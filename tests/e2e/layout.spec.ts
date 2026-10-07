@@ -2,14 +2,19 @@
 // Layout at 320×568, 390×844 and 1280×800 (02 §19, 04 §11): no horizontal overflow, the board fully
 // visible, and nothing interactive in the top-left FB safe zone (checked in every build; the zone
 // only matters in fbig, but our layout keeps it clear everywhere).
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
 import type { E2EHooks } from '../../src/app/boot';
+import type { LevelPack } from '../../src/engine/types';
 import { defaults } from '../../src/game/save';
 import type { SaveDataV1 } from '../../src/game/types';
 
 type TestWindow = Window & { __mewdoku?: E2EHooks };
 
 const SAFE_ZONE = 64;
+const PACK_000 = resolve(dirname(fileURLToPath(import.meta.url)), '../../src/data/levels/pack-000.json');
 
 async function boot(page: Page, save?: SaveDataV1): Promise<void> {
   await page.goto('/');
@@ -67,14 +72,25 @@ test('tutorial board fits', async ({ page }) => {
   await safeZoneClear(page);
 });
 
-test('home and the largest board fit', async ({ page }) => {
-  await boot(page, { ...defaults(Date.now()), tutorialDone: true, progress: { level: 2, completed: 1, best: {} } });
+/** The largest board in the bundled pack (content may regenerate it, so read it at test time). */
+function largestBundledLevel(): { level: number; n: number } {
+  const pack = JSON.parse(readFileSync(PACK_000, 'utf8')) as LevelPack;
+  let best = { level: 2, n: 0 };
+  pack.levels.forEach((rec, k) => {
+    const level = rec.i ?? pack.first + k;
+    if (level >= 2 && rec.n > best.n) best = { level, n: rec.n };
+  });
+  return best;
+}
+
+test('home and the largest bundled board fit', async ({ page }) => {
+  const { level, n } = largestBundledLevel();
+  await boot(page, { ...defaults(Date.now()), tutorialDone: true, progress: { level, completed: level - 1, best: {} } });
   await noHorizontalOverflow(page);
   await safeZoneClear(page);
-  // A 12×12 board: the daily falls back to on-device generation when no month file exists, so use
-  // a seeded level whose size we cannot control; instead check the current level and the daily.
   await page.locator('.home__play').click();
   await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
+  expect(await page.evaluate(() => (window as TestWindow).__mewdoku?.state()?.puzzle.n ?? 0)).toBe(n);
   await noHorizontalOverflow(page);
   await boardVisible(page);
   await safeZoneClear(page);

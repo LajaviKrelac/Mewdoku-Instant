@@ -1,14 +1,204 @@
 {
   "v": 1,
-  "version": "0.0.0-placeholder",
-  "gen": "placeholder-prototype/0",
+  "version": "content-ac69b4aace86",
+  "gen": "mewdoku-gen/1.0.0",
   "packs": [
     {
       "file": "levels/pack-000.json",
       "first": 1,
       "count": 100,
-      "sha256": "65dd2df9d6c55cb8a85b532a2162aad85b08f4a0e8d76a532541f12954a5ac50"
+      "sha256": "184bce0b076e119d0352d453358b2f92f8c934ae4f6fd9f8c6ef8bcadf3ed1bc"
+    },
+    {
+      "file": "levels/pack-001.json",
+      "first": 101,
+      "count": 100,
+      "sha256": "105f75ffdbef51350bce887c829f1fc170abd3dd270ebf85a4f06f7713ca835c"
+    },
+    {
+      "file": "levels/pack-002.json",
+      "first": 201,
+      "count": 100,
+      "sha256": "6172d88dd26377f9b97762408a0263fcd755b878163a65f047759eb2532262cc"
+    },
+    {
+      "file": "levels/pack-003.json",
+      "first": 301,
+      "count": 100,
+      "sha256": "317f80ee8e20e85e86644894cd52b86703cc3eecb1ddcad799b8966b8730b656"
+    },
+    {
+      "file": "levels/pack-004.json",
+      "first": 401,
+      "count": 100,
+      "sha256": "4cfb5c3f20f09a48f51a0394350ed8d5396822f6361cd6267ae269bb80d97e81"
+    },
+    {
+      "file": "levels/pack-005.json",
+      "first": 501,
+      "count": 100,
+      "sha256": "9bded052703c7b061de34b3c5420cb191e27dae6f748ef92390b769bd9298bc3"
+    },
+    {
+      "file": "levels/pack-006.json",
+      "first": 601,
+      "count": 100,
+      "sha256": "ab3b292120a2a29fd3e15906b1d0c861bbf5005b71dd564c0d035cb94eae6953"
+    },
+    {
+      "file": "levels/pack-007.json",
+      "first": 701,
+      "count": 100,
+      "sha256": "7647b55ada93d42e8472c31d5e352b1205a591fe8c31e13428dfb54e52430b78"
+    },
+    {
+      "file": "levels/pack-008.json",
+      "first": 801,
+      "count": 100,
+      "sha256": "b58ef80acb229e106b37d6505b6ef49f1e78f142262b2b3853fdefd1078b94fb"
+    },
+    {
+      "file": "levels/pack-009.json",
+      "first": 901,
+      "count": 100,
+      "sha256": "e63f7c07445c9619852aa038d160fd5b32998a84ef3bf015828cc43a0c8c15cc"
     }
   ],
-  "daily": []
+  "daily": [
+    {
+      "file": "daily/2026-10.json",
+      "month": "2026-10",
+      "sha256": "7aa3059a01f2016d95a8ed5289bcf2720f71bcd2995b5a4fce8b2a8d3ea57754"
+    },
+    {
+      "file": "daily/2026-11.json",
+      "month": "2026-11",
+      "sha256": "15f3b9b104789df9295345b1fd2859c929fb0eeac03b8c84200e922400e04999"
+    },
+    {
+      "file": "daily/2026-12.json",
+      "month": "2026-12",
+      "sha256": "1c78f2f204e3ce3179bfed3c0a1080741f95decaae0b9eeb1bcd256272eed122"
+    },
+    {
+      "file": "daily/2027-01.json",
+      "month": "2027-01",
+      "sha256": "30e9866fb24687737dde3e025d48794ed01c2358c4cd223f6ac4dc1c756ad023"
+    },
+    {
+      "file": "daily/2027-02.json",
+      "month": "2027-02",
+      "sha256": "922155916e4df8293ea4ef8670bc04b2919819746eaa679a20c550954baaa732"
+    },
+    {
+      "file": "daily/2027-03.json",
+      "month": "2027-03",
+      "sha256": "f4fa0780f27241686f8113be974af8ae929f6594c939672d24c99f899f923f85"
+    },
+    {
+      "file": "daily/2027-04.json",
+      "month": "2027-04",
+      "sha256": "4663e8752bb5a9fdafdeaf3b8adcfe277cef0c03779262d29b08d5407d86f3cd"
+    },
+    {
+      "file": "daily/2027-05.json",
+      "month": "2027-05",
+      "sha256": "e895decdd939e35063fe693e3f72ad454f9c2f2e77f9eca8706a6c58e17fb2f4"
+    },
+    {
+      "file": "daily/2027-06.json",
+      "month": "2027-06",
+      "sha256": "2a65db8a629cfc6b46fe1648e20dfea773c48637d4d86b209a9b22d323d68e3b"
+    },
+    {
+      "file": "daily/2027-07.json",
+      "month": "2027-07",
+      "sha256": "4d389086fd0d12dcf00abf382fe22770d9f9fd80424d724ce8e3e7f48f3f0d7e"
+    },
+    {
+      "file": "daily/2027-08.json",
+      "month": "2027-08",
+      "sha256": "6d4c2c9f54dbda97a642fd39387f5799bb9e3d3cfe25c878719eafadd7a6a937"
+    },
+    {
+      "file": "daily/2027-09.json",
+      "month": "2027-09",
+      "sha256": "c22cdd10bfd29d385d176b554f8a03b0f344c927d8bd2d6f91f676957fb8190c"
+    },
+    {
+      "file": "daily/2027-10.json",
+      "month": "2027-10",
+      "sha256": "674a691c038d334f56799526ee6c9bcb5f83d18aad34d7a9712371767902c697"
+    },
+    {
+      "file": "daily/2027-11.json",
+      "month": "2027-11",
+      "sha256": "8cf44d4ed345a8288b188b0d273f1a302c7c9b6608b2d0171a3684a8c63e7107"
+    },
+    {
+      "file": "daily/2027-12.json",
+      "month": "2027-12",
+      "sha256": "82da3572770bc42fa5735594ee0c6a3b918a89be624121ca9f9fd3508ce56fc8"
+    },
+    {
+      "file": "daily/2028-01.json",
+      "month": "2028-01",
+      "sha256": "8a5c92a242a2e21afc5afd48f42da84bbde5e2700d95c48e880b3816a62c0d5a"
+    },
+    {
+      "file": "daily/2028-02.json",
+      "month": "2028-02",
+      "sha256": "8b29ef1adbe92081adfe9ceab3225be696a0003bdcb735326b684596505398c0"
+    },
+    {
+      "file": "daily/2028-03.json",
+      "month": "2028-03",
+      "sha256": "0b5465aefc8d6b68e13b51f11a72254983a7285e75fb81671475ee903402560b"
+    },
+    {
+      "file": "daily/2028-04.json",
+      "month": "2028-04",
+      "sha256": "aa61ea5f2a710bc351f1c8e9500e255a27875783675c29d6fb45743592857aa6"
+    },
+    {
+      "file": "daily/2028-05.json",
+      "month": "2028-05",
+      "sha256": "bfa8f34e0591ce4c6bec48d356ad944bb4842b082b49422b466c9d4dd712fd1e"
+    },
+    {
+      "file": "daily/2028-06.json",
+      "month": "2028-06",
+      "sha256": "46e79228d119ab25c2cbd40ad8ffb23a607e1c4ff842dbd0a46bb65ae2bba7ca"
+    },
+    {
+      "file": "daily/2028-07.json",
+      "month": "2028-07",
+      "sha256": "b5d22e549c5585d987dbe25fd8f05672fc2fef7b7c4efa7bee100b9d4839ce8d"
+    },
+    {
+      "file": "daily/2028-08.json",
+      "month": "2028-08",
+      "sha256": "cad9c57c7ddbbcc196733b6ae15fa985b1e02dad4b5fd59ac969d8428533e3d1"
+    },
+    {
+      "file": "daily/2028-09.json",
+      "month": "2028-09",
+      "sha256": "36bcfc87cd82745916908ae0ac13be59d5843d041c541635ea34442750c527d9"
+    },
+    {
+      "file": "daily/2028-10.json",
+      "month": "2028-10",
+      "sha256": "9e063e7740832cb8b81bb2dcc4bab82a44f3b6f8d88f4b2c53da1577ca034f93"
+    },
+    {
+      "file": "daily/2028-11.json",
+      "month": "2028-11",
+      "sha256": "6095271854e0d1d4c5d70407757d2476e8534a408e005d917ab20f0446f100cb"
+    },
+    {
+      "file": "daily/2028-12.json",
+      "month": "2028-12",
+      "sha256": "2f8ad25b725515191094528d3ea4bc97c83984af69f806cd29d491b601927953"
+    }
+  ]
 }
