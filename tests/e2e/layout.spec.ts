@@ -4,7 +4,7 @@
 // only matters in fbig, but our layout keeps it clear everywhere). Also: the tutorial coach card
 // never covers the board or the top bar and hides under the hint card (UX-01, UX-06, SPEC-04); a
 // short desktop window (150-200 % zoom) plays without the rotate notice (UX-02, A11Y-1); keyboard
-// play starts without a click (SPEC-01, A11Y-4).
+// play starts without a click (SPEC-01, A11Y-4), and a phone shows no focus ring until a key is used.
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -214,4 +214,17 @@ test('keyboard play starts without a click: focus lands on the board, H opens a 
   await page.locator('.top-bar__btn--settings').focus();
   await page.keyboard.press('h');
   await expect(page.locator('.overlay[data-overlay=hint] .hint-card__apply')).toBeVisible();
+});
+
+test('a phone starting the tutorial: the board has focus but shows no ring until a key is pressed', async ({ page }, info) => {
+  test.skip(info.project.name === 'web-1280', 'touch-first (coarse pointer) only; desktops always show the ring');
+  await boot(page);
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
+  const focused = page.locator('.cell:focus');
+  await expect(focused).toHaveCount(1); // A11Y-4: focus is on the board, not on <body>
+  const ring = (): Promise<string> => page.evaluate(() => getComputedStyle(document.querySelector('.cell:focus .cell__tile') as Element).boxShadow);
+  expect(await ring()).toBe('none');
+  await page.keyboard.press('ArrowDown'); // row 2, column 1: no coach highlight there
+  await expect(page.locator('.cell[data-i="4"]')).toBeFocused();
+  expect(await ring()).toContain('rgb(23, 128, 111)'); // --accent ring once the keyboard is in use
 });

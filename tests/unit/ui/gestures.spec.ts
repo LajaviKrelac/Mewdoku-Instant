@@ -331,4 +331,11 @@ describe('attachKeyboard: Enter honours cellLockAfterCatMs (logic-4, 02 §6.2)',
     key(' ');
     expect(log).toEqual(['tap:4', 'tap:4']);
   });
+
+  it('the first key on the board marks it data-kbd (the focus ring then shows on touch-first devices)', () => {
+    kb.focus(0, true);
+    expect(board.dataset.kbd).toBeUndefined(); // programmatic focus at level start: no ring on phones (board.css)
+    key('ArrowRight');
+    expect(board.dataset.kbd).toBe('');
+  });
 });

@@ -59,8 +59,12 @@ body {
    568 px minimum column (02 §19) instead of shrinking the board or showing the rotate notice, which
    is for landscape phones only. The game screen lays out for the same 568 px (game-screen.ts). */
 @media (max-height: 567px) and (pointer: fine) {
+  /* body's overflow moves to the viewport, which scrolls; body grows with the column, so the desktop
+     side pattern (painted on body) covers the whole scroll height, not just the first screenful. */
   body {
     overflow-y: auto;
+    height: auto;
+    min-height: 100%;
   }
 
   #app {

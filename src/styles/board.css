@@ -197,6 +197,24 @@
   box-shadow: 0 0 0 2px var(--card), 0 0 0 5px var(--accent);
 }
 
+/* Touch-first devices: the board takes focus when a level starts (A11Y-4), and with no interaction
+   yet Chromium shows that programmatic focus as :focus-visible, so a first-run phone would see a ring
+   on a tile nobody chose (next to the tutorial's own highlight). Until a key is pressed on this board
+   (keyboard.ts sets data-kbd) the tile keeps its normal look; desktops always show the ring. */
+@media (pointer: coarse) {
+  .board:not([data-kbd]) .cell:focus-visible .cell__tile {
+    box-shadow: none;
+  }
+
+  .board:not([data-kbd]) .cell[data-s='w']:focus-visible .cell__tile {
+    box-shadow: inset 0 0 0 var(--wrong-ring, 2px) var(--wrong);
+  }
+
+  .board:not([data-kbd]) .cell[data-s='g']:focus-visible .cell__tile {
+    box-shadow: inset 0 0 0 2px rgba(59, 48, 68, 0.28);
+  }
+}
+
 @media (hover: hover) {
   .board:not([aria-disabled='true']) .cell:hover .cell__tile {
     box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.6);

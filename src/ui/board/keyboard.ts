@@ -62,6 +62,8 @@ export function attachKeyboard(boardEl: HTMLElement, cb: KeyboardCallbacks, opts
   for (let i = 0; i < total; i++) opts.cellElement(i)?.setAttribute('tabindex', i === 0 ? '0' : '-1');
 
   const onKey = (e: KeyboardEvent): void => {
+    // Keyboard in use on this board: from now on its focus ring shows on touch-first devices too (board.css).
+    if (boardEl.dataset.kbd === undefined) boardEl.dataset.kbd = '';
     if (e.altKey || e.ctrlKey || e.metaKey) return;
     const fromCell = cellIndexOf(e.target, boardEl);
     if (fromCell !== null && fromCell !== current) focus(fromCell);

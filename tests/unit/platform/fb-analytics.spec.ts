@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { createFakeClock } from '../../../src/app/clock';
 import { cfg } from '../../../src/app/config';
+import { ANALYTICS_PARAM_KEYS } from '../../../src/app/events';
 import { createFbAnalytics, sanitizeEventName, sanitizeParams } from '../../../src/platform/fb/fb-analytics';
 import { createStub } from './helpers';
 
@@ -19,6 +20,24 @@ describe('sanitizeEventName', () => {
     ['a'.repeat(60), 'a'.repeat(40)],
   ])('%j → %j', (input, expected) => {
     expect(sanitizeEventName(input)).toBe(expected);
+  });
+});
+
+describe('the 02 §20 event table fits the logEvent limits (05 §10, 02 §23)', () => {
+  it('every event name and parameter key passes through the sanitisers unchanged', () => {
+    const names = Object.keys(ANALYTICS_PARAM_KEYS) as (keyof typeof ANALYTICS_PARAM_KEYS)[];
+    expect(names.length).toBeGreaterThanOrEqual(15);
+    for (const name of names) {
+      expect(sanitizeEventName(name), name).toBe(name);
+      expect(name.length).toBeGreaterThanOrEqual(2);
+      expect(name.length).toBeLessThanOrEqual(40);
+      const keys = ANALYTICS_PARAM_KEYS[name] as readonly string[];
+      expect(keys.length, name).toBeLessThanOrEqual(25);
+      // A worst-case value per key: 99 characters, the longest the limit allows.
+      const params = Object.fromEntries(keys.map((k) => [k, 'v'.repeat(99)]));
+      expect(sanitizeParams(params), name).toEqual(params);
+      for (const k of keys) expect(k.length >= 2 && k.length <= 40 && /^[A-Za-z0-9_]+$/.test(k), `${name}.${k}`).toBe(true);
+    }
   });
 });
 

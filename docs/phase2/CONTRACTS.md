@@ -307,7 +307,7 @@ A six-lens review found 56 issues; the fixes (groups A app resilience, B FB plat
 - Event **`overlay:failed { id }`** (`app/events.ts`): the chunk failed after its retries; the router has closed the queued overlay. The session reconciles: `hint` → back to playing, nothing charged; `win` / `daily_result` / `fail` → toast, then Home with the result or the lost board saved; `coach` → toast, and the tutorial's "Got it" step moves on by itself; anything else → toast.
 - **The coach (O8) is in the lazy chunk** (`overlay-chunk.ts` exports `createCoach`; `loadOverlayChunk()` returns it). It is still non-modal; a queued coach never makes the board inert.
 - Focus: the router passes `restoreOnNextFrame: true` to `trapFocus`, so focus goes back to the opener on the next animation frame (RP-3). Tests that check the restored focus wait one frame. `RouterFactories.trapFocus` takes the same option.
-- `GameScreen` recovers lost focus onto the board two frames after it drops to `<body>`, and handles **H / K** anywhere on the game screen while no modal is open (02 §6.3).
+- `GameScreen` recovers lost focus onto the board two frames after it drops to `<body>`, and handles **H / K** anywhere on the game screen while no modal is open (02 §6.3). `board/keyboard.ts` marks the board `data-kbd` on its first key press; on coarse-pointer devices `board.css` shows the cell focus ring only after that, so the automatic focus at level start draws no ring on a phone.
 
 **Platform (all optional members, so test doubles need not implement them).**
 
