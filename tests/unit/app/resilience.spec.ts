@@ -88,7 +88,7 @@ describe('logic-2 / RP-2: the overlay chunk cannot be loaded', () => {
     expect(h.game().status).toBe('playing');
   });
 
-  it('the tutorial bulb (step 5) toasts and stays at step 5; it works once the chunk loads', async () => {
+  it('the tutorial bulb (step 5) applies the step directly when the card cannot load (no dead end)', async () => {
     const h = createHarness({ save: (s) => ({ ...s, tutorialDone: false, progress: { level: 1, completed: 0, best: {} } }) });
     await h.session.start({ mode: 'tutorial', replay: false });
     await h.settle(h.config.fx.boardEntryMs);
@@ -100,12 +100,8 @@ describe('logic-2 / RP-2: the overlay chunk cannot be loaded', () => {
     h.router.chunkOk = false;
     await h.session.onBulb();
     expect(h.game().status).toBe('playing');
-    expect(h.router.toasts).toEqual([t('hint.unavailable')]);
     expect(h.router.isOpen('hint')).toBe(false);
-    h.router.chunkOk = true;
-    await h.session.onBulb();
-    expect(h.game().status).toBe('hint');
-    expect(h.router.isOpen('hint')).toBe(true);
+    expect(h.store.get().session?.tutorialStep).toBe(6);
   });
 
   it('a hint card that fails to open returns the game to playing', async () => {

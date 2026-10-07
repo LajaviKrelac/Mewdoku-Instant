@@ -29,7 +29,7 @@ Hints run on the main thread. A board size whose hint ever exceeds 30 ms moves t
 | With the resumable cache (`node_modules/.cache/mewdoku-content/`) | a few seconds: only the sort, the repair and the file writes run again | — |
 | `scripts/verify-levels.ts` (10 packs, 27 months) | 2.3 s, 0 issues | integration |
 | `vitest --project property` (every shipped record, 03 §11.2) | about 8 s (27 tests) | integration |
-| Full `vitest run` (unit + dom + property) | about 35 s (72 files, 1161 tests) | Phase 2 hardening |
+| Full `vitest run` (unit + dom + property) | about 37 s (73 files, 1164 tests) | Phase 2 hardening (final audit re-run) |
 
 ## 3. Engine bytes in the bundle (minified, raw)
 

@@ -306,6 +306,10 @@ export function createRouter(root: HTMLElement, deps: RouterDeps = {}): Router {
     while (screenHost.firstChild) screenHost.removeChild(screenHost.firstChild);
     const next = make();
     screenHost.appendChild(next.el);
+    // Short desktop windows scroll the 568 px column; a new screen starts at the top, not at the
+    // offset used to reach its button on the previous screen.
+    const scroller = doc.scrollingElement ?? doc.documentElement;
+    if (scroller && scroller.scrollTop !== 0) scroller.scrollTop = 0;
     current = next;
     screenId = id;
     bus?.emit('screen', { screen: id });

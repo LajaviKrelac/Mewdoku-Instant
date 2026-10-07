@@ -61,7 +61,7 @@ In e2e builds, `window.__mewdoku` exposes `state()`, `app()`, `solution()`, `see
 | Check | Result |
 |---|---|
 | `npx tsc --noEmit` | clean |
-| `npx vitest run` (all projects) | **1 164 passed, 0 failed** in 73 files: `unit` 955 (55 files), `dom` 180 (15 files), `property` 29 (3 files). Before this hardening pass the suite had 1 145. |
+| `npx vitest run` (all projects) | **1 166 passed, 0 failed** in 73 files (1 164 at the final audit, plus the two post-audit regression tests). Before the lead's follow-up pass the suite had 1 145 (1 023 at the end of integration, before the review fixes). |
 | `npx tsx scripts/verify-levels.ts` | 10 level packs, 27 daily months, **0 issues** (2.8 s) |
 | `npx tsx scripts/palette-check.ts` | OK. Pattern glyph minimum 3.38:1 (Slate, faded); white on `--accent` 4.82:1; `--ink-2` 4.82–5.65:1; "In progress" 5.93:1 |
 | `npm run build`, `build:fbig`, `build:e2e`, `build:fbig-e2e` | all four build cleanly, with no warnings |
@@ -69,6 +69,13 @@ In e2e builds, `window.__mewdoku` exposes `state()`, `app()`, `solution()`, `see
 | `npx tsx scripts/zip-fbig.ts` | 216.8 KB zip, 51 files (budget 500 KB, 60 files) |
 | `npx playwright test` (4 projects) | **48 passed, 0 failed, 5 skipped by design**: `web-390` 23 + 2 skipped, `web-320` 5 + 2 skipped, `web-1280` 6 + 1 skipped, `fbig-390` 14 |
 | Reviewers' repro scripts for the 9 major findings, against fresh `dist/e2e` and `dist/fbig-e2e` | all 9 fixed (§6.2) |
+
+**Independent audit (2026-10-07).** An auditor re-ran the checks in this table and got the same results, figure for figure. The e2e builds were rebuilt by Playwright's own web servers. Of the nine major-finding repro scripts, the auditor re-ran four (logic-2, UX-02, A11Y-1 and A11Y-2), with the same "after" results. The auditor also:
+
+- reverted ten of the lead's code changes one at a time (follow-ups 1 and 3–8, and the `data-kbd` focus ring), and each revert made its covering test fail;
+- played the built `dist/web` at 390×844 with touch: the tutorial, then Levels 2–4 with a mistake, a hint, the kitty, a fail with Continue, and three wins. There were no console errors and no requests outside the app's own origin.
+
+The audit found two new issues; both are listed in §9.
 
 The 5 skips are declared in `tests/e2e/layout.spec.ts`. The short-desktop-window test and the desktop keyboard test need a fine pointer, so they run only in `web-1280`. The phone focus-ring test needs a coarse pointer, so it does not run in `web-1280`. There are no other skips.
 
@@ -88,16 +95,17 @@ Raw bytes from `scripts/size-check.ts`, with 1 KB = 1000 B. FB hosting may serve
 | Packs, daily months, licence texts, favicon | 273.2 KB | 273.4 KB | lazy | fetched on demand |
 | FB zip | — | 216.8 KB, 51 files | 500 KB, 60 files | |
 
-The lead took two cheap wins before accepting the new ceilings:
+Before accepting the new ceilings, the lead took one cheap win:
 
 - **The coach moved into the lazy overlay chunk: −4.4 KB main JS.** On a first run, boot fetches the chunk during the loading screen, in the same bounded wait as the pack and the font (`boot.overlayTimeoutMs` = 1.5 s), so the tutorial's first board shows with its coach. Returning players fetch it after Home shows.
-- **A failed sound-chunk download is retried through `loadChunk`.**
+
+Separately (a robustness fix, not a size win), a failed sound-chunk download is now retried through `loadChunk` (RP-2).
 
 The lazy-chunk budget went from 45 KB to 48 KB. That covers the coach (≈ 4.6 KB) with about 2 KB headroom; the worker budget is unchanged. Breakdown and history: [perf.md §4](../perf.md).
 
 ## 5. Screenshot index (`docs/phase2/screenshots/`)
 
-All `app-*.png` files were refreshed on 2026-10-07 from the final `dist/e2e` build:
+All `app-*.png` files except the two `app-fbig-*` captures were refreshed on 2026-10-07 from the final `dist/e2e` build:
 
 - **Phones** (390×844, 320×568): DPR 2, touch.
 - **Desktop** (1280×800): DPR 1.
@@ -236,7 +244,7 @@ Groups: A app resilience and B FB platform/boot (listed together as A/B), C UI/v
 5. **Level-slot guard.** `withSlot` writes a level board only when its id is `L{progress.level}`, and `withoutSlot` clears only the session's own board. A late cloud merge can no longer have the old level's moves, its Home or its O4 Home overwrite or drop the newer level's board. Two tests in `resilience.spec.ts`.
 6. **Router** passes `restoreOnNextFrame: true`. The router focus test waits one animation frame, and the fake trap asserts the option.
 7. **Hint context** carries `regions: s.puzzle.regions`. A test checks that the screen-reader line names the colour.
-8. **Bundle.** The coach moved into the lazy overlay chunk, with a first-run prefetch during boot (`boot.overlayTimeoutMs`). If the coach cannot load, the tutorial never dead-ends: the "Got it" step moves on by itself, and the next step retries the chunk. New ceilings: main 190 KB, CSS 40 KB, first load 250 KB, lazy 48 KB. Tests: router (coach queued, non-modal), boot (prefetch order, bounded wait, returning players), tutorial-session (coach failure), size-check (ceilings).
+8. **Bundle.** The coach moved into the lazy overlay chunk, with a first-run prefetch during boot (`boot.overlayTimeoutMs`). If the coach cannot load, the "Got it" step moves on by itself and the next step retries the chunk. This covers a transient failure. A chunk that never loads still stops the first run at step 5 (see §9, "Offline first run"). New ceilings: main 190 KB, CSS 40 KB, first load 250 KB, lazy 48 KB. Tests: router (coach queued, non-modal), boot (prefetch order, bounded wait, returning players), tutorial-session (coach failure), size-check (ceilings).
 9. **Docs.** 02 (§6.3, §17.2, §18, §19), 04 (§4.4, §5.1, §6.3, §7.3, §8, §9), 05 (§4, §6.2, §7, §10), CONTRACTS §10, perf.md.
 10. **Visual regression: focus ring at first load.** The A11Y-4 fix put focus on the board at tutorial start, and Chromium draws that programmatic focus as `:focus-visible`, so phones showed a ring on a tile nobody chose. On coarse-pointer devices the ring now appears after the first key press on the board (`data-kbd`); desktops are unchanged. Covered by a unit test and an e2e test.
 11. **Visual regression: short desktop windows.** The side pattern ended after the first screenful, because body stayed one viewport tall while the page scrolled. Body now grows with the column in that media query.
@@ -269,7 +277,8 @@ Each is recorded in the spec or contract section named.
 - **Determinism across engines.** The golden generation check (`tests/e2e/determinism.spec.ts`) runs in Chromium only, on the worker and on the main thread. WebKit and Firefox are not installed in this environment.
 - **Meta documentation.** Meta's documentation could not be checked from this environment. The FB adapter was tested against our stub (`tests/fixtures/fbinstant-stub.js`), written from 05's documented API shapes, never against the real SDK. Items marked *inferred* or *likely* in 05 (upload labels, Monetization Manager, ad policies, the floating-menu safe zone) must be checked in Phase 4.
 - **Hung requests are bounded but slow.** A request that never answers costs up to 3 × `levels.fetchTimeoutMs` plus backoff (about 17 s) before the substitute board or generated daily; the reviewers' daily case took about 20 s. A worker that never starts costs 10 s. The loading indicator shows throughout, and the 25 s fail-safe goes Home with a toast. The deadlines are tunables in `app/config.ts`.
-- **Offline first run.** The coach and the step-5 hint card come from the lazy overlay chunk. If it cannot be fetched at all, the tutorial still advances: the board keeps outlining the targets, "Got it" moves on by itself, and the bulb retries the chunk on each tap. The coach text is missing until the chunk loads.
+- **Offline first run, tutorial step 5 (fixed after the final audit).** The coach and the step-5 hint card come from the lazy overlay chunk. If the chunk cannot be fetched at all, the tutorial bulb now applies the step-5 hint directly (`helper-flows.onBulb`, tutorial branch), so the tutorial always finishes; its win then goes Home with progress kept (the win overlay is in the same chunk). Covered by `tests/unit/app/tutorial-session.spec.ts` ("step 5 cannot dead-end") and `resilience.spec.ts`; the auditor's `offline-tut` repro now completes the tutorial with no page errors.
+- **Short desktop windows kept Home's scroll offset in a level (fixed after the final audit).** `router.replaceScreen` now scrolls the page to the top on every screen switch. Covered by `tests/unit/app/router.spec.ts` ("a new screen starts at the top of a scrolled page").
 - **Late cloud copy during the tutorial (PLAT-1 residue).** A device with no local mirror whose cloud read fails or times out starts the tutorial, because it knows nothing else. If the cloud copy arrives after the tutorial started, it is merged (nothing is lost) but the player is not pulled out of the tutorial; the next launch goes Home.
 - **Privacy policy.** About shows "Our privacy policy will be linked here". A real URL is needed before Phase 4 submission (05 §13).
 - **Ad placement IDs.** These are empty in non-e2e builds until monetization is approved, so FB builds use the free fallback (by design, 05 §6.2).
@@ -284,7 +293,7 @@ Each is recorded in the spec or contract section named.
 | 2 | 3 hearts per attempt; revive restores 1 heart once; Retry gives a fresh copy of the same board | **Done** | reducer-matrix "one revive per attempt", "respects rules.maxRevives", "a fresh attempt on the same puzzle"; e2e smoke 3 (three mistakes → O4 → Retry → fresh board), 9 (reload with O4 open, Continue still offered) |
 | 3 | The hint explains and applies a valid next step on every shipped level and never reveals a wrong deduction; property test over the packs | **Done** | `tests/property/hints.spec.ts`: all 1 000 levels and 823 dailies solved by repeated Apply, every step sound, no reveal fallback. `tests/unit/engine/hint.spec.ts` (random partial boards, mistaken marks). `levels.spec.ts` property 5 (solvable without guessing). e2e smoke 6 |
 | 4 | The kitty places a correct cat; stocks persist; rewarded and fallback flows work with mock ads | **Done** | `hint.spec.ts` `pickKittyCell`; `tests/unit/app/helper-flows.spec.ts` (kitty flow, O2 → ad → grant order, saves.now); `saves.spec.ts`; e2e smoke 10 (`?ads=unsupported`), 12 (`?ads=close` grants nothing), fbig "10 s rewarded video is not cut off and grants the hint" |
-| 5 | The tutorial (Level 1) is completable and cannot cost hearts | **Done** | `tests/unit/game/tutorial-run.spec.ts`, `tests/unit/app/tutorial-session.spec.ts` ("wrong input only pulses: no heart lost", "runs all six steps", coach-failure cases); e2e smoke 1 |
+| 5 | The tutorial (Level 1) is completable and cannot cost hearts | **Done** | `tests/unit/game/tutorial-run.spec.ts`, `tests/unit/app/tutorial-session.spec.ts` ("wrong input only pulses: no heart lost", "runs all six steps", coach-failure cases); e2e smoke 1. If the overlay chunk never loads, the step-5 bulb applies the hint directly, so the first run still finishes (§9; "step 5 cannot dead-end"). |
 | 6 | 1 000 levels ship; each has exactly one solution and is graded within its band (03 §9) | **Done** | `scripts/verify-levels.ts`: 0 issues. `tests/property/levels.spec.ts` properties 1–9 (unique solution, brute-force cross-check for N ≤ 9, grade inside the slot band, manifest SHA-256) |
 | 7 | The daily puzzle unlocks after level 20, is the same for a given date, and records time | **Done** | e2e smoke 8 (locked before level 20, opens after); `levels-repo.spec.ts` (month lookup, a missing month generated from the date seed); `progression.spec.ts` (daily spec from the date); `stats.spec.ts` (daily record); `restore.spec.ts` (a full daily records and shows O7) |
 | 8 | The ad gate follows §13.2 with fake-clock unit tests; a shown ad is never cut short, only readiness is time-limited | **Done** | `tests/unit/game/economy-pacing.spec.ts`, `tests/unit/app/interstitial.spec.ts`; `ad-flow.spec.ts` "a long rewarded ad is never cut short", "watchdog"; `fb-ads.spec.ts` (readiness timeout, reload backoff, stalled load); fbig e2e "no interstitial before 10 completed levels", "an ad that never becomes ready is skipped after ads.readyTimeoutMs" |
@@ -296,4 +305,4 @@ Each is recorded in the spec or contract section named.
 | 14 | Bundle within budget (04 §9); no runtime network calls except our own static files and the FB SDK | **Done** | `scripts/size-check.ts` within the new budget (§4). A scan of the built output finds only two absolute URLs: the FB SDK tag in the FBIG `index.html`, and the SVG namespace identifier `http://www.w3.org/2000/svg` in the JS, which is never fetched. Packs, months, chunks, the worker and the font are relative same-origin files (`base: './'`, `assetsInlineLimit: 0`). `product-name.spec.ts` checks the favicon has no external references. There is no dedicated e2e network-allowlist test (a candidate for Phase 3 CI). |
 | 15 | No original assets, text or code anywhere (06 checklist) | **Done** | `docs/provenance.md` (every drawing, string, level and third-party file); `tests/unit/sanity.spec.ts` (known original phrases rejected); all art hand-coded SVG; all levels generated by our engine with our seeds. The clean room was kept: no source from 06 §4 was opened in this pass. |
 
-Overall, all 15 criteria are met with automated evidence. Two partial gaps are noted in rows 13 and 14: no real screen-reader session, and no automated network-allowlist e2e test.
+Overall, all 15 criteria are met with automated evidence. Rows 13 and 14 note two partial gaps: no real screen-reader session, and no automated network-allowlist e2e test. The step-5 caveat the audit found (overlay chunk never loads) is fixed (§9).

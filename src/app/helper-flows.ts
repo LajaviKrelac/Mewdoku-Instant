@@ -171,7 +171,8 @@ export function createHelperFlows(host: HelperHost): HelperFlows {
       // Tutorial: free and uncharged (02 §9.3); only at the bulb step.
       if (step !== null && !tutorialAllowsTool(step, 'bulb')) return;
       await host.runBusy(async (alive) => {
-        if (!(await cardsReady(alive, t('hint.unavailable')))) return;
+        const cards = await host.router.overlaysReady();
+        if (!alive()) return;
         let hint: HintStep;
         try {
           hint = await host.engine.getHint(s0.puzzle, s0.cells);
@@ -179,7 +180,15 @@ export function createHelperFlows(host: HelperHost): HelperFlows {
           if (alive()) host.toast(t('hint.unavailable'));
           return;
         }
-        if (alive() && host.game()?.cells === s0.cells) host.openHint(hint, false);
+        if (!alive() || host.game()?.cells !== s0.cells) return;
+        if (cards) {
+          host.openHint(hint, false);
+          return;
+        }
+        // The card cannot load (offline first run). Step 5 accepts only the hint's Apply, so apply
+        // the step directly instead of leaving the tutorial with no way forward.
+        host.dispatch({ type: 'HINT_OPEN', step: hint, charged: false });
+        host.dispatch({ type: 'HINT_APPLY', t: host.clock.now() });
       });
       return;
     }

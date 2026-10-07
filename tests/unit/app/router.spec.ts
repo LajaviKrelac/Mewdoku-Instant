@@ -159,6 +159,15 @@ describe('router', () => {
     expect(s.events).toEqual(['screen:home', 'open:settings', 'close:settings', 'destroy:home', 'screen:game']);
   });
 
+  it('a new screen starts at the top of a scrolled page (short desktop windows)', () => {
+    const s = setup();
+    s.router.showHome({} as never, {} as never);
+    const scroller = document.scrollingElement ?? document.documentElement; // jsdom has no scrollingElement
+    scroller.scrollTop = 206; // the offset used to reach Play in a 640×340 window
+    s.router.showGame({} as never, {} as never);
+    expect(scroller.scrollTop).toBe(0);
+  });
+
   it('update() reaches only open overlays; toast() goes to the toast layer', () => {
     const s = setup();
     s.router.update('fail', {} as never);

@@ -131,6 +131,25 @@ describe('tutorial: the coach lives in the lazy overlay chunk (04 §9)', () => {
     expect(h.router.props.coach).toMatchObject({ step: 3 });
   });
 
+  it('step 5 cannot dead-end: when the hint card cannot load, the bulb applies the step directly', async () => {
+    const h = firstRun();
+    await begin(h);
+    h.session.onCellDoubleTap(LAVENDER);
+    h.session.onCoachGotIt();
+    h.session.onPaint([4, 5, 6], 'mark');
+    h.session.onCellDoubleTap(ROW2_CAT);
+    expect(step(h)).toBe(5);
+    h.router.chunkOk = false; // the lazy overlay chunk never loads (offline first run)
+    await h.session.onBulb();
+    expect(h.router.isOpen('hint')).toBe(false);
+    expect(h.game().status).toBe('playing');
+    expect(h.game().cells[HINT_CAT]).toBe(CellState.Cat);
+    expect(step(h)).toBe(6);
+    expect(h.save().stock.hints).toBe(0); // still free
+    h.session.onCellDoubleTap(LAST_CAT);
+    expect(h.game().status).toBe('won');
+  });
+
   it('on any other step the failure only toasts; the step stays and the board outlines remain', async () => {
     const h = firstRun();
     await begin(h);
