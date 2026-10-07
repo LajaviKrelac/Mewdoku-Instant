@@ -1,0 +1,14 @@
+{
+  "v": 1,
+  "version": "0.0.0-placeholder",
+  "gen": "placeholder-prototype/0",
+  "packs": [
+    {
+      "file": "levels/pack-000.json",
+      "first": 1,
+      "count": 100,
+      "sha256": "65dd2df9d6c55cb8a85b532a2162aad85b08f4a0e8d76a532541f12954a5ac50"
+    }
+  ],
+  "daily": []
+}

@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "strict": true,
@@ -14,7 +14,18 @@
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["node", "vite/client"]
+    "types": ["node", "vite/client"],
+    "paths": {
+      "@platform": ["./src/platform/web/index.ts"]
+    }
   },
-  "include": ["src", "scripts", "tests", "vite.config.ts"]
+  "include": [
+    "src",
+    "scripts",
+    "tests",
+    "dev",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "playwright.config.ts"
+  ]
 }

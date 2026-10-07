@@ -1,0 +1,98 @@
+// Owner: foundation (platform workstream: additive only).
+// Platform adapter contract (04 §4.4, §6). Depends only on game/ types.
+import type { SaveDataV1 } from '../game/types';
+
+export type PlatformId = 'web' | 'fbig';
+
+export interface Capabilities {
+  interstitial: boolean;
+  rewarded: boolean;
+  banner: boolean;
+  cloudSave: boolean;
+  leaderboards: boolean;
+  share: boolean;
+  payments: boolean;
+  /** Platform haptics OR navigator.vibrate. false → Settings hides "Vibration" (02 §14). */
+  haptics: boolean;
+}
+
+export type AdKind = 'interstitial' | 'rewarded';
+export type InterstitialPlacement = 'next_level' | 'retry' | 'daily_done';
+export type RewardedPlacement = 'hint' | 'kitty' | 'revive';
+export type AdPlacement = InterstitialPlacement | RewardedPlacement;
+export type AdFailReason = 'unsupported' | 'no_fill' | 'not_ready' | 'skipped' | 'rate_limited' | 'timeout' | 'error';
+export type AdResult =
+  | { ok: true } // interstitial shown / rewarded watched to the end
+  | { ok: false; reason: AdFailReason };
+
+/**
+ * Raw save sources returned by storage.load(). [Foundation addition] 04 §4.4 returns one merged
+ * `unknown`; merging needs game/save.ts (migrate + merge), which platform/ must not import (04 §2),
+ * so the adapter returns both raw copies and the app runs migrate() on each, then merge().
+ */
+export interface RawSave {
+  /** Parsed local mirror (localStorage), or null when absent / unparseable. */
+  local: unknown | null;
+  /** Parsed cloud copy (FB player data), or null when absent or unsupported (web). */
+  cloud: unknown | null;
+  /** true when a stored copy existed but could not be parsed (it was backed up, 04 §7.2). */
+  corrupt: boolean;
+}
+
+/** 'memory' = localStorage unavailable (private mode, quota); the app shows a one-time toast (04 §6.2). */
+export type StorageStatus = 'ok' | 'memory';
+
+export interface PlatformStorage {
+  load(): Promise<RawSave>;
+  /**
+   * Writes the local mirror at once. cloud: 'debounced' = setDataAsync after save.cloudDebounceMs;
+   * 'now' = setDataAsync at once (cancels the debounce); 'flush' = setDataAsync then flushDataAsync
+   * (04 §7.1). Web: cloud is ignored. Never rejects: errors are retried or logged inside.
+   */
+  save(data: SaveDataV1, opts: { cloud: 'debounced' | 'now' | 'flush' }): Promise<void>;
+  status(): StorageStatus;
+}
+
+export interface PlatformAds {
+  preload(kind: AdKind): void;
+  isReady(kind: AdKind): boolean;
+  /** Waits ≤ ads.readyTimeoutMs for readiness (→ 'timeout'), then shows with NO timeout. Never rejects. */
+  showInterstitial(p: InterstitialPlacement): Promise<AdResult>;
+  /** ok only when watched to completion. Never rejects. */
+  showRewarded(p: RewardedPlacement): Promise<AdResult>;
+}
+
+export type AnalyticsParams = Record<string, string | number>;
+
+export interface PlatformAdapter {
+  readonly id: PlatformId;
+  capabilities(): Capabilities; // final after init()
+  init(): Promise<void>; // FB: initializeAsync (call early)
+  setLoadingProgress(pct: number): void; // FB: setLoadingProgress(0..100)
+  start(): Promise<void>; // FB: startGameAsync
+  getLocale(): string; // valid after start()
+  getPlayerId(): string | null; // game-scoped ID or null
+  onPause(cb: () => void): void;
+  storage: PlatformStorage;
+  ads: PlatformAds;
+  analytics: { log(name: string, params?: AnalyticsParams): void };
+  haptics: { pulse(pattern: number | readonly number[]): void };
+  leaderboards?: {
+    // Phase 4, optional capability
+    submit(board: string, score: number, extra?: string): Promise<void>;
+    show?(board: string): Promise<void>; // FB overlay view (05 §8)
+  };
+}
+
+/** Both adapters export `createPlatform(): PlatformAdapter` from their index.ts (imported via '@platform'). */
+export type CreatePlatform = () => PlatformAdapter;
+
+/**
+ * Minimal timer/clock surface the adapters need for debounces and readiness timeouts. [Foundation
+ * addition] app/clock.ts `Clock` satisfies it structurally, so tests can pass a FakeClock.
+ */
+export interface PlatformTimers {
+  now(): number;
+  setTimeout(fn: () => void, ms: number): number;
+  clearTimeout(id: number | null | undefined): void;
+}

@@ -1,0 +1,32 @@
+/* Owner: ui-board
+   Colour, spacing and type tokens (02 §17.2). Mirrors ui/art/palette.ts (PALETTE, TOKENS).
+   Region palette as --r0…--r11 (palette index order). Theming hook (02 §22). */
+:root {
+  --page: #fbf6ee;
+  --card: #ffffff;
+  --ink: #3b3044;
+  --ink-2: #7a6e80;
+  --accent: #1f9e89;
+  --danger: #d33a4a;
+  --heart: #e8506a;
+  --scrim: rgba(30, 22, 36, 0.75);
+
+  --r0: #f49aae; /* Strawberry */
+  --r1: #f7b98b; /* Apricot */
+  --r2: #f2dc7c; /* Lemon */
+  --r3: #bfdb86; /* Lime */
+  --r4: #8fd6b8; /* Mint */
+  --r5: #7cc6d6; /* Lagoon */
+  --r6: #9bbdf0; /* Sky */
+  --r7: #b9a7ec; /* Lavender */
+  --r8: #e3a6df; /* Orchid */
+  --r9: #c7a58c; /* Cocoa */
+  --r10: #9aa9bc; /* Slate */
+  --r11: #a3b57f; /* Moss */
+
+  --cat-fur: #f29a4a;
+  --cat-muzzle: #ffe9cf;
+
+  --font-display: 'Mewdoku Display', 'Fredoka', ui-rounded, system-ui, sans-serif;
+  --font-body: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
