@@ -1,16 +1,31 @@
 /* Owner: ui-board
    Colour, spacing and type tokens (02 §17.2). Mirrors ui/art/palette.ts (PALETTE, TOKENS).
-   Region palette as --r0…--r11 (palette index order). Theming hook (02 §22). */
+   Region palette as --r0…--r11 (palette index order). Theming hook (02 §22): a theme (dark mode,
+   palettes, skins) overrides these custom properties only. */
 :root {
+  /* ── UI colours (02 §17.2) ───────────────────────────────────────────── */
   --page: #fbf6ee;
+  --page-2: #f4ece0; /* desktop side fill, wells */
   --card: #ffffff;
   --ink: #3b3044;
   --ink-2: #7a6e80;
+  --ink-3: #b3a9b6; /* disabled text, hairline icons */
   --accent: #1f9e89;
+  --accent-deep: #167565; /* pressed edge of primary buttons, accent text on white */
+  --accent-soft: #dcf2ec;
   --danger: #d33a4a;
+  --wrong: #a3193a; /* wrong-X glyph + ring: 3:1 on every tile (scripts/palette-check.ts) */
   --heart: #e8506a;
+  --heart-empty: #eadfe3;
   --scrim: rgba(30, 22, 36, 0.75);
+  --scrim-soft: rgba(30, 22, 36, 0.32);
+  --line: rgba(59, 48, 68, 0.1);
+  --line-2: rgba(59, 48, 68, 0.16);
+  --gold: #ffd45c;
+  --gold-deep: #e9a92b;
+  --hard: #6c3fb5;
 
+  /* ── Region palette (02 §17.2), by palette index ─────────────────────── */
   --r0: #f49aae; /* Strawberry */
   --r1: #f7b98b; /* Apricot */
   --r2: #f2dc7c; /* Lemon */
@@ -24,9 +39,69 @@
   --r10: #9aa9bc; /* Slate */
   --r11: #a3b57f; /* Moss */
 
+  /* ── Cat (02 §17.3) ──────────────────────────────────────────────────── */
   --cat-fur: #f29a4a;
+  --cat-fur-2: #d9762e;
   --cat-muzzle: #ffe9cf;
 
+  /* ── Type (02 §17.6): one OFL display face + system UI ───────────────── */
   --font-display: 'Mewdoku Display', 'Fredoka', ui-rounded, system-ui, sans-serif;
-  --font-body: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-body: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --fs-xs: 0.75rem;
+  --fs-s: 0.875rem;
+  --fs-m: 1rem;
+  --fs-l: 1.125rem;
+  --fs-xl: 1.375rem;
+  --fs-xxl: 1.75rem;
+  --fs-hero: 2.5rem;
+
+  /* ── Space, radius, elevation ────────────────────────────────────────── */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --radius-s: 10px;
+  --radius-m: 14px;
+  --radius-l: 20px;
+  --radius-xl: 28px;
+  --radius-pill: 999px;
+  --shadow-1: 0 1px 2px rgba(59, 48, 68, 0.06), 0 2px 8px rgba(59, 48, 68, 0.07);
+  --shadow-2: 0 2px 4px rgba(59, 48, 68, 0.05), 0 10px 28px rgba(59, 48, 68, 0.1);
+  --shadow-3: 0 18px 50px rgba(30, 22, 36, 0.28);
+
+  /* ── Layout (02 §19; the game screen overwrites these from computeLayout) ── */
+  --gutter: 16px;
+  --col-max: 480px;
+  --top-bar: 56px;
+  --pills: 44px;
+  --chips: 40px;
+  --tool: 64px;
+  --vgap: 12px;
+  --fb-safe: 64px;
+  --focus-ring: 3px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  /* ── Motion (02 §17.5) ───────────────────────────────────────────────── */
+  --t-draw: 120ms;
+  --t-drop: 280ms;
+  --t-shake: 300ms;
+  --t-crack: 400ms;
+  --t-fade: 400ms;
+  --t-overlay: 200ms;
+  --ease-drop: cubic-bezier(0.2, 1.4, 0.4, 1);
+  --ease-out: cubic-bezier(0.22, 0.8, 0.3, 1);
+  --hint-dim: 0.45; /* 1 − layout.hintDim (dimmed 55 %) */
+}
+
+/* Reduced motion (02 §17.5): fades ≤ 150 ms; fx.css removes shake/confetti/stagger. */
+[data-motion='reduced'] {
+  --t-draw: 0ms;
+  --t-drop: 0ms;
+  --t-shake: 0ms;
+  --t-crack: 150ms;
+  --t-fade: 150ms;
+  --t-overlay: 150ms;
 }

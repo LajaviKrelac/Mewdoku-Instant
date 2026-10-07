@@ -1,5 +1,5 @@
 // Owner: game. Hand-made puzzles and helpers for the game rule tests (no generator, no codec).
-import type { HintStep, Puzzle, PuzzleId } from '../../../src/engine/types';
+import type { HintStep, LevelRecord, Puzzle, PuzzleId } from '../../../src/engine/types';
 import { newGame } from '../../../src/game/factory';
 import { reduce } from '../../../src/game/reducer';
 import type { Action, GameEvent, GameState, ModeId } from '../../../src/game/types';
@@ -67,3 +67,22 @@ export const paintA = (cells: number[], mode: 'mark' | 'erase', t = 0): Action =
 export function step(partial: Partial<HintStep> & Pick<HintStep, 'kind'>): HintStep {
   return { level: 1, focusUnits: [], focusCells: [], effectCells: [], ...partial };
 }
+
+/** P5 won (every solution cell double-tapped). */
+export function wonState(puzzle: Puzzle = P5, mode: ModeId = 'level'): GameState {
+  return run(playing(puzzle, mode), SOL5.map((c, i) => dbl(c, i))).state;
+}
+
+/** P5 lost: three wrong attempts at WRONG5[0..2] (hearts 0, mistakes 3). */
+export function lostState(puzzle: Puzzle = P5, mode: ModeId = 'level'): GameState {
+  return run(playing(puzzle, mode), WRONG5.slice(0, 3).map((c, i) => dbl(c, i))).state;
+}
+
+/** A valid on-disk record for the P5 board (passes engine/codec checkRecord). */
+export function rec5(i?: number): LevelRecord {
+  const base = { n: 5, r: R5, s: S5, g: 1 as const, e: 7, h: 0 as const };
+  return i === undefined ? base : { i, ...base };
+}
+
+/** Event types only, for compact assertions. */
+export const types = (events: readonly GameEvent[]): string[] => events.map((e) => e.type);

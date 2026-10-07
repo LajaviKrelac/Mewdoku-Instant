@@ -1,0 +1,284 @@
+// Owner: ui-board. Board view: build once, diff-only updates, region fade, highlights, moods, keyboard (04 §5.3).
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cfg } from '../../../src/app/config';
+import type { HintStep } from '../../../src/engine/types';
+import { CellState } from '../../../src/game/types';
+import { mountSprite } from '../../../src/ui/art/sprite';
+import { createBoardView, type BoardInput, type BoardModel, type BoardView } from '../../../src/ui/board/board-view';
+
+// 4×4: regions A B C C / A A C C / A D D C / D D D D (the tutorial board), colours Mint Lavender Lemon Strawberry.
+const REGIONS = Uint8Array.from([0, 1, 2, 2, 0, 0, 2, 2, 0, 3, 3, 2, 3, 3, 3, 3]);
+const COLORS = Uint8Array.from([4, 7, 2, 0]);
+
+function model(over: Partial<BoardModel> = {}): BoardModel {
+  return { puzzleId: 'T1', n: 4, regions: REGIONS, colors: COLORS, cells: new Uint8Array(16), regionsDone: 0, patterns: false, ...over };
+}
+
+function withCells(changes: Record<number, number>, base = new Uint8Array(16)): Uint8Array {
+  const out = Uint8Array.from(base);
+  for (const [k, v] of Object.entries(changes)) out[Number(k)] = v;
+  return out;
+}
+
+describe('createBoardView', () => {
+  let board: BoardView;
+  let input: { [K in keyof BoardInput]: ReturnType<typeof vi.fn> };
+
+  beforeEach(() => {
+    mountSprite();
+    input = { tap: vi.fn(), doubleTap: vi.fn(), paint: vi.fn(), bulb: vi.fn(), paw: vi.fn() };
+    board = createBoardView(model(), input as unknown as BoardInput, { reducedMotion: () => false });
+    document.body.appendChild(board.el);
+  });
+
+  afterEach(() => {
+    board.destroy();
+    vi.useRealTimers();
+  });
+
+  const cell = (i: number): HTMLElement => board.cellElement(i) as HTMLElement;
+
+  it('builds an accessible grid of n×n cell buttons', () => {
+    expect(board.el.getAttribute('role')).toBe('grid');
+    expect(board.el.getAttribute('aria-label')).toBe('Puzzle board, 4 by 4');
+    expect(board.el.querySelectorAll('[role=row]')).toHaveLength(4);
+    const buttons = board.el.querySelectorAll('button.cell[role=gridcell]');
+    expect(buttons).toHaveLength(16);
+    expect(cell(1).getAttribute('aria-label')).toBe('Row 1, column 2, Lavender, empty');
+    expect(cell(0).dataset.s).toBe('e');
+    expect(cell(0).style.getPropertyValue('--c')).toBe('var(--r4)');
+    // region-aware insets: cell 0 (A) faces B on the right, A below
+    expect(cell(0).style.getPropertyValue('--ir')).toBe('3.5px');
+    expect(cell(0).style.getPropertyValue('--ib')).toBe('1.5px');
+    // roving tabindex: only the first cell is tabbable
+    expect(Array.from(buttons).filter((b) => b.getAttribute('tabindex') === '0')).toHaveLength(1);
+  });
+
+  it('diffs updates: only changed cells are touched, elements are reused', () => {
+    const before = Array.from({ length: 16 }, (_, i) => cell(i));
+    const spy = vi.spyOn(Element.prototype, 'setAttribute');
+    board.update(model({ cells: withCells({ 1: CellState.Cat, 5: CellState.Mark }) }));
+    const labelWrites = spy.mock.calls.filter(([name]) => name === 'aria-label');
+    spy.mockRestore();
+    expect(labelWrites).toHaveLength(2);
+    expect(Array.from({ length: 16 }, (_, i) => cell(i))).toEqual(before);
+    expect(cell(1).dataset.s).toBe('c');
+    expect(cell(5).dataset.s).toBe('m');
+    expect(cell(1).getAttribute('aria-label')).toBe('Row 1, column 2, Lavender, cat');
+    expect(cell(1).querySelector('use.cell__cat')?.getAttribute('href')).toBe('#cat-idle');
+    // the same model again touches nothing
+    const spy2 = vi.spyOn(Element.prototype, 'setAttribute');
+    board.update(model({ cells: withCells({ 1: CellState.Cat, 5: CellState.Mark }) }));
+    expect(spy2.mock.calls.filter(([name]) => name === 'aria-label')).toHaveLength(0);
+    spy2.mockRestore();
+  });
+
+  it('renders every state code (e|m|c|w|g)', () => {
+    board.update(model({ cells: withCells({ 0: CellState.Mark, 1: CellState.Cat, 2: CellState.Wrong, 3: CellState.Given }) }));
+    expect([0, 1, 2, 3, 4].map((i) => cell(i).dataset.s)).toEqual(['m', 'c', 'w', 'g', 'e']);
+    expect(cell(2).getAttribute('aria-label')).toBe('Row 1, column 3, Lemon, wrong');
+  });
+
+  it('fades done regions with data-done and clears them on a fresh attempt', () => {
+    board.update(model({ cells: withCells({ 1: CellState.Cat }), regionsDone: 0b10 }));
+    expect(cell(1).hasAttribute('data-done')).toBe(true);
+    expect(cell(0).hasAttribute('data-done')).toBe(false);
+    board.update(model({ cells: withCells({ 1: CellState.Cat, 13: CellState.Cat }), regionsDone: 0b1010 }));
+    for (const i of [9, 10, 12, 13, 14, 15]) expect(cell(i).hasAttribute('data-done')).toBe(true);
+    board.update(model());
+    expect(board.el.querySelectorAll('[data-done]')).toHaveLength(0);
+  });
+
+  it('rebuilds on a new puzzle id or new region layout, and not otherwise', () => {
+    const first = cell(0);
+    board.update(model({ colors: Uint8Array.from(COLORS) })); // equal content, new reference
+    expect(cell(0)).toBe(first);
+    board.update(model({ puzzleId: 'L2' }));
+    expect(cell(0)).not.toBe(first);
+    const second = cell(0);
+    const regions = Uint8Array.from(REGIONS);
+    regions[15] = 2;
+    board.update(model({ puzzleId: 'L2', regions }));
+    expect(cell(0)).not.toBe(second);
+    board.update(model({ puzzleId: 'L3', n: 5, regions: new Uint8Array(25), colors: Uint8Array.from([0, 1, 2, 3, 4]), cells: new Uint8Array(25) }));
+    expect(board.el.querySelectorAll('button.cell')).toHaveLength(25);
+  });
+
+  it('patterns add glyphs and name them in labels', () => {
+    board.update(model({ patterns: true }));
+    expect(board.el.hasAttribute('data-patterns')).toBe(true);
+    expect(cell(1).querySelector('use.cell__pat')?.getAttribute('href')).toBe('#glyph-7');
+    expect(cell(1).getAttribute('aria-label')).toBe('Row 1, column 2, Lavender (bar), empty');
+    board.update(model({ patterns: false }));
+    expect(board.el.hasAttribute('data-patterns')).toBe(false);
+    expect(cell(1).getAttribute('aria-label')).toBe('Row 1, column 2, Lavender, empty');
+  });
+
+  it('hint highlight marks focus, ghost X and ghost cat; null clears it', () => {
+    const step: HintStep = { kind: 'single', level: 1, focusUnits: [], focusCells: [0, 4, 8], effectCells: [12, 13], placeCell: 8 };
+    board.setHighlight({ kind: 'hint', step });
+    expect(board.el.dataset.hl).toBe('hint');
+    expect(board.el.querySelectorAll('[data-f]')).toHaveLength(3);
+    expect(cell(12).dataset.ghost).toBe('x');
+    expect(cell(8).dataset.ghost).toBe('cat');
+    expect(cell(8).querySelector('use.cell__cat')).not.toBeNull();
+    board.setHighlight({ kind: 'hint', step: { ...step, kind: 'mistaken_mark', effectCells: [5], placeCell: undefined } });
+    expect(cell(5).dataset.ghost).toBe('clear');
+    expect(cell(12).hasAttribute('data-ghost')).toBe(false);
+    board.setHighlight({ kind: 'coach', cells: [1] });
+    expect(board.el.dataset.hl).toBe('coach');
+    expect(board.el.querySelectorAll('[data-f]')).toHaveLength(1);
+    board.setHighlight(null);
+    expect(board.el.hasAttribute('data-hl')).toBe(false);
+    expect(board.el.querySelectorAll('[data-f],[data-ghost]')).toHaveLength(0);
+  });
+
+  it('setLocked sets aria-disabled and blocks keyboard input', () => {
+    board.setLocked(true);
+    expect(board.el.getAttribute('aria-disabled')).toBe('true');
+    cell(0).dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    expect(input.tap).not.toHaveBeenCalled();
+    board.setLocked(false);
+    expect(board.el.hasAttribute('aria-disabled')).toBe(false);
+    cell(0).dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    expect(input.tap).toHaveBeenCalledWith(0);
+  });
+
+  it('MISTAKE makes cats sad for fx.sadCatsMs; WON makes them happy after fx.winHappyDelayMs', () => {
+    vi.useFakeTimers();
+    board.update(model({ cells: withCells({ 1: CellState.Cat }) }));
+    const catUse = (): string | null => cell(1).querySelector('use.cell__cat')?.getAttribute('href') ?? null;
+    board.update(model({ cells: withCells({ 1: CellState.Cat, 0: CellState.Wrong }) }));
+    board.playEvent({ type: 'MISTAKE', cell: 0, heartsLeft: 2 });
+    expect(board.el.dataset.mood).toBe('sad');
+    expect(catUse()).toBe('#cat-sad');
+    expect(cell(0).classList.contains('fx-flash')).toBe(true);
+    vi.advanceTimersByTime(cfg.fx.sadCatsMs);
+    expect(board.el.dataset.mood).toBe('idle');
+    expect(catUse()).toBe('#cat-idle');
+    board.playEvent({ type: 'WON' });
+    expect(board.el.dataset.mood).toBe('idle');
+    vi.advanceTimersByTime(cfg.fx.winHappyDelayMs);
+    expect(board.el.dataset.mood).toBe('happy');
+    expect(catUse()).toBe('#cat-happy');
+  });
+
+  it('LOST keeps cats sad until a fresh attempt clears the wrong cells', () => {
+    board.update(model({ cells: withCells({ 1: CellState.Cat, 0: CellState.Wrong }) }));
+    board.playEvent({ type: 'LOST' });
+    expect(board.el.dataset.mood).toBe('sad');
+    board.update(model());
+    expect(board.el.dataset.mood).toBe('idle');
+  });
+
+  it('a kitty cat looks surprised for kitty.revealMs, then follows the board mood', () => {
+    vi.useFakeTimers();
+    board.update(model({ cells: withCells({ 1: CellState.Cat }) }));
+    board.playEvent({ type: 'CAT_PLACED', cell: 1, source: 'kitty' });
+    expect(cell(1).querySelector('use.cell__cat')?.getAttribute('href')).toBe('#cat-surprised');
+    expect(cell(1).dataset.mood).toBe('surprised');
+    expect(cell(1).querySelector('.cell__spark')).not.toBeNull();
+    vi.advanceTimersByTime(cfg.kitty.revealMs + 250);
+    expect(cell(1).querySelector('use.cell__cat')?.getAttribute('href')).toBe('#cat-idle');
+    expect(cell(1).querySelector('.cell__spark')).toBeNull();
+  });
+
+  it('transient classes are removed again', () => {
+    vi.useFakeTimers();
+    board.playEvent({ type: 'PULSE', cell: 3 });
+    board.playEvent({ type: 'MARKED', cells: [4, 5] });
+    expect(cell(3).classList.contains('fx-pulse')).toBe(true);
+    expect(cell(4).classList.contains('fx-draw')).toBe(true);
+    board.playEntry();
+    expect(board.el.classList.contains('fx-entry')).toBe(true);
+    vi.advanceTimersByTime(1000);
+    expect(board.el.querySelectorAll('.fx-pulse,.fx-draw')).toHaveLength(0);
+    expect(board.el.classList.contains('fx-entry')).toBe(false);
+  });
+
+  it('reduced motion skips draw-in, drop and sparkle', () => {
+    board.destroy();
+    board = createBoardView(model(), input as unknown as BoardInput, { reducedMotion: () => true });
+    board.playEvent({ type: 'MARKED', cells: [4] });
+    board.playEvent({ type: 'CAT_PLACED', cell: 1, source: 'kitty' });
+    expect(board.el.querySelectorAll('.fx-draw,.fx-drop,.cell__spark')).toHaveLength(0);
+    board.playEntry();
+    expect(board.el.style.getPropertyValue('--entry-stagger')).toBe('0ms');
+  });
+
+  it('setSlot and geometry report the slot size', () => {
+    board.setSlot(40);
+    expect(board.el.style.getPropertyValue('--slot')).toBe('40px');
+    const g = board.geometry(); // jsdom has no layout: falls back to the slot size
+    expect(g).toMatchObject({ pad: cfg.layout.boardPad, slot: 40, n: 4 });
+    expect(board.cellRect(0)).not.toBeNull();
+    expect(board.cellRect(99)).toBeNull();
+  });
+
+  it('destroy detaches the element', () => {
+    board.destroy();
+    expect(board.el.isConnected).toBe(false);
+    board = createBoardView(model(), input as unknown as BoardInput, { reducedMotion: () => false });
+  });
+});
+
+describe('board keyboard (02 §6.3)', () => {
+  let board: BoardView;
+  let input: { [K in keyof BoardInput]: ReturnType<typeof vi.fn> };
+  const key = (k: string, init: KeyboardEventInit = {}): void => {
+    (document.activeElement ?? board.el).dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...init }));
+  };
+
+  beforeEach(() => {
+    input = { tap: vi.fn(), doubleTap: vi.fn(), paint: vi.fn(), bulb: vi.fn(), paw: vi.fn() };
+    board = createBoardView(model(), input as unknown as BoardInput, { reducedMotion: () => false });
+    document.body.appendChild(board.el);
+    board.focusCell(0);
+  });
+
+  afterEach(() => board.destroy());
+
+  it('arrows move a roving tabindex and DOM focus, clamped at the edges', () => {
+    key('ArrowRight');
+    key('ArrowDown');
+    expect(document.activeElement).toBe(board.cellElement(5));
+    expect(board.cellElement(5)?.getAttribute('tabindex')).toBe('0');
+    expect(board.cellElement(0)?.getAttribute('tabindex')).toBe('-1');
+    key('ArrowLeft');
+    key('ArrowLeft');
+    key('ArrowUp');
+    key('ArrowUp');
+    expect(document.activeElement).toBe(board.cellElement(0));
+    key('End');
+    expect(document.activeElement).toBe(board.cellElement(3));
+  });
+
+  it('Space taps, Enter double-taps, H and K open the helpers; repeats are ignored', () => {
+    key('ArrowRight');
+    key(' ');
+    key('Enter');
+    key('Enter', { repeat: true });
+    key('h');
+    key('K');
+    expect(input.tap).toHaveBeenCalledWith(1);
+    expect(input.doubleTap).toHaveBeenCalledTimes(1);
+    expect(input.doubleTap).toHaveBeenCalledWith(1);
+    expect(input.bulb).toHaveBeenCalledTimes(1);
+    expect(input.paw).toHaveBeenCalledTimes(1);
+  });
+
+  it('prevents default for handled keys and ignores modified keys', () => {
+    const ev = new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true });
+    board.cellElement(0)?.dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(true);
+    key('h', { ctrlKey: true });
+    expect(input.bulb).not.toHaveBeenCalled();
+  });
+
+  it('focusing a cell by pointer moves the roving index there', () => {
+    board.cellElement(10)?.focus();
+    expect(board.cellElement(10)?.getAttribute('tabindex')).toBe('0');
+    key(' ');
+    expect(input.tap).toHaveBeenCalledWith(10);
+  });
+});

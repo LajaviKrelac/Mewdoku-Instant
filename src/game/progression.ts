@@ -2,7 +2,7 @@
 // Level numbers → packs and puzzle ids, hard levels, endless/substitute/daily GenSpecs, daily unlock,
 // local date keys (02 §11, §12; 03 §8–9). PURE: the current time is always passed in.
 import { cfg, type GameConfig } from '../app/config';
-import type { GenSpec, GradeBand, PuzzleId, SizeWeight } from '../engine/types';
+import type { DailyPack, GenSpec, GradeBand, LevelPack, LevelRecord, PuzzleId, SizeWeight } from '../engine/types';
 import {
   bandFor,
   breatherBand,
@@ -15,6 +15,7 @@ import {
   RETRY_BAND,
   allowG5Steps,
   SEEDS,
+  shapeLimits,
   weekdayOfDateKey,
   type RampRow,
 } from './ramp';
@@ -74,6 +75,32 @@ export function packsToPrefetch(level: number, c: GameConfig = cfg): number[] {
   return out;
 }
 
+/**
+ * Level L's record in a loaded pack (level → record): by position `L − first` when that record's `i`
+ * agrees (or is absent), else by searching `i`. Null when the pack does not hold L.
+ */
+export function levelRecordIn(pack: LevelPack, level: number): LevelRecord | null {
+  if (level < pack.first || level >= pack.first + pack.levels.length) {
+    return pack.levels.find((r) => r.i === level) ?? null;
+  }
+  const byPos = pack.levels[level - pack.first];
+  if (byPos && (byPos.i === undefined || byPos.i === level)) return byPos;
+  return pack.levels.find((r) => r.i === level) ?? null;
+}
+
+/** "YYYY-MM" of a date key: the daily month file that holds it (03 §8.6). */
+export function dailyMonthOf(dateKey: string): string {
+  if (!DATE_KEY_RE.test(dateKey)) throw new RangeError(`dailyMonthOf: bad date key ${dateKey}`);
+  return dateKey.slice(0, 7);
+}
+
+/** The record for a date in a loaded month pack (daily date → record), or null. */
+export function dailyRecordIn(pack: DailyPack, dateKey: string): LevelRecord | null {
+  if (pack.month !== dateKey.slice(0, 7)) return null;
+  const rec: unknown = Object.prototype.hasOwnProperty.call(pack.days, dateKey) ? pack.days[dateKey] : undefined;
+  return rec === undefined ? null : (rec as LevelRecord);
+}
+
 /** L > levels.shipped: generated on the device (02 §11.4). */
 export function isEndless(level: number, c: GameConfig = cfg): boolean {
   return level > c.levels.shipped;
@@ -96,10 +123,24 @@ export function slotPoolAndBand(
   return { pool, band: breather ? breatherBand(band) : band };
 }
 
+/**
+ * Adds the runtime generator tuning from cfg.gen and, for a sizePool spec, the per-size shape limits
+ * (03 §4.5) for every size the first draw can pick, so a drawn n gets its own minRegion/maxRegion.
+ */
+function tuned(spec: GenSpec, level: number | null, c: GameConfig): GenSpec {
+  const out: GenSpec = { ...spec, edenOneIn: c.gen.edenOneIn, repairMaxIter: c.gen.repairMaxIter };
+  if (!spec.sizePool) return out;
+  const sizeLimits = spec.sizePool.map(([n]): readonly [number, number, number] => {
+    const lim = shapeLimits(n, level, false, c);
+    return [n, lim.minRegion, lim.maxRegion];
+  });
+  return { ...out, sizeLimits };
+}
+
 /** Endless level spec: seed level:v1:L, sizePool of the last ramp row, hard/breather bands (02 §11.4). */
 export function endlessSpec(level: number, c: GameConfig = cfg): GenSpec {
   const { pool, band } = slotPoolAndBand(level, c, ENDLESS_ROW);
-  return makeGenSpec({ n: 0, seed: SEEDS.level(level), band, level, sizePool: pool }, c);
+  return tuned(makeGenSpec({ n: 0, seed: SEEDS.level(level), band, level, sizePool: pool }, c), level, c);
 }
 
 /** Retry spec after maxAttempts failures: seed `${seed}:r1`, band G1–G5, still ≤ 1 G5 step (02 §11.4). */
@@ -110,13 +151,13 @@ export function endlessRetrySpec(spec: GenSpec): GenSpec {
 /** Substitute board when a pack cannot load: seed fallback:v1:L, the slot's size pool and band (02 §11.4). */
 export function substituteSpec(level: number, c: GameConfig = cfg): GenSpec {
   const { pool, band } = slotPoolAndBand(level, c);
-  return makeGenSpec({ n: 0, seed: SEEDS.fallback(level), band, level, sizePool: pool }, c);
+  return tuned(makeGenSpec({ n: 0, seed: SEEDS.fallback(level), band, level, sizePool: pool }, c), level, c);
 }
 
 /** Daily spec: seed daily:v1:date, n and band from the weekday table (02 §12). */
 export function dailySpec(dateKey: string, c: GameConfig = cfg): GenSpec {
   const slot = dailySlotFor(dateKey);
-  return makeGenSpec({ n: slot.n, seed: SEEDS.daily(dateKey), band: slot.band, level: null }, c);
+  return tuned(makeGenSpec({ n: slot.n, seed: SEEDS.daily(dateKey), band: slot.band, level: null }, c), null, c);
 }
 
 /** Unlocked iff save.progress.level > daily.unlockAfterLevel (02 §12). */

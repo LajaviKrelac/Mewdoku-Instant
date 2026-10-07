@@ -33,5 +33,6 @@ export function bitIndices(mask: number): number[] {
 /** Mask with bits 0..n-1 set (n ≤ 31). */
 export function fullMask(n: number): number {
   if (!Number.isInteger(n) || n < 0 || n > 31) throw new RangeError(`fullMask: n out of range: ${n}`);
-  return (1 << n) - 1;
+  // (1 << 31) - 1 would leave the int32 range; the unsigned shift keeps every n exact.
+  return n === 0 ? 0 : -1 >>> (32 - n);
 }

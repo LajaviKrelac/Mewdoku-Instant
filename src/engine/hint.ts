@@ -58,7 +58,8 @@ function hasNewEffect(step: HintStep, cells: Readonly<Uint8Array>): boolean {
 /**
  * The next step to teach (03 §6): a mistaken_mark first, else the first trace step with a new effect
  * on the board, else reveal_fallback. `cells` holds CellState values (engine/types.ts).
- * Throws when the board is already solved (no cat-less region is left to reveal).
+ * On a solved board it still teaches shadow steps while tiles are Empty; once nothing is left to
+ * teach and every region has a cat it throws (the app never asks for a hint on a won board).
  */
 export function getHintStep(puzzle: Puzzle, cells: Readonly<Uint8Array>): HintStep {
   const mistaken = findMistakenMark(puzzle, cells);

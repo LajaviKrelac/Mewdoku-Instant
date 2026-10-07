@@ -121,29 +121,57 @@ export function confinementIn(v: View): HintStep | null {
   return null;
 }
 
-/** L3 on a view: candidate x (cell order) whose shadow covers every candidate of an open unit u ∌ x. */
+/**
+ * L3 on a view: candidate x (cell order) whose shadow covers every candidate of an open unit u ∌ x.
+ * The 03 §5.2 scan is x-major (first x, then first u). Attack is symmetric, so the cells whose shadow
+ * covers Cand(u) are ∩_{y ∈ Cand(u)} A(y); computing that per unit and keeping the smallest x (the
+ * earliest unit on ties) yields exactly the same (x, u) as the x-major scan, much faster.
+ */
 export function shadowConflictIn(v: View): HintStep | null {
   const n = v.n;
   const { attackRows } = v.bt;
-  for (let x = 0; x < n * n; x++) {
-    if (v.status[x] !== KnowledgeStatus.Cand) continue;
-    const xr = Math.floor(x / n);
-    const xc = n + (x % n);
-    const xg = 2 * n + (v.bt.regions[x] as number);
-    for (let u = 0; u < 3 * n; u++) {
-      if (v.ccount[u] !== 0 || u === xr || u === xc || u === xg) continue;
-      let covered = true;
-      for (let r = 0; r < n; r++) {
-        if ((v.uc[u * n + r] as number) & ~(attackRows[x * n + r] as number)) {
-          covered = false;
-          break;
+  const inter = new Int32Array(n);
+  let bestX = n * n;
+  let bestU = -1;
+  for (let u = 0; u < 3 * n; u++) {
+    if (v.ccount[u] !== 0) continue;
+    // Start from every candidate outside u (rows past the current best x cannot hold a smaller x).
+    let any = 0;
+    const lastRow = Math.floor((bestX - 1) / n);
+    for (let r = 0; r < n; r++) {
+      const m = r <= lastRow ? (v.uc[r * n + r] as number) & ~unitRowMask(v.bt, u, r) : 0;
+      inter[r] = m;
+      any |= m;
+    }
+    // Intersect with the shadow of each candidate y of u.
+    for (let ry = 0; ry < n && any !== 0; ry++) {
+      let ym = v.uc[u * n + ry] as number;
+      while (ym !== 0 && any !== 0) {
+        const low = ym & -ym;
+        const y = ry * n + 31 - Math.clz32(low);
+        ym ^= low;
+        any = 0;
+        for (let r = 0; r <= lastRow; r++) {
+          const m = (inter[r] as number) & (attackRows[y * n + r] as number);
+          inter[r] = m;
+          any |= m;
         }
       }
-      if (!covered) continue;
-      return { kind: 'shadow_conflict', level: 3, focusUnits: [unitFromId(u, n)], focusCells: [x], effectCells: [x] };
+    }
+    if (any === 0) continue;
+    for (let r = 0; r <= lastRow; r++) {
+      const m = inter[r] as number;
+      if (m === 0) continue;
+      const x = r * n + 31 - Math.clz32(m & -m);
+      if (x < bestX) {
+        bestX = x;
+        bestU = u;
+      }
+      break;
     }
   }
-  return null;
+  if (bestU < 0) return null;
+  return { kind: 'shadow_conflict', level: 3, focusUnits: [unitFromId(bestU, n)], focusCells: [bestX], effectCells: [bestX] };
 }
 
 /** L0 for every cat of K (free bookkeeping inside trial propagation). */

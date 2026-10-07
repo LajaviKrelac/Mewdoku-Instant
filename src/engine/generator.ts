@@ -1,7 +1,7 @@
 // Owner: engine
 // Generator pipeline (03 §4): plant a king permutation, grow regions, repair uniqueness, filter.
 // Deterministic for a seed (03 §7): integer arithmetic only, index-ordered iteration. PURE.
-import { canonicalLabels, encodeRegions, encodeSolution } from './codec';
+import { canonicalLabels, encodeRegions, encodeSolution, MAX_N, MIN_N } from './codec';
 import { canonicalKey, shapeOk } from './filters';
 import { grade } from './grader';
 import { makeRng } from './rng';
@@ -123,8 +123,19 @@ export function growRegions(n: number, perm: Uint8Array, rng: Rng, mode: GrowthM
   return regions;
 }
 
-/** true when region g stays non-empty and 4-connected once `excluded` leaves it. */
-export function regionConnectedWithout(n: number, regions: Uint8Array, g: number, excluded: number): boolean {
+/** Reusable flood-fill buffers for the connectivity checks of one repair run (no per-check allocation). */
+interface FloodScratch {
+  readonly seen: Uint8Array;
+  readonly stack: Int32Array;
+  /** Incremented per check, so `seen` never needs clearing (wraps after 255 checks). */
+  stamp: number;
+}
+
+function floodScratch(total: number): FloodScratch {
+  return { seen: new Uint8Array(total), stack: new Int32Array(total), stamp: 0 };
+}
+
+function connectedWithout(n: number, regions: Uint8Array, g: number, excluded: number, fs: FloodScratch): boolean {
   const total = n * n;
   let start = -1;
   let count = 0;
@@ -135,40 +146,59 @@ export function regionConnectedWithout(n: number, regions: Uint8Array, g: number
     }
   }
   if (count === 0) return false;
-  const seen = new Uint8Array(total);
-  const stack = new Int32Array(total);
+  const { seen, stack } = fs;
+  if (fs.stamp === 255) {
+    seen.fill(0);
+    fs.stamp = 0;
+  }
+  const mark = ++fs.stamp;
   let sp = 0;
   stack[sp++] = start;
-  seen[start] = 1;
+  seen[start] = mark;
   let reached = 0;
   while (sp > 0) {
     const i = stack[--sp] as number;
     reached++;
     const r = Math.floor(i / n);
     const c = i - r * n;
-    const push = (j: number): void => {
-      if (!seen[j] && j !== excluded && regions[j] === g) {
-        seen[j] = 1;
+    for (let d = 0; d < 4; d++) {
+      let j: number;
+      if (d === 0) {
+        if (r === 0) continue;
+        j = i - n;
+      } else if (d === 1) {
+        if (r === n - 1) continue;
+        j = i + n;
+      } else if (d === 2) {
+        if (c === 0) continue;
+        j = i - 1;
+      } else {
+        if (c === n - 1) continue;
+        j = i + 1;
+      }
+      if (seen[j] !== mark && j !== excluded && regions[j] === g) {
+        seen[j] = mark;
         stack[sp++] = j;
       }
-    };
-    if (r > 0) push(i - n);
-    if (r < n - 1) push(i + n);
-    if (c > 0) push(i - 1);
-    if (c < n - 1) push(i + 1);
+    }
   }
   return reached === count;
+}
+
+/** true when region g stays non-empty and 4-connected once `excluded` leaves it. */
+export function regionConnectedWithout(n: number, regions: Uint8Array, g: number, excluded: number): boolean {
+  return connectedWithout(n, regions, g, excluded, floodScratch(n * n));
 }
 
 /** Packs a move (cell x joins region g2) into one integer: x * 16 + g2. */
 const packMove = (x: number, g2: number): number => x * 16 + g2;
 
 /** Applies the first move (in list order) that keeps the losing region connected. */
-function applyFirstMove(n: number, regions: Uint8Array, moves: readonly number[]): boolean {
+function applyFirstMove(n: number, regions: Uint8Array, moves: readonly number[], fs: FloodScratch): boolean {
   for (const mv of moves) {
     const x = Math.floor(mv / 16);
     const g2 = mv - x * 16;
-    if (!regionConnectedWithout(n, regions, regions[x] as number, x)) continue;
+    if (!connectedWithout(n, regions, regions[x] as number, x, fs)) continue;
     regions[x] = g2;
     return true;
   }
@@ -190,6 +220,7 @@ export function repairUnique(n: number, regions: Uint8Array, perm: Uint8Array, r
   const total = n * n;
   const isSolCat = new Uint8Array(total);
   for (let r = 0; r < n; r++) isSolCat[r * n + (perm[r] as number)] = 1;
+  const fs = floodScratch(total);
   for (let iter = 0; iter < maxIter; iter++) {
     const res = countSolutions(n, regions, 2);
     if (res.count === 1) return true;
@@ -200,12 +231,12 @@ export function repairUnique(n: number, regions: Uint8Array, perm: Uint8Array, r
     const moves: number[] = [];
     for (let r = 0; r < n; r++) if (s2[r] !== perm[r]) pushMovesOf(n, regions, r * n + (s2[r] as number), moves);
     rng.shuffle(moves);
-    if (applyFirstMove(n, regions, moves)) continue;
+    if (applyFirstMove(n, regions, moves, fs)) continue;
     // Escape: a random boundary move of any cell that is not an S1 cat.
     const escapes: number[] = [];
     for (let i = 0; i < total; i++) if (!isSolCat[i]) pushMovesOf(n, regions, i, escapes);
     rng.shuffle(escapes);
-    if (!applyFirstMove(n, regions, escapes)) return false;
+    if (!applyFirstMove(n, regions, escapes, fs)) return false;
   }
   return false;
 }
@@ -241,6 +272,7 @@ function limitsFor(spec: GenSpec, n: number): { minRegion: number; maxRegion: nu
 export function generate(spec: GenSpec, opts: GenerateOptions = {}): GenResult {
   const rng = makeRng(spec.seed);
   const n = spec.sizePool && spec.sizePool.length > 0 ? pickSize(spec.sizePool, rng) : spec.n;
+  if (!Number.isInteger(n) || n < MIN_N || n > MAX_N) throw new RangeError(`generate: board size ${n} outside ${MIN_N}..${MAX_N}`);
   const limits = limitsFor(spec, n);
   const edenOneIn = spec.edenOneIn ?? GEN_DEFAULTS.edenOneIn;
   const repairMaxIter = spec.repairMaxIter ?? GEN_DEFAULTS.repairMaxIter;

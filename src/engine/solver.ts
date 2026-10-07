@@ -1,7 +1,7 @@
 // Owner: engine
 // Production solver "Solver B": unit-MRV on bitboards, stops at `limit` solutions (03 §3.1). PURE.
 // Written as plain functions over one state object (no per-node closures): 3–4× faster in V8.
-import { fullMask, popcount } from './bits';
+import { fullMask } from './bits';
 import type { SolveResult } from './types';
 
 interface SolverState {
@@ -13,6 +13,9 @@ interface SolverState {
   /** One frame per depth: cand[depth * n + r] = columns still possible in row r. */
   readonly cand: Int32Array;
   readonly sol: Uint8Array;
+  /** Per-node scratch: candidates per column and per region (filled and read before recursing). */
+  readonly colCnt: Int32Array;
+  readonly regCnt: Int32Array;
   readonly solutions: Uint8Array[];
   readonly limit: number;
   nodes: number;
@@ -47,14 +50,31 @@ function search(s: SolverState, depth: number, rows: number, cols: number, regs:
     return s.solutions.length >= s.limit;
   }
   const base = depth * n;
+  const { colCnt, regCnt, regions } = s;
+  for (let i = 0; i < n; i++) {
+    colCnt[i] = 0;
+    regCnt[i] = 0;
+  }
   // Most constrained open unit among rows, then columns, then regions (first minimum wins).
+  // One pass over the candidate cells counts all three unit kinds (closed units hold none).
   let best = -1;
   let bestCnt = 99;
   let bestType = 0;
   for (let r = 0; r < n; r++) {
     if ((rows >> r) & 1) continue;
-    const k = popcount(cand[base + r] as number);
-    if (k === 0) return false;
+    let m = cand[base + r] as number;
+    if (m === 0) return false;
+    const rowBase = r * n;
+    let k = 0;
+    while (m !== 0) {
+      const low = m & -m;
+      const c = 31 - Math.clz32(low);
+      colCnt[c] = (colCnt[c] as number) + 1;
+      const g = regions[rowBase + c] as number;
+      regCnt[g] = (regCnt[g] as number) + 1;
+      k++;
+      m ^= low;
+    }
     if (k < bestCnt) {
       bestCnt = k;
       best = r;
@@ -63,9 +83,7 @@ function search(s: SolverState, depth: number, rows: number, cols: number, regs:
   }
   for (let c = 0; c < n; c++) {
     if ((cols >> c) & 1) continue;
-    const bit = 1 << c;
-    let k = 0;
-    for (let r = 0; r < n; r++) if ((cand[base + r] as number) & bit) k++;
+    const k = colCnt[c] as number;
     if (k === 0) return false;
     if (k < bestCnt) {
       bestCnt = k;
@@ -75,9 +93,7 @@ function search(s: SolverState, depth: number, rows: number, cols: number, regs:
   }
   for (let g = 0; g < n; g++) {
     if ((regs >> g) & 1) continue;
-    const gBase = g * n;
-    let k = 0;
-    for (let r = 0; r < n; r++) k += popcount((cand[base + r] as number) & (regRows[gBase + r] as number));
+    const k = regCnt[g] as number;
     if (k === 0) return false;
     if (k < bestCnt) {
       bestCnt = k;
@@ -128,7 +144,19 @@ export function countSolutions(n: number, regions: Uint8Array, limit = 2): Solve
   }
   const cand = new Int32Array((n + 1) * n);
   cand.fill(full, 0, n);
-  const s: SolverState = { n, full, regions, regRows, cand, sol: new Uint8Array(n), solutions: [], limit, nodes: 0 };
+  const s: SolverState = {
+    n,
+    full,
+    regions,
+    regRows,
+    cand,
+    sol: new Uint8Array(n),
+    colCnt: new Int32Array(n),
+    regCnt: new Int32Array(n),
+    solutions: [],
+    limit,
+    nodes: 0,
+  };
   if (limit >= 1) search(s, 0, 0, 0, 0);
   const count = (s.solutions.length >= 2 ? 2 : s.solutions.length) as 0 | 1 | 2;
   return { count, solutions: s.solutions, nodes: s.nodes };

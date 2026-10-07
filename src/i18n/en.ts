@@ -37,6 +37,7 @@ export const en = {
   'home.daily.a11y': 'Daily puzzle, {date}, {size}, {status}',
   'home.stock.hints': 'Hints: {count}',
   'home.stock.kitties': 'Kitties: {count}',
+  'home.daily.sub': '{size} · {status}',
 
   // ── Game (S2) ──────────────────────────────────────────────────────────────
   'game.title.level': 'Level {level}',

@@ -2,7 +2,7 @@
 // Game construction and in-progress conversion (04 §3, §7.2). PURE.
 import type { Puzzle } from '../engine/types';
 import { rulesFor } from './modes';
-import { decodeCells, encodeCells } from './save';
+import { decodeCells, encodeCells, validateSlot } from './save-fields';
 import { CellState, type GameState, type InProgressV1, type ModeId, type RuleFlags } from './types';
 
 /** Fresh attempt: givens only, full hearts, counters 0, empty move log, status 'ready' (04 §4.2 RETRY). */
@@ -33,13 +33,20 @@ export function newGame(puzzle: Puzzle, mode: ModeId, rules: RuleFlags = rulesFo
 }
 
 /**
- * Rebuilds a game from a VALIDATED slot (save.validateInProgress). Status: 'won' when the cats already
- * fill the board (02 §15 step 4, checked first), 'lost' when hearts === 0 (step 5), else 'ready'.
- * The move log is not persisted, so it starts empty. Hint/kitty overlays are never restored.
+ * Rebuilds a game from a saved slot (02 §15 restore steps 4–6). The slot is validated against the
+ * puzzle first (04 §7.2 checks, with the mode implied by `puzzle.id` and the hearts/revive limits of
+ * the RuleFlags the game will use: `rules`, else rulesFor(slot.mode)), and an invalid
+ * slot throws a RangeError naming the failed check: the caller clears that slot and starts fresh
+ * (02 §15 step 3). Status: 'won' when the cats already fill the board (step 4, checked first), 'lost'
+ * when hearts === 0 (step 5), else 'ready' (step 6). The move log is not persisted, so it starts
+ * empty; hint and kitty overlays are never restored (anything charged stays charged).
  */
 export function restoreGame(puzzle: Puzzle, slot: InProgressV1, rules?: RuleFlags): GameState {
+  const daily = typeof slot === 'object' && slot !== null && slot.mode === 'daily';
+  const flags = rules ?? rulesFor(daily ? 'daily' : 'level');
+  const check = checkSlot(puzzle, slot, flags);
+  if (!check.ok) throw new RangeError(`restoreGame(${puzzle.id}): invalid slot (${check.reason})`);
   const mode: ModeId = slot.mode;
-  const flags = rules ?? rulesFor(mode);
   const cells = decodeCells(slot.cells, puzzle.n);
   const catsPlaced = countCats(cells);
   const status = catsPlaced >= puzzle.n ? 'won' : slot.hearts <= 0 ? 'lost' : 'ready';
@@ -60,6 +67,17 @@ export function restoreGame(puzzle: Puzzle, slot: InProgressV1, rules?: RuleFlag
     openHint: null,
     moves: [],
   };
+}
+
+/**
+ * validateInProgress for restoreGame. The expected mode follows the puzzle id (L… → level, D… →
+ * daily; T1 is never saved), so a slot cannot restore a board in the wrong mode.
+ */
+function checkSlot(puzzle: Puzzle, slot: InProgressV1, rules: RuleFlags): { ok: true } | { ok: false; reason: string } {
+  if (typeof slot !== 'object' || slot === null) return { ok: false, reason: 'shape' };
+  const mode = puzzle.id[0] === 'L' ? 'level' : puzzle.id[0] === 'D' ? 'daily' : null;
+  if (mode === null) return { ok: false, reason: 'id' };
+  return validateSlot(slot, puzzle, { mode, id: puzzle.id }, rules);
 }
 
 /** Snapshot for the save slot (level/daily modes only; the tutorial is never saved). Throws for the tutorial. */

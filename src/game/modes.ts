@@ -22,6 +22,10 @@ export interface GameMode {
   readonly fixedColors: readonly number[] | null;
   /** `mode` param for analytics (02 §20). */
   readonly analyticsMode: string;
+  /** HUD title (02 §5 S2): 'level' → "Level L" (the tutorial is "Level 1"), 'daily' → "Daily · date". */
+  readonly hudTitle: 'level' | 'daily';
+  /** Top-bar Home button (02 §4.2: none during the tutorial; Gear is always there). */
+  readonly homeButton: boolean;
 }
 
 /** RuleFlags for a mode from cfg (hearts 3, revive 1/1; tutorial: mistakePenalty false). */
@@ -47,6 +51,8 @@ function buildModes(c: GameConfig): Readonly<Record<ModeId, GameMode>> {
     winGate: null,
     fixedColors: TUTORIAL_COLORS,
     analyticsMode: 'tutorial',
+    hudTitle: 'level',
+    homeButton: false,
   };
   const level: GameMode = {
     id: 'level',
@@ -58,6 +64,8 @@ function buildModes(c: GameConfig): Readonly<Record<ModeId, GameMode>> {
     winGate: 'next_level',
     fixedColors: null,
     analyticsMode: 'level',
+    hudTitle: 'level',
+    homeButton: true,
   };
   const daily: GameMode = {
     id: 'daily',
@@ -69,6 +77,8 @@ function buildModes(c: GameConfig): Readonly<Record<ModeId, GameMode>> {
     winGate: 'daily_done',
     fixedColors: null,
     analyticsMode: 'daily',
+    hudTitle: 'daily',
+    homeButton: true,
   };
   return Object.freeze({
     tutorial: Object.freeze(tutorial),

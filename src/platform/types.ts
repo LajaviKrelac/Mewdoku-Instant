@@ -51,6 +51,12 @@ export interface PlatformStorage {
    */
   save(data: SaveDataV1, opts: { cloud: 'debounced' | 'now' | 'flush' }): Promise<void>;
   status(): StorageStatus;
+  /**
+   * [Platform addition] One-time warning hook (04 §6.2): `cb` runs once, the first time the local
+   * store is (or becomes) memory-only — immediately when it already is. The app shows the
+   * 'toast.storageMemory' toast from it. Optional so test doubles need not implement it.
+   */
+  onMemoryFallback?(cb: () => void): void;
 }
 
 export interface PlatformAds {

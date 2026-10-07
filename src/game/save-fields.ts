@@ -128,12 +128,34 @@ export type SlotCheck = { ok: true } | { ok: false; reason: string };
 
 const fail = (reason: string): SlotCheck => ({ ok: false, reason });
 
+/** Hearts/revive limits a slot is checked against (cfg values, or a game's RuleFlags). */
+export interface SlotLimits {
+  readonly heartsPerAttempt: number;
+  readonly maxRevives: number;
+  readonly heartsOnRevive: number;
+}
+
+/** SlotLimits from a config (cfg.hearts.perAttempt, cfg.revive.*). */
+export function slotLimitsOf(c: GameConfig = cfg): SlotLimits {
+  return { heartsPerAttempt: c.hearts.perAttempt, maxRevives: c.revive.maxPerAttempt, heartsOnRevive: c.revive.heartsRestored };
+}
+
 /** 04 §7.2 checks: mode/id, length/chars, Cat/Wrong/Given placement, Wrong count, hearts invariant. */
 export function validateInProgress(
   slot: InProgressV1,
   puzzle: Puzzle,
   expect: { mode: 'level' | 'daily'; id: PuzzleId },
   c: GameConfig = cfg,
+): SlotCheck {
+  return validateSlot(slot, puzzle, expect, slotLimitsOf(c));
+}
+
+/** validateInProgress with explicit limits (restoreGame passes the RuleFlags it will play with). */
+export function validateSlot(
+  slot: InProgressV1,
+  puzzle: Puzzle,
+  expect: { mode: 'level' | 'daily'; id: PuzzleId },
+  lim: SlotLimits,
 ): SlotCheck {
   if (!isRecord(slot)) return fail('shape');
   if (slot.mode !== expect.mode) return fail('mode');
@@ -158,10 +180,10 @@ export function validateInProgress(
     }
   }
   if (wrong !== slot.mistakes) return fail('mistakes');
-  if (slot.revivesUsed > c.revive.maxPerAttempt) return fail('revives');
-  const expected = c.hearts.perAttempt + slot.revivesUsed * c.revive.heartsRestored - slot.mistakes;
-  if (slot.hearts !== expected || slot.hearts > c.hearts.perAttempt) return fail('hearts');
-  // A revive happens at 0 hearts and sets heartsRestored, and hearts only go down afterwards.
-  if (slot.revivesUsed > 0 && slot.hearts > c.revive.heartsRestored) return fail('hearts');
+  if (slot.revivesUsed > lim.maxRevives) return fail('revives');
+  const expected = lim.heartsPerAttempt + slot.revivesUsed * lim.heartsOnRevive - slot.mistakes;
+  if (slot.hearts !== expected || slot.hearts > lim.heartsPerAttempt) return fail('hearts');
+  // A revive happens at 0 hearts and sets heartsOnRevive, and hearts only go down afterwards.
+  if (slot.revivesUsed > 0 && slot.hearts > lim.heartsOnRevive) return fail('hearts');
   return { ok: true };
 }

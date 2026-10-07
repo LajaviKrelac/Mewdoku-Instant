@@ -1,2 +1,262 @@
 /* Owner: ui-board
-   Board card, cells, region-aware insets, glyph states (data-s), region fade (data-done) (02 §17.4, 04 §5.3). */
+   Board card, cells, region-aware insets, glyph states (data-s), region fade (data-done) (02 §17.4, 04 §5.3).
+   DOM (ui/board/board-view.ts):
+     .board[role=grid][data-mood][data-hl][data-patterns][aria-disabled] (--n --slot --pad)
+       > .board__row[role=row] > button.cell[data-i][data-s=e|m|c|w|g][data-done][data-f][data-ghost][data-mood]
+           (--c --it --ir --ib --il --row --blink-dur --blink-delay)
+           > .cell__tile + svg.cell__g > .cell__pat? .cell__x ×2 .cell__catg?(.cell__cat .cell__blink) */
+
+.board {
+  --slot: 36px;
+  --n: 8;
+  --pad: 12px;
+  position: relative;
+  flex: none;
+  width: calc(var(--slot) * var(--n) + 2 * var(--pad));
+  height: calc(var(--slot) * var(--n) + 2 * var(--pad));
+  padding: var(--pad);
+  border-radius: var(--board-radius, 16px);
+  background: var(--card);
+  box-shadow: 0 1px 0 rgba(59, 48, 68, 0.04), 0 3px 0 rgba(59, 48, 68, 0.05), 0 14px 34px rgba(59, 48, 68, 0.1);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.board__row {
+  display: flex;
+  height: var(--slot);
+}
+
+.cell {
+  position: relative;
+  flex: none;
+  display: block;
+  width: var(--slot);
+  height: var(--slot);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 180ms ease;
+}
+
+.cell:focus {
+  outline: none;
+}
+
+.cell__tile {
+  position: absolute;
+  top: var(--it);
+  right: var(--ir);
+  bottom: var(--ib);
+  left: var(--il);
+  border-radius: calc(var(--slot) * var(--cell-r, 0.18));
+  background: var(--c);
+}
+
+/* Error flash (MISTAKE) and region fade (02 §17.4: mixed 45 % toward --page over 400 ms). */
+.cell__tile::before,
+.cell__tile::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: inherit;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cell__tile::before {
+  background: var(--danger);
+}
+
+.cell__tile::after {
+  background: var(--page);
+  transition: opacity var(--t-fade) ease;
+}
+
+.cell[data-done] .cell__tile::after {
+  opacity: 0.45;
+}
+
+.cell__g {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* Mark X (02 §17.4): --ink at 70 %, 52 % of the cell, stroke 10 %, round caps. The numbers come
+   from cfg.layout via the board's --mark-* variables (board-view.ts applyRenderVars). */
+.cell__x {
+  display: none;
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: var(--mark-w, 10);
+  stroke-linecap: round;
+  stroke-dasharray: var(--x-len, 74);
+  stroke-dashoffset: 0;
+  opacity: var(--mark-op, 0.7);
+}
+
+.cell[data-s='m'] .cell__x {
+  display: inline;
+}
+
+/* Wrong: --wrong X at full opacity plus a 2 px inner ring (02 §17.4, contrast-checked). */
+.cell[data-s='w'] .cell__x {
+  display: inline;
+  stroke: var(--wrong);
+  stroke-width: 11;
+  opacity: 1;
+}
+
+.cell[data-s='w'] .cell__tile {
+  box-shadow: inset 0 0 0 var(--wrong-ring, 2px) var(--wrong);
+}
+
+.cell[data-s='w'],
+.cell[data-s='g'] {
+  cursor: default;
+}
+
+/* Cats (0.82 × cell, 02 §17.3) and the idle blink lid. */
+.cell__catg {
+  display: none;
+  transform-box: fill-box;
+  transform-origin: 50% 92%;
+}
+
+.cell[data-s='c'] .cell__catg,
+.cell[data-s='g'] .cell__catg {
+  display: inline;
+}
+
+.cell[data-s='g'] .cell__tile {
+  box-shadow: inset 0 0 0 2px rgba(59, 48, 68, 0.28);
+}
+
+.cell__blink {
+  display: none;
+  opacity: 0;
+}
+
+.board[data-mood='idle'] .cell[data-s='c']:not([data-mood]) .cell__blink {
+  display: inline;
+  animation: cat-blink var(--blink-dur, 5s) var(--blink-delay, 0ms) infinite linear;
+}
+
+/* Colour patterns (02 §18): a 22 % glyph in the tile's top-left corner. */
+.cell__pat {
+  display: none;
+  color: var(--ink);
+  opacity: 0.5;
+}
+
+.board[data-patterns] .cell__pat {
+  display: inline;
+}
+
+.cell[data-done] .cell__pat {
+  opacity: 0.32;
+}
+
+/* Keyboard focus (02 §18): 3 px --accent ring, lifted above the neighbours. */
+.cell:focus-visible {
+  z-index: 2;
+}
+
+.cell:focus-visible .cell__tile {
+  box-shadow: 0 0 0 2px var(--card), 0 0 0 5px var(--accent);
+}
+
+@media (hover: hover) {
+  .board:not([aria-disabled='true']) .cell:hover .cell__tile {
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.6);
+  }
+
+  .board:not([aria-disabled='true']) .cell[data-s='w']:hover .cell__tile {
+    box-shadow: inset 0 0 0 2px var(--wrong);
+  }
+}
+
+.board[aria-disabled='true'] .cell {
+  cursor: default;
+}
+
+/* ── Highlights: hint (O1) and coach (O8) dim everything but the focus ── */
+/* The hint dims the board itself; the coach overlay (O8) dims the screen with an SVG mask, so the
+   board only outlines the coach's focus cells. */
+.board[data-hl='hint'] .cell {
+  opacity: var(--hint-dim);
+}
+
+.board[data-hl] .cell[data-f],
+.board[data-hl] .cell[data-ghost] {
+  opacity: 1;
+  z-index: 1;
+}
+
+.board[data-hl] .cell[data-ghost]:not([data-f]) {
+  opacity: 0.9;
+}
+
+.board[data-hl] .cell[data-f] .cell__tile {
+  box-shadow: 0 0 0 2px var(--card), 0 0 0 4.5px var(--accent), 0 6px 14px rgba(31, 158, 137, 0.35);
+}
+
+.board[data-hl='coach'] .cell[data-f] .cell__tile {
+  box-shadow: 0 0 0 2px var(--card), 0 0 0 5px var(--gold);
+  animation: coach-ring 1.3s ease-in-out infinite;
+}
+
+/* Ghost X on Empty effect cells: what Apply would cross out. */
+.cell[data-ghost='x'][data-s='e'] .cell__x {
+  display: inline;
+  opacity: 0.4;
+  animation: ghost-pulse 1.2s ease-in-out infinite;
+}
+
+/* Ghost clear: the mistaken X that Apply would remove fades in and out. */
+.cell[data-ghost='clear'] .cell__x {
+  animation: ghost-clear 1.2s ease-in-out infinite;
+}
+
+/* Ghost cat: the forced cat Apply would place. */
+.cell[data-ghost='cat'] .cell__catg {
+  display: inline;
+  opacity: 0.6;
+  animation: ghost-bob 1.4s ease-in-out infinite;
+}
+
+/* Kitty sparkle burst (fx: board-fx.ts sparkle()). */
+.cell__spark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.cell__spark i {
+  position: absolute;
+  left: calc(var(--slot) * -0.14);
+  top: calc(var(--slot) * -0.14);
+  width: calc(var(--slot) * 0.28);
+  height: calc(var(--slot) * 0.28);
+  background: var(--gold);
+  -webkit-clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+  animation: spark 620ms var(--ease-out) var(--sd, 0ms) both;
+}

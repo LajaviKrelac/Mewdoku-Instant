@@ -6,13 +6,16 @@ import { cfg, type GameConfig } from '../app/config';
 import { checkRecord, isDailyPack, isLevelPack, recordToPuzzle } from '../engine/codec';
 import type { DailyPack, GenResult, GenSpec, LevelPack, LevelRecord, Puzzle, PuzzleId } from '../engine/types';
 import {
+  dailyMonthOf,
   dailyPuzzleId,
+  dailyRecordIn,
   dailySpec,
   endlessRetrySpec,
   endlessSpec,
   isEndless,
   isHard,
   levelPuzzleId,
+  levelRecordIn,
   packFirstLevel,
   packIndexFor,
   packsToPrefetch,
@@ -135,17 +138,11 @@ export function createLevelsRepo(deps: LevelsRepoDeps): LevelsRepo {
     return p;
   }
 
-  function recordFor(pack: LevelPack, level: number): LevelRecord | null {
-    const byPos = pack.levels[level - pack.first];
-    if (byPos && (byPos.i === undefined || byPos.i === level)) return byPos;
-    return pack.levels.find((r) => r.i === level) ?? null;
-  }
-
   /** Decodes and caches level L from a loaded pack; null when the record is missing or corrupt. */
   function decodeLevel(pack: LevelPack, level: number): Puzzle | null {
     const cached = puzzles.get(level);
     if (cached) return cached;
-    const rec = recordFor(pack, level);
+    const rec = levelRecordIn(pack, level);
     if (!rec || !checkRecord(rec).ok) return null;
     const puzzle = recordToPuzzle(rec, levelPuzzleId(level));
     puzzles.set(level, puzzle);
@@ -230,7 +227,7 @@ export function createLevelsRepo(deps: LevelsRepoDeps): LevelsRepo {
     if (!DATE_KEY_RE.test(dateKey)) throw new RangeError(`getDaily: bad date key ${dateKey}`);
     const cached = dailies.get(dateKey);
     if (cached) return cached;
-    const month = dateKey.slice(0, 7);
+    const month = dailyMonthOf(dateKey);
     let pending = months.get(month);
     if (!pending) {
       pending = fetchMonth(month).catch(() => null);
@@ -238,9 +235,9 @@ export function createLevelsRepo(deps: LevelsRepoDeps): LevelsRepo {
     }
     const pack = await pending;
     const id = dailyPuzzleId(dateKey);
-    const rec = pack ? pack.days[dateKey] : undefined;
+    const rec = pack ? dailyRecordIn(pack, dateKey) : null;
     let loaded: LoadedPuzzle | null = null;
-    if (rec !== undefined) {
+    if (rec !== null) {
       if (checkRecord(rec).ok) loaded = { puzzle: recordToPuzzle(rec, id), source: 'daily_pack' };
       else fallback('daily_record');
     }

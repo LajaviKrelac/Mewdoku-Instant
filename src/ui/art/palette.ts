@@ -1,6 +1,7 @@
 // Owner: ui-board
 // Region colours, glyphs and UI tokens (02 §17.2, §18). Mirrors styles/tokens.css (--r0…--r11 etc.).
 // Colour NAMES live in i18n (colorName(i)). scripts/palette-check.ts validates these values.
+import { assignColors } from '../../engine/colors';
 import type { DeltaMatrix, Puzzle } from '../../engine/types';
 
 export const PALETTE_SIZE = 12;
@@ -31,9 +32,14 @@ export const PALETTE_DE00: DeltaMatrix = Object.freeze([
   4389, 2636, 1782, 1058, 1524, 2792, 3978, 4875, 4925, 2227, 2906,    0,
 ]);
 
-export type TokenName = 'page' | 'card' | 'ink' | 'ink-2' | 'accent' | 'danger' | 'heart' | 'scrim';
+export type TokenName = 'page' | 'card' | 'ink' | 'ink-2' | 'accent' | 'danger' | 'heart' | 'scrim' | 'wrong';
 
-/** UI tokens (02 §17.2). */
+/**
+ * UI tokens (02 §17.2). `wrong` is a Phase 2 addition validated by scripts/palette-check.ts: the
+ * spec's --danger (#D33A4A) only reaches ~2.2:1 on the pastel tiles, so the wrong-X glyph and its
+ * ring use this deeper crimson to meet the 3:1 non-text contrast rule (02 §18). --danger stays the
+ * UI error colour (flash, lost heart).
+ */
 export const TOKENS: Readonly<Record<TokenName, string>> = Object.freeze({
   page: '#FBF6EE',
   card: '#FFFFFF',
@@ -43,6 +49,7 @@ export const TOKENS: Readonly<Record<TokenName, string>> = Object.freeze({
   danger: '#D33A4A',
   heart: '#E8506A',
   scrim: 'rgba(30,22,36,.75)',
+  wrong: '#A3193A',
 });
 
 /** Our cat's colours (02 §17.3): ginger fur, cream muzzle. */
@@ -50,10 +57,31 @@ export const CAT_COLORS = Object.freeze({ fur: '#F29A4A', muzzle: '#FFE9CF' });
 
 /** `var(--rN)` for a palette index. */
 export function regionColorVar(paletteIndex: number): string {
-  throw new Error('not implemented: regionColorVar');
+  return `var(--r${paletteIndex})`;
 }
 
 /** Palette index per region label: `fixed` (tutorial, game/modes fixedColors) or engine assignColors(puzzle, PALETTE_DE00). */
 export function regionColorsFor(puzzle: Pick<Puzzle, 'id' | 'n' | 'regions'>, fixed: readonly number[] | null): Uint8Array {
-  throw new Error('not implemented: regionColorsFor');
+  if (fixed && fixed.length >= puzzle.n && fixed.slice(0, puzzle.n).every(isPaletteIndex)) {
+    return Uint8Array.from(fixed.slice(0, puzzle.n));
+  }
+  return assignColors(puzzle, PALETTE_DE00, PALETTE_SIZE);
+}
+
+function isPaletteIndex(v: number): boolean {
+  return Number.isInteger(v) && v >= 0 && v < PALETTE_SIZE;
+}
+
+/** '#RRGGBB' → [r, g, b] (0..255). */
+export function hexToRgb(hex: string): [number, number, number] {
+  const v = parseInt(hex.replace('#', ''), 16);
+  return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
+}
+
+/** Mixes `hex` toward `toward` by `t` (0..1) in sRGB, like CSS color-mix in srgb. Returns '#rrggbb'. */
+export function mixHex(hex: string, toward: string, t: number): string {
+  const a = hexToRgb(hex);
+  const b = hexToRgb(toward);
+  const out = a.map((v, i) => Math.round(v + ((b[i] as number) - v) * t));
+  return `#${out.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
 }

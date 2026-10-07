@@ -1,0 +1,266 @@
+// Owner: app
+// Building blocks of the session (04 §5.2): the TICK timer with its stack of pause reasons, one-shot
+// board timers, the feedback player (sfx, haptics, announcer; never throws), and the overlay props
+// builders for O3 / O4 / O7 / O8.
+import type { MuteReason } from '../audio/audio-engine';
+import type { HintStep, Puzzle } from '../engine/types';
+import { msUntilLocalMidnight } from '../game/progression';
+import { tutorialStep, type TutorialStepIndex } from '../game/tutorial';
+import type { GameState, InProgressV1, SaveDataV1 } from '../game/types';
+import { PRAISE_COUNT, t } from '../i18n';
+import { PALETTE_SIZE, regionColorsFor } from '../ui/art/palette';
+import type { CoachProps } from '../ui/overlays/coach';
+import type { DailyResultProps } from '../ui/overlays/daily-result';
+import type { FailOverlayProps } from '../ui/overlays/fail-overlay';
+import { hintText, type HintTextContext } from '../ui/overlays/hint-card';
+import type { WinOverlayProps } from '../ui/overlays/win-overlay';
+import type { GameScreen } from '../ui/screens/game-screen';
+import type { Clock, TimerId } from './clock';
+import type { GameConfig } from './config';
+import type { PauseReason } from './events';
+import type { SessionDeps } from './session-types';
+import type { Feedback } from './session-effects';
+import type { SessionMeta } from './store';
+
+// ─────────────────────────────── timers ───────────────────────────────
+
+export interface SessionTimers {
+  /** Starts or stops the TICK interval to match tickable() and the pause stack (final partial TICK on stop). */
+  sync(): void;
+  /** Dispatches the time since the last TICK now (before an action that may end the attempt, or a save). */
+  flushTick(): void;
+  /** One-shot timer cleared by clear() (START, KITTY_DONE, overlay delays). */
+  later(ms: number, fn: () => void): void;
+  /** Stops everything without a final TICK (teardown). */
+  clear(): void;
+  pause(reason: PauseReason): void;
+  resume(reason: PauseReason): void;
+  isPaused(reason?: PauseReason): boolean;
+}
+
+export interface TimerHooks {
+  tickable(): boolean;
+  tick(dtMs: number): void;
+  /** UiState.paused: page hidden or FB onPause. */
+  onPausedChange(paused: boolean): void;
+  mute(reason: MuteReason, on: boolean): void;
+}
+
+const MUTE_FOR: Readonly<Partial<Record<PauseReason, MuteReason>>> = { hidden: 'hidden', fb_pause: 'pause', ad: 'ad' };
+const isHide = (r: PauseReason): boolean => r === 'hidden' || r === 'fb_pause';
+
+export function createSessionTimers(clock: Clock, c: GameConfig, hooks: TimerHooks): SessionTimers {
+  const pauses = new Set<PauseReason>();
+  const once = new Set<TimerId>();
+  let interval: TimerId | null = null;
+  let last = 0;
+  const delta = (): number => {
+    const now = clock.perf();
+    const dt = now - last;
+    last = now;
+    return dt;
+  };
+
+  const timers: SessionTimers = {
+    sync() {
+      const run = pauses.size === 0 && hooks.tickable();
+      if (run && interval === null) {
+        last = clock.perf();
+        interval = clock.setInterval(() => hooks.tick(delta()), c.timer.tickMs);
+      } else if (!run && interval !== null) {
+        clock.clearInterval(interval);
+        interval = null;
+        hooks.tick(delta()); // partial delta; a no-op once the status left playing/hint/kitty
+      }
+    },
+    flushTick() {
+      if (interval !== null) hooks.tick(delta());
+    },
+    later(ms, fn) {
+      const id: TimerId = clock.setTimeout(() => {
+        once.delete(id);
+        fn();
+      }, ms);
+      once.add(id);
+    },
+    clear() {
+      for (const id of once) clock.clearTimeout(id);
+      once.clear();
+      if (interval !== null) clock.clearInterval(interval);
+      interval = null;
+    },
+    pause(reason) {
+      if (pauses.has(reason)) return;
+      pauses.add(reason);
+      timers.sync();
+      const m = MUTE_FOR[reason];
+      if (m) hooks.mute(m, true);
+      if (isHide(reason)) hooks.onPausedChange(true);
+    },
+    resume(reason) {
+      if (!pauses.delete(reason)) return;
+      const m = MUTE_FOR[reason];
+      if (m) hooks.mute(m, false);
+      if (isHide(reason) && !pauses.has('hidden') && !pauses.has('fb_pause')) hooks.onPausedChange(false);
+      timers.sync();
+    },
+    isPaused: (reason) => (reason ? pauses.has(reason) : pauses.size > 0),
+  };
+  return timers;
+}
+
+// ─────────────────────────────── feedback ───────────────────────────────
+
+export interface FeedbackPlayer {
+  /** Sound (mark ticks throttled to input.paintSoundThrottleMs) and vibration (Vibration setting). */
+  play(fb: Feedback): void;
+  announce(message: string): void;
+  announceHint(step: HintStep, ctx: HintTextContext): void;
+  /** Runs a side effect, reporting instead of throwing. */
+  guard(fn: () => void): void;
+}
+
+export function createFeedbackPlayer(
+  deps: Pick<SessionDeps, 'sfx' | 'announcer' | 'platform' | 'clock' | 'bus'>,
+  c: GameConfig,
+  hapticsOn: () => boolean,
+): FeedbackPlayer {
+  let lastMark = -Infinity;
+  const guard = (fn: () => void): void => {
+    try {
+      fn();
+    } catch (error) {
+      deps.bus.emit('error', { where: 'effects', error });
+    }
+  };
+  return {
+    play(fb) {
+      if (fb.sfx === 'mark') {
+        const now = deps.clock.perf();
+        if (now - lastMark < c.input.paintSoundThrottleMs) return;
+        lastMark = now;
+      }
+      const id = fb.sfx;
+      if (id) guard(() => deps.sfx.play(id, fb.sfxIndex === undefined ? undefined : { index: fb.sfxIndex }));
+      const pattern = fb.haptic;
+      if (pattern !== undefined && hapticsOn()) guard(() => deps.platform.haptics.pulse(pattern));
+    },
+    announce: (message) => guard(() => deps.announcer.say(message)),
+    announceHint: (step, ctx) => guard(() => deps.announcer.say(t('a11y.hint', { text: hintText(step, ctx) }))),
+    guard,
+  };
+}
+
+// ─────────────────────────────── small helpers ───────────────────────────────
+
+export function withSlot(save: SaveDataV1, slot: 'level' | 'daily', value: InProgressV1 | null): SaveDataV1 {
+  if (save.inProgress[slot] === value) return save;
+  return { ...save, inProgress: { ...save.inProgress, [slot]: value } };
+}
+
+/** SessionMeta.colors: the given function or ui/art regionColorsFor; never throws (identity fallback). */
+export function defaultColors(
+  custom: ((puzzle: Puzzle, fixed: readonly number[] | null) => Uint8Array) | undefined,
+  puzzle: Puzzle,
+  fixed: readonly number[] | null,
+): Uint8Array {
+  try {
+    const colors = (custom ?? regionColorsFor)(puzzle, fixed);
+    if (colors.length >= puzzle.n) return colors;
+  } catch {
+    // fall through
+  }
+  if (fixed && fixed.length === puzzle.n) return Uint8Array.from(fixed);
+  return Uint8Array.from({ length: puzzle.n }, (_, i) => i % PALETTE_SIZE);
+}
+
+export function defaultPraise(): number {
+  return Math.floor(Math.random() * PRAISE_COUNT) % PRAISE_COUNT;
+}
+
+// ─────────────────────────────── overlay props ───────────────────────────────
+
+export interface WinPropsOptions {
+  readonly clock: Clock;
+  readonly config: GameConfig;
+  readonly praise: number;
+  readonly reducedMotion: boolean;
+  onNext(): void;
+  onHome(): void;
+  onDone(): void;
+}
+
+export type WinProps = { kind: 'daily'; props: DailyResultProps } | { kind: 'win'; props: WinOverlayProps };
+
+export const overlayProps = {
+  /** O3 (level / tutorial / tutorial replay) or O7 (daily). */
+  win(state: GameState, m: SessionMeta, o: WinPropsOptions): WinProps {
+    if (m.mode === 'daily') {
+      const now = o.clock.now();
+      return {
+        kind: 'daily',
+        props: {
+          dateKey: m.dateKey ?? '',
+          ms: Math.round(state.elapsedMs),
+          mistakes: state.mistakes,
+          hints: state.hintsUsed,
+          kitties: state.kittiesUsed,
+          nextPuzzleAt: now + msUntilLocalMidnight(now),
+          now: () => o.clock.now(),
+          onDone: o.onDone,
+        },
+      };
+    }
+    const tutorial = m.mode === 'tutorial';
+    const replay = m.request.mode === 'tutorial' && m.request.replay;
+    const level = m.level ?? 1;
+    return {
+      kind: 'win',
+      props: {
+        variant: tutorial ? (replay ? 'tutorial_replay' : 'tutorial') : 'level',
+        level,
+        nextLevel: tutorial ? 2 : level + 1,
+        praise: o.praise,
+        buttonDelayMs: o.config.fx.winButtonDelayMs,
+        reducedMotion: o.reducedMotion,
+        onNext: o.onNext,
+        onHome: o.onHome,
+      },
+    };
+  },
+
+  /** O4; buttonDelayMs is 0 when restored from a save (02 §15 step 5). */
+  fail(
+    continueOffer: FailOverlayProps['continueOffer'],
+    buttonDelayMs: number,
+    cb: Pick<FailOverlayProps, 'onContinue' | 'onRetry' | 'onHome'>,
+  ): FailOverlayProps {
+    return { continueOffer, buttonDelayMs, busy: false, ...cb };
+  },
+
+  /** O8 for a tutorial step; target rects are read live from the game screen. */
+  coach(step: TutorialStepIndex, screen: () => GameScreen | null, onGotIt: () => void): CoachProps {
+    const def = tutorialStep(step);
+    return {
+      step,
+      hand: def.hand,
+      showGotIt: def.gotIt,
+      colorParam: def.colorParam,
+      targetRects: () => {
+        const s = screen();
+        if (!s) return [];
+        if (def.target === 'bulb') {
+          const r = s.toolRect('bulb');
+          return r ? [r] : [];
+        }
+        const rects: DOMRect[] = [];
+        for (const cell of def.focusCells) {
+          const r = s.cellRect(cell);
+          if (r) rects.push(r);
+        }
+        return rects;
+      },
+      onGotIt,
+    };
+  },
+};

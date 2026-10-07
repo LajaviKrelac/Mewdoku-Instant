@@ -14,8 +14,8 @@ import {
 import type { DailyRecord, InProgressV1, LevelBest, ReduceMotionSetting, SaveDataV1, Settings } from './types';
 
 export type { InProgressV1, SaveDataV1 } from './types';
-export { decodeCells, encodeCells, validateInProgress, isInProgressShape } from './save-fields';
-export type { SlotCheck } from './save-fields';
+export { decodeCells, encodeCells, validateInProgress, validateSlot, slotLimitsOf, isInProgressShape } from './save-fields';
+export type { SlotCheck, SlotLimits } from './save-fields';
 
 /** Current schema version. */
 export const SAVE_VERSION = 1;
@@ -98,9 +98,15 @@ function validateV1(d: Record<string, unknown>, now: number, c: GameConfig, rep:
   };
 
   const p = group('progress');
-  const level = p ? field(p.level, isPosInt, 1, 'progress.level') : 1;
+  let level = p ? field(p.level, isPosInt, 1, 'progress.level') : 1;
   // Phase 2 progress is linear (no replays), so completed = level − 1 is the best repair.
-  const completed = p ? field(p.completed, isNonNegInt, Math.max(0, level - 1), 'progress.completed') : Math.max(0, level - 1);
+  let completed = p ? field(p.completed, isNonNegInt, Math.max(0, level - 1), 'progress.completed') : Math.max(0, level - 1);
+  if (d.tutorialDone === true && level < 2) {
+    // The tutorial win/skip always moves on to Level 2 (02 §10.1); never route a finished player back into it.
+    level = 2;
+    completed = Math.max(completed, 1);
+    rep.push('progress.level');
+  }
   const best = p ? readBest(p.best) : { value: {}, dropped: false };
   if (best.dropped) rep.push('progress.best');
 

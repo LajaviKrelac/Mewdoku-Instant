@@ -38,16 +38,27 @@ interface Found {
   readonly k: number;
 }
 
-/** First productive k-subset for one (k, A, B), or null. */
-function searchPair(v: View, k: number, a: number, b: number): Found | null {
+/** Per-pair inputs, computed once per view: open A-units, B-units touched by each, A-units touched by each B-unit. */
+interface PairData {
+  readonly open: readonly number[];
+  readonly bOfA: readonly number[];
+  readonly aOfB: Int32Array;
+}
+
+function pairData(v: View, a: number, b: number): PairData {
   const n = v.n;
   const open: number[] = [];
   for (let i = 0; i < n; i++) if (v.ccount[a * n + i] === 0) open.push(i);
-  if (open.length < k) return null;
-  // B-units touched by each open A-unit, and A-units touched by each B-unit.
   const bOfA = open.map((i) => touchedKindMask(v, a * n + i, b));
   const aOfB = new Int32Array(n);
   for (let j = 0; j < n; j++) aOfB[j] = touchedKindMask(v, b * n + j, a);
+  return { open, bOfA, aOfB };
+}
+
+/** First productive k-subset for one (k, A, B), or null. */
+function searchPair(d: PairData, k: number, a: number, b: number): Found | null {
+  const { open, bOfA, aOfB } = d;
+  if (open.length < k) return null;
   let found: Found | null = null;
   const rec = (start: number, depth: number, sMask: number, tMask: number): boolean => {
     if (depth === k) {
@@ -103,9 +114,12 @@ function toStep(v: View, f: Found): HintStep {
 /** L4 on a view: 2 ≤ k ≤ ⌊m/2⌋ over the six kind pairs. */
 export function findPigeonholeIn(v: View): HintStep | null {
   const m = Math.min(openCount(v, ROW), openCount(v, COL), openCount(v, REGION));
+  if (m < 4) return null;
+  const data = PAIRS.map(([a, b]) => pairData(v, a, b));
   for (let k = 2; k <= m >> 1; k++) {
-    for (const [a, b] of PAIRS) {
-      const f = searchPair(v, k, a, b);
+    for (let p = 0; p < PAIRS.length; p++) {
+      const [a, b] = PAIRS[p] as readonly [number, number];
+      const f = searchPair(data[p] as PairData, k, a, b);
       if (f) return toStep(v, f);
     }
   }

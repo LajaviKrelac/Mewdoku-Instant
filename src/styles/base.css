@@ -1,5 +1,8 @@
 /* Owner: ui-board
-   Reset, font-face (our one OFL display font, 02 §17.6), body, buttons. */
+   Reset, font-face (our one OFL display font, 02 §17.6), body, buttons, icons, focus, helpers.
+   Shared vocabulary (used by ui-board and ui-shell DOM):
+     .btn  --primary | --secondary | --ghost | --icon | --block | --lg ; .btn__icon .btn__label .btn__badge .btn__chev
+     .badge .badge--hard   .icon   .sr-only / .visually-hidden   .screen  --boot | --home | --game */
 @font-face {
   font-family: 'Mewdoku Display';
   font-style: normal;
@@ -21,11 +24,287 @@ body {
   background: var(--page);
   color: var(--ink);
   font-family: var(--font-body);
+  font-size: 100%;
+  line-height: 1.4;
   -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  overflow: hidden; /* the app is a fixed portrait column; overlays scroll internally */
+  overscroll-behavior: none;
+}
+
+/* Desktop / landscape (02 §19): a centred portrait column on --page, the rest a soft paw pattern. */
+@media (min-width: 560px) {
+  body {
+    background-color: var(--page-2);
+    background-image: radial-gradient(circle at 12px 12px, rgba(242, 154, 74, 0.13) 0 3px, transparent 3.5px),
+      radial-gradient(circle at 40px 40px, rgba(31, 158, 137, 0.1) 0 3px, transparent 3.5px);
+    background-size: 56px 56px;
+  }
 }
 
 #app {
+  position: relative;
+  height: 100%;
   min-height: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  background: var(--page);
+  overflow: hidden;
+}
+
+@media (min-width: 560px) {
+  #app {
+    box-shadow: 0 0 0 1px var(--line), 0 0 60px rgba(59, 48, 68, 0.08);
+  }
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.005em;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+svg {
+  overflow: visible;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* ── Icons ─────────────────────────────────────────────────────────────── */
+.icon {
+  display: inline-block;
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: none;
+  vertical-align: middle;
+  pointer-events: none;
+}
+
+/* ── Buttons ───────────────────────────────────────────────────────────── */
+.btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 var(--sp-5);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-l);
+  line-height: 1.1;
+  text-align: center;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  transition: transform 90ms ease, box-shadow 90ms ease, background-color 150ms ease, opacity 150ms ease;
+}
+
+.btn > * + * {
+  margin-left: var(--sp-2);
+}
+
+.btn__icon {
+  width: 1.4em;
+  height: 1.4em;
+}
+
+.btn__label {
+  min-width: 0;
+}
+
+.btn__chev {
+  width: 1.1em;
+  height: 1.1em;
+  opacity: 0.85;
+}
+
+.btn--primary {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 4px 0 var(--accent-deep), 0 8px 18px rgba(31, 158, 137, 0.28);
+}
+
+.btn--primary:active:not([aria-disabled='true']):not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--accent-deep), 0 3px 8px rgba(31, 158, 137, 0.25);
+}
+
+.btn--secondary {
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: 0 3px 0 var(--line-2), var(--shadow-1);
+}
+
+.btn--secondary:active:not([aria-disabled='true']):not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--line-2), var(--shadow-1);
+}
+
+.btn--ghost {
+  background: transparent;
+  color: var(--ink-2);
+  min-height: 44px;
+  font-size: var(--fs-m);
+}
+
+.btn--ghost:active:not([aria-disabled='true']) {
+  background: var(--line);
+}
+
+.btn--icon {
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: var(--shadow-1);
+  --icon-fill: var(--accent-soft);
+}
+
+.btn--icon .btn__icon {
+  width: 24px;
+  height: 24px;
+}
+
+.btn--icon:active:not([aria-disabled='true']):not(:disabled) {
+  transform: scale(0.94);
+}
+
+.btn--block {
+  display: flex;
+  width: 100%;
+}
+
+.btn--lg {
+  min-height: 64px;
+  font-size: var(--fs-xl);
+}
+
+.btn[aria-disabled='true'],
+.btn:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.btn--primary[aria-disabled='true'],
+.btn--primary:disabled {
+  box-shadow: 0 4px 0 var(--accent-deep);
+}
+
+.btn[aria-busy='true'] {
+  cursor: progress;
+}
+
+.btn[aria-busy='true'] .btn__label {
+  opacity: 0.6;
+}
+
+.btn__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.6em;
+  height: 1.6em;
+  padding: 0 0.45em;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.24);
+  font-size: 0.75em;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.badge--hard {
+  background: var(--hard);
+  color: #fff;
+  box-shadow: 0 2px 0 rgba(59, 48, 68, 0.18);
+}
+
+.btn--primary .badge--hard {
+  background: #fff;
+  color: var(--hard);
+  box-shadow: none;
+}
+
+/* ── Focus (02 §18: visible 3 px --accent ring for keyboard users) ─────── */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+:focus-visible {
+  outline: var(--focus-ring) solid var(--accent);
+  outline-offset: 2px;
+}
+
+.btn--primary:focus-visible {
+  outline-color: var(--ink);
+}
+
+/* ── Helpers ───────────────────────────────────────────────────────────── */
+.sr-only,
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
+}
+
+/* ── Screens (router hosts; ui-shell DOM) ──────────────────────────────── */
+.screen {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow: hidden;
+  padding-top: var(--safe-top);
+  padding-bottom: var(--safe-bottom);
 }
 
 /* Foundation placeholder (src/main.ts) until the app workstream boots the real UI. */

@@ -76,17 +76,24 @@ export function buildTables(n: number, regions: Uint8Array): PuzzleTables {
     (regRows[g] as number[])[r] = ((regRows[g] as number[])[r] as number) | (1 << c);
     unitsOf.push([r, n + c, 2 * n + g]);
   }
+  const total = n * n;
+  const rowArr = new Uint8Array(total);
+  const colArr = new Uint8Array(total);
+  for (let i = 0; i < total; i++) {
+    rowArr[i] = Math.floor(i / n);
+    colArr[i] = i % n;
+  }
   const attack: CellIndex[][] = [];
-  for (let i = 0; i < n * n; i++) {
-    const r = rowOf(i, n);
-    const c = colOf(i, n);
+  for (let i = 0; i < total; i++) {
+    const r = rowArr[i] as number;
+    const c = colArr[i] as number;
     const g = regions[i];
     const list: CellIndex[] = [];
-    for (let j = 0; j < n * n; j++) {
+    for (let j = 0; j < total; j++) {
       if (j === i) continue;
-      const rj = rowOf(j, n);
-      const cj = colOf(j, n);
-      if (rj === r || cj === c || regions[j] === g || (Math.abs(rj - r) <= 1 && Math.abs(cj - c) <= 1)) list.push(j);
+      const dr = (rowArr[j] as number) - r;
+      const dc = (colArr[j] as number) - c;
+      if (dr === 0 || dc === 0 || regions[j] === g || (dr >= -1 && dr <= 1 && dc >= -1 && dc <= 1)) list.push(j);
     }
     attack.push(list);
   }

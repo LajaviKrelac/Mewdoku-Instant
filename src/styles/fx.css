@@ -1,2 +1,441 @@
 /* Owner: ui-board
-   Keyframes (drop, draw-in, crack, confetti) and reduced-motion overrides (02 §17.5). */
+   Keyframes (drop, draw-in, crack, confetti) and reduced-motion overrides (02 §17.5).
+   Only transform and opacity are animated (04 §5.3), plus stroke-dashoffset for the X draw-in. */
+
+/* ── Board ─────────────────────────────────────────────────────────────── */
+.board.fx-entry .cell__tile,
+.board.fx-entry .cell__g {
+  animation: tile-in var(--entry-ms, 160ms) var(--ease-out) both;
+  animation-delay: calc(var(--row, 0) * var(--entry-stagger, 8ms));
+}
+
+@keyframes tile-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* X stroke draw-in: 120 ms ease-out, the second stroke slightly behind the first. */
+.cell.fx-draw .cell__x {
+  animation: x-draw 85ms ease-out both;
+}
+
+.cell.fx-draw .cell__x + .cell__x {
+  animation-delay: 35ms;
+}
+
+@keyframes x-draw {
+  from {
+    stroke-dashoffset: var(--x-len, 74);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Cat drop with overshoot: 280 ms cubic-bezier(.2, 1.4, .4, 1). */
+.cell.fx-drop .cell__catg {
+  animation: cat-drop var(--t-drop) var(--ease-drop) both;
+}
+
+@keyframes cat-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-26%) scale(0.55);
+  }
+  45% {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Happy hop on WON. */
+.cell.fx-hop .cell__catg {
+  animation: cat-hop 520ms ease-out;
+}
+
+@keyframes cat-hop {
+  0%,
+  100% {
+    transform: none;
+  }
+  30% {
+    transform: translateY(-16%) scale(1.04, 0.98);
+  }
+  55% {
+    transform: translateY(0) scale(1.07, 0.9);
+  }
+  75% {
+    transform: translateY(-5%) scale(0.98, 1.03);
+  }
+}
+
+/* Wrong flash (the shake itself is WAAPI, fx/shake.ts). */
+.cell.fx-flash .cell__tile::before {
+  animation: cell-flash var(--t-shake) linear both;
+}
+
+@keyframes cell-flash {
+  0% {
+    opacity: 0;
+  }
+  25% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* PULSE: a locked or filtered cell squeezes. */
+.cell.fx-pulse {
+  animation: cell-pulse 240ms ease;
+}
+
+@keyframes cell-pulse {
+  0%,
+  100% {
+    transform: none;
+  }
+  40% {
+    transform: scale(0.88);
+  }
+}
+
+/* REGION_DONE: a soft pop while the fade transition runs. */
+.cell.fx-done .cell__tile {
+  animation: region-pop var(--t-fade) ease;
+}
+
+@keyframes region-pop {
+  0%,
+  100% {
+    transform: none;
+  }
+  35% {
+    transform: scale(1.07);
+  }
+}
+
+@keyframes cat-blink {
+  0%,
+  95.4% {
+    opacity: 0;
+  }
+  95.5%,
+  98.4% {
+    opacity: 1;
+  }
+  98.5%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes coach-ring {
+  0%,
+  100% {
+    box-shadow: 0 0 0 2px var(--card), 0 0 0 5px var(--gold), 0 0 0 5px rgba(255, 212, 92, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 2px var(--card), 0 0 0 5px var(--gold), 0 0 0 13px rgba(255, 212, 92, 0);
+  }
+}
+
+@keyframes ghost-pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@keyframes ghost-clear {
+  0%,
+  100% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 0.12;
+  }
+}
+
+@keyframes ghost-bob {
+  0%,
+  100% {
+    transform: none;
+  }
+  50% {
+    transform: translateY(-6%);
+  }
+}
+
+@keyframes spark {
+  from {
+    opacity: 1;
+    transform: translate(0, 0) scale(0.2) rotate(0deg);
+  }
+  60% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: translate(calc(var(--sx) * var(--slot) * 0.75), calc(var(--sy) * var(--slot) * 0.75)) scale(1) rotate(90deg);
+  }
+}
+
+/* ── HUD ───────────────────────────────────────────────────────────────── */
+.heart__half {
+  transform-box: fill-box;
+  transform-origin: 50% 80%;
+}
+
+.heart__crack .heart__half--l {
+  animation: crack-l var(--t-crack) ease-in both;
+}
+
+.heart__crack .heart__half--r {
+  animation: crack-r var(--t-crack) ease-in both;
+}
+
+@keyframes crack-l {
+  0% {
+    opacity: 1;
+    transform: none;
+  }
+  25% {
+    opacity: 1;
+    transform: translateX(-4%) rotate(-6deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-22%, 40%) rotate(-28deg);
+  }
+}
+
+@keyframes crack-r {
+  0% {
+    opacity: 1;
+    transform: none;
+  }
+  25% {
+    opacity: 1;
+    transform: translateX(4%) rotate(6deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(22%, 40%) rotate(28deg);
+  }
+}
+
+.heart--pop .heart__full {
+  animation: heart-pop 520ms var(--ease-drop);
+}
+
+@keyframes heart-pop {
+  from {
+    transform: scale(0.2);
+  }
+  to {
+    transform: none;
+  }
+}
+
+.pill--bump .pill__icon,
+.tool__badge--bump {
+  animation: bump 360ms var(--ease-drop);
+}
+
+@keyframes bump {
+  0%,
+  100% {
+    transform: none;
+  }
+  40% {
+    transform: scale(1.25);
+  }
+}
+
+.pill--hurt {
+  animation: hurt var(--t-crack) ease;
+}
+
+@keyframes hurt {
+  0%,
+  100% {
+    transform: none;
+  }
+  30% {
+    transform: scale(1.06);
+  }
+}
+
+/* ── Confetti (fx/confetti.ts): 40 <i>, launch then gravity, 1 600 ms ─── */
+.confetti {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.confetti .cf {
+  position: absolute;
+  left: 50%;
+  top: 38%;
+  animation: confetti-x var(--dur, 1600ms) linear var(--delay, 0ms) both;
+}
+
+.confetti .cf b {
+  display: block;
+  width: calc(10px * var(--s, 1));
+  height: calc(10px * var(--s, 1));
+  margin: calc(-5px * var(--s, 1)) 0 0 calc(-5px * var(--s, 1));
+  background: var(--c, #ffd45c);
+  border-radius: 2px;
+  animation: confetti-y var(--dur, 1600ms) linear var(--delay, 0ms) both;
+}
+
+.confetti .cf-rect b {
+  height: calc(5px * var(--s, 1));
+}
+
+.confetti .cf-dot b {
+  border-radius: 50%;
+}
+
+@keyframes confetti-x {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(var(--dx, 0));
+  }
+}
+
+@keyframes confetti-y {
+  0% {
+    opacity: 1;
+    transform: translateY(0) rotate(0deg);
+    animation-timing-function: cubic-bezier(0.2, 0.7, 0.4, 1);
+  }
+  28% {
+    transform: translateY(calc(-1 * var(--up, 24vmin))) rotate(calc(var(--rot, 360deg) * 0.3));
+    animation-timing-function: cubic-bezier(0.5, 0, 0.9, 0.6);
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(var(--fall, 50vmin)) rotate(var(--rot, 360deg));
+  }
+}
+
+/* ── Illustrations (art/illustrations.ts) ──────────────────────────────── */
+.illus__blink {
+  opacity: 0;
+  animation: cat-blink 4.6s linear 1.2s infinite;
+}
+
+.illus--home .illus__body,
+.illus--tutorial .illus__body {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: breathe 3.2s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    transform: none;
+  }
+  50% {
+    transform: scale(1.012, 0.988);
+  }
+}
+
+.illus__z {
+  animation: z-float 2.8s ease-in-out infinite;
+}
+
+.illus__z--2 {
+  animation-delay: 0.9s;
+}
+
+@keyframes z-float {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(4px);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-4px);
+  }
+}
+
+.illus__wave {
+  transform-box: fill-box;
+  transform-origin: 20% 100%;
+  animation: wave 1.6s ease-in-out infinite;
+}
+
+@keyframes wave {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(-12deg);
+  }
+}
+
+.illus__spark {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: twinkle 1.8s ease-in-out infinite;
+  animation-delay: calc(var(--k, 0) * 0.4s);
+}
+
+@keyframes twinkle {
+  0%,
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.6);
+  }
+}
+
+/* ── Reduced motion (02 §17.5): no shake, confetti, stagger or loops; fades ≤ 150 ms ──
+   One universal rule: every animation jumps to its end state (static rings, hidden lids, landed
+   cats), transitions shorten to 150 ms. The WAAPI shake is skipped in JS (fx/shake.ts). */
+[data-motion='reduced'] *,
+[data-motion='reduced'] *::before,
+[data-motion='reduced'] *::after {
+  animation-delay: 0s !important;
+  animation-duration: 1ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 150ms !important;
+}
+
+[data-motion='reduced'] .confetti,
+[data-motion='reduced'] .cell__spark {
+  display: none;
+}

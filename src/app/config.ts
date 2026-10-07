@@ -39,6 +39,9 @@ export interface GameConfig {
     readonly unsupportedFallback: { readonly cooldownSec: number };
     /** Dev/e2e mock ad overlay length (04 §6.2). */
     readonly mock: { readonly durationMs: number };
+    /** FB adapter: delays before re-loading an ad instance after consecutive load failures; after the
+     *  last one it waits for the next preload()/show request (05 §6.2, no tight reload loop). */
+    readonly reloadDelaysMs: readonly number[];
   };
   readonly daily: {
     readonly unlockAfterLevel: number;
@@ -91,6 +94,8 @@ export interface GameConfig {
     readonly cloudKey: string;
     /** setDataAsync NETWORK_FAILURE backoff (05 §7). */
     readonly cloudRetryDelaysMs: readonly number[];
+    /** FB: getDataAsync wait at boot; on timeout the session keeps the local copy and skips cloud writes (05 §7). */
+    readonly cloudLoadTimeoutMs: number;
   };
   readonly timer: { readonly tickMs: number };
   readonly hint: {
@@ -169,6 +174,13 @@ export interface GameConfig {
     readonly keyMax: number;
     readonly valueMaxLen: number;
   };
+  /** Boot sequence caps (04 §5.1). [app addition] */
+  readonly boot: {
+    /** Longest wait for document.fonts.ready; the font never blocks boot on failure (04 §5.1). */
+    readonly fontTimeoutMs: number;
+    /** Longest wait for restore-rule validation at launch; slower checks run when the board is opened (02 §15). */
+    readonly restoreTimeoutMs: number;
+  };
 }
 
 export const cfg: GameConfig = deepFreeze({
@@ -201,6 +213,7 @@ export const cfg: GameConfig = deepFreeze({
     banner: { enabled: false },
     unsupportedFallback: { cooldownSec: 600 },
     mock: { durationMs: 1500 },
+    reloadDelaysMs: [5000, 30_000, 120_000],
   },
   daily: { unlockAfterLevel: 20, firstPackMonth: '2026-10' },
   levels: {
@@ -243,6 +256,7 @@ export const cfg: GameConfig = deepFreeze({
     corruptKeep: 2,
     cloudKey: 'save',
     cloudRetryDelaysMs: [1000, 3000, 10_000],
+    cloudLoadTimeoutMs: 4000,
   },
   timer: { tickMs: 1000 },
   hint: { mainThreadBudgetMs: 30 },
@@ -300,6 +314,7 @@ export const cfg: GameConfig = deepFreeze({
     version: 'mewdoku-gen/1.0.0',
   },
   analytics: { nameMin: 2, nameMax: 40, maxParams: 25, keyMin: 2, keyMax: 40, valueMaxLen: 99 },
+  boot: { fontTimeoutMs: 1500, restoreTimeoutMs: 1500 },
 });
 
 /** Drag threshold for a cell of `cellPx` CSS px: max(8, 0.2 × cellPx) (02 §3 input.dragStartPx). */
