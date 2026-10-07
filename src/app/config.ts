@@ -209,6 +209,11 @@ export interface GameConfig {
     readonly packTimeoutMs: number;
     /** platform.init() / start() are retried once after this delay before boot gives up (PLAT-8). [boot addition] */
     readonly platformRetryDelayMs: number;
+    /**
+     * First run only: longest wait for the lazy overlay chunk (it holds the tutorial coach, O8), side
+     * by side with the pack and font waits, so the first board shows with its coach (04 §9). [boot addition]
+     */
+    readonly overlayTimeoutMs: number;
   };
   /** Loading indicator (lead decision, Phase 2 integration). [app addition] */
   readonly loading: {
@@ -368,7 +373,7 @@ export const cfg: GameConfig = deepFreeze({
     version: 'mewdoku-gen/1.0.0',
   },
   analytics: { nameMin: 2, nameMax: 40, maxParams: 25, keyMin: 2, keyMax: 40, valueMaxLen: 99 },
-  boot: { fontTimeoutMs: 1500, restoreTimeoutMs: 1500, packTimeoutMs: 1500, platformRetryDelayMs: 1000 },
+  boot: { fontTimeoutMs: 1500, restoreTimeoutMs: 1500, packTimeoutMs: 1500, platformRetryDelayMs: 1000, overlayTimeoutMs: 1500 },
   loading: { indicatorDelayMs: 300, failSafeMs: 25_000 },
   chunks: { retryDelaysMs: [500, 1500], timeoutMs: 8000 },
   worker: { callTimeoutMs: 10_000 },

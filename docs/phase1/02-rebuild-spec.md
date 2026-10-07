@@ -383,7 +383,7 @@ Notes:
 | Arrow keys | Move the focused cell (roving tabindex) | [DECISION] Accessibility (§18) |
 | Space | Tap the focused cell | [DECISION] |
 | Enter | Double-tap the focused cell (cat attempt or removal) | [DECISION] |
-| H / K | Hint / Kitty | [DECISION] |
+| H / K | Hint / Kitty, from anywhere on the game screen while **no modal overlay** is open: a focused cell is not needed, and focus may be on the top bar, the tools or the page itself (the non-modal tutorial coach does not count as a modal). Ignored with Ctrl, Alt or Meta, on key repeat and while input is locked. How to play lists every key (§18) | [DECISION] (Phase 2 review SPEC-01 / A11Y-8) |
 | Esc | Close the top overlay or card. O7 Esc = Done. **Exceptions:** Esc is ignored on O3 Win and O4 Fail, which need an explicit button choice (O4's Home discards the attempt and Continue shows an ad; O3 has no state that closes without a choice), and in the tutorial's hint step Esc, like ✕, does not close O1 (Apply only, §11.5 step 5) | [DECISION] |
 
 ### 6.4 Other controls
@@ -779,18 +779,24 @@ The character of the original, in words (01 §12): cute, calm, minimal; flat rou
 
 Our expression of that character must be **visibly our own**: our own palette values, our own cat character, our own icon set, our own layout proportions and a different accent colour (06 §5).
 
-### 17.2 Tokens and region palette (provisional; validate in Phase 2)
+### 17.2 Tokens and region palette (validated in Phase 2)
 
 | Token | Value | Use |
 |---|---|---|
 | `--page` | `#FBF6EE` | Page background (warm paper) |
 | `--card` | `#FFFFFF` | Board card, pills, sheets |
 | `--ink` | `#3B3044` | Text, X glyph, cat outline |
-| `--ink-2` | `#7A6E80` | Secondary text |
-| `--accent` | `#1F9E89` | Primary buttons (deliberately **not** orange) |
+| `--ink-2` | `#6F6375` | Secondary text (≥ 4.5:1 on `--page`, `--page-2` and `--card`). Phase 1 value `#7A6E80` was 4.2:1 |
+| `--accent` | `#17806F` | Primary buttons (deliberately **not** orange); white labels on it are 4.8:1. Phase 1 value `#1F9E89` gave white text only 3.3:1 |
+| `--accent-deep` | `#0F5A4E` | Pressed edge of primary buttons; accent-coloured text on white |
+| `--amber-text` | `#8A5A00` | Gold-family text on white or `--card`, e.g. the daily card's "In progress" (≥ 4.5:1); `--gold` stays for icons only |
 | `--danger` | `#D33A4A` | Wrong X, lost heart, error flash |
 | `--heart` | `#E8506A` | Hearts |
 | `--scrim` | `rgba(30,22,36,.75)` | Win and fail overlays |
+| `--stage` | `#2D2435` | Solid card behind the win and fail stage content, so no board cat shows through translucent text or disabled buttons |
+| `--wrong` | `#A3193A` | Wrong-X glyph and its ring (3:1 on every tile; `--danger` is the UI error colour) |
+
+All text pairs above are checked at ≥ 4.5:1 (WCAG 1.4.3) by `scripts/palette-check.ts` (Phase 2 review UX-08, A11Y-3, A11Y-10).
 
 Region colours (12, named for hint copy):
 
@@ -803,13 +809,12 @@ Region colours (12, named for hint copy):
 | 4 | Mint | `#8FD6B8` | 10 | Slate | `#9AA9BC` |
 | 5 | Lagoon | `#7CC6D6` | 11 | Moss | `#A3B57F` |
 
-Phase 2 must validate this palette with a script:
+`scripts/palette-check.ts` validates this palette (Phase 2, passing; the region colours are unchanged):
 
 - pairwise CIEDE2000 ≥ 10;
 - simulated deuteranopia, protanopia and tritanopia ΔE reported, with the patterns option compensating where it falls short;
-- `--ink` X glyph at ≥ 3:1 contrast against every tile (WCAG 1.4.11).
-
-The values may then be adjusted. **Colour assignment per puzzle** is deterministic: choose N of the 12 colours and assign them so that **adjacent regions** get the most different colours (03 §8.3).
+- `--ink` X glyph, cat outline, `--wrong` X and the colour-pattern glyphs (at their §18 opacities, on normal and faded tiles) at ≥ 3:1 against every tile (WCAG 1.4.11);
+- the UI text pairs at ≥ 4.5:1. **Colour assignment per puzzle** is deterministic: choose N of the 12 colours and assign them so that **adjacent regions** get the most different colours (03 §8.3).
 
 ### 17.3 Cat character (our own)
 
@@ -863,10 +868,10 @@ With reduced motion on: no shake, no confetti, no stagger. Fades are kept at ≤
 
 | Requirement | Spec |
 |---|---|
-| Not colour-only (WCAG 1.4.1) | Region-aware gaps (§17.4) are **always on**. The optional **Colour patterns** setting adds a 22 %-size glyph in each tile's corner. There are 12 glyphs (dot, ring, triangle, square, diamond, star, plus, bar, chevron, heart, drop, moon), one per palette index. |
+| Not colour-only (WCAG 1.4.1) | Region-aware gaps (§17.4) are **always on**. The optional **Colour patterns** setting adds a 22 %-size glyph in each tile's corner. There are 12 glyphs (dot, ring, triangle, square, diamond, star, plus, bar, chevron, heart, drop, moon), one per palette index. The glyph is drawn in `--ink` at **85 % opacity** (65 % on a faded, done region), which keeps it ≥ 3:1 on every tile (`layout.patternOpacity`, `patternOpacityDone`). On small slots (11×11 and 12×12 on a phone) the glyph grows to at least **7 px** (`layout.patternMinPx`, at most 1.6× the 22 % size) so the shapes stay tellable apart (Phase 2 review UX-13, A11Y-5). |
 | Non-text contrast (WCAG 1.4.11) | X, cat outline and wrong-X are ≥ 3:1 against every tile colour (validated by script). |
-| Screen reader | The board is `role="grid"`; each cell is a `button` with `aria-label`, e.g. "Row 3, column 5, Lavender, marked". A polite live region announces "Cat placed. 4 of 8.", "Wrong tile. 2 hearts left.", "Lavender done." Hint text names colours and, when patterns are on, glyphs. |
-| Keyboard | Full play via §6.3. Visible focus ring (3 px `--accent`). |
+| Screen reader | The board is `role="grid"`; each cell is a `button` with `aria-label`, e.g. "Row 3, column 5, Lavender, marked". A polite live region announces "Cat placed. 4 of 8.", "Wrong tile. 2 hearts left.", "Lavender done." Hint text names colours and, when patterns are on, glyphs. A hint that points at one tile ("its cat goes here", "this tile is out") also says which: "Highlighted tile: row 4, column 4, Apricot." Live regions exist before their first message, so the first one is read. |
+| Keyboard | Full play via §6.3; How to play lists the keys where a keyboard or mouse is present. Visible focus ring (3 px `--accent`). Focus never drops to the page: starting a level, closing a dialog or the tutorial's buttons put it back on the board or on the control that opened the dialog. |
 | Motion | Respect `prefers-reduced-motion` plus the setting (§17.5). |
 | Touch targets | The whole cell, including half of each gap, is hittable. A 12×12 board on a 360 px phone gives about 26 px cells. This is a known limit of the format, also present in the original. Drag-to-mark and the double-tap model reduce mis-taps. |
 | Text | rem-based sizes; supports 200 % browser zoom on the web build without overlap (FB webview may cap this). |
@@ -890,7 +895,9 @@ compact     = H < 640 → pills and chips at 36 px, chip text hidden (icons only
 
 - **FB safe zone**: reserve the top-left 64 × 64 px in the FBIG build. Place no controls there because the platform's floating menu may overlap it (05 §5, inferred). The Home and Gear buttons sit top-right.
 - Desktop and landscape (facebook.com): a centred portrait column on `--page`, with the remaining width filled by a soft pattern.
-- A landscape phone with height < 480 px shows O10 "Please rotate your device". FBIG portrait orientation config normally prevents this.
+- A landscape **phone** with height < 480 px (`layout.rotateMaxHeight`) shows O10 "Please rotate your device". A phone is a coarse primary pointer (touch) on a screen whose short side is < 600 px. FBIG portrait orientation config normally prevents this.
+- **Desktop windows never show O10**, whatever their size: a short window (a 150–200 % zoomed browser, a squat window, a 640 × 360 desktop) keeps the portrait column at its 568 px minimum height and the page scrolls (Phase 2 review UX-02, A11Y-1).
+- Sizes come from the visual viewport at page scale 1: pinch-zoom magnifies the page and never re-lays out or shrinks the board (A11Y-2).
 - Minimum supported viewport: 320 × 568.
 
 ## 20. Analytics events

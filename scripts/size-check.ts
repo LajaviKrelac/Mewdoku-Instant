@@ -2,14 +2,15 @@
 // Bundle budget (04 §9) on dist/<mode>, RAW bytes (FB hosting may not compress, 05 §5.3; 1 KB = 1000
 // bytes, as Vite prints them). Exit 1 when over.
 //   First load (what index.html pulls in before the first screen): main JS (entry + modulepreload
-//   chunks) ≤ 170 KB, CSS ≤ 36 KB, font ≤ 25 KB, index.html ≤ 4 KB; total ≤ 220 KB.
+//   chunks) ≤ 190 KB, CSS ≤ 40 KB, font ≤ 25 KB, index.html ≤ 4 KB; total ≤ 250 KB.
 //   Lazy: the engine worker ≤ 25 KB (created on first generate, never during boot, 04 §5.5) and the
-//   lazy JS chunks ≤ 45 KB (overlays, hint engine, sound recipes, RPC, main-thread generator;
-//   preloaded after the first screen). Packs and daily months are listed, not budgeted.
-//   FB builds: ≤ 60 files.
-// Budget history (integration, 2026-10-07): CSS 20 → 36 KB (lead decision); main JS 140 → 170 KB and
-// the worker moved out of the first-load sum (integration lead, pending lead sign-off; see
-// docs/phase2/STATUS.md "Deviations").
+//   lazy JS chunks ≤ 48 KB (overlays incl. the tutorial coach, hint engine, sound recipes, RPC,
+//   main-thread generator; preloaded after the first screen, the overlay chunk during boot on a
+//   first run). Packs and daily months are listed, not budgeted. FB builds: ≤ 60 files.
+// Budget history: integration (2026-10-07): CSS 20 → 36 KB; main JS 140 → 170 KB, worker out of the
+// first-load sum. Phase 2 hardening (lead decision, 2026-10-07): main JS 170 → 190 KB, CSS 36 → 40 KB,
+// first load 220 → 250 KB; lazy JS 45 → 48 KB because the coach (O8, ≈ 4.6 KB) moved from the main
+// bundle into the overlay chunk (the minimal raise plus ≈ 2 KB headroom). See 04 §9.
 //
 // Usage: tsx scripts/size-check.ts [distDir …] [--json]
 //   No dirs → every existing one of dist/web and dist/fbig. A dir whose name starts with "fbig" also
@@ -40,16 +41,16 @@ const KB = 1000;
 
 /** In matching order: a file is counted by the first budget it matches. */
 export const BUDGETS: readonly SizeBudget[] = [
-  { label: 'Main JS', pattern: /^assets\/index-[^/]*\.js$/, maxBytes: 170 * KB, includeHtmlJs: true, firstLoad: true },
-  { label: 'CSS', pattern: /^assets\/[^/]*\.css$/, maxBytes: 36 * KB, firstLoad: true },
+  { label: 'Main JS', pattern: /^assets\/index-[^/]*\.js$/, maxBytes: 190 * KB, includeHtmlJs: true, firstLoad: true },
+  { label: 'CSS', pattern: /^assets\/[^/]*\.css$/, maxBytes: 40 * KB, firstLoad: true },
   { label: 'Font', pattern: /\.woff2$/, maxBytes: 25 * KB, firstLoad: true },
   { label: 'index.html', pattern: /^index\.html$/, maxBytes: 4 * KB, firstLoad: true },
   { label: 'Worker JS (lazy)', pattern: /^assets\/[^/]*worker[^/]*\.js$/, maxBytes: 25 * KB },
-  { label: 'Lazy JS chunks', pattern: /^assets\/[^/]*\.js$/, maxBytes: 45 * KB },
+  { label: 'Lazy JS chunks', pattern: /^assets\/[^/]*\.js$/, maxBytes: 48 * KB },
 ];
 
 /** Everything index.html loads before the first screen (the firstLoad rows) (04 §9). */
-export const FIRST_LOAD_MAX = 220 * KB;
+export const FIRST_LOAD_MAX = 250 * KB;
 export const FB_MAX_FILES = 60;
 
 interface FileEntry {

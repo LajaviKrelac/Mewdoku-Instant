@@ -1,6 +1,6 @@
 // Owner: ui-shell
 // O7 daily result (02 §5 O7, §12): date, happy cat, solve time, mistakes and hints, next puzzle countdown.
-// The countdown refreshes while open. Esc acts as Done; scrim taps are ignored (Done may show an ad).
+// The countdown refreshes while open; once the next puzzle is due it reads 'daily.ready' instead. Esc acts as Done; scrim taps are ignored (Done may show an ad).
 //
 // Classes: .overlay[data-overlay=daily_result] > .overlay__panel--dialog.daily-result
 //          .daily-result__art .daily-result__time .daily-result__stats .daily-result__next
@@ -44,7 +44,10 @@ export function createDailyResult(): OverlayView<DailyResultProps> {
   );
 
   const renderNext = (): void => {
-    if (props) setText(next, t('daily.next', { time: formatDuration(props.nextPuzzleAt - props.now()) }));
+    if (!props) return;
+    // Solved after midnight, or left open past it: the next daily is already playable (logic-5, SPEC-03).
+    const left = props.nextPuzzleAt - props.now();
+    setText(next, left <= 0 ? t('daily.ready') : t('daily.next', { time: formatDuration(left) }));
   };
   const render = (p: DailyResultProps): void => {
     props = p;

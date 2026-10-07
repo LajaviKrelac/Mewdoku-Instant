@@ -35,6 +35,9 @@ function fakeOverlay(id: string, modal: boolean, made: string[]): FakeOverlay {
   return o;
 }
 
+/** Resolves after the next animation frame (the router restores focus there, RP-3). */
+const nextFrame = (): Promise<void> => new Promise((r) => requestAnimationFrame(() => r()));
+
 function setup() {
   document.body.innerHTML = '<button id="outside">outside</button><div id="app"></div>';
   const root = document.getElementById('app') as HTMLElement;
@@ -67,6 +70,7 @@ function setup() {
     trapFocus: (el, opts) => {
       const name = el.className;
       traps.push(`trap:${name}`);
+      if (!opts?.restoreOnNextFrame) traps.push('sync-restore'); // the router always defers (RP-3)
       (opts?.initialFocus ?? el.querySelector('button'))?.focus();
       return () => {
         traps.push(`release:${name}`);
@@ -339,10 +343,38 @@ describe('router: lazy overlay chunk (04 §9)', () => {
     expect(s.made).toEqual(['settings']);
   });
 
-  it('the real chunk provides every overlay except the coach', async () => {
+  it('the real chunk provides every overlay, the coach included (lead decision: 04 §9 budget)', async () => {
     const { loadOverlayChunk } = await import('../../../src/app/router');
     const f = await loadOverlayChunk();
-    expect(Object.keys(f).sort()).toEqual(['daily_result', 'fail', 'hint', 'how_to_play', 'rewarded', 'settings', 'win']);
+    expect(Object.keys(f).sort()).toEqual(['coach', 'daily_result', 'fail', 'hint', 'how_to_play', 'rewarded', 'settings', 'win']);
+  });
+
+  it('the coach is queued until the chunk lands, non-modal all along, then opened with the latest props', async () => {
+    let land: (f: Partial<OverlayFactories>) => void = () => undefined;
+    document.body.innerHTML = '<div id="app"></div>';
+    const root = document.getElementById('app') as HTMLElement;
+    const made: string[] = [];
+    const coach = fakeOverlay('coach', false, made);
+    let opened: unknown = null;
+    coach.open = (p: unknown) => void (coach.calls.push('open'), (opened = p));
+    const router = createRouter(root, {
+      factories: {
+        loadOverlays: () => new Promise((r) => (land = r)),
+        gameScreen: () => ({ el: document.createElement('section'), update: () => undefined, destroy: () => undefined }) as never,
+      },
+    });
+    router.showGame({} as never, {} as never);
+    router.open('coach', { step: 1 } as never);
+    router.update('coach', { step: 2 } as never);
+    expect(router.isOpen('coach')).toBe(true);
+    expect(made).toEqual(['coach']); // only our fake; the router has no eager overlay of its own
+    expect(coach.calls).toEqual([]);
+    land({ coach: () => coach });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(coach.calls).toEqual(['open']);
+    expect(opened).toEqual({ step: 2 });
+    expect(root.querySelector('.app-screen')?.hasAttribute('inert')).toBe(false); // the board stays playable
   });
 });
 
@@ -366,6 +398,8 @@ describe('router: initial focus honours [data-autofocus] (lead decision)', () =>
     s.router.open('fail', {} as never);
     expect((document.activeElement as HTMLElement).textContent).toBe('fail-auto');
     s.router.close('fail');
+    // Focus is restored on the next animation frame (restoreOnNextFrame, RP-3), not synchronously.
+    await nextFrame();
     expect(document.activeElement?.id).toBe('outside');
   });
 });

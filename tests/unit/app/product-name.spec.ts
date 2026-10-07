@@ -2,7 +2,7 @@
 // working title "Mewdoku" is a code name (06 §6.1), so a rename before Phase 4 must be a one-line
 // change in src/i18n/en.ts plus the <title> this test keeps in sync. Also: index.html links our own
 // favicon (RP-7), so the web build never requests a missing /favicon.ico.
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -13,8 +13,8 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const html = readFileSync(resolve(ROOT, 'index.html'), 'utf8');
 const NAME = en['app.name'];
 
-/** Keys that predate the single-source rule and spell the name out; nothing may join this list. */
-const LEGACY = ['about.made'];
+/** Keys that spell the name out instead of taking {name}: none (the old 'about.made' was removed). */
+const LEGACY: string[] = [];
 
 describe('product name: one source of truth (LEGAL-1)', () => {
   it("index.html's <title> is the i18n 'app.name'", () => {
@@ -32,6 +32,17 @@ describe('product name: one source of truth (LEGAL-1)', () => {
     expect(spelled).toEqual(LEGACY);
     expect(t('about.madeBy', { name: t('app.name') })).toContain(NAME);
     expect(en['about.madeBy']).toContain('{name}');
+  });
+
+  it('the shipped licence notices say "This game", never the name', () => {
+    const dir = resolve(ROOT, 'src/ui/overlays/licences');
+    const files = readdirSync(dir).filter((f) => f.endsWith('.txt'));
+    expect(files.length).toBeGreaterThan(0);
+    for (const file of files) {
+      const text = readFileSync(resolve(dir, file), 'utf8');
+      expect(text.toLowerCase(), file).not.toContain(NAME.toLowerCase());
+      expect(text, file).toMatch(/^This game /);
+    }
   });
 });
 

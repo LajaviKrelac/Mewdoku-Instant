@@ -10,7 +10,7 @@ import { getMode, rulesFor } from '../game/modes';
 import { isHard } from '../game/progression';
 import { reduce } from '../game/reducer';
 import { validateSlot } from '../game/save';
-import { advance, filterTutorialAction } from '../game/tutorial';
+import { advance, filterTutorialAction, tutorialStep } from '../game/tutorial';
 import type { Action, GameEvent, GameState, ModeId } from '../game/types';
 import type { GameScreen, GameScreenCallbacks, GameView } from '../ui/screens/game-screen';
 import { t } from '../i18n';
@@ -19,7 +19,7 @@ import { cfg } from './config';
 import type { AnalyticsEvent } from './events';
 import { createHelperFlows } from './helper-flows';
 import { feedbackFor, failEvent, levelParam, mistakeEvent, startEvents, winBookkeeping } from './session-effects';
-import { createFeedbackPlayer, createSessionTimers, defaultColors, defaultPraise, overlayProps, withSlot } from './session-parts';
+import { createFeedbackPlayer, createSessionTimers, defaultColors, defaultPraise, overlayProps, withoutSlot, withSlot } from './session-parts';
 import { createTransitions } from './session-transitions';
 import { shallowEqual, type AppState, type OverlayId, type SessionMeta, type SessionRequest } from './store';
 import { asTutorialStep, boardLocked, selectGameView, type ViewContext } from './views';
@@ -213,7 +213,8 @@ export function createSession(deps: SessionDeps): Session {
     const s = game();
     const m = meta();
     if (!s || !m || s.status !== 'hint') return;
-    const ctx = { n: s.puzzle.n, colors: m.colors, patterns: save().settings.patterns };
+    // regions: the card's screen-reader line names the highlighted tile's colour (A11Y-7).
+    const ctx = { n: s.puzzle.n, colors: m.colors, patterns: save().settings.patterns, regions: s.puzzle.regions };
     router.open('hint', {
       step,
       ...ctx,
@@ -316,8 +317,9 @@ export function createSession(deps: SessionDeps): Session {
       }
       if (restored) state = restored;
       else {
-        current = withSlot(current, slotKey, null);
-        cleared = true;
+        const next = withoutSlot(current, slotKey, puzzle.id);
+        cleared = next !== current;
+        current = next;
       }
     }
     const level = req.mode === 'level' ? req.level : req.mode === 'tutorial' ? 1 : null;
@@ -501,6 +503,14 @@ export function createSession(deps: SessionDeps): Session {
   function onOverlayFailed(id: OverlayId): void {
     const s = game();
     if (id === 'rewarded') return; // helper flows check the chunk first; a closed O2 is "Not now"
+    if (id === 'coach') {
+      // The tutorial never dead-ends on a missing coach (04 §8): the board still outlines the targets,
+      // the "Got it" step moves on by itself, and the next step's coach tries the chunk again.
+      toast(t('toast.error'));
+      const step = asTutorialStep(meta()?.tutorialStep ?? null);
+      if (step !== null && tutorialStep(step).gotIt) tutorialAdvance('got_it');
+      return;
+    }
     if (id === 'hint') {
       if (s?.status === 'hint') dispatch({ type: 'HINT_CLOSE' }, true);
       return toast(t('hint.unavailable'));

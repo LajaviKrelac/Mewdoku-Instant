@@ -402,7 +402,9 @@ export type AdResult =
 
 export interface PlatformAdapter {
   readonly id: 'web' | 'fbig';
-  capabilities(): Capabilities;                        // final after init()
+  capabilities(): Capabilities;                        // final after init(), except that an ad kind can
+                                                       // switch OFF later: FB latches it after an 'unsupported'
+                                                       // (CLIENT_UNSUPPORTED_OPERATION) result (PLAT-4)
   init(): Promise<void>;                               // FB: initializeAsync (call early)
   setLoadingProgress(pct: number): void;               // FB: setLoadingProgress(0..100)
   start(): Promise<void>;                              // FB: startGameAsync
@@ -410,10 +412,15 @@ export interface PlatformAdapter {
   getPlayerId(): string | null;                        // game-scoped ID or null
   onPause(cb: () => void): void;
   storage: {
-    load(): Promise<unknown | null>;                   // raw; run migrate() on the result
+    load(): Promise<RawSave>;                          // both raw copies; the app migrates and merges (§7.3)
     // Writes the local mirror at once. cloud: 'debounced' = setDataAsync after save.cloudDebounceMs;
     // 'now' = setDataAsync at once; 'flush' = setDataAsync then flushDataAsync (§7.1). Web: cloud is ignored.
     save(data: SaveDataV1, opts: { cloud: 'debounced' | 'now' | 'flush' }): Promise<void>;
+    status(): 'ok' | 'memory';                         // 'memory' = no localStorage (private mode, quota)
+    onMemoryFallback?(cb: () => void): void;           // once, when the store is or becomes memory-only
+    // Save copies that arrive after load(): FB 'cloud' (the late cloud read, §7.3) or web 'tab'
+    // (another tab wrote the save). The app merges each into the live save; returns an unsubscribe.
+    onExternalSave?(cb: (copy: { source: 'cloud' | 'tab'; value: unknown | null }) => void): () => void;
   };
   ads: {
     preload(kind: 'interstitial' | 'rewarded'): void;
@@ -428,6 +435,15 @@ export interface PlatformAdapter {
     show?(board: string): Promise<void>;               // FB overlay view (05 §8)
   };
 }
+
+export interface RawSave {
+  local: unknown | null;                               // parsed local mirror
+  cloud: unknown | null;                               // parsed FB cloud copy (null on web)
+  corrupt: boolean;                                    // a stored copy could not be parsed (backed up, §7.2)
+  localUnmerged?: boolean;                             // FB: the mirror holds writes from a session that never
+                                                       // merged the cloud copy, so the newest-wins fields come
+                                                       // from the cloud (§7.3, PLAT-1)
+}
 ```
 
 ## 5. Runtime design
@@ -437,17 +453,20 @@ export interface PlatformAdapter {
 ```ts
 // src/app/boot.ts (shape)
 export async function boot(platform: PlatformAdapter) {
-  await platform.init();                                   // FIRST: lets FB show its progress bar early
+  await retryOnce(() => platform.init());                  // FIRST: lets FB show its progress bar early
   platform.setLoadingProgress(10);
   mountSprite(); applyTokens();
-  const raw = await platform.storage.load();               // FB: cloud + local mirror, merged
-  const save = migrate(raw, clock.now());
+  const raw = await platform.storage.load();               // FB: cloud read bounded by save.cloudLoadTimeoutMs
+  const save = migrateAndMerge(raw, clock.now());          // §7.3 (localUnmerged → the cloud's fields win)
   save.sessions += 1; saves.touch();                       // firstSeenAt is set by defaults() on the very first boot
   platform.setLoadingProgress(40);
-  await levels.ensurePackFor(save.progress.level);         // pack-000 is bundled → instant
-  await fonts.ready.catch(() => {});                       // the font is ≤ 25 KB; never block on failure
+  await Promise.all([                                      // each wait is bounded; none can hold the start
+    within(boot.packTimeoutMs, levels.ensurePackFor(save.progress.level)),   // pack-000 is bundled → instant
+    within(boot.fontTimeoutMs, fonts.ready),               // the font is ≤ 25 KB; never block on failure
+    !save.tutorialDone && within(boot.overlayTimeoutMs, router.overlaysReady()), // first run: the coach's chunk
+  ]);
   platform.setLoadingProgress(100);
-  await platform.start();                                  // FB: startGameAsync; locale is valid after this
+  await retryOnce(() => platform.start());                 // FB: startGameAsync; locale is valid after this
   session.startedAt = clock.now();                         // ad-gate session grace (02 §13.2)
   i18n.setLocale(platform.getLocale());
   applyRestoreRules(save);                                 // 02 §15 "Restoring on launch", steps 1-5
@@ -458,6 +477,12 @@ export async function boot(platform: PlatformAdapter) {
 ```
 
 Restore step 4 (a saved board that is already full) and step 5 (hearts = 0) only take effect when the player opens that board from Home. `applyRestoreRules` validates the boards and clears stale or invalid slots; it does not navigate.
+
+Bounded waits and an honest failure (Phase 2 review RP-1, PLAT-8):
+
+- Nothing on the way to `platform.start()` waits without a bound. A pack still loading after `boot.packTimeoutMs` (1.5 s) goes on in the background, and `getLevel()` waits for it later behind the loading indicator. The font gets `boot.fontTimeoutMs`. On a **first run** the lazy overlay chunk, which holds the tutorial coach (O8), is fetched in the same parallel wait, capped by `boot.overlayTimeoutMs` (1.5 s), so the tutorial's first board shows with its coach; returning players fetch it at the last step.
+- `platform.init()` and `platform.start()` are each **retried once** after `boot.platformRetryDelayMs` (1 s). A second failure rejects `boot()`, and `main.ts` shows an honest error ("The game couldn't start…", `boot.failed`) with a **Try again** button that reloads. It never shows the "you can keep playing" toast, because nothing can be played.
+- Save copies that arrive after launch (`storage.onExternalSave`: the FB late cloud read, another web tab) are merged into the live save (`restore.ts mergeArrived`, §7.3). Only a cloud copy is written back.
 
 ### 5.2 State management
 
@@ -654,8 +679,8 @@ Type-checking and tests need the alias too. `tsconfig.json` gets `"paths": { "@p
 |---|---|
 | Lifecycle | `FBInstant.initializeAsync()` → `setLoadingProgress()` → `startGameAsync()`. `onPause` → pause the timer, mute audio, flush the save. The locale is read **after** start. |
 | Capabilities | Derived from `FBInstant.getSupportedAPIs()`, e.g. `'getRewardedVideoAsync'`, `'player.setDataAsync'`, `'performHapticFeedbackAsync'`, `'globalLeaderboards.setScoreAsync'`. |
-| Storage | `player.getDataAsync(['save'])` merged with the local mirror (§7.3). `setDataAsync({save})` is debounced 3 s. `flushDataAsync()` only on critical saves: win, daily win, purchase (none in Phase 2). Every write is mirrored to localStorage. Write errors are retried with backoff; `PENDING_REQUEST` is coalesced. |
-| Ads | One preloaded interstitial and one rewarded instance (`getInterstitialAdAsync(id)` / `getRewardedVideoAsync(id)` → `loadAsync()`). **Readiness timeout**: if the instance's `loadAsync()` has not resolved within `ads.readyTimeoutMs` (4 s) of the show request, return `{ok: false, reason: 'timeout'}` without showing it. **No timeout on `showAsync()`**: it resolves only when the ad is finished or closed, and rejects if it fails or the player closes it early (05 §6.2). `ad-flow.ts` adds the `ads.showWatchdogMs` safety net. FB error codes map to `AdResult` (`ADS_NO_FILL` → `no_fill`; `ADS_FREQUENT_LOAD` / `RATE_LIMITED` → `rate_limited`; `ADS_NOT_LOADED` → `not_ready`; `CLIENT_UNSUPPORTED_OPERATION` → `unsupported`; a rewarded rejection after the show began → `skipped`). A new instance is reloaded after every show or failure. Placement IDs come from `import.meta.env.VITE_FB_PLACEMENT_INTERSTITIAL` and `VITE_FB_PLACEMENT_REWARDED`. **An empty ID makes that capability false**, so builds made before monetization is approved use the free fallback. |
+| Storage | `player.getDataAsync(['save'])` merged with the local mirror (§7.3), which is kept **per player** (`mewdoku.save.v1:<playerId>`); a cloud read slower than `save.cloudLoadTimeoutMs` is merged when it arrives, with cloud writes off until then (§7.3 "Late cloud merge"). `setDataAsync({save})` is debounced 3 s. `flushDataAsync()` only on critical saves: win, daily win, purchase (none in Phase 2). Every write is mirrored to localStorage. Write errors are retried with backoff; `PENDING_REQUEST` is coalesced. |
+| Ads | One preloaded interstitial and one rewarded instance (`getInterstitialAdAsync(id)` / `getRewardedVideoAsync(id)` → `loadAsync()`). **Readiness timeout**: if the instance's `loadAsync()` has not resolved within `ads.readyTimeoutMs` (4 s) of the show request, return `{ok: false, reason: 'timeout'}` without showing it. **No timeout on `showAsync()`**: it resolves only when the ad is finished or closed, and rejects if it fails or the player closes it early (05 §6.2). `ad-flow.ts` adds the `ads.showWatchdogMs` safety net. FB error codes map to `AdResult` (`ADS_NO_FILL` → `no_fill`; `ADS_FREQUENT_LOAD` / `RATE_LIMITED` → `rate_limited`; `ADS_NOT_LOADED` → `not_ready`; `CLIENT_UNSUPPORTED_OPERATION` → `unsupported`; a rewarded rejection after the show began → `skipped`). A new instance is reloaded after every show or failure, after a failed load only once the reload backoff (`ads.reloadDelaysMs`) allows; a `loadAsync()` still pending after `ads.loadTimeoutMs` is abandoned as failed. An `unsupported` result latches that ad kind off for the session and turns its capability false, so the free fallback applies (05 §6.2). Placement IDs come from `import.meta.env.VITE_FB_PLACEMENT_INTERSTITIAL` and `VITE_FB_PLACEMENT_REWARDED`. **An empty ID makes that capability false**, so builds made before monetization is approved use the free fallback. |
 | Analytics | `FBInstant.logEvent(name, undefined, params)`. Names and params are sanitised (05 §10). |
 | Haptics | `performHapticFeedbackAsync()` if supported, else `navigator.vibrate` |
 | Leaderboards | Phase 4 and feature-detected only (05 §8) |
@@ -695,24 +720,36 @@ On the web adapter, `now()` and `critical()` are the same thing: a synchronous `
 | `stock`, `settings`, `ads`, `inProgress.level`, `inProgress.daily`, `ext` | Taken from the document with the newer `updatedAt` |
 | After merging | An `inProgress.level` whose id is not `L${progress.level}` is cleared (that level was already won on the other device), and so is an `inProgress.daily` whose date has a `daily` record |
 
+**FB local mirror per player (PLAT-2).** The FB build's mirror lives under `mewdoku.save.v1:<playerId>` (`save.storageKey` + `:` + the URL-encoded `player.getID()`), so another FB account on the same device never sees or merges it. With no player ID the unscoped key is a cache only: it is never merged with a cloud copy and never adopted by a player. The web build keeps the single key `mewdoku.save.v1`.
+
+**Late cloud merge (PLAT-1).** If the boot cloud read fails or takes longer than `save.cloudLoadTimeoutMs` (4 s), the session starts from the mirror (or defaults) with **cloud writes off**, so it can never overwrite a cloud copy it has not merged. The read goes on in the background (`save.cloudLateRetryDelaysMs`, the last delay repeating). When it arrives, `onExternalSave({ source: 'cloud' })` hands it to the app, which merges it into the live save, taking the newest-wins fields from the cloud copy; only then do cloud writes start. A session that ran unmerged sets the persistent marker `mewdoku.save.v1:<playerId>#unmerged`; the next load that does read the cloud returns `localUnmerged: true`, so the mirror's fresher `updatedAt` does not win stock, settings, ads, in-progress boards or `ext`. The first save after a merge clears the marker.
+
+**A level slot belongs to the current level.** The session writes a board to `inProgress.level` only when its id is `L${progress.level}`, and clears the slot only for its own board: after a late merge moved progress on, the session still playing the older level never overwrites or drops the newer level's board.
+
+**Another web tab (RP-5).** The web adapter turns the `storage` event into `onExternalSave({ source: 'tab' })`: the app merges the other tab's copy (progress never goes backwards) and does not write it back, so two tabs never echo each other.
+
 ## 8. Error handling and resilience
 
 - `window.onerror` and `unhandledrejection` log an analytics event and show a non-blocking toast. The game keeps running.
 - Pack fetch failure: retry ×2 (after 500 ms and 2 s), then play a **substitute board** generated in the worker (02 §11.4, seed `mewdoku:fallback:v1:<L>`), which is not saved as in-progress, and log `pack_fallback`. The player never sees a dead end.
-- Waiting for an ad to become **ready** never blocks progress for more than `ads.readyTimeoutMs` (4 s). An ad that is showing is not interrupted; the `ads.showWatchdogMs` net unlocks input if its promise never settles (02 §13.2).
-- Storage failure falls back to memory; the session still works.
+- **No request can hang** (RP-1). Every pack and daily-month fetch has a per-attempt deadline, `levels.fetchTimeoutMs` (5 s); a request that has not answered counts as a failed attempt (retry, then the substitute board or the generated daily).
+- **Lazy chunks** (RP-2). Chromium remembers a failed dynamic `import()` and rejects the same URL again without a new request, so `workers/lazy-chunk.ts loadChunk()` retries a failed chunk from its URL plus a cache-busting `?retry=N`, after `chunks.retryDelaysMs` ([500, 1500] ms), with `chunks.timeoutMs` (8 s) per attempt. The overlay chunk, the sound recipes and the hint engine all load through it. When the overlay chunk still fails, the router closes the queued overlays and emits `overlay:failed`; the session reconciles: a hint is never charged without its card, a win or a loss goes Home with the result saved, other overlays toast, and the tutorial's "Got it" step moves on by itself. A later open retries the chunk.
+- **Worker** (§5.5). The worker's start-up and each call have `worker.callTimeoutMs` (10 s); on expiry the worker is dropped and the work runs on the main thread.
+- **Loading fail-safe.** A level or daily still not ready after `loading.failSafeMs` (25 s) goes back Home with a toast instead of leaving the loading indicator up forever.
+- Waiting for an ad to become **ready** never blocks progress for more than `ads.readyTimeoutMs` (4 s). An ad that is showing is not interrupted; the `ads.showWatchdogMs` net unlocks input if its promise never settles (02 §13.2). FB: a `loadAsync()` that never settles is dropped after `ads.loadTimeoutMs` (12 s) and counts as a failed load (05 §6.2).
+- Storage failure falls back to memory; the session still works. A store that fails mid-session (quota, revoked) switches to memory at once, shows the one-time toast and marks `ui.storage` (RP-4). On FB a blocked localStorage does not show the toast while cloud save works (PLAT-3).
 
 ## 9. Bundle budget (enforced by `scripts/size-check.ts`)
 
 | Item | Budget (uncompressed) | Rationale |
 |---|---|---|
-| Main JS (including the main-thread engine parts and bundled pack-000) | ≤ 170 KB | FB hosting may not serve compressed files, so budget raw bytes (05 §5). Phase 1 estimated 140 KB; the integrated app measured 187–194 KB before code splitting and 160–167 KB (web / fbig) after it (Phase 2 integration; pending lead sign-off) |
-| CSS | ≤ 36 KB | Raised from 20 KB in Phase 2 (lead decision; measured about 34 KB minified) |
+| Main JS (including the main-thread engine parts and bundled pack-000) | ≤ 190 KB | FB hosting may not serve compressed files, so budget raw bytes (05 §5). Phase 1 estimated 140 KB; the integrated app measured 187–194 KB before code splitting and 160–167 KB after it. The Phase 2 review fixes (resilience, the FB storage rework, a11y) added about 10 KB; the lead raised the ceiling from 170 KB to 190 KB (Phase 2 hardening) after moving the tutorial coach into the lazy overlay chunk |
+| CSS | ≤ 40 KB | Raised from 20 KB (integration) and 36 KB (Phase 2 hardening, lead decision; measured about 37 KB minified after the review fixes) |
 | Font (one OFL subset) | ≤ 25 KB | — |
 | `index.html` | ≤ 4 KB | — |
-| **First-load total** (what `index.html` loads before the first screen: the four rows above) | **≤ 220 KB** | Target load ≤ 2 s on 4G, well under the < 5 s guideline (05 §5.4) |
+| **First-load total** (what `index.html` loads before the first screen: the four rows above) | **≤ 250 KB** | Raised from 220 KB with the rows above (lead decision). Target load ≤ 2 s on 4G, well under the < 5 s guideline (05 §5.4) |
 | Worker JS | ≤ 25 KB, lazy | Created on the first generation, never during boot (§5.5), so it is not part of the first load |
-| Lazy JS chunks (overlays O1–O7, hint engine, sound recipes, RPC, main-thread generator) | ≤ 45 KB | Fetched right after the first screen (boot step 8) or on first use (Phase 2 integration) |
+| Lazy JS chunks (overlays O1–O8, hint engine, sound recipes, RPC, main-thread generator) | ≤ 48 KB | Fetched right after the first screen (boot step 8) or on first use; on a first run the overlay chunk (with the coach) is fetched during boot. Raised from 45 KB because the coach (≈ 4.6 KB) moved here from the main JS; the minimal raise plus about 2 KB headroom |
 | Other packs (9 × ~15 KB) + daily months (27 × ~4.7 KB) | Lazy | Fetched on demand |
 | Files in the FB zip | ≤ 60 (platform cap 500) | — |
 | FB zip size | ≤ 500 KB | — |

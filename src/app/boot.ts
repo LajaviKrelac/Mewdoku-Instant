@@ -1,6 +1,6 @@
 // Owner: app
 // Boot sequence (04 §5.1): platform.init → sprite/tokens → load + migrate + merge save → sessions+1
-// → ensure pack → fonts → progress 100 → platform.start → locale → restore rules → route → preload ads.
+// → ensure pack → fonts (+ the overlay chunk with the coach, first run only) → progress 100 → platform.start → locale → restore rules → route → preload ads.
 // Nothing on the way to platform.start() may wait without a bound (05 §5.4, RP-1): the pack and the
 // font wait in parallel, each capped (boot.packTimeoutMs, boot.fontTimeoutMs); a pack still loading
 // is awaited later by getLevel() behind the loading indicator. platform.init() and start() are
@@ -24,6 +24,7 @@ import { applyMotion, resolveReducedMotion, systemPrefersReducedMotion, watchSys
 import { mountRotateNotice } from '../ui/overlays/rotate-notice';
 import { createBootScreen, type BootScreen } from '../ui/screens/boot-screen';
 import { createEngineClient, type EngineClient } from '../workers/engine-client';
+import { loadChunk } from '../workers/lazy-chunk';
 import { createAdFlow } from './ad-flow';
 import { delay, systemClock, type Clock } from './clock';
 import { cfg } from './config';
@@ -163,11 +164,14 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
       delay: (ms) => delay(clock, ms),
       onFallback: (where) => bus.emit('analytics', { name: 'pack_fallback', params: { where } }),
     });
-  // Both waits are bounded and run side by side: a slow or hung pack never holds Home or startGameAsync.
+  // The waits are bounded and run side by side: a slow or hung pack never holds Home or startGameAsync.
   const pack = within(clock, cfg.boot.packTimeoutMs, Promise.resolve().then(() => levels.ensurePackFor(first.progress.level)), undefined);
   const fonts = (doc as Document & { fonts?: { ready?: Promise<unknown> } }).fonts?.ready;
   const font = fonts ? within(clock, cfg.boot.fontTimeoutMs, fonts.then(() => undefined), undefined) : undefined;
-  await Promise.all([pack, font]);
+  // First run: the tutorial coach (O8) is in the lazy overlay chunk; fetch it now, while the loading
+  // screen still shows, so the first board appears with its coach. Returning players get it at step 8.
+  const overlays = first.tutorialDone ? undefined : within(clock, cfg.boot.overlayTimeoutMs, router.overlaysReady(), false);
+  await Promise.all([pack, font, overlays]);
   progress(100);
 
   // 4. Start: the game becomes visible; locale is valid only now (05 §4).
@@ -189,7 +193,9 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
   const unlock = (): void => attempt(() => audio.unlock(), undefined);
   doc.addEventListener('pointerdown', unlock, true);
   doc.addEventListener('keydown', unlock, true);
-  const lazySfx = opts.sfx ? null : createLazySfx(audio);
+  // The recipes chunk goes through loadChunk: a failed download is retried with a cache-busting URL,
+  // since Chromium never re-requests a dynamic import that failed once (RP-2).
+  const lazySfx = opts.sfx ? null : createLazySfx(audio, () => loadChunk(() => import('../audio/sfx')));
   const sfx: Sfx = opts.sfx ?? (lazySfx as Sfx);
   const announcer = opts.announcer ?? createAnnouncer(doc.body);
   const adFlow = createAdFlow({
@@ -330,7 +336,8 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
   else await live.start({ mode: 'tutorial', replay: false });
 
   // 8. The lazy chunks (04 §9: overlays, sound recipes, hint engine; none is needed for the first
-  //    screen), then preload ads (never during play start-up).
+  //    screen but the coach, fetched at step 3 on a first run), then preload ads (never during play
+  //    start-up).
   void router.preloadOverlays();
   void lazySfx?.load();
   attempt(() => engine.preload(), undefined);

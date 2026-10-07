@@ -105,6 +105,10 @@ export function createPlatform(): PlatformAdapter {
 }
 ```
 
+Start-up failures (ours, Phase 2 review PLAT-8): `initializeAsync()` and `startGameAsync()` are each retried once after `boot.platformRetryDelayMs` (1 s). A second failure, or a missing SDK, shows an honest error ("The game couldn't start. Check your connection and try again.") with a **Try again** button, never the "you can keep playing" toast. Nothing before `startGameAsync()` waits without a bound: the cloud read (§7), the pack and the font each have a deadline (04 §5.1), so the FB loading screen cannot hang on our side.
+
+Analytics values are sent as strings (`logEvent` parameter values are strings in the reference signature; numbers are converted, §10, PLAT-7).
+
 Facts from the SDK 7.1 reference text ([dt-types]) that still apply:
 
 - `getPlatform()` is null until init.
@@ -193,6 +197,9 @@ The NAV_FLOATING platform menu overlays a corner of the game. We **reserve the t
   - `ADS_FREQUENT_LOAD` and `RATE_LIMITED` → `rate_limited`
   - `ADS_NOT_LOADED` → `not_ready`
   - `CLIENT_UNSUPPORTED_OPERATION` → `unsupported`
+- **Unsupported latch** (ours, Phase 2 review PLAT-4). An `unsupported` result from a load or a show switches that ad kind **off for the session**: later requests answer `unsupported` without touching the SDK, and `capabilities()` reports it false, so hint, kitty and revive use the free fallback (02 §13.3). If the rewarded request that discovered it had already been accepted by the player, the free grant is given at once when its cooldown allows.
+- **Reload backoff** (ours, PLAT-5). After a failed load the next load waits for `ads.reloadDelaysMs` (5 s, 30 s, 120 s). A `preload()` never cuts the backoff short, so a no-fill never costs a second instance and load straight away; a show request still loads at once.
+- **Stalled loads** (ours, PLAT-6). A `loadAsync()` that has not settled after `ads.loadTimeoutMs` (12 s) is abandoned and counts as a failed load, so the backoff tries a fresh instance. Once one show request has waited the readiness window on a stalled load, further requests fail at once with `timeout` instead of locking input for another 4 s each.
 - A 4 s **readiness** timeout (`ads.readyTimeoutMs`) covers loading only. `showAsync()` gets **no** timeout: Meta's reference text says its promise "resolves when user finished watching the ad, and rejects if it failed to present or was closed during the ad" ([dt-types], re-read 2026-10-06), so a timeout would cut off ads that are still playing. `ad-flow.ts` keeps a 120 s watchdog purely as a safety net (02 §3). The game never waits on an ad that is not ready.
 - Mute our audio while an ad shows, and restore it afterwards.
 - The pacing gate (02 §13.2) is applied **before** asking the SDK:
@@ -223,6 +230,10 @@ Until rewarded ads are actually available, the free-fallback rule (02 §13.3) me
 | Errors | `NETWORK_FAILURE` → retry with backoff. `PENDING_REQUEST` → coalesce. `INVALID_PARAM` → log and keep the local copy. | [dt-types] |
 | Deleting a key | Write `null` (Playgama's practice) | [pg-npm] |
 | Offline / first frame | The local mirror makes boot instant; the cloud merge follows | — |
+| Boot read deadline | The boot read waits at most `save.cloudLoadTimeoutMs` (4 s). On failure or timeout the session starts from the mirror (or defaults) with **cloud writes off**, so it never overwrites a cloud copy it has not merged (Phase 2 review PLAT-1). The read is retried in the background (`save.cloudLateRetryDelaysMs`: 5, 15, 30, 60 s, the last repeating); when it arrives the app merges it into the live save (the cloud's stock, settings and boards win) and cloud writes start. | ours |
+| Unmerged marker | A session that ran without the cloud merge sets `mewdoku.save.v1:<playerId>#unmerged` in localStorage. The next boot that reads the cloud gets `localUnmerged: true` and takes the newest-wins fields from the cloud, not from the mirror's fresher `updatedAt`. The first save after a merge clears it. | ours |
+| Mirror per player | The localStorage mirror key is `mewdoku.save.v1:<playerId>` (URL-encoded `player.getID()`), so a second FB account on the same browser never sees, merges or uploads the first one's progress (PLAT-2). Without a player ID the unscoped key is a cache only and is never merged into a player's cloud copy. | ours |
+| Blocked localStorage | Cloud save still works, so the "progress can't be saved on this device" toast is not shown on FB while cloud save is available (PLAT-3). | ours |
 
 ## 8. Leaderboards and social (Phase 4, optional)
 
@@ -255,6 +266,7 @@ Sharing, invites, shortcuts, community follow and join, and context switching al
   - parameter keys are 2–40 characters;
   - parameter values are under 100 characters.
 - `fb-analytics.ts` truncates and filters to fit these limits. Note the 2-character minimum on **keys**: our board-size parameter is therefore `size`, not `n` (02 §20).
+- Parameter **values are sent as strings** (`toSdkParams`): the reference signature types them as strings, so a number such as a level is converted (Phase 2 review PLAT-7).
 - The event list is in 02 §20. **No other analytics SDK is used.**
 
 ## 11. Local testing

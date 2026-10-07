@@ -116,3 +116,28 @@ describe('tutorial session', () => {
     expect(h.save().progress).toEqual(before.progress);
   });
 });
+
+describe('tutorial: the coach lives in the lazy overlay chunk (04 §9)', () => {
+  it('a coach that cannot load never dead-ends the tutorial: the "Got it" step moves on by itself', async () => {
+    const h = firstRun();
+    await begin(h);
+    h.session.onCellDoubleTap(LAVENDER);
+    expect(step(h)).toBe(2);
+    h.log.length = 0;
+    h.bus.emit('overlay:failed', { id: 'coach' }); // the chunk failed after its retries
+    expect(step(h)).toBe(3);
+    expect(slice(h.log, /^toast:/)).toHaveLength(1);
+    expect(h.router.isOpen('coach')).toBe(true); // step 3's coach asks for the chunk again
+    expect(h.router.props.coach).toMatchObject({ step: 3 });
+  });
+
+  it('on any other step the failure only toasts; the step stays and the board outlines remain', async () => {
+    const h = firstRun();
+    await begin(h);
+    h.bus.emit('overlay:failed', { id: 'coach' });
+    expect(step(h)).toBe(1);
+    expect(h.game().status).toBe('playing');
+    h.session.onCellDoubleTap(LAVENDER); // still playable
+    expect(step(h)).toBe(2);
+  });
+});

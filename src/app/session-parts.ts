@@ -153,9 +153,27 @@ export function createFeedbackPlayer(
 
 // ─────────────────────────────── small helpers ───────────────────────────────
 
+/**
+ * The save with `slot` set to `value`. A level board is only ever written to the level slot when it
+ * is the current level's (`L{progress.level}`): after a late cloud merge moved progress on, the
+ * session still playing the older level must not overwrite the newer level's board (PLAT-1). The
+ * save is then returned unchanged. Clearing (null) is always allowed; see withoutSlot.
+ */
 export function withSlot(save: SaveDataV1, slot: 'level' | 'daily', value: InProgressV1 | null): SaveDataV1 {
   if (save.inProgress[slot] === value) return save;
+  if (slot === 'level' && value !== null && value.id !== `L${save.progress.level}`) return save;
   return { ...save, inProgress: { ...save.inProgress, [slot]: value } };
+}
+
+/**
+ * Clears `slot` for the session playing `puzzleId`, except a level slot that holds another level's
+ * board for the current level (a late cloud merge, PLAT-1): that board is not this session's to drop.
+ */
+export function withoutSlot(save: SaveDataV1, slot: 'level' | 'daily', puzzleId: string): SaveDataV1 {
+  const cur = save.inProgress[slot];
+  if (cur === null) return save;
+  if (slot === 'level' && cur.id !== puzzleId && cur.id === `L${save.progress.level}`) return save;
+  return withSlot(save, slot, null);
 }
 
 /** SessionMeta.colors: the given function or ui/art regionColorsFor; never throws (identity fallback). */

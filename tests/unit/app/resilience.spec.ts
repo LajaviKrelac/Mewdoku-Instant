@@ -206,3 +206,36 @@ describe('logic-5 / SPEC-03: O7 for a daily solved after midnight', () => {
     expect(props?.nextPuzzleAt).toBe(h.clock.now() - h.config.fx.winOverlayDelayMs + msUntilLocalMidnight(h.clock.now() - h.config.fx.winOverlayDelayMs));
   });
 });
+
+describe('PLAT-1 edge: a late cloud merge moves progress on while an older level is open', () => {
+  /** The FB cloud copy lands mid-level: progress is now level 9, with level 9's board in the slot. */
+  function lateCloudMerge(h: Harness): void {
+    const l9 = { ...(h.save().inProgress.level as NonNullable<SaveDataV1['inProgress']['level']>), id: 'L9' as const, cells: 'cloud-board', savedAt: 1 };
+    h.store.update((app) => ({
+      ...app,
+      save: { ...app.save, progress: { level: 9, completed: 8, best: {} }, inProgress: { ...app.save.inProgress, level: l9 } },
+    }));
+  }
+
+  it('moves on level 5 never overwrite the level 9 board, nor does Home save it there', async () => {
+    const h = createHarness();
+    await startLevel(h, 5);
+    h.session.onCellTap(WRONG5[3] as number); // writes the L5 slot as usual
+    expect(h.save().inProgress.level?.id).toBe('L5');
+    lateCloudMerge(h);
+    h.session.onCellTap(WRONG5[4] as number); // a board change on level 5
+    expect(h.save().inProgress.level).toMatchObject({ id: 'L9', cells: 'cloud-board' });
+    h.session.onHome(); // saveNow → saveBoard
+    expect(h.save().inProgress.level).toMatchObject({ id: 'L9', cells: 'cloud-board' });
+  });
+
+  it('discarding level 5 from O4 keeps the level 9 board', async () => {
+    const h = createHarness();
+    await startLevel(h, 5);
+    await threeMistakes(h);
+    await h.settle(h.config.fx.failOverlayDelayMs);
+    lateCloudMerge(h);
+    h.router.props.fail?.onHome();
+    expect(h.save().inProgress.level).toMatchObject({ id: 'L9', cells: 'cloud-board' });
+  });
+});

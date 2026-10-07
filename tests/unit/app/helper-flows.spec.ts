@@ -28,6 +28,16 @@ describe('hint flow (02 §9.1)', () => {
     ]);
   });
 
+  it("O1 gets the board's regions, so its screen-reader line names the tile's colour (A11Y-7)", async () => {
+    const h = createHarness({ save: withStock(5, 3) });
+    await playing(h);
+    await h.session.onBulb();
+    const props = h.router.props.hint;
+    expect(props?.regions).toBe(h.game().puzzle.regions);
+    const { hintLocation } = await import('../../../src/ui/overlays/hint-card');
+    expect(props && hintLocation(props.step, props)).toMatch(/^Highlighted tile: row \d+, column \d+, [A-Z]\w+\.$/);
+  });
+
   it('reopening the same board is free; any board change clears the cache', async () => {
     const h = createHarness({ save: withStock(5, 3) });
     await playing(h);
@@ -141,6 +151,36 @@ describe('free fallback when rewarded ads are unsupported (02 §13.3)', () => {
     expect(h.game().hearts).toBe(1);
     expect(h.game().revivesUsed).toBe(1);
     expect(h.save().ads.lastFallbackGrantAt).toBeGreaterThan(0);
+  });
+
+  it("a rewarded ad that answers 'unsupported' after the yes takes the free grant at once (PLAT-4)", async () => {
+    const h = createHarness({ save: withStock(0, 3) });
+    await playing(h);
+    h.platform.rewardedResults.push({ ok: false, reason: 'unsupported' });
+    await h.session.onBulb();
+    expect(slice(h.log, FLOW)).toEqual([
+      'open:rewarded',
+      'close:rewarded',
+      'ad:rewarded:hint',
+      'save:now:h1k3',
+      'engine:getHint',
+      'save:now:h0k3',
+      'status:hint',
+      'open:hint',
+    ]);
+    expect(h.router.props.rewarded?.variant).toBe('video'); // asked once, not again as "free"
+    expect(h.save().ads.lastFallbackGrantAt).toBe(h.clock.now());
+    expect(h.analytics).toContainEqual({ name: 'ad_rewarded', params: { placement: 'hint', result: 'fallback' } });
+    expect(h.log).not.toContain(`toast:${t('rewarded.noVideo')}`);
+  });
+
+  it("'unsupported' during the fallback cooldown: the no-video toast, nothing granted", async () => {
+    const h = createHarness({ save: (s) => ({ ...withStock(0, 3)(s), ads: { lastAdAt: 0, lastFallbackGrantAt: NOW - 60_000 } }) });
+    await playing(h);
+    h.platform.rewardedResults.push({ ok: false, reason: 'unsupported' });
+    await h.session.onBulb();
+    expect(slice(h.log, FLOW)).toEqual(['open:rewarded', 'close:rewarded', 'ad:rewarded:hint', `toast:${t('rewarded.noVideo')}`]);
+    expect(h.save().stock.hints).toBe(0);
   });
 
   it('revive during the cooldown: Continue is hidden', async () => {

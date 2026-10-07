@@ -2,17 +2,18 @@
 // Screen switching, overlay stack, focus restore, Esc handling (04 §3, §5.3). Overlays are created
 // lazily from the ui/overlays factories, appended to an overlay host once, and toggled.
 // Focus: only the top-most MODAL overlay holds a focus trap; everything below it is inert. When it
-// closes, focus returns to what was focused when it opened, and the next modal down is re-trapped.
+// closes, focus returns (on the next animation frame, RP-3) to what was focused when it opened, and
+// the next modal down is re-trapped.
 // Initial focus: the element that already has focus inside the overlay, else its first focusable
 // [data-autofocus] element, else its first focusable element.
-// Lazy chunk (04 §9 budget): every overlay except the coach lives in ./overlay-chunk, imported on
-// demand (preloadOverlays() starts it after the first route). An open() that arrives before the chunk
-// has landed is queued: the overlay is already on the stack (isOpen/top/stack, inert background,
+// Lazy chunk (04 §9 budget): every overlay (the coach too) lives in ./overlay-chunk, imported on
+// demand (preloadOverlays() starts it; boot does so early on a first run, for the tutorial's coach).
+// An open() that arrives before the chunk has landed is queued: the overlay is already on the stack (isOpen/top/stack, inert background,
 // 'overlay:open'), and its view is created, opened with the latest props and focused on arrival.
 // A failed chunk download is retried with a cache-busting URL (workers/lazy-chunk); when it still
 // fails, the queued overlays are closed and 'overlay:failed' tells the app (04 §8: never a dead end).
 import { focusableElements, setInert, trapFocus } from '../ui/a11y/focus-trap';
-import { createCoach, type CoachProps } from '../ui/overlays/coach';
+import type { CoachProps } from '../ui/overlays/coach';
 import type { DailyResultProps } from '../ui/overlays/daily-result';
 import type { FailOverlayProps } from '../ui/overlays/fail-overlay';
 import type { HintCardProps } from '../ui/overlays/hint-card';
@@ -84,7 +85,10 @@ export interface RouterFactories {
   gameScreen(view: GameView, cb: GameScreenCallbacks): GameScreen;
   toastLayer(): ToastLayer;
   loadingIndicator(): LoadingIndicator;
-  trapFocus(container: HTMLElement, opts?: { initialFocus?: HTMLElement | null; returnFocus?: HTMLElement | null }): () => void;
+  trapFocus(
+    container: HTMLElement,
+    opts?: { initialFocus?: HTMLElement | null; returnFocus?: HTMLElement | null; restoreOnNextFrame?: boolean },
+  ): () => void;
   setInert(elements: readonly HTMLElement[], inert: boolean): void;
 }
 
@@ -95,9 +99,6 @@ export interface RouterDeps {
   readonly factories?: Partial<RouterFactories>;
 }
 
-/** Overlays in the main bundle. */
-const EAGER_OVERLAYS: Partial<OverlayFactories> = { coach: createCoach };
-
 /** Whether an overlay is modal before its view exists (only the coach is not, CONTRACTS §4). */
 const isModalId = (id: OverlayId): boolean => id !== 'coach';
 
@@ -105,6 +106,7 @@ const isModalId = (id: OverlayId): boolean => id !== 'coach';
 export async function loadOverlayChunk(): Promise<Partial<OverlayFactories>> {
   const m = await loadChunk(() => import('./overlay-chunk'));
   return {
+    coach: m.createCoach,
     hint: m.createHintCard,
     rewarded: m.createRewardedPrompt,
     win: m.createWinOverlay,
@@ -135,7 +137,7 @@ export function createRouter(root: HTMLElement, deps: RouterDeps = {}): Router {
   const doc = deps.doc ?? root.ownerDocument;
   const f = deps.factories ?? {};
   /** Factories available now; the lazy chunk adds the rest when it lands. */
-  const factories: Partial<OverlayFactories> = { ...EAGER_OVERLAYS, ...(f.overlays ?? {}) };
+  const factories: Partial<OverlayFactories> = { ...(f.overlays ?? {}) };
   const loadOverlays = f.loadOverlays ?? loadOverlayChunk;
   const makeToast = f.toastLayer ?? createToastLayer;
   const makeLoading = f.loadingIndicator ?? createLoadingIndicator;
@@ -211,6 +213,10 @@ export function createRouter(root: HTMLElement, deps: RouterDeps = {}): Router {
       release: trap(v.el, {
         initialFocus: now && v.el.contains(now) ? now : autofocusTarget(v.el),
         returnFocus: returnTo.get(topId) ?? null,
+        // Focus goes back on the next frame, after the un-inerted screen and the board's highlight
+        // change have been styled once: a synchronous focus() forced a second full-document recalc
+        // (hint close ≈ 300 → 150 ms at 4× CPU on a 12×12 board, RP-3).
+        restoreOnNextFrame: true,
       }),
     };
   }

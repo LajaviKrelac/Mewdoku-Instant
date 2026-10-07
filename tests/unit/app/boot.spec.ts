@@ -2,8 +2,16 @@
 // Owner: app. Boot sequence (04 §5.1) and the Home shell (02 §4.2, §12, §14) with a fake platform and
 // fake UI factories: init first, progress 100 before start, merge + sessions+1, restore rules, route
 // (tutorial on first run, Home otherwise), ads preloaded last.
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+// loadChunk is wrapped (still the real one) so a test can see which lazy chunks boot loads through it.
+vi.mock('../../../src/workers/lazy-chunk', async (orig) => {
+  const m = await orig<typeof import('../../../src/workers/lazy-chunk')>();
+  return { ...m, loadChunk: vi.fn(m.loadChunk) };
+});
+
 import { boot, showBootFailure } from '../../../src/app/boot';
+import { loadChunk } from '../../../src/workers/lazy-chunk';
 import { cfg } from '../../../src/app/config';
 import type { LevelsRepo } from '../../../src/game/levels-repo';
 import type { ExternalSave } from '../../../src/platform/types';
@@ -74,6 +82,10 @@ function fakeUi(log: string[]): Ui {
 
 interface StartOpts {
   memory?: boolean;
+  /** Boot with the real lazy sound recipes instead of the fake sfx. */
+  realSfx?: boolean;
+  /** Stands in for the lazy overlay chunk (default: the real one); gets boot's log. */
+  loadOverlays?: (log: string[]) => RouterFactories['loadOverlays'];
   levels?: Partial<LevelsRepo>;
   /** Adjusts the fake platform before boot (failures, storage hooks). */
   prepare?: (platform: FakePlatform) => void;
@@ -95,11 +107,11 @@ function begin(local: SaveDataV1 | null, opts: StartOpts = {}) {
     clock,
     doc: document,
     search: '',
-    routerFactories: ui.factories,
+    routerFactories: opts.loadOverlays ? { ...ui.factories, loadOverlays: opts.loadOverlays(log) } : ui.factories,
     levels: createFakeLevels(opts.levels),
     engine: createLoggedEngine(log),
     audio: fa.audio,
-    sfx: fa.sfx,
+    ...(opts.realSfx ? {} : { sfx: fa.sfx }),
     announcer: { say: () => undefined, clear: () => undefined, destroy: () => undefined },
   });
   return { done, root, log, clock, platform, ui, muted: fa.muted };
@@ -234,6 +246,49 @@ describe('boot', () => {
     expect(s.app.store.get().ui.paused).toBe(true);
     window.dispatchEvent(new Event('focus'));
     expect(s.app.store.get().ui.paused).toBe(false);
+    s.app.dispose();
+  });
+});
+
+describe('boot: lazy chunks (RP-2, 04 §9)', () => {
+  const logged = (log: string[]): RouterFactories['loadOverlays'] => () => {
+    log.push('chunk:overlays');
+    return Promise.resolve({});
+  };
+  const order = (log: string[]): string[] => log.filter((x) => /^(chunk:|progress:100|platform:start|screen:)/.test(x));
+
+  it('first run: the overlay chunk (it holds the coach) is fetched behind the loading screen', async () => {
+    const s = await start(null, { loadOverlays: logged });
+    expect(order(s.log)).toEqual(['chunk:overlays', 'progress:100', 'platform:start', 'screen:game:T1']);
+    s.app.dispose();
+  });
+
+  it('first run: a chunk that never arrives holds the start no longer than boot.overlayTimeoutMs', async () => {
+    const b = begin(null, { loadOverlays: (log) => () => (log.push('chunk:overlays'), new Promise(() => undefined)) });
+    await settle();
+    expect(b.log).toContain('chunk:overlays');
+    expect(b.log).not.toContain('platform:start');
+    await b.clock.advanceAsync(cfg.boot.overlayTimeoutMs);
+    await settle();
+    expect(order(b.log)).toEqual(['chunk:overlays', 'progress:100', 'platform:start', 'screen:game:T1']); // its coach opens when the chunk lands
+    (await b.done).dispose();
+  });
+
+  it('returning player: the overlay chunk waits until after the first route', async () => {
+    const s = await start(returning(), { loadOverlays: logged });
+    expect(order(s.log)).toEqual(['progress:100', 'platform:start', 'screen:home', 'chunk:overlays']);
+    s.app.dispose();
+  });
+
+  it('the sound recipes chunk is fetched through the retrying loader right after the first screen', async () => {
+    vi.mocked(loadChunk).mockClear();
+    const s = await start(returning(), { realSfx: true });
+    await settle();
+    const calls = vi.mocked(loadChunk).mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    // One of the loaders is the sound recipes module (the overlay chunk may be another).
+    const mods = await Promise.all(calls.map(([load]) => load() as Promise<Record<string, unknown>>));
+    expect(mods.some((m) => typeof m['createSfx'] === 'function')).toBe(true);
     s.app.dispose();
   });
 });

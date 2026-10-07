@@ -137,7 +137,7 @@ UI modules are plain functions that return handles. The UI never imports the sto
 ### 5.3 platform (called only by app)
 
 - `@platform` resolves to `platform/web/index.ts` or `platform/fb/index.ts`. Both export `createPlatform(): PlatformAdapter`, plus testable factories `createWebPlatform(opts)` and `createFbPlatform(opts)`.
-- `storage.load(): Promise<RawSave>` returns `{ local, cloud, corrupt }`. The **app** runs `migrate()` on each copy and `merge()`s them.
+- `storage.load(): Promise<RawSave>` returns `{ local, cloud, corrupt, localUnmerged? }`. The **app** runs `migrate()` on each copy and `merge()`s them (`app/restore.ts loadSave`; with `localUnmerged` the cloud copy's newest-wins fields win, §10).
 - `storage.save(data, { cloud: 'debounced' | 'now' | 'flush' })` and `storage.status()`.
 - Ads: `preload`, `isReady`, `showInterstitial(p)`, `showRewarded(p)`. **They never reject.** Readiness waits at most `ads.readyTimeoutMs`, and the show itself has no timeout.
 - Helpers: `shared/haptics.ts` (`canVibrate`, `createVibrateHaptics`, `createHaptics`), `web/local-storage.ts` (`safeLocalStorage`, `createLocalStore(key)`), `web/mock-ads.ts` (`readMockAdMode`, `createMockAds`), and in `fb/`: `createFbStorage`, `createFbAds`, `mapAdError`, `createFbAnalytics`, `sanitizeEventName`, `sanitizeParams`, plus `fbinstant.d.ts`.
@@ -145,7 +145,7 @@ UI modules are plain functions that return handles. The UI never imports the sto
 ### 5.4 app (internal hub; signatures matter to tests and to `main.ts`)
 
 - `boot(platform, root, opts?): Promise<AppHandle>` and `applyRestoreRules(save, { today, levels })`. In e2e builds it installs `window.__mewdoku: E2EHooks` (`state()`, `app()`, `solution()`, `seedSave(json)`).
-- `createRouter(root, { bus?, doc?, factories? }): Router` with `showBoot`, `showHome(view, cb)`, `showGame(view, cb): GameScreen`, `open(id, OverlayPropsMap[id])`, `update`, `close`, `closeAll`, `isOpen`, `top`, `stack`, `toast`, `setLoading(on)`, `escape`, `preloadOverlays()`, `destroy`. Every overlay except the coach comes from the lazy chunk `app/overlay-chunk.ts`; an `open()` before it lands is queued (see §9).
+- `createRouter(root, { bus?, doc?, factories? }): Router` with `showBoot`, `showHome(view, cb)`, `showGame(view, cb): GameScreen`, `open(id, OverlayPropsMap[id])`, `update`, `close`, `closeAll`, `isOpen`, `top`, `stack`, `toast`, `setLoading(on)`, `escape`, `preloadOverlays()`, `destroy`. Every overlay, the coach included (since the Phase 2 hardening, §10), comes from the lazy chunk `app/overlay-chunk.ts`; an `open()` before it lands is queued (see §9). `overlaysReady()` resolves whether the chunk is (or could be) loaded.
 - `createSession(deps): Session`:
   - `start(req: SessionRequest)`, `state()`, `subscribe(fn)`, `pause(reason)`, `resume(reason)`, `saveNow()`, `dispose()`;
   - the commands that screens and overlays call: `onCellTap`, `onCellDoubleTap`, `onPaint`, `onBulb`, `onPaw`, `onHintApply`, `onHintClose`, `onCoachGotIt`, `onContinue`, `onRetry`, `onNext`, `onDailyDone`, `onHome`, `onSkipTutorial`.
@@ -193,7 +193,7 @@ pointer / keys ─► ui/board (gestures, keyboard) ─► BoardInput ─► Gam
 - **Boot** (04 §5.1):
   1. `platform.init()`, then `mountSprite()`.
   2. `storage.load()` → `migrateReport` + `merge`, then `sessions + 1` and `saves.touch()`.
-  3. `levels.ensurePackFor()`, then wait for the fonts.
+  3. `levels.ensurePackFor()` and the fonts (and, on a first run, the overlay chunk with the coach), side by side, each with a deadline (`boot.packTimeoutMs`, `boot.fontTimeoutMs`, `boot.overlayTimeoutMs`).
   4. Set the loading progress to 100, then `platform.start()`, and record `sessionStartedAt = clock.now()`.
   5. `setLocale(platform.getLocale())`, then `applyRestoreRules`.
   6. Route to `home` (or straight to the tutorial), then preload ads.
@@ -282,7 +282,7 @@ pointer / keys ─► ui/board (gestures, keyboard) ─► BoardInput ─► Gam
 
 **Bundle split (04 §9).** Modules that the first screen does not need are lazy chunks: the overlays O1–O7 (`app/overlay-chunk.ts`, preloaded by boot after the first route), the hint engine (`engine/hint.ts` and the grader; `EngineClient.preload()`), the RPC layer (`workers/rpc.ts`, loaded with the worker), the sound recipes (`audio/lazy-sfx.ts` wraps `audio/sfx.ts`) and the win/fail/daily/tutorial poses (`ui/art/illustrations.ts`; the home and boot poses are in `ui/art/mascot.ts`). Rules for new code:
 
-- Do not import `ui/overlays/*` (except `coach`, `toast`, `loading-indicator`, `rotate-notice`, `overlay-base`, `hint-text`) from main-bundle modules; open overlays through the router.
+- Do not import `ui/overlays/*` values (except `toast`, `loading-indicator`, `rotate-notice`, `overlay-base`, `hint-text`) from main-bundle modules; open overlays through the router. Type-only imports of any overlay's props are fine. (The coach left this list in the Phase 2 hardening, §10.)
 - `RouterFactories.loadOverlays` is the test seam for the chunk; tests that pass every overlay in `factories.overlays` stay synchronous.
 - The S0 splash (`ui/screens/boot-screen.ts`) is web-only: boot passes it to the router as `factories.bootScreen` when `__PLATFORM__ === 'web'`, so FBIG builds drop it (FB shows its own loader).
 
@@ -293,4 +293,58 @@ pointer / keys ─► ui/board (gestures, keyboard) ─► BoardInput ─► Gam
 **Layering.** `src/game/**` may import `src/data/**` (`level-assets.ts` wires the shipped JSON), see §2.
 
 **Content scripts.** The worker pool and the resumable cache moved from `gen-levels.ts` to `scripts/gen-pool.ts` (shared with `gen-daily.ts`); `gen-levels.ts` re-exports the old names. Regenerating with `--no-cache --workers 4` reproduces every pack and daily month byte for byte.
+
+## 10. Phase 2 hardening changes (integration lead, 2026-10-07)
+
+A six-lens review found 56 issues; the fixes (groups A app resilience, B FB platform and boot, C UI, visuals and a11y) and the lead's follow-ups added the APIs below. All are additive; nothing that another module calls changed its signature, except where noted.
+
+**Product name.** The product name lives in **one** place, the i18n key `app.name` (working title "Mewdoku", a code name pending the user's decision, 06 §6.1). Every other string takes it through `{name}` (`about.madeBy`); `index.html`'s `<title>` mirrors it, and `tests/unit/app/product-name.spec.ts` keeps the two in sync, fails if any other key or a shipped licence notice spells the name, and guards the favicon. The old `about.made` key (which spelled the name) was removed: this is the one key removal of Phase 2, made by the lead for LEGAL-1. Internal identifiers (storage keys, seeds, `window.__mewdoku`, the font-face alias) are not user-facing and stay.
+
+**Router and overlays.**
+
+- `Router.overlaysReady(): Promise<boolean>`: loads the lazy overlay chunk if needed; `false` when it cannot be loaded. Never rejects. Helper flows check it before charging for a card (O1, O2).
+- `Router.preloadOverlays()`: starts the chunk; boot calls it after the first route, and on a first run boot awaits `overlaysReady()` during the loading screen (bounded by `boot.overlayTimeoutMs`).
+- Event **`overlay:failed { id }`** (`app/events.ts`): the chunk failed after its retries; the router has closed the queued overlay. The session reconciles: `hint` → back to playing, nothing charged; `win` / `daily_result` / `fail` → toast, then Home with the result or the lost board saved; `coach` → toast, and the tutorial's "Got it" step moves on by itself; anything else → toast.
+- **The coach (O8) is in the lazy chunk** (`overlay-chunk.ts` exports `createCoach`; `loadOverlayChunk()` returns it). It is still non-modal; a queued coach never makes the board inert.
+- Focus: the router passes `restoreOnNextFrame: true` to `trapFocus`, so focus goes back to the opener on the next animation frame (RP-3). Tests that check the restored focus wait one frame. `RouterFactories.trapFocus` takes the same option.
+- `GameScreen` recovers lost focus onto the board two frames after it drops to `<body>`, and handles **H / K** anywhere on the game screen while no modal is open (02 §6.3).
+
+**Platform (all optional members, so test doubles need not implement them).**
+
+- `RawSave.localUnmerged?: boolean`: FB mirror written by a session that never merged the cloud copy (PLAT-1).
+- `PlatformStorage.onExternalSave?(cb: (copy: ExternalSave) => void): () => void`, `ExternalSave { source: 'cloud' | 'tab'; value }`: save copies that arrive after `load()` (the late FB cloud read; another web tab's write). The app merges each (`app/restore.ts mergeArrived`) and writes back only a cloud copy.
+- `capabilities()` is final after `init()` **except** that an ad kind can switch off later: the FB adapter latches a kind off after an `unsupported` result (PLAT-4). Read capabilities at the moment of use, never cache them.
+- FB local mirror per player: key `mewdoku.save.v1:<encodeURIComponent(playerId)>`, with the persistent marker `<key>#unmerged` (`web/local-storage.ts createLocalFlag(key)`, `LocalFlag { get, set }`). The web build keeps `mewdoku.save.v1`.
+- `platform/shared/timers.ts`: `sleep(timers, ms)`, `within(timers, p, ms, onTimeout)`. `fb/fb-analytics.ts toSdkParams(params)`: values as strings (PLAT-7).
+
+**App.**
+
+- `app/fetch-json.ts fetchJsonWithTimeout(url, timeoutMs = levels.fetchTimeoutMs, fetchImpl?)`: aborts and rejects after the deadline; boot passes it to `createAssetLoaders`.
+- `app/restore.ts`: `loadSave(raw, now)`, `mergePreferring(preferred, other)`, `mergeArrived(live, copy, now)`; `boot.ts` re-exports `applyRestoreRules` and `loadSave`.
+- `boot.showBootFailure(root, reload?)`: the honest start-up error with "Try again" (PLAT-8); `main.ts` calls it when `boot()` rejects.
+- `session-parts.ts withSlot(save, slot, value)` writes a level board only when its id is `L${progress.level}`; `withoutSlot(save, slot, puzzleId)` clears a slot only for its own board (late cloud merge, 04 §7.3).
+- Helper flows: a rewarded request that returns `unsupported` after the player accepted O2 takes the free grant at once when the cooldown allows (PLAT-4); otherwise "no video".
+- The hint context passed to O1 and to the announcement includes `regions` (`HintTextContext.regions?`), so `hintLocation()` names the tile's colour (A11Y-7).
+
+**Workers.**
+
+- `workers/lazy-chunk.ts`: `loadChunk(load, opts?)` retries a failed dynamic import from its URL with a cache-busting `?retry=N` after `chunks.retryDelaysMs`, each attempt capped by `chunks.timeoutMs`; `deadline(p, ms, onExpire?)`; `failedChunkUrl(err)`. The overlay chunk, the sound recipes (`createLazySfx(audio, () => loadChunk(() => import('../audio/sfx')))`) and the hint engine load through it. It lives in `workers/` and imports only `app/config.ts` (allowed, §2), so `app/` may use it.
+- `EngineClient`: the worker's start-up and each call have `worker.callTimeoutMs`; on expiry the worker is dropped and the call runs on the main thread.
+
+**UI.**
+
+- `ui/a11y/focus-trap.ts trapFocus(container, { initialFocus?, returnFocus?, restoreOnNextFrame? })`.
+- `ui/overlays/hint-card.ts hintLocation(step, ctx)`; `hint-text.ts regionName(label, ctx)`.
+- `ui/overlays/overlay-base.ts setTextKeepTogether(el, text, phrases?)` (no orphaned dates or "Double-tap").
+- `ui/overlays/rotate-notice.ts shouldShowRotateNotice(w, h, phone = true)`, `isPhone(win)`: phones only (coarse pointer, short side < 600 px), visual-viewport sizes at scale 1 (02 §19).
+- `ui/overlays/toast.ts TOAST_SETTLE_MS`, `modalOverlayOpen(doc)`; `coach.ts LIVE_SETTLE_MS`, `placeCard(...)`, `roundSpot(...)`, `SoftRect`; `board-view.ts patternScaleFor(slotPx)`; `layout.ts readViewport(win, fresh?)`; `game/progression.ts localMidnightAfter(dateKey)`.
+- O7 shows `daily.ready` instead of the countdown once `nextPuzzleAt <= now()` (logic-5).
+
+**New config keys** (`app/config.ts`): `ads.loadTimeoutMs` (12 s), `levels.fetchTimeoutMs` (5 s), `save.cloudLateRetryDelaysMs` ([5, 15, 30, 60] s), `layout.patternOpacity` (0.85), `layout.patternOpacityDone` (0.65), `layout.patternMinPx` (7), `boot.packTimeoutMs` (1.5 s), `boot.platformRetryDelayMs` (1 s), `boot.overlayTimeoutMs` (1.5 s), `loading.failSafeMs` (25 s), `chunks.retryDelaysMs` ([500, 1500]), `chunks.timeoutMs` (8 s), `worker.callTimeoutMs` (10 s).
+
+**New strings** (`src/i18n/en.ts`, appended): `daily.ready`, `about.madeBy`, `boot.failed`, `boot.retry`, `a11y.hintAt`, `a11y.hintAtColor`, `howto.keys`, `fail.continue.a11y.videoLabel`, `fail.continue.a11y.freeLabel`, `about.code`, `about.codeLicence`.
+
+**Tokens** (02 §17.2): `--accent #17806F`, `--accent-deep #0F5A4E`, `--ink-2 #6F6375`, new `--amber-text #8A5A00` and `--stage #2D2435`; `scripts/palette-check.ts` checks the UI text pairs at 4.5:1 and the pattern glyphs at 3:1.
+
+**Bundle budget** (04 §9, lead decision): main JS ≤ 190 KB, CSS ≤ 40 KB, first load ≤ 250 KB, lazy JS ≤ 48 KB (the coach moved there), worker ≤ 25 KB unchanged.
 

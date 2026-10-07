@@ -132,7 +132,7 @@ export function createSettingsModal(): OverlayView<SettingsProps> {
     h('div', { class: 'overlay__head' }, back, h('h2', { class: 'overlay__title', id: aboutTitleId }, t('about.title')), closeButton(() => props?.onClose())),
     h('p', { class: 'about__name' }, t('app.name')),
     version,
-    // The product name has one source, 'app.name' (LEGAL-1; 'about.madeBy' supersedes 'about.made').
+    // The product name has one source, 'app.name' (LEGAL-1).
     h('p', { class: 'about__text' }, t('about.madeBy', { name: t('app.name') })),
     h('p', { class: 'about__text' }, t('about.font'), ' ', licence),
     h(

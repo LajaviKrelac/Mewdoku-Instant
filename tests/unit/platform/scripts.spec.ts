@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { unzipSync } from 'fflate';
 import { afterEach, describe, expect, it } from 'vitest';
-import { checkSizes, FB_MAX_FILES, FIRST_LOAD_MAX } from '../../../scripts/size-check';
+import { BUDGETS, checkSizes, FB_MAX_FILES, FIRST_LOAD_MAX } from '../../../scripts/size-check';
 import { uploadBundle } from '../../../scripts/upload-fbig';
 import { zipFbig } from '../../../scripts/zip-fbig';
 
@@ -78,21 +78,29 @@ describe('size-check', () => {
     expect(r.maxFiles).toBeUndefined();
   });
 
+  it('has the lead-approved ceilings (04 §9)', () => {
+    const max = (label: string) => BUDGETS.find((b) => b.label === label)?.maxBytes;
+    expect([max('Main JS'), max('CSS'), max('Font'), max('index.html'), FIRST_LOAD_MAX]).toEqual([190_000, 40_000, 25_000, 4_000, 250_000]);
+    expect([max('Worker JS (lazy)'), max('Lazy JS chunks')]).toEqual([25_000, 48_000]);
+  });
+
   it('fails when the first-load total or the lazy chunks are over budget', () => {
     const d = tempDir('web');
-    fakeBuild(d, { main: 155_000, css: 35_000, font: 24_000 }); // each row ok, the sum over 220 KB
+    // shared-def.js (10 KB) is a modulepreload chunk, so main JS = 188 KB: each row ok, the sum over 250 KB.
+    fakeBuild(d, { main: 178_000, css: 39_500, font: 24_500 });
     const r = checkSizes(d, { fb: false });
     expect(r.rows.find((x) => x.label === 'Main JS')?.ok).toBe(true);
+    expect(r.rows.find((x) => x.label === 'CSS')?.ok).toBe(true);
     expect(r.rows.find((x) => x.label === 'First-load total')?.ok).toBe(false);
     expect(r.ok).toBe(false);
     const lazy = tempDir('web');
-    fakeBuild(lazy, { lazy: 46_000 });
+    fakeBuild(lazy, { lazy: 48_001 });
     expect(checkSizes(lazy, { fb: false }).ok).toBe(false);
   });
 
   it('fails when a budget is exceeded', () => {
     const d = tempDir('web');
-    fakeBuild(d, { main: 175_000 });
+    fakeBuild(d, { main: 185_000 }); // + the 10 KB modulepreload chunk = 195 KB
     const r = checkSizes(d, { fb: false });
     expect(r.ok).toBe(false);
     expect(r.rows.find((x) => x.label === 'Main JS')?.ok).toBe(false);

@@ -242,6 +242,26 @@ describe('line breaks (UX-15)', () => {
     expect(Array.from(title.querySelectorAll('.nowrap')).map((e) => e.textContent)).toContain('Wed 7 Oct');
     dr.destroy();
   });
+
+  it('says the next puzzle is ready once its time has come, instead of a 23 h countdown (logic-5, SPEC-03)', () => {
+    let now = 1_000_000;
+    const dr = createDailyResult();
+    document.body.append(dr.el);
+    const props = { dateKey: '2026-10-07', ms: 252_000, mistakes: 0, hints: 0, kitties: 0, now: () => now, onDone: vi.fn() };
+    // Solved after midnight: nextPuzzleAt already passed.
+    dr.open({ ...props, nextPuzzleAt: now - 120_000 });
+    expect(q(dr.el, '.daily-result__next').textContent).toBe('A new puzzle is ready');
+    // Exactly at the due time it is ready too.
+    dr.update({ ...props, nextPuzzleAt: now });
+    expect(q(dr.el, '.daily-result__next').textContent).toBe('A new puzzle is ready');
+    // Before midnight: the countdown, which flips to "ready" while the overlay stays open.
+    dr.update({ ...props, nextPuzzleAt: now + 90_000 });
+    expect(q(dr.el, '.daily-result__next').textContent).toMatch(/^Next puzzle in /);
+    now += 90_000;
+    vi.advanceTimersByTime(1000);
+    expect(q(dr.el, '.daily-result__next').textContent).toBe('A new puzzle is ready');
+    dr.destroy();
+  });
 });
 
 describe('How to play: keyboard controls (A11Y-8)', () => {

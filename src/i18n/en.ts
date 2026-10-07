@@ -166,7 +166,6 @@ export const en = {
   'settings.about': 'About & credits',
   'about.title': 'About & credits',
   'about.version': 'Version {version}',
-  'about.made': 'Puzzles, pictures, sounds and words made by the Mewdoku team.',
   'about.font': 'Headings use the Fredoka typeface by the Fredoka Project Authors, under the SIL Open Font License 1.1.',
   'about.fontLicence': 'Font licence',
   'about.privacy': 'Privacy policy',
@@ -261,7 +260,7 @@ export const en = {
   // ── Group A fixes (appended) ───────────────────────────────────────────────
   /** O7 when the next daily is already playable (solved after midnight, or left open past it). */
   'daily.ready': 'A new puzzle is ready',
-  /** About credit: the product name comes from 'app.name' (one source of truth; supersedes 'about.made'). */
+  /** About credit: the product name comes from 'app.name' (one source of truth, LEGAL-1). */
   'about.madeBy': 'Puzzles, pictures, sounds and words made by the {name} team.',
 
   // ── Group B fixes (appended) ───────────────────────────────────────────────

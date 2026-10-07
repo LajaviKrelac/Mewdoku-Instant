@@ -9,7 +9,7 @@ import type { AnalyticsEvent } from './events';
 import type { HelperFlows } from './helper-flows';
 import type { SaveScheduler } from './saves';
 import type { GameCommands } from './session-types';
-import { withSlot } from './session-parts';
+import { withoutSlot } from './session-parts';
 import type { SessionMeta, SessionRequest } from './store';
 import type { FailOverlayProps } from '../ui/overlays/fail-overlay';
 
@@ -118,7 +118,7 @@ export function createTransitions(host: TransitionHost): TransitionCommands {
           // O4 Home discards the attempt (02 §10.2). The top-bar Home in the fx.failOverlayDelayMs
           // before O4 shows saves the board like any other Home; a restore reopens O4 (02 §15 step 5).
           const slot = host.slotFor(m);
-          if (slot) host.updateSave((sv) => withSlot(sv, slot, null));
+          if (slot) host.updateSave((sv) => withoutSlot(sv, slot, m.puzzleId));
           host.saves.now();
           host.leave('discard');
         } else {

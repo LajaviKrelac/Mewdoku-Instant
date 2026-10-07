@@ -117,6 +117,15 @@ export function createHelperFlows(host: HelperHost): HelperFlows {
     return false;
   }
 
+  /** The free grant (02 §13.3): cooldown stamped and saved, logged as result 'fallback'. */
+  function grantFallback(p: RewardedPlacement): true {
+    host.updateSave((s) => recordFallbackGrant(s, host.clock.now()));
+    host.saves.touch();
+    host.log({ name: 'ad_rewarded', params: { placement: p, result: 'fallback' } });
+    host.bus.emit('ad', { kind: 'rewarded', placement: p, result: 'fallback' });
+    return true;
+  }
+
   async function rewardedOrFallback(p: RewardedPlacement): Promise<boolean> {
     const asks = p !== 'revive';
     if (asks && !(await cardsReady(() => true, t(p === 'hint' ? 'hint.unavailable' : 'kitty.unavailable')))) return false;
@@ -130,16 +139,16 @@ export function createHelperFlows(host: HelperHost): HelperFlows {
         }
         return true;
       }
+      // The platform turned out not to support rewarded ads (FB CLIENT_UNSUPPORTED_OPERATION, which
+      // also switches the capability off): the player already said yes, so the free grant applies
+      // at once when it is available, instead of a "no video" dead end (PLAT-4).
+      if (r.reason === 'unsupported' && fallbackAvailable(host.save(), host.clock.now(), c)) return grantFallback(p);
       host.toast(t('rewarded.noVideo'));
       return false;
     }
     if (fallbackAvailable(host.save(), host.clock.now(), c)) {
       if (asks && !(await askO2(p, 'free'))) return false;
-      host.updateSave((s) => recordFallbackGrant(s, host.clock.now()));
-      host.saves.touch();
-      host.log({ name: 'ad_rewarded', params: { placement: p, result: 'fallback' } });
-      host.bus.emit('ad', { kind: 'rewarded', placement: p, result: 'fallback' });
-      return true;
+      return grantFallback(p);
     }
     if (asks) await askO2(p, 'countdown');
     return false;
