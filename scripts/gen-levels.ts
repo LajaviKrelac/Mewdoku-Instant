@@ -78,11 +78,13 @@ function readCache(path: string): Map<string, GenTaskResult & { hash: string }> 
 
 /**
  * Worker bootstrap: Node's built-in type stripping would load this .ts file without tsx's module
- * resolution (extensionless imports), so the worker registers tsx first and then imports us.
+ * resolution (extensionless imports), so the worker registers tsx first and then imports us. null when
+ * this module was loaded as CommonJS (no import.meta.resolve): the caller then runs in-thread.
  */
-function workerBoot(): string {
-  const api = import.meta.resolve('tsx/esm/api');
-  return `import(${JSON.stringify(api)}).then((m) => { m.register(); return import(${JSON.stringify(import.meta.url)}); });`;
+function workerBoot(): string | null {
+  const resolve = (import.meta as { resolve?: (specifier: string) => string }).resolve;
+  if (typeof resolve !== 'function') return null;
+  return `import(${JSON.stringify(resolve('tsx/esm/api'))}).then((m) => { m.register(); return import(${JSON.stringify(import.meta.url)}); });`;
 }
 
 type WorkerReply = { ok: true; result: GenTaskResult } | { ok: false; key: string; error: string };
@@ -134,7 +136,9 @@ export async function runGenTasks(tasks: readonly GenTask[], opts: RunOptions): 
       return { ok: false, key: task.key, error: err instanceof Error ? err.message : String(err) };
     }
   };
-  if (opts.workers <= 1 || pending.length < 2) {
+  const boot = opts.workers > 1 && pending.length > 1 ? workerBoot() : null;
+  if (opts.workers > 1 && pending.length > 1 && boot === null) opts.log(`${opts.label}: worker threads unavailable here; generating in-thread`);
+  if (boot === null) {
     for (const task of pending) accept(task, runLocal(task));
   } else {
     let next = 0;
@@ -150,7 +154,7 @@ export async function runGenTasks(tasks: readonly GenTask[], opts: RunOptions): 
         rejectAll(err instanceof Error ? err : new Error(String(err)));
       };
       for (let t = live; t > 0; t--) {
-        const w = new Worker(workerBoot(), { eval: true, workerData: { mewdokuGenWorker: true } });
+        const w = new Worker(boot, { eval: true, workerData: { mewdokuGenWorker: true } });
         pool.push(w);
         let current: (GenTask & { hash: string }) | undefined;
         let finished = false;

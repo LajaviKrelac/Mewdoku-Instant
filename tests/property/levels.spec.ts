@@ -90,7 +90,8 @@ describe('shipped content (03 §11.2)', () => {
     expect(bad).toEqual([]);
     levelPacks.forEach((p, k) => {
       expect(isLevelPack(p)).toBe(true);
-      expect(p).toMatchObject({ v: 1, kind: 'levels', first: k * cfg.levels.packSize + 1, count: p.levels.length, gen: cfg.gen.version });
+      // Shipped packs keep their generator tag when cfg.gen.version is bumped later (they are fixed data).
+      expect(p).toMatchObject({ v: 1, kind: 'levels', first: k * cfg.levels.packSize + 1, count: p.levels.length, gen: expect.stringMatching(/^mewdoku-gen\//) });
     });
     dailyPacks.forEach((p, k) => {
       expect(isDailyPack(p)).toBe(true);
@@ -193,7 +194,7 @@ describe('shipped content (03 §11.2)', () => {
 
   it('9. the manifest lists every file with a matching SHA-256', () => {
     const sha = (rel: string): string => createHash('sha256').update(read(rel)).digest('hex');
-    expect(manifest).toMatchObject({ v: 1, gen: cfg.gen.version });
+    expect(manifest).toMatchObject({ v: 1, gen: expect.stringMatching(/^mewdoku-gen\//) });
     expect(manifest.packs.map((p) => p.file)).toEqual(levelFiles.map((f) => `levels/${f}`));
     expect(manifest.daily.map((d) => d.file)).toEqual(dailyFiles.map((f) => `daily/${f}`));
     for (const p of manifest.packs) expect(p.sha256, p.file).toBe(sha(p.file));
