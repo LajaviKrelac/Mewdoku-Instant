@@ -11,6 +11,7 @@ import { mascotIllustration } from '../art/mascot';
 import { icon } from '../art/sprite';
 import { clear, h, setText, type View } from '../dom';
 import { createTopBar, type TopBarProps } from '../hud/top-bar';
+import { setTextKeepTogether } from '../overlays/overlay-base';
 
 export interface DailyCardView {
   readonly state: DailyCardState;
@@ -142,7 +143,9 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
     const size = t('home.daily.size', { n: d.n });
     const status = dailyStatusText(d);
     daily.dataset.state = d.state;
-    setText(dailyTitle, t('home.daily.title', { date }));
+    // The date never breaks between day and month ("Wed 7" / "Oct", UX-15).
+    const title = t('home.daily.title', { date });
+    if (dailyTitle.textContent !== title) setTextKeepTogether(dailyTitle, title, [date]);
     setText(dailySub, d.state === 'locked' ? status : t('home.daily.sub', { size, status }));
     daily.setAttribute('aria-label', t('home.daily.a11y', { date, size, status }));
     const wanted = d.state === 'locked' ? 'lock' : 'cal';

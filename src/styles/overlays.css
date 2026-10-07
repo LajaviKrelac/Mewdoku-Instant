@@ -59,21 +59,32 @@
   overscroll-behavior: contain; outline: none; }
 .overlay__panel--dialog { max-width: 400px; padding: 24px 20px 20px; border-radius: var(--radius-xl); background: var(--card);
   box-shadow: var(--shadow-3); text-align: center; animation: mw-pop-in 220ms var(--ease-out) both; }
-.overlay__panel--stage { max-width: 360px; color: #fff; text-align: center; animation: mw-pop-in 260ms var(--ease-out) both; }
-/* Stage text sits on the scrimmed board (busy X glyphs, cats): a soft dark halo keeps it legible. */
-.overlay__panel--stage .overlay__title, .win__sub, .fail__body, .win__home.btn--ghost, .fail__home {
-  text-shadow: 0 1px 2px rgba(30, 22, 36, 0.8), 0 0 14px rgba(30, 22, 36, 0.75); }
+.overlay__panel--stage { max-width: 360px; padding: 20px 20px 14px; border-radius: var(--radius-xl); background: var(--stage);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 18px 50px rgba(0, 0, 0, 0.35); color: #fff; text-align: center;
+  animation: mw-pop-in 260ms var(--ease-out) both; }
+/* The stage content sits on its own solid card (UX-04): the scrimmed board never shows through the
+   title, the cat or a button. Gated buttons (the 1 s win delay, the fail delay, waiting for an ad)
+   stay opaque with a muted fill instead of turning translucent; aria-disabled keeps them focusable. */
+.overlay__panel--stage .btn[aria-disabled='true'] { opacity: 1; }
+.overlay__panel--stage .btn--primary[aria-disabled='true'] { background: #3b524e; color: rgba(255, 255, 255, 0.74); box-shadow: 0 4px 0 #263633; }
+.overlay__panel--stage .btn--secondary[aria-disabled='true'] { background: #d9d3dc; color: var(--ink-2); box-shadow: 0 3px 0 rgba(0, 0, 0, 0.25); }
+.overlay__panel--stage .btn--ghost[aria-disabled='true'] { color: rgba(255, 255, 255, 0.55); }
+/* The stage card is its own stacking context (the confetti sits behind its content) and never clips:
+   the overlay itself scrolls when very large text makes the card taller than the screen. */
+.overlay[data-overlay='win'], .overlay[data-overlay='fail'] { justify-content: flex-start; overflow-y: auto; }
+.overlay__scrim--dark { position: fixed; } /* win / fail only: stays put if the overlay scrolls */
+.overlay__panel--stage { z-index: 1; flex: none; margin: auto 0; max-height: none; overflow: visible; }
 .overlay__panel--sheet { max-width: 480px; margin-top: auto; padding: 16px; border-radius: var(--radius-xl); background: var(--card);
   box-shadow: var(--shadow-3); animation: mw-sheet-in 220ms var(--ease-out) both; }
 .overlay__head { display: flex; align-items: center; margin: -4px -4px 8px 0; text-align: left; }
 .overlay__head .overlay__title { flex: 1; min-width: 0; }
-.overlay__title { color: var(--ink); font-size: var(--fs-xxl); line-height: 1.15; }
-.overlay__body { margin-top: 8px; color: var(--ink-2); font-size: var(--fs-l); line-height: 1.4; }
+.overlay__title { color: var(--ink); font-size: var(--fs-xxl); line-height: 1.15; text-wrap: balance; }
+.overlay__body { margin-top: 8px; color: var(--ink-2); font-size: var(--fs-l); line-height: 1.4; text-wrap: balance; }
 .overlay__actions { display: flex; align-items: center; justify-content: center; margin-top: 20px; }
 .overlay__actions--stack { flex-direction: column; align-items: stretch; }
 .overlay__actions--stack > * + * { margin-top: 12px; }
 .overlay__actions--stack > .btn--ghost { align-self: center; }
-.overlay__close, .overlay__back { width: 40px; height: 40px; min-height: 40px; background: var(--page-2); box-shadow: none; flex: none; }
+.overlay__close, .overlay__back { width: 44px; height: 44px; min-height: 44px; background: var(--page-2); box-shadow: none; flex: none; }
 .overlay__back { margin-right: 8px; }
 .overlay__back .btn__icon { transform: rotate(180deg); }
 .overlay__art { display: flex; justify-content: center; margin: 8px auto; }
@@ -84,6 +95,7 @@
 .hint-card__row { display: flex; align-items: flex-start; text-align: left; }
 .hint-card__icon { flex: none; width: 44px; height: 44px; margin-right: 12px; padding: 8px; border-radius: 50%;
   background: #fff6d6; color: var(--gold-deep); }
+.hint-card__desc { flex: 1 1 auto; min-width: 0; }
 .hint-card__text { padding-top: 2px; color: var(--ink); font-size: var(--fs-l); line-height: 1.4; }
 .hint-card__actions { margin-top: 14px; }
 .hint-card__apply { flex: 1; max-width: 260px; margin: 0 auto; }
@@ -106,13 +118,17 @@
 .win__praise { color: var(--gold) !important; }
 .win__art > svg { width: 210px; height: 210px; }
 .win__sub { margin-top: 2px; color: rgba(255, 255, 255, 0.88); font-family: var(--font-display); font-weight: 600; font-size: var(--fs-l); }
-.win__confetti { position: absolute; top: 0; right: 0; bottom: 0; left: 0; overflow: hidden; pointer-events: none; }
+/* The burst lives inside the card, behind its content (z-index −1 in the card's stacking context):
+   over the card's background and the scrim around it, never over the title, cat or buttons (UX-05). */
+.win__confetti { position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: -1; overflow: visible; pointer-events: none; }
+.win__confetti .confetti { overflow: visible; z-index: auto; }
+.win__confetti .confetti .cf { top: 26%; }
 .win .overlay__actions, .fail .overlay__actions { margin-top: 24px; }
 .win__home, .fail__home { color: rgba(255, 255, 255, 0.9); }
 .win__home.btn--primary { color: #fff; }
 .fail__art > svg { width: 170px; height: 170px; }
 .fail__body { max-width: 300px; margin: 4px auto 0; color: rgba(255, 255, 255, 0.82); font-size: var(--fs-m); }
-.fail__continue .btn__badge { margin-left: 10px; background: rgba(255, 255, 255, 0.24); }
+.fail__continue .btn__badge { margin-left: 10px; background: var(--accent-deep); color: #fff; }
 .fail__continue .btn__badge .icon { width: 1.1em; height: 1.1em; margin-left: 3px; color: #fff; --icon-fill: #fff; }
 .fail__retry { color: var(--ink); }
 
@@ -129,8 +145,15 @@
   justify-content: space-between; }
 .settings-row--link .btn__label { flex: 1; text-align: left; }
 .settings-row--link .btn__chev { color: var(--ink-3); }
+.settings-row--link.btn:focus-visible { border-radius: var(--radius-m); outline-offset: -2px; }
+/* Large text (200 %): the label keeps its width and the System / On / Off control wraps under it
+   instead of being drawn over it (A11Y-6). */
 .settings-row--motion { flex-wrap: wrap; }
-.switch { display: inline-flex; align-items: center; min-height: 44px; padding: 4px 0; border: 0; background: none; cursor: pointer; }
+.settings-row--motion .settings-row__label { flex: 1 0 auto; }
+.settings-row--motion .segmented { margin: 4px 0 4px auto; }
+/* Pill-shaped, so the 3 px focus ring follows the rounded control (UX-16). */
+.switch { display: inline-flex; align-items: center; min-height: 44px; padding: 4px 4px 4px 10px; border: 0; border-radius: var(--radius-pill);
+  background: none; cursor: pointer; }
 .switch__state { min-width: 2.2em; margin-right: 8px; color: var(--ink-2); font-size: var(--fs-s); font-weight: 600; text-align: right; }
 .switch__track { position: relative; width: 52px; height: 32px; border-radius: 16px; background: var(--line-2); transition: background-color 150ms ease; }
 .switch__knob { position: absolute; top: 3px; left: 3px; width: 26px; height: 26px; border-radius: 50%; background: #fff;
@@ -138,13 +161,13 @@
 .switch[aria-checked='true'] .switch__track { background: var(--accent); }
 .switch[aria-checked='true'] .switch__knob { transform: translateX(20px); }
 .segmented { display: inline-flex; padding: 3px; border-radius: var(--radius-pill); background: var(--page-2); }
-.segmented__opt { min-height: 38px; padding: 0 12px; border: 0; border-radius: var(--radius-pill); background: transparent; color: var(--ink-2);
+.segmented__opt { min-width: 44px; min-height: 44px; padding: 0 12px; border: 0; border-radius: var(--radius-pill); background: transparent; color: var(--ink-2);
   font-family: var(--font-display); font-weight: 600; font-size: var(--fs-s); cursor: pointer; }
 .segmented__opt[aria-checked='true'] { background: var(--card); color: var(--ink); box-shadow: var(--shadow-1); }
 .about__name { margin-top: 8px; color: var(--accent-deep); font-family: var(--font-display); font-weight: 600; font-size: var(--fs-xl); }
 .about__version { color: var(--ink-2); font-size: var(--fs-s); }
 .about__text { margin-top: 12px; color: var(--ink); font-size: var(--fs-m); line-height: 1.45; }
-.about__link { color: var(--accent-deep); font-weight: 600; }
+.about__link { display: inline-block; margin: -11px 0; padding: 11px 0; color: var(--accent-deep); font-weight: 600; }
 
 /* O6 how to play */
 .howto__rules { margin: 0; padding: 0; list-style: none; }
@@ -158,6 +181,9 @@
 .howto__note-icon { width: 20px; height: 20px; margin: 0 10px 0 0; color: var(--accent); }
 .howto__note-icon--heart { color: var(--heart); }
 .howto__note-icon--bulb { color: var(--gold-deep); }
+/* Keyboard controls: only where a keyboard is likely (a mouse or trackpad is present). */
+.howto__notes .howto__keys { display: none; }
+@media (any-pointer: fine) { .howto__notes .howto__keys { display: flex; } }
 .howto__extra { flex-direction: column; align-items: stretch; margin-top: 16px; }
 .howto__extra > * + * { margin-top: 10px; }
 
@@ -180,17 +206,28 @@
 .coach[data-hand='swipe'] .coach__hand { animation: mw-hand-swipe 1.9s ease-in-out infinite; }
 .coach__card { position: absolute; left: 16px; right: 16px; max-width: 440px; margin: 0 auto; padding: 16px 18px; border-radius: var(--radius-xl);
   background: var(--card); box-shadow: var(--shadow-3); text-align: center; pointer-events: auto; animation: mw-pop-in 220ms var(--ease-out) both; }
-.coach__text { color: var(--ink); font-size: var(--fs-l); font-weight: 500; line-height: 1.4; }
+/* First appearance: the empty live region is shown first, its text a moment later (coach.ts). */
+.coach__card[data-pending] { opacity: 0; animation: none; }
+.coach__text { color: var(--ink); font-size: var(--fs-l); font-weight: 500; line-height: 1.4; text-wrap: balance; }
 .coach__gotit { margin-top: 12px; min-width: 140px; }
+/* A modal above the coach (hint card in step 5, Settings, How to play): the router makes the coach
+   inert; its card, hand, rings and dim disappear until the modal closes (UX-01, UX-07, SPEC-04). */
+.coach[inert] { visibility: hidden; }
 
 /* O9 toast, O10 rotate notice */
 .toast-layer { position: fixed; left: 0; right: 0; bottom: calc(104px + var(--safe-bottom)); z-index: 60; display: flex; justify-content: center;
   padding: 0 16px; pointer-events: none; }
+/* While a modal is open: at the very bottom, below the centred card (never over the fail overlay's
+   Retry / Home or its title, UX-03). Short screens without a modal: under the top bar (below). */
+.toast-layer[data-pos='modal'] { top: auto; bottom: calc(12px + var(--safe-bottom)); }
 .toast { max-width: 420px; padding: 10px 18px; border-radius: var(--radius-l); background: var(--ink); color: #fff; font-weight: 600;
-  text-align: center; box-shadow: var(--shadow-2); animation: mw-pop-in 200ms var(--ease-out) both; }
+  text-align: center; text-wrap: balance; box-shadow: var(--shadow-2); animation: mw-pop-in 200ms var(--ease-out) both; }
+.toast:empty { display: none; }
 /* ── Loading indicator: opening a board takes > loading.indicatorDelayMs (pack fetch, generation) ── */
 .loading-layer { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 55; display: flex; align-items: center;
   justify-content: center; padding: 24px; background: rgba(251, 246, 238, 0.62); animation: mw-fade-in var(--t-overlay) ease both; }
+/* Over an open overlay (Next on the win overlay waiting for a pack): continue its dark stage (UX-10). */
+.loading-layer[data-over='true'] { background: var(--scrim); }
 .loading-card { display: flex; flex-direction: column; align-items: center; min-width: 200px; padding: 18px 24px 16px;
   border-radius: var(--radius-l); background: var(--card); box-shadow: var(--shadow-2); color: var(--ink); }
 .loading-paws { display: flex; align-items: center; height: 36px; }
@@ -224,8 +261,12 @@
 .screen--home > :first-child, .screen--game > :first-child { width: 100%; flex: none; }
 .home__body { display: flex; flex: 1; flex-direction: column; width: 100%; max-width: 512px; min-height: 0; padding: 0 16px 16px; }
 .home__hero { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; min-height: 0; text-align: center; }
-.home__wordmark { color: var(--accent); font-size: 3rem; line-height: 1; }
+.home__wordmark { color: var(--accent); font-size: min(3rem, 15vw); line-height: 1; overflow-wrap: anywhere; }
 .home__tagline { margin-top: 6px; color: var(--ink-2); }
+/* A dialog over Home (Settings, About, the daily result) would slice through the wordmark: the
+   router makes the screen inert while it is open, and the wordmark fades out (UX-14). */
+.home__wordmark, .home__tagline { transition: opacity var(--t-overlay) ease; }
+[inert] .home__wordmark, [inert] .home__tagline { opacity: 0; }
 .home__mascot { margin-top: 12px; }
 .home__mascot > svg { width: 210px; height: 210px; max-height: 28vh; }
 .home__actions > * + * { margin-top: 14px; }
@@ -239,12 +280,12 @@
 .daily-card__icon .icon { width: 28px; height: 28px; }
 .home-card { flex-direction: column; align-items: flex-start; justify-content: center; }
 .daily-card__text { display: flex; flex: 1; flex-direction: column; min-width: 0; }
-.daily-card__title, .home-card__title { font-family: var(--font-display); font-weight: 600; font-size: var(--fs-l); }
+.daily-card__title, .home-card__title { font-family: var(--font-display); font-weight: 600; font-size: var(--fs-l); text-wrap: balance; }
 .daily-card__sub, .home-card__sub { margin-top: 2px; color: var(--ink-2); font-size: var(--fs-s); }
 .daily-card__chev { width: 20px; height: 20px; color: var(--ink-3); }
 .daily-card[data-state='locked'] { background: var(--page-2); color: var(--ink-2); box-shadow: none; }
 .daily-card[data-state='locked'] .daily-card__icon { background: var(--line); color: var(--ink-3); }
-.daily-card[data-state='in_progress'] .daily-card__sub { color: var(--gold-deep); font-weight: 600; }
+.daily-card[data-state='in_progress'] .daily-card__sub { color: var(--amber-text); font-weight: 600; }
 .daily-card[data-state='solved'] .daily-card__sub { color: var(--accent-deep); font-weight: 600; }
 .home__stock { display: flex; justify-content: center; margin-top: 18px; }
 .stock__item { display: inline-flex; align-items: center; margin: 0 6px; padding: 6px 16px 6px 10px; border-radius: var(--radius-pill);
@@ -271,6 +312,13 @@
   .home__play .btn__chev { display: none; }
   .daily-card__title { font-size: var(--fs-m); }
 }
+@media (max-width: 374px) {
+  .toast { padding: 8px 14px; font-size: var(--fs-s); }
+}
+/* "Continue · Level 1000" plus the HARD badge leaves no room for the chevron below 420 px (UX-09). */
+@media (max-width: 419px) {
+  .home__play[data-hard='true'] .btn__chev { display: none; }
+}
 @media (max-height: 639px) {
   .overlay__art > svg, .win__art > svg, .fail__art > svg { width: 120px; height: 120px; }
   .overlay[data-overlay='win'] .overlay__title, .overlay[data-overlay='fail'] .overlay__title { font-size: var(--fs-xxl); }
@@ -279,8 +327,18 @@
   .hint-card__icon { width: 36px; height: 36px; padding: 6px; }
   .hint-card__actions { margin-top: 10px; }
   .overlay[data-overlay='hint'][data-placement='top'] .hint-card { padding-top: calc(12px + var(--safe-top)); }
-  .home__wordmark { font-size: 2.5rem; }
+  .home__wordmark { font-size: min(2.5rem, 13vw); }
   .home__mascot > svg { width: 150px; height: 150px; }
+  .toast-layer { top: calc(64px + var(--safe-top)); bottom: auto; }
+  /* Compact coach card: it fits between the top bar and the board, or below the board (UX-06). */
+  .coach__card { padding: 10px 14px; }
+  .coach__text { font-size: var(--fs-m); line-height: 1.35; }
+  .coach__gotit { margin-top: 8px; min-height: 44px; }
+  .overlay__panel--stage { padding: 14px 16px 10px; }
+}
+@media (max-height: 599px) {
+  /* 320 × 568: the longest coach lines fit between the board and the screen edge. */
+  .coach__text { font-size: var(--fs-s); }
 }
 
 /* Reduced motion (02 §17.5): fades only, ≤ 150 ms; the coach hand stays still. */

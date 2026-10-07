@@ -185,6 +185,15 @@ export function msUntilLocalMidnight(nowMs: number): number {
   return next.getTime() - nowMs;
 }
 
+/**
+ * Epoch ms of the local midnight that ends `dateKey`, i.e. when the next daily becomes "today" (O7
+ * after a daily solved past midnight counts down from its own date, 02 §12). DST-safe; null for a bad key.
+ */
+export function localMidnightAfter(dateKey: string): number | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey);
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + 1).getTime() : null;
+}
+
 export type DailyCardState = 'locked' | 'not_played' | 'in_progress' | 'solved';
 
 /** Home daily card state for today (02 §12 "Home card states"). */

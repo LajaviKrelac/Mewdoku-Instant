@@ -1,10 +1,13 @@
 // Owner: platform
 // Web adapter (04 §6.2): local storage, mock ads in dev/e2e (unsupported in production → free
 // fallback), no-op analytics, navigator.vibrate haptics.
+// Two tabs share one save (RP-5): a write by another tab arrives as a 'storage' event and is handed
+// to the app (onExternalSave, source 'tab'), which merges it into its live save (04 §7.3), so a stale
+// tab's next write can no longer take progress or best times backwards.
 import { cfg } from '../../app/config';
 import { canVibrate, createVibrateHaptics } from '../shared/haptics';
 import { createSystemTimers } from '../shared/timers';
-import type { AdResult, Capabilities, PlatformAdapter, PlatformAds, PlatformTimers } from '../types';
+import type { AdResult, Capabilities, ExternalSave, PlatformAdapter, PlatformAds, PlatformTimers } from '../types';
 import { createLocalStore } from './local-storage';
 import { createMockAds, readMockAdMode, type MockAdMode } from './mock-ads';
 
@@ -17,6 +20,8 @@ export interface WebPlatformOptions {
   readonly nav?: Navigator;
   readonly doc?: Document;
   readonly timers?: PlatformTimers;
+  /** Where 'storage' events from other tabs arrive. Default: doc's window. */
+  readonly win?: Pick<Window, 'addEventListener' | 'removeEventListener'> | null;
 }
 
 /** Compile-time constant: false in production web builds, so the mock is tree-shaken away. */
@@ -54,6 +59,7 @@ function buildWebPlatform(opts: WebPlatformOptions, makeMock: MockFactory | null
   const nav = opts.nav ?? (typeof navigator === 'undefined' ? undefined : navigator);
   const doc = opts.doc ?? (typeof document === 'undefined' ? undefined : document);
   const search = opts.search ?? (typeof location === 'undefined' ? '' : location.search);
+  const win = opts.win !== undefined ? opts.win : (doc?.defaultView ?? null);
 
   const local = createLocalStore(cfg.save.storageKey, {
     ...(opts.storage !== undefined ? { storage: opts.storage } : {}),
@@ -96,6 +102,28 @@ function buildWebPlatform(opts: WebPlatformOptions, makeMock: MockFactory | null
       status: () => local.status(),
       onMemoryFallback(cb) {
         local.onMemory?.(cb);
+      },
+      onExternalSave(cb) {
+        if (!win) return () => undefined;
+        const onStorage = (e: Event): void => {
+          const { key, newValue } = e as StorageEvent;
+          // Only our save key; a removal (newValue null) or a clear() (key null) carries nothing to merge.
+          if (key !== cfg.save.storageKey || newValue === null || newValue === undefined) return;
+          let value: unknown;
+          try {
+            value = JSON.parse(newValue) as unknown;
+          } catch {
+            return; // the other tab wrote something unreadable: keep ours
+          }
+          const copy: ExternalSave = { source: 'tab', value };
+          try {
+            cb(copy);
+          } catch {
+            /* a listener must never break storage */
+          }
+        };
+        win.addEventListener('storage', onStorage);
+        return () => win.removeEventListener('storage', onStorage);
       },
     },
     ads: mock ? mock.ads : NO_ADS,

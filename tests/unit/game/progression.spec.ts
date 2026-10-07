@@ -17,6 +17,7 @@ import {
   levelPuzzleId,
   levelRecordIn,
   localDateKey,
+  localMidnightAfter,
   msUntilLocalMidnight,
   packCount,
   packFirstLevel,
@@ -160,6 +161,19 @@ describe('daily unlock and dates (02 §12)', () => {
   it('msUntilLocalMidnight: "Next puzzle in 7 h 48 min" at 16:12', () => {
     expect(msUntilLocalMidnight(new Date(2026, 9, 6, 16, 12).getTime())).toBe((7 * 60 + 48) * 60_000);
     expect(msUntilLocalMidnight(new Date(2026, 9, 6, 23, 59, 59, 999).getTime())).toBe(1);
+  });
+
+  it('localMidnightAfter: the local midnight that ends a date key (O7 counts down from the daily’s own date)', () => {
+    expect(localMidnightAfter('2026-10-07')).toBe(new Date(2026, 9, 8).getTime());
+    expect(localMidnightAfter('2026-12-31')).toBe(new Date(2027, 0, 1).getTime()); // month and year roll over
+    expect(localMidnightAfter('2028-02-28')).toBe(new Date(2028, 1, 29).getTime());
+    // Solved at 00:01 on 8 Oct, the 7 Oct daily's next puzzle is already out; same day: msUntilLocalMidnight.
+    const after = new Date(2026, 9, 8, 0, 1).getTime();
+    expect((localMidnightAfter('2026-10-07') as number) - after).toBeLessThan(0);
+    const noon = new Date(2026, 9, 7, 12, 0).getTime();
+    expect((localMidnightAfter('2026-10-07') as number) - noon).toBe(msUntilLocalMidnight(noon));
+    expect(localMidnightAfter('')).toBeNull();
+    expect(localMidnightAfter('D2026-10-07')).toBeNull();
   });
 
   it('home card states: locked / not played / in progress / solved', () => {

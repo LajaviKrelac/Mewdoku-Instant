@@ -14,12 +14,19 @@ const TABBABLE = [
   '[tabindex]',
 ].join(',');
 
+/**
+ * Cheap visibility test: no getComputedStyle. The router calls this right after it toggles `inert`
+ * on the whole screen, so a computed-style read here forced a full-document style recalc on every
+ * overlay open (RP-3: 100-250 ms at 4× CPU on a 12×12 board). Our UI hides controls with the
+ * `hidden` attribute (or inline display/visibility), never with a stylesheet rule alone, so the
+ * attribute and inline-style checks are enough.
+ */
 function isVisible(el: HTMLElement): boolean {
   if (el.closest('[hidden],[inert],[aria-hidden="true"]')) return false;
-  const view = el.ownerDocument.defaultView;
-  if (!view) return true;
-  const cs = view.getComputedStyle(el);
-  return cs.display !== 'none' && cs.visibility !== 'hidden';
+  for (let n: HTMLElement | null = el; n; n = n.parentElement) {
+    if (n.style.display === 'none' || n.style.visibility === 'hidden') return false;
+  }
+  return true;
 }
 
 /** Tabbable descendants in DOM order. */
@@ -34,10 +41,16 @@ export function focusableElements(container: HTMLElement): HTMLElement[] {
 /**
  * Keeps Tab/Shift+Tab inside `container` and focuses `initialFocus` (or the first focusable).
  * The returned release() restores focus to `returnFocus` (default: the element focused before).
+ * `restoreOnNextFrame` (RP-3): restore on the next animation frame instead of at once. focus()
+ * forces a style update, and when a modal closes the router has just removed `inert` from the whole
+ * screen while the board drops its hint highlight, so a synchronous restore costs a second
+ * full-document recalc (≈ 100 ms at 4× CPU on a 12×12 board). A deferred restore happens only if
+ * focus is still lost (on <body>, detached, or in the closed container) or moved within previous's
+ * own dialog, so a modal opened meanwhile keeps its focus.
  */
 export function trapFocus(
   container: HTMLElement,
-  opts?: { initialFocus?: HTMLElement | null; returnFocus?: HTMLElement | null },
+  opts?: { initialFocus?: HTMLElement | null; returnFocus?: HTMLElement | null; restoreOnNextFrame?: boolean },
 ): () => void {
   const doc = container.ownerDocument;
   const previous = (opts?.returnFocus ?? doc.activeElement) as HTMLElement | null;
@@ -87,7 +100,18 @@ export function trapFocus(
     released = true;
     doc.removeEventListener('keydown', onKey, true);
     doc.removeEventListener('focusin', onFocusIn, true);
-    if (previous && previous.isConnected && typeof previous.focus === 'function') previous.focus({ preventScroll: true });
+    if (!previous || typeof previous.focus !== 'function') return;
+    const win = doc.defaultView;
+    if (!opts?.restoreOnNextFrame || !win?.requestAnimationFrame) {
+      if (previous.isConnected) previous.focus({ preventScroll: true });
+      return;
+    }
+    win.requestAnimationFrame(() => {
+      if (!previous.isConnected) return;
+      const a = doc.activeElement;
+      const lost = !a || a === doc.body || !a.isConnected || container.contains(a);
+      if (lost || previous.closest('[role="dialog"]')?.contains(a)) previous.focus({ preventScroll: true });
+    });
   };
 }
 

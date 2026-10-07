@@ -1,5 +1,7 @@
 // Owner: platform
-// FBInstant.logEvent with name/param sanitising to the 05 §10 limits (cfg.analytics).
+// FBInstant.logEvent with name/param sanitising to the 05 §10 limits (cfg.analytics). The SDK's
+// parameters are string-valued ([dt-types]: `{ [key: string]: string }`), so numbers are sent as
+// their decimal text (PLAT-7); the app-facing contract (04 §4.4) still takes string | number.
 import { cfg, type GameConfig } from '../../app/config';
 import type { AnalyticsParams, PlatformAdapter } from '../types';
 import type { FBInstantSDK } from './fbinstant';
@@ -43,6 +45,13 @@ export function sanitizeParams(params: AnalyticsParams | undefined, c: GameConfi
   return out;
 }
 
+/** Sanitised params as the SDK wants them: string values (sanitizeParams already keeps each < 100 chars). */
+export function toSdkParams(params: AnalyticsParams): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(params)) out[k] = String(v);
+  return out;
+}
+
 export function createFbAnalytics(
   sdk: FBInstantSDK,
   opts: { ready?: () => boolean; config?: GameConfig } = {},
@@ -54,7 +63,7 @@ export function createFbAnalytics(
       if (opts.ready && !opts.ready()) return;
       const n = sanitizeEventName(name, c);
       if (n === null) return;
-      const p = sanitizeParams(params, c);
+      const p = toSdkParams(sanitizeParams(params, c));
       try {
         const err = sdk.logEvent(n, undefined, Object.keys(p).length > 0 ? p : undefined);
         if (err && import.meta.env.DEV && import.meta.env.MODE !== 'test') console.debug('[fb] logEvent', n, err);

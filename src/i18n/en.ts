@@ -257,6 +257,30 @@ export const en = {
   'time.hoursMinutes': '{h} h {m} min',
   'time.minutes': '{m} min',
   'time.underMinute': 'under a minute',
+
+  // ── Group A fixes (appended) ───────────────────────────────────────────────
+  /** O7 when the next daily is already playable (solved after midnight, or left open past it). */
+  'daily.ready': 'A new puzzle is ready',
+  /** About credit: the product name comes from 'app.name' (one source of truth; supersedes 'about.made'). */
+  'about.madeBy': 'Puzzles, pictures, sounds and words made by the {name} team.',
+
+  // ── Group B fixes (appended) ───────────────────────────────────────────────
+  /** Shown in place of the game when start-up failed twice (PLAT-8); never the "keep playing" toast. */
+  'boot.failed': "The game couldn't start. Check your connection and try again.",
+  'boot.retry': 'Try again',
+
+  // ── Group C fixes (appended) ───────────────────────────────────────────────
+  /** Screen-reader line naming the tile a hint points at (A11Y-7); the card's sentence says "here". */
+  'a11y.hintAt': 'Highlighted tile: row {row}, column {col}.',
+  'a11y.hintAtColor': 'Highlighted tile: row {row}, column {col}, {color}.',
+  /** How to play: keyboard controls (02 §6.3), shown where a keyboard or mouse is present. */
+  'howto.keys': 'Keyboard: arrow keys move, Space crosses out, Enter places a cat, H for a hint, K for the kitty.',
+  /** Fail Continue: the accessible name contains the visible label "Continue +1" (WCAG 2.5.3). */
+  'fail.continue.a11y.videoLabel': 'Continue +1 heart, after a short video',
+  'fail.continue.a11y.freeLabel': 'Continue +1 heart',
+  /** About: the one piece of third-party code in the bundle (Vite's module preload helper, MIT). */
+  'about.code': 'Includes a loader helper from Vite, © 2019-present VoidZero Inc. and Vite contributors, MIT License.',
+  'about.codeLicence': 'MIT licence',
 } as const;
 
 export type En = typeof en;

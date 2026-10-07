@@ -1,12 +1,14 @@
 // Owner: platform
 // fb-storage (05 §7, 04 §7.1): cloud + mirror on load, mirror written at once, debounced
-// setDataAsync, flush only for 'flush', retry/backoff, coalescing, no cloud writes after a failed read.
+// setDataAsync, flush only for 'flush', retry/backoff, coalescing, no cloud writes after a failed read
+// until the late cloud copy was merged, the unmerged-mirror marker, per-player mirrors.
 import { describe, expect, it } from 'vitest';
 import { createFakeClock } from '../../../src/app/clock';
 import { cfg } from '../../../src/app/config';
 import type { SaveDataV1 } from '../../../src/game/types';
 import { createFbStorage } from '../../../src/platform/fb/fb-storage';
-import { createLocalStore } from '../../../src/platform/web/local-storage';
+import type { ExternalSave } from '../../../src/platform/types';
+import { createLocalFlag, createLocalStore } from '../../../src/platform/web/local-storage';
 import { createStub, drain, MemoryStorage, track, type StubConfig } from './helpers';
 
 const KEY = cfg.save.storageKey;
@@ -224,5 +226,216 @@ describe('createFbStorage: save', () => {
     await store.save(doc(1), { cloud: 'debounced' });
     expect(store.status()).toBe('memory');
     expect(seen).toEqual([1]);
+  });
+});
+
+// ── Review fixes: PLAT-1 (late cloud read, unmerged marker), PLAT-2 (per-player mirror), PLAT-3 ──
+
+const FLAG = `${KEY}#unmerged`;
+
+/** A store wired like the adapter: persisted marker, optional per-player scoping. */
+function wired(
+  config: StubConfig,
+  opts: { storage?: MemoryStorage | null; scopedTo?: () => string | null } = {},
+) {
+  const clock = createFakeClock();
+  const { sdk, control } = createStub(config, clock);
+  const storage = opts.storage === undefined ? new MemoryStorage() : opts.storage;
+  const at = (key: string) => ({
+    local: createLocalStore(key, { storage, now: () => clock.now() }),
+    unmerged: createLocalFlag(`${key}#unmerged`, { storage }),
+  });
+  const unscoped = at(KEY);
+  const store = createFbStorage(sdk, {
+    local: unscoped.local,
+    unmerged: unscoped.unmerged,
+    timers: clock,
+    log: () => undefined,
+    ...(opts.scopedTo ? { scoped: { playerId: opts.scopedTo, mirrorFor: (id: string) => at(`${KEY}:${id}`) } } : {}),
+  });
+  const seen: ExternalSave[] = [];
+  const sent = (): number[] =>
+    control.find('player.setDataAsync').map((c) => ((c.args[0] as { save: SaveDataV1 }).save as unknown as { sessions: number }).sessions);
+  return { clock, control, store, storage, seen, sent, listen: () => store.onExternalSave?.((c) => seen.push(c)) };
+}
+
+describe('createFbStorage: a session that could not read the cloud (PLAT-1)', () => {
+  it('flags its mirror; the next load that reads the cloud reports it unmerged until a merged save clears it', async () => {
+    const storage = new MemoryStorage();
+    const s1 = wired({ data: { save: doc(5) }, getDataDelayMs: 60_000 }, { storage });
+    const r1 = track(s1.store.load());
+    await s1.clock.advanceAsync(cfg.save.cloudLoadTimeoutMs);
+    await drain();
+    expect(r1.value).toEqual({ local: null, cloud: null, corrupt: false });
+    await s1.store.save(doc(6), { cloud: 'debounced' }); // fresher updatedAt than the cloud's, but never merged with it
+    expect(storage.getItem(FLAG)).toBe('1');
+
+    const s2 = wired({ data: { save: doc(5) } }, { storage });
+    expect(await s2.store.load()).toEqual({ local: doc(6), cloud: doc(5), corrupt: false, localUnmerged: true });
+    expect(storage.getItem(FLAG)).toBe('1'); // still set: nothing merged has been written yet
+    await s2.store.save(doc(7), { cloud: 'debounced' });
+    expect(storage.getItem(FLAG)).toBeNull();
+
+    const s3 = wired({ data: { save: doc(7) } }, { storage });
+    expect(await s3.store.load()).toEqual({ local: doc(7), cloud: doc(7), corrupt: false });
+  });
+
+  it('hands the late cloud copy to the app and starts cloud writes only after it was merged (05 §7)', async () => {
+    const s = wired({ data: { save: doc(5) }, getDataDelayMs: 6_000 });
+    const writesWhenDelivered: number[] = [];
+    s.store.onExternalSave?.((copy) => {
+      s.seen.push(copy);
+      writesWhenDelivered.push(s.control.count('player.setDataAsync'));
+    });
+    const r = track(s.store.load());
+    await s.clock.advanceAsync(cfg.save.cloudLoadTimeoutMs);
+    await drain();
+    expect(r.value?.cloud).toBeNull();
+    await s.store.save(doc(6), { cloud: 'now' });
+    expect(s.sent()).toEqual([]);
+    await s.clock.advanceAsync(6_000 - cfg.save.cloudLoadTimeoutMs);
+    await drain();
+    expect(s.seen).toEqual([{ source: 'cloud', value: doc(5) }]);
+    expect(writesWhenDelivered).toEqual([0]);
+    await s.store.save(doc(7), { cloud: 'now' });
+    expect(s.sent()).toEqual([7]);
+    expect(s.store.status()).toBe('ok');
+  });
+
+  it('keeps reading in the background after a failed boot read, on cloudLateRetryDelaysMs, until the copy arrives', async () => {
+    const bootTries = cfg.save.cloudRetryDelaysMs.length + 1;
+    const lateFails = 2;
+    const s = wired({ data: { save: doc(9) }, errors: { getDataAsync: Array<string>(bootTries + lateFails).fill('NETWORK_FAILURE') } });
+    s.listen();
+    void s.store.load();
+    const bootSpan = cfg.save.cloudRetryDelaysMs.reduce((a, b) => a + b, 0);
+    const [l0 = 0, l1 = 0, l2 = 0] = cfg.save.cloudLateRetryDelaysMs;
+    await s.clock.advanceAsync(bootSpan + l0 + l1 + l2 - 1);
+    await drain();
+    expect(s.seen).toEqual([]);
+    expect(s.control.count('player.getDataAsync')).toBe(bootTries + lateFails);
+    await s.clock.advanceAsync(1);
+    await drain();
+    expect(s.seen).toEqual([{ source: 'cloud', value: doc(9) }]);
+    await s.clock.advanceAsync(30 * 60_000);
+    await drain();
+    expect(s.control.count('player.getDataAsync')).toBe(bootTries + lateFails + 1); // stops once merged
+    await s.store.save(doc(10), { cloud: 'now' });
+    expect(s.sent()).toEqual([10]);
+  });
+
+  it('a copy that arrives before anyone subscribed waits for the first subscriber; cloud writes stay off until then', async () => {
+    const s = wired({ data: { save: doc(3) }, getDataDelayMs: 5_000 });
+    void s.store.load();
+    await s.clock.advanceAsync(10_000);
+    await drain();
+    await s.store.save(doc(4), { cloud: 'now' });
+    expect(s.sent()).toEqual([]);
+    s.listen();
+    expect(s.seen).toEqual([{ source: 'cloud', value: doc(3) }]);
+    await s.store.save(doc(5), { cloud: 'now' });
+    expect(s.sent()).toEqual([5]);
+  });
+
+  it('keeps cloud writes off when the app failed to merge the late copy', async () => {
+    const s = wired({ data: { save: doc(3) }, getDataDelayMs: 5_000 });
+    s.store.onExternalSave?.(() => {
+      throw new Error('merge failed');
+    });
+    void s.store.load();
+    await s.clock.advanceAsync(10_000);
+    await drain();
+    await s.store.save(doc(4), { cloud: 'now' });
+    expect(s.sent()).toEqual([]);
+  });
+
+  it('does not retry a read the SDK refused for good (INVALID_PARAM)', async () => {
+    const s = wired({ errors: { getDataAsync: ['INVALID_PARAM'] } });
+    s.listen();
+    await s.store.load();
+    await s.clock.advanceAsync(30 * 60_000);
+    await drain();
+    expect(s.control.count('player.getDataAsync')).toBe(1);
+    expect(s.seen).toEqual([]);
+  });
+});
+
+describe('createFbStorage: per-player mirror (PLAT-2)', () => {
+  it("reads and writes only the player's own mirror", async () => {
+    const storage = new MemoryStorage();
+    storage.setItem(`${KEY}:A`, JSON.stringify(doc(40)));
+    const b = wired({ data: null }, { storage, scopedTo: () => 'B' });
+    expect(await b.store.load()).toEqual({ local: null, cloud: null, corrupt: false });
+    await b.store.save(doc(1), { cloud: 'now' });
+    expect(storage.getItem(`${KEY}:B`)).toBe(JSON.stringify(doc(1)));
+    expect(storage.getItem(`${KEY}:A`)).toBe(JSON.stringify(doc(40)));
+    expect(b.sent()).toEqual([1]);
+  });
+
+  it('without a player ID the unscoped mirror is a cache only: never merged with a cloud copy', async () => {
+    const storage = new MemoryStorage();
+    storage.setItem(KEY, JSON.stringify(doc(40)));
+    const ok = wired({ data: { save: doc(2) } }, { storage, scopedTo: () => null });
+    expect(await ok.store.load()).toEqual({ local: null, cloud: doc(2), corrupt: false });
+
+    // Cloud unreadable: the cache is used for the session, but a late cloud copy is never merged
+    // into it (it may be another account's progress), so the session never writes to the cloud.
+    const off = wired({ data: { save: doc(2) }, getDataDelayMs: 6_000 }, { storage, scopedTo: () => null });
+    off.listen();
+    const r = track(off.store.load());
+    await off.clock.advanceAsync(60_000);
+    await drain();
+    expect(r.value?.local).toEqual(doc(40));
+    expect(off.seen).toEqual([]);
+    await off.store.save(doc(41), { cloud: 'now' });
+    expect(off.sent()).toEqual([]);
+  });
+
+  it('without a player ID and without a cache, the late cloud copy is merged as usual', async () => {
+    const s = wired({ data: { save: doc(2) }, getDataDelayMs: 6_000 }, { storage: new MemoryStorage(), scopedTo: () => null });
+    s.listen();
+    void s.store.load();
+    await s.clock.advanceAsync(6_000);
+    await drain();
+    expect(s.seen).toEqual([{ source: 'cloud', value: doc(2) }]);
+  });
+});
+
+describe('createFbStorage: storage status with cloud save (PLAT-3)', () => {
+  it("a blocked localStorage is not reported while the cloud keeps every write", async () => {
+    const s = wired({ data: { save: doc(9) } }, { storage: null });
+    const warned: number[] = [];
+    expect((await s.store.load()).cloud).toEqual(doc(9));
+    s.store.onMemoryFallback?.(() => warned.push(1)); // boot registers after load()
+    expect(s.store.status()).toBe('ok');
+    await s.store.save(doc(10), { cloud: 'now' });
+    expect(s.sent()).toEqual([10]);
+    expect(warned).toEqual([]);
+  });
+
+  it('is reported when neither the mirror nor the cloud keeps the save', async () => {
+    const s = wired({ errors: { getDataAsync: ['INVALID_PARAM'] } }, { storage: null });
+    const warned: number[] = [];
+    const early: number[] = [];
+    const loading = s.store.load();
+    s.store.onMemoryFallback?.(() => early.push(1)); // registered while load() runs: waits for its answer
+    expect(early).toEqual([]);
+    await loading;
+    expect(early).toEqual([1]);
+    s.store.onMemoryFallback?.(() => warned.push(1));
+    expect(s.store.status()).toBe('memory');
+    expect(warned).toEqual([1]);
+  });
+
+  it('a mirror that fails mid-session is reported only when the cloud is off', async () => {
+    const storage = new MemoryStorage();
+    const s = wired({ data: { save: doc(1) } }, { storage });
+    const warned: number[] = [];
+    await s.store.load();
+    s.store.onMemoryFallback?.(() => warned.push(1));
+    storage.failWrites = true;
+    await s.store.save(doc(2), { cloud: 'now' });
+    expect(s.store.status()).toBe('ok');
+    expect(warned).toEqual([]);
   });
 });

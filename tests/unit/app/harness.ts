@@ -143,6 +143,8 @@ export interface FakeRouter extends Router {
   homeView: HomeView | null;
   /** Auto-answer for O2: 'accept' | 'decline' | null (stay open). */
   rewardedAnswer: 'accept' | 'decline' | null;
+  /** What overlaysReady() answers (false: the lazy overlay chunk cannot be loaded). */
+  chunkOk: boolean;
 }
 
 const fakeEl = (): HTMLElement => ({}) as HTMLElement;
@@ -156,6 +158,7 @@ export function createFakeRouter(bus: AppBus, log: Log): FakeRouter {
     game: null,
     homeView: null,
     rewardedAnswer: 'accept',
+    chunkOk: true,
     root: fakeEl(),
     screen: () => screenId,
     showBoot() {
@@ -229,6 +232,7 @@ export function createFakeRouter(bus: AppBus, log: Log): FakeRouter {
     setLoading: (on) => void log.push(`loading:${on ? 'on' : 'off'}`),
     escape: () => false,
     preloadOverlays: () => Promise.resolve(),
+    overlaysReady: () => Promise.resolve(r.chunkOk),
     destroy: () => undefined,
   };
   return r;

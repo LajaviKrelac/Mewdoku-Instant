@@ -1,5 +1,7 @@
-// Owner: app. RPC over postMessage and the engine client's worker / main-thread fallback (04 §5.5).
+// Owner: app. RPC over postMessage and the engine client's worker / main-thread fallback (04 §5.5),
+// including the worker deadline and the worker answering when the hint chunk cannot load (04 §8).
 import { describe, expect, it } from 'vitest';
+import { mergeConfig } from '../../../src/app/config';
 import type { GenResult, GenSpec } from '../../../src/engine/types';
 import { createEngineClient } from '../../../src/workers/engine-client';
 import { engineWorkerApi } from '../../../src/workers/engine.worker';
@@ -60,13 +62,14 @@ describe('rpc', () => {
 });
 
 /** A fake Worker backed by a MessageChannel and the real worker API. */
-function fakeWorker(opts: { crashOn?: string } = {}): Worker {
+function fakeWorker(opts: { crashOn?: string; hang?: boolean } = {}): Worker {
   const ch = new MessageChannel();
   const listeners: Record<string, ((ev: Event) => void)[]> = {};
   exposeRpc(
     {
       ...engineWorkerApi,
       getHint: (...args: Parameters<typeof engineWorkerApi.getHint>) => {
+        if (opts.hang) return new Promise<never>(() => undefined); // never replies
         if (opts.crashOn === 'getHint') {
           queueMicrotask(() => {
             for (const l of listeners.error ?? []) l(Object.assign(new Event('error'), { preventDefault: () => undefined }));
@@ -180,6 +183,69 @@ describe('engine client', () => {
     expect(workers).toBe(0);
     await client.getHint(puzzle, cells);
     expect(workers).toBe(1);
+    client.dispose();
+  });
+
+  it('a worker that never answers misses worker.callTimeoutMs: it is dropped and the main thread generates (RP-1)', async () => {
+    const config = mergeConfig({ worker: { callTimeoutMs: 30 } });
+    let created = 0;
+    let terminated = 0;
+    const silent = (): Worker =>
+      ({
+        postMessage: () => undefined, // the script never loads / never replies
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+        terminate: () => void terminated++,
+      }) as unknown as Worker;
+    const result = { ok: false } as unknown as GenResult;
+    const onMain: GenSpec[] = [];
+    const client = createEngineClient({
+      config,
+      createWorker: () => (created++, silent()),
+      generateOnMain: async (spec) => (onMain.push(spec), result),
+    });
+    const spec = { n: 5, seed: 'x' } as unknown as GenSpec;
+    expect(await client.generate(spec)).toBe(result);
+    expect(onMain).toEqual([spec]);
+    expect(terminated).toBe(1);
+    expect(await client.generate(spec)).toBe(result); // broken for good: straight to the main thread
+    expect(created).toBe(1);
+    client.dispose();
+  });
+
+  it('a forced worker hint that never answers falls back to the main thread', async () => {
+    const config = mergeConfig({ worker: { callTimeoutMs: 30 } });
+    let loads = 0;
+    const real = await import('../../../src/engine/hint');
+    const client = createEngineClient({
+      config,
+      hintsInWorker: true,
+      createWorker: () => fakeWorker({ hang: true }),
+      loadHintEngine: async () => (loads++, real),
+    });
+    expect((await client.getHint(puzzle, cells)).kind).toBeTruthy();
+    expect(loads).toBe(1); // answered by the main-thread engine
+    client.dispose();
+  });
+
+  it('when the hint chunk cannot be loaded, the worker answers hints and kitty cells (RP-2)', async () => {
+    let workers = 0;
+    const client = createEngineClient({
+      createWorker: () => (workers++, fakeWorker()),
+      loadHintEngine: () => Promise.reject(new TypeError('Failed to fetch dynamically imported module')),
+    });
+    const step = await client.getHint(puzzle, cells);
+    expect(step.kind).toBeTruthy();
+    const cell = await client.pickKittyCell(puzzle, cells);
+    expect(Array.from(puzzle.solution).map((col, row) => row * puzzle.n + col)).toContain(cell);
+    expect(workers).toBe(1);
+    client.dispose();
+  });
+
+  it('without a worker either, the chunk error reaches the caller (the session toasts, charges nothing)', async () => {
+    const client = createEngineClient({ createWorker: () => null, loadHintEngine: () => Promise.reject(new Error('chunk failed')) });
+    await expect(client.pickKittyCell(puzzle, cells)).rejects.toThrow('chunk failed');
+    await expect(client.getHint(puzzle, cells)).rejects.toThrow('chunk failed');
     client.dispose();
   });
 

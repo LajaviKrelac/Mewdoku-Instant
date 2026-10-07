@@ -3,6 +3,7 @@
 // and an exact restore of a level and a daily in progress at the same time.
 import { describe, expect, it } from 'vitest';
 import { applyRestoreRules, loadSave } from '../../../src/app/boot';
+import { mergeArrived } from '../../../src/app/restore';
 import { encodeCells } from '../../../src/game/save';
 import { defaults } from '../../../src/game/save';
 import type { InProgressV1, SaveDataV1 } from '../../../src/game/types';
@@ -61,6 +62,71 @@ describe('loadSave (04 §7.3)', () => {
     expect(loadSave({ local: null, cloud: null, corrupt: true }, NOW).corrupt).toEqual(['local']);
     expect(loadSave({ local: 'not json {', cloud: null, corrupt: false }, NOW).corrupt).toEqual(['local']);
     expect(loadSave({ local: null, cloud: null, corrupt: false }, NOW).save.sessions).toBe(0);
+  });
+});
+
+describe('loadSave: a local copy that never merged the cloud (PLAT-1)', () => {
+  // Session 1 could not read the cloud, so it ran on defaults and stamped a fresh updatedAt.
+  const unmergedLocal = {
+    ...defaults(NOW - 60_000),
+    updatedAt: NOW - 60_000,
+    sessions: 1,
+    progress: { level: 2, completed: 1, best: { 1: [5_000, 0] as [number, number] } },
+  };
+  const cloud = {
+    ...base({
+      stock: { hints: 9, kitties: 9 },
+      settings: { ...defaults(NOW).settings, sound: false, haptics: false },
+      progress: { level: 40, completed: 39, best: { 12: [33_000, 0] as [number, number] } },
+    }),
+    updatedAt: NOW - 3_600_000,
+  };
+
+  it('takes stock, settings and the other newest-wins fields from the cloud; max / union still apply', () => {
+    const r = loadSave({ local: unmergedLocal, cloud, corrupt: false, localUnmerged: true }, NOW);
+    expect(r.save.stock).toEqual({ hints: 9, kitties: 9 });
+    expect(r.save.settings.sound).toBe(false);
+    expect(r.save.settings.haptics).toBe(false);
+    expect(r.save.progress.level).toBe(40);
+    expect(r.save.progress.best).toEqual({ 1: [5_000, 0], 12: [33_000, 0] });
+    expect(r.save.tutorialDone).toBe(true);
+    expect(r.save.updatedAt).toBe(NOW - 60_000);
+  });
+
+  it('without the flag the newer copy wins as before (04 §7.3)', () => {
+    const r = loadSave({ local: unmergedLocal, cloud, corrupt: false }, NOW);
+    expect(r.save.stock).toEqual(defaults(NOW).stock);
+    expect(r.save.progress.level).toBe(40);
+  });
+});
+
+describe('mergeArrived: copies that arrive after launch', () => {
+  const live = { ...base({ stock: { hints: 1, kitties: 0 }, progress: { level: 5, completed: 4, best: {} } }), updatedAt: NOW };
+
+  it("the late FB cloud copy wins the newest-wins fields even though it is older (PLAT-1)", () => {
+    const cloud = { ...base({ stock: { hints: 9, kitties: 9 }, progress: { level: 40, completed: 39, best: {} } }), updatedAt: NOW - 3_600_000 };
+    const out = mergeArrived(live, { source: 'cloud', value: cloud }, NOW);
+    expect(out.stock).toEqual({ hints: 9, kitties: 9 });
+    expect(out.progress.level).toBe(40);
+  });
+
+  it("another tab's newer write is merged with the plain rules: progress and bests never go backwards (RP-5)", () => {
+    const tab = {
+      ...base({ stock: { hints: 3, kitties: 2 }, progress: { level: 6, completed: 5, best: { 5: [2_246, 0] as [number, number] } } }),
+      updatedAt: NOW + 1_000,
+    };
+    const out = mergeArrived(live, { source: 'tab', value: tab }, NOW);
+    expect(out.progress).toEqual({ level: 6, completed: 5, best: { 5: [2_246, 0] } });
+    expect(out.stock).toEqual({ hints: 3, kitties: 2 });
+    const stale = { ...tab, updatedAt: NOW - 5_000, progress: { level: 3, completed: 2, best: {} }, stock: { hints: 0, kitties: 0 } };
+    const kept = mergeArrived(out, { source: 'tab', value: stale }, NOW);
+    expect(kept.progress.level).toBe(6);
+    expect(kept.stock).toEqual({ hints: 3, kitties: 2 });
+  });
+
+  it('an empty or unreadable copy changes nothing', () => {
+    expect(mergeArrived(live, { source: 'cloud', value: null }, NOW)).toBe(live);
+    expect(mergeArrived(live, { source: 'tab', value: 'not json {' }, NOW)).toBe(live);
   });
 });
 

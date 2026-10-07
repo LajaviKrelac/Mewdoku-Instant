@@ -4,11 +4,16 @@
 //
 // No SDK call happens before init(): the factory only wires objects, setLoadingProgress() and
 // onPause() calls made earlier are queued and replayed once initializeAsync() has resolved.
+// init() and start() are memoised while pending or resolved; a rejection clears the memo, so the app
+// can try again (PLAT-8).
+// The local save mirror is per player (PLAT-2, see fb-storage.ts): `${save.storageKey}:<player ID>`.
+// An ad kind whose load or show reports 'unsupported' (CLIENT_UNSUPPORTED_OPERATION) is switched off
+// for the rest of the session, so capabilities() turns false and the 02 §13.3 free fallback applies.
 import { cfg } from '../../app/config';
 import { canVibrate, createHaptics, type Haptics } from '../shared/haptics';
 import { createSystemTimers } from '../shared/timers';
 import type { AdKind, Capabilities, PlatformAdapter, PlatformTimers } from '../types';
-import { createLocalStore } from '../web/local-storage';
+import { createLocalFlag, createLocalStore } from '../web/local-storage';
 import { createFbAds } from './fb-ads';
 import { createFbAnalytics } from './fb-analytics';
 import { createFbStorage } from './fb-storage';
@@ -66,8 +71,12 @@ export function createFbPlatform(opts: FbPlatformOptions = {}): PlatformAdapter 
   let queuedProgress: number | null = null;
   const queuedPause: (() => void)[] = [];
 
+  /** Ad kinds latched off after an 'unsupported' result this session (PLAT-4). */
+  const adsOff = new Set<AdKind>();
+
   const has = (api: string): boolean => apis.has(api);
-  const adSupported = (kind: AdKind): boolean => has(kind === 'interstitial' ? FB_API.interstitial : FB_API.rewarded);
+  const adSupported = (kind: AdKind): boolean =>
+    !adsOff.has(kind) && has(kind === 'interstitial' ? FB_API.interstitial : FB_API.rewarded);
 
   let haptics: Haptics = createHaptics({ nav });
 
@@ -91,12 +100,20 @@ export function createFbPlatform(opts: FbPlatformOptions = {}): PlatformAdapter 
     },
   };
 
-  const local = createLocalStore(cfg.save.storageKey, {
-    ...(opts.storage !== undefined ? { storage: opts.storage } : {}),
-    now: () => timers.now(),
+  const storageOpt = opts.storage !== undefined ? { storage: opts.storage } : {};
+  const mirrorAt = (key: string) => ({
+    local: createLocalStore(key, { ...storageOpt, now: () => timers.now() }),
+    unmerged: createLocalFlag(`${key}#unmerged`, storageOpt),
   });
+  const unscoped = mirrorAt(cfg.save.storageKey);
   const storage = createFbStorage(forward, {
-    local,
+    local: unscoped.local,
+    unmerged: unscoped.unmerged,
+    scoped: {
+      playerId: () => playerId(),
+      // encodeURIComponent keeps ':' and '#' out of the ID, so no key can collide with another.
+      mirrorFor: (id) => mirrorAt(`${cfg.save.storageKey}:${encodeURIComponent(id)}`),
+    },
     timers,
     cloudEnabled: () => initialized && has(FB_API.getData) && has(FB_API.setData),
   });
@@ -105,6 +122,7 @@ export function createFbPlatform(opts: FbPlatformOptions = {}): PlatformAdapter 
     timers,
     readyTimeoutMs: cfg.ads.readyTimeoutMs,
     supported: (kind) => initialized && adSupported(kind),
+    onUnsupported: (kind) => adsOff.add(kind),
   });
   const analytics = createFbAnalytics(forward, { ready: () => initialized });
 
@@ -128,6 +146,15 @@ export function createFbPlatform(opts: FbPlatformOptions = {}): PlatformAdapter 
     haptics: has(FB_API.haptics) || canVibrate(nav),
   });
 
+  const playerId = (): string | null => {
+    if (!initialized) return null;
+    try {
+      return sdkRef().player.getID() ?? null;
+    } catch {
+      return null;
+    }
+  };
+
   const init = (): Promise<void> => {
     initP ??= (async () => {
       const s = sdkRef();
@@ -149,7 +176,10 @@ export function createFbPlatform(opts: FbPlatformOptions = {}): PlatformAdapter 
       if (queuedProgress !== null) applyProgress(queuedProgress);
       queuedProgress = null;
       for (const cb of queuedPause.splice(0)) s.onPause(cb);
-    })();
+    })().catch((err: unknown) => {
+      initP = null; // a later init() tries again (PLAT-8)
+      throw err;
+    });
     return initP;
   };
 
@@ -167,7 +197,10 @@ export function createFbPlatform(opts: FbPlatformOptions = {}): PlatformAdapter 
       if (lastProgress < 100) setLoadingProgress(100);
       await sdkRef().startGameAsync();
       started = true;
-    })();
+    })().catch((err: unknown) => {
+      startP = null; // a later start() tries again (PLAT-8)
+      throw err;
+    });
     return startP;
   };
 
@@ -187,14 +220,7 @@ export function createFbPlatform(opts: FbPlatformOptions = {}): PlatformAdapter 
       }
     },
 
-    getPlayerId() {
-      if (!initialized) return null;
-      try {
-        return sdkRef().player.getID() ?? null;
-      } catch {
-        return null;
-      }
-    },
+    getPlayerId: playerId,
 
     onPause(cb) {
       if (!initialized) {

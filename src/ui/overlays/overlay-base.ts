@@ -134,6 +134,26 @@ export function isGated(btn: HTMLElement): boolean {
   return btn.getAttribute('aria-disabled') === 'true';
 }
 
+/** Kept on one line: a word followed by a "·" / "—" separator, and a hyphenated word ("double-tap"). */
+const KEEP = '\\S+ [·—–](?= )|[^\\s-]+(?:-[^\\s-]+)+';
+
+/**
+ * Sets `el`'s text with `phrases` (a date such as "Wed 7 Oct"), hyphenated words and a word followed
+ * by a "·" / "—" separator kept on one line: each is wrapped in a `.nowrap` span (UX-15).
+ * `el.textContent` stays exactly `text`, so screen readers and tests see the plain sentence.
+ */
+export function setTextKeepTogether(el: HTMLElement, text: string, phrases: readonly string[] = []): void {
+  const alts = phrases.filter((p) => p !== '').map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const re = new RegExp([...alts, KEEP].join('|'), 'g');
+  el.textContent = '';
+  let last = 0;
+  for (const m of text.matchAll(re)) {
+    el.append(text.slice(last, m.index), h('span', { class: 'nowrap' }, m[0]));
+    last = (m.index ?? 0) + m[0].length;
+  }
+  el.append(text.slice(last));
+}
+
 /** Sets a button's visible label (the .btn__label span). */
 export function setButtonLabel(btn: HTMLElement, label: string): void {
   const span = btn.querySelector('.btn__label');

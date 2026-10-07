@@ -48,7 +48,8 @@ export interface FBInstantSDK {
   /** API names such as 'getRewardedVideoAsync', 'player.setDataAsync', 'performHapticFeedbackAsync'. */
   getSupportedAPIs(): string[];
   onPause(cb: () => void): void;
-  logEvent(eventName: string, valueToSum?: number | null, parameters?: Record<string, string | number>): FBError | null;
+  /** Parameter values are strings, each under 100 characters (05 §10). */
+  logEvent(eventName: string, valueToSum?: number | null, parameters?: Record<string, string>): FBError | null;
   getInterstitialAdAsync(placementID: string): Promise<FBAdInstance>;
   getRewardedVideoAsync(placementID: string): Promise<FBAdInstance>;
   performHapticFeedbackAsync(): Promise<void>;

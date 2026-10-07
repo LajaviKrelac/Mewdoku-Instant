@@ -4,7 +4,7 @@
 // builders for O3 / O4 / O7 / O8.
 import type { MuteReason } from '../audio/audio-engine';
 import type { HintStep, Puzzle } from '../engine/types';
-import { msUntilLocalMidnight } from '../game/progression';
+import { localMidnightAfter, msUntilLocalMidnight } from '../game/progression';
 import { tutorialStep, type TutorialStepIndex } from '../game/tutorial';
 import type { GameState, InProgressV1, SaveDataV1 } from '../game/types';
 import { PRAISE_COUNT, t } from '../i18n';
@@ -205,7 +205,8 @@ export const overlayProps = {
           mistakes: state.mistakes,
           hints: state.hintsUsed,
           kitties: state.kittiesUsed,
-          nextPuzzleAt: now + msUntilLocalMidnight(now),
+          // The midnight after the daily's OWN date: past already when it was solved after midnight.
+          nextPuzzleAt: localMidnightAfter(m.dateKey ?? '') ?? now + msUntilLocalMidnight(now),
           now: () => o.clock.now(),
           onDone: o.onDone,
         },

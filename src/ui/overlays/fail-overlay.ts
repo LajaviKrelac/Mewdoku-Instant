@@ -76,7 +76,8 @@ export function createFailOverlay(): OverlayView<FailOverlayProps> {
     } else {
       videoIcon.remove();
     }
-    cont.setAttribute('aria-label', p.continueOffer === 'video' ? t('fail.continue.a11y.video') : t('fail.continue.a11y.free'));
+    // The accessible name contains the visible "Continue +1" (WCAG 2.5.3, A11Y-12).
+    cont.setAttribute('aria-label', p.continueOffer === 'video' ? t('fail.continue.a11y.videoLabel') : t('fail.continue.a11y.freeLabel'));
     cont.toggleAttribute('data-autofocus', p.continueOffer !== null);
     retry.toggleAttribute('data-autofocus', p.continueOffer === null);
     applyGates();

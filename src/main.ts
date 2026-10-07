@@ -2,6 +2,8 @@
 // Entry (04 §3, §8): window.onerror / unhandledrejection → js_error analytics + a non-blocking toast
 // (the game keeps running), create the platform from '@platform', run boot(). boot() mounts the SVG
 // sprite right after platform.init() (04 §5.1).
+// If boot fails (no SDK, or init / start rejected twice, PLAT-8) nothing is playable, so the page
+// says so plainly and offers a reload; it never shows the "you can keep playing" toast copy.
 import './styles/tokens.css';
 import './styles/base.css';
 import './styles/board.css';
@@ -9,7 +11,7 @@ import './styles/hud.css';
 import './styles/overlays.css';
 import './styles/fx.css';
 import { createPlatform } from '@platform';
-import { boot, type AppHandle } from './app/boot';
+import { boot, showBootFailure, type AppHandle } from './app/boot';
 import { t } from './i18n';
 
 let app: AppHandle | null = null;
@@ -49,7 +51,6 @@ if (root) {
     })
     .catch((err: unknown) => {
       console.error('[mewdoku] boot failed', err);
-      // Last resort: a plain message instead of a blank page.
-      root.textContent = t('toast.error');
+      showBootFailure(root);
     });
 }

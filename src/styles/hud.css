@@ -187,7 +187,7 @@
   min-width: 0;
   overflow: hidden;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3; /* large text (200 %) takes three lines; the row grows for it (layout.ts) */
   -webkit-box-orient: vertical;
 }
 

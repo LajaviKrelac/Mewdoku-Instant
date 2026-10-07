@@ -3,7 +3,7 @@
 // corrupt-copy backup keeping the last cfg.save.corruptKeep.
 import { describe, expect, it } from 'vitest';
 import { cfg } from '../../../src/app/config';
-import { createLocalStore, safeLocalStorage } from '../../../src/platform/web/local-storage';
+import { createLocalFlag, createLocalStore, safeLocalStorage } from '../../../src/platform/web/local-storage';
 import { MemoryStorage } from './helpers';
 
 const KEY = cfg.save.storageKey;
@@ -93,5 +93,31 @@ describe('createLocalStore', () => {
     cyclic.self = cyclic;
     expect(s.write(cyclic)).toBe(false);
     expect(s.status()).toBe('ok');
+  });
+});
+
+describe('createLocalFlag', () => {
+  it('persists on as "1" and off as no key, and survives a new instance', () => {
+    const storage = new MemoryStorage();
+    const f = createLocalFlag('k#flag', { storage });
+    expect(f.get()).toBe(false);
+    f.set(true);
+    expect(storage.getItem('k#flag')).toBe('1');
+    expect(createLocalFlag('k#flag', { storage }).get()).toBe(true);
+    f.set(false);
+    expect(storage.getItem('k#flag')).toBeNull();
+  });
+
+  it('never throws and keeps the flag in memory when storage fails', () => {
+    const storage = new MemoryStorage();
+    storage.failWrites = true;
+    const f = createLocalFlag('k#flag', { storage });
+    expect(() => f.set(true)).not.toThrow();
+    expect(f.get()).toBe(true);
+    const none = createLocalFlag('k#flag', { storage: null });
+    none.set(true);
+    expect(none.get()).toBe(true);
+    // Never touches the corrupt-save backups.
+    expect(Array.from(storage.map.keys()).some((k) => k.startsWith(cfg.save.corruptKeyPrefix))).toBe(false);
   });
 });

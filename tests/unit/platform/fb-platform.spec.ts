@@ -102,6 +102,32 @@ describe('createFbPlatform: lifecycle', () => {
     const platform = createFbPlatform({ placements: PLACEMENTS, storage: null, timers: createFakeClock() });
     await expect(platform.init()).rejects.toThrow(/FBInstant/);
   });
+
+  it('a rejected startGameAsync can be retried: start() calls the SDK again (PLAT-8)', async () => {
+    const { platform, control } = setup({ errors: { startGameAsync: ['INVALID_OPERATION'] } });
+    await expect(platform.start()).rejects.toMatchObject({ code: 'INVALID_OPERATION' });
+    expect(control.state.started).toBe(false);
+    await platform.start();
+    expect(control.count('startGameAsync')).toBe(2);
+    expect(control.count('initializeAsync')).toBe(1); // a resolved init stays memoised
+    expect(control.state.started).toBe(true);
+    await platform.start(); // and so does a resolved start
+    expect(control.count('startGameAsync')).toBe(2);
+  });
+
+  it('a rejected initializeAsync can be retried: init() calls the SDK again (PLAT-8)', async () => {
+    const clock = createFakeClock();
+    const { sdk, control } = createStub({}, clock);
+    let fails = 1;
+    const flaky = Object.assign(Object.create(sdk) as typeof sdk, {
+      initializeAsync: () => (fails-- > 0 ? Promise.reject({ code: 'NETWORK_FAILURE', message: 'x' }) : sdk.initializeAsync()),
+    });
+    const platform = createFbPlatform({ sdk: flaky, placements: PLACEMENTS, storage: new MemoryStorage(), timers: clock });
+    await expect(platform.init()).rejects.toMatchObject({ code: 'NETWORK_FAILURE' });
+    await platform.init();
+    expect(control.state.initialized).toBe(true);
+    expect(platform.capabilities().cloudSave).toBe(true);
+  });
 });
 
 describe('createFbPlatform: capabilities', () => {
@@ -157,15 +183,59 @@ describe('createFbPlatform: capabilities', () => {
 });
 
 describe('createFbPlatform: storage and analytics wiring', () => {
-  it('loads cloud + mirror and writes the mirror under the save key', async () => {
-    const { platform, storage, control } = setup({ data: { save: { v: 1, sessions: 3 } } });
+  it("loads cloud + mirror and writes the mirror under the save key scoped to the player's ID", async () => {
+    const { platform, storage, control } = setup({ data: { save: { v: 1, sessions: 3 } }, playerId: 'p-7' });
     await platform.init();
     const raw = await platform.storage.load();
     expect(raw.cloud).toEqual({ v: 1, sessions: 3 });
     await platform.storage.save({ v: 1, sessions: 4 } as unknown as SaveDataV1, { cloud: 'flush' });
-    expect(storage.getItem('mewdoku.save.v1')).toBe(JSON.stringify({ v: 1, sessions: 4 }));
+    expect(storage.getItem('mewdoku.save.v1:p-7')).toBe(JSON.stringify({ v: 1, sessions: 4 }));
+    expect(storage.getItem('mewdoku.save.v1')).toBeNull(); // the unscoped key is not this player's mirror
     expect(control.count('player.flushDataAsync')).toBe(1);
     expect(platform.storage.status()).toBe('ok');
+  });
+
+  it('two FB accounts on one device never see or merge each other\'s mirror (PLAT-2)', async () => {
+    const storage = new MemoryStorage();
+    const session = async (playerId: string, cloud: Record<string, unknown> | null) => {
+      const clock = createFakeClock();
+      const { sdk, control } = createStub({ playerId, data: cloud }, clock);
+      const platform = createFbPlatform({ sdk, placements: PLACEMENTS, storage, timers: clock });
+      await platform.init();
+      return { platform, control, raw: await platform.storage.load() };
+    };
+    const a = await session('player-A', { save: { v: 1, sessions: 40 } });
+    await a.platform.storage.save({ v: 1, sessions: 41 } as unknown as SaveDataV1, { cloud: 'now' });
+    const b = await session('player-B', null);
+    expect(b.raw).toEqual({ local: null, cloud: null, corrupt: false }); // a new player: nothing of A's
+    await b.platform.storage.save({ v: 1, sessions: 1 } as unknown as SaveDataV1, { cloud: 'now' });
+    expect(b.control.playerData()).toEqual({ save: { v: 1, sessions: 1 } });
+    const again = await session('player-A', { save: { v: 1, sessions: 41 } });
+    expect(again.raw.local).toEqual({ v: 1, sessions: 41 }); // A's own mirror survived B's session
+  });
+
+  it('an unscoped mirror (earlier build, or a session without a player ID) is never adopted by a player', async () => {
+    const storage = new MemoryStorage();
+    storage.setItem('mewdoku.save.v1', JSON.stringify({ v: 1, sessions: 99 }));
+    const { sdk } = createStub({ playerId: 'p-1', data: { save: { v: 1, sessions: 2 } } }, createFakeClock());
+    const platform = createFbPlatform({ sdk, placements: PLACEMENTS, storage, timers: createFakeClock() });
+    await platform.init();
+    const raw = await platform.storage.load();
+    expect(raw.local).toBeNull();
+    expect(raw.cloud).toEqual({ v: 1, sessions: 2 });
+  });
+
+  it("a rewarded load that reports CLIENT_UNSUPPORTED_OPERATION turns the capability off for the session (PLAT-4)", async () => {
+    const { platform, control } = setup({ ads: { rewarded: { load: 'CLIENT_UNSUPPORTED_OPERATION' } } });
+    await platform.init();
+    expect(platform.capabilities().rewarded).toBe(true);
+    await expect(platform.ads.showRewarded('hint')).resolves.toEqual({ ok: false, reason: 'unsupported' });
+    expect(platform.capabilities().rewarded).toBe(false); // → the app's 02 §13.3 free fallback
+    expect(platform.capabilities().interstitial).toBe(true);
+    const created = control.count('getRewardedVideoAsync');
+    platform.ads.preload('rewarded');
+    await expect(platform.ads.showRewarded('kitty')).resolves.toEqual({ ok: false, reason: 'unsupported' });
+    expect(control.count('getRewardedVideoAsync')).toBe(created);
   });
 
   it('drops analytics before init and logs sanitised events after', async () => {
@@ -173,6 +243,6 @@ describe('createFbPlatform: storage and analytics wiring', () => {
     platform.analytics.log('level_start', { level: 1 });
     await platform.init();
     platform.analytics.log('level_start', { level: 2, size: 5 });
-    expect(control.find('logEvent').map((c) => c.args)).toEqual([['level_start', null, { level: 2, size: 5 }]]);
+    expect(control.find('logEvent').map((c) => c.args)).toEqual([['level_start', null, { level: '2', size: '5' }]]);
   });
 });

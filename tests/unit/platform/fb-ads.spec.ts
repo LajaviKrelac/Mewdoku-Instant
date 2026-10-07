@@ -1,6 +1,7 @@
 // Owner: platform
 // fb-ads (05 §6, 04 §6.3): readiness timeout vs long show, error mapping, reload after every show or
-// failure with a bounded backoff, empty placement → unsupported.
+// failure with a bounded backoff, empty placement → unsupported; 'unsupported' latches the kind off,
+// preload respects the backoff, a load that never settles is capped.
 import { describe, expect, it } from 'vitest';
 import { createFakeClock } from '../../../src/app/clock';
 import { cfg } from '../../../src/app/config';
@@ -174,6 +175,120 @@ describe('createFbAds', () => {
     await clock.advanceAsync(cfg.ads.reloadDelaysMs[0] ?? 0);
     await drain();
     expect(control.count('getRewardedVideoAsync')).toBe(2);
+  });
+
+  it("latches a kind off after 'unsupported' from a load: no more SDK calls, onUnsupported once (PLAT-4)", async () => {
+    const clock = createFakeClock();
+    const { sdk, control } = createStub({ ads: { rewarded: { load: 'CLIENT_UNSUPPORTED_OPERATION' } } }, clock);
+    const off: string[] = [];
+    const ads = createFbAds(sdk, { placements: PLACEMENTS, timers: clock, onUnsupported: (k) => off.push(k) });
+    await expect(ads.showRewarded('hint')).resolves.toEqual({ ok: false, reason: 'unsupported' });
+    expect(off).toEqual(['rewarded']);
+    const created = control.count('getRewardedVideoAsync');
+    ads.preload('rewarded');
+    await expect(ads.showRewarded('kitty')).resolves.toEqual({ ok: false, reason: 'unsupported' });
+    await clock.advanceAsync(10 * 60_000);
+    await drain();
+    expect(control.count('getRewardedVideoAsync')).toBe(created);
+    expect(ads.isReady('rewarded')).toBe(false);
+    expect(off).toEqual(['rewarded']);
+    // The other kind is unaffected.
+    const inter = track(ads.showInterstitial('next_level'));
+    await clock.advanceAsync(1_000);
+    await drain();
+    expect(inter.value).toEqual({ ok: true });
+  });
+
+  it("latches a kind off after 'unsupported' from a show", async () => {
+    const clock = createFakeClock();
+    const { sdk, control } = createStub({ ads: { interstitial: { show: 'CLIENT_UNSUPPORTED_OPERATION', showDelayMs: 0 } } }, clock);
+    const off: string[] = [];
+    const ads = createFbAds(sdk, { placements: PLACEMENTS, timers: clock, onUnsupported: (k) => off.push(k) });
+    ads.preload('interstitial');
+    await drain();
+    await expect(ads.showInterstitial('retry')).resolves.toEqual({ ok: false, reason: 'unsupported' });
+    expect(off).toEqual(['interstitial']);
+    expect(control.count('getInterstitialAdAsync')).toBe(1); // no reload after it
+  });
+
+  it('a preload during the reload backoff does not cut it short: one instance per failure (PLAT-5)', async () => {
+    const { ads, clock, control } = setup({ presets: ['no-fill'] });
+    await expect(ads.showRewarded('hint')).resolves.toEqual({ ok: false, reason: 'no_fill' });
+    expect(control.count('getRewardedVideoAsync')).toBe(1);
+    ads.preload('rewarded'); // what ad-flow does after every show, and session at level start
+    ads.preload('rewarded');
+    await drain();
+    expect(control.count('getRewardedVideoAsync')).toBe(1);
+    await clock.advanceAsync((cfg.ads.reloadDelaysMs[0] ?? 0) - 1);
+    await drain();
+    expect(control.count('getRewardedVideoAsync')).toBe(1);
+    await clock.advanceAsync(1);
+    await drain();
+    expect(control.count('getRewardedVideoAsync')).toBe(2); // the scheduled retry
+    // A show request (the player asking) still loads at once.
+    await expect(ads.showRewarded('hint')).resolves.toEqual({ ok: false, reason: 'no_fill' });
+    expect(control.count('getRewardedVideoAsync')).toBe(3);
+  });
+
+  it('once the backoff is used up, a failed show still costs one instance, not two (PLAT-5)', async () => {
+    const { ads, clock, control } = setup({ presets: ['no-fill'] });
+    for (let i = 0; i <= cfg.ads.reloadDelaysMs.length; i++) {
+      await expect(ads.showRewarded('hint')).resolves.toEqual({ ok: false, reason: 'no_fill' });
+      ads.preload('rewarded'); // ad-flow's reload after every show
+      await drain();
+    }
+    await clock.advanceAsync(10 * 60_000);
+    await drain();
+    const before = control.count('getRewardedVideoAsync');
+    await expect(ads.showRewarded('hint')).resolves.toEqual({ ok: false, reason: 'no_fill' });
+    ads.preload('rewarded');
+    await drain();
+    expect(control.count('getRewardedVideoAsync')).toBe(before + 1);
+  });
+
+  it('a load that never settles is dropped after ads.loadTimeoutMs and a fresh instance follows the backoff (PLAT-6)', async () => {
+    const { ads, clock, control } = setup({ presets: ['never-ready'] });
+    ads.preload('rewarded');
+    await drain();
+    expect(control.count('getRewardedVideoAsync')).toBe(1);
+    await clock.advanceAsync(cfg.ads.loadTimeoutMs - 1);
+    await drain();
+    expect(control.count('getRewardedVideoAsync')).toBe(1);
+    await clock.advanceAsync(1 + (cfg.ads.reloadDelaysMs[0] ?? 0));
+    await drain();
+    expect(control.count('getRewardedVideoAsync')).toBe(2);
+    expect(control.count('ad.loadAsync')).toBe(2);
+  });
+
+  it('after one request waited out the readiness window on a stalled load, the next fails at once (PLAT-6)', async () => {
+    const { ads, clock } = setup({ presets: ['never-ready'] });
+    ads.preload('rewarded');
+    await drain();
+    const first = track(ads.showRewarded('hint'));
+    await clock.advanceAsync(cfg.ads.readyTimeoutMs);
+    await drain();
+    expect(first.value).toEqual({ ok: false, reason: 'timeout' });
+    const second = track(ads.showRewarded('hint'));
+    await drain();
+    expect(second.value).toEqual({ ok: false, reason: 'timeout' }); // no second 4 s input lock
+    // Once the stalled load is dropped and a fresh one starts, a request waits for it again.
+    await clock.advanceAsync(cfg.ads.loadTimeoutMs + (cfg.ads.reloadDelaysMs[0] ?? 0));
+    await drain();
+    const third = track(ads.showRewarded('hint'));
+    await drain();
+    expect(third.done).toBe(false);
+    await clock.advanceAsync(cfg.ads.readyTimeoutMs);
+    await drain();
+    expect(third.value).toEqual({ ok: false, reason: 'timeout' });
+  });
+
+  it('an instance that loads after the cap is never shown', async () => {
+    const { ads, clock, control } = setup({ ads: { interstitial: { loadDelayMs: cfg.ads.loadTimeoutMs + 1_000, showDelayMs: 0 } } });
+    ads.preload('interstitial');
+    await clock.advanceAsync(cfg.ads.loadTimeoutMs + 1_000);
+    await drain();
+    expect(ads.isReady('interstitial')).toBe(false);
+    expect(control.count('ad.showAsync')).toBe(0);
   });
 
   it('survives an SDK that throws synchronously', async () => {

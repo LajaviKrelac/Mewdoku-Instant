@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Owner: platform
 // Web adapter (04 §6.2): capabilities per mock mode, storage via the local store (cloud ignored),
-// memory fallback hook, no-op lifecycle and analytics, haptics capability.
+// memory fallback hook, no-op lifecycle and analytics, haptics capability, other tabs' writes.
 import { describe, expect, it } from 'vitest';
 import { createFakeClock } from '../../../src/app/clock';
 import { cfg } from '../../../src/app/config';
@@ -95,6 +95,23 @@ describe('createWebPlatform', () => {
     expect(warned).toBe(1);
     await p.storage.save(save(7), { cloud: 'now' });
     expect((await p.storage.load()).local).toEqual(save(7));
+  });
+
+  it("hands another tab's write of the save to the app (RP-5), and nothing else", () => {
+    const p = make();
+    const seen: unknown[] = [];
+    const off = p.storage.onExternalSave?.((copy) => seen.push(copy));
+    expect(off).toBeTypeOf('function');
+    const fire = (init: StorageEventInit) => window.dispatchEvent(new StorageEvent('storage', init));
+    fire({ key: cfg.save.storageKey, newValue: JSON.stringify(save(6)), oldValue: JSON.stringify(save(5)) });
+    fire({ key: 'something.else', newValue: '{}' });
+    fire({ key: cfg.save.storageKey, newValue: null }); // removed in the other tab
+    fire({ key: null, newValue: null }); // localStorage.clear() in the other tab
+    fire({ key: cfg.save.storageKey, newValue: '{oops' }); // unreadable: keep ours
+    expect(seen).toEqual([{ source: 'tab', value: save(6) }]);
+    off?.();
+    fire({ key: cfg.save.storageKey, newValue: JSON.stringify(save(7)) });
+    expect(seen).toHaveLength(1);
   });
 
   it('uses the real localStorage by default when it works (jsdom)', async () => {

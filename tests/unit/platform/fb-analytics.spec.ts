@@ -61,9 +61,20 @@ describe('createFbAnalytics', () => {
     a.log('?', { level: 1 });
     a.log('js_error');
     expect(control.find('logEvent').map((c) => c.args)).toEqual([
-      ['level_start', null, { level: 3 }],
+      ['level_start', null, { level: '3' }],
       ['js_error', null, null],
     ]);
+  });
+
+  it('sends every parameter value as a string under the length limit (the SDK takes string values only)', () => {
+    const { sdk, control } = createStub({}, createFakeClock());
+    createFbAnalytics(sdk).log('level_win', { level: 5, ms: 61_234.5, mode: 'level', where: 'x'.repeat(200) });
+    const params = control.find('logEvent')[0]?.args[2] as Record<string, unknown>;
+    expect(params).toEqual({ level: '5', ms: '61234.5', mode: 'level', where: 'x'.repeat(cfg.analytics.valueMaxLen) });
+    for (const v of Object.values(params)) {
+      expect(typeof v).toBe('string');
+      expect((v as string).length).toBeLessThan(100);
+    }
   });
 
   it('never throws, even when the SDK does', () => {

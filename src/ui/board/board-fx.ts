@@ -26,12 +26,39 @@ export function createFxTimers(): FxTimers {
   };
 }
 
-/** Adds `cls` (restarting the animation when already present) and removes it after `ms`. */
+/** Latest flash per element and class, so an older flash's timer never strips a newer one. */
+const flashes = new WeakMap<Element, Map<string, number>>();
+let flashSeq = 0;
+
+/**
+ * Adds `cls` and removes it after `ms`. Never reads layout (RP-3): a class that is not on the element
+ * yet is simply added, and its keyframes start with the next style update. When the class is still
+ * on (a flash restarted within `ms`), it is removed now and added back on the next animation frame
+ * two animation frames later (one style update without it, then one with it, restarts the keyframes)
+ * instead of forcing a reflow with offsetWidth.
+ */
 export function flashClass(el: Element, cls: string, ms: number, timers: FxTimers): void {
+  const seq = ++flashSeq;
+  let mine = flashes.get(el);
+  if (!mine) flashes.set(el, (mine = new Map()));
+  mine.set(cls, seq);
+  const current = (): boolean => flashes.get(el)?.get(cls) === seq;
+  const finish = (): void => {
+    if (current()) el.classList.remove(cls);
+  };
+  if (!el.classList.contains(cls)) {
+    el.classList.add(cls);
+    timers.later(ms, finish);
+    return;
+  }
   el.classList.remove(cls);
-  void (el as HTMLElement).offsetWidth; // restart keyframes
-  el.classList.add(cls);
-  timers.later(ms, () => el.classList.remove(cls));
+  const win = el.ownerDocument.defaultView;
+  const readd = (): void => {
+    if (current()) el.classList.add(cls);
+  };
+  if (win && typeof win.requestAnimationFrame === 'function') win.requestAnimationFrame(() => win.requestAnimationFrame(readd));
+  else timers.later(0, readd);
+  timers.later(ms, finish);
 }
 
 /** A small burst of star sparkles around a cell (kitty reveal, 02 §9.2). */

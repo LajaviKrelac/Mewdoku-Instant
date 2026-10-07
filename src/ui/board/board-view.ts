@@ -36,8 +36,22 @@ function applyRenderVars(el: HTMLElement): void {
     '--x-len': String(Math.ceil(L.markScale * 100 * Math.SQRT2)),
     '--wrong-ring': `${L.wrongRingPx}px`,
     '--hint-dim': String(1 - L.hintDim),
+    '--pat-op': String(L.patternOpacity),
+    '--pat-op-done': String(L.patternOpacityDone),
   };
   for (const [k, v] of Object.entries(vars)) el.style.setProperty(k, v);
+}
+
+/**
+ * Extra scale for the colour-pattern glyph on small slots (02 §18): the glyph box is
+ * layout.patternScale of the cell, grown to at least layout.patternMinPx (at most 1.6×) so the 12
+ * shapes stay tellable apart on 11×11 / 12×12 boards. 1 on normal slots.
+ */
+export function patternScaleFor(slotPx: number): number {
+  const L = cfg.layout;
+  const box = L.patternScale * slotPx;
+  if (!(box > 0)) return 1;
+  return Math.min(1.6, Math.max(1, L.patternMinPx / box));
 }
 
 export function createBoardView(model: BoardModel, input: BoardInput, opts: BoardViewOptions): BoardView {
@@ -279,8 +293,10 @@ export function createBoardView(model: BoardModel, input: BoardInput, opts: Boar
       }
     },
     setSlot(px) {
+      if (px === slotPx && el.style.getPropertyValue('--slot') !== '') return;
       slotPx = px;
       el.style.setProperty('--slot', `${px}px`);
+      el.style.setProperty('--pat-k', patternScaleFor(px).toFixed(3));
     },
     geometry() {
       const r = el.getBoundingClientRect();

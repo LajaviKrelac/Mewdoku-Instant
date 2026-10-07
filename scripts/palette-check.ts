@@ -1,6 +1,8 @@
 // Owner: ui-board
 // Palette validation (02 §17.2, §18): pairwise CIEDE2000 ≥ 10, simulated deuteranopia/protanopia/
-// tritanopia ΔE report, --ink X glyph ≥ 3:1 against every tile, and PALETTE_DE00 matches PALETTE.
+// tritanopia ΔE report, --ink X glyph, cat outline, wrong-X and colour-pattern glyphs ≥ 3:1 against
+// every tile (normal and faded), UI text pairs ≥ 4.5:1 (WCAG 1.4.3) and UI glyphs ≥ 3:1, and
+// PALETTE_DE00 matches PALETTE.
 // Run: npx tsx scripts/palette-check.ts [--quiet]. Exits non-zero when a hard check fails.
 import { pathToFileURL } from 'node:url';
 import { cfg } from '../src/app/config';
@@ -12,6 +14,8 @@ export type CvdKind = 'deuteranopia' | 'protanopia' | 'tritanopia';
 /** Hard thresholds (02 §17.2, §18). */
 export const MIN_DE00 = 10;
 export const MIN_CONTRAST = 3;
+/** WCAG 1.4.3 for normal-size text (our display face has one 600 weight, so no "bold large" text). */
+export const MIN_TEXT_CONTRAST = 4.5;
 /** PALETTE_DE00 entries are ΔE × 100 rounded; allow one unit of rounding drift. */
 const MATRIX_TOLERANCE = 1;
 
@@ -182,18 +186,55 @@ export interface ContrastRow {
   readonly ratio: number;
 }
 
-/** Glyph-vs-tile contrast for the X mark, cat outline and wrong-X, on normal and faded tiles. */
+/**
+ * Glyph-vs-tile contrast for the X mark, cat outline, wrong-X (and its ring, kept outside the fade
+ * veil by board.css) and the colour-pattern glyph (02 §18 non-colour cue), on normal and faded tiles.
+ */
 export function glyphContrast(): ContrastRow[] {
   const rows: ContrastRow[] = [];
+  const L = cfg.layout;
   PALETTE.forEach((tileHex, tile) => {
     for (const faded of [false, true]) {
       const bg = faded ? mixHex(tileHex, TOKENS.page, cfg.fx.regionFadeMix) : tileHex;
-      rows.push({ what: 'mark X (--ink @ markOpacity)', tile, faded, ratio: contrastRatio(over(TOKENS.ink, bg, cfg.layout.markOpacity), bg) });
+      rows.push({ what: 'mark X (--ink @ markOpacity)', tile, faded, ratio: contrastRatio(over(TOKENS.ink, bg, L.markOpacity), bg) });
       rows.push({ what: 'cat outline (--ink)', tile, faded, ratio: contrastRatio(TOKENS.ink, bg) });
       rows.push({ what: 'wrong X (--wrong)', tile, faded, ratio: contrastRatio(TOKENS.wrong, bg) });
+      const patOp = faded ? L.patternOpacityDone : L.patternOpacity;
+      rows.push({ what: 'pattern glyph (--ink @ patternOpacity)', tile, faded, ratio: contrastRatio(over(TOKENS.ink, bg, patOp), bg) });
     }
   });
   return rows;
+}
+
+export interface UiContrastRow {
+  readonly what: string;
+  readonly fg: string;
+  readonly bg: string;
+  readonly ratio: number;
+  /** MIN_TEXT_CONTRAST for text, MIN_CONTRAST for UI glyphs and large text. */
+  readonly min: number;
+}
+
+/** UI colour pairs that carry text or meaning (02 §17.2 tokens after the Phase 2 contrast pass). */
+export function uiContrast(): UiContrastRow[] {
+  const white = '#FFFFFF';
+  const T = TOKENS;
+  const pairs: readonly (readonly [what: string, fg: string, bg: string, min: number])[] = [
+    ['primary button label (white on --accent)', white, T.accent, MIN_TEXT_CONTRAST],
+    ['tool count badge (white on --accent)', white, T.accent, MIN_TEXT_CONTRAST],
+    ['fail "+1" badge (white on --accent-deep)', white, T['accent-deep'], MIN_TEXT_CONTRAST],
+    ['empty tool badge (white on --ink-2)', white, T['ink-2'], MIN_TEXT_CONTRAST],
+    ['secondary text (--ink-2 on --page)', T['ink-2'], T.page, MIN_TEXT_CONTRAST],
+    ['secondary text (--ink-2 on --page-2)', T['ink-2'], T['page-2'], MIN_TEXT_CONTRAST],
+    ['secondary text (--ink-2 on --card)', T['ink-2'], T.card, MIN_TEXT_CONTRAST],
+    ['accent text (--accent-deep on --card)', T['accent-deep'], T.card, MIN_TEXT_CONTRAST],
+    ['"In progress" (--amber-text on --card)', T['amber-text'], T.card, MIN_TEXT_CONTRAST],
+    ['body text (--ink on --page-2)', T.ink, T['page-2'], MIN_TEXT_CONTRAST],
+    ['focus ring (--accent on --card)', T.accent, T.card, MIN_CONTRAST],
+    ['focus ring (--accent on --page)', T.accent, T.page, MIN_CONTRAST],
+    ['wordmark, large text (--accent on --page)', T.accent, T.page, MIN_CONTRAST],
+  ];
+  return pairs.map(([what, fg, bg, min]) => ({ what, fg, bg, min, ratio: contrastRatio(fg, bg) }));
 }
 
 const fmt = (v: number): string => v.toFixed(2);
@@ -240,6 +281,12 @@ export function main(argv: readonly string[]): void {
     if (r.ratio < MIN_CONTRAST) failures.push(`${r.what} on ${NAMES[r.tile]}${r.faded ? ' (faded)' : ''}: ${fmt(r.ratio)}:1 < ${MIN_CONTRAST}:1`);
   }
   for (const [what, r] of byWhat) log(`${what.padEnd(30)} min ${fmt(r.ratio)}:1 on ${NAMES[r.tile]}${r.faded ? ' (faded)' : ''}`);
+
+  // 5. UI text (WCAG 1.4.3, 4.5:1) and UI glyphs / large text (3:1).
+  for (const r of uiContrast()) {
+    log(`${r.what.padEnd(44)} ${fmt(r.ratio)}:1 (min ${r.min})`);
+    if (r.ratio < r.min) failures.push(`${r.what}: ${fmt(r.ratio)}:1 < ${r.min}:1`);
+  }
 
   if (failures.length) {
     console.error(`palette-check: ${failures.length} failure(s)`);

@@ -32,20 +32,39 @@ export const PALETTE_DE00: DeltaMatrix = Object.freeze([
   4389, 2636, 1782, 1058, 1524, 2792, 3978, 4875, 4925, 2227, 2906,    0,
 ]);
 
-export type TokenName = 'page' | 'card' | 'ink' | 'ink-2' | 'accent' | 'danger' | 'heart' | 'scrim' | 'wrong';
+export type TokenName =
+  | 'page'
+  | 'page-2'
+  | 'card'
+  | 'ink'
+  | 'ink-2'
+  | 'accent'
+  | 'accent-deep'
+  | 'amber-text'
+  | 'danger'
+  | 'heart'
+  | 'scrim'
+  | 'wrong';
 
 /**
  * UI tokens (02 §17.2). `wrong` is a Phase 2 addition validated by scripts/palette-check.ts: the
  * spec's --danger (#D33A4A) only reaches ~2.2:1 on the pastel tiles, so the wrong-X glyph and its
  * ring use this deeper crimson to meet the 3:1 non-text contrast rule (02 §18). --danger stays the
  * UI error colour (flash, lost heart).
+ * Phase 2 contrast pass (02 §17.2 values are provisional): `accent` is a deeper teal than the
+ * spec's #1F9E89 (white labels on it were 3.3:1; now 4.8:1, WCAG 1.4.3), `ink-2` is darker than
+ * #7A6E80 (4.1:1 on --page-2; now 4.8:1), and `amber-text` replaces --gold-deep for text.
+ * scripts/palette-check.ts enforces these pairs. Mirrors styles/tokens.css.
  */
 export const TOKENS: Readonly<Record<TokenName, string>> = Object.freeze({
   page: '#FBF6EE',
+  'page-2': '#F4ECE0',
   card: '#FFFFFF',
   ink: '#3B3044',
-  'ink-2': '#7A6E80',
-  accent: '#1F9E89',
+  'ink-2': '#6F6375',
+  accent: '#17806F',
+  'accent-deep': '#0F5A4E',
+  'amber-text': '#8A5A00',
   danger: '#D33A4A',
   heart: '#E8506A',
   scrim: 'rgba(30,22,36,.75)',

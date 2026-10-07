@@ -274,3 +274,49 @@ test('13 · a slow daily-month fetch shows the loading indicator until the board
   await expect(page.locator('#app')).not.toHaveAttribute('aria-busy', 'true');
   expect((await game(page))?.id).toBe(`D${today()}`);
 });
+
+// ── Resilience (04 §8: the player never sees a dead end) ──
+
+/** Aborts matching requests while `fail(n)` (n = 1-based request count) is true; returns the URLs seen. */
+async function flaky(page: Page, pattern: RegExp, fail: (n: number) => boolean): Promise<string[]> {
+  const seen: string[] = [];
+  await page.route(pattern, (route) => {
+    seen.push(route.request().url());
+    return fail(seen.length) ? route.abort() : route.continue();
+  });
+  return seen;
+}
+
+test('14 · the overlay chunk failing once at boot: it is re-fetched (cache-busted) and O1 / O3 still open', async ({ page }) => {
+  await open(page, '', returning());
+  const seen = await flaky(page, /overlay-chunk-[\w-]+\.js(\?.*)?$/, (n) => n === 1);
+  await page.reload();
+  await ready(page, 'home');
+  await playLevel(page);
+  await hintTool(page).click();
+  await expect(page.locator('[data-overlay="hint"]')).toBeVisible();
+  expect((await app(page))?.save.stock.hints).toBe(4); // charged once, for a card that opened
+  expect(seen.length).toBe(2);
+  expect(seen[1]).toMatch(/\?retry=\d+$/);
+  await page.keyboard.press('Escape');
+  const sol = await solution(page);
+  for (let r = 0; r < sol.length; r++) await dbl(page, r * sol.length + (sol[r] as number));
+  await expect(page.getByRole('button', { name: /^Next/ })).toBeVisible();
+});
+
+test('15 · the overlay chunk never loading: the bulb charges nothing, and a lost board goes Home kept', async ({ page }) => {
+  await open(page, '', returning());
+  await flaky(page, /overlay-chunk-[\w-]+\.js(\?.*)?$/, () => true);
+  await page.reload();
+  await ready(page, 'home');
+  await playLevel(page);
+  await hintTool(page).click();
+  await expect(page.locator('.toast')).toContainText('Hint unavailable', { timeout: 15_000 });
+  expect((await game(page))?.status).toBe('playing');
+  expect((await app(page))?.save.stock.hints).toBe(5);
+  for (const i of await wrongCells(page, 3)) await dbl(page, i);
+  await ready(page, 'home'); // no O4 can be shown: Home, with the 0-heart board saved (02 §15 step 5)
+  const slot = (await app(page))?.save.inProgress.level;
+  expect(slot?.hearts).toBe(0);
+  expect(slot?.revivesUsed).toBe(0);
+});

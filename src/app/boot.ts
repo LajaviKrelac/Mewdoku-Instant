@@ -1,6 +1,12 @@
 // Owner: app
 // Boot sequence (04 §5.1): platform.init → sprite/tokens → load + migrate + merge save → sessions+1
 // → ensure pack → fonts → progress 100 → platform.start → locale → restore rules → route → preload ads.
+// Nothing on the way to platform.start() may wait without a bound (05 §5.4, RP-1): the pack and the
+// font wait in parallel, each capped (boot.packTimeoutMs, boot.fontTimeoutMs); a pack still loading
+// is awaited later by getLevel() behind the loading indicator. platform.init() and start() are
+// retried once (PLAT-8); a second failure rejects, and main.ts shows an honest error with a retry.
+// Save copies that arrive after launch (FB late cloud read, another web tab) are merged into the
+// live save (restore.ts mergeArrived).
 import { createAudioEngine, type AudioEngine } from '../audio/audio-engine';
 import { createLazySfx } from '../audio/lazy-sfx';
 import type { Sfx } from '../audio/sfx';
@@ -23,7 +29,8 @@ import { delay, systemClock, type Clock } from './clock';
 import { cfg } from './config';
 import { createEventBus, type AppBus, type AppEventMap } from './events';
 import { parseFlagParam, setFlagOverrides } from './flags';
-import { applyRestoreRules, loadSave } from './restore';
+import { fetchJsonWithTimeout } from './fetch-json';
+import { applyRestoreRules, loadSave, mergeArrived } from './restore';
 import { createRouter, type Router, type RouterFactories } from './router';
 import { createSaveScheduler } from './saves';
 import { createSession, type Session } from './session';
@@ -82,11 +89,9 @@ declare global {
 
 const EMPTY_RAW: RawSave = { local: null, cloud: null, corrupt: false };
 
+/** Pack and daily-month JSON: aborted after levels.fetchTimeoutMs, so a request can never hang (RP-1). */
 function fetchJsonDefault(url: string): Promise<unknown> {
-  return fetch(url).then((r) => {
-    if (!r.ok) throw new Error(`HTTP ${r.status} for ${url}`);
-    return r.json() as Promise<unknown>;
-  });
+  return fetchJsonWithTimeout(url);
 }
 
 function attempt<T>(fn: () => T, fallback: T): T {
@@ -102,6 +107,16 @@ function within<T>(clock: Clock, ms: number, p: Promise<T>, fallback: T): Promis
   return Promise.race([p.catch(() => fallback), delay(clock, ms).then(() => fallback)]);
 }
 
+/** `fn()`, tried a second time after `ms` when the first try rejects (PLAT-8). */
+async function retryOnce<T>(clock: Clock, ms: number, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch {
+    await delay(clock, ms);
+    return fn();
+  }
+}
+
 export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: BootOptions = {}): Promise<AppHandle> {
   const clock = opts.clock ?? systemClock;
   const doc = opts.doc ?? root.ownerDocument;
@@ -115,7 +130,7 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
   bus.on('error', ({ where }) => bus.emit('analytics', { name: 'js_error', params: { where: where.slice(0, 40) } }));
 
   // 1. FIRST: lets FB show its progress bar early (05 §4).
-  await platform.init();
+  await retryOnce(clock, cfg.boot.platformRetryDelayMs, () => platform.init());
   attempt(() => mountSprite(doc), undefined);
   // S0 splash: web builds only (__PLATFORM__ is a build-time constant, so FBIG drops the module).
   const splash: Partial<RouterFactories> = __PLATFORM__ === 'web' ? { bootScreen: createBootScreen } : {};
@@ -148,13 +163,15 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
       delay: (ms) => delay(clock, ms),
       onFallback: (where) => bus.emit('analytics', { name: 'pack_fallback', params: { where } }),
     });
-  await levels.ensurePackFor(first.progress.level);
+  // Both waits are bounded and run side by side: a slow or hung pack never holds Home or startGameAsync.
+  const pack = within(clock, cfg.boot.packTimeoutMs, Promise.resolve().then(() => levels.ensurePackFor(first.progress.level)), undefined);
   const fonts = (doc as Document & { fonts?: { ready?: Promise<unknown> } }).fonts?.ready;
-  if (fonts) await within(clock, cfg.boot.fontTimeoutMs, fonts.then(() => undefined), undefined);
+  const font = fonts ? within(clock, cfg.boot.fontTimeoutMs, fonts.then(() => undefined), undefined) : undefined;
+  await Promise.all([pack, font]);
   progress(100);
 
   // 4. Start: the game becomes visible; locale is valid only now (05 §4).
-  await platform.start();
+  await retryOnce(clock, cfg.boot.platformRetryDelayMs, () => platform.start());
   const sessionStartedAt = clock.now();
   setLocale(attempt(() => platform.getLocale(), 'en'));
 
@@ -252,7 +269,37 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
     },
   });
   const rotate = attempt(() => mountRotateNotice(root, win ?? undefined), null);
-  if (store.get().ui.storage === 'memory') router.toast(t('toast.storageMemory'));
+
+  // One-time "can't save" warning (04 §6.2): memory-only at launch, or later when storage fails
+  // mid-session (quota, revoked). The FB adapter reports it only when the cloud does not keep the save.
+  let warnedMemory = false;
+  const warnMemory = (): void => {
+    if (warnedMemory) return;
+    warnedMemory = true;
+    store.update((s) => (s.ui.storage === 'memory' ? s : { ...s, ui: { ...s.ui, storage: 'memory' } }));
+    router.toast(t('toast.storageMemory'));
+  };
+  if (store.get().ui.storage === 'memory') warnMemory();
+  attempt(() => platform.storage.onMemoryFallback?.(warnMemory), undefined);
+
+  // Save copies that arrive after launch: the FB cloud read that finished late (PLAT-1) or a write by
+  // another web tab (RP-5). The running board is left alone; Home and the settings follow the store.
+  // Only the late cloud copy is written back (that is what starts the cloud writes); another tab's
+  // copy is not, or two tabs would echo each other's writes forever.
+  const offExternal =
+    attempt(
+      () =>
+        platform.storage.onExternalSave?.((copy) => {
+          const live = store.get().save;
+          const next = mergeArrived(live, copy, clock.now());
+          if (next !== live) {
+            store.update((s) => ({ ...s, save: next }));
+            attempt(() => shell.applySettings(), undefined);
+          }
+          if (copy.source === 'cloud') saves.touch();
+        }),
+      undefined,
+    ) ?? (() => undefined);
 
   const handle: AppHandle = {
     store,
@@ -262,6 +309,7 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
     session: live,
     dispose() {
       saves.flush();
+      offExternal();
       live.dispose();
       shell.dispose();
       unwatch();
@@ -292,6 +340,27 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
     if (caps.rewarded) attempt(() => platform.ads.preload('rewarded'), undefined);
   }
   return handle;
+}
+
+/**
+ * The honest fatal state when boot() rejected (PLAT-8): nothing is playable, so say so and offer one
+ * button that starts the game again (a page reload). Used by main.ts.
+ */
+export function showBootFailure(root: HTMLElement, reload: () => void = () => window.location.reload()): void {
+  const doc = root.ownerDocument;
+  const box = doc.createElement('div');
+  box.className = 'boot-failed';
+  box.setAttribute('role', 'alert');
+  box.style.cssText = 'padding:40vh 16px 0;text-align:center';
+  const msg = doc.createElement('p');
+  msg.textContent = t('boot.failed');
+  const retry = doc.createElement('button');
+  retry.type = 'button';
+  retry.className = 'btn btn--primary';
+  retry.textContent = t('boot.retry');
+  retry.addEventListener('click', () => reload());
+  box.append(msg, retry);
+  root.replaceChildren(box);
 }
 
 /** window.__mewdoku (04 §11): read the state, the solution, and seed a save for the next reload. */

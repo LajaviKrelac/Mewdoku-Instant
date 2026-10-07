@@ -111,6 +111,42 @@ export function createLocalStore(
   };
 }
 
+/** A persisted on/off marker stored next to a save (e.g. the FB "mirror not merged with the cloud" flag). */
+export interface LocalFlag {
+  get(): boolean;
+  set(on: boolean): void;
+}
+
+/**
+ * localStorage[key] = '1' while on, removed while off. Never throws: when storage is unusable the
+ * flag lives in memory for the session (like createLocalStore's fallback). Never backs anything up.
+ */
+export function createLocalFlag(key: string, opts?: { storage?: Storage | null }): LocalFlag {
+  let storage: Storage | null = opts?.storage === undefined ? safeLocalStorage() : opts.storage;
+  let memory = false;
+  return {
+    get() {
+      if (!storage) return memory;
+      try {
+        return storage.getItem(key) === '1';
+      } catch {
+        storage = null;
+        return memory;
+      }
+    },
+    set(on) {
+      memory = on;
+      if (!storage) return;
+      try {
+        if (on) storage.setItem(key, '1');
+        else storage.removeItem(key);
+      } catch {
+        storage = null;
+      }
+    },
+  };
+}
+
 function safeCall(cb: () => void): void {
   try {
     cb();

@@ -7,7 +7,7 @@ import type { LevelsRepo } from '../game/levels-repo';
 import { dateKeyOf, isEndless } from '../game/progression';
 import { clearStaleSlots, merge, migrateReport, validateInProgress } from '../game/save';
 import type { InProgressV1, SaveDataV1 } from '../game/types';
-import type { RawSave } from '../platform/types';
+import type { ExternalSave, RawSave } from '../platform/types';
 import { cfg, type GameConfig } from './config';
 import { withSlot } from './session-parts';
 
@@ -18,8 +18,22 @@ export interface LoadedSave {
 }
 
 /**
+ * 04 §7.3 merge in which `preferred` supplies the newest-wins fields (stock, settings, ads,
+ * inProgress, ext) whatever the two updatedAt say; the max / union / OR / min rules and the
+ * stale-slot clean-up are unchanged. Used when `other` was written by a session that never merged
+ * `preferred` (PLAT-1): its fresher updatedAt says nothing about which copy the player last used.
+ */
+export function mergePreferring(preferred: SaveDataV1, other: SaveDataV1): SaveDataV1 {
+  const older: SaveDataV1 = { ...other, updatedAt: Math.min(other.updatedAt, preferred.updatedAt - 1) };
+  const merged = merge(older, preferred);
+  return { ...merged, updatedAt: Math.max(other.updatedAt, preferred.updatedAt) };
+}
+
+/**
  * migrate() each raw copy, then merge (04 §7.3). An empty or unreadable copy never takes part in
  * the merge: its defaults carry updatedAt = now and would otherwise win the "newest" fields.
+ * A local copy flagged `localUnmerged` (written while the cloud could not be read) takes the
+ * newest-wins fields from the cloud copy instead (PLAT-1).
  */
 export function loadSave(raw: RawSave, now: number, c: GameConfig = cfg): LoadedSave {
   const corrupt: string[] = [];
@@ -32,8 +46,21 @@ export function loadSave(raw: RawSave, now: number, c: GameConfig = cfg): Loaded
   if (cloud.outcome === 'reset') corrupt.push('cloud');
   else if (cloud.outcome === 'repaired') corrupt.push('cloud_fields');
   const cloudOk = cloud.outcome !== 'empty' && cloud.outcome !== 'reset';
-  if (localOk && cloudOk) return { save: merge(local.save, cloud.save), corrupt };
+  if (localOk && cloudOk) {
+    return { save: raw.localUnmerged === true ? mergePreferring(cloud.save, local.save) : merge(local.save, cloud.save), corrupt };
+  }
   return { save: clearStaleSlots(cloudOk ? cloud.save : local.save), corrupt };
+}
+
+/**
+ * Merges a copy that arrived after launch into the live save (04 §7.3): the FB cloud copy whose read
+ * finished late (it wins the newest-wins fields, PLAT-1) or another tab's write (plain merge, RP-5).
+ * An empty or unreadable copy changes nothing (the live save is returned as is).
+ */
+export function mergeArrived(live: SaveDataV1, copy: ExternalSave, now: number, c: GameConfig = cfg): SaveDataV1 {
+  const r = migrateReport(copy.value, now, c);
+  if (r.outcome === 'empty' || r.outcome === 'reset') return live;
+  return copy.source === 'cloud' ? mergePreferring(r.save, live) : merge(live, r.save);
 }
 
 export interface RestoreResult {

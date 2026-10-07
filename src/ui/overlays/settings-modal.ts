@@ -6,12 +6,14 @@
 // Classes: .overlay[data-overlay=settings] > .overlay__panel--dialog.settings[data-view=main|about]
 //          .settings__view .overlay__head .settings__list .settings-row(--link) .settings-row__label
 //          .settings-row__note .switch(.switch__track .switch__knob .switch__state)
-//          .segmented .segmented__opt .about__name .about__text .about__link
+//          .segmented .segmented__opt .about__name .about__text .about__code .about__link
 import type { ReduceMotionSetting, Settings } from '../../game/types';
 import { t } from '../../i18n';
 import { icon } from '../art/sprite';
 import { h, setText, type OverlayView } from '../dom';
 import { closeButton, createOverlayShell, makeButton, nextId } from './overlay-base';
+// Vite's MIT notice for the one third-party helper in the bundle (LEGAL-3; docs/provenance.md §6).
+import viteLicenceUrl from './licences/vite-MIT.txt?url';
 
 export interface SettingsProps {
   readonly settings: Settings;
@@ -130,8 +132,16 @@ export function createSettingsModal(): OverlayView<SettingsProps> {
     h('div', { class: 'overlay__head' }, back, h('h2', { class: 'overlay__title', id: aboutTitleId }, t('about.title')), closeButton(() => props?.onClose())),
     h('p', { class: 'about__name' }, t('app.name')),
     version,
-    h('p', { class: 'about__text' }, t('about.made')),
+    // The product name has one source, 'app.name' (LEGAL-1; 'about.madeBy' supersedes 'about.made').
+    h('p', { class: 'about__text' }, t('about.madeBy', { name: t('app.name') })),
     h('p', { class: 'about__text' }, t('about.font'), ' ', licence),
+    h(
+      'p',
+      { class: 'about__text about__code' },
+      t('about.code'),
+      ' ',
+      h('a', { class: 'about__link', href: viteLicenceUrl, target: '_blank', rel: 'noopener noreferrer' }, t('about.codeLicence')),
+    ),
     privacy,
   );
   shell.panel.append(mainView, aboutView);

@@ -3,7 +3,10 @@
 // fake UI factories: init first, progress 100 before start, merge + sessions+1, restore rules, route
 // (tutorial on first run, Home otherwise), ads preloaded last.
 import { describe, expect, it } from 'vitest';
-import { boot } from '../../../src/app/boot';
+import { boot, showBootFailure } from '../../../src/app/boot';
+import { cfg } from '../../../src/app/config';
+import type { LevelsRepo } from '../../../src/game/levels-repo';
+import type { ExternalSave } from '../../../src/platform/types';
 import { createFakeClock } from '../../../src/app/clock';
 import type { OverlayFactories, RouterFactories } from '../../../src/app/router';
 import type { OverlayId } from '../../../src/app/store';
@@ -11,7 +14,7 @@ import { defaults, encodeCells } from '../../../src/game/save';
 import type { SaveDataV1 } from '../../../src/game/types';
 import { t } from '../../../src/i18n';
 import type { HomeCallbacks, HomeView } from '../../../src/ui/screens/home-screen';
-import { createFakeAudio, createFakeLevels, createFakePlatform, createLoggedEngine, NOW, TODAY } from './harness';
+import { createFakeAudio, createFakeLevels, createFakePlatform, createLoggedEngine, NOW, TODAY, type FakePlatform } from './harness';
 
 interface Ui {
   home: { view: HomeView; cb: HomeCallbacks } | null;
@@ -69,7 +72,15 @@ function fakeUi(log: string[]): Ui {
   return ui;
 }
 
-async function start(local: SaveDataV1 | null, opts: { memory?: boolean } = {}) {
+interface StartOpts {
+  memory?: boolean;
+  levels?: Partial<LevelsRepo>;
+  /** Adjusts the fake platform before boot (failures, storage hooks). */
+  prepare?: (platform: FakePlatform) => void;
+}
+
+/** boot() without awaiting it, for tests that drive the fake clock while it runs. */
+function begin(local: SaveDataV1 | null, opts: StartOpts = {}) {
   document.body.innerHTML = '<div id="app"></div>';
   const root = document.getElementById('app') as HTMLElement;
   const log: string[] = [];
@@ -77,20 +88,32 @@ async function start(local: SaveDataV1 | null, opts: { memory?: boolean } = {}) 
   const platform = createFakePlatform(log);
   platform.raw = { local, cloud: null, corrupt: false };
   if (opts.memory) platform.storage.status = () => 'memory';
+  opts.prepare?.(platform);
   const ui = fakeUi(log);
   const fa = createFakeAudio(log);
-  const app = await boot(platform, root, {
+  const done = boot(platform, root, {
     clock,
     doc: document,
     search: '',
     routerFactories: ui.factories,
-    levels: createFakeLevels(),
+    levels: createFakeLevels(opts.levels),
     engine: createLoggedEngine(log),
     audio: fa.audio,
     sfx: fa.sfx,
     announcer: { say: () => undefined, clear: () => undefined, destroy: () => undefined },
   });
-  return { app, log, clock, platform, ui, muted: fa.muted };
+  return { done, root, log, clock, platform, ui, muted: fa.muted };
+}
+
+async function start(local: SaveDataV1 | null, opts: StartOpts = {}) {
+  const b = begin(local, opts);
+  const app = await b.done;
+  return { ...b, app };
+}
+
+/** Lets boot's promise chains run until they wait on the fake clock (real macrotask turns). */
+async function settle(turns = 10): Promise<void> {
+  for (let i = 0; i < turns; i++) await new Promise<void>((r) => setTimeout(r, 0));
 }
 
 const returning = (patch: Partial<SaveDataV1> = {}): SaveDataV1 => ({
@@ -211,6 +234,174 @@ describe('boot', () => {
     expect(s.app.store.get().ui.paused).toBe(true);
     window.dispatchEvent(new Event('focus'));
     expect(s.app.store.get().ui.paused).toBe(false);
+    s.app.dispose();
+  });
+});
+
+describe('boot: bounded waits and start-up failures (RP-1, PLAT-8)', () => {
+  it('a level pack that never arrives holds neither platform.start nor Home longer than boot.packTimeoutMs', async () => {
+    const b = begin(returning({ progress: { level: 310, completed: 309, best: {} } }), {
+      levels: { ensurePackFor: () => new Promise<void>(() => undefined) },
+    });
+    await settle();
+    await b.clock.advanceAsync(cfg.boot.packTimeoutMs - 1);
+    await settle();
+    expect(b.log).not.toContain('platform:start');
+    await b.clock.advanceAsync(1);
+    const app = await b.done;
+    expect(b.log).toContain('platform:start');
+    expect(b.log).toContain('screen:home');
+    app.dispose();
+  });
+
+  it('retries platform.start() once after boot.platformRetryDelayMs', async () => {
+    let fails = 1;
+    const b = begin(returning(), {
+      prepare: (p) => {
+        const real = p.start;
+        p.start = () => (fails-- > 0 ? Promise.reject({ code: 'INVALID_OPERATION', message: 'x' }) : real());
+      },
+    });
+    await settle();
+    expect(b.log).not.toContain('platform:start');
+    await b.clock.advanceAsync(cfg.boot.platformRetryDelayMs);
+    const app = await b.done;
+    expect(b.log.filter((x) => x === 'platform:start')).toHaveLength(1);
+    expect(b.log).toContain('screen:home');
+    app.dispose();
+  });
+
+  it('retries platform.init() once, then rejects so main.ts can show the honest error', async () => {
+    let inits = 0;
+    const b = begin(returning(), {
+      prepare: (p) => {
+        p.init = () => {
+          inits++;
+          return Promise.reject(new Error('FBInstant SDK is not loaded'));
+        };
+      },
+    });
+    const outcome = b.done.then(
+      () => 'resolved',
+      () => 'rejected',
+    );
+    await settle();
+    await b.clock.advanceAsync(cfg.boot.platformRetryDelayMs);
+    expect(await outcome).toBe('rejected');
+    expect(inits).toBe(2);
+  });
+
+  it('the boot-failure screen says the game could not start and offers a retry, never "keep playing"', () => {
+    document.body.innerHTML = '<div id="app"><p>old</p></div>';
+    const root = document.getElementById('app') as HTMLElement;
+    let reloads = 0;
+    showBootFailure(root, () => reloads++);
+    expect(root.textContent).toContain(t('boot.failed'));
+    expect(root.textContent).not.toContain(t('toast.error'));
+    expect(root.querySelector('[role="alert"]')).not.toBeNull();
+    const button = root.querySelector('button');
+    expect(button?.textContent).toBe(t('boot.retry'));
+    button?.click();
+    expect(reloads).toBe(1);
+  });
+});
+
+describe('boot: storage warnings (04 §6.2, RP-4 / PLAT-3)', () => {
+  it('storage that turns memory-only mid-session shows the toast once and marks ui.storage', async () => {
+    let fire: (() => void) | null = null;
+    const s = await start(returning(), {
+      prepare: (p) => {
+        p.storage.onMemoryFallback = (cb) => void (fire = cb);
+      },
+    });
+    expect(s.app.store.get().ui.storage).toBe('ok');
+    expect(fire).not.toBeNull();
+    fire!();
+    fire!();
+    expect(s.log.filter((x) => x === `toast:${t('toast.storageMemory')}`)).toHaveLength(1);
+    expect(s.app.store.get().ui.storage).toBe('memory');
+    s.app.dispose();
+  });
+
+  it('memory-only at launch: one toast even when the hook also fires at once', async () => {
+    const s = await start(returning(), {
+      memory: true,
+      prepare: (p) => {
+        p.storage.onMemoryFallback = (cb) => cb();
+      },
+    });
+    expect(s.log.filter((x) => x === `toast:${t('toast.storageMemory')}`)).toHaveLength(1);
+    s.app.dispose();
+  });
+});
+
+describe('boot: save copies that arrive after launch (PLAT-1, RP-5)', () => {
+  const hook = () => {
+    const h: { cb: ((copy: ExternalSave) => void) | null; prepare: (p: FakePlatform) => void } = {
+      cb: null,
+      prepare: (p) => {
+        p.storage.onExternalSave = (cb) => {
+          h.cb = cb;
+          return () => void (h.cb = null);
+        };
+      },
+    };
+    return h;
+  };
+  const cloudCopy = (): SaveDataV1 => ({
+    ...returning(),
+    updatedAt: NOW - 3_600_000,
+    progress: { level: 40, completed: 39, best: { 12: [33_000, 0] } },
+    stock: { hints: 9, kitties: 9 },
+    settings: { ...defaults(NOW).settings, sound: false },
+  });
+
+  it('the late FB cloud copy is merged (it wins stock and settings), applied, and saved once', async () => {
+    const h = hook();
+    const s = await start(returning({ progress: { level: 5, completed: 4, best: {} } }), { prepare: h.prepare });
+    await s.clock.advanceAsync(400);
+    s.platform.writes.length = 0;
+    h.cb?.({ source: 'cloud', value: cloudCopy() });
+    const save = s.app.store.get().save;
+    expect(save.progress.level).toBe(40);
+    expect(save.stock).toEqual({ hints: 9, kitties: 9 });
+    expect(save.settings.sound).toBe(false);
+    expect(s.muted.has('setting')).toBe(true);
+    expect(s.ui.home?.view).toMatchObject({ level: 40 });
+    await s.clock.advanceAsync(400);
+    expect(s.platform.writes.map((w) => [w.cloud, w.data.progress.level])).toEqual([['debounced', 40]]);
+    s.app.dispose();
+    expect(h.cb).toBeNull();
+  });
+
+  it('a cloud copy that arrived during launch sends a returning player Home, not into the tutorial', async () => {
+    const s = await start(null, {
+      prepare: (p) => {
+        p.storage.onExternalSave = (cb) => {
+          cb({ source: 'cloud', value: cloudCopy() }); // delivered at subscription, before routing
+          return () => undefined;
+        };
+      },
+    });
+    expect(s.log).toContain('screen:home');
+    expect(s.log).not.toContain('screen:game:T1');
+    expect(s.app.store.get().save.progress.level).toBe(40);
+    s.app.dispose();
+  });
+
+  it("another tab's newer save is merged into the store (progress never goes backwards) and not written back", async () => {
+    const h = hook();
+    const s = await start(returning({ progress: { level: 5, completed: 4, best: {} } }), { prepare: h.prepare });
+    await s.clock.advanceAsync(400);
+    s.platform.writes.length = 0;
+    const other: SaveDataV1 = { ...returning(), updatedAt: NOW + 5_000, progress: { level: 6, completed: 5, best: { 5: [2_246, 0] } } };
+    h.cb?.({ source: 'tab', value: other });
+    expect(s.app.store.get().save.progress).toEqual({ level: 6, completed: 5, best: { 5: [2_246, 0] } });
+    await s.clock.advanceAsync(10_000);
+    expect(s.platform.writes).toEqual([]);
+    // The tab's own next write (page hide) carries the merged progress.
+    s.platform.pauseCb?.();
+    expect(s.platform.writes.at(-1)?.data.progress.level).toBe(6);
     s.app.dispose();
   });
 });

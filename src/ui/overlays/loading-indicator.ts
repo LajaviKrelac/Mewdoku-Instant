@@ -5,11 +5,14 @@
 // reduced motion). The layer blocks taps on the screen below, so a second Play cannot start twice.
 // a11y: the text is written into a polite status region when shown (so it is announced once), and
 // the router sets aria-busy on the app root while it shows.
+// Over an open overlay (Next on the win overlay waits for a pack) the layer continues that overlay's
+// dark scrim (data-over) instead of laying a cream veil on it (UX-10).
 //
-// Classes: .loading-layer > .loading-card > .loading-paws > .loading-paw ×3 ; .loading-text
+// Classes: .loading-layer[data-over] > .loading-card > .loading-paws > .loading-paw ×3 ; .loading-text
 import { t } from '../../i18n';
 import { icon } from '../art/sprite';
 import { h } from '../dom';
+import { modalOverlayOpen } from './toast';
 
 export interface LoadingIndicator {
   readonly el: HTMLElement;
@@ -34,6 +37,7 @@ export function createLoadingIndicator(): LoadingIndicator {
     el,
     show() {
       if (!el.hidden) return;
+      el.dataset.over = String(modalOverlayOpen(el.ownerDocument));
       el.hidden = false;
       text.textContent = t('game.loading');
     },

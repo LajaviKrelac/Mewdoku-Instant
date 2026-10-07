@@ -1,7 +1,11 @@
 // Owner: ui-board
 // Keyboard play (02 §6.3, §18): roving tabindex on the cell buttons, arrows move, Space = tap,
 // Enter = double-tap, H = hint, K = kitty. Esc is handled globally by the router.
+// Like a pointer double-tap, Enter locks its cell for input.cellLockAfterCatMs (02 §6.2): a quick
+// second Enter (or Space) must not undo the cat that was just placed.
+import { cfg, type GameConfig } from '../../app/config';
 import type { CellIndex } from '../../engine/types';
+import { defaultNow } from './gestures';
 
 export interface KeyboardCallbacks {
   tap(cell: CellIndex): void;
@@ -14,6 +18,10 @@ export interface KeyboardOptions {
   readonly n: number;
   cellElement(cell: CellIndex): HTMLElement | null;
   isLocked(): boolean;
+  /** Monotonic ms clock for the cell lock (default performance.now, as in gestures). Tests inject one. */
+  now?(): number;
+  /** Config variant (tests). */
+  config?: GameConfig;
 }
 
 export interface KeyboardHandle {
@@ -35,7 +43,10 @@ function cellIndexOf(el: EventTarget | null, boardEl: HTMLElement): CellIndex | 
 export function attachKeyboard(boardEl: HTMLElement, cb: KeyboardCallbacks, opts: KeyboardOptions): KeyboardHandle {
   const n = opts.n;
   const total = n * n;
+  const now = opts.now ?? defaultNow;
   let current: CellIndex = 0;
+  /** The cell of the last Enter and when its cellLockAfterCatMs ends. */
+  let lock = { cell: -1, until: 0 };
 
   const focus = (cell: CellIndex, focusDom = false): void => {
     const next = Math.max(0, Math.min(total - 1, cell));
@@ -93,6 +104,11 @@ export function attachKeyboard(boardEl: HTMLElement, cb: KeyboardCallbacks, opts
     if (!act) return;
     e.preventDefault(); // no page scroll on Space, no synthetic click on Enter
     if (e.repeat || opts.isLocked()) return;
+    if (act === 'tap' || act === 'double') {
+      const t = now();
+      if (lock.cell === current && t < lock.until) return;
+      if (act === 'double') lock = { cell: current, until: t + (opts.config ?? cfg).input.cellLockAfterCatMs };
+    }
     if (act === 'tap') cb.tap(current);
     else if (act === 'double') cb.doubleTap(current);
     else if (act === 'bulb') cb.bulb();

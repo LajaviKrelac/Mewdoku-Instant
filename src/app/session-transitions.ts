@@ -36,6 +36,8 @@ export interface TransitionHost {
   goHome(): void;
   slotFor(m: SessionMeta): 'level' | 'daily' | null;
   updateFail(patch: Partial<FailOverlayProps>): void;
+  /** O4 is open (or queued for its chunk): only then does Home discard the attempt. */
+  failOpen(): boolean;
   closeFail(): void;
   /** After RETRY: start events, board entry and START after fx.boardEntryMs. */
   restartEntry(): void;
@@ -112,8 +114,9 @@ export function createTransitions(host: TransitionHost): TransitionCommands {
       const s = host.game();
       const m = host.meta();
       if (s && m) {
-        if (s.status === 'lost') {
-          // O4 Home discards the attempt (02 §10.2).
+        if (s.status === 'lost' && host.failOpen()) {
+          // O4 Home discards the attempt (02 §10.2). The top-bar Home in the fx.failOverlayDelayMs
+          // before O4 shows saves the board like any other Home; a restore reopens O4 (02 §15 step 5).
           const slot = host.slotFor(m);
           if (slot) host.updateSave((sv) => withSlot(sv, slot, null));
           host.saves.now();

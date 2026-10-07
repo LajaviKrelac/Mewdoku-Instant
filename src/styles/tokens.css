@@ -8,21 +8,23 @@
   --page-2: #f4ece0; /* desktop side fill, wells */
   --card: #ffffff;
   --ink: #3b3044;
-  --ink-2: #7a6e80;
+  --ink-2: #6f6375; /* secondary text: ≥ 4.5:1 on --page, --page-2 and --card (scripts/palette-check.ts) */
   --ink-3: #b3a9b6; /* disabled text, hairline icons */
-  --accent: #1f9e89;
-  --accent-deep: #167565; /* pressed edge of primary buttons, accent text on white */
+  --accent: #17806f; /* teal; white labels on it are ≥ 4.5:1 (WCAG 1.4.3, scripts/palette-check.ts) */
+  --accent-deep: #0f5a4e; /* pressed edge of primary buttons, accent text on white */
   --accent-soft: #dcf2ec;
   --danger: #d33a4a;
   --wrong: #a3193a; /* wrong-X glyph + ring: 3:1 on every tile (scripts/palette-check.ts) */
   --heart: #e8506a;
   --heart-empty: #eadfe3;
   --scrim: rgba(30, 22, 36, 0.75);
+  --stage: #2d2435; /* solid card behind the win / fail stage content (on the dark scrim) */
   --scrim-soft: rgba(30, 22, 36, 0.32);
   --line: rgba(59, 48, 68, 0.1);
   --line-2: rgba(59, 48, 68, 0.16);
   --gold: #ffd45c;
-  --gold-deep: #e9a92b;
+  --gold-deep: #e9a92b; /* icons only: 2:1 on white, never text */
+  --amber-text: #8a5a00; /* gold-family text on white or --card (≥ 4.5:1) */
   --hard: #6c3fb5;
 
   /* ── Region palette (02 §17.2), by palette index ─────────────────────── */

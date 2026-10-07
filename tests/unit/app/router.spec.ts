@@ -228,6 +228,7 @@ function lazySetup() {
     made,
     opened,
     lazy,
+    onFailed: (fn: (id: string) => void) => bus.on('overlay:failed', ({ id }) => fn(id)),
     loads: () => loads,
     land: async () => {
       gate.resolve(lazy);
@@ -295,6 +296,36 @@ describe('router: lazy overlay chunk (04 §9)', () => {
     expect(s.loads()).toBe(2);
     await s.land();
     expect(s.opened.map((o) => o.id)).toEqual(['settings']);
+  });
+
+  it('a failed chunk load tells the app which queued overlays failed, after closing them (RP-2)', async () => {
+    const s = lazySetup();
+    const failed: string[] = [];
+    s.router.open('win', {} as never);
+    s.router.open('settings', {} as never);
+    s.onFailed((id) => failed.push(`${id}:${s.router.isOpen(id as OverlayId) ? 'open' : 'closed'}`));
+    await s.fail();
+    expect(failed).toEqual(['win:closed', 'settings:closed']);
+    expect(s.router.stack()).toEqual([]);
+  });
+
+  it('overlaysReady() loads the chunk once and answers true; false (never rejecting) when it fails', async () => {
+    const s = lazySetup();
+    const ready = s.router.overlaysReady();
+    expect(s.loads()).toBe(1);
+    await s.land();
+    await expect(ready).resolves.toBe(true);
+    await expect(s.router.overlaysReady()).resolves.toBe(true);
+    expect(s.loads()).toBe(1);
+
+    const f = lazySetup();
+    const notReady = f.router.overlaysReady();
+    await f.fail();
+    await expect(notReady).resolves.toBe(false);
+    const retry = f.router.overlaysReady(); // a later check tries again
+    expect(f.loads()).toBe(2);
+    await f.land();
+    await expect(retry).resolves.toBe(true);
   });
 
   it('preloadOverlays() starts the download once and never rejects', async () => {

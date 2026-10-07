@@ -11,6 +11,12 @@ export interface LayoutInput {
   readonly safeTop: number;
   readonly safeBottom: number;
   readonly n: number;
+  /**
+   * Root font size ÷ 16 (user text scaling, 02 §18 "rem-based sizes"). Above 1 the rule-chip row
+   * grows with it (×1.15 for a third line, at most 2.4×) so its rem text is not truncated; the board
+   * gives up the space. Compact mode hides the chip text (icons only), so its row does not grow.
+   */
+  readonly textScale?: number;
 }
 
 /** Result of the 02 §19 formulas. All values in CSS px. */
@@ -42,7 +48,9 @@ export function computeLayout(input: LayoutInput, c: GameConfig = cfg): GameLayo
   const compact = input.vh < L.compactHeight;
   const topBar = L.topBar;
   const pills = compact ? L.compactPills : L.pills;
-  const chips = compact ? L.compactChips : L.chips;
+  const textScale = input.textScale ?? 1;
+  const chipScale = compact || !(textScale > 1) ? 1 : Math.min(2.4, textScale * 1.15);
+  const chips = Math.round((compact ? L.compactChips : L.chips) * chipScale);
   const tools = L.tools + L.toolsGap + safeBottom;
   const vGaps = L.vGap * L.vGapCount;
   const boardMax = Math.max(0, Math.min(colW, input.vh - safeTop - topBar - pills - chips - tools - vGaps));
@@ -129,9 +137,13 @@ export interface ViewportInfo {
   readonly safeBottom: number;
   readonly safeLeft: number;
   readonly safeRight: number;
+  /** Root font size in CSS px (16 unless the user scales text). */
+  readonly remPx: number;
 }
 
 const probes = new WeakMap<Document, HTMLElement>();
+/** Probe values (safe areas, rem) per document, valid while the window keeps this size and zoom. */
+const probeCache = new WeakMap<Document, { key: string; safe: [number, number, number, number]; remPx: number }>();
 
 function safeAreaProbe(doc: Document): HTMLElement | null {
   let probe = probes.get(doc) ?? null;
@@ -140,7 +152,7 @@ function safeAreaProbe(doc: Document): HTMLElement | null {
   probe = doc.createElement('div');
   probe.setAttribute('aria-hidden', 'true');
   probe.style.cssText =
-    'position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;' +
+    'position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;font-size:1rem;' +
     'padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px);';
   doc.body.appendChild(probe);
   probes.set(doc, probe);
@@ -152,19 +164,35 @@ function px(v: string | null | undefined): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-/** visualViewport (falling back to innerWidth/innerHeight) plus env(safe-area-inset-*) via a probe. */
-export function readViewport(win: Window = window): ViewportInfo {
+/**
+ * The visual viewport at page scale 1 (02 §19), falling back to innerWidth/innerHeight, plus
+ * env(safe-area-inset-*) and the root font size via a probe.
+ * - Pinch-zoom (A11Y-2) changes visualViewport.width/height by 1/scale; multiplying by `scale` gives
+ *   the unzoomed size, so magnifying never shrinks the board, while the on-screen keyboard and URL
+ *   bar (which change the visual viewport at scale 1) are still followed.
+ * - The probe needs a computed-style read, which forces a style recalc when the document is dirty
+ *   (RP-3: a board mount paid one for every relayout). Its values only change with the window size,
+ *   orientation or zoom, so they are cached under that key; `fresh` re-reads them.
+ */
+export function readViewport(win: Window = window, fresh = false): ViewportInfo {
   const vv = win.visualViewport;
-  const vw = vv && vv.width > 0 ? vv.width : win.innerWidth;
-  const vh = vv && vv.height > 0 ? vv.height : win.innerHeight;
-  const probe = safeAreaProbe(win.document);
-  const cs = probe ? win.getComputedStyle(probe) : null;
-  return {
-    vw,
-    vh,
-    safeTop: px(cs?.paddingTop),
-    safeBottom: px(cs?.paddingBottom),
-    safeLeft: px(cs?.paddingLeft),
-    safeRight: px(cs?.paddingRight),
-  };
+  const scale = vv && vv.scale > 0 ? vv.scale : 1;
+  const vw = vv && vv.width > 0 ? vv.width * scale : win.innerWidth;
+  const vh = vv && vv.height > 0 ? vv.height * scale : win.innerHeight;
+  const doc = win.document;
+  const key = `${win.innerWidth}x${win.innerHeight}@${win.devicePixelRatio || 1}`;
+  let cached = probeCache.get(doc);
+  if (fresh || !cached || cached.key !== key || !probes.get(doc)?.isConnected) {
+    const probe = safeAreaProbe(doc);
+    const cs = probe ? win.getComputedStyle(probe) : null;
+    const rem = px(cs?.fontSize);
+    cached = {
+      key,
+      safe: [px(cs?.paddingTop), px(cs?.paddingRight), px(cs?.paddingBottom), px(cs?.paddingLeft)],
+      remPx: rem > 0 ? rem : 16,
+    };
+    probeCache.set(doc, cached);
+  }
+  const [safeTop, safeRight, safeBottom, safeLeft] = cached.safe;
+  return { vw, vh, safeTop, safeBottom, safeLeft, safeRight, remPx: cached.remPx };
 }

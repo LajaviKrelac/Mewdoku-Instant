@@ -36,3 +36,32 @@ export function sleep(timers: PlatformTimers, ms: number): Promise<void> {
     timers.setTimeout(resolve, ms);
   });
 }
+
+/**
+ * Settles like `p`, unless `ms` pass first: then it settles with `onTimeout()` (a throw rejects) and
+ * a late result of `p` is ignored. The timer is cleared as soon as `p` settles.
+ */
+export function within<T, F>(timers: PlatformTimers, p: Promise<T>, ms: number, onTimeout: () => F): Promise<T | F> {
+  return new Promise<T | F>((resolve, reject) => {
+    let done = false;
+    const timer = timers.setTimeout(() => {
+      if (done) return;
+      done = true;
+      try {
+        resolve(onTimeout());
+      } catch (err) {
+        reject(err);
+      }
+    }, ms);
+    const settle = (fn: () => void): void => {
+      if (done) return;
+      done = true;
+      timers.clearTimeout(timer);
+      fn();
+    };
+    p.then(
+      (v) => settle(() => resolve(v)),
+      (err: unknown) => settle(() => reject(err)),
+    );
+  });
+}

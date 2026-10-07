@@ -4,7 +4,11 @@
 // Row heights from computeLayout() are published as CSS variables on the root so the HUD rows,
 // the board stage and the tool row follow the same numbers (compact mode below 640 px).
 //
-// Classes: .screen.screen--game[data-mode][data-status][data-compact] > .game__col
+// Keyboard (02 §6.3, §18): H / K work anywhere on the screen while no modal is open (the board's own
+// handler covers them when a cell has focus), and whenever focus falls to <body> (a level starts, a
+// tool button is disabled, the coach's "Got it" goes away) it is moved back to the board.
+//
+// Classes: .screen.screen--game[data-mode][data-status][data-compact] > main.game__col
 //          (.game__hud .game__stage .game__tools); vars --col-w --top-bar --pills --chips --tools
 //          --board --vgap
 import type { CellIndex } from '../../engine/types';
@@ -12,7 +16,7 @@ import type { GameEvent, ModeId, PaintMode, Status } from '../../game/types';
 import { cfg } from '../../app/config';
 import { formatShortDate, t } from '../../i18n';
 import { createBoardView, type BoardHighlight, type BoardModel } from '../board/board-view';
-import { computeLayout, readViewport, type GameLayout } from '../board/layout';
+import { computeLayout, readViewport, type GameLayout, type ViewportInfo } from '../board/layout';
 import { createPills, type PillsProps } from '../hud/pills';
 import { createRuleChips, type RuleChip, type RuleChipsProps } from '../hud/rule-chips';
 import { createToolBar, type ToolBarProps } from '../hud/tool-bar';
@@ -133,19 +137,31 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
     'div',
     { class: 'screen screen--game' },
     topBar.el,
-    h('div', { class: 'game__col' }, h('div', { class: 'game__hud' }, pills.el, chips.el), stage, h('div', { class: 'game__tools' }, tools.el)),
+    // The play area is the page's main landmark (Home uses <main> too).
+    h('main', { class: 'game__col' }, h('div', { class: 'game__hud' }, pills.el, chips.el), stage, h('div', { class: 'game__tools' }, tools.el)),
   );
 
-  const win = (): Window | null => el.ownerDocument.defaultView;
+  const doc = el.ownerDocument;
+  const win = (): Window | null => doc.defaultView;
 
-  const relayout = (): void => {
+  /** Fine pointer (mouse): a short window scrolls over the 568 px minimum column (base.css) instead of shrinking it. */
+  const finePointer = (w: Window): boolean => typeof w.matchMedia === 'function' && w.matchMedia('(pointer: fine)').matches;
+
+  /**
+   * The last viewport reading. Reading visualViewport / the safe-area probe forces a style and layout
+   * update when the document is dirty (RP-3: 90-140 ms at 4× CPU on a 12×12 board mount), so it is
+   * re-read only on a resize, not on every relayout (playEntry, a new board size).
+   */
+  let vp: ViewportInfo | null = null;
+  const relayout = (remeasure = false): void => {
     const w = win();
     if (!w) return;
-    const vp = readViewport(w);
-    const next = computeLayout({ vw: vp.vw, vh: vp.vh, safeTop: vp.safeTop, safeBottom: vp.safeBottom, n: current.board.n });
+    if (remeasure || !vp) vp = readViewport(w);
+    const L = cfg.layout;
+    const vh = finePointer(w) ? Math.max(vp.vh, L.minViewportH) : vp.vh;
+    const next = computeLayout({ vw: vp.vw, vh, safeTop: vp.safeTop, safeBottom: vp.safeBottom, n: current.board.n, textScale: vp.remPx / 16 });
     const compactChanged = next.compact !== layout.compact;
     layout = next;
-    const L = cfg.layout;
     const vars: Record<string, string> = {
       '--col-w': `${next.colW}px`,
       '--top-bar': `${next.topBar}px`,
@@ -166,6 +182,50 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
     }
   };
 
+  // ── keyboard: H / K at screen level, focus recovery (SPEC-01, A11Y-4, A11Y-8) ──
+  const focusBoard = (preventScroll = false): void => {
+    const roving = board.el.querySelector<HTMLElement>('[tabindex="0"]');
+    if (roving) roving.focus({ preventScroll });
+    else board.focusCell(0);
+  };
+  /** In the document and not behind a modal (the router makes the screen inert while one is open). */
+  const screenActive = (): boolean => el.isConnected && !el.closest('[inert]');
+  let focusRaf = 0;
+  /**
+   * Two frames later (after any focus restore, which the focus trap may run on the next frame), focus
+   * the board if focus is still lost (on <body> or a removed element). No scroll: the player did not ask.
+   */
+  const recoverFocusSoon = (): void => {
+    const w = win();
+    if (!w?.requestAnimationFrame) return;
+    w.cancelAnimationFrame(focusRaf);
+    focusRaf = w.requestAnimationFrame(() => {
+      focusRaf = w.requestAnimationFrame(() => {
+        focusRaf = 0;
+        const a = doc.activeElement;
+        if (screenActive() && (!a || a === doc.body || !a.isConnected)) focusBoard(true);
+      });
+    });
+  };
+  const onFocusOut = (e: FocusEvent): void => {
+    if (!e.relatedTarget) recoverFocusSoon();
+  };
+  const onDocKey = (e: KeyboardEvent): void => {
+    const t = e.target as Node;
+    const key = e.key.toLowerCase();
+    // Not when a cell has focus (the board's own handler did it and called preventDefault), not for
+    // keys typed inside an overlay (the coach's Got it, a dialog), not behind a modal.
+    if ((key !== 'h' && key !== 'k') || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+    if (!screenActive() || (t !== doc.body && !el.contains(t)) || board.el.contains(t)) return;
+    e.preventDefault();
+    if (e.repeat || current.inputLocked) return;
+    if (key === 'h') {
+      if (current.bulbEnabled) cb.onBulb();
+    } else if (current.pawEnabled) cb.onPaw();
+  };
+  doc.addEventListener('keydown', onDocKey);
+  doc.addEventListener('focusout', onFocusOut, true);
+
   const render = (v: GameView, prev: GameView | null): void => {
     el.dataset.mode = v.mode;
     el.dataset.status = v.status;
@@ -178,13 +238,16 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
     if (!prev || prev.inputLocked !== v.inputLocked) board.setLocked(v.inputLocked);
   };
 
-  const onResize = (): void => relayout();
+  const onResize = (): void => relayout(true);
   const w0 = win() ?? (typeof window === 'undefined' ? null : window);
   w0?.addEventListener('resize', onResize);
   w0?.visualViewport?.addEventListener('resize', onResize);
 
   relayout();
   render(view, null);
+  // The router appends the screen right after creating it; focus left on <body> (the previous screen
+  // was removed) goes to the board so keyboard play works without a click (02 §6.3, §18).
+  recoverFocusSoon();
 
   return {
     el,
@@ -199,21 +262,24 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
       pills.playEvent(ev);
     },
     playEntry() {
-      // The screen may have been created detached; measure again now that it is in the document.
+      // Re-apply the layout now that the screen is in the document (the viewport reading is cached
+      // since creation; a resize re-reads it).
       relayout();
       board.playEntry();
+      // A (re)started level (mount, Retry, revive): keyboard focus belongs on the board.
+      recoverFocusSoon();
     },
     cellRect: (cell) => board.cellRect(cell),
     toolRect: (tool) => tools.toolRect(tool),
     boardRect: () => (board.el.isConnected ? board.el.getBoundingClientRect() : null),
-    focusBoard() {
-      const roving = board.el.querySelector<HTMLElement>('[tabindex="0"]');
-      if (roving) roving.focus();
-      else board.focusCell(0);
-    },
+    focusBoard: () => focusBoard(),
     destroy() {
       w0?.removeEventListener('resize', onResize);
       w0?.visualViewport?.removeEventListener('resize', onResize);
+      doc.removeEventListener('keydown', onDocKey);
+      doc.removeEventListener('focusout', onFocusOut, true);
+      if (focusRaf) win()?.cancelAnimationFrame(focusRaf);
+      focusRaf = 0;
       topBar.destroy();
       pills.destroy();
       chips.destroy();

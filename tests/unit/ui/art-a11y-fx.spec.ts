@@ -165,6 +165,7 @@ describe('a11y', () => {
   });
 
   it('trapFocus keeps Tab inside, focuses the initial element and restores focus on release', () => {
+    vi.useFakeTimers();
     const outside = document.createElement('button');
     document.body.appendChild(outside);
     outside.focus();
@@ -184,6 +185,45 @@ describe('a11y', () => {
     expect(box.contains(document.activeElement)).toBe(true);
     release();
     expect(document.activeElement).toBe(outside);
+    vi.useRealTimers();
+  });
+
+  it('restoreOnNextFrame: focus returns on the next frame, after the closing writes (RP-3)', () => {
+    vi.useFakeTimers();
+    const outside = document.createElement('button');
+    document.body.appendChild(outside);
+    outside.focus();
+    const box = document.createElement('div');
+    box.innerHTML = '<button>1</button>';
+    document.body.appendChild(box);
+    const release = trapFocus(box, { restoreOnNextFrame: true });
+    expect(box.contains(document.activeElement)).toBe(true);
+    release();
+    (document.activeElement as HTMLElement).blur(); // the closing overlay hides its focused button
+    expect(document.activeElement).toBe(document.body);
+    vi.advanceTimersByTime(20);
+    expect(document.activeElement).toBe(outside);
+    vi.useRealTimers();
+  });
+
+  it('restoreOnNextFrame leaves focus alone when another dialog took it meanwhile', () => {
+    vi.useFakeTimers();
+    const outside = document.createElement('button');
+    document.body.appendChild(outside);
+    outside.focus();
+    const box = document.createElement('div');
+    box.innerHTML = '<button>1</button>';
+    document.body.appendChild(box);
+    const release = trapFocus(box, { restoreOnNextFrame: true });
+    const other = document.createElement('div');
+    other.setAttribute('role', 'dialog');
+    other.innerHTML = '<button id="o">o</button>';
+    document.body.appendChild(other);
+    release();
+    (other.querySelector('#o') as HTMLElement).focus(); // a new modal opened in the same task
+    vi.advanceTimersByTime(20);
+    expect((document.activeElement as HTMLElement).id).toBe('o');
+    vi.useRealTimers();
   });
 
   it('setInert toggles inert plus an aria-hidden fallback and restores the previous value', () => {

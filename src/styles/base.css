@@ -40,7 +40,7 @@ body {
   body {
     background-color: var(--page-2);
     background-image: radial-gradient(circle at 12px 12px, rgba(242, 154, 74, 0.13) 0 3px, transparent 3.5px),
-      radial-gradient(circle at 40px 40px, rgba(31, 158, 137, 0.1) 0 3px, transparent 3.5px);
+      radial-gradient(circle at 40px 40px, rgba(23, 128, 111, 0.1) 0 3px, transparent 3.5px);
     background-size: 56px 56px;
   }
 }
@@ -53,6 +53,19 @@ body {
   margin: 0 auto;
   background: var(--page);
   overflow: hidden;
+}
+
+/* Short desktop windows (a 150-200 % zoomed browser, a squat window): the page scrolls over the
+   568 px minimum column (02 §19) instead of shrinking the board or showing the rotate notice, which
+   is for landscape phones only. The game screen lays out for the same 568 px (game-screen.ts). */
+@media (max-height: 567px) and (pointer: fine) {
+  body {
+    overflow-y: auto;
+  }
+
+  #app {
+    min-height: 568px;
+  }
 }
 
 @media (min-width: 560px) {
@@ -145,12 +158,12 @@ svg {
 .btn--primary {
   background: var(--accent);
   color: #fff;
-  box-shadow: 0 4px 0 var(--accent-deep), 0 8px 18px rgba(31, 158, 137, 0.28);
+  box-shadow: 0 4px 0 var(--accent-deep), 0 8px 18px rgba(23, 128, 111, 0.28);
 }
 
 .btn--primary:active:not([aria-disabled='true']):not(:disabled) {
   transform: translateY(3px);
-  box-shadow: 0 1px 0 var(--accent-deep), 0 3px 8px rgba(31, 158, 137, 0.25);
+  box-shadow: 0 1px 0 var(--accent-deep), 0 3px 8px rgba(23, 128, 111, 0.25);
 }
 
 .btn--secondary {
@@ -278,6 +291,11 @@ svg {
 }
 
 /* ── Helpers ───────────────────────────────────────────────────────────── */
+/* A date or a hyphenated word that must not break across lines (overlay-base setTextKeepTogether). */
+.nowrap {
+  white-space: nowrap;
+}
+
 .sr-only,
 .visually-hidden {
   position: absolute !important;

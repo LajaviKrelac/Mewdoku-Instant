@@ -9,6 +9,8 @@
 // demand (preloadOverlays() starts it after the first route). An open() that arrives before the chunk
 // has landed is queued: the overlay is already on the stack (isOpen/top/stack, inert background,
 // 'overlay:open'), and its view is created, opened with the latest props and focused on arrival.
+// A failed chunk download is retried with a cache-busting URL (workers/lazy-chunk); when it still
+// fails, the queued overlays are closed and 'overlay:failed' tells the app (04 §8: never a dead end).
 import { focusableElements, setInert, trapFocus } from '../ui/a11y/focus-trap';
 import { createCoach, type CoachProps } from '../ui/overlays/coach';
 import type { DailyResultProps } from '../ui/overlays/daily-result';
@@ -24,6 +26,7 @@ import type { BootScreen } from '../ui/screens/boot-screen';
 import { createGameScreen, type GameScreen, type GameScreenCallbacks, type GameView } from '../ui/screens/game-screen';
 import { createHomeScreen, type HomeCallbacks, type HomeView } from '../ui/screens/home-screen';
 import type { OverlayView, View } from '../ui/dom';
+import { loadChunk } from '../workers/lazy-chunk';
 import type { AppBus } from './events';
 import type { OverlayId, ScreenId } from './store';
 
@@ -61,6 +64,11 @@ export interface Router {
   escape(): boolean;
   /** Starts loading the lazy overlay chunk (boot calls it after the first route). Never rejects. */
   preloadOverlays(): Promise<void>;
+  /**
+   * Resolves true once the lazy overlay chunk is loaded (starting the load if needed), false when it
+   * cannot be loaded. Flows that charge for an overlay (a hint) check it first. Never rejects.
+   */
+  overlaysReady(): Promise<boolean>;
   destroy(): void;
 }
 
@@ -81,7 +89,7 @@ export interface RouterFactories {
 }
 
 export interface RouterDeps {
-  /** Receives 'screen', 'overlay:open', 'overlay:close' and 'error' (lazy chunk failed to load). */
+  /** Receives 'screen', 'overlay:open', 'overlay:close', and 'error' + 'overlay:failed' (lazy chunk failed to load). */
   readonly bus?: AppBus;
   readonly doc?: Document;
   readonly factories?: Partial<RouterFactories>;
@@ -93,9 +101,9 @@ const EAGER_OVERLAYS: Partial<OverlayFactories> = { coach: createCoach };
 /** Whether an overlay is modal before its view exists (only the coach is not, CONTRACTS §4). */
 const isModalId = (id: OverlayId): boolean => id !== 'coach';
 
-/** The lazy overlay chunk (one request; 04 §9). */
+/** The lazy overlay chunk (one request; 04 §9), re-fetched with a cache-busting URL after a failure. */
 export async function loadOverlayChunk(): Promise<Partial<OverlayFactories>> {
-  const m = await import('./overlay-chunk');
+  const m = await loadChunk(() => import('./overlay-chunk'));
   return {
     hint: m.createHintCard,
     rewarded: m.createRewardedPrompt,
@@ -153,6 +161,7 @@ export function createRouter(root: HTMLElement, deps: RouterDeps = {}): Router {
   /** Open requests waiting for the lazy chunk: the latest props per overlay. */
   const pending = new Map<OverlayId, OverlayPropsMap[OverlayId]>();
   let loading: Promise<void> | null = null;
+  let loaded = false;
   const returnTo = new Map<OverlayId, HTMLElement | null>();
   const inertState = new Map<HTMLElement, boolean>();
   let active: { id: OverlayId; release: () => void } | null = null;
@@ -248,17 +257,20 @@ export function createRouter(root: HTMLElement, deps: RouterDeps = {}): Router {
 
   function ensureLoaded(): Promise<void> {
     loading ??= loadOverlays().then(
-      (loaded) => {
-        for (const key of Object.keys(loaded) as OverlayId[]) {
-          if (!factories[key]) (factories as Record<OverlayId, unknown>)[key] = loaded[key];
+      (chunk) => {
+        for (const key of Object.keys(chunk) as OverlayId[]) {
+          if (!factories[key]) (factories as Record<OverlayId, unknown>)[key] = chunk[key];
         }
+        loaded = true;
         flushPending();
       },
       (error: unknown) => {
         loading = null; // a later open() retries
         if (destroyed) return;
         bus?.emit('error', { where: 'overlay_chunk', error });
-        for (const id of order.slice()) if (pending.has(id)) closeInternal(id);
+        const failed = order.filter((id) => pending.has(id));
+        for (const id of failed) closeInternal(id);
+        for (const id of failed) bus?.emit('overlay:failed', { id }); // the app reconciles (no dead end)
       },
     );
     return loading;
@@ -363,6 +375,7 @@ export function createRouter(root: HTMLElement, deps: RouterDeps = {}): Router {
       return views.get(id)?.dismiss() ?? false;
     },
     preloadOverlays: () => ensureLoaded().catch(() => undefined),
+    overlaysReady: () => (loaded ? Promise.resolve(true) : ensureLoaded().then(() => loaded, () => false)),
     destroy() {
       destroyed = true;
       doc.removeEventListener('keydown', onKey);

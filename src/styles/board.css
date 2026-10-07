@@ -22,6 +22,9 @@
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
+  /* The card has a fixed size (--slot × --n): its inner layout never moves anything outside it, so
+     cell-level changes (marks, highlight, fades) do not relayout the rest of the screen. */
+  contain: layout style;
 }
 
 .board__row {
@@ -83,6 +86,15 @@
 
 .cell[data-done] .cell__tile::after {
   opacity: 0.45;
+}
+
+/* A wrong tile keeps its --wrong ring at full strength in a faded region: the veil stops inside
+   the ring (the X glyph is drawn above the veil anyway). */
+.cell[data-s='w'] .cell__tile::after {
+  top: var(--wrong-ring, 2px);
+  right: var(--wrong-ring, 2px);
+  bottom: var(--wrong-ring, 2px);
+  left: var(--wrong-ring, 2px);
 }
 
 .cell__g {
@@ -155,11 +167,17 @@
   animation: cat-blink var(--blink-dur, 5s) var(--blink-delay, 0ms) infinite linear;
 }
 
-/* Colour patterns (02 §18): a 22 % glyph in the tile's top-left corner. */
+/* Colour patterns (02 §18): a 22 % glyph in the tile's top-left corner, ≥ 3:1 against every tile,
+   faded or not (WCAG 1.4.11; opacities from cfg.layout via --pat-op / --pat-op-done, checked by
+   scripts/palette-check.ts). On small slots (11×11, 12×12 on a phone) --pat-k scales the glyph up
+   to cfg.layout.patternMinPx so the shapes stay tellable apart (board-view.ts setSlot). */
 .cell__pat {
   display: none;
   color: var(--ink);
-  opacity: 0.5;
+  opacity: var(--pat-op, 0.85);
+  transform-box: view-box;
+  transform-origin: 12px 12px;
+  transform: scale(var(--pat-k, 1));
 }
 
 .board[data-patterns] .cell__pat {
@@ -167,7 +185,7 @@
 }
 
 .cell[data-done] .cell__pat {
-  opacity: 0.32;
+  opacity: var(--pat-op-done, 0.65);
 }
 
 /* Keyboard focus (02 §18): 3 px --accent ring, lifted above the neighbours. */
@@ -211,7 +229,7 @@
 }
 
 .board[data-hl] .cell[data-f] .cell__tile {
-  box-shadow: 0 0 0 2px var(--card), 0 0 0 4.5px var(--accent), 0 6px 14px rgba(31, 158, 137, 0.35);
+  box-shadow: 0 0 0 2px var(--card), 0 0 0 4.5px var(--accent), 0 6px 14px rgba(23, 128, 111, 0.35);
 }
 
 .board[data-hl='coach'] .cell[data-f] .cell__tile {

@@ -132,6 +132,14 @@ describe('S1 home', () => {
     expect(q(play, '.btn__label').textContent).toBe('Continue · Level 41');
   });
 
+  it('keeps the daily date on one line (UX-15)', () => {
+    const home = createHomeScreen(view(), callbacks());
+    const title = q(home.el, '.daily-card__title');
+    expect(title.textContent).toBe('Daily puzzle · Tue 6 Oct');
+    expect(Array.from(title.querySelectorAll('.nowrap')).map((e) => e.textContent)).toContain('Tue 6 Oct');
+    home.destroy();
+  });
+
   it('daily card states: locked, not played, in progress, solved', () => {
     const home = createHomeScreen(view({ daily: { state: 'locked', dateKey: '2026-10-06', n: 8, solvedMs: null, unlockLevel: 20 } }), callbacks());
     const card = q(home.el, '.daily-card');
@@ -258,6 +266,102 @@ describe('S2 game', () => {
     game.update(view({ mode: 'daily', level: null, dateKey: '2026-10-06', hints: 0 }));
     expect(lastOf('topbar', 'update')).toMatchObject({ title: 'Daily · Tue 6 Oct' });
     expect(lastOf('tools', 'update')).toMatchObject({ hints: 0 });
+    game.destroy();
+  });
+
+  it('H / K work anywhere on the screen while no modal is open; never twice, never from an overlay (SPEC-01, A11Y-8)', () => {
+    const cb = callbacks();
+    const game = createGameScreen(view(), cb);
+    document.body.append(game.el);
+    const key = (target: EventTarget, k: string, init: KeyboardEventInit = {}): boolean =>
+      target.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...init }));
+    // Focus on <body> (a level just started): H opens the hint, K calls the kitty.
+    expect(key(document.body, 'h')).toBe(false); // handled → preventDefault
+    expect(cb.onBulb).toHaveBeenCalledTimes(1);
+    key(document.body, 'K');
+    expect(cb.onPaw).toHaveBeenCalledTimes(1);
+    // A focused control on the screen (top bar, tool row) works too.
+    const btn = document.createElement('button');
+    q(game.el, '.game__tools').append(btn);
+    key(btn, 'h');
+    expect(cb.onBulb).toHaveBeenCalledTimes(2);
+    // The board's own handler covers a focused cell (it calls preventDefault): no second call.
+    const cell = q(game.el, '.game__stage button');
+    key(cell, 'h');
+    const prevented = new KeyboardEvent('keydown', { key: 'h', bubbles: true, cancelable: true });
+    prevented.preventDefault();
+    document.body.dispatchEvent(prevented);
+    expect(cb.onBulb).toHaveBeenCalledTimes(2);
+    // Modifiers, auto-repeat, a disabled tool or a locked board: nothing.
+    key(document.body, 'h', { ctrlKey: true });
+    key(document.body, 'h', { repeat: true });
+    game.update(view({ bulbEnabled: false, pawEnabled: false }));
+    key(document.body, 'h');
+    key(document.body, 'k');
+    game.update(view({ inputLocked: true }));
+    key(document.body, 'h');
+    expect(cb.onBulb).toHaveBeenCalledTimes(2);
+    expect(cb.onPaw).toHaveBeenCalledTimes(1);
+    game.update(view());
+    // Keys typed inside an overlay belong to it.
+    const overlay = document.createElement('div');
+    const inOverlay = document.createElement('button');
+    overlay.append(inOverlay);
+    document.body.append(overlay);
+    key(inOverlay, 'h');
+    expect(cb.onBulb).toHaveBeenCalledTimes(2);
+    // A modal is open: the router makes the screen inert.
+    const host = document.createElement('div');
+    document.body.append(host);
+    host.append(game.el);
+    host.setAttribute('inert', '');
+    key(document.body, 'h');
+    expect(cb.onBulb).toHaveBeenCalledTimes(2);
+    host.removeAttribute('inert');
+    key(document.body, 'h');
+    expect(cb.onBulb).toHaveBeenCalledTimes(3);
+    game.destroy();
+    key(document.body, 'h');
+    expect(cb.onBulb).toHaveBeenCalledTimes(3);
+  });
+
+  it('moves focus that fell to <body> back to the board: at mount, on a restart and when a control goes away (A11Y-4)', () => {
+    vi.useFakeTimers();
+    try {
+      const cb = callbacks();
+      const game = createGameScreen(view(), cb);
+      document.body.append(game.el);
+      const cell = q(game.el, '.game__stage button');
+      expect(document.activeElement).toBe(document.body);
+      vi.advanceTimersByTime(40); // two frames: after the router's own focus restore
+      expect(document.activeElement).toBe(cell);
+      // A focused control disappears (the paw disabled during a reveal, the coach's Got it hidden).
+      const btn = document.createElement('button');
+      q(game.el, '.game__tools').append(btn);
+      btn.focus();
+      btn.blur();
+      expect(document.activeElement).toBe(document.body);
+      vi.advanceTimersByTime(40);
+      expect(document.activeElement).toBe(cell);
+      // Focus moved somewhere else on purpose: left alone.
+      btn.focus();
+      vi.advanceTimersByTime(40);
+      expect(document.activeElement).toBe(btn);
+      // A restart (Retry, revive) with focus lost.
+      btn.blur();
+      game.playEntry();
+      vi.advanceTimersByTime(40);
+      expect(document.activeElement).toBe(cell);
+      expect(cb.onTap).not.toHaveBeenCalled();
+      game.destroy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('wraps the play area in the main landmark (A11Y-12)', () => {
+    const game = createGameScreen(view(), callbacks());
+    expect(q(game.el, 'main.game__col').querySelector('.game__stage')).not.toBeNull();
     game.destroy();
   });
 

@@ -38,7 +38,10 @@ export interface GameCommands {
   onNext(): Promise<void>;
   /** O7 Done: gate 'daily_done' → Home. */
   onDailyDone(): Promise<void>;
-  /** Top-bar Home saves the board; O3 Home after a win; O4 Home (status lost) discards the attempt. */
+  /**
+   * Top-bar Home saves the board (also a lost one before O4 shows); O3 Home after a win; Home while
+   * O4 is open (status lost) discards the attempt (02 §4.2, §10.2).
+   */
   onHome(): void;
   /** How to play → "I know how to play" (first-run tutorial only). */
   onSkipTutorial(): void;

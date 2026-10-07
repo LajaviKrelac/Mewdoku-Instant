@@ -8,9 +8,14 @@
 // Bundle (04 §9): the hint engine (hint, techniques, grader) and the RPC layer are lazy chunks too.
 // Nothing needs them before the first hint, kitty or generated board; preload() warms the hint
 // engine up after the first screen (boot step 8).
+// Never hangs, never dead-ends (04 §8): lazy chunks are re-fetched with a cache-busting URL after a
+// failure (lazy-chunk.ts); when the hint chunk still cannot load, hints and kitty cells come from the
+// worker (its own module graph). The worker's start-up and every call have a deadline
+// (worker.callTimeoutMs): on expiry the worker is dropped and the work runs on the main thread.
 import { cfg, type GameConfig } from '../app/config';
 import type { CellIndex, GenResult, GenSpec, HintStep, Puzzle } from '../engine/types';
 import type { EngineWorkerApi } from './engine.worker';
+import { deadline, loadChunk } from './lazy-chunk';
 import type { RpcChannel } from './rpc';
 
 export interface EngineClient {
@@ -51,12 +56,12 @@ function defaultPerf(): number {
 }
 
 async function defaultGenerateOnMain(spec: GenSpec): Promise<GenResult> {
-  const mod = await import('../engine/generator');
+  const mod = await loadChunk(() => import('../engine/generator'));
   return mod.generate(spec);
 }
 
 function defaultLoadHintEngine(): Promise<HintEngine> {
-  return import('../engine/hint');
+  return loadChunk(() => import('../engine/hint'));
 }
 
 export function createEngineClient(opts: EngineClientOptions = {}): EngineClient {
@@ -122,7 +127,7 @@ export function createEngineClient(opts: EngineClientOptions = {}): EngineClient
       w.addEventListener('messageerror', () => fail('engine worker message error'));
       let rpc: typeof import('./rpc');
       try {
-        rpc = await import('./rpc');
+        rpc = await loadChunk(() => import('./rpc'), { config: c });
       } catch {
         fail('rpc chunk unavailable');
         return null;
@@ -134,24 +139,36 @@ export function createEngineClient(opts: EngineClientOptions = {}): EngineClient
     return starting;
   }
 
-  /** Runs `onWorker`; when the worker is unavailable or dies mid-call, runs `onMain` instead. */
+  /**
+   * Runs `onWorker`; when the worker is unavailable, dies mid-call or misses the deadline (it is then
+   * dropped for good), runs `onMain` instead.
+   */
   async function viaWorker<T>(onWorker: (ch: RpcChannel<EngineWorkerApi>) => Promise<T>, onMain: () => Promise<T>): Promise<T> {
     const ch = await ensureWorker();
     if (!ch) return onMain();
     try {
-      return await onWorker(ch);
+      return await deadline(onWorker(ch), c.worker.callTimeoutMs, () => fail('engine worker timeout'));
     } catch (err) {
-      if (broken) return onMain(); // the worker crashed: not an engine error
+      if (broken) return onMain(); // the worker crashed or hung: not an engine error
       throw err;
     }
   }
 
-  async function hintOnMain(puzzle: Puzzle, cells: Readonly<Uint8Array>): Promise<HintStep> {
-    const engine = await hints();
-    const t0 = perf();
-    const step = engine.getHintStep(puzzle, cells);
-    if (perf() - t0 > c.hint.mainThreadBudgetMs) slowSizes.add(puzzle.n);
-    return step;
+  /** `main(hint engine)`; when the hint chunk cannot be loaded, `inWorker` (else the load error). */
+  function withHints<T>(main: (engine: HintEngine) => T, inWorker: (ch: RpcChannel<EngineWorkerApi>) => Promise<T>): Promise<T> {
+    return hints().then(main, (err: unknown) => viaWorker(inWorker, () => Promise.reject(err)));
+  }
+
+  function hintOnMain(puzzle: Puzzle, cells: Readonly<Uint8Array>): Promise<HintStep> {
+    return withHints(
+      (engine) => {
+        const t0 = perf();
+        const step = engine.getHintStep(puzzle, cells);
+        if (perf() - t0 > c.hint.mainThreadBudgetMs) slowSizes.add(puzzle.n);
+        return step;
+      },
+      (ch) => ch.remote.getHint(puzzle, cells as Uint8Array),
+    );
   }
 
   return {
@@ -173,7 +190,10 @@ export function createEngineClient(opts: EngineClientOptions = {}): EngineClient
     },
     pickKittyCell(puzzle, cells) {
       const snapshot = Uint8Array.from(cells);
-      return hints().then((engine) => engine.pickKittyCell(puzzle, snapshot));
+      return withHints(
+        (engine) => engine.pickKittyCell(puzzle, snapshot),
+        (ch) => ch.remote.pickKittyCell(puzzle, snapshot),
+      );
     },
     preload() {
       if (!disposed) hints().catch(() => undefined);

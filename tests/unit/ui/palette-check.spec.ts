@@ -1,5 +1,9 @@
 // Owner: ui-board. scripts/palette-check.ts: CIEDE2000, CVD simulation, contrast, and the shipped palette passes.
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
+import { cfg } from '../../../src/app/config';
 import {
   computeMatrix,
   contrastRatio,
@@ -9,10 +13,12 @@ import {
   main,
   MIN_CONTRAST,
   MIN_DE00,
+  MIN_TEXT_CONTRAST,
   pairwise,
   simulateCvd,
+  uiContrast,
 } from '../../../scripts/palette-check';
-import { PALETTE, PALETTE_DE00 } from '../../../src/ui/art/palette';
+import { PALETTE, PALETTE_DE00, TOKENS } from '../../../src/ui/art/palette';
 
 describe('palette-check', () => {
   it('CIEDE2000 matches Sharma et al. (2005) reference pairs', () => {
@@ -45,6 +51,34 @@ describe('palette-check', () => {
 
   it('every glyph passes 3:1 on every tile, faded or not', () => {
     for (const row of glyphContrast()) expect(row.ratio, `${row.what} on ${row.tile}`).toBeGreaterThanOrEqual(MIN_CONTRAST);
+  });
+
+  it('checks the colour-pattern glyph on every tile, normal and faded (02 §18 non-colour cue)', () => {
+    const rows = glyphContrast().filter((r) => r.what.startsWith('pattern glyph'));
+    expect(rows).toHaveLength(PALETTE.length * 2);
+    for (const r of rows) expect(r.ratio, `pattern glyph on ${r.tile}${r.faded ? ' faded' : ''}`).toBeGreaterThanOrEqual(MIN_CONTRAST);
+    // The old 0.5 / 0.32 opacities failed (2.1-2.6:1): the check must notice a regression.
+    expect(cfg.layout.patternOpacity).toBeGreaterThanOrEqual(0.8);
+  });
+
+  it('UI text pairs reach 4.5:1 and UI glyphs 3:1 (WCAG 1.4.3 / 1.4.11)', () => {
+    const rows = uiContrast();
+    for (const r of rows) expect(r.ratio, r.what).toBeGreaterThanOrEqual(r.min);
+    const text = rows.filter((r) => r.min === MIN_TEXT_CONTRAST).map((r) => r.what);
+    expect(text).toContain('primary button label (white on --accent)');
+    expect(text).toContain('secondary text (--ink-2 on --page-2)');
+    // The spec's provisional values would fail: white on #1F9E89 is 3.3:1, #7A6E80 on --page-2 4.1:1.
+    expect(contrastRatio('#FFFFFF', '#1F9E89')).toBeLessThan(MIN_TEXT_CONTRAST);
+    expect(contrastRatio('#7A6E80', TOKENS['page-2'])).toBeLessThan(MIN_TEXT_CONTRAST);
+  });
+
+  it('styles/tokens.css mirrors the TOKENS colours the checks validate', () => {
+    const css = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../../../src/styles/tokens.css'), 'utf8');
+    for (const [name, hex] of Object.entries(TOKENS)) {
+      if (!hex.startsWith('#')) continue;
+      const m = new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{6})`).exec(css);
+      expect(m?.[1]?.toLowerCase(), `--${name}`).toBe(hex.toLowerCase());
+    }
   });
 
   it('main() passes on the shipped palette', () => {

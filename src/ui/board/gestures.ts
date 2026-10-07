@@ -2,6 +2,8 @@
 // Pointer gesture recogniser on the board (02 §6.1, 04 §5.4): tap, double-tap (same cell, ≤
 // input.doubleTapMs between pointerups), drag-paint with mode chosen by the start cell, cell lock
 // after a double-tap (input.cellLockAfterCatMs), primary pointer only, right-click suppressed.
+// A resize or rotation during a gesture cancels it like pointercancel: the geometry captured at
+// pointerdown is stale, so hit-testing on with it would paint the wrong cells.
 import { cfg, dragStartPx, type GameConfig } from '../../app/config';
 import type { CellIndex } from '../../engine/types';
 import { CellState, type PaintMode } from '../../game/types';
@@ -41,7 +43,8 @@ interface Stream {
   readonly visited: Set<CellIndex>;
 }
 
-const defaultNow = (): number => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+/** performance.now(), or Date.now() where it is missing (also the keyboard's cell-lock clock). */
+export const defaultNow = (): number => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
 /** Attaches Pointer Event listeners (touch-action: none on boardEl). Returns detach(). */
 export function attachGestures(boardEl: HTMLElement, cb: GestureCallbacks, opts: GestureOptions): () => void {
@@ -141,6 +144,12 @@ export function attachGestures(boardEl: HTMLElement, cb: GestureCallbacks, opts:
   };
 
   const onContext = (e: Event): void => e.preventDefault();
+  const onResize = (): void => reset();
+  const win = boardEl.ownerDocument.defaultView;
+  const viewports: EventTarget[] = [];
+  if (win) viewports.push(win);
+  if (win?.visualViewport) viewports.push(win.visualViewport);
+  for (const t of viewports) t.addEventListener('resize', onResize);
 
   boardEl.addEventListener('pointerdown', onDown);
   boardEl.addEventListener('pointermove', onMove);
@@ -150,6 +159,7 @@ export function attachGestures(boardEl: HTMLElement, cb: GestureCallbacks, opts:
 
   return () => {
     reset();
+    for (const t of viewports) t.removeEventListener('resize', onResize);
     boardEl.removeEventListener('pointerdown', onDown);
     boardEl.removeEventListener('pointermove', onMove);
     boardEl.removeEventListener('pointerup', onUp);

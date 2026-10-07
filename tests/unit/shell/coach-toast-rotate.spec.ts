@@ -1,7 +1,7 @@
 // Owner: ui-shell. O8 coach (non-modal), O9 toast layer, O10 rotate notice.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cfg } from '../../../src/app/config';
-import { coachText, createCoach, placeCard, type CoachProps } from '../../../src/ui/overlays/coach';
+import { coachText, createCoach, LIVE_SETTLE_MS, placeCard, roundSpot, type CoachProps } from '../../../src/ui/overlays/coach';
 import { mountRotateNotice, shouldShowRotateNotice } from '../../../src/ui/overlays/rotate-notice';
 import { createToastLayer } from '../../../src/ui/overlays/toast';
 
@@ -36,9 +36,16 @@ describe('O8 tutorial coach', () => {
     expect(coach.modal).toBe(false);
     coach.open(props());
     expect(coach.el.hidden).toBe(false);
+    // A11Y-11: the live region appears empty first; the text follows once it is in the a11y tree.
+    expect(q(coach.el, '.coach__text').textContent).toBe('');
+    expect(q(coach.el, '.coach__card').hasAttribute('data-pending')).toBe(true);
+    vi.advanceTimersByTime(LIVE_SETTLE_MS);
+    expect(q(coach.el, '.coach__card').hasAttribute('data-pending')).toBe(false);
     expect(q(coach.el, '.coach__text').textContent).toBe(
       'Every colour hides exactly one cat. This Lavender colour is a single tile — double-tap it.',
     );
+    // UX-15: "double-tap" never breaks at its hyphen (the text stays the same for screen readers).
+    expect(Array.from(coach.el.querySelectorAll('.coach__text .nowrap')).map((e) => e.textContent)).toContain('double-tap');
     expect(coach.el.querySelectorAll('mask rect[fill="black"]')).toHaveLength(1);
     expect(coach.el.dataset.hand).toBe('double_tap');
     expect(q(coach.el, '.coach__hand').hidden).toBe(false);
@@ -53,6 +60,7 @@ describe('O8 tutorial coach', () => {
     document.body.append(coach.el);
     const p = props({ step: 2, hand: 'none', showGotIt: true, colorParam: null, targetRects: () => [rect(0, 0, 10, 10), rect(20, 0, 10, 10)] });
     coach.open(p);
+    vi.advanceTimersByTime(LIVE_SETTLE_MS);
     expect(q(coach.el, '.coach__text').textContent).toBe('A cat claims its whole row and column.');
     const gotIt = q(coach.el, '.coach__gotit');
     expect(gotIt.hidden).toBe(false);
@@ -72,6 +80,7 @@ describe('O8 tutorial coach', () => {
     const coach = createCoach();
     document.body.append(coach.el);
     coach.open(props({ step: 5, hand: 'tap', colorParam: null, targetRects: () => [rect(120, 760, 64, 64)] }));
+    vi.advanceTimersByTime(LIVE_SETTLE_MS);
     expect(q(coach.el, '.coach__text').textContent).toBe('Stuck? Tap the bulb for a hint.');
     expect(coach.el.querySelectorAll('.coach__ring')).toHaveLength(1);
     coach.close();

@@ -3,7 +3,7 @@
 // once, saved with 'touch'), O6 How to play (skip / replay tutorial), O7 reopened from a solved daily
 // card, and the stale-daily rule applied whenever Home is shown.
 import type { AudioEngine } from '../audio/audio-engine';
-import { dailyCardState, dateKeyOf, localDateKey, msUntilLocalMidnight } from '../game/progression';
+import { dailyCardState, dateKeyOf, localDateKey, localMidnightAfter, msUntilLocalMidnight } from '../game/progression';
 import type { SaveDataV1, Settings } from '../game/types';
 import type { PlatformAdapter } from '../platform/types';
 import oflUrl from '../assets/fonts/OFL.txt?url';
@@ -89,7 +89,7 @@ export function createShell(deps: ShellDeps): Shell {
       mistakes: rec[1],
       hints: rec[2],
       kitties: rec[3],
-      nextPuzzleAt: now + msUntilLocalMidnight(now),
+      nextPuzzleAt: localMidnightAfter(today) ?? now + msUntilLocalMidnight(now),
       now: () => clock.now(),
       onDone: () => router.close('daily_result'), // reopened from Home: no transition, no gate
     });

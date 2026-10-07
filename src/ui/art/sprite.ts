@@ -61,6 +61,12 @@ function starPath(cx: number, cy: number, ro: number, ri: number): string {
   return `M${pts.join('L')}Z`;
 }
 
+/**
+ * The glyphs are drawn on a 24 grid with a margin; this grows each shape (and its strokes) by 1.2×
+ * about the centre so it fills its 22 % box (02 §18) and stays readable on 12×12 boards.
+ */
+const GLYPH_FILL = 'matrix(1.2 0 0 1.2 -2.4 -2.4)';
+
 /** Pattern glyphs (02 §18), filled with currentColor on a 24 grid. */
 const GLYPHS: readonly string[] = [
   '<circle cx="12" cy="12" r="5.6"/>',
@@ -164,7 +170,7 @@ export function spriteMarkup(): string {
     `<defs>${DEFS}</defs>` +
     catSymbols() +
     markSymbols() +
-    GLYPHS.map((g, i) => sym(`glyph-${i}`, '0 0 24 24', `<g fill="currentColor">${g}</g>`)).join('') +
+    GLYPHS.map((g, i) => sym(`glyph-${i}`, '0 0 24 24', `<g fill="currentColor" transform="${GLYPH_FILL}">${g}</g>`)).join('') +
     iconSymbols();
   return cached;
 }

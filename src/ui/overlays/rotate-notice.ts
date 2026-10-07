@@ -1,15 +1,33 @@
 // Owner: ui-shell
-// O10 rotate notice (02 §19): shown on a landscape phone whose height is < layout.rotateMaxHeight.
-// Self-managing: listens to resize / visualViewport and toggles itself.
+// O10 rotate notice (02 §19): shown on a landscape PHONE whose height is < layout.rotateMaxHeight.
+// A phone is a coarse (touch) primary pointer on a screen whose short side is < 600 px. Desktop
+// windows (a 150-200 % zoomed browser, a squat window) never get it: they keep the portrait column
+// and scroll (base.css, game-screen.ts). Sizes come from the visual viewport at page scale 1, so
+// pinch-zoom does not trigger it. Self-managing: listens to resize / visualViewport and toggles itself.
 //
 // Classes: .rotate-notice > .rotate-notice__art .rotate-notice__title .rotate-notice__body
 import { cfg } from '../../app/config';
 import { t } from '../../i18n';
 import { h, s } from '../dom';
 
-/** Landscape (w > h) and h < layout.rotateMaxHeight. */
-export function shouldShowRotateNotice(width: number, height: number): boolean {
-  return width > height && height < cfg.layout.rotateMaxHeight;
+/** Short side of a phone screen (CSS px): tablets and desktops are wider than this. */
+const PHONE_MAX_SHORT_SIDE = 600;
+
+/** Landscape (w > h) and h < layout.rotateMaxHeight, on a phone (`phone` defaults to true). */
+export function shouldShowRotateNotice(width: number, height: number, phone = true): boolean {
+  return phone && width > height && height < cfg.layout.rotateMaxHeight;
+}
+
+/**
+ * Whether this window is a phone: a coarse primary pointer (touch) and a small screen. Unknown
+ * capabilities (no matchMedia / screen) count as a phone, keeping the notice where it was before.
+ */
+export function isPhone(win: Window): boolean {
+  const coarse = typeof win.matchMedia === 'function' ? win.matchMedia('(pointer: coarse)').matches : true;
+  if (!coarse) return false;
+  const sc = win.screen as Screen | undefined;
+  const short = sc ? Math.min(sc.width || 0, sc.height || 0) : 0;
+  return short === 0 || short < PHONE_MAX_SHORT_SIDE;
 }
 
 /** Our own little drawing: a phone turning upright, with a curved arrow. */
@@ -36,9 +54,10 @@ export function mountRotateNotice(host: HTMLElement, win: Window = window): { re
 
   const check = (): void => {
     const vv = win.visualViewport;
-    const w = vv?.width ?? win.innerWidth;
-    const hgt = vv?.height ?? win.innerHeight;
-    el.hidden = !shouldShowRotateNotice(w, hgt);
+    const scale = vv && vv.scale > 0 ? vv.scale : 1;
+    const w = vv ? vv.width * scale : win.innerWidth;
+    const hgt = vv ? vv.height * scale : win.innerHeight;
+    el.hidden = !shouldShowRotateNotice(w, hgt, isPhone(win));
   };
   check();
   win.addEventListener('resize', check);

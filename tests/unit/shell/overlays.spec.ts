@@ -87,7 +87,14 @@ describe('O1 sheet placement', () => {
     const avoid = vi.fn(() => null);
     card.open({ step, n: 4, colors: Uint8Array.from([7, 4, 2, 0]), patterns: false, onApply: vi.fn(), onClose: vi.fn(), avoidRect: avoid });
     expect(card.el.dataset.placement).toBe('bottom');
-    expect(avoid).toHaveBeenCalled();
+    // Measured on the next frame, after every DOM write of the open (one style recalc, RP-3).
+    expect(avoid).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(20);
+    expect(avoid).toHaveBeenCalledTimes(1);
+    expect(card.el.dataset.placement).toBe('bottom');
+    card.close();
+    vi.advanceTimersByTime(20);
+    expect(avoid).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -197,10 +204,13 @@ describe('O4 fail overlay', () => {
     fail.open(props({ buttonDelayMs: 0 }));
     const cont = q(fail.el, '.fail__continue');
     expect(cont.querySelector('.icon-play-video')).not.toBeNull();
-    expect(cont.getAttribute('aria-label')).toBe('Watch a video to continue with one more heart');
+    // WCAG 2.5.3: the accessible name contains the visible label ("Continue" "+1"), and says it is a video.
+    expect(cont.getAttribute('aria-label')).toBe('Continue +1 heart, after a short video');
+    const visible = `${cont.querySelector('.btn__label')?.textContent ?? '?'} ${cont.querySelector('.btn__badge')?.textContent ?? '?'}`;
+    expect(cont.getAttribute('aria-label')?.startsWith(visible)).toBe(true);
     fail.update(props({ continueOffer: 'free', buttonDelayMs: 0 }));
     expect(cont.querySelector('.icon-play-video')).toBeNull();
-    expect(cont.getAttribute('aria-label')).toBe('Continue with one more heart');
+    expect(cont.getAttribute('aria-label')).toBe('Continue +1 heart');
     fail.update(props({ continueOffer: null, buttonDelayMs: 0 }));
     expect(cont.hidden).toBe(true);
     expect(q(fail.el, '.fail__retry').hasAttribute('data-autofocus')).toBe(true);

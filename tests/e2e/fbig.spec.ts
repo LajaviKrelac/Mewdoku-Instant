@@ -3,6 +3,8 @@
 // the stub; each test configures it through window.__FB_STUB_CONFIG__ before the page loads, and
 // seeds the player's save as the stub's cloud copy (so the boot merge is exercised too).
 // Runs in the `fbig-390` project against dist/fbig-e2e (hooks on, test placement IDs).
+// Review fixes covered here: a late cloud read (PLAT-1), per-player mirrors (PLAT-2), a blocked
+// localStorage with cloud save (PLAT-3), a startGameAsync that fails (PLAT-8).
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -55,7 +57,7 @@ function seededSave(level: number, completed: number, patch: (s: SaveDataV1) => 
   });
 }
 
-async function openGame(page: Page, stubConfig: Record<string, unknown>, opts: { clockAt?: number } = {}): Promise<void> {
+async function loadGame(page: Page, stubConfig: Record<string, unknown>, opts: { clockAt?: number } = {}): Promise<void> {
   await page.route('https://connect.facebook.net/**', (route) =>
     route.fulfill({ status: 200, contentType: 'application/javascript', body: STUB_SRC }),
   );
@@ -64,6 +66,10 @@ async function openGame(page: Page, stubConfig: Record<string, unknown>, opts: {
   }, stubConfig);
   if (opts.clockAt !== undefined) await page.clock.install({ time: opts.clockAt });
   await page.goto('/');
+}
+
+async function openGame(page: Page, stubConfig: Record<string, unknown>, opts: { clockAt?: number } = {}): Promise<void> {
+  await loadGame(page, stubConfig, opts);
   await page.waitForFunction(() => (window as TestWindow).__fbStub?.state.started === true && !!(window as TestWindow).__mewdoku);
 }
 
@@ -143,6 +149,93 @@ test.describe('FBIG storage', () => {
 
     await solve(page);
     await expect.poll(() => stub(page, (s) => s.count('player.flushDataAsync')), { timeout: 5_000 }).toBe(1);
+  });
+});
+
+test.describe('FBIG save robustness', () => {
+  /** The returning player's cloud copy: level 40, 9 hints and kitties, sound off, an hour old. */
+  const cloudCopy = (): SaveDataV1 =>
+    seededSave(40, 39, (s) => ({
+      ...s,
+      updatedAt: Date.now() - 3_600_000,
+      stock: { hints: 9, kitties: 9 },
+      settings: { ...s.settings, sound: false },
+    }));
+
+  test('a cloud read slower than the boot timeout is merged when it arrives; the next session keeps the cloud stock (PLAT-1)', async ({ page, context }) => {
+    test.setTimeout(45_000);
+    const cloud = cloudCopy();
+    await openGame(page, { data: { save: cloud }, persist: false, getDataDelayMs: 4_500 });
+    // Boot gave up waiting (cloudLoadTimeoutMs) and started a first run …
+    expect((await appState(page)).save.tutorialDone).toBe(false);
+    // … then the late copy is merged into the live save, and only then do cloud writes start.
+    await expect.poll(async () => (await appState(page)).save.progress.level, { timeout: 5_000 }).toBe(40);
+    const s = await appState(page);
+    expect(s.save.stock).toEqual({ hints: 9, kitties: 9 });
+    expect(s.save.settings.sound).toBe(false);
+    await expect.poll(() => stub(page, (st) => st.count('player.setDataAsync')), { timeout: 6_000 }).toBeGreaterThan(0);
+    await page.close();
+
+    // A session whose read fails outright (on a device with no mirror yet) never wins the next
+    // merge with its fresh defaults.
+    const p1 = await context.newPage();
+    await p1.addInitScript(() => localStorage.clear());
+    const failing = Array(12).fill('NETWORK_FAILURE');
+    await openGame(p1, { data: { save: cloud }, persist: false, errors: { getDataAsync: failing } });
+    expect((await appState(p1)).save.progress.level).toBe(1);
+    await p1.waitForTimeout(800); // the session's mirror write (defaults, fresh updatedAt)
+    expect(await stub(p1, (st) => st.count('player.setDataAsync'))).toBe(0);
+    await p1.close();
+    const p2 = await context.newPage();
+    await openGame(p2, { data: { save: cloud }, persist: false });
+    const merged = (await appState(p2)).save;
+    expect(merged.progress.level).toBe(40);
+    expect(merged.stock).toEqual({ hints: 9, kitties: 9 });
+    expect(merged.settings.sound).toBe(false);
+  });
+
+  test("two FB accounts in one browser never see or merge each other's progress (PLAT-2)", async ({ page, context }) => {
+    await openGame(page, { playerId: 'player-A', persist: false, data: { save: cloudCopy() } });
+    expect((await appState(page)).save.progress.level).toBe(40);
+    await page.waitForTimeout(800); // A's mirror is written
+    await page.close();
+    const b = await context.newPage();
+    await openGame(b, { playerId: 'player-B', persist: false });
+    const s = await appState(b);
+    expect(s.save.progress.level).toBe(1);
+    expect(s.save.progress.best).toEqual({});
+    expect(s.save.stock).toEqual(defaults(Date.now()).stock);
+    const keys = await b.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('mewdoku.save.v1')).sort());
+    expect(keys).toContain('mewdoku.save.v1:player-A');
+  });
+
+  test("a blocked localStorage does not claim progress can't be saved while cloud save works (PLAT-3)", async ({ page }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(window, 'localStorage', {
+        get() {
+          throw new DOMException('blocked', 'SecurityError');
+        },
+      });
+    });
+    await openGame(page, { persist: false, data: { save: seededSave(9, 8) } });
+    const s = await appState(page);
+    expect(s.save.progress.level).toBe(9);
+    expect(s.ui.storage).toBe('ok');
+    await page.waitForTimeout(600);
+    await expect(page.getByText("Progress can't be saved on this device right now.")).toHaveCount(0);
+  });
+
+  test('a startGameAsync that fails once is retried; failing twice shows an honest error with a retry (PLAT-8)', async ({ page, context }) => {
+    await openGame(page, { persist: false, data: { save: seededSave(5, 4) }, errors: { startGameAsync: ['INVALID_OPERATION'] } });
+    expect(await stub(page, (s) => s.count('startGameAsync'))).toBe(2);
+    await expect(sel.playButton(page)).toBeVisible();
+    await page.close();
+
+    const p2 = await context.newPage();
+    await loadGame(p2, { persist: false, errors: { startGameAsync: ['INVALID_OPERATION', 'INVALID_OPERATION'] } });
+    await expect(p2.getByRole('alert')).toContainText("The game couldn't start.");
+    await expect(p2.getByText('Oops, something hiccupped. You can keep playing.')).toHaveCount(0);
+    await expect(p2.getByRole('button', { name: 'Try again' })).toBeVisible();
   });
 });
 

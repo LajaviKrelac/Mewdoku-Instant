@@ -1,8 +1,10 @@
-// Owner: ui-board. Gesture recogniser with synthetic pointer streams (02 §6.1, 04 §11).
+// Owner: ui-board. Gesture recogniser with synthetic pointer streams (02 §6.1, 04 §11), and the
+// keyboard's Enter cell lock (02 §6.2, §6.3).
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { cfg } from '../../../src/app/config';
 import { CellState, type PaintMode } from '../../../src/game/types';
 import { attachGestures } from '../../../src/ui/board/gestures';
+import { attachKeyboard, type KeyboardHandle } from '../../../src/ui/board/keyboard';
 import type { BoardGeometry } from '../../../src/ui/board/layout';
 
 const N = 5;
@@ -240,10 +242,93 @@ describe('attachGestures', () => {
     expect(log).toEqual(['tap:0', 'tap:1', 'tap:0', 'tap:24']);
   });
 
+  it('a resize mid-drag cancels the stream: the geometry from pointerdown is stale (RP-6)', () => {
+    down(at(2, 0));
+    move(at(2, 2));
+    expect(log).toEqual(['paint:mark:10,11,12']);
+    window.dispatchEvent(new Event('resize'));
+    move(at(2, 4)); // would hit-test with the old geometry
+    up(at(2, 4));
+    expect(log).toEqual(['paint:mark:10,11,12']);
+    now += 1000;
+    tapAt(at(0, 0)); // the next gesture works as usual
+    expect(log).toEqual(['paint:mark:10,11,12', 'tap:0']);
+  });
+
+  it('a resize between pointerdown and pointerup drops that tap; detach stops listening for resizes', () => {
+    down(at(1, 1));
+    window.dispatchEvent(new Event('resize'));
+    up(at(1, 1));
+    expect(log).toEqual([]);
+    detach();
+    detach = () => undefined;
+    window.dispatchEvent(new Event('resize')); // no listener left (nothing to assert beyond "no throw")
+  });
+
   it('detach removes every listener', () => {
     detach();
     detach = () => undefined;
     tapAt(at(0, 0));
     expect(log).toEqual([]);
+  });
+});
+
+describe('attachKeyboard: Enter honours cellLockAfterCatMs (logic-4, 02 §6.2)', () => {
+  let board: HTMLElement;
+  let now: number;
+  let log: string[];
+  let kb: KeyboardHandle;
+
+  const key = (k: string, opts: KeyboardEventInit = {}): void => {
+    board.querySelector<HTMLElement>(`[data-i="${kb.focused()}"]`)?.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...opts }));
+  };
+
+  beforeEach(() => {
+    board = document.createElement('div');
+    for (let i = 0; i < N * N; i++) {
+      const b = document.createElement('button');
+      b.dataset.i = String(i);
+      board.appendChild(b);
+    }
+    document.body.appendChild(board);
+    now = 1000;
+    log = [];
+    kb = attachKeyboard(
+      board,
+      { tap: (c) => log.push(`tap:${c}`), doubleTap: (c) => log.push(`double:${c}`), bulb: () => log.push('bulb'), paw: () => log.push('paw') },
+      { n: N, cellElement: (i) => board.querySelector<HTMLElement>(`[data-i="${i}"]`), isLocked: () => false, now: () => now },
+    );
+  });
+
+  afterEach(() => {
+    kb.detach();
+    board.remove();
+  });
+
+  it('a second Enter (or Space) on the same cell within the lock is ignored; after it, Enter works again', () => {
+    kb.focus(2, true);
+    key('Enter');
+    now += 100;
+    key('Enter'); // would remove the cat just placed
+    key(' ');
+    expect(log).toEqual(['double:2']);
+    now += cfg.input.cellLockAfterCatMs;
+    key('Enter');
+    expect(log).toEqual(['double:2', 'double:2']);
+  });
+
+  it('the lock is per cell: Enter on another cell responds at once', () => {
+    kb.focus(2, true);
+    key('Enter');
+    key('ArrowRight');
+    key('Enter');
+    expect(log).toEqual(['double:2', 'double:3']);
+  });
+
+  it('Space taps are not locked by other Spaces (only a cat attempt locks)', () => {
+    kb.focus(4, true);
+    key(' ');
+    key(' ');
+    expect(log).toEqual(['tap:4', 'tap:4']);
   });
 });

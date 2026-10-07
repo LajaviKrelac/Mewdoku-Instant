@@ -21,7 +21,7 @@ import { createHelperFlows } from './helper-flows';
 import { feedbackFor, failEvent, levelParam, mistakeEvent, startEvents, winBookkeeping } from './session-effects';
 import { createFeedbackPlayer, createSessionTimers, defaultColors, defaultPraise, overlayProps, withSlot } from './session-parts';
 import { createTransitions } from './session-transitions';
-import { shallowEqual, type AppState, type SessionMeta, type SessionRequest } from './store';
+import { shallowEqual, type AppState, type OverlayId, type SessionMeta, type SessionRequest } from './store';
 import { asTutorialStep, boardLocked, selectGameView, type ViewContext } from './views';
 
 export type { GameCommands, Session, SessionDeps } from './session-types';
@@ -256,10 +256,12 @@ export function createSession(deps: SessionDeps): Session {
   // ─────────────────────────────── mounting ───────────────────────────────
 
   let loadingTimer: TimerId | null = null;
+  let failSafe: TimerId | null = null;
   let loadingShown = false;
   function hideLoading(): void {
     clock.clearTimeout(loadingTimer);
-    loadingTimer = null;
+    clock.clearTimeout(failSafe);
+    loadingTimer = failSafe = null;
     if (!loadingShown) return;
     loadingShown = false;
     router.setLoading(false);
@@ -389,6 +391,7 @@ export function createSession(deps: SessionDeps): Session {
     goHome: () => deps.goHome?.(),
     slotFor,
     updateFail,
+    failOpen: () => router.isOpen('fail'),
     closeFail: () => {
       router.close('fail');
       failProps = null;
@@ -424,7 +427,15 @@ export function createSession(deps: SessionDeps): Session {
             loadingShown = true;
             router.setLoading(true);
           }, c.loading.indicatorDelayMs);
-          const lp = req.mode === 'level' ? await deps.levels.getLevel(req.level) : await deps.levels.getDaily(req.dateKey);
+          // Last resort (04 §8: never a dead end): a board still not ready after loading.failSafeMs
+          // goes back Home with a toast, like a failed load; a late result is ignored.
+          const load = req.mode === 'level' ? deps.levels.getLevel(req.level) : deps.levels.getDaily(req.dateKey);
+          const lp = await Promise.race([
+            load,
+            new Promise<never>((_, reject) => {
+              failSafe = clock.setTimeout(() => reject(new Error('board load timed out')), c.loading.failSafeMs);
+            }),
+          ]);
           puzzle = lp.puzzle;
           substitute = lp.source === 'substitute';
         }
@@ -484,11 +495,26 @@ export function createSession(deps: SessionDeps): Session {
     if (router.isOpen('settings') || router.isOpen('how_to_play')) timers.pause('modal');
     else timers.resume('modal');
   };
+  // An overlay whose lazy chunk could not be loaded (the router already closed it, 04 §8): the game
+  // must not stay behind an invisible card. Hint → back to playing; no O3 / O4 / O7 → Home, keeping
+  // the won board's progress, or the lost board and its unused revive (O4 reopens on restore, 02 §15).
+  function onOverlayFailed(id: OverlayId): void {
+    const s = game();
+    if (id === 'rewarded') return; // helper flows check the chunk first; a closed O2 is "Not now"
+    if (id === 'hint') {
+      if (s?.status === 'hint') dispatch({ type: 'HINT_CLOSE' }, true);
+      return toast(t('hint.unavailable'));
+    }
+    toast(t('toast.error'));
+    if (s?.status === 'won' ? id === 'win' || id === 'daily_result' : s?.status === 'lost' && id === 'fail') session.onHome();
+  }
+
   const offs = [
     bus.on('pause', ({ reason }) => timers.pause(reason)),
     bus.on('resume', ({ reason }) => timers.resume(reason)),
     bus.on('overlay:open', syncModal),
     bus.on('overlay:close', syncModal),
+    bus.on('overlay:failed', ({ id }) => onOverlayFailed(id)),
   ];
 
   return session;

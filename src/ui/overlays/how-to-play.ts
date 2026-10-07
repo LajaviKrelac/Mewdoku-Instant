@@ -92,6 +92,8 @@ export function createHowToPlay(): OverlayView<HowToPlayProps> {
       'div',
       { class: 'howto__notes' },
       h('p', null, icon('icon-paw', { class: 'howto__note-icon howto__note-icon--paw' }), h('span', null, t('howto.controls'))),
+      // Keyboard play (02 §6.3); CSS shows it only where a mouse or trackpad is present.
+      h('p', { class: 'howto__keys' }, icon('icon-paw', { class: 'howto__note-icon howto__note-icon--paw' }), h('span', null, t('howto.keys'))),
       h('p', null, icon('icon-heart', { class: 'howto__note-icon howto__note-icon--heart' }), h('span', null, t('howto.hearts'))),
       h('p', null, icon('icon-bulb', { class: 'howto__note-icon howto__note-icon--bulb' }), h('span', null, t('howto.helpers'))),
     ),

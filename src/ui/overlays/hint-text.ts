@@ -11,10 +11,12 @@ export interface HintTextContext {
   readonly colors: Uint8Array;
   /** Colour patterns on → colour names carry their glyph: "Lavender (star)" (02 §18). */
   readonly patterns: boolean;
+  /** Optional region label per cell (puzzle.regions): lets hintLocation() name the tile's colour. */
+  readonly regions?: Uint8Array;
 }
 
 /** Colour name of a region label (palette index via ctx.colors), with its glyph when patterns are on. */
-function regionName(label: number, ctx: HintTextContext): string {
+export function regionName(label: number, ctx: HintTextContext): string {
   const p = ctx.colors[label] ?? label;
   const color = colorName(p);
   return ctx.patterns ? t('unit.colorWithGlyph', { color, glyph: glyphName(p) }) : color;

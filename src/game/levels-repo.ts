@@ -203,7 +203,8 @@ export function createLevelsRepo(deps: LevelsRepoDeps): LevelsRepo {
     return { puzzle: await substitutePuzzle(level), source: 'substitute' };
   }
 
-  async function fetchMonth(month: string): Promise<DailyPack | null> {
+  /** The month's pack; null when there is none (or it is invalid); undefined when the network failed. */
+  async function fetchMonth(month: string): Promise<DailyPack | null | undefined> {
     const delays = c.levels.fetchRetryDelaysMs;
     for (let attempt = 0; ; attempt++) {
       try {
@@ -214,9 +215,8 @@ export function createLevelsRepo(deps: LevelsRepoDeps): LevelsRepo {
         return null;
       } catch {
         if (attempt >= delays.length) {
-          months.delete(month); // try the network again next time
           fallback('daily_fetch');
-          return null;
+          return undefined;
         }
         await deps.delay(delays[attempt] ?? 0);
       }
@@ -230,8 +230,13 @@ export function createLevelsRepo(deps: LevelsRepoDeps): LevelsRepo {
     const month = dailyMonthOf(dateKey);
     let pending = months.get(month);
     if (!pending) {
-      pending = fetchMonth(month).catch(() => null);
-      months.set(month, pending);
+      const p: Promise<DailyPack | null> = fetchMonth(month)
+        .catch(() => undefined)
+        .then((pack) => {
+          if (pack === undefined && months.get(month) === p) months.delete(month); // try the network again next time
+          return pack ?? null;
+        });
+      months.set(month, (pending = p));
     }
     const pack = await pending;
     const id = dailyPuzzleId(dateKey);

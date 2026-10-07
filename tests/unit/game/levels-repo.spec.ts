@@ -1,5 +1,7 @@
 // Owner: game. Levels repository (04 §3, §8; 02 §11.4, §12): bundled pack, lazy packs with retries,
 // substitute boards, endless and daily generation through an injected generator, plus the Vite asset wiring.
+import { readdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { mergeConfig } from '../../../src/app/config';
 import { isLevelPack } from '../../../src/engine/codec';
@@ -297,6 +299,19 @@ describe('Vite asset wiring (level-assets.ts)', () => {
     for (const m of months) expect(typeof dailyMonthUrl(m)).toBe('string');
   });
 
+  it('every shipped pack (but 000) and daily month in src/data has a URL', () => {
+    const dir = (sub: string): string[] => readdirSync(fileURLToPath(new URL(`../../../src/data/${sub}`, import.meta.url)));
+    const packFiles = dir('levels').filter((f) => /^pack-\d{3}\.json$/.test(f) && f !== 'pack-000.json');
+    const monthFiles = dir('daily').filter((f) => /^\d{4}-\d{2}\.json$/.test(f));
+    expect(packFiles.length).toBeGreaterThan(0);
+    expect(monthFiles.length).toBeGreaterThan(0);
+    const { packs, months } = availableAssets();
+    expect(packs).toEqual(packFiles.map((f) => Number(f.slice(5, 8))).sort((a, b) => a - b));
+    expect(months).toEqual(monthFiles.map((f) => f.slice(0, 7)).sort());
+    for (const k of packs) expect(packUrl(k)).toMatch(/pack-\d{3}/);
+    for (const m of months) expect(dailyMonthUrl(m)).toContain(m);
+  });
+
   it('loaders resolve null for absent files without fetching, and fetch present ones by URL', async () => {
     const urls: string[] = [];
     const loaders = createAssetLoaders((url) => {
@@ -326,5 +341,28 @@ describe('Vite asset wiring (level-assets.ts)', () => {
       expect(got.source).toBe('pack');
       expect(got.puzzle.id).toBe(`L${level}`);
     }
+  });
+});
+
+describe('daily month memo (RP-1, 04 §8)', () => {
+  const month = (days: Record<string, unknown>): unknown => ({ v: 1, kind: 'daily', month: '2026-10', gen: 'test', days });
+
+  it('a month that failed is forgotten even when it failed at once (no retry delays, synchronous throw)', async () => {
+    let calls = 0;
+    const repo = createLevelsRepo({
+      bundled: BUNDLED,
+      config: mergeConfig({ levels: { fetchRetryDelaysMs: [] } }, C),
+      loadPack: () => Promise.resolve(null),
+      loadDailyMonth: () => {
+        calls++;
+        if (calls === 1) throw new Error('sync failure');
+        return Promise.resolve(month({ '2026-10-08': rec5() }));
+      },
+      generate: () => Promise.resolve(okGen()),
+      delay: () => Promise.resolve(),
+    });
+    expect((await repo.getDaily('2026-10-07')).source).toBe('generated');
+    expect((await repo.getDaily('2026-10-08')).source).toBe('daily_pack'); // the network was asked again
+    expect(calls).toBe(2);
   });
 });

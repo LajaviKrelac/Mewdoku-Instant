@@ -111,6 +111,8 @@ export interface AppEventMap {
   screen: { readonly screen: ScreenId };
   'overlay:open': { readonly id: OverlayId };
   'overlay:close': { readonly id: OverlayId };
+  /** The router could not open a queued overlay (its lazy chunk failed to load); it is already closed. */
+  'overlay:failed': { readonly id: OverlayId };
   /** A save was scheduled or written. */
   save: { readonly mode: SaveMode };
   /** Hint/kitty stock changed. */

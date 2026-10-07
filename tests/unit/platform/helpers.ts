@@ -32,7 +32,12 @@ export interface StubConfig {
   setDataDelayMs?: number;
   flushDelayMs?: number;
   data?: Record<string, unknown> | null;
-  errors?: { getDataAsync?: (string | null)[]; setDataAsync?: (string | null)[]; flushDataAsync?: (string | null)[] };
+  errors?: {
+    getDataAsync?: (string | null)[];
+    setDataAsync?: (string | null)[];
+    flushDataAsync?: (string | null)[];
+    startGameAsync?: (string | null)[];
+  };
   ads?: { interstitial?: StubAdBehaviour; rewarded?: StubAdBehaviour };
   presets?: string[];
 }

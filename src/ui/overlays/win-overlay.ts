@@ -2,9 +2,11 @@
 // O3 win overlay (02 §5 O3, §10.1): praise word, celebrating cat, confetti, Next enabled after
 // buttonDelayMs, Home always enabled. Phase 3 hook: an empty reward slot element (02 §22).
 // Esc and scrim taps are ignored: the player picks Next or Home.
+// The confetti layer is the stage card's first child, painted behind the card's content (UX-05): the
+// burst flies out over the card and the scrim but never over the praise word, the cat or a button.
 //
 // Classes: .overlay[data-overlay=win] > .overlay__scrim--dark + .overlay__panel--stage.win[data-variant]
-//          .win__confetti .win__praise .win__art .win__sub .win__reward .win__next .win__home
+//          (.win__confetti .win__praise .win__art .win__sub .win__reward .win__next .win__home)
 import { illustration } from '../art/illustrations';
 import { icon } from '../art/sprite';
 import { h, setText, type OverlayView } from '../dom';
@@ -56,8 +58,7 @@ export function createWinOverlay(): OverlayView<WinOverlayProps> {
     className: 'win__home',
     onPress: () => props?.onHome(),
   });
-  shell.el.insertBefore(confettiHost, shell.panel);
-  shell.panel.append(title, art, sub, reward, h('div', { class: 'overlay__actions overlay__actions--stack' }, next, home));
+  shell.panel.append(confettiHost, title, art, sub, reward, h('div', { class: 'overlay__actions overlay__actions--stack' }, next, home));
 
   const render = (p: WinOverlayProps): void => {
     props = p;

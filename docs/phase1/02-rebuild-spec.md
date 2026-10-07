@@ -142,9 +142,9 @@ Leaderboard screens are **Phase 4**. They need FBIG leaderboards or overlay view
 Routing rules that the map does not show:
 
 - "Returning" means `save.tutorialDone === true`. Until then, every boot goes straight into the tutorial, which restarts at step 1 (tutorial progress is not saved).
-- During the tutorial the top bar shows **no Home button**; Gear is available. Gear → How to play offers **"I know how to play"** only while the first-run tutorial is running. It applies the tutorial-win bookkeeping (§10.1) without an overlay and loads Level 2.
-- "Replay tutorial" (from How to play, after the tutorial is done) runs the same script. Its win returns to **Home** and changes no progress, stock or stats.
-- Leaving the game with Home always saves the in-progress board first (§15). The fail overlay's Home is the exception: it discards the attempt (§10.2).
+- During the **first-run** tutorial the top bar shows **no Home button**; Gear is available. Gear → How to play offers **"I know how to play"** only while the first-run tutorial is running. It applies the tutorial-win bookkeeping (§10.1) without an overlay and loads Level 2.
+- "Replay tutorial" (from How to play, after the tutorial is done) runs the same script. Its win returns to **Home** and changes no progress, stock or stats. The replay **keeps the Home button** (it has no "I know how to play", so Home is its way out): Home returns to S1 and saves nothing, because the tutorial is never saved (§15 step 1).
+- Leaving the game with Home always saves the in-progress board first (§15). The fail overlay's Home is the exception: it discards the attempt (§10.2). The top-bar Home in the `fx.failOverlayDelayMs` between the last heart and O4 is an ordinary Home: it saves the 0-heart board, which restores into LOST with O4 and its unused revive (§15 step 5).
 
 ## 5. Screen wireframes
 
@@ -384,7 +384,7 @@ Notes:
 | Space | Tap the focused cell | [DECISION] |
 | Enter | Double-tap the focused cell (cat attempt or removal) | [DECISION] |
 | H / K | Hint / Kitty | [DECISION] |
-| Esc | Close the top overlay or card | [DECISION] |
+| Esc | Close the top overlay or card. O7 Esc = Done. **Exceptions:** Esc is ignored on O3 Win and O4 Fail, which need an explicit button choice (O4's Home discards the attempt and Continue shows an ad; O3 has no state that closes without a choice), and in the tutorial's hint step Esc, like ✕, does not close O1 (Apply only, §11.5 step 5) | [DECISION] |
 
 ### 6.4 Other controls
 
@@ -658,7 +658,7 @@ Existence is confirmed (01 §10.10). Everything else is [DECISION]:
 | In-progress daily | Kept in its own save slot, `inProgress.daily` (§15), so playing a level never discards it. When Home is shown and the slot holds an **earlier** date, the slot is cleared. |
 | Failing a daily | O4 works as in levels. Retry gives the same daily, fresh. Home discards the attempt, and the card shows "not played". |
 | Replay | A solved daily shows O7 again. No replay and no past days in Phase 2. A calendar and streaks are Phase 3 hooks. |
-| Midnight rollover during play | The current board continues and is credited to its **original** date. Leaving to Home after midnight clears it (row above). |
+| Midnight rollover during play | The current board continues and is credited to its **original** date. Leaving to Home after midnight clears it (row above). O7's "Next puzzle in …" counts down to the midnight **after the solved daily's own date**; once that has passed (solved after midnight, or O7 left open past it), O7 says a new puzzle is ready instead. |
 | Leaderboard | Phase 4: submit the solve time if FBIG leaderboards are available (05 §8) |
 
 ## 13. Monetization (Phase 2 behaviour)

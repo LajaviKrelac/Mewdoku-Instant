@@ -42,6 +42,12 @@ export interface GameConfig {
     /** FB adapter: delays before re-loading an ad instance after consecutive load failures; after the
      *  last one it waits for the next preload()/show request (05 §6.2, no tight reload loop). */
     readonly reloadDelaysMs: readonly number[];
+    /**
+     * FB adapter: an instance whose loadAsync() has not settled after this long is dropped and
+     * counts as a failed load (reload backoff), so a load that never settles cannot block that ad
+     * kind for the session (PLAT-6). Longer than readyTimeoutMs. [platform addition]
+     */
+    readonly loadTimeoutMs: number;
   };
   readonly daily: {
     readonly unlockAfterLevel: number;
@@ -57,6 +63,11 @@ export interface GameConfig {
     readonly packSize: number;
     /** Pack fetch retry delays before falling back to a substitute board (04 §8). */
     readonly fetchRetryDelaysMs: readonly number[];
+    /**
+     * Per-attempt cap for a pack or daily-month request: one that has not answered by then counts as
+     * a failed attempt (retry, then substitute / generated daily), so it can never hang (04 §8). [app addition]
+     */
+    readonly fetchTimeoutMs: number;
   };
   readonly fx: {
     readonly boardEntryMs: number;
@@ -96,6 +107,12 @@ export interface GameConfig {
     readonly cloudRetryDelaysMs: readonly number[];
     /** FB: getDataAsync wait at boot; on timeout the session keeps the local copy and skips cloud writes (05 §7). */
     readonly cloudLoadTimeoutMs: number;
+    /**
+     * FB: after a failed or timed-out boot read, the cloud copy is read again in the background on
+     * this schedule (the last delay repeats) until it arrives; the app then merges it and cloud
+     * writes start (05 §7 "the cloud merge follows", PLAT-1). [platform addition]
+     */
+    readonly cloudLateRetryDelaysMs: readonly number[];
   };
   readonly timer: { readonly tickMs: number };
   readonly hint: {
@@ -148,6 +165,11 @@ export interface GameConfig {
     readonly patternScale: number;
     readonly focusRingPx: number;
     readonly hintDim: number;
+    /** Colour-pattern glyph opacity (--ink) on a tile, and on a faded (done) tile: both ≥ 3:1 (02 §18, palette-check). [ui addition] */
+    readonly patternOpacity: number;
+    readonly patternOpacityDone: number;
+    /** Smallest drawn glyph box (CSS px): small slots scale the 22 % glyph up to this (11×11 / 12×12 on phones). [ui addition] */
+    readonly patternMinPx: number;
   };
   /** Offline generator and runtime substitute/endless generation (03 §4.5, §8.3). */
   readonly gen: {
@@ -180,11 +202,32 @@ export interface GameConfig {
     readonly fontTimeoutMs: number;
     /** Longest wait for restore-rule validation at launch; slower checks run when the board is opened (02 §15). */
     readonly restoreTimeoutMs: number;
+    /**
+     * Longest wait for the current level's pack at launch (04 §5.1 ensurePackFor). The fetch goes on
+     * in the background and getLevel() waits for it behind the loading indicator (RP-1). [boot addition]
+     */
+    readonly packTimeoutMs: number;
+    /** platform.init() / start() are retried once after this delay before boot gives up (PLAT-8). [boot addition] */
+    readonly platformRetryDelayMs: number;
   };
   /** Loading indicator (lead decision, Phase 2 integration). [app addition] */
   readonly loading: {
     /** Opening a level or daily that takes longer than this (pack fetch, on-device generation) shows the indicator. */
     readonly indicatorDelayMs: number;
+    /** Last resort: a level or daily still not ready after this goes back Home with a toast (04 §8). [app addition] */
+    readonly failSafeMs: number;
+  };
+  /** Lazy JS chunks (04 §9): a failed import is retried with a cache-busting URL (04 §8). [app addition] */
+  readonly chunks: {
+    /** Backoff before each retry; its length is the number of retries. */
+    readonly retryDelaysMs: readonly number[];
+    /** Per-attempt cap, so a stalled download cannot hang the caller. */
+    readonly timeoutMs: number;
+  };
+  /** Engine worker (04 §5.5). [app addition] */
+  readonly worker: {
+    /** Deadline for the worker's start-up and for each call; on expiry the worker is dropped and work runs on the main thread. */
+    readonly callTimeoutMs: number;
   };
 }
 
@@ -219,6 +262,7 @@ export const cfg: GameConfig = deepFreeze({
     unsupportedFallback: { cooldownSec: 600 },
     mock: { durationMs: 1500 },
     reloadDelaysMs: [5000, 30_000, 120_000],
+    loadTimeoutMs: 12_000,
   },
   daily: { unlockAfterLevel: 20, firstPackMonth: '2026-10' },
   levels: {
@@ -228,6 +272,7 @@ export const cfg: GameConfig = deepFreeze({
     prefetchAhead: 20,
     packSize: 100,
     fetchRetryDelaysMs: [500, 2000],
+    fetchTimeoutMs: 5000,
   },
   fx: {
     boardEntryMs: 250,
@@ -262,6 +307,7 @@ export const cfg: GameConfig = deepFreeze({
     cloudKey: 'save',
     cloudRetryDelaysMs: [1000, 3000, 10_000],
     cloudLoadTimeoutMs: 4000,
+    cloudLateRetryDelaysMs: [5000, 15_000, 30_000, 60_000],
   },
   timer: { tickMs: 1000 },
   hint: { mainThreadBudgetMs: 30 },
@@ -305,6 +351,9 @@ export const cfg: GameConfig = deepFreeze({
     patternScale: 0.22,
     focusRingPx: 3,
     hintDim: 0.55,
+    patternOpacity: 0.85,
+    patternOpacityDone: 0.65,
+    patternMinPx: 7,
   },
   gen: {
     maxAttempts: 5000,
@@ -319,8 +368,10 @@ export const cfg: GameConfig = deepFreeze({
     version: 'mewdoku-gen/1.0.0',
   },
   analytics: { nameMin: 2, nameMax: 40, maxParams: 25, keyMin: 2, keyMax: 40, valueMaxLen: 99 },
-  boot: { fontTimeoutMs: 1500, restoreTimeoutMs: 1500 },
-  loading: { indicatorDelayMs: 300 },
+  boot: { fontTimeoutMs: 1500, restoreTimeoutMs: 1500, packTimeoutMs: 1500, platformRetryDelayMs: 1000 },
+  loading: { indicatorDelayMs: 300, failSafeMs: 25_000 },
+  chunks: { retryDelaysMs: [500, 1500], timeoutMs: 8000 },
+  worker: { callTimeoutMs: 10_000 },
 });
 
 /** Drag threshold for a cell of `cellPx` CSS px: max(8, 0.2 × cellPx) (02 §3 input.dragStartPx). */

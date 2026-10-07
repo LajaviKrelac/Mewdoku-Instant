@@ -2,6 +2,8 @@
 // Helper and ad flows of the session, exactly in the 04 §5.7 order (02 §9, §10.2, §13):
 //   stock check → O2 → rewarded ad or free fallback → (+1 stock, saves.now) → engine → debit +
 //   saves.now → dispatch. Interstitials: pacing gate → ad → lastAdAt; the transition always goes on.
+// A flow that needs a lazily loaded card (O1, O2) first checks router.overlaysReady(): when the chunk
+// cannot be loaded it toasts and charges nothing, so the game stays playable (04 §8).
 import type { RewardedVariant } from '../ui/overlays/rewarded-prompt';
 import { interstitialGate, type InterstitialTrigger } from '../game/ad-pacing';
 import { fallbackAvailable, fallbackReadyAt, grant, recordAdShown, recordFallbackGrant, spend } from '../game/economy';
@@ -108,8 +110,16 @@ export function createHelperFlows(host: HelperHost): HelperFlows {
     });
   }
 
+  /** The O1/O2 chunk is (or gets) loaded; else `message` is toasted and nothing is charged. */
+  async function cardsReady(alive: () => boolean, message: string): Promise<boolean> {
+    if (await host.router.overlaysReady()) return alive();
+    if (alive()) host.toast(message);
+    return false;
+  }
+
   async function rewardedOrFallback(p: RewardedPlacement): Promise<boolean> {
     const asks = p !== 'revive';
+    if (asks && !(await cardsReady(() => true, t(p === 'hint' ? 'hint.unavailable' : 'kitty.unavailable')))) return false;
     if (rewardedAvailable()) {
       if (asks && !(await askO2(p, 'video'))) return false;
       const r = await host.adFlow.rewarded(p);
@@ -152,6 +162,7 @@ export function createHelperFlows(host: HelperHost): HelperFlows {
       // Tutorial: free and uncharged (02 §9.3); only at the bulb step.
       if (step !== null && !tutorialAllowsTool(step, 'bulb')) return;
       await host.runBusy(async (alive) => {
+        if (!(await cardsReady(alive, t('hint.unavailable')))) return;
         let hint: HintStep;
         try {
           hint = await host.engine.getHint(s0.puzzle, s0.cells);
@@ -169,6 +180,7 @@ export function createHelperFlows(host: HelperHost): HelperFlows {
       return;
     }
     await host.runBusy(async (alive) => {
+      if (!(await cardsReady(alive, t('hint.unavailable')))) return; // never charge for a card that cannot open
       if (host.save().stock.hints <= 0) {
         if (!(await rewardedOrFallback('hint')) || !alive()) return;
         host.updateSave((s) => grant(s, 'hints', undefined, c));
@@ -214,7 +226,9 @@ export function createHelperFlows(host: HelperHost): HelperFlows {
         if (alive()) host.toast(t('kitty.unavailable')); // nothing charged
         return;
       }
-      if (!alive() || host.game() !== s1) return;
+      // TICK replaces the state object every second: compare the board, as onBulb does.
+      const s2 = host.game();
+      if (!alive() || !s2 || s2.status !== 'playing' || s2.cells !== s1.cells) return;
       host.updateSave((s) => spend(s, 'kitties'));
       host.saves.now();
       stockChanged();
