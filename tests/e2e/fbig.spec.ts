@@ -194,3 +194,33 @@ test.describe('FBIG ads', () => {
     expect(await stub(page, (s) => s.count('ad.showAsync'))).toBe(0);
   });
 });
+
+test.describe('FBIG layout', () => {
+  /** Visible controls whose box reaches into the top-left 64×64 safe zone (02 §19, 05 §5). */
+  const safeZoneHits = (page: Page): Promise<string[]> =>
+    page.evaluate(() => {
+      const out: string[] = [];
+      for (const el of Array.from(document.querySelectorAll<HTMLElement>('button, a[href], [role="button"]'))) {
+        const r = el.getBoundingClientRect();
+        if (r.width === 0 || r.height === 0 || el.closest('[hidden]')) continue;
+        if (r.left < 64 && r.top < 64) out.push(el.className || el.tagName);
+      }
+      return out;
+    });
+
+  test('the FB safe zone holds no control on Home or in a level', async ({ page }) => {
+    await openGame(page, { data: { save: seededSave(12, 11) } });
+    expect(await page.evaluate(() => document.getElementById('app')?.dataset.platform)).toBe('fbig');
+    expect(await safeZoneHits(page)).toEqual([]);
+    await startLevel(page);
+    expect(await safeZoneHits(page)).toEqual([]);
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
+
+  test('a first run boots straight into the tutorial with the safe zone clear', async ({ page }) => {
+    await openGame(page, {});
+    await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().session?.mode === 'tutorial');
+    expect(await safeZoneHits(page)).toEqual([]);
+  });
+});

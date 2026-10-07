@@ -14,7 +14,8 @@ import type { SaveDataV1 } from '../../src/game/types';
 type TestWindow = Window & { __mewdoku?: E2EHooks };
 
 const SAFE_ZONE = 64;
-const PACK_000 = resolve(dirname(fileURLToPath(import.meta.url)), '../../src/data/levels/pack-000.json');
+const LEVELS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../../src/data/levels');
+const PACK_000 = resolve(LEVELS_DIR, 'pack-000.json');
 
 async function boot(page: Page, save?: SaveDataV1): Promise<void> {
   await page.goto('/');
@@ -95,3 +96,28 @@ test('home and the largest bundled board fit', async ({ page }) => {
   await boardVisible(page);
   await safeZoneClear(page);
 });
+
+/** The first 12×12 level of the shipped packs (02 §18: the smallest cells the format allows). */
+function first12(): number {
+  for (let k = 1; k <= 9; k++) {
+    const pack = JSON.parse(readFileSync(resolve(LEVELS_DIR, `pack-${String(k).padStart(3, '0')}.json`), 'utf8')) as LevelPack;
+    const rec = pack.levels.find((r) => r.n === 12);
+    if (rec) return rec.i ?? pack.first;
+  }
+  throw new Error('no 12×12 level shipped');
+}
+
+test('a 12×12 board (fetched pack) fits with whole cells', async ({ page }) => {
+  const level = first12();
+  await boot(page, { ...defaults(Date.now()), tutorialDone: true, progress: { level, completed: level - 1, best: {} } });
+  await page.locator('.home__play').click();
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
+  expect(await page.evaluate(() => (window as TestWindow).__mewdoku?.state()?.puzzle.n ?? 0)).toBe(12);
+  await noHorizontalOverflow(page);
+  await boardVisible(page);
+  await safeZoneClear(page);
+  // 02 §18: about 26 px cells on a 360 px phone; never below 22 px at the 320 px minimum.
+  const box = await page.locator('.cell').first().boundingBox();
+  expect(box?.width ?? 0).toBeGreaterThanOrEqual(22);
+});
+

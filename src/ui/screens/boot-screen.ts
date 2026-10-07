@@ -4,7 +4,7 @@
 // Classes: .screen.screen--boot > .boot__wordmark .boot__art .boot__progress(.boot__bar .boot__fill)
 //          .boot__pct .boot__label
 import { t } from '../../i18n';
-import { illustration } from '../art/illustrations';
+import { mascotIllustration } from '../art/mascot';
 import { h, setText } from '../dom';
 
 export interface BootScreen {
@@ -35,7 +35,7 @@ export function createBootScreen(): BootScreen {
     { class: 'screen screen--boot', 'aria-busy': 'true' },
     h('div', { class: 'boot__center' },
       h('h1', { class: 'boot__wordmark' }, t('app.name')),
-      h('div', { class: 'boot__art' }, illustration('boot', { label: t('a11y.illustration.boot') })),
+      h('div', { class: 'boot__art' }, mascotIllustration('boot', { label: t('a11y.illustration.boot') })),
       bar,
       h('p', { class: 'boot__label' }, t('boot.loading')),
     ),

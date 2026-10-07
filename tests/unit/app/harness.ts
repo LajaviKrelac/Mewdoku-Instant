@@ -226,7 +226,9 @@ export function createFakeRouter(bus: AppBus, log: Log): FakeRouter {
       r.toasts.push(message);
       log.push(`toast:${message}`);
     },
+    setLoading: (on) => void log.push(`loading:${on ? 'on' : 'off'}`),
     escape: () => false,
+    preloadOverlays: () => Promise.resolve(),
     destroy: () => undefined,
   };
   return r;
@@ -261,6 +263,7 @@ export function createLoggedEngine(log: Log, opts: { failHint?: boolean } = {}):
       log.push('engine:pickKittyCell');
       return real.pickKittyCell(puzzle, cells);
     },
+    preload: real.preload,
     dispose: real.dispose,
   };
   return e;

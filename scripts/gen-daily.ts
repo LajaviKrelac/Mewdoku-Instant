@@ -11,7 +11,7 @@ import { canonicalKey } from '../src/engine/filters';
 import type { DailyPack, GenSpec, LevelRecord } from '../src/engine/types';
 import { dailySpec } from '../src/game/progression';
 import { SEEDS, weekdayOfDateKey } from '../src/game/ramp';
-import { CONTENT_CACHE_DIR, parseArgs, runGenTask, runGenTasks, type GenTask, type GenTaskResult } from './gen-levels';
+import { CONTENT_CACHE_DIR, parseArgs, runGenTask, runGenTasks, type GenTask, type GenTaskResult } from './gen-pool';
 import { nextMonth, orderedRecord, updateManifest, writeDailyPack } from './verify-levels';
 
 const MONTH_RE = /^(\d{4})-(0[1-9]|1[0-2])$/;

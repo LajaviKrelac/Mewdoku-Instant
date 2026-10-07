@@ -307,13 +307,3 @@ svg {
   padding-bottom: var(--safe-bottom);
 }
 
-/* Foundation placeholder (src/main.ts) until the app workstream boots the real UI. */
-.placeholder-wordmark {
-  margin: 0;
-  padding-top: 40vh;
-  text-align: center;
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 2.5rem;
-  color: var(--accent);
-}

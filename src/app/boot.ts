@@ -2,11 +2,13 @@
 // Boot sequence (04 §5.1): platform.init → sprite/tokens → load + migrate + merge save → sessions+1
 // → ensure pack → fonts → progress 100 → platform.start → locale → restore rules → route → preload ads.
 import { createAudioEngine, type AudioEngine } from '../audio/audio-engine';
-import { createSfx, type Sfx } from '../audio/sfx';
+import { createLazySfx } from '../audio/lazy-sfx';
+import type { Sfx } from '../audio/sfx';
 import { createAssetLoaders } from '../game/level-assets';
 import { createLevelsRepo, type LevelsRepo } from '../game/levels-repo';
 import { localDateKey } from '../game/progression';
 import { migrate } from '../game/save';
+import type { GenResult, GenSpec } from '../engine/types';
 import type { GameState, SaveDataV1 } from '../game/types';
 import type { PlatformAdapter, RawSave } from '../platform/types';
 import { setLocale, t } from '../i18n';
@@ -14,7 +16,7 @@ import { createAnnouncer, type Announcer } from '../ui/a11y/announcer';
 import { mountSprite } from '../ui/art/sprite';
 import { applyMotion, resolveReducedMotion, systemPrefersReducedMotion, watchSystemReducedMotion } from '../ui/fx/motion';
 import { mountRotateNotice } from '../ui/overlays/rotate-notice';
-import type { BootScreen } from '../ui/screens/boot-screen';
+import { createBootScreen, type BootScreen } from '../ui/screens/boot-screen';
 import { createEngineClient, type EngineClient } from '../workers/engine-client';
 import { createAdFlow } from './ad-flow';
 import { delay, systemClock, type Clock } from './clock';
@@ -27,6 +29,7 @@ import { createSaveScheduler } from './saves';
 import { createSession, type Session } from './session';
 import { createShell } from './shell';
 import { createStore, initialAppState, type AppState, type Store } from './store';
+import { attachUiClickFeedback } from './ui-sounds';
 import { watchVisibility } from './visibility';
 
 export { applyRestoreRules, loadSave } from './restore';
@@ -64,6 +67,11 @@ export interface E2EHooks {
   solution(): number[] | null;
   /** Replaces the save (JSON of SaveDataV1) and writes it; reload to apply. */
   seedSave(json: string): void;
+  /**
+   * The generator as the game runs it (03 §11.3 cross-engine check): 'worker' goes through the
+   * engine client (module worker), 'main' through the lazily loaded main-thread generator chunk.
+   */
+  generate(spec: GenSpec, where: 'worker' | 'main'): Promise<GenResult>;
 }
 
 declare global {
@@ -109,7 +117,9 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
   // 1. FIRST: lets FB show its progress bar early (05 §4).
   await platform.init();
   attempt(() => mountSprite(doc), undefined);
-  const router = createRouter(root, { bus, doc, factories: opts.routerFactories });
+  // S0 splash: web builds only (__PLATFORM__ is a build-time constant, so FBIG drops the module).
+  const splash: Partial<RouterFactories> = __PLATFORM__ === 'web' ? { bootScreen: createBootScreen } : {};
+  const router = createRouter(root, { bus, doc, factories: { ...splash, ...opts.routerFactories } });
   const bootScreen: BootScreen | null = platform.id === 'web' ? attempt(() => router.showBoot(), null) : null;
   const progress = (pct: number): void => {
     attempt(() => platform.setLoadingProgress(pct), undefined);
@@ -162,7 +172,8 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
   const unlock = (): void => attempt(() => audio.unlock(), undefined);
   doc.addEventListener('pointerdown', unlock, true);
   doc.addEventListener('keydown', unlock, true);
-  const sfx = opts.sfx ?? createSfx(audio);
+  const lazySfx = opts.sfx ? null : createLazySfx(audio);
+  const sfx: Sfx = opts.sfx ?? (lazySfx as Sfx);
   const announcer = opts.announcer ?? createAnnouncer(doc.body);
   const adFlow = createAdFlow({
     platform,
@@ -210,6 +221,13 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
     openSettings: () => shell.openSettings(),
   });
   shell.applySettings();
+  // 02 §16 UI button click + 4 ms vibration, delegated on the app root (lead decision).
+  const offUiClick = attachUiClickFeedback(root, {
+    play: () => sfx.play('ui'),
+    haptic: () => {
+      if (store.get().save.settings.haptics && platform.capabilities().haptics) platform.haptics.pulse(cfg.haptics.ui);
+    },
+  });
   const stopMotion = attempt(() => watchSystemReducedMotion(() => shell.applySettings(), win ?? undefined), () => undefined);
 
   // Router → store mirror (overlay stack and screen), toasts from anywhere.
@@ -249,6 +267,7 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
       unwatch();
       stopMotion();
       rotate?.destroy();
+      offUiClick();
       doc.removeEventListener('pointerdown', unlock, true);
       doc.removeEventListener('keydown', unlock, true);
       engine.dispose();
@@ -256,13 +275,17 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
       bus.clear();
     },
   };
-  if (__E2E__ && win) win.__mewdoku = createE2EHooks(handle, platform, saves);
+  if (__E2E__ && win) win.__mewdoku = createE2EHooks(handle, platform, saves, engine);
 
   // 7. Route: returning players land on Home; first run goes straight into the tutorial (02 §4.2).
   if (store.get().save.tutorialDone) shell.showHome();
   else await live.start({ mode: 'tutorial', replay: false });
 
-  // 8. Preload ads (never during play start-up).
+  // 8. The lazy chunks (04 §9: overlays, sound recipes, hint engine; none is needed for the first
+  //    screen), then preload ads (never during play start-up).
+  void router.preloadOverlays();
+  void lazySfx?.load();
+  attempt(() => engine.preload(), undefined);
   const caps = attempt(() => platform.capabilities(), null);
   if (cfg.ads.enabled && caps) {
     if (caps.interstitial) attempt(() => platform.ads.preload('interstitial'), undefined);
@@ -276,6 +299,7 @@ export function createE2EHooks(
   handle: Pick<AppHandle, 'store' | 'clock'>,
   platform: Pick<PlatformAdapter, 'storage'>,
   saves: { dispose(): void },
+  engine: Pick<EngineClient, 'generate'>,
 ): E2EHooks {
   const { store, clock } = handle;
   return {
@@ -291,6 +315,11 @@ export function createE2EHooks(
       saves.dispose(); // nothing from this page load may overwrite the seeded save before the reload
       store.update((s) => ({ ...s, save: data }));
       void platform.storage.save(data, { cloud: 'now' });
+    },
+    async generate(spec, where) {
+      if (where === 'worker') return engine.generate(spec);
+      const mod = await import('../engine/generator');
+      return mod.generate(spec);
     },
   };
 }

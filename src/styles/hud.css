@@ -212,6 +212,13 @@
   }
 }
 
+/* Wide screens (the 480 px column): chips size to their text, so each fits on one line. */
+@media (min-width: 600px) {
+  .chip {
+    flex: 1 1 auto;
+  }
+}
+
 /* ── Tool bar: bulb · paw (64 px, count badges) ────────────────────────── */
 .tool-bar {
   display: flex;

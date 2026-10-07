@@ -60,6 +60,9 @@
 .overlay__panel--dialog { max-width: 400px; padding: 24px 20px 20px; border-radius: var(--radius-xl); background: var(--card);
   box-shadow: var(--shadow-3); text-align: center; animation: mw-pop-in 220ms var(--ease-out) both; }
 .overlay__panel--stage { max-width: 360px; color: #fff; text-align: center; animation: mw-pop-in 260ms var(--ease-out) both; }
+/* Stage text sits on the scrimmed board (busy X glyphs, cats): a soft dark halo keeps it legible. */
+.overlay__panel--stage .overlay__title, .win__sub, .fail__body, .win__home.btn--ghost, .fail__home {
+  text-shadow: 0 1px 2px rgba(30, 22, 36, 0.8), 0 0 14px rgba(30, 22, 36, 0.75); }
 .overlay__panel--sheet { max-width: 480px; margin-top: auto; padding: 16px; border-radius: var(--radius-xl); background: var(--card);
   box-shadow: var(--shadow-3); animation: mw-sheet-in 220ms var(--ease-out) both; }
 .overlay__head { display: flex; align-items: center; margin: -4px -4px 8px 0; text-align: left; }
@@ -85,9 +88,11 @@
 .hint-card__actions { margin-top: 14px; }
 .hint-card__apply { flex: 1; max-width: 260px; margin: 0 auto; }
 .hint-card__actions .overlay__close { margin-left: 12px; }
-/* Flipped above the board when the bottom slot would cover it (HintCardProps.avoidRect). */
-.overlay[data-overlay='hint'][data-placement='top'] { justify-content: flex-start; padding-top: calc(12px + var(--safe-top)); }
-.overlay[data-overlay='hint'][data-placement='top'] .hint-card { margin-top: 0; margin-bottom: auto; animation-name: mw-sheet-down; }
+/* Flipped above the board when the bottom slot would cover it (HintCardProps.avoidRect): a full-width
+   sheet flush with the top edge, so the top bar's buttons never peek out around it. */
+.overlay[data-overlay='hint'][data-placement='top'] { justify-content: flex-start; padding: 0 0 calc(16px + var(--safe-bottom)); }
+.overlay[data-overlay='hint'][data-placement='top'] .hint-card { margin-top: 0; margin-bottom: auto; padding-top: calc(16px + var(--safe-top));
+  border-radius: 0 0 var(--radius-xl) var(--radius-xl); animation-name: mw-sheet-down; }
 
 /* O2 rewarded prompt */
 .rewarded__icon { display: flex; align-items: center; justify-content: center; width: 72px; height: 72px; margin: 0 auto 12px;
@@ -183,6 +188,20 @@
   padding: 0 16px; pointer-events: none; }
 .toast { max-width: 420px; padding: 10px 18px; border-radius: var(--radius-l); background: var(--ink); color: #fff; font-weight: 600;
   text-align: center; box-shadow: var(--shadow-2); animation: mw-pop-in 200ms var(--ease-out) both; }
+/* ── Loading indicator: opening a board takes > loading.indicatorDelayMs (pack fetch, generation) ── */
+.loading-layer { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 55; display: flex; align-items: center;
+  justify-content: center; padding: 24px; background: rgba(251, 246, 238, 0.62); animation: mw-fade-in var(--t-overlay) ease both; }
+.loading-card { display: flex; flex-direction: column; align-items: center; min-width: 200px; padding: 18px 24px 16px;
+  border-radius: var(--radius-l); background: var(--card); box-shadow: var(--shadow-2); color: var(--ink); }
+.loading-paws { display: flex; align-items: center; height: 36px; }
+.loading-paw { width: 22px; height: 22px; margin: 0 4px; color: var(--accent); opacity: 0.22; animation: mw-paw-step 1200ms ease-in-out infinite; }
+.loading-paw:nth-child(odd) { transform: translateY(6px) rotate(-14deg); }
+.loading-paw:nth-child(even) { transform: translateY(-6px) rotate(14deg); }
+.loading-paw:nth-child(2) { animation-delay: 200ms; }
+.loading-paw:nth-child(3) { animation-delay: 400ms; }
+.loading-text { margin-top: 6px; font-weight: 600; font-size: var(--fs-s); color: var(--ink-2); text-align: center; }
+@keyframes mw-paw-step { 0%, 100% { opacity: 0.22; } 30%, 50% { opacity: 1; } }
+[data-motion='reduced'] .loading-paw { opacity: 1; }
 .rotate-notice { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 100; display: flex; flex-direction: column; align-items: center;
   justify-content: center; padding: 24px; background: var(--page); color: var(--ink); text-align: center; }
 .rotate-notice__art { width: 72px; height: 72px; }
@@ -259,6 +278,7 @@
   .hint-card__text { font-size: var(--fs-m); }
   .hint-card__icon { width: 36px; height: 36px; padding: 6px; }
   .hint-card__actions { margin-top: 10px; }
+  .overlay[data-overlay='hint'][data-placement='top'] .hint-card { padding-top: calc(12px + var(--safe-top)); }
   .home__wordmark { font-size: 2.5rem; }
   .home__mascot > svg { width: 150px; height: 150px; }
 }

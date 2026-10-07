@@ -35,7 +35,7 @@ The direction rules of 04 §2, made concrete for `tests/unit/layering.spec.ts` (
 | `src/app/config.ts` | nothing (leaf) | — |
 | `src/i18n/**` | `i18n/` only (leaf) | everything else |
 | `src/engine/**` | `engine/` | anything outside `engine/` (no DOM, timers, `Math.random`) |
-| `src/game/**` | `engine/`, `game/`, `app/config.ts` | DOM, timers, `platform/`, `ui/`, other `app/` |
+| `src/game/**` | `engine/`, `game/`, `app/config.ts`, `data/` (the shipped JSON, wired in `level-assets.ts`; lead decision, Phase 2 integration) | DOM, timers, `platform/`, `ui/`, other `app/` |
 | `src/platform/**` | `platform/`, `game/types.ts` (types), `app/config.ts`, `i18n/` | `ui/`, other `app/`, `game/` values |
 | `src/ui/**`, `src/audio/**` | `ui/`, `audio/`, `i18n/`, `app/config.ts`, `engine/` and `game/` (pure) | `platform/` values, other `app/` (UI gets props and callbacks) |
 | `src/workers/**` | `engine/`, `workers/`, `app/config.ts` | `ui/`, `platform/` |
@@ -94,7 +94,7 @@ UI modules are plain functions that return handles. The UI never imports the sto
 | `screens/boot-screen.ts` | `createBootScreen(): { el, setProgress(pct), destroy() }` (web only) | router |
 | `screens/home-screen.ts` | `createHomeScreen(HomeView, HomeCallbacks): View<HomeView>`; `HomeView { level, hard, continueLevel, daily: DailyCardView, hints, kitties, showTrophy, fbSafeZone, extraCards }`; callbacks `onPlay, onDaily, onSettings, onTrophy, onCard` | router |
 | `screens/game-screen.ts` | `createGameScreen(GameView, GameScreenCallbacks): GameScreen` with `playEvent(ev)`, `playEntry()`, `cellRect(i)`, `toolRect(tool)`, `focusBoard()`. Composes top bar, pills, rule chips, board view, tool bar, and runs layout on resize | router |
-| `overlays/hint-card.ts` | `createHintCard(): OverlayView<HintCardProps>`; `hintText(step, { n, colors, patterns })` and `unitName(unit, ctx)` render the 02 §9.1 templates (also used for announcements) | router, session |
+| `overlays/hint-card.ts` | `createHintCard(): OverlayView<HintCardProps>`; `hintText(step, { n, colors, patterns })` and `unitName(unit, ctx)` render the 02 §9.1 templates (also used for announcements). The text helpers live in `overlays/hint-text.ts` (main bundle; the session imports them from there) and are re-exported by `hint-card.ts` (lazy chunk) | router, session |
 | `overlays/rewarded-prompt.ts` | `RewardedPromptProps { placement: 'hint'\|'kitty', variant: 'video'\|'free'\|'countdown', nextFreeAt, now(), onAccept, onDecline }` | router |
 | `overlays/win-overlay.ts` | `WinOverlayProps { variant: 'level'\|'tutorial'\|'tutorial_replay', level, nextLevel, praise, buttonDelayMs, reducedMotion, onNext, onHome }` | router |
 | `overlays/fail-overlay.ts` | `FailOverlayProps { continueOffer: 'video'\|'free'\|null, buttonDelayMs, busy, onContinue, onRetry, onHome }` | router |
@@ -145,7 +145,7 @@ UI modules are plain functions that return handles. The UI never imports the sto
 ### 5.4 app (internal hub; signatures matter to tests and to `main.ts`)
 
 - `boot(platform, root, opts?): Promise<AppHandle>` and `applyRestoreRules(save, { today, levels })`. In e2e builds it installs `window.__mewdoku: E2EHooks` (`state()`, `app()`, `solution()`, `seedSave(json)`).
-- `createRouter(root, { bus?, doc? }): Router` with `showBoot`, `showHome(view, cb)`, `showGame(view, cb): GameScreen`, `open(id, OverlayPropsMap[id])`, `update`, `close`, `closeAll`, `isOpen`, `top`, `stack`, `toast`, `escape`, `destroy`.
+- `createRouter(root, { bus?, doc?, factories? }): Router` with `showBoot`, `showHome(view, cb)`, `showGame(view, cb): GameScreen`, `open(id, OverlayPropsMap[id])`, `update`, `close`, `closeAll`, `isOpen`, `top`, `stack`, `toast`, `setLoading(on)`, `escape`, `preloadOverlays()`, `destroy`. Every overlay except the coach comes from the lazy chunk `app/overlay-chunk.ts`; an `open()` before it lands is queued (see §9).
 - `createSession(deps): Session`:
   - `start(req: SessionRequest)`, `state()`, `subscribe(fn)`, `pause(reason)`, `resume(reason)`, `saveNow()`, `dispose()`;
   - the commands that screens and overlays call: `onCellTap`, `onCellDoubleTap`, `onPaint`, `onBulb`, `onPaw`, `onHintApply`, `onHintClose`, `onCoachGotIt`, `onContinue`, `onRetry`, `onNext`, `onDailyDone`, `onHome`, `onSkipTutorial`.
@@ -155,7 +155,7 @@ UI modules are plain functions that return handles. The UI never imports the sto
 - Flags: `isFlagOn`, `setFlagOverrides`, `parseFlagParam`, `DEFAULT_FLAGS` (all off).
 - `selectHomeView(state, ctx)` and `selectGameView(state, ctx)` map `AppState` to the UI view models.
 - Workers:
-  - `createEngineClient(opts?)` provides `generate`, `getHint` (async; it rejects when the engine throws), `pickKittyCell` and `dispose`.
+  - `createEngineClient(opts?)` provides `generate`, `getHint` (async; it rejects when the engine throws), `pickKittyCell` (async since integration: the hint engine is a lazy chunk), `preload()` and `dispose`.
   - `rpc.ts` provides `createRpcClient<T>(port)` and `exposeRpc(api, port)`.
   - `engine.worker.ts` exposes `EngineWorkerApi { generate, getHint }`.
 
@@ -267,3 +267,30 @@ pointer / keys ─► ui/board (gestures, keyboard) ─► BoardInput ─► Gam
 7. **One `Session.onHome()`** serves the top bar, O3 and O4. A `lost` status means discard; any other status means save the board first.
 8. **`tsconfig` `lib` is ES2020** (it was ES2022), to enforce the browser baseline.
 9. **Extra scripts:** `build:fbig-e2e`, `preview:e2e`, `preview:fbig-e2e`, `test:unit`, `levels:schedule`.
+
+## 9. Phase 2 integration changes (integration lead, 2026-10-07)
+
+**Tokens.** `--wrong: #A3193A` (`TOKENS.wrong` in `ui/art/palette.ts`, `tokens.css`) is the colour of the wrong-X glyph and its ring. The spec's `--danger` (`#D33A4A`) reaches only about 2.2:1 on the pastel tiles; `--wrong` passes the 3:1 non-text contrast check on every tile (`scripts/palette-check.ts`: min 3.18:1 on Slate). `--danger` stays the UI error colour (flash, lost heart). New tokens are added to `tokens.css` and, when scripts or SVG need them, to `TOKENS`.
+
+**CSS class vocabulary.** There is no separate class list; each stylesheet's header comment is the reference, and each UI module's header repeats the classes it renders (`// Classes: …`):
+
+- `styles/base.css`: buttons (`.btn --primary|--secondary|--ghost|--icon|--block|--lg`, `.btn__icon .btn__label .btn__badge .btn__chev`), `.badge`, `.icon`, `.sr-only`, `.screen --boot|--home|--game`;
+- `styles/board.css`: the board DOM (`.board[role=grid][data-mood][data-hl][data-patterns]`, `.board__row`, `button.cell[data-s=e|m|c|w|g][data-done]…`, the `--c --it --ir --ib --il` cell variables);
+- `styles/hud.css`: top bar, pills, rule chips, tool bar, compact mode;
+- `styles/overlays.css`: `.overlay[data-overlay] > .overlay__scrim--clear|soft|dark + .overlay__panel--sheet|dialog|stage`, the screen layouts, toast, coach, rotate notice and the loading indicator (`.loading-layer > .loading-card`);
+- `styles/fx.css`: animation classes and the reduced-motion rule (`[data-motion='reduced']`).
+
+**Bundle split (04 §9).** Modules that the first screen does not need are lazy chunks: the overlays O1–O7 (`app/overlay-chunk.ts`, preloaded by boot after the first route), the hint engine (`engine/hint.ts` and the grader; `EngineClient.preload()`), the RPC layer (`workers/rpc.ts`, loaded with the worker), the sound recipes (`audio/lazy-sfx.ts` wraps `audio/sfx.ts`) and the win/fail/daily/tutorial poses (`ui/art/illustrations.ts`; the home and boot poses are in `ui/art/mascot.ts`). Rules for new code:
+
+- Do not import `ui/overlays/*` (except `coach`, `toast`, `loading-indicator`, `rotate-notice`, `overlay-base`, `hint-text`) from main-bundle modules; open overlays through the router.
+- `RouterFactories.loadOverlays` is the test seam for the chunk; tests that pass every overlay in `factories.overlays` stay synchronous.
+- The S0 splash (`ui/screens/boot-screen.ts`) is web-only: boot passes it to the router as `factories.bootScreen` when `__PLATFORM__ === 'web'`, so FBIG builds drop it (FB shows its own loader).
+
+**New app APIs.** `Router.setLoading(on)` (loading indicator, `aria-busy` on the app root; the session shows it when opening a level or daily takes longer than `cfg.loading.indicatorDelayMs` = 300 ms); `app/ui-sounds.ts` (`attachUiClickFeedback`: the 02 §16 UI click and 4 ms vibration for every enabled button outside the board, delegated on the app root); initial focus in a modal goes to its first focusable `[data-autofocus]` element; `E2EHooks.generate(spec, 'worker' | 'main')` for the cross-engine check (`tests/e2e/determinism.spec.ts`).
+
+**New strings and config.** `game.loading`, `kitty.unavailable` (toast when the kitty cannot pick a cell; nothing is charged); `cfg.loading.indicatorDelayMs`.
+
+**Layering.** `src/game/**` may import `src/data/**` (`level-assets.ts` wires the shipped JSON), see §2.
+
+**Content scripts.** The worker pool and the resumable cache moved from `gen-levels.ts` to `scripts/gen-pool.ts` (shared with `gen-daily.ts`); `gen-levels.ts` re-exports the old names. Regenerating with `--no-cache --workers 4` reproduces every pack and daily month byte for byte.
+

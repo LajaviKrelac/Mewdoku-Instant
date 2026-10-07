@@ -7,7 +7,7 @@
 //          .home__stock(.stock__item)
 import type { DailyCardState } from '../../game/progression';
 import { formatClock, formatShortDate, t } from '../../i18n';
-import { illustration } from '../art/illustrations';
+import { mascotIllustration } from '../art/mascot';
 import { icon } from '../art/sprite';
 import { clear, h, setText, type View } from '../dom';
 import { createTopBar, type TopBarProps } from '../hud/top-bar';
@@ -121,7 +121,7 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
         { class: 'home__hero' },
         h('h1', { class: 'home__wordmark' }, t('app.name')),
         h('p', { class: 'home__tagline' }, t('app.tagline')),
-        h('div', { class: 'home__mascot' }, illustration('home', { label: t('a11y.mascot') })),
+        h('div', { class: 'home__mascot' }, mascotIllustration('home', { label: t('a11y.mascot') })),
       ),
       h('div', { class: 'home__actions' }, play, daily, cards),
       h('div', { class: 'home__stock stock' }, hintsItem, kittiesItem),

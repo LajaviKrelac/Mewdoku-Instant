@@ -181,6 +181,11 @@ export interface GameConfig {
     /** Longest wait for restore-rule validation at launch; slower checks run when the board is opened (02 §15). */
     readonly restoreTimeoutMs: number;
   };
+  /** Loading indicator (lead decision, Phase 2 integration). [app addition] */
+  readonly loading: {
+    /** Opening a level or daily that takes longer than this (pack fetch, on-device generation) shows the indicator. */
+    readonly indicatorDelayMs: number;
+  };
 }
 
 export const cfg: GameConfig = deepFreeze({
@@ -315,6 +320,7 @@ export const cfg: GameConfig = deepFreeze({
   },
   analytics: { nameMin: 2, nameMax: 40, maxParams: 25, keyMin: 2, keyMax: 40, valueMaxLen: 99 },
   boot: { fontTimeoutMs: 1500, restoreTimeoutMs: 1500 },
+  loading: { indicatorDelayMs: 300 },
 });
 
 /** Drag threshold for a cell of `cellPx` CSS px: max(8, 0.2 × cellPx) (02 §3 input.dragStartPx). */

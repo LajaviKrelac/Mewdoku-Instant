@@ -41,6 +41,7 @@ function fakeBuild(root: string, sizes: Partial<Record<string, number>> = {}): v
     'assets/index-abc.js': sizes.main ?? 100_000,
     'assets/shared-def.js': sizes.shared ?? 10_000,
     'assets/engine.worker-123.js': sizes.worker ?? 20_000,
+    'assets/overlay-chunk-77.js': sizes.lazy ?? 18_000,
     'assets/index-abc.css': sizes.css ?? 15_000,
     'assets/display-latin-9.woff2': sizes.font ?? 16_468,
     'assets/pack-001-aa.json': 14_000,
@@ -55,19 +56,43 @@ describe('size-check', () => {
     const r = checkSizes(d, { fb: false });
     const row = (label: string) => r.rows.find((x) => x.label === label);
     expect(row('Main JS')?.bytes).toBe(110_000);
-    expect(row('Worker JS')?.bytes).toBe(20_000);
     expect(row('CSS')?.bytes).toBe(15_000);
     expect(row('Font')?.bytes).toBe(16_468);
-    expect(row('First-load total')?.bytes).toBe(110_000 + 20_000 + 15_000 + 16_468 + HTML.length);
+    // First load = what index.html pulls in before the first screen; the worker is lazy (04 §5.5).
+    expect(row('First-load total')?.bytes).toBe(110_000 + 15_000 + 16_468 + HTML.length);
     expect(row('First-load total')?.maxBytes).toBe(FIRST_LOAD_MAX);
+    expect(row('Worker JS (lazy)')?.bytes).toBe(20_000);
+    expect(row('Lazy JS chunks')?.bytes).toBe(18_000);
     expect(row('Lazy (packs, other)')?.bytes).toBe(18_000 + '{"instant_games":{}}'.length);
+    expect(r.rows.map((x) => x.label)).toEqual([
+      'Main JS',
+      'CSS',
+      'Font',
+      'index.html',
+      'First-load total',
+      'Worker JS (lazy)',
+      'Lazy JS chunks',
+      'Lazy (packs, other)',
+    ]);
     expect(r.ok).toBe(true);
     expect(r.maxFiles).toBeUndefined();
   });
 
+  it('fails when the first-load total or the lazy chunks are over budget', () => {
+    const d = tempDir('web');
+    fakeBuild(d, { main: 155_000, css: 35_000, font: 24_000 }); // each row ok, the sum over 220 KB
+    const r = checkSizes(d, { fb: false });
+    expect(r.rows.find((x) => x.label === 'Main JS')?.ok).toBe(true);
+    expect(r.rows.find((x) => x.label === 'First-load total')?.ok).toBe(false);
+    expect(r.ok).toBe(false);
+    const lazy = tempDir('web');
+    fakeBuild(lazy, { lazy: 46_000 });
+    expect(checkSizes(lazy, { fb: false }).ok).toBe(false);
+  });
+
   it('fails when a budget is exceeded', () => {
     const d = tempDir('web');
-    fakeBuild(d, { main: 150_000 });
+    fakeBuild(d, { main: 175_000 });
     const r = checkSizes(d, { fb: false });
     expect(r.ok).toBe(false);
     expect(r.rows.find((x) => x.label === 'Main JS')?.ok).toBe(false);
@@ -95,7 +120,7 @@ describe('zip-fbig', () => {
     fakeBuild(d);
     const a = zipFbig({ distDir: d, outDir: out, name: 'mew', version: '1.2.3', sha: 'abc1234', quiet: true });
     expect(a.file).toBe(join(out, 'mew-fbig-1.2.3-abc1234.zip'));
-    expect(a.fileCount).toBe(9);
+    expect(a.fileCount).toBe(10);
     const bytes = readFileSync(a.file);
     expect(a.bytes).toBe(bytes.length);
     const entries = unzipSync(new Uint8Array(bytes));

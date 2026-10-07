@@ -184,6 +184,17 @@ describe('kitty flow (02 §9.2)', () => {
     ]);
   });
 
+  it('a failed kitty pick toasts kitty.unavailable and charges nothing (lead decision)', async () => {
+    const h = createHarness({ save: withStock(5, 3) });
+    await playing(h);
+    h.engine.pickKittyCell = () => Promise.reject(new Error('engine failure'));
+    await h.session.onPaw();
+    expect(slice(h.log, FLOW)).toEqual([`toast:${t('kitty.unavailable')}`]);
+    expect(h.save().stock.kitties).toBe(3);
+    expect(h.game().status).toBe('playing');
+    expect(h.store.get().ui.inputLocked).toBe(false);
+  });
+
   it('is ignored outside PLAYING', async () => {
     const h = createHarness();
     await h.session.start({ mode: 'level', level: 5 }); // still READY

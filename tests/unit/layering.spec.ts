@@ -242,6 +242,10 @@ describe('layering (04 §2)', () => {
     const edge = (from: string, target: string | null, typeOnly = false): Edge => ({ from, spec: target ?? 'x', target, typeOnly });
     expect(checkSrcEdge(edge('src/engine/hint.ts', 'src/game/types.ts', true))).not.toBeNull();
     expect(checkSrcEdge(edge('src/game/reducer.ts', 'src/app/store.ts'))).not.toBeNull();
+    // Lead decision: game/level-assets.ts wires the shipped data files (pack-000 import, ?url globs).
+    expect(checkSrcEdge(edge('src/game/level-assets.ts', 'src/data/levels/pack-000.json'))).toBeNull();
+    expect(checkSrcEdge(edge('src/ui/board/board-view.ts', 'src/data/levels/pack-000.json'))).not.toBeNull();
+    expect(checkSrcEdge(edge('src/engine/codec.ts', 'src/data/levels/pack-000.json'))).not.toBeNull();
     expect(checkSrcEdge(edge('src/game/reducer.ts', 'src/platform/types.ts', true))).not.toBeNull();
     expect(checkSrcEdge(edge('src/platform/web/index.ts', 'src/game/save.ts'))).not.toBeNull();
     expect(checkSrcEdge(edge('src/platform/web/index.ts', 'src/game/types.ts', true))).toBeNull();

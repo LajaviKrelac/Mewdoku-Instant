@@ -106,7 +106,27 @@ describe('engine client', () => {
     const step = await client.getHint(puzzle, cells);
     expect(step.kind).toBeTruthy();
     expect(created).toBe(0); // the worker is lazy: hints did not need it
-    expect(typeof client.pickKittyCell(puzzle, cells)).toBe('number');
+    expect(typeof (await client.pickKittyCell(puzzle, cells))).toBe('number');
+    client.dispose();
+  });
+
+  it('loads the hint engine lazily, once, and retries a failed chunk load', async () => {
+    const real = await import('../../../src/engine/hint');
+    let loads = 0;
+    let fail = true;
+    const client = createEngineClient({
+      createWorker: () => null,
+      loadHintEngine: () => {
+        loads++;
+        return fail ? Promise.reject(new Error('chunk failed')) : Promise.resolve(real);
+      },
+    });
+    await expect(client.getHint(puzzle, cells)).rejects.toThrow('chunk failed');
+    fail = false;
+    client.preload();
+    expect((await client.getHint(puzzle, cells)).kind).toBeTruthy();
+    expect(typeof (await client.pickKittyCell(puzzle, cells))).toBe('number');
+    expect(loads).toBe(2);
     client.dispose();
   });
 

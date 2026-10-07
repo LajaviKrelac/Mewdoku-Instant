@@ -209,11 +209,12 @@ export function createHelperFlows(host: HelperHost): HelperFlows {
       if (!alive() || !s1 || !meta || s1.status !== 'playing') return;
       let cell: number;
       try {
-        cell = host.engine.pickKittyCell(s1.puzzle, s1.cells);
+        cell = await host.engine.pickKittyCell(s1.puzzle, s1.cells);
       } catch {
-        host.toast(t('toast.error'));
+        if (alive()) host.toast(t('kitty.unavailable')); // nothing charged
         return;
       }
+      if (!alive() || host.game() !== s1) return;
       host.updateSave((s) => spend(s, 'kitties'));
       host.saves.now();
       stockChanged();

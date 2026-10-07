@@ -12,15 +12,12 @@ import '../src/styles/overlays.css';
 import '../src/styles/fx.css';
 import { cfg } from '../src/app/config';
 import { recordToPuzzle } from '../src/engine/codec';
-import { growRegions, randomKingPerm } from '../src/engine/generator';
 import { getHintStep } from '../src/engine/hint';
-import { makeRng } from '../src/engine/rng';
 import type { CellIndex, LevelPack, Puzzle } from '../src/engine/types';
 import { newGame } from '../src/game/factory';
 import { reduce } from '../src/game/reducer';
 import { CellState, type Action, type GameState } from '../src/game/types';
 import { t } from '../src/i18n';
-import pack from '../src/data/levels/pack-000.json';
 import { illustration, type IllustrationKind } from '../src/ui/art/illustrations';
 import { regionColorsFor } from '../src/ui/art/palette';
 import { icon, mountSprite, type SymbolId } from '../src/ui/art/sprite';
@@ -39,15 +36,16 @@ const root = document.getElementById('app') as HTMLElement;
 mountSprite();
 applyMotion(root, q.get('rm') === '1');
 
+/** Every shipped level pack (dev only: the harness may load them all eagerly). */
+const PACKS = Object.values(import.meta.glob<LevelPack>('../src/data/levels/pack-*.json', { eager: true, import: 'default' }));
+
+/** The first shipped level of size n (4 → the tutorial board). The packs cover every size 4–12. */
 function puzzleOfSize(n: number): Puzzle {
-  const levels = (pack as unknown as LevelPack).levels;
-  const rec = levels.find((l) => l.n === n && !l.tut);
-  if (rec) return recordToPuzzle(rec, `L${rec.i ?? 0}`);
-  // No shipped board of this size in the placeholder pack: grow one (visual check only).
-  const rng = makeRng(`harness:${n}`);
-  const solution = randomKingPerm(n, rng);
-  const regions = growRegions(n, solution, rng, 'balanced');
-  return { id: `L${900 + n}`, n, k: 1, regions, solution, givens: [], grade: 3, effort: 0, hard: false };
+  for (const pack of PACKS) {
+    const rec = pack.levels.find((l) => l.n === n && (n === 4 || !l.tut));
+    if (rec) return recordToPuzzle(rec, `L${rec.i ?? 0}`);
+  }
+  throw new RangeError(`board harness: no shipped level of size ${n} (4–12)`);
 }
 
 /** Plays a scripted opening so the board shows every cell state. */

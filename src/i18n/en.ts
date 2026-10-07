@@ -56,6 +56,8 @@ export const en = {
   'game.tool.hint.a11y': 'Hint, {count} left',
   'game.tool.kitty.a11y': 'Kitty, {count} left',
   'game.tool.free': 'Free',
+  'game.loading': 'Getting the board ready…',
+  'kitty.unavailable': 'The kitty is napping. Try again in a moment.',
 
   // ── Hint card (O1) and explanation templates (02 §9.1) ─────────────────────
   'hint.title': 'Hint',
@@ -176,7 +178,7 @@ export const en = {
   'howto.rule.lines': 'Every row and every column holds one cat too.',
   'howto.rule.space': 'Cats like their space: two cats never touch, not even at the corners.',
   'howto.controls': 'Tap a tile to cross it out. Double-tap to place a cat. Swipe across tiles to cross out several at once.',
-  'howto.hearts': 'A cat on the wrong tile costs a heart. Lose all three and the level starts again.',
+  'howto.hearts': 'A cat on the wrong tile costs a heart. Lose all three and you can try the level again.',
   'howto.helpers': 'Stuck? The bulb explains one step. The paw finds a cat for you.',
   'howto.skip': 'I know how to play',
   'howto.replay': 'Replay tutorial',

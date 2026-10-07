@@ -252,3 +252,25 @@ test('12 · ?ads=close: an early-closed rewarded ad grants nothing', async ({ pa
   expect((await app(page))?.save.stock.hints).toBe(0);
   expect((await game(page))?.status).toBe('playing');
 });
+
+test('13 · a slow daily-month fetch shows the loading indicator until the board is ready', async ({ page }) => {
+  // The daily month file is fetched when the daily is opened (not at boot): hold it until released.
+  let release: () => void = () => undefined;
+  const gate = new Promise<void>((r) => (release = r));
+  await page.route(/\/\d{4}-\d{2}-[^/]*\.json$/, async (route) => {
+    await gate;
+    await route.continue();
+  });
+  await open(page, '', returning({ progress: { level: 25, completed: 24, best: {} } }));
+  await page.locator('.daily-card').click();
+  const layer = page.locator('.loading-layer');
+  await expect(layer).toBeVisible();
+  await expect(layer.getByRole('status')).toHaveText('Getting the board ready…');
+  await expect(page.locator('#app')).toHaveAttribute('aria-busy', 'true');
+  expect((await app(page))?.screen).toBe('home');
+  release();
+  await playing(page);
+  await expect(layer).toBeHidden();
+  await expect(page.locator('#app')).not.toHaveAttribute('aria-busy', 'true');
+  expect((await game(page))?.id).toBe(`D${today()}`);
+});

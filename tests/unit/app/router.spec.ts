@@ -166,3 +166,191 @@ describe('router', () => {
     expect(last(s.events)).toBe('toast:hello');
   });
 });
+
+// ─────────────────── lazy overlay chunk, [data-autofocus], loading indicator ───────────────────
+
+function deferred<T>() {
+  let resolve!: (v: T) => void;
+  let reject!: (e: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+function lazySetup() {
+  document.body.innerHTML = '<button id="outside">outside</button><div id="app"></div>';
+  const root = document.getElementById('app') as HTMLElement;
+  const bus = createEventBus<AppEventMap>();
+  const events: string[] = [];
+  bus.on('overlay:open', ({ id }) => void events.push(`open:${id}`));
+  bus.on('overlay:close', ({ id }) => void events.push(`close:${id}`));
+  bus.on('error', ({ where }) => void events.push(`error:${where}`));
+  const made: string[] = [];
+  const opened: { id: string; props: unknown }[] = [];
+  const make = (id: OverlayId) => () => {
+    made.push(id);
+    const el = document.createElement('div');
+    el.className = `ov-${id}`;
+    const first = document.createElement('button');
+    first.textContent = `${id}-first`;
+    const auto = document.createElement('button');
+    auto.textContent = `${id}-auto`;
+    auto.setAttribute('data-autofocus', '');
+    el.append(first, auto);
+    return {
+      el,
+      modal: id !== 'coach',
+      open: (p: unknown) => void opened.push({ id, props: p }),
+      update: (p: unknown) => void opened.push({ id: `${id}:update`, props: p }),
+      close: () => undefined,
+      dismiss: () => true,
+      destroy: () => undefined,
+    } as never;
+  };
+  let loads = 0;
+  let gate = deferred<Partial<OverlayFactories>>();
+  const lazy = Object.fromEntries((['settings', 'how_to_play', 'fail'] as OverlayId[]).map((id) => [id, make(id)])) as Partial<OverlayFactories>;
+  const factories: Partial<RouterFactories> = {
+    overlays: { coach: make('coach') },
+    loadOverlays: () => {
+      loads++;
+      return gate.promise;
+    },
+    gameScreen: () => ({ el: document.createElement('section'), update: () => undefined, destroy: () => undefined }) as never,
+  };
+  const router = createRouter(root, { bus, factories });
+  return {
+    root,
+    router,
+    events,
+    made,
+    opened,
+    lazy,
+    loads: () => loads,
+    land: async () => {
+      gate.resolve(lazy);
+      await gate.promise;
+      await Promise.resolve();
+    },
+    fail: async () => {
+      gate.reject(new Error('offline'));
+      await gate.promise.catch(() => undefined);
+      await Promise.resolve();
+      gate = deferred<Partial<OverlayFactories>>();
+    },
+  };
+}
+
+describe('router: lazy overlay chunk (04 §9)', () => {
+  it('queues an open() until the chunk lands, then opens with the latest props and traps focus', async () => {
+    const s = lazySetup();
+    s.router.showGame({} as never, {} as never);
+    const screenHost = s.root.querySelector('.app-screen') as HTMLElement;
+    s.router.open('settings', { v: 1 } as never);
+    expect(s.router.isOpen('settings')).toBe(true);
+    expect(s.router.stack()).toEqual(['settings']);
+    expect(s.events).toEqual(['open:settings']);
+    expect(screenHost.hasAttribute('inert')).toBe(true); // the board is blocked while it loads
+    expect(s.made).toEqual([]);
+    s.router.update('settings', { v: 2 } as never);
+    await s.land();
+    expect(s.made).toEqual(['settings']);
+    expect(s.opened).toEqual([{ id: 'settings', props: { v: 2 } }]);
+    expect((document.activeElement as HTMLElement).textContent).toBe('settings-auto');
+    expect(s.loads()).toBe(1);
+  });
+
+  it('an overlay closed before the chunk lands is never opened', async () => {
+    const s = lazySetup();
+    s.router.open('fail', {} as never);
+    s.router.close('fail');
+    expect(s.router.isOpen('fail')).toBe(false);
+    await s.land();
+    expect(s.opened).toEqual([]);
+    s.router.open('fail', { now: true } as never); // later opens are synchronous
+    expect(s.opened).toEqual([{ id: 'fail', props: { now: true } }]);
+  });
+
+  it('keeps the stack order when several queued overlays land together', async () => {
+    const s = lazySetup();
+    s.router.open('settings', {} as never);
+    s.router.open('how_to_play', {} as never);
+    await s.land();
+    const host = s.root.querySelector('.app-overlays') as HTMLElement;
+    expect(Array.from(host.children).map((c) => c.className)).toEqual(['ov-settings', 'ov-how_to_play']);
+    expect((document.activeElement as HTMLElement).textContent).toBe('how_to_play-auto');
+    s.router.close('how_to_play');
+    expect(s.router.top()).toBe('settings');
+  });
+
+  it('a failed chunk load closes the queued overlays, reports it, and the next open retries', async () => {
+    const s = lazySetup();
+    s.router.open('settings', {} as never);
+    await s.fail();
+    expect(s.router.isOpen('settings')).toBe(false);
+    expect(s.events).toEqual(['open:settings', 'error:overlay_chunk', 'close:settings']);
+    s.router.open('settings', {} as never);
+    expect(s.loads()).toBe(2);
+    await s.land();
+    expect(s.opened.map((o) => o.id)).toEqual(['settings']);
+  });
+
+  it('preloadOverlays() starts the download once and never rejects', async () => {
+    const s = lazySetup();
+    const p = s.router.preloadOverlays();
+    void s.router.preloadOverlays();
+    expect(s.loads()).toBe(1);
+    await s.land();
+    await expect(p).resolves.toBeUndefined();
+    s.router.open('settings', {} as never);
+    expect(s.made).toEqual(['settings']);
+  });
+
+  it('the real chunk provides every overlay except the coach', async () => {
+    const { loadOverlayChunk } = await import('../../../src/app/router');
+    const f = await loadOverlayChunk();
+    expect(Object.keys(f).sort()).toEqual(['daily_result', 'fail', 'hint', 'how_to_play', 'rewarded', 'settings', 'win']);
+  });
+});
+
+describe('router: initial focus honours [data-autofocus] (lead decision)', () => {
+  it('focuses the first focusable [data-autofocus] element, skipping hidden ones', async () => {
+    const { autofocusTarget } = await import('../../../src/app/router');
+    const el = document.createElement('div');
+    el.innerHTML = '<button>a</button><button data-autofocus hidden>b</button><button data-autofocus>c</button>';
+    document.body.appendChild(el);
+    expect(autofocusTarget(el)?.textContent).toBe('c');
+    const none = document.createElement('div');
+    none.innerHTML = '<button>a</button>';
+    expect(autofocusTarget(none)).toBeNull();
+  });
+
+  it('a modal opened from the board gets focus on its [data-autofocus] button', async () => {
+    const s = lazySetup();
+    void s.router.preloadOverlays();
+    await s.land();
+    (document.getElementById('outside') as HTMLButtonElement).focus();
+    s.router.open('fail', {} as never);
+    expect((document.activeElement as HTMLElement).textContent).toBe('fail-auto');
+    s.router.close('fail');
+    expect(document.activeElement?.id).toBe('outside');
+  });
+});
+
+describe('router: loading indicator (lead decision)', () => {
+  it('shows a polite status over the screen and marks the app root busy', () => {
+    const s = lazySetup();
+    s.router.setLoading(false); // nothing to hide yet: no layer is created
+    expect(s.root.querySelector('.loading-layer')).toBeNull();
+    s.router.setLoading(true);
+    const layer = s.root.querySelector('.loading-layer') as HTMLElement;
+    expect(layer.hidden).toBe(false);
+    expect(s.root.getAttribute('aria-busy')).toBe('true');
+    expect(layer.querySelector('[role="status"]')?.textContent).toBe('Getting the board ready…');
+    s.router.setLoading(false);
+    expect(layer.hidden).toBe(true);
+    expect(s.root.hasAttribute('aria-busy')).toBe(false);
+  });
+});

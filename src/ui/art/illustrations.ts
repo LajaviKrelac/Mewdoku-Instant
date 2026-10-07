@@ -2,60 +2,13 @@
 // Larger poses of our ginger loaf cat (02 §17.3): home mascot (idle), boot (sleeping), win (party
 // hat), fail (small bandage), daily (happy), tutorial. Never a trumpet cat or a crying cat (06 §3).
 // Drawn on a 200-unit grid around the same head as the board symbols (art/cat-parts.ts).
-import { CAT, catBlink, catHead, type CatEars, type CatEyes, type CatMouth } from './cat-parts';
+// The home and boot poses and the shared body parts live in mascot.ts (main bundle); this module is
+// only used by the lazy overlays (04 §9).
+import { CAT } from './cat-parts';
+import { basePose, head, INK, mascotMarkup, ol, poseSvg, tube } from './mascot';
 import { PALETTE, TOKENS } from './palette';
 
 export type IllustrationKind = 'home' | 'boot' | 'win' | 'fail' | 'daily' | 'tutorial';
-
-const SVG_NS = 'http://www.w3.org/2000/svg';
-const W = 3.4; // outline width on the 200 grid
-const INK = CAT.ink;
-
-const ol = (w = W): string => `stroke="${INK}" stroke-width="${w}" stroke-linejoin="round" stroke-linecap="round"`;
-
-/** A thick outlined stroke (ink under fur), for tails and arms. */
-function tube(d: string, width: number, fill: string = CAT.fur): string {
-  return `<path d="${d}" fill="none" stroke="${INK}" stroke-width="${width + 2 * W}" stroke-linecap="round"/><path d="${d}" fill="none" stroke="${fill}" stroke-width="${width}" stroke-linecap="round"/>`;
-}
-
-const SHADOW = `<ellipse cx="100" cy="183" rx="70" ry="7" fill="${INK}" opacity=".09"/>`;
-const BODY =
-  `<path d="M40 177C27 177 25 161 29 147 37 118 64 100 100 100 136 100 163 118 171 147 175 161 173 177 160 177Z" fill="${CAT.fur}" ${ol()}/>` +
-  `<g fill="none" stroke="${CAT.furDark}" stroke-width="5" stroke-linecap="round">` +
-  `<path d="M45 125Q53 129 55 137M37 145Q46 147 50 155M155 125Q147 129 145 137M163 145Q154 147 150 155"/></g>` +
-  `<ellipse cx="100" cy="146" rx="26" ry="20" fill="${CAT.muzzle}"/>`;
-const PAWS =
-  `<ellipse cx="82" cy="172" rx="14" ry="8.5" fill="${CAT.muzzle}" ${ol(3)}/><ellipse cx="118" cy="172" rx="14" ry="8.5" fill="${CAT.muzzle}" ${ol(3)}/>` +
-  `<path d="M78 170.5V174M86 170.5V174M114 170.5V174M122 170.5V174" stroke="${INK}" stroke-width="1.8" stroke-linecap="round" opacity=".5"/>`;
-const TAIL = tube('M150 158C176 160 190 142 186 120 184 108 174 105 171 113', 11);
-
-interface HeadOpts {
-  eyes: CatEyes;
-  mouth: CatMouth;
-  ears?: CatEars;
-  /** Extra markup on the head's 100 grid (hats, bandages). */
-  extra?: string;
-  tx?: number;
-  ty?: number;
-  rot?: number;
-  blink?: boolean;
-}
-
-/** The board head, scaled ×1.3 onto the 200 grid (chibi proportions) and centred over the body. */
-function head(o: HeadOpts): string {
-  const s = 1.3;
-  const tx = o.tx ?? 100 - 50 * s;
-  const ty = o.ty ?? 8;
-  const stroke = W / s;
-  const blink = o.blink ? `<g class="illus__blink">${catBlink(stroke)}</g>` : '';
-  return (
-    `<g transform="translate(${tx} ${ty}) rotate(${o.rot ?? 0} 50 60) scale(${s})">` +
-    catHead({ eyes: o.eyes, mouth: o.mouth, ears: o.ears ?? 'up', stroke }) +
-    blink +
-    (o.extra ?? '') +
-    '</g>'
-  );
-}
 
 function partyHat(): string {
   // Cone between the ears (head grid), tilted to the right, lemon with teal bands and a pompom.
@@ -85,9 +38,6 @@ function bandage(): string {
     '</g>'
   );
 }
-
-const zz = (x: number, y: number, s: number, cls: string): string =>
-  `<path class="illus__z ${cls}" d="M${x} ${y}h${s}l-${s} ${s * 1.2}h${s}" fill="none" stroke="${TOKENS['ink-2']}" stroke-width="${2.6 + s / 10}" stroke-linecap="round" stroke-linejoin="round"/>`;
 
 function confettiBits(): string {
   const bits: [number, number, number, number, 'r' | 'c'][] = [
@@ -137,16 +87,11 @@ function raisedPaw(): string {
 const sweatDrop = `<path d="M44 52C44 52 51 61 51 65.5A7 7 0 0 1 37 65.5C37 61 44 52 44 52Z" fill="#A9DAF2" ${ol(2.6)}/><path d="M41 64.5a3.2 3.2 0 0 0 2.2 3" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/>`;
 
 function markup(kind: IllustrationKind): string {
-  const base = (h: string, extra = ''): string => `${SHADOW}<g class="illus__body">${TAIL}${BODY}${PAWS}${h}</g>${extra}`;
+  const base = basePose;
   switch (kind) {
     case 'home':
-      return base(head({ eyes: 'open', mouth: 'smile', blink: true }));
     case 'boot':
-      return (
-        `${SHADOW}<g class="illus__body">${TAIL}${BODY}${PAWS}` +
-        head({ eyes: 'sleep', mouth: 'smile', ty: 20, rot: -8 }) +
-        `</g>${zz(140, 40, 12, 'illus__z--1')}${zz(160, 18, 16, 'illus__z--2')}`
-      );
+      return mascotMarkup(kind);
     case 'win':
       return `<g class="illus__confetti">${confettiBits()}</g>` + base(head({ eyes: 'happy', mouth: 'open', extra: partyHat(), ty: 16 }));
     case 'fail':
@@ -160,16 +105,5 @@ function markup(kind: IllustrationKind): string {
 
 /** A fresh inline SVG; decorative (aria-hidden) unless `label` is given. */
 export function illustration(kind: IllustrationKind, opts?: { label?: string; class?: string }): SVGSVGElement {
-  const svg = document.createElementNS(SVG_NS, 'svg');
-  svg.setAttribute('class', `illus illus--${kind}${opts?.class ? ` ${opts.class}` : ''}`);
-  svg.setAttribute('viewBox', kind === 'win' ? '0 -6 200 198' : '0 0 200 192');
-  svg.setAttribute('focusable', 'false');
-  if (opts?.label) {
-    svg.setAttribute('role', 'img');
-    svg.setAttribute('aria-label', opts.label);
-  } else {
-    svg.setAttribute('aria-hidden', 'true');
-  }
-  svg.innerHTML = markup(kind);
-  return svg;
+  return poseSvg(kind, markup(kind), kind === 'win' ? '0 -6 200 198' : '0 0 200 192', opts);
 }

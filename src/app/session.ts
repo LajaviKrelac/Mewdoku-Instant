@@ -6,14 +6,15 @@
 // props in session-parts.ts.
 import type { HintStep, Puzzle } from '../engine/types';
 import { newGame, restoreGame, toInProgress } from '../game/factory';
-import { getMode } from '../game/modes';
+import { getMode, rulesFor } from '../game/modes';
 import { isHard } from '../game/progression';
 import { reduce } from '../game/reducer';
-import { validateInProgress } from '../game/save';
+import { validateSlot } from '../game/save';
 import { advance, filterTutorialAction } from '../game/tutorial';
 import type { Action, GameEvent, GameState, ModeId } from '../game/types';
 import type { GameScreen, GameScreenCallbacks, GameView } from '../ui/screens/game-screen';
 import { t } from '../i18n';
+import type { TimerId } from './clock';
 import { cfg } from './config';
 import type { AnalyticsEvent } from './events';
 import { createHelperFlows } from './helper-flows';
@@ -254,6 +255,16 @@ export function createSession(deps: SessionDeps): Session {
 
   // ─────────────────────────────── mounting ───────────────────────────────
 
+  let loadingTimer: TimerId | null = null;
+  let loadingShown = false;
+  function hideLoading(): void {
+    clock.clearTimeout(loadingTimer);
+    loadingTimer = null;
+    if (!loadingShown) return;
+    loadingShown = false;
+    router.setLoading(false);
+  }
+
   function teardown(): void {
     gen++;
     busy = false;
@@ -284,13 +295,24 @@ export function createSession(deps: SessionDeps): Session {
     const mode: ModeId = req.mode;
     const gm = getMode(mode);
     const slotKey = substitute ? null : gm.saveSlot;
+    // The mode's RuleFlags under this session's config: the new board, the slot validation and the
+    // restored board all use the same hearts / revive limits.
+    const rules = rulesFor(mode, c);
     let current = save();
-    let state = newGame(puzzle, mode);
+    let state = newGame(puzzle, mode, rules);
     let cleared = false;
     const slot = slotKey ? current.inProgress[slotKey] : null;
     if (slotKey && slot) {
       // 02 §15 step 3 (validation); restoreGame applies steps 4 (full board → won) and 5 (0 hearts → lost).
-      if (validateInProgress(slot, puzzle, { mode: slotKey, id: puzzle.id }, c).ok) state = restoreGame(puzzle, slot);
+      let restored: GameState | null = null;
+      if (validateSlot(slot, puzzle, { mode: slotKey, id: puzzle.id }, rules).ok) {
+        try {
+          restored = restoreGame(puzzle, slot, rules);
+        } catch {
+          restored = null; // never reached after validateSlot; a bad slot must not break the level
+        }
+      }
+      if (restored) state = restored;
       else {
         current = withSlot(current, slotKey, null);
         cleared = true;
@@ -387,18 +409,28 @@ export function createSession(deps: SessionDeps): Session {
       const req: SessionRequest =
         request.mode === 'level' && request.level <= 1 ? { mode: 'tutorial', replay: save().tutorialDone } : request;
       teardown();
+      hideLoading();
       const mine = gen;
       let puzzle: Puzzle;
       let substitute = false;
       try {
         if (req.mode === 'tutorial') puzzle = deps.levels.getTutorial();
         else {
+          // A pack fetch or an on-device generation that is not done within the delay shows the
+          // loading indicator until the board is ready (lead decision, Phase 2 integration).
+          loadingTimer = clock.setTimeout(() => {
+            loadingTimer = null;
+            if (gen !== mine || disposed) return;
+            loadingShown = true;
+            router.setLoading(true);
+          }, c.loading.indicatorDelayMs);
           const lp = req.mode === 'level' ? await deps.levels.getLevel(req.level) : await deps.levels.getDaily(req.dateKey);
           puzzle = lp.puzzle;
           substitute = lp.source === 'substitute';
         }
       } catch (error) {
         if (gen !== mine || disposed) return;
+        hideLoading();
         bus.emit('error', { where: 'load', error });
         toast(t('toast.error'));
         store.update((app) => ({ ...app, game: null, session: null }));
@@ -406,6 +438,7 @@ export function createSession(deps: SessionDeps): Session {
         return;
       }
       if (gen !== mine || disposed) return;
+      hideLoading();
       mount(req, puzzle, substitute);
     },
     state: game,
@@ -440,6 +473,7 @@ export function createSession(deps: SessionDeps): Session {
       if (disposed) return;
       disposed = true;
       teardown();
+      hideLoading();
       for (const off of offs) off();
       listeners.clear();
     },

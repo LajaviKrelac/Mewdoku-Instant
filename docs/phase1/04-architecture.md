@@ -706,13 +706,14 @@ On the web adapter, `now()` and `critical()` are the same thing: a synchronous `
 
 | Item | Budget (uncompressed) | Rationale |
 |---|---|---|
-| Main JS (including engine and bundled pack-000) | ≤ 140 KB | FB hosting may not serve compressed files, so budget raw bytes (05 §5) |
-| Worker JS | ≤ 25 KB | — |
-| CSS | ≤ 20 KB | — |
+| Main JS (including the main-thread engine parts and bundled pack-000) | ≤ 170 KB | FB hosting may not serve compressed files, so budget raw bytes (05 §5). Phase 1 estimated 140 KB; the integrated app measured 187–194 KB before code splitting and 160–167 KB (web / fbig) after it (Phase 2 integration; pending lead sign-off) |
+| CSS | ≤ 36 KB | Raised from 20 KB in Phase 2 (lead decision; measured about 34 KB minified) |
 | Font (one OFL subset) | ≤ 25 KB | — |
 | `index.html` | ≤ 4 KB | — |
-| **First-load total** | **≤ 220 KB** | Target load ≤ 2 s on 4G, well under the < 5 s guideline (05 §5.4) |
-| Other packs (9 × ~14 KB) + daily months (~27 × 4 KB) | Lazy | Fetched on demand |
+| **First-load total** (what `index.html` loads before the first screen: the four rows above) | **≤ 220 KB** | Target load ≤ 2 s on 4G, well under the < 5 s guideline (05 §5.4) |
+| Worker JS | ≤ 25 KB, lazy | Created on the first generation, never during boot (§5.5), so it is not part of the first load |
+| Lazy JS chunks (overlays O1–O7, hint engine, sound recipes, RPC, main-thread generator) | ≤ 45 KB | Fetched right after the first screen (boot step 8) or on first use (Phase 2 integration) |
+| Other packs (9 × ~15 KB) + daily months (27 × ~4.7 KB) | Lazy | Fetched on demand |
 | Files in the FB zip | ≤ 60 (platform cap 500) | — |
 | FB zip size | ≤ 500 KB | — |
 

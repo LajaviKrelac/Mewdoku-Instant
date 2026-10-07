@@ -3,17 +3,24 @@
 // lazily from the ui/overlays factories, appended to an overlay host once, and toggled.
 // Focus: only the top-most MODAL overlay holds a focus trap; everything below it is inert. When it
 // closes, focus returns to what was focused when it opened, and the next modal down is re-trapped.
-import { setInert, trapFocus } from '../ui/a11y/focus-trap';
+// Initial focus: the element that already has focus inside the overlay, else its first focusable
+// [data-autofocus] element, else its first focusable element.
+// Lazy chunk (04 §9 budget): every overlay except the coach lives in ./overlay-chunk, imported on
+// demand (preloadOverlays() starts it after the first route). An open() that arrives before the chunk
+// has landed is queued: the overlay is already on the stack (isOpen/top/stack, inert background,
+// 'overlay:open'), and its view is created, opened with the latest props and focused on arrival.
+import { focusableElements, setInert, trapFocus } from '../ui/a11y/focus-trap';
 import { createCoach, type CoachProps } from '../ui/overlays/coach';
-import { createDailyResult, type DailyResultProps } from '../ui/overlays/daily-result';
-import { createFailOverlay, type FailOverlayProps } from '../ui/overlays/fail-overlay';
-import { createHintCard, type HintCardProps } from '../ui/overlays/hint-card';
-import { createHowToPlay, type HowToPlayProps } from '../ui/overlays/how-to-play';
-import { createRewardedPrompt, type RewardedPromptProps } from '../ui/overlays/rewarded-prompt';
-import { createSettingsModal, type SettingsProps } from '../ui/overlays/settings-modal';
+import type { DailyResultProps } from '../ui/overlays/daily-result';
+import type { FailOverlayProps } from '../ui/overlays/fail-overlay';
+import type { HintCardProps } from '../ui/overlays/hint-card';
+import type { HowToPlayProps } from '../ui/overlays/how-to-play';
+import type { RewardedPromptProps } from '../ui/overlays/rewarded-prompt';
+import type { SettingsProps } from '../ui/overlays/settings-modal';
+import { createLoadingIndicator, type LoadingIndicator } from '../ui/overlays/loading-indicator';
 import { createToastLayer, type ToastLayer } from '../ui/overlays/toast';
-import { createWinOverlay, type WinOverlayProps } from '../ui/overlays/win-overlay';
-import { createBootScreen, type BootScreen } from '../ui/screens/boot-screen';
+import type { WinOverlayProps } from '../ui/overlays/win-overlay';
+import type { BootScreen } from '../ui/screens/boot-screen';
 import { createGameScreen, type GameScreen, type GameScreenCallbacks, type GameView } from '../ui/screens/game-screen';
 import { createHomeScreen, type HomeCallbacks, type HomeView } from '../ui/screens/home-screen';
 import type { OverlayView, View } from '../ui/dom';
@@ -48,8 +55,12 @@ export interface Router {
   top(): OverlayId | null;
   stack(): readonly OverlayId[];
   toast(message: string): void;
+  /** The loading indicator over the current screen; aria-busy on the app root while it shows. */
+  setLoading(on: boolean): void;
   /** Esc: dismiss() the top overlay; returns whether something handled it. */
   escape(): boolean;
+  /** Starts loading the lazy overlay chunk (boot calls it after the first route). Never rejects. */
+  preloadOverlays(): Promise<void>;
   destroy(): void;
 }
 
@@ -58,39 +69,68 @@ export type OverlayFactories = { readonly [K in OverlayId]: () => OverlayView<Ov
 /** UI constructors used by the router (test seam; defaults are the real ui/ modules). */
 export interface RouterFactories {
   readonly overlays: Partial<OverlayFactories>;
+  /** Loads the factories missing from `overlays` (default: the lazy ./overlay-chunk). */
+  loadOverlays(): Promise<Partial<OverlayFactories>>;
   bootScreen(): BootScreen;
   homeScreen(view: HomeView, cb: HomeCallbacks): View<HomeView>;
   gameScreen(view: GameView, cb: GameScreenCallbacks): GameScreen;
   toastLayer(): ToastLayer;
+  loadingIndicator(): LoadingIndicator;
   trapFocus(container: HTMLElement, opts?: { initialFocus?: HTMLElement | null; returnFocus?: HTMLElement | null }): () => void;
   setInert(elements: readonly HTMLElement[], inert: boolean): void;
 }
 
 export interface RouterDeps {
-  /** Receives 'screen', 'overlay:open', 'overlay:close'. */
+  /** Receives 'screen', 'overlay:open', 'overlay:close' and 'error' (lazy chunk failed to load). */
   readonly bus?: AppBus;
   readonly doc?: Document;
   readonly factories?: Partial<RouterFactories>;
 }
 
-const DEFAULT_OVERLAYS: OverlayFactories = {
-  hint: createHintCard,
-  rewarded: createRewardedPrompt,
-  win: createWinOverlay,
-  fail: createFailOverlay,
-  settings: createSettingsModal,
-  how_to_play: createHowToPlay,
-  daily_result: createDailyResult,
-  coach: createCoach,
-};
+/** Overlays in the main bundle. */
+const EAGER_OVERLAYS: Partial<OverlayFactories> = { coach: createCoach };
+
+/** Whether an overlay is modal before its view exists (only the coach is not, CONTRACTS §4). */
+const isModalId = (id: OverlayId): boolean => id !== 'coach';
+
+/** The lazy overlay chunk (one request; 04 §9). */
+export async function loadOverlayChunk(): Promise<Partial<OverlayFactories>> {
+  const m = await import('./overlay-chunk');
+  return {
+    hint: m.createHintCard,
+    rewarded: m.createRewardedPrompt,
+    win: m.createWinOverlay,
+    fail: m.createFailOverlay,
+    settings: m.createSettingsModal,
+    how_to_play: m.createHowToPlay,
+    daily_result: m.createDailyResult,
+  };
+}
+
+/** Stand-in when no splash factory was given (FBIG builds): an empty screen. */
+function blankBootScreen(doc: Document): () => BootScreen {
+  return () => ({ el: doc.createElement('div'), setProgress: () => undefined, destroy: () => undefined });
+}
+
+/** The overlay's first focusable [data-autofocus] element (hidden or disabled ones are skipped). */
+export function autofocusTarget(container: HTMLElement): HTMLElement | null {
+  const marked = container.querySelectorAll<HTMLElement>('[data-autofocus]');
+  if (marked.length === 0) return null;
+  const focusable = focusableElements(container);
+  for (const el of Array.from(marked)) if (focusable.indexOf(el) >= 0) return el;
+  return null;
+}
 
 type AnyOverlay = OverlayView<OverlayPropsMap[OverlayId]>;
 
 export function createRouter(root: HTMLElement, deps: RouterDeps = {}): Router {
   const doc = deps.doc ?? root.ownerDocument;
   const f = deps.factories ?? {};
-  const overlayFactories: OverlayFactories = { ...DEFAULT_OVERLAYS, ...(f.overlays ?? {}) };
+  /** Factories available now; the lazy chunk adds the rest when it lands. */
+  const factories: Partial<OverlayFactories> = { ...EAGER_OVERLAYS, ...(f.overlays ?? {}) };
+  const loadOverlays = f.loadOverlays ?? loadOverlayChunk;
   const makeToast = f.toastLayer ?? createToastLayer;
+  const makeLoading = f.loadingIndicator ?? createLoadingIndicator;
   const trap = f.trapFocus ?? trapFocus;
   const inert = f.setInert ?? setInert;
   const { bus } = deps;
@@ -103,11 +143,16 @@ export function createRouter(root: HTMLElement, deps: RouterDeps = {}): Router {
   root.appendChild(screenHost);
   root.appendChild(overlayHost);
   let toastLayer: ToastLayer | null = null;
+  let loadingLayer: LoadingIndicator | null = null;
 
   let screenId: ScreenId = 'boot';
   let current: { destroy(): void } | null = null;
+  let destroyed = false;
   const views = new Map<OverlayId, AnyOverlay>();
   const order: OverlayId[] = [];
+  /** Open requests waiting for the lazy chunk: the latest props per overlay. */
+  const pending = new Map<OverlayId, OverlayPropsMap[OverlayId]>();
+  let loading: Promise<void> | null = null;
   const returnTo = new Map<OverlayId, HTMLElement | null>();
   const inertState = new Map<HTMLElement, boolean>();
   let active: { id: OverlayId; release: () => void } | null = null;
@@ -123,11 +168,10 @@ export function createRouter(root: HTMLElement, deps: RouterDeps = {}): Router {
     inert([el], on);
   }
 
+  const isModal = (id: OverlayId): boolean => views.get(id)?.modal ?? isModalId(id);
+
   function topModalIndex(): number {
-    for (let i = order.length - 1; i >= 0; i--) {
-      const id = order[i] as OverlayId;
-      if (views.get(id)?.modal) return i;
-    }
+    for (let i = order.length - 1; i >= 0; i--) if (isModal(order[i] as OverlayId)) return i;
     return -1;
   }
 
@@ -140,43 +184,92 @@ export function createRouter(root: HTMLElement, deps: RouterDeps = {}): Router {
     }
   }
 
-  /** Keeps exactly one focus trap, on the top-most modal overlay. */
+  /** Keeps exactly one focus trap, on the top-most modal overlay (none while its view is loading). */
   function syncFocus(): void {
     const m = topModalIndex();
     const topId = m >= 0 ? (order[m] as OverlayId) : null;
-    if (active?.id === topId) return;
+    const v = topId === null ? undefined : views.get(topId);
+    if (active && active.id === topId && v) return;
     if (active) {
       const release = active.release;
       active = null;
       release();
     }
-    if (topId === null) return;
-    const v = views.get(topId) as AnyOverlay;
+    if (topId === null || !v) return;
     const now = focused();
     active = {
       id: topId,
       release: trap(v.el, {
-        initialFocus: now && v.el.contains(now) ? now : null,
+        initialFocus: now && v.el.contains(now) ? now : autofocusTarget(v.el),
         returnFocus: returnTo.get(topId) ?? null,
       }),
     };
   }
 
-  function overlay<K extends OverlayId>(id: K): OverlayView<OverlayPropsMap[K]> {
+  /** The overlay's view, created on first use; null while its factory is still loading. */
+  function overlay<K extends OverlayId>(id: K): OverlayView<OverlayPropsMap[K]> | null {
     let v = views.get(id) as OverlayView<OverlayPropsMap[K]> | undefined;
     if (!v) {
-      v = overlayFactories[id]();
+      const make = factories[id] as (() => OverlayView<OverlayPropsMap[K]>) | undefined;
+      if (!make) return null;
+      v = make();
       overlayHost.appendChild(v.el);
       views.set(id, v as unknown as AnyOverlay);
     }
     return v;
   }
 
+  /** DOM order follows the stack (later = on top). */
+  function restack(): void {
+    for (const id of order) {
+      const v = views.get(id);
+      if (v) overlayHost.appendChild(v.el);
+    }
+  }
+
+  /** Opens the queued overlays whose factories have arrived. */
+  function flushPending(): void {
+    if (destroyed || pending.size === 0) return;
+    let opened = false;
+    for (const id of order.slice()) {
+      if (!pending.has(id)) continue;
+      const v = overlay(id);
+      if (!v) continue;
+      const props = pending.get(id) as OverlayPropsMap[typeof id];
+      pending.delete(id);
+      v.open(props);
+      opened = true;
+    }
+    if (!opened) return;
+    restack();
+    applyInert();
+    syncFocus();
+  }
+
+  function ensureLoaded(): Promise<void> {
+    loading ??= loadOverlays().then(
+      (loaded) => {
+        for (const key of Object.keys(loaded) as OverlayId[]) {
+          if (!factories[key]) (factories as Record<OverlayId, unknown>)[key] = loaded[key];
+        }
+        flushPending();
+      },
+      (error: unknown) => {
+        loading = null; // a later open() retries
+        if (destroyed) return;
+        bus?.emit('error', { where: 'overlay_chunk', error });
+        for (const id of order.slice()) if (pending.has(id)) closeInternal(id);
+      },
+    );
+    return loading;
+  }
+
   function closeInternal(id: OverlayId): void {
     const i = order.indexOf(id);
     if (i < 0) return;
     order.splice(i, 1);
-    views.get(id)?.close();
+    if (pending.has(id)) pending.delete(id);
+    else views.get(id)?.close();
     applyInert();
     syncFocus();
     returnTo.delete(id);
@@ -210,23 +303,33 @@ export function createRouter(root: HTMLElement, deps: RouterDeps = {}): Router {
   const router: Router = {
     root,
     screen: () => screenId,
-    showBoot: () => replaceScreen('boot', () => (f.bootScreen ?? createBootScreen)()),
+    // The S0 splash is web-only (FBIG shows its own loader): boot passes its factory in web builds.
+    showBoot: () => replaceScreen('boot', () => (f.bootScreen ?? blankBootScreen(doc))()),
     showHome: (view, cb) => replaceScreen('home', () => (f.homeScreen ?? createHomeScreen)(view, cb)),
     showGame: (view, cb) => replaceScreen('game', () => (f.gameScreen ?? createGameScreen)(view, cb)),
     open(id, props) {
+      if (destroyed) return;
       const v = overlay(id);
       const i = order.indexOf(id);
       if (i >= 0) order.splice(i, 1);
       else returnTo.set(id, focused()); // may be inside a lower overlay (Settings → How to play)
       order.push(id);
-      overlayHost.appendChild(v.el); // DOM order follows the stack (later = on top)
-      v.open(props);
+      if (v) {
+        pending.delete(id);
+        overlayHost.appendChild(v.el); // DOM order follows the stack (later = on top)
+        v.open(props);
+      } else {
+        pending.set(id, props);
+        void ensureLoaded();
+      }
       applyInert();
       syncFocus();
       bus?.emit('overlay:open', { id });
     },
     update(id, props) {
-      if (order.indexOf(id) >= 0) overlay(id).update(props);
+      if (order.indexOf(id) < 0) return;
+      if (pending.has(id)) pending.set(id, props);
+      else overlay(id)?.update(props);
     },
     close: closeInternal,
     closeAll,
@@ -240,20 +343,40 @@ export function createRouter(root: HTMLElement, deps: RouterDeps = {}): Router {
       }
       toastLayer.show(message);
     },
+    setLoading(on) {
+      if (destroyed || (!on && !loadingLayer)) return;
+      if (!loadingLayer) {
+        loadingLayer = makeLoading();
+        root.appendChild(loadingLayer.el);
+      }
+      if (on) {
+        loadingLayer.show();
+        root.setAttribute('aria-busy', 'true');
+      } else {
+        loadingLayer.hide();
+        root.removeAttribute('aria-busy');
+      }
+    },
     escape() {
       const id = router.top();
       if (id === null) return false;
       return views.get(id)?.dismiss() ?? false;
     },
+    preloadOverlays: () => ensureLoaded().catch(() => undefined),
     destroy() {
+      destroyed = true;
       doc.removeEventListener('keydown', onKey);
       closeAll();
+      pending.clear();
       for (const v of views.values()) v.destroy();
       views.clear();
       current?.destroy();
       current = null;
       toastLayer?.destroy();
       toastLayer = null;
+      loadingLayer?.destroy();
+      loadingLayer = null;
+      root.removeAttribute('aria-busy');
       while (root.firstChild) root.removeChild(root.firstChild);
     },
   };

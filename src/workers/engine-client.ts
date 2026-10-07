@@ -5,20 +5,27 @@
 // Resilience: when the worker cannot start or crashes (old WebViews without module workers, CSP),
 // work falls back to the main thread; generate() then loads the generator through a dynamic import
 // so it stays out of the main bundle.
+// Bundle (04 §9): the hint engine (hint, techniques, grader) and the RPC layer are lazy chunks too.
+// Nothing needs them before the first hint, kitty or generated board; preload() warms the hint
+// engine up after the first screen (boot step 8).
 import { cfg, type GameConfig } from '../app/config';
-import { getHintStep, pickKittyCell } from '../engine/hint';
 import type { CellIndex, GenResult, GenSpec, HintStep, Puzzle } from '../engine/types';
 import type { EngineWorkerApi } from './engine.worker';
-import { createRpcChannel, type RpcChannel } from './rpc';
+import type { RpcChannel } from './rpc';
 
 export interface EngineClient {
   generate(spec: GenSpec): Promise<GenResult>;
   /** Rejects when the engine throws (the session shows "Hint unavailable" and charges nothing). */
   getHint(puzzle: Puzzle, cells: Readonly<Uint8Array>): Promise<HintStep>;
-  /** pickKittyCell on the main thread (O(N²)). */
-  pickKittyCell(puzzle: Puzzle, cells: Readonly<Uint8Array>): CellIndex;
+  /** pickKittyCell on the main thread (O(N²)); async only because the hint engine is a lazy chunk. */
+  pickKittyCell(puzzle: Puzzle, cells: Readonly<Uint8Array>): Promise<CellIndex>;
+  /** Starts loading the hint engine chunk (never rejects; boot calls it after the first route). */
+  preload(): void;
   dispose(): void;
 }
+
+/** The main-thread hint engine (a lazy chunk). */
+export type HintEngine = Pick<typeof import('../engine/hint'), 'getHintStep' | 'pickKittyCell'>;
 
 export interface EngineClientOptions {
   /** Test seam: replaces the Worker constructor. Return null to simulate "no Worker support". */
@@ -29,6 +36,8 @@ export interface EngineClientOptions {
   readonly generateOnMain?: (spec: GenSpec) => Promise<GenResult>;
   /** Test seam: monotonic ms for the hint budget. */
   readonly perf?: () => number;
+  /** Test seam: loads the main-thread hint engine (default: dynamic import of engine/hint). */
+  readonly loadHintEngine?: () => Promise<HintEngine>;
   readonly config?: GameConfig;
 }
 
@@ -46,17 +55,33 @@ async function defaultGenerateOnMain(spec: GenSpec): Promise<GenResult> {
   return mod.generate(spec);
 }
 
+function defaultLoadHintEngine(): Promise<HintEngine> {
+  return import('../engine/hint');
+}
+
 export function createEngineClient(opts: EngineClientOptions = {}): EngineClient {
   const c = opts.config ?? cfg;
   const perf = opts.perf ?? defaultPerf;
   const generateOnMain = opts.generateOnMain ?? defaultGenerateOnMain;
+  const loadHintEngine = opts.loadHintEngine ?? defaultLoadHintEngine;
   let worker: Worker | null = null;
   let channel: RpcChannel<EngineWorkerApi> | null = null;
+  let starting: Promise<RpcChannel<EngineWorkerApi> | null> | null = null;
+  let hintEngine: Promise<HintEngine> | null = null;
   /** The worker failed to start or crashed: everything runs on the main thread from now on. */
   let broken = false;
   let disposed = false;
   /** Board sizes whose main-thread hint exceeded the budget (03 §6): later hints go to the worker. */
   const slowSizes = new Set<number>();
+
+  /** The hint engine chunk; a failed load is retried on the next call. */
+  function hints(): Promise<HintEngine> {
+    hintEngine ??= loadHintEngine().catch((err: unknown) => {
+      hintEngine = null;
+      throw err;
+    });
+    return hintEngine;
+  }
 
   function fail(reason: string): void {
     broken = true;
@@ -64,6 +89,7 @@ export function createEngineClient(opts: EngineClientOptions = {}): EngineClient
     const w = worker;
     channel = null;
     worker = null;
+    starting = null;
     ch?.rejectAll(reason);
     ch?.dispose();
     try {
@@ -73,33 +99,44 @@ export function createEngineClient(opts: EngineClientOptions = {}): EngineClient
     }
   }
 
-  /** Lazily creates the worker (never during boot). null → use the main thread. */
-  function ensureWorker(): RpcChannel<EngineWorkerApi> | null {
-    if (channel) return channel;
-    if (broken || disposed) return null;
-    let w: Worker | null;
-    try {
-      w = (opts.createWorker ?? defaultCreateWorker)();
-    } catch {
-      w = null;
-    }
-    if (!w) {
-      broken = true;
-      return null;
-    }
-    worker = w;
-    channel = createRpcChannel<EngineWorkerApi>(w);
-    w.addEventListener('error', (ev) => {
-      ev.preventDefault();
-      fail('engine worker error');
-    });
-    w.addEventListener('messageerror', () => fail('engine worker message error'));
-    return channel;
+  /** Lazily creates the worker and its RPC channel (never during boot). null → use the main thread. */
+  function ensureWorker(): Promise<RpcChannel<EngineWorkerApi> | null> {
+    if (channel) return Promise.resolve(channel);
+    if (broken || disposed) return Promise.resolve(null);
+    starting ??= (async () => {
+      let w: Worker | null;
+      try {
+        w = (opts.createWorker ?? defaultCreateWorker)();
+      } catch {
+        w = null;
+      }
+      if (!w) {
+        broken = true;
+        return null;
+      }
+      worker = w;
+      w.addEventListener('error', (ev) => {
+        ev.preventDefault();
+        fail('engine worker error');
+      });
+      w.addEventListener('messageerror', () => fail('engine worker message error'));
+      let rpc: typeof import('./rpc');
+      try {
+        rpc = await import('./rpc');
+      } catch {
+        fail('rpc chunk unavailable');
+        return null;
+      }
+      if (disposed || broken || worker !== w) return null;
+      channel = rpc.createRpcChannel<EngineWorkerApi>(w);
+      return channel;
+    })();
+    return starting;
   }
 
   /** Runs `onWorker`; when the worker is unavailable or dies mid-call, runs `onMain` instead. */
   async function viaWorker<T>(onWorker: (ch: RpcChannel<EngineWorkerApi>) => Promise<T>, onMain: () => Promise<T>): Promise<T> {
-    const ch = ensureWorker();
+    const ch = await ensureWorker();
     if (!ch) return onMain();
     try {
       return await onWorker(ch);
@@ -109,9 +146,10 @@ export function createEngineClient(opts: EngineClientOptions = {}): EngineClient
     }
   }
 
-  function hintOnMain(puzzle: Puzzle, cells: Readonly<Uint8Array>): HintStep {
+  async function hintOnMain(puzzle: Puzzle, cells: Readonly<Uint8Array>): Promise<HintStep> {
+    const engine = await hints();
     const t0 = perf();
-    const step = getHintStep(puzzle, cells);
+    const step = engine.getHintStep(puzzle, cells);
     if (perf() - t0 > c.hint.mainThreadBudgetMs) slowSizes.add(puzzle.n);
     return step;
   }
@@ -127,20 +165,18 @@ export function createEngineClient(opts: EngineClientOptions = {}): EngineClient
     getHint(puzzle, cells) {
       if (disposed) return Promise.reject(new Error('engine client disposed'));
       const snapshot = Uint8Array.from(cells);
-      if (!opts.hintsInWorker && !slowSizes.has(puzzle.n)) {
-        try {
-          return Promise.resolve(hintOnMain(puzzle, snapshot));
-        } catch (err) {
-          return Promise.reject(err instanceof Error ? err : new Error(String(err)));
-        }
-      }
+      if (!opts.hintsInWorker && !slowSizes.has(puzzle.n)) return hintOnMain(puzzle, snapshot);
       return viaWorker(
         (ch) => ch.remote.getHint(puzzle, snapshot),
-        () => Promise.resolve().then(() => getHintStep(puzzle, snapshot)),
+        () => hints().then((engine) => engine.getHintStep(puzzle, snapshot)),
       );
     },
     pickKittyCell(puzzle, cells) {
-      return pickKittyCell(puzzle, cells);
+      const snapshot = Uint8Array.from(cells);
+      return hints().then((engine) => engine.pickKittyCell(puzzle, snapshot));
+    },
+    preload() {
+      if (!disposed) hints().catch(() => undefined);
     },
     dispose() {
       disposed = true;

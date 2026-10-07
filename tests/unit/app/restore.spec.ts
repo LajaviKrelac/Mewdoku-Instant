@@ -132,6 +132,25 @@ describe('opening a restored board (02 §15 steps 3–6)', () => {
     expect(h.game().status).toBe('playing');
   });
 
+  it("restores with the mode's RuleFlags under the session config (5 hearts per attempt)", async () => {
+    // Two mistakes: 5 − 2 = 3 hearts is only valid with 5 hearts per attempt.
+    const s = slot('L25', 'level', { [WRONG5[0] as number]: 3, [WRONG5[1] as number]: 3 }, { hearts: 3 });
+    const h = createHarness({
+      config: { hearts: { perAttempt: 5 } },
+      save: () => base({ inProgress: { level: s, daily: null } }),
+    });
+    await h.session.start({ mode: 'level', level: 25 });
+    expect(h.game()).toMatchObject({ hearts: 3, mistakes: 2, status: 'ready' });
+    expect(h.game().rules).toMatchObject({ heartsPerAttempt: 5 });
+    expect(h.save().inProgress.level).toEqual(s);
+    // The same slot breaks the hearts invariant under the default config (3 − 2 ≠ 3): cleared, fresh board.
+    const d = createHarness({ save: () => base({ inProgress: { level: s, daily: null } }) });
+    await d.session.start({ mode: 'level', level: 25 });
+    expect(d.game()).toMatchObject({ hearts: 3, mistakes: 0 });
+    expect(d.game().rules).toMatchObject({ heartsPerAttempt: 3 });
+    expect(d.save().inProgress.level).toBeNull();
+  });
+
   it('clears an invalid slot when the board opens and starts fresh', async () => {
     const s = slot('L25', 'level', { [WRONG5[0] as number]: 2 });
     const h = createHarness({ save: () => base({ inProgress: { level: s, daily: null } }) });

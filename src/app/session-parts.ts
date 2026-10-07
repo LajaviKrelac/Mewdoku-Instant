@@ -12,7 +12,7 @@ import { PALETTE_SIZE, regionColorsFor } from '../ui/art/palette';
 import type { CoachProps } from '../ui/overlays/coach';
 import type { DailyResultProps } from '../ui/overlays/daily-result';
 import type { FailOverlayProps } from '../ui/overlays/fail-overlay';
-import { hintText, type HintTextContext } from '../ui/overlays/hint-card';
+import { hintText, type HintTextContext } from '../ui/overlays/hint-text';
 import type { WinOverlayProps } from '../ui/overlays/win-overlay';
 import type { GameScreen } from '../ui/screens/game-screen';
 import type { Clock, TimerId } from './clock';

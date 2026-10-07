@@ -175,3 +175,36 @@ describe('sfx', () => {
     expect(recipe('heart_last').length).toBe(recipe('mistake').length + 3);
   });
 });
+
+describe('lazy sfx (04 §9 budget)', () => {
+  it('drops plays until the recipes land, then delegates; load() is idempotent and retries after a failure', async () => {
+    const { createLazySfx } = await import('../../../src/audio/lazy-sfx');
+    const engine = createAudioEngine(fakeAudioWindow());
+    const played: string[] = [];
+    let loads = 0;
+    let fail = true;
+    const lazy = createLazySfx(engine, () => {
+      loads++;
+      if (fail) return Promise.reject(new Error('offline'));
+      return Promise.resolve({ createSfx: () => ({ play: (id: string) => void played.push(id) }) });
+    });
+    lazy.play('ui'); // starts a load that fails
+    await lazy.load();
+    expect(lazy.ready()).toBe(false);
+    expect(played).toEqual([]);
+    fail = false;
+    await Promise.all([lazy.load(), lazy.load()]);
+    expect(loads).toBe(2);
+    expect(lazy.ready()).toBe(true);
+    lazy.play('cat');
+    expect(played).toEqual(['cat']);
+  });
+
+  it('the default loader brings the real recipes', async () => {
+    const { createLazySfx } = await import('../../../src/audio/lazy-sfx');
+    const lazy = createLazySfx(createAudioEngine(fakeAudioWindow()));
+    await lazy.load();
+    expect(lazy.ready()).toBe(true);
+    expect(() => lazy.play('win')).not.toThrow();
+  });
+});
