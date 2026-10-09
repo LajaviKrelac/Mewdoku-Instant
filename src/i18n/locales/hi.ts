@@ -260,6 +260,7 @@ export const catalog: LocaleCatalog = {
   'settings.shop': 'दुकान',
   'settings.removeAds': 'विज्ञापन हटाएँ',
   'settings.feedback': 'प्रतिक्रिया भेजें',
+  'toast.languageUnavailable': 'यह भाषा लोड नहीं हो सकी। थोड़ी देर में फिर कोशिश करें।',
   'howto.a11y': 'रंग पहचानने में मुश्किल? सेटिंग्स में रंग पैटर्न चालू करें।',
   'fish.count.one': '{count} मछली',
   'fish.count.other': '{count} मछलियाँ',

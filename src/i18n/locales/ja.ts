@@ -256,6 +256,7 @@ export const catalog: LocaleCatalog = {
   'settings.shop': 'ショップ',
   'settings.removeAds': '広告を削除',
   'settings.feedback': 'ご意見を送る',
+  'toast.languageUnavailable': 'この言語を読み込めませんでした。少ししてからもう一度お試しください。',
   'howto.a11y': '色の見分けがつきにくいときは、設定で「色の模様」をオンにしましょう。',
   'fish.count.other': 'さかな{count}匹',
   'fish.plus': '+{count}',

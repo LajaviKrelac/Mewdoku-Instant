@@ -255,6 +255,7 @@ export const catalog: LocaleCatalog = {
   'settings.shop': 'Toko',
   'settings.removeAds': 'Hapus iklan',
   'settings.feedback': 'Kirim masukan',
+  'toast.languageUnavailable': 'Bahasa itu gagal dimuat. Coba lagi sebentar lagi.',
   'howto.a11y': 'Sulit membedakan warna? Aktifkan pola warna di Pengaturan.',
   'fish.count.other': '{count} ikan',
   'fish.plus': '+{count}',

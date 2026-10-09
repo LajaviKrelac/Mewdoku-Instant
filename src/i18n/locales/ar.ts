@@ -273,6 +273,7 @@ export const catalog: LocaleCatalog = {
   'settings.shop': 'المتجر',
   'settings.removeAds': 'إزالة الإعلانات',
   'settings.feedback': 'إرسال ملاحظات',
+  'toast.languageUnavailable': 'تعذر تحميل هذه اللغة. حاول مرة أخرى بعد قليل.',
   'howto.a11y': 'يصعب التمييز بين الألوان؟ فعّل نقوش الألوان من الإعدادات.',
   'fish.count.zero': 'لا سمك',
   'fish.count.one': 'سمكة واحدة',

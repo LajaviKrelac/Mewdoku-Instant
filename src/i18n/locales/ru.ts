@@ -265,6 +265,7 @@ export const catalog: LocaleCatalog = {
   'settings.shop': 'Магазин',
   'settings.removeAds': 'Убрать рекламу',
   'settings.feedback': 'Отправить отзыв',
+  'toast.languageUnavailable': 'Не удалось загрузить этот язык. Попробуйте ещё раз чуть позже.',
   'howto.a11y': 'Трудно различать цвета? Включите узоры на цветах в Настройках.',
   'fish.count.one': '{count} рыбка',
   'fish.count.few': '{count} рыбки',

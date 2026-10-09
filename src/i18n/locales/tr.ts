@@ -260,6 +260,7 @@ export const catalog: LocaleCatalog = {
   'settings.shop': 'Mağaza',
   'settings.removeAds': 'Reklamları kaldır',
   'settings.feedback': 'Geri bildirim gönder',
+  'toast.languageUnavailable': 'Bu dil yüklenemedi. Biraz sonra tekrar dene.',
   'howto.a11y': 'Renkleri ayırt etmek zor mu? Ayarlar’dan renk desenlerini aç.',
   'fish.count.one': '{count} balık',
   'fish.count.other': '{count} balık',

@@ -258,6 +258,7 @@ export const catalog: LocaleCatalog = {
   'settings.shop': 'Boutique',
   'settings.removeAds': 'Retirer les pubs',
   'settings.feedback': 'Envoyer un avis',
+  'toast.languageUnavailable': 'Impossible de charger cette langue. Réessaie dans un instant.',
   'howto.a11y': 'Couleurs difficiles à distinguer ? Active les motifs de couleur dans les Réglages.',
   'fish.count.one': '{count} poisson',
   'fish.count.other': '{count} poissons',

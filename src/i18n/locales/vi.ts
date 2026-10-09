@@ -255,6 +255,7 @@ export const catalog: LocaleCatalog = {
   'settings.shop': 'Cửa hàng',
   'settings.removeAds': 'Bỏ quảng cáo',
   'settings.feedback': 'Gửi góp ý',
+  'toast.languageUnavailable': 'Không tải được ngôn ngữ này. Hãy thử lại sau giây lát.',
   'howto.a11y': 'Khó phân biệt màu? Hãy bật họa tiết màu trong Cài đặt.',
   'fish.count.other': '{count} cá',
   'fish.plus': '+{count}',

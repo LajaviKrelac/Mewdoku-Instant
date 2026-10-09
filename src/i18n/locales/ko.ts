@@ -256,6 +256,7 @@ export const catalog: LocaleCatalog = {
   'settings.shop': '상점',
   'settings.removeAds': '광고 제거',
   'settings.feedback': '의견 보내기',
+  'toast.languageUnavailable': '이 언어를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.',
   'howto.a11y': '색 구분이 어렵나요? 설정에서 색상 무늬를 켜 보세요.',
   'fish.count.other': '물고기 {count}마리',
   'fish.plus': '+{count}',

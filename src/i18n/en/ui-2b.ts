@@ -11,6 +11,8 @@ export const enUi2b = {
   'settings.removeAds': 'Remove ads',
   // Review PAR-5: the Feedback row (shown only when config app.feedbackUrl is set).
   'settings.feedback': 'Send feedback',
+  // Review ROB-2: the toast when a language picked in Settings could not load (the app shows it).
+  'toast.languageUnavailable': "That language couldn't load. Try again in a moment.",
   'howto.a11y': 'Colours hard to tell apart? Turn on colour patterns in Settings.',
 
   // ── Fish (§2.2, §2.5, §7) ──────────────────────────────────────────────────
