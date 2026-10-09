@@ -1,31 +1,66 @@
 /* Owner: A (Phase 2b; was ui-board)
-   Colour, spacing and type tokens (02 §17.2). Mirrors ui/art/palette.ts (PALETTE, TOKENS).
-   Region palette as --r0…--r11 (palette index order). Theming hook (02 §22): a theme (dark mode,
-   palettes, skins) overrides these custom properties only. */
+   The one token set of the Classic look (phase2b §1.3, §1.4): our own values (R6: nothing sampled
+   from the original). Mirrors ui/art/palette.ts (TOKENS, PALETTE, CAT_COLORS, EVENT_THEME_TOKENS);
+   scripts/palette-check.ts validates the pairs. This is the ONLY stylesheet with colour literals
+   (tests/unit/ui/css-rules.spec.ts): every other file uses these tokens. Tinted shadows and glows use
+   the RGB triplets, as rgba(var(--accent-rgb), .28). Region palette as --r0…--r11 (palette index).
+   Also here: the per-script display stacks (§6.6) and the [data-event-theme] blocks (§4.4). */
 :root {
-  /* ── UI colours (02 §17.2) ───────────────────────────────────────────── */
-  --page: #fbf6ee;
-  --page-2: #f4ece0; /* desktop side fill, wells */
-  --card: #ffffff;
-  --ink: #3b3044;
-  --ink-2: #6f6375; /* secondary text: ≥ 4.5:1 on --page, --page-2 and --card (scripts/palette-check.ts) */
-  --ink-3: #b3a9b6; /* disabled text, hairline icons */
-  --accent: #17806f; /* teal; white labels on it are ≥ 4.5:1 (WCAG 1.4.3, scripts/palette-check.ts) */
-  --accent-deep: #0f5a4e; /* pressed edge of primary buttons, accent text on white */
-  --accent-soft: #dcf2ec;
-  --danger: #d33a4a;
-  --wrong: #a3193a; /* wrong-X glyph + ring: 3:1 on every tile (scripts/palette-check.ts) */
+  /* ── Page, cards, ink (phase2b §1.4) ─────────────────────────────────── */
+  --page: #faf6f0; /* off-white page */
+  --page-2: #f1eadf; /* wells, desktop side fill */
+  --card: #ffffff; /* board card, pills, sheets */
+  --board-card: var(--card); /* the board card (an event may tint it) */
+  --ink: #2f2a35; /* text, outlines: 12.97:1 on --page */
+  --ink-2: #665e6c; /* secondary text: 5.77 on --page, 5.20 on --page-2 */
+  --ink-3: #b2aab4; /* disabled, hairlines (no text) */
+  --line: rgba(47, 42, 53, 0.1);
+  --line-2: rgba(47, 42, 53, 0.16);
+
+  /* ── Orange accent ───────────────────────────────────────────────────── */
+  --accent: #e57010; /* primary fill, hint ring; white labels on it only at ≥ 24 px (3.15:1) */
+  --accent-deep: #b4560a; /* 4 px bottom edge of primary buttons */
+  --accent-title: #d2620c; /* large titles (≥ 24 px): 3.55 on --page */
+  --accent-text: #a84b08; /* small accent text, small badges with white text (white on it 5.71) */
+  --accent-soft: #fde9d6; /* icon wells, victory rays */
+  --focus: #b9520a; /* focus ring: 4.56 on --page, 4.91 on --card */
+  --title-on-dark: #e57010; /* ranking-panel title on --stage: 4.78 */
+
+  /* ── Dark surfaces ───────────────────────────────────────────────────── */
+  --stage: #2a2430; /* solid dark panels (ranking, O4): white on it 15.07 */
+  --scrim: rgba(28, 23, 32, 0.82); /* full-screen dim */
+  --scrim-soft: rgba(28, 23, 32, 0.32);
+  --tap-text: #ffd45c; /* "Tap to keep going" on the scrim: 7.26 */
+  --stage-off: #4b4150; /* a disabled primary button on --stage */
+  --stage-off-edge: #322a37; /* its bottom edge */
+  --card-off: #dcd5de; /* a disabled secondary button on --stage */
+
+  /* ── Gold, fish, glow (graphics only) ────────────────────────────────── */
+  --gold: #ffc23d; /* glow, sparkles, coach ring */
+  --gold-deep: #dd9a12; /* icon strokes on gold */
+  --gold-soft: #fff4d6; /* gold icon wells */
+  --amber-text: #8a5a00; /* gold-family text on white (≥ 4.5:1) */
+  --fish: #ffb81f;
+  --fish-deep: #c98200;
+  --fish-hi: #ffe08a;
+  --glow: rgba(255, 194, 61, 0.65); /* the solved-board glow */
+  --glow-0: rgba(255, 194, 61, 0); /* the same, transparent (gradient end) */
+
+  /* ── Status ──────────────────────────────────────────────────────────── */
   --heart: #e8506a;
-  --heart-empty: #eadfe3;
-  --scrim: rgba(30, 22, 36, 0.75);
-  --stage: #2d2435; /* solid card behind the win / fail stage content (on the dark scrim) */
-  --scrim-soft: rgba(30, 22, 36, 0.32);
-  --line: rgba(59, 48, 68, 0.1);
-  --line-2: rgba(59, 48, 68, 0.16);
-  --gold: #ffd45c;
-  --gold-deep: #e9a92b; /* icons only: 2:1 on white, never text */
-  --amber-text: #8a5a00; /* gold-family text on white or --card (≥ 4.5:1) */
-  --hard: #6c3fb5;
+  --heart-empty: #efe5e8; /* empty-heart fill */
+  --heart-empty-line: #d6c6cc; /* empty-heart outline */
+  --danger: #d33a4a; /* error flash, lost heart */
+  --wrong: #a3193a; /* wrong-X glyph + ring: ≥ 3.18:1 on every tile */
+  --hard: #6c3fb5; /* Hard badge: white on it 6.96 */
+
+  /* ── RGB triplets for tinted shadows and glows ───────────────────────── */
+  --ink-rgb: 47, 42, 53;
+  --accent-rgb: 229, 112, 16;
+  --accent-shadow-rgb: 120, 50, 0; /* primary label text-shadow at .35 */
+  --gold-rgb: 255, 194, 61;
+  --page-rgb: 250, 246, 240;
+  --scrim-rgb: 28, 23, 32;
 
   /* ── Region palette (02 §17.2), by palette index ─────────────────────── */
   --r0: #f49aae; /* Strawberry */
@@ -41,19 +76,28 @@
   --r10: #9aa9bc; /* Slate */
   --r11: #a3b57f; /* Moss */
 
-  /* ── Cat (02 §17.3) ──────────────────────────────────────────────────── */
-  --cat-fur: #f29a4a;
-  --cat-fur-2: #d9762e;
-  --cat-muzzle: #ffe9cf;
+  /* ── Tux (phase2b §1.6; the art itself carries these in ui/art/palette.ts CAT_COLORS) ── */
+  --cat-fur: #2e2a33;
+  --cat-mask: #fbf8f4;
+  --cat-line: #f6f0e8;
 
-  /* ── Type (02 §17.6): one OFL display face + system UI ───────────────── */
+  /* ── Page art and side fill ──────────────────────────────────────────── */
+  --page-art: none; /* an event's tileable pattern (phase2b §4.4) */
+  --side-dot-a: rgba(229, 112, 16, 0.1); /* desktop side pattern */
+  --side-dot-b: rgba(47, 42, 53, 0.06);
+
+  /* ── Type (02 §17.6, phase2b §6.6): one OFL display face + system UI ─── */
   --font-display: 'Mewdoku Display', 'Fredoka', ui-rounded, system-ui, sans-serif;
+  --display-weight: 600;
+  /* digits (level numbers, fish, points, timer) keep the display face in every script */
+  --font-num: 'Mewdoku Display', 'Fredoka', ui-rounded, system-ui, sans-serif;
   --font-body: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --fs-xs: 0.75rem;
   --fs-s: 0.875rem;
   --fs-m: 1rem;
   --fs-l: 1.125rem;
   --fs-xl: 1.375rem;
+  --fs-btn: 1.5rem; /* white on --accent needs ≥ 24 px (phase2b §1.4 primary-button rule) */
   --fs-xxl: 1.75rem;
   --fs-hero: 2.5rem;
 
@@ -69,9 +113,10 @@
   --radius-l: 20px;
   --radius-xl: 28px;
   --radius-pill: 999px;
-  --shadow-1: 0 1px 2px rgba(59, 48, 68, 0.06), 0 2px 8px rgba(59, 48, 68, 0.07);
-  --shadow-2: 0 2px 4px rgba(59, 48, 68, 0.05), 0 10px 28px rgba(59, 48, 68, 0.1);
-  --shadow-3: 0 18px 50px rgba(30, 22, 36, 0.28);
+  --shadow-1: 0 1px 2px rgba(var(--ink-rgb), 0.06), 0 2px 8px rgba(var(--ink-rgb), 0.07);
+  --shadow-2: 0 2px 4px rgba(var(--ink-rgb), 0.05), 0 10px 28px rgba(var(--ink-rgb), 0.1);
+  --shadow-3: 0 18px 50px rgba(var(--scrim-rgb), 0.28);
+  --shadow-card: 0 2px 0 rgba(var(--ink-rgb), 0.05), 0 10px 26px rgba(var(--ink-rgb), 0.08); /* board card (§1.5) */
 
   /* ── Layout (02 §19; the game screen overwrites these from computeLayout) ── */
   --gutter: 16px;
@@ -83,6 +128,7 @@
   --vgap: 12px;
   --fb-safe: 64px;
   --focus-ring: 3px;
+  --banner-reserve: 58px; /* = cfg.ads.banner.reservePx (phase2b §3.2; a test keeps them equal) */
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 
@@ -98,6 +144,38 @@
   --hint-dim: 0.45; /* 1 − layout.hintDim (dimmed 55 %) */
 }
 
+/* Per-script display stacks (phase2b §6.6): no Fredoka for these scripts, so system faces at 700.
+   Latin, Latin extended (tr, pl) keep Fredoka (base.css adds the latin-ext face). */
+:root:lang(ja) {
+  --font-display: 'Hiragino Maru Gothic ProN', 'Hiragino Sans', 'Noto Sans JP', system-ui, sans-serif;
+  --display-weight: 700;
+}
+:root:lang(ko) {
+  --font-display: 'Apple SD Gothic Neo', 'Noto Sans KR', system-ui, sans-serif;
+  --display-weight: 700;
+}
+:root:lang(zh) {
+  --font-display: 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', system-ui, sans-serif;
+  --display-weight: 700;
+}
+:root:lang(th) {
+  --font-display: 'Thonburi', 'Noto Sans Thai', system-ui, sans-serif;
+  --display-weight: 700;
+}
+:root:lang(hi) {
+  --font-display: 'Kohinoor Devanagari', 'Noto Sans Devanagari', system-ui, sans-serif;
+  --display-weight: 700;
+}
+:root:lang(ar) {
+  --font-display: 'Geeza Pro', 'Noto Sans Arabic', 'Segoe UI', system-ui, sans-serif;
+  --display-weight: 700;
+}
+:root:lang(ru),
+:root:lang(vi) {
+  --font-display: system-ui, 'Segoe UI', Roboto, sans-serif;
+  --display-weight: 700;
+}
+
 /* Reduced motion (02 §17.5): fades ≤ 150 ms; fx.css removes shake/confetti/stagger. */
 [data-motion='reduced'] {
   --t-draw: 0ms;
@@ -106,4 +184,32 @@
   --t-crack: 150ms;
   --t-fade: 150ms;
   --t-overlay: 150ms;
+}
+
+/* ── Event themes (phase2b §1.3, §4.3, §4.4) ─────────────────────────────
+   Set on the event screen and the event game screen only. They may override --page, --page-art,
+   --board-card and --glow (and the accessory, in the art); never the region colours, --ink, --wrong
+   or the X. Values mirror EVENT_THEME_TOKENS (ui/art/palette.ts) and src/data/events/events.json;
+   the patterns are eventPatternUrl() (ui/art/event-art.ts). palette-check re-checks the text pairs and
+   the faded tiles on each page. */
+[data-event-theme='lantern-walk-2026'] {
+  --page: #fff4e6;
+  --page-art: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='72' viewBox='0 0 72 72'%3E%3Cpath d='M18 9V14' stroke='%23FDEDDC' stroke-width='1.4'/%3E%3Cellipse cx='18' cy='22' rx='6.4' ry='7.6' fill='%23FCE3CA'/%3E%3Crect x='14.4' y='12.6' width='7.2' height='2.6' rx='1' fill='%23FDEDDC'/%3E%3Crect x='14.4' y='28.8' width='7.2' height='2.6' rx='1' fill='%23FDEDDC'/%3E%3Cpath d='M18 15V29' stroke='%23FDEDDC' stroke-width='1'/%3E%3Cpath d='M54 45.6V49.6' stroke='%23FDEDDC' stroke-width='1.11'/%3E%3Cellipse cx='54' cy='56' rx='5.12' ry='6.08' fill='%23FCE3CA'/%3E%3Crect x='51.12' y='48.48' width='5.76' height='2.08' rx='0.8' fill='%23FDEDDC'/%3E%3Crect x='51.12' y='61.44' width='5.76' height='2.08' rx='0.8' fill='%23FDEDDC'/%3E%3Cpath d='M54 50.4V61.6' stroke='%23FDEDDC' stroke-width='0.8'/%3E%3Ccircle cx='52' cy='16' r='1.6' fill='%23FDEDDC'/%3E%3Ccircle cx='16' cy='58' r='1.3' fill='%23FDEDDC'/%3E%3C/svg%3E");
+  --board-card: #ffffff;
+  --glow: rgba(255, 170, 60, 0.65);
+  --glow-0: rgba(255, 170, 60, 0);
+}
+[data-event-theme='snow-paws-2026'] {
+  --page: #f3f6fa;
+  --page-art: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='72' viewBox='0 0 72 72'%3E%3Cpath d='M18 20L28.0 20.0M23.5 20.0L25.8 21.9M23.5 20.0L25.8 18.1M18 20L23.0 28.7M20.8 24.8L20.2 27.7M20.8 24.8L23.6 25.8M18 20L13.0 28.7M15.3 24.8L12.4 25.8M15.3 24.8L15.8 27.7M18 20L8.0 20.0M12.5 20.0L10.2 18.1M12.5 20.0L10.2 21.9M18 20L13.0 11.3M15.2 15.2L15.8 12.3M15.2 15.2L12.4 14.2M18 20L23.0 11.3M20.8 15.2L23.6 14.2M20.8 15.2L20.2 12.3' stroke='%23E0E8F3' stroke-width='1.8' stroke-linecap='round' fill='none'/%3E%3Cpath d='M54 54L61.5 54.0M58.1 54.0L59.8 55.4M58.1 54.0L59.8 52.6M54 54L57.8 60.5M56.1 57.6L55.7 59.8M56.1 57.6L58.2 58.3M54 54L50.3 60.5M51.9 57.6L49.8 58.3M51.9 57.6L52.3 59.8M54 54L46.5 54.0M49.9 54.0L48.2 52.6M49.9 54.0L48.2 55.4M54 54L50.3 47.5M51.9 50.4L52.3 48.2M51.9 50.4L49.8 49.7M54 54L57.8 47.5M56.1 50.4L58.2 49.7M56.1 50.4L55.7 48.2' stroke='%23E0E8F3' stroke-width='1.8' stroke-linecap='round' fill='none'/%3E%3Ccircle cx='50' cy='18' r='2' fill='%23E9EEF6'/%3E%3Ccircle cx='20' cy='54' r='2.4' fill='%23E9EEF6'/%3E%3Ccircle cx='36' cy='38' r='1.4' fill='%23E0E8F3'/%3E%3C/svg%3E");
+  --board-card: #ffffff;
+  --glow: rgba(150, 200, 255, 0.6);
+  --glow-0: rgba(150, 200, 255, 0);
+}
+[data-event-theme='yarn-hearts-2027'] {
+  --page: #fff1f3;
+  --page-art: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='72' viewBox='0 0 72 72'%3E%3Ccircle cx='19' cy='21' r='8.5' fill='%23FCE0E6'/%3E%3Cpath d='M13.05 16.75Q19 22.7 24.1 27.37M11.77 22.27Q18.15 26.1 19.85 29.07M17.3 12.92Q23.25 19.3 27.07 21.85' stroke='%23FDEAEE' stroke-width='1.3' fill='none' stroke-linecap='round'/%3E%3Cpath d='M24.95 26.95q5.1 7.65 11.89 4.25' stroke='%23FDEAEE' stroke-width='1.2' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='55' cy='55' r='6.5' fill='%23FCE0E6'/%3E%3Cpath d='M50.45 51.75Q55 56.3 58.9 59.87M49.47 55.97Q54.35 58.9 55.65 61.17M53.7 48.82Q58.25 53.7 61.17 55.65' stroke='%23FDEAEE' stroke-width='1.3' fill='none' stroke-linecap='round'/%3E%3Cpath d='M59.55 59.55q3.9 5.85 9.1 3.25' stroke='%23FDEAEE' stroke-width='1.2' fill='none' stroke-linecap='round'/%3E%3Cpath d='M54 22C48 18 48 13.4 51 13.4C52.6 13.4 53.6 14.4 54 15.4C54.4 14.4 55.4 13.4 57 13.4C60 13.4 60 18 54 22Z' fill='%23FDEAEE'/%3E%3Cpath d='M18 57.2C13.2 54 13.2 50.32 15.6 50.32C16.88 50.32 17.68 51.12 18 51.92C18.32 51.12 19.12 50.32 20.4 50.32C22.8 50.32 22.8 54 18 57.2Z' fill='%23FDEAEE'/%3E%3C/svg%3E");
+  --board-card: #ffffff;
+  --glow: rgba(255, 140, 170, 0.6);
+  --glow-0: rgba(255, 140, 170, 0);
 }

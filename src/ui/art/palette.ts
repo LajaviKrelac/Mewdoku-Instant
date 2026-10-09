@@ -1,8 +1,8 @@
 // Owner: A (Phase 2b)
-// Region colours, glyphs and UI tokens (02 §17.2, §18). Mirrors styles/tokens.css (--r0…--r11 etc.).
-// Colour NAMES live in i18n (colorName(i)). scripts/palette-check.ts validates these values.
-// Phase 2b (A): TOKENS and CAT_COLORS take the Classic values of phase2b §1.4 / §1.6 in place;
-// xEdgeColor() (F0) gives the white X's tinted edge per palette index (§1.5).
+// Region colours, glyphs and UI tokens (02 §17.2, §18; phase2b §1.3–§1.6). Mirrors styles/tokens.css
+// (--r0…--r11 etc.). Colour NAMES live in i18n (colorName(i)). scripts/palette-check.ts validates these
+// values. Phase 2b: one token set, the Classic look (TOKENS), Tux's colours (CAT_COLORS), the event
+// theme overrides (EVENT_THEME_TOKENS) and xEdgeColor(), the white X's tinted edge per tile (§1.5).
 import { cfg, type GameConfig } from '../../app/config';
 import { assignColors } from '../../engine/colors';
 import type { DeltaMatrix, Puzzle } from '../../engine/types';
@@ -41,41 +41,115 @@ export type TokenName =
   | 'card'
   | 'ink'
   | 'ink-2'
+  | 'ink-3'
   | 'accent'
   | 'accent-deep'
+  | 'accent-title'
+  | 'accent-text'
+  | 'accent-soft'
+  | 'focus'
+  | 'title-on-dark'
+  | 'tap-text'
+  | 'stage'
   | 'amber-text'
+  | 'gold'
+  | 'fish'
+  | 'fish-deep'
+  | 'fish-hi'
   | 'danger'
   | 'heart'
   | 'scrim'
-  | 'wrong';
+  | 'glow'
+  | 'wrong'
+  | 'hard';
 
 /**
- * UI tokens (02 §17.2). `wrong` is a Phase 2 addition validated by scripts/palette-check.ts: the
- * spec's --danger (#D33A4A) only reaches ~2.2:1 on the pastel tiles, so the wrong-X glyph and its
- * ring use this deeper crimson to meet the 3:1 non-text contrast rule (02 §18). --danger stays the
- * UI error colour (flash, lost heart).
- * Phase 2 contrast pass (02 §17.2 values are provisional): `accent` is a deeper teal than the
- * spec's #1F9E89 (white labels on it were 3.3:1; now 4.8:1, WCAG 1.4.3), `ink-2` is darker than
- * #7A6E80 (4.1:1 on --page-2; now 4.8:1), and `amber-text` replaces --gold-deep for text.
- * scripts/palette-check.ts enforces these pairs. Mirrors styles/tokens.css.
+ * The one token set of the Classic look (phase2b §1.3, §1.4). Values are ours (R6: nothing sampled
+ * from the original). Mirrors styles/tokens.css (tests/unit/ui/palette-check.spec.ts keeps them equal)
+ * and is validated by scripts/palette-check.ts:
+ * - `accent` carries white labels only at ≥ 24 px (WCAG large text, 3.15:1); smaller orange text
+ *   uses `accent-text`, large titles `accent-title`, the focus ring `focus`.
+ * - `wrong` (#A3193A) stays: --danger only reaches ~2.2:1 on the pastel tiles, so the wrong-X glyph
+ *   and its ring use this deeper crimson to meet 3:1 (02 §18). --danger stays the UI error colour.
+ * - `amber-text` stays the gold-family text colour (daily card "In progress").
  */
 export const TOKENS: Readonly<Record<TokenName, string>> = Object.freeze({
-  page: '#FBF6EE',
-  'page-2': '#F4ECE0',
+  page: '#FAF6F0',
+  'page-2': '#F1EADF',
   card: '#FFFFFF',
-  ink: '#3B3044',
-  'ink-2': '#6F6375',
-  accent: '#17806F',
-  'accent-deep': '#0F5A4E',
+  ink: '#2F2A35',
+  'ink-2': '#665E6C',
+  'ink-3': '#B2AAB4',
+  accent: '#E57010',
+  'accent-deep': '#B4560A',
+  'accent-title': '#D2620C',
+  'accent-text': '#A84B08',
+  'accent-soft': '#FDE9D6',
+  focus: '#B9520A',
+  'title-on-dark': '#E57010',
+  'tap-text': '#FFD45C',
+  stage: '#2A2430',
   'amber-text': '#8A5A00',
+  gold: '#FFC23D',
+  fish: '#FFB81F',
+  'fish-deep': '#C98200',
+  'fish-hi': '#FFE08A',
   danger: '#D33A4A',
   heart: '#E8506A',
-  scrim: 'rgba(30,22,36,.75)',
+  scrim: 'rgba(28,23,32,.82)',
+  glow: 'rgba(255,194,61,.65)',
   wrong: '#A3193A',
+  hard: '#6C3FB5',
 });
 
-/** Our cat's colours (02 §17.3): ginger fur, cream muzzle. */
-export const CAT_COLORS = Object.freeze({ fur: '#F29A4A', muzzle: '#FFE9CF' });
+/**
+ * Tux, our tuxedo-style cat (phase2b §1.6): dark fur with a sheen, a near-black outline, a white
+ * asymmetric blaze, bib, socks and tail tip, light-green irises, pink nose and inner ears. Expression
+ * lines drawn on the dark fur use `line` (ink lines vanish on black fur); on the white mask they are ink.
+ */
+export const CAT_COLORS = Object.freeze({
+  fur: '#2E2A33',
+  sheen: '#46404E',
+  outline: '#16131A',
+  mask: '#FBF8F4',
+  earIn: '#F2A3B4',
+  nose: '#F28AA0',
+  blush: '#FF8FA6',
+  mouth: '#6B2B3F',
+  line: '#F6F0E8',
+  iris: '#BFE38A',
+  pupil: '#16131A',
+});
+
+/**
+ * Event theme overrides (phase2b §1.3, §4.3, §4.4) as they are written in the [data-event-theme]
+ * blocks of styles/tokens.css: an event may theme the page, its pattern, the board card and the glow,
+ * never the region colours, --ink, --wrong or the X tokens. palette-check re-checks every text pair and
+ * the faded-tile glyphs on each event page; tests keep tokens.css (and src/data/events, when present)
+ * equal to these values.
+ */
+export interface EventThemeTokens {
+  readonly page: string;
+  readonly boardCard: string;
+  readonly glow: string;
+}
+
+export const EVENT_THEME_TOKENS: Readonly<Record<string, EventThemeTokens>> = /* @__PURE__ */ Object.freeze({
+  'lantern-walk-2026': { page: '#FFF4E6', boardCard: '#FFFFFF', glow: 'rgba(255,170,60,.65)' },
+  'snow-paws-2026': { page: '#F3F6FA', boardCard: '#FFFFFF', glow: 'rgba(150,200,255,.6)' },
+  'yarn-hearts-2027': { page: '#FFF1F3', boardCard: '#FFFFFF', glow: 'rgba(255,140,170,.6)' },
+});
+
+/**
+ * Event page-pattern motif colours (ui/art/event-art.ts): `a` for the motifs, `b` (lighter) for their
+ * details. Each is only a shade off its page, so text drawn over the pattern keeps ≥ 4.5:1 for --ink,
+ * --ink-2 and --accent-text (scripts/palette-check.ts checks every motif colour).
+ */
+export const EVENT_PATTERN_COLORS: Readonly<Record<'lanterns' | 'snowflakes' | 'yarn', { readonly a: string; readonly b: string }>> = /* @__PURE__ */ Object.freeze({
+  lanterns: { a: '#FCE3CA', b: '#FDEDDC' },
+  snowflakes: { a: '#E0E8F3', b: '#E9EEF6' },
+  yarn: { a: '#FCE0E6', b: '#FDEAEE' },
+});
 
 /** `var(--rN)` for a palette index. */
 export function regionColorVar(paletteIndex: number): string {

@@ -1,19 +1,16 @@
 // Owner: C (Phase 2b; was app)
 // Building blocks of the session (04 §5.2): the TICK timer with its stack of pause reasons, one-shot
 // board timers, the feedback player (sfx, haptics, announcer; never throws), and the overlay props
-// builders for O3 / O4 / O7 / O8.
+// builders for O4 and O8 (the post-win screens are built by views.ts, phase2b §2.4–§2.5).
 import type { MuteReason } from '../audio/audio-engine';
 import type { HintStep, Puzzle } from '../engine/types';
-import { localMidnightAfter, msUntilLocalMidnight } from '../game/progression';
 import { tutorialStep, type TutorialStepIndex } from '../game/tutorial';
 import type { GameState, InProgressV2, SaveData } from '../game/types';
 import { PRAISE_COUNT, t } from '../i18n';
 import { PALETTE_SIZE, regionColorsFor } from '../ui/art/palette';
 import type { CoachProps } from '../ui/overlays/coach';
-import type { DailyResultProps } from '../ui/overlays/daily-result';
 import type { FailOverlayProps } from '../ui/overlays/fail-overlay';
 import { hintText, type HintTextContext } from '../ui/overlays/hint-text';
-import type { WinOverlayProps } from '../ui/overlays/win-overlay';
 import type { GameScreen } from '../ui/screens/game-screen';
 import type { Clock, TimerId } from './clock';
 import type { GameConfig } from './config';
@@ -201,56 +198,7 @@ export function defaultPraise(): number {
 
 // ─────────────────────────────── overlay props ───────────────────────────────
 
-export interface WinPropsOptions {
-  readonly clock: Clock;
-  readonly config: GameConfig;
-  readonly praise: number;
-  readonly reducedMotion: boolean;
-  onNext(): void;
-  onHome(): void;
-  onDone(): void;
-}
-
-export type WinProps = { kind: 'daily'; props: DailyResultProps } | { kind: 'win'; props: WinOverlayProps };
-
 export const overlayProps = {
-  /** O3 (level / tutorial / tutorial replay) or O7 (daily). */
-  win(state: GameState, m: SessionMeta, o: WinPropsOptions): WinProps {
-    if (m.mode === 'daily') {
-      const now = o.clock.now();
-      return {
-        kind: 'daily',
-        props: {
-          dateKey: m.dateKey ?? '',
-          ms: Math.round(state.elapsedMs),
-          mistakes: state.mistakes,
-          hints: state.hintsUsed,
-          kitties: state.kittiesUsed,
-          // The midnight after the daily's OWN date: past already when it was solved after midnight.
-          nextPuzzleAt: localMidnightAfter(m.dateKey ?? '') ?? now + msUntilLocalMidnight(now),
-          now: () => o.clock.now(),
-          onDone: o.onDone,
-        },
-      };
-    }
-    const tutorial = m.mode === 'tutorial';
-    const replay = m.request.mode === 'tutorial' && m.request.replay;
-    const level = m.level ?? 1;
-    return {
-      kind: 'win',
-      props: {
-        variant: tutorial ? (replay ? 'tutorial_replay' : 'tutorial') : 'level',
-        level,
-        nextLevel: tutorial ? 2 : level + 1,
-        praise: o.praise,
-        buttonDelayMs: o.config.fx.winButtonDelayMs,
-        reducedMotion: o.reducedMotion,
-        onNext: o.onNext,
-        onHome: o.onHome,
-      },
-    };
-  },
-
   /** O4; buttonDelayMs is 0 when restored from a save (02 §15 step 5). */
   fail(
     continueOffer: FailOverlayProps['continueOffer'],

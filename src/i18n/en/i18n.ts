@@ -1,9 +1,11 @@
 // Owner: E
 // Phase 2b English strings owned by localization (phase2b §6.4, Appendix A): the days+hours duration
 // template and the endonyms for the Settings Language row (one per locale id, i18n.locales). Endonyms
-// are the languages' own names and are the same in every catalogue. Wired into ../en.ts.
-export const enI18n = {
-  'time.daysHours': '{d} d {h} h',
+// are the languages' own names and are the same in every catalogue: the locale catalogues spread
+// LOCALE_NAMES instead of repeating them. Wired into ../en.ts.
+
+/** Each language's own name (endonym), identical in every catalogue (phase2b Appendix A). */
+export const LOCALE_NAMES = {
   'locale.name.en': 'English',
   'locale.name.es': 'Español',
   'locale.name.pt-BR': 'Português (Brasil)',
@@ -21,4 +23,9 @@ export const enI18n = {
   'locale.name.zh-Hans': '简体中文',
   'locale.name.hi': 'हिन्दी',
   'locale.name.ar': 'العربية',
+} as const;
+
+export const enI18n = {
+  'time.daysHours': '{d} d {h} h',
+  ...LOCALE_NAMES,
 } as const;

@@ -1,6 +1,9 @@
 // Owner: D (Phase 2b; was platform)
 // Dev/e2e mock ads (04 §6.2): ?ads=ok|nofill|unsupported|close, a placeholder overlay for
 // cfg.ads.mock.durationMs. Never bundled in production web or fbig builds.
+// phase2b §3.3: the same ?ads= mode drives a mock banner, a 50 px grey "Banner placeholder" bar fixed
+// at the bottom, shown and hidden by the app's banner rules exactly like the FB banner (ok / close:
+// shown; nofill: no_fill; unsupported: no banner at all).
 import { cfg } from '../../app/config';
 import { t } from '../../i18n';
 import type { AdKind, AdResult, PlatformAds, PlatformTimers } from '../types';
@@ -24,6 +27,55 @@ export function readMockAdMode(search: string): MockAdMode {
 
 /** Attribute the e2e tests look for while the placeholder is up. */
 export const MOCK_AD_TEST_ID = 'mock-ad';
+/** Attribute of the mock banner bar (phase2b §3.3). */
+export const MOCK_BANNER_TEST_ID = 'mock-banner';
+/** The FB banner's height (50 dp, [search: Meta docs]); the app reserves ads.banner.reservePx around it. */
+export const MOCK_BANNER_HEIGHT_PX = 50;
+
+/**
+ * Mock PlatformAds.banner for dev/e2e (phase2b §3.3), or undefined in 'unsupported' mode. show() puts
+ * the bar up (idempotent) and answers ok, or no_fill in 'nofill' mode; hide() takes it down. Never rejects.
+ */
+export function createMockBanner(mode: MockAdMode, opts: { doc: Document }): PlatformAds['banner'] {
+  if (mode === 'unsupported') return undefined;
+  const doc = opts.doc;
+  let bar: HTMLElement | null = null;
+  return {
+    show() {
+      if (mode === 'nofill') return Promise.resolve({ ok: false, reason: 'no_fill' });
+      if (!bar) {
+        bar = doc.createElement('div');
+        bar.setAttribute('data-testid', MOCK_BANNER_TEST_ID);
+        bar.setAttribute('role', 'region');
+        bar.setAttribute('aria-label', t('ads.banner.placeholder'));
+        bar.textContent = t('ads.banner.placeholder');
+        // Inline styles: platform/ may not use ui/ or styles/. Neutral grey, like an empty ad slot.
+        bar.style.cssText = [
+          'position:fixed',
+          'left:0',
+          'right:0',
+          'bottom:0',
+          `height:${MOCK_BANNER_HEIGHT_PX}px`,
+          'z-index:2147483646',
+          'display:flex',
+          'align-items:center',
+          'justify-content:center',
+          'background:#d9d9d9',
+          'color:#333',
+          'font:14px system-ui,-apple-system,sans-serif',
+          'border-top:1px solid #bbb',
+        ].join(';');
+        (doc.body ?? doc.documentElement).appendChild(bar);
+      }
+      return Promise.resolve({ ok: true });
+    },
+    hide() {
+      bar?.parentNode?.removeChild(bar);
+      bar = null;
+      return Promise.resolve();
+    },
+  };
+}
 
 /**
  * ok: shows the placeholder, resolves {ok:true}; nofill: {ok:false,'no_fill'}; unsupported:

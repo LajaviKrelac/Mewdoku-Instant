@@ -9,21 +9,36 @@
 // The local save mirror is per player (PLAT-2, see fb-storage.ts): `${save.storageKey}:<player ID>`.
 // An ad kind whose load or show reports 'unsupported' (CLIENT_UNSUPPORTED_OPERATION) is switched off
 // for the rest of the session, so capabilities() turns false and the 02 §13.3 free fallback applies.
+//
+// Phase 2b (D): the banner (`ads.banner`, main bundle; only when both banner APIs are supported and
+// VITE_FB_PLACEMENT_BANNER is set, latched off by 'unsupported'), and `ranking` / `groups` / `payments`
+// as main-bundle facades over the lazy `fb-social` chunk (fb-social-glue.ts). Their capabilities come
+// from cheap probes after init(), so capabilities() stays final after init(); the chunk is preloaded
+// right after start() (never awaited, never before the first route) when any of them is usable.
 import { cfg } from '../../app/config';
 import { canVibrate, createHaptics, type Haptics } from '../shared/haptics';
 import { createSystemTimers } from '../shared/timers';
-import type { AdKind, Capabilities, PlatformAdapter, PlatformTimers } from '../types';
+import type { AdKind, Capabilities, PlatformAdapter, PlatformAds, PlatformTimers } from '../types';
 import { createLocalFlag, createLocalStore } from '../web/local-storage';
 import { createFbAds } from './fb-ads';
 import { createFbAnalytics } from './fb-analytics';
+import { createFbBanner } from './fb-banner';
+import { parseLeaderboardMap, probeBanner } from './fb-probe';
+import { createSocialGlue, type SocialModule } from './fb-social-glue';
 import { createFbStorage } from './fb-storage';
 import type { FBInstantSDK } from './fbinstant';
 
 export interface FbPlatformOptions {
   /** Defaults to window.FBInstant. */
   readonly sdk?: FBInstantSDK;
-  /** Defaults to import.meta.env.VITE_FB_PLACEMENT_INTERSTITIAL / _REWARDED. */
-  readonly placements?: { readonly interstitial: string; readonly rewarded: string };
+  /** Defaults to import.meta.env.VITE_FB_PLACEMENT_INTERSTITIAL / _REWARDED / _BANNER (banner: '' when omitted here). */
+  readonly placements?: { readonly interstitial: string; readonly rewarded: string; readonly banner?: string };
+  /** VITE_FB_LEADERBOARDS (JSON map BoardKey → dashboard name or id). Defaults to the env value. */
+  readonly leaderboards?: string;
+  /** Loads the lazy `fb-social` chunk. Default: () => import('./fb-social'). Tests inject failures. */
+  readonly loadSocial?: () => Promise<SocialModule>;
+  /** Where overlay views are mounted. Default: the global document. */
+  readonly doc?: Document;
   readonly storage?: Storage | null;
   readonly timers?: PlatformTimers;
   /** navigator, for the vibrate fallback. */
@@ -53,7 +68,10 @@ export function createFbPlatform(opts: FbPlatformOptions = {}): PlatformAdapter 
   const placements = opts.placements ?? {
     interstitial: import.meta.env.VITE_FB_PLACEMENT_INTERSTITIAL ?? '',
     rewarded: import.meta.env.VITE_FB_PLACEMENT_REWARDED ?? '',
+    banner: import.meta.env.VITE_FB_PLACEMENT_BANNER ?? '',
   };
+  const bannerPlacement = (placements.banner ?? '').trim();
+  const boards = parseLeaderboardMap(opts.leaderboards !== undefined ? opts.leaderboards : import.meta.env.VITE_FB_LEADERBOARDS);
   const lazySdk = (): FBInstantSDK => {
     const s = opts.sdk ?? defaultSdk();
     if (!s) throw new Error('FBInstant SDK is not loaded');
@@ -73,6 +91,8 @@ export function createFbPlatform(opts: FbPlatformOptions = {}): PlatformAdapter 
 
   /** Ad kinds latched off after an 'unsupported' result this session (PLAT-4). */
   const adsOff = new Set<AdKind>();
+  /** The banner latched off after an 'unsupported' result this session (phase2b §3.2). */
+  let bannerOff = false;
 
   const has = (api: string): boolean => apis.has(api);
   const adSupported = (kind: AdKind): boolean =>
@@ -126,6 +146,47 @@ export function createFbPlatform(opts: FbPlatformOptions = {}): PlatformAdapter 
   });
   const analytics = createFbAnalytics(forward, { ready: () => initialized });
 
+  // ── phase2b: banner (main bundle) ──
+  let bannerProbe: boolean | null = null;
+  const bannerUsable = (): boolean => {
+    if (!initialized || bannerOff || bannerPlacement === '') return false;
+    bannerProbe ??= probeBanner(sdkRef(), apis);
+    return bannerProbe;
+  };
+  let banner: NonNullable<PlatformAds['banner']> | null = null;
+  const bannerApi = (): PlatformAds['banner'] => {
+    if (!bannerUsable()) return undefined;
+    banner ??= createFbBanner(sdkRef(), {
+      placement: bannerPlacement,
+      timers,
+      onUnsupported: () => {
+        bannerOff = true;
+      },
+    });
+    return banner;
+  };
+  // `banner` is a getter: present only while usable (after init, both APIs, a placement, not latched off).
+  const adsAll: PlatformAds = {
+    preload: (kind) => ads.preload(kind),
+    isReady: (kind) => ads.isReady(kind),
+    showInterstitial: (p) => ads.showInterstitial(p),
+    showRewarded: (p) => ads.showRewarded(p),
+    get banner() {
+      return bannerApi();
+    },
+  };
+
+  // ── phase2b: rankings, overlay views, groups, payments (lazy fb-social chunk) ──
+  const social = createSocialGlue({
+    sdk: sdkRef,
+    apis: () => apis,
+    initialized: () => initialized,
+    boards,
+    timers,
+    load: opts.loadSocial ?? (() => import('./fb-social')),
+    ...(opts.doc ? { doc: opts.doc } : {}),
+  });
+
   const applyProgress = (pct: number): void => {
     try {
       forward.setLoadingProgress(pct);
@@ -138,15 +199,17 @@ export function createFbPlatform(opts: FbPlatformOptions = {}): PlatformAdapter 
     // 05 §6.2: an empty placement ID makes that ad capability false (free fallback, 02 §13.3).
     interstitial: adSupported('interstitial') && placements.interstitial.trim() !== '',
     rewarded: adSupported('rewarded') && placements.rewarded.trim() !== '',
-    banner: false, // not used in Phase 2 (02 §13)
+    // phase2b §3.2: both banner APIs, a placement id, not latched off.
+    banner: bannerUsable(),
     cloudSave: has(FB_API.getData) && has(FB_API.setData),
-    leaderboards: false, // Phase 4, after doc verification (05 §8)
+    // phase2b §5.4: = ranking.caps().global (a leaderboard API and at least one board id).
+    leaderboards: social.ranking.caps().global,
     share: false,
-    payments: false,
+    // phase2b §8.4: not iOS, payments.purchaseAsync supported; the Buy section also needs payments.ready().
+    payments: social.payments() !== undefined,
     haptics: has(FB_API.haptics) || canVibrate(nav),
-    // phase2b §5.4, §5.6: D sets these from the probe (overlayViews.*, tournament.*). Off until then.
-    overlayViews: false,
-    groups: false,
+    overlayViews: social.overlayViews(),
+    groups: social.groups() !== undefined,
   });
 
   const playerId = (): string | null => {
@@ -200,6 +263,8 @@ export function createFbPlatform(opts: FbPlatformOptions = {}): PlatformAdapter 
       if (lastProgress < 100) setLoadingProgress(100);
       await sdkRef().startGameAsync();
       started = true;
+      // phase2b §11: the fb-social chunk loads after start(), never blocking the first route.
+      social.preload();
     })().catch((err: unknown) => {
       startP = null; // a later start() tries again (PLAT-8)
       throw err;
@@ -238,9 +303,16 @@ export function createFbPlatform(opts: FbPlatformOptions = {}): PlatformAdapter 
     },
 
     storage,
-    ads,
+    ads: adsAll,
     analytics,
     haptics: { pulse: (pattern) => haptics.pulse(pattern) },
+    ranking: social.ranking,
+    get groups() {
+      return social.groups();
+    },
+    get payments() {
+      return social.payments();
+    },
   };
 }
 

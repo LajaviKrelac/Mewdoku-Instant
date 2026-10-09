@@ -225,7 +225,7 @@ describe('opening a restored board (02 §15 steps 3–6)', () => {
     expect(h.game().cells.every((v) => v === 0)).toBe(true);
   });
 
-  it('a full board runs the win bookkeeping and shows O3 at once', async () => {
+  it('a full board runs the win bookkeeping and shows the victory screen at once (no panel)', async () => {
     const full: Record<number, number> = {};
     for (const c of SOL5) full[c] = 2;
     const h = createHarness({ save: () => base({ inProgress: { level: slot('L25', 'level', full), daily: null, event: null } }) });
@@ -235,18 +235,19 @@ describe('opening a restored board (02 §15 steps 3–6)', () => {
     expect(h.save().inProgress.level).toBeNull();
     expect(last(h.platform.writes)?.cloud).toBe('flush');
     await h.settle(0);
-    expect(h.router.isOpen('win')).toBe(true);
-    expect(h.router.props.win).toMatchObject({ variant: 'level', level: 25, nextLevel: 26 });
+    expect(h.router.isOpen('ranking')).toBe(false);
+    expect(h.router.isOpen('victory')).toBe(true);
+    expect(h.router.props.victory).toMatchObject({ variant: 'level', level: 25, nextLevel: 26 });
   });
 
-  it('a full daily board records the daily and shows O7', async () => {
+  it('a full daily board records the daily and shows the daily victory', async () => {
     const full: Record<number, number> = {};
     for (const c of SOL5) full[c] = 2;
     const h = createHarness({ save: () => base({ inProgress: { level: null, daily: slot(`D${TODAY}`, 'daily', full), event: null } }) });
     await h.session.start({ mode: 'daily', dateKey: TODAY });
     await h.settle(0);
     expect(h.save().daily[TODAY]).toEqual([12_345, 0, 0, 0]);
-    expect(h.router.isOpen('daily_result')).toBe(true);
+    expect(h.router.props.victory?.variant).toBe('daily');
   });
 
   it('hearts 0 → LOST with O4 shown at once and Continue still offered', async () => {

@@ -2,15 +2,28 @@
 // FB adapter lifecycle and capabilities (05 §4, 04 §6.3): initializeAsync is the first SDK call,
 // progress reaches 100 before startGameAsync, locale read after start, capabilities from
 // getSupportedAPIs + placement IDs, onPause, haptics, player ID.
-import { describe, expect, it } from 'vitest';
+// Phase 2b: the banner capability and `ads.banner`, and the ranking / groups / payments facades over
+// the lazy fb-social chunk (preloaded after start(), loaded on demand, retried after a failure).
+import { describe, expect, it, vi } from 'vitest';
 import { createFakeClock } from '../../../src/app/clock';
+import { cfg } from '../../../src/app/config';
 import { createFbPlatform } from '../../../src/platform/fb';
+import type { SocialModule } from '../../../src/platform/fb/fb-social-glue';
 import type { SaveData } from '../../../src/game/types';
-import { createStub, MemoryStorage, type StubConfig } from './helpers';
+import { createStub, drain, MemoryStorage, track, type StubConfig } from './helpers';
 
 const PLACEMENTS = { interstitial: 'int-1', rewarded: 'rew-1' };
+const BOARDS_JSON = JSON.stringify({ paw_points: 'pp', daily_fastest: 'df' });
 
-function setup(config: StubConfig = {}, opts: { placements?: { interstitial: string; rewarded: string }; nav?: Navigator } = {}) {
+function setup(
+  config: StubConfig = {},
+  opts: {
+    placements?: { interstitial: string; rewarded: string; banner?: string };
+    nav?: Navigator;
+    leaderboards?: string;
+    loadSocial?: () => Promise<SocialModule>;
+  } = {},
+) {
   const clock = createFakeClock();
   const { sdk, control } = createStub(config, clock);
   const storage = new MemoryStorage();
@@ -19,7 +32,9 @@ function setup(config: StubConfig = {}, opts: { placements?: { interstitial: str
     placements: opts.placements ?? PLACEMENTS,
     storage,
     timers: clock,
+    leaderboards: opts.leaderboards ?? '',
     ...(opts.nav ? { nav: opts.nav } : {}),
+    ...(opts.loadSocial ? { loadSocial: opts.loadSocial } : {}),
   });
   return { clock, control, platform, storage };
 }
@@ -132,21 +147,39 @@ describe('createFbPlatform: lifecycle', () => {
 
 describe('createFbPlatform: capabilities', () => {
   it('derives everything from getSupportedAPIs and the placement IDs', async () => {
-    const { platform } = setup({}, { nav: noVibrate });
+    const { platform } = setup({}, { nav: noVibrate, placements: { ...PLACEMENTS, banner: 'ban-1' }, leaderboards: BOARDS_JSON });
     expect(platform.capabilities().rewarded).toBe(false); // nothing known before init
+    expect(platform.capabilities().banner).toBe(false);
+    expect(platform.capabilities().payments).toBe(false);
     await platform.init();
     expect(platform.capabilities()).toEqual({
       interstitial: true,
       rewarded: true,
-      banner: false,
+      banner: true, // phase2b §3.2: both banner APIs + a placement id
       cloudSave: true,
-      leaderboards: false,
+      leaderboards: true, // phase2b §5.4: a leaderboard API + at least one board id
       share: false,
-      payments: false,
+      payments: true, // phase2b §8.4: not iOS + payments.purchaseAsync
       haptics: true,
-      overlayViews: false, // phase2b §5.4 / §5.6: D derives these from the probe
-      groups: false,
+      overlayViews: true,
+      groups: true,
     });
+  });
+
+  it('phase2b capabilities without their placement, boards or APIs', async () => {
+    const plain = setup({}, { nav: noVibrate });
+    await plain.platform.init();
+    expect(plain.platform.capabilities()).toMatchObject({ banner: false, leaderboards: false }); // no placement, no boards
+    const off = setup(
+      { presets: ['no-banner-hide', 'lb-none', 'ios', 'no-overlay', 'no-tournament'] },
+      { placements: { ...PLACEMENTS, banner: 'ban-1' }, leaderboards: BOARDS_JSON },
+    );
+    await off.platform.init();
+    expect(off.platform.capabilities()).toMatchObject({ banner: false, leaderboards: false, payments: false, overlayViews: false, groups: false });
+    expect(off.platform.ads.banner).toBeUndefined();
+    expect(off.platform.payments).toBeUndefined();
+    expect(off.platform.groups).toBeUndefined();
+    expect(off.platform.ranking?.caps().api).toBe('none'); // ranking stays defined (§5.4)
   });
 
   it('an empty placement ID turns that ad capability off', async () => {
@@ -246,5 +279,121 @@ describe('createFbPlatform: storage and analytics wiring', () => {
     await platform.init();
     platform.analytics.log('level_start', { level: 2, size: 5 });
     expect(control.find('logEvent').map((c) => c.args)).toEqual([['level_start', null, { level: '2', size: '5' }]]);
+  });
+});
+
+describe('createFbPlatform: phase2b banner', () => {
+  it('ads.banner exists only after init, with both APIs and a placement; it loads at the bottom', async () => {
+    const { platform, control } = setup({}, { placements: { ...PLACEMENTS, banner: 'ban-1' } });
+    expect(platform.ads.banner).toBeUndefined();
+    await platform.init();
+    const banner = platform.ads.banner;
+    expect(banner).toBeDefined();
+    await expect(banner!.show('bottom')).resolves.toEqual({ ok: true });
+    expect(control.find('loadBannerAdAsync')[0]?.args).toEqual(['ban-1', 'bottom']);
+    await banner!.hide();
+    expect(control.state.bannerVisible).toBe(false);
+    expect(platform.ads.banner).toBe(banner); // one instance per session
+  });
+
+  it("an 'unsupported' banner call turns the capability off for the session", async () => {
+    const { platform } = setup({ banner: { load: 'CLIENT_UNSUPPORTED_OPERATION' } }, { placements: { ...PLACEMENTS, banner: 'ban-1' } });
+    await platform.init();
+    expect(platform.capabilities().banner).toBe(true);
+    await expect(platform.ads.banner!.show('bottom')).resolves.toEqual({ ok: false, reason: 'unsupported' });
+    expect(platform.capabilities().banner).toBe(false);
+    expect(platform.ads.banner).toBeUndefined();
+    expect(platform.capabilities().interstitial).toBe(true); // other ads unaffected
+  });
+});
+
+describe('createFbPlatform: phase2b social facades (lazy fb-social chunk)', () => {
+  const realChunk = (): Promise<SocialModule> => import('../../../src/platform/fb/fb-social');
+
+  it('the chunk is preloaded right after start(), never before; not at all when nothing needs it', async () => {
+    let loads = 0;
+    const { platform, control } = setup({}, { leaderboards: BOARDS_JSON, loadSocial: () => (loads++, realChunk()) });
+    await platform.init();
+    platform.capabilities();
+    expect(loads).toBe(0);
+    await platform.start();
+    expect(loads).toBe(1);
+    // The real payments provider registers onReady once the chunk is in.
+    await vi.waitFor(() => expect(control.count('payments.onReady')).toBe(1));
+
+    let idle = 0;
+    const bare = setup({ presets: ['lb-none', 'no-overlay', 'no-tournament', 'no-payments'] }, { loadSocial: () => (idle++, realChunk()) });
+    await bare.platform.start();
+    expect(idle).toBe(0);
+  });
+
+  it('ranking works through the facade: submit, mine, top against the stub', async () => {
+    const { platform, control } = setup({ playerId: 'me' }, { leaderboards: BOARDS_JSON, loadSocial: realChunk });
+    await platform.start();
+    const ranking = platform.ranking!;
+    expect(ranking.caps()).toEqual({ api: 'classic', global: true, myRank: true, overlay: true, overlayInRect: false });
+    await expect(ranking.submit('paw_points', 55)).resolves.toBe('ok');
+    await expect(ranking.mine('paw_points')).resolves.toEqual({ rank: 1, score: 55, isMe: true });
+    await expect(ranking.top('paw_points', 10)).resolves.toEqual([{ rank: 1, score: 55, isMe: true }]);
+    expect(control.leaderboard('pp')).toEqual([expect.objectContaining({ playerId: 'me', score: 55 })]);
+    // A board without an id never loads anything or reaches the SDK.
+    await expect(ranking.submit('event_snow_paws_2026', 5)).resolves.toBe('unsupported');
+  });
+
+  it('NEZP: no rank of my own; the facade answers null for mine without loading', async () => {
+    let loads = 0;
+    const { platform } = setup({ presets: ['lb-nezp', 'no-overlay', 'no-tournament', 'no-payments'] }, { leaderboards: BOARDS_JSON, loadSocial: () => (loads++, realChunk()) });
+    await platform.init();
+    expect(platform.ranking!.caps()).toMatchObject({ api: 'nezp', myRank: false });
+    await expect(platform.ranking!.mine('paw_points')).resolves.toBeNull();
+    expect(loads).toBe(0);
+  });
+
+  it('a chunk that fails to load gives the fallbacks, and the next call loads again', async () => {
+    let attempt = 0;
+    const loadSocial = (): Promise<SocialModule> => (++attempt === 1 ? Promise.reject(new Error('chunk 404')) : realChunk());
+    const { platform } = setup({ playerId: 'me' }, { leaderboards: BOARDS_JSON, loadSocial });
+    await platform.init();
+    await expect(platform.ranking!.top('paw_points', 10)).resolves.toEqual([]);
+    await expect(platform.ranking!.submit('paw_points', 10)).resolves.toBe('ok');
+    expect(attempt).toBe(2);
+  });
+
+  it('a chunk that never loads cannot hold the ranking panel: answers within rank.fetchTimeoutMs', async () => {
+    const { platform, clock } = setup({}, { leaderboards: BOARDS_JSON, loadSocial: () => new Promise(() => undefined) });
+    await platform.init();
+    const top = track(platform.ranking!.top('paw_points', 10));
+    const sub = track(platform.ranking!.submit('paw_points', 10));
+    await clock.advanceAsync(cfg.rank.fetchTimeoutMs);
+    await drain();
+    expect(top.value).toEqual([]);
+    expect(sub.value).toBe('error');
+  });
+
+  it('payments: onReady subscribers wait for the chunk, then for FB; ready() follows', async () => {
+    const { platform, control } = setup({}, { loadSocial: realChunk });
+    await platform.init();
+    const payments = platform.payments!;
+    const seen: string[] = [];
+    payments.onReady(() => seen.push('ready'));
+    expect(payments.ready()).toBe(false);
+    await platform.start();
+    await vi.waitFor(() => expect(seen).toEqual(['ready']));
+    expect(payments.ready()).toBe(true);
+    const r = await payments.purchase('fish_250', 'stub-player-1:n1');
+    expect(r.ok).toBe(true);
+    expect(control.purchases()).toHaveLength(1);
+  });
+
+  it('groups: create / current / post through the facade', async () => {
+    const { platform, control, clock } = setup({}, { loadSocial: realChunk });
+    await platform.start();
+    const groups = platform.groups!;
+    await expect(groups.current()).resolves.toBeNull();
+    const made = await groups.create(clock.now() + 3_600_000, 'Group challenge');
+    expect(made).toEqual({ id: 'tournament-1' });
+    await expect(groups.current()).resolves.toMatchObject({ id: 'tournament-1' });
+    await expect(groups.post(40)).resolves.toBe(true);
+    expect(control.state.tournament?.score).toBe(40);
   });
 });

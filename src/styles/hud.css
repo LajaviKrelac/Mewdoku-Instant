@@ -1,5 +1,7 @@
 /* Owner: A (Phase 2b; was ui-board)
-   Top bar, pills, rule chips, tool bar, compact mode (02 §5, §19). */
+   Top bar (with the phase2b lead slot), pills, rule chips, tool bar, compact mode (02 §5, §19).
+   Classic look (phase2b §1.4): white pills and round tools with soft shadows, orange accents, count
+   badges with white text on --accent-text (small white text never sits on --accent). Tokens only. */
 
 /* ── Top bar (56 px; FB safe zone = empty top-left 64×64) ──────────────── */
 .top-bar {
@@ -14,6 +16,31 @@
 
 .top-bar[data-fb-safe] .top-bar__lead {
   min-width: calc(var(--fb-safe) - var(--sp-3));
+}
+
+/* The lead slot (phase2b §2.5; the Home fish pill): column 1, right after the FB safe zone on FBIG,
+   at the inline start on the web. It shares the lead's grid cell and keeps clear of the safe zone. */
+.top-bar__lead,
+.top-bar__slot {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.top-bar__slot {
+  display: flex;
+  align-items: center;
+  justify-self: start;
+  min-width: 0;
+  height: 44px;
+}
+
+.top-bar[data-fb-safe] .top-bar__slot {
+  margin-inline-start: calc(var(--fb-safe) - var(--sp-3));
+}
+
+.top-bar__title {
+  grid-column: 2;
+  grid-row: 1;
 }
 
 .top-bar__title {
@@ -40,6 +67,7 @@
 
 .top-bar__actions {
   grid-column: 3; /* stays right when the title is hidden (Home) */
+  grid-row: 1;
   display: flex;
   justify-content: flex-end;
   align-items: center;
@@ -65,7 +93,7 @@
   border-radius: var(--radius-pill);
   background: var(--card);
   box-shadow: var(--shadow-1);
-  font-family: var(--font-display);
+  font-family: var(--font-num);
   font-weight: 600;
   font-size: var(--fs-l);
   white-space: nowrap;
@@ -109,7 +137,7 @@
 }
 
 .heart__empty {
-  color: #d8c6cd;
+  color: var(--heart-empty-line);
   --icon-fill: var(--heart-empty);
 }
 
@@ -164,7 +192,7 @@
   padding: 0 8px;
   border: 1.5px solid var(--line-2);
   border-radius: var(--radius-m);
-  background: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.6);
   color: var(--ink-2);
   font-size: var(--fs-xs);
   font-weight: 600;
@@ -256,7 +284,7 @@
 }
 
 .tool--paw {
-  color: #c8651e; /* darker ginger: ≥ 3:1 on the white button (WCAG 1.4.11) */
+  color: var(--accent); /* the kitty paw: 3.15:1 on the white button (WCAG 1.4.11, palette-check) */
 }
 
 .tool:active:not(:disabled) {
@@ -277,10 +305,10 @@
   height: 26px;
   padding: 0 7px;
   border-radius: var(--radius-pill);
-  background: var(--accent);
+  background: var(--accent-text); /* white 14 px text: 5.71:1 */
   box-shadow: 0 0 0 3px var(--page);
   color: #fff;
-  font-family: var(--font-display);
+  font-family: var(--font-num);
   font-weight: 600;
   font-size: var(--fs-s);
   line-height: 26px;

@@ -1,0 +1,62 @@
+[
+  {
+    "v": 1,
+    "id": "lantern-walk-2026",
+    "nameKey": "event.lantern.name",
+    "taglineKey": "event.lantern.tagline",
+    "startUtc": "2026-11-13T00:00Z",
+    "endUtc": "2026-11-27T00:00Z",
+    "unlockAfterLevel": 10,
+    "theme": { "page": "#FFF4E6", "pageArt": "lanterns", "boardCard": "#FFFFFF", "glow": "rgba(255,170,60,.65)", "accessory": "lantern" },
+    "puzzles": { "file": "events/lantern-walk-2026.json", "count": 21 },
+    "gen": { "sizes": [[7, 1], [8, 2], [9, 2], [10, 1]], "band": [2, 3] },
+    "track": [
+      { "at": 3, "reward": { "hints": 2 } },
+      { "at": 7, "reward": { "fish": 30 } },
+      { "at": 12, "reward": { "kitties": 2 } },
+      { "at": 16, "reward": { "fish": 60 } },
+      { "at": 21, "reward": { "fish": 100, "kitties": 3 } }
+    ],
+    "leaderboard": "event_lantern_walk_2026"
+  },
+  {
+    "v": 1,
+    "id": "snow-paws-2026",
+    "nameKey": "event.snow.name",
+    "taglineKey": "event.snow.tagline",
+    "startUtc": "2026-12-18T00:00Z",
+    "endUtc": "2027-01-08T00:00Z",
+    "unlockAfterLevel": 10,
+    "theme": { "page": "#F3F6FA", "pageArt": "snowflakes", "boardCard": "#FFFFFF", "glow": "rgba(150,200,255,.6)", "accessory": "scarf" },
+    "puzzles": { "file": "events/snow-paws-2026.json", "count": 21 },
+    "gen": { "sizes": [[8, 2], [9, 2], [10, 2], [11, 1]], "band": [3, 4] },
+    "track": [
+      { "at": 3, "reward": { "hints": 2 } },
+      { "at": 7, "reward": { "fish": 30 } },
+      { "at": 12, "reward": { "kitties": 2 } },
+      { "at": 16, "reward": { "fish": 60 } },
+      { "at": 21, "reward": { "fish": 100, "kitties": 3 } }
+    ],
+    "leaderboard": "event_snow_paws_2026"
+  },
+  {
+    "v": 1,
+    "id": "yarn-hearts-2027",
+    "nameKey": "event.yarn.name",
+    "taglineKey": "event.yarn.tagline",
+    "startUtc": "2027-02-05T00:00Z",
+    "endUtc": "2027-02-19T00:00Z",
+    "unlockAfterLevel": 10,
+    "theme": { "page": "#FFF1F3", "pageArt": "yarn", "boardCard": "#FFFFFF", "glow": "rgba(255,140,170,.6)", "accessory": "yarn" },
+    "puzzles": { "file": "events/yarn-hearts-2027.json", "count": 21 },
+    "gen": { "sizes": [[9, 2], [10, 2], [11, 2], [12, 1]], "band": [3, 4] },
+    "track": [
+      { "at": 3, "reward": { "hints": 2 } },
+      { "at": 7, "reward": { "fish": 30 } },
+      { "at": 12, "reward": { "kitties": 2 } },
+      { "at": 16, "reward": { "fish": 60 } },
+      { "at": 21, "reward": { "fish": 100, "kitties": 3 } }
+    ],
+    "leaderboard": "event_yarn_hearts_2027"
+  }
+]

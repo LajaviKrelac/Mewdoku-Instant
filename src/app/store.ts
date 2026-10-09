@@ -3,6 +3,7 @@
 // by default, since all state is immutable).
 import type { PuzzleId } from '../engine/types';
 import type { LocaleId } from './config';
+import type { EventDef } from '../game/events';
 import type { GameState, ModeId, SaveData } from '../game/types';
 
 export type Listener<S> = (state: S, prev: S) => void;
@@ -111,11 +112,12 @@ export type OverlayId =
   | 'rank_hub'
   | 'group_result';
 
-/** What the player asked to play. */
+/** What the player asked to play. phase2b §4.4 adds event puzzles (`index` 0-based). */
 export type SessionRequest =
   | { mode: 'tutorial'; replay: boolean }
   | { mode: 'level'; level: number }
-  | { mode: 'daily'; dateKey: string };
+  | { mode: 'daily'; dateKey: string }
+  | { mode: 'event'; eventId: string; index: number };
 
 /** Facts about the running game that are not part of the reducer state. */
 export interface SessionMeta {
@@ -133,6 +135,8 @@ export interface SessionMeta {
   readonly tutorialStep: number | null;
   /** Substitute board (pack failed to load): never saved as in-progress (02 §11.4). */
   readonly substitute: boolean;
+  /** Event mode (phase2b §4.4): the event and the puzzle index (0-based); absent or null otherwise. */
+  readonly event?: { readonly def: EventDef; readonly index: number } | null;
 }
 
 export interface UiState {

@@ -1,10 +1,13 @@
 // Owner: B (Phase 2b)
 // O2 rewarded-ad prompt (02 §5 O2, §13.3). Revive does not use it (the O4 button is the prompt).
 // The variant is chosen by the app when the dialog opens; the countdown variant ticks live.
+// phase2b §2.8: "Swap {price} fish" (secondary, with the fish icon) whenever `swap` is given and the
+// balance covers the price, in every variant. Order: Watch video / Take it, Swap, OK, Not now.
 //
 // Classes: .overlay[data-overlay=rewarded] > .overlay__panel--dialog.rewarded[data-variant]
-//          .rewarded__icon .overlay__title .overlay__body .overlay__actions
-import { formatClock, t } from '../../i18n';
+//          .rewarded__icon .overlay__title .overlay__body .overlay__actions(.rewarded__accept
+//          .rewarded__swap .rewarded__ok .rewarded__decline)
+import { formatClock, formatNumber, t } from '../../i18n';
 import { icon } from '../art/sprite';
 import { clear, h, setText, type OverlayView } from '../dom';
 import { createOverlayShell, createTicker, makeButton, setButtonLabel } from './overlay-base';
@@ -91,7 +94,18 @@ export function createRewardedPrompt(): OverlayView<RewardedPromptProps> {
     className: 'rewarded__ok',
     onPress: () => props?.onDecline(),
   });
-  shell.panel.append(iconSlot, title, body, h('div', { class: 'overlay__actions overlay__actions--stack' }, accept, ok, notNow));
+  const swap = makeButton({
+    variant: 'secondary',
+    label: '',
+    icon: 'icon-fish',
+    block: true,
+    className: 'rewarded__swap',
+    onPress: () => {
+      const s = props?.swap;
+      if (s && s.balance >= s.price) s.onSwap();
+    },
+  });
+  shell.panel.append(iconSlot, title, body, h('div', { class: 'overlay__actions overlay__actions--stack' }, accept, swap, ok, notNow));
 
   const videoIcon = icon('icon-play-video', { class: 'btn__icon' });
 
@@ -117,6 +131,11 @@ export function createRewardedPrompt(): OverlayView<RewardedPromptProps> {
     } else {
       videoIcon.remove();
     }
+
+    // §2.8: shown at ≥ price, hidden below (the app may also omit `swap`).
+    const s = p.swap;
+    swap.hidden = !s || s.balance < s.price;
+    if (s) setButtonLabel(swap, t('rewarded.swap', { count: formatNumber(s.price) }));
 
     if (countdown) {
       ticker.start(TICK_MS, () => {

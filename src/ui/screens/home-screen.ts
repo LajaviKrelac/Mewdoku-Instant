@@ -3,17 +3,20 @@
 // stock readout. Phase 3 hook: extra cards array (02 §22).
 // Phase 2b (B): the fish pill in the top bar's lead slot (§2.5), the event card above the Level
 // button (§4.4: rendered in the extra-cards area as its event variant), data-banner (§3.2).
-// F0 added the view fields and callbacks below; the screen does not render them yet.
+// The event card's art is A's eventArt(def, 'card'), which lives in the lazy `events` chunk: the app
+// passes it in (HomeEventCardView.art) once that chunk has loaded; the card renders without it until then.
 //
-// Classes: .screen.screen--home > .home__body > .home__hero(.home__wordmark .home__tagline .home__mascot)
-//          .home__actions(.home__play .badge.badge--hard .daily-card[data-state] .home__cards .home-card)
-//          .home__stock(.stock__item)
+// Classes: .screen.screen--home[data-banner] > .home__body > .home__hero(.home__wordmark .home__tagline .home__mascot)
+//          .home__actions(.home__cards > .event-card[data-state] .home__play .badge.badge--hard
+//          .daily-card[data-state] .home-card) .home__stock(.stock__item); the top bar's lead slot holds .fish-pill
+import { cfg } from '../../app/config';
 import type { EventDef } from '../../game/events';
 import type { DailyCardState } from '../../game/progression';
-import { formatClock, formatShortDate, t } from '../../i18n';
+import { formatClock, formatDuration, formatShortDate, t, translate } from '../../i18n';
 import { mascotIllustration } from '../art/mascot';
 import { icon } from '../art/sprite';
 import { clear, h, setText, type View } from '../dom';
+import { createFishPill } from '../hud/pills';
 import { createTopBar, type TopBarProps } from '../hud/top-bar';
 import { setTextKeepTogether } from '../overlays/overlay-base';
 
@@ -48,6 +51,12 @@ export interface HomeEventCardView {
   readonly unlockLevel: number;
   /** In the last events.cardEndsSoonHours. */
   readonly endsSoon: boolean;
+  /**
+   * A's eventArt(def, 'card') from the lazy `events` chunk (pattern + the 48 px pose with the
+   * accessory), passed by the app once the chunk has loaded. Optional (phase2b B addition); the card
+   * shows without art until it is there. Called again only when the event changes.
+   */
+  readonly art?: ((def: EventDef, kind: 'card') => HTMLElement) | null;
 }
 
 /** Phase 3 entry points (events, calendar…). Empty in Phase 2. */
@@ -91,6 +100,30 @@ export interface HomeCallbacks {
   onEvent(): void;
 }
 
+/** "3 d 4 h" for a day or more, else "7 h 48 min" / "12 min" (event countdowns, phase2b §4.4). */
+export function formatDaysHours(ms: number): string {
+  const left = Math.max(0, ms);
+  const d = Math.floor(left / 86_400_000);
+  if (d < 1) return formatDuration(left);
+  return t('time.daysHours', { d, h: Math.floor((left % 86_400_000) / 3_600_000) });
+}
+
+/** The event card's status line (phase2b §4.4): "Ends in 3 d 4 h · 7 / 21 solved", "Starts in 2 d", … */
+export function eventStatusText(e: HomeEventCardView): string {
+  switch (e.state) {
+    case 'teaser':
+      return t('event.card.startsIn', { time: formatDaysHours(e.startsAt - e.now) });
+    case 'locked':
+      return t('event.card.locked', { level: e.unlockLevel });
+    case 'done':
+      return t('event.card.done');
+    case 'active': {
+      const ends = e.endsSoon ? t('event.card.endsSoon') : t('event.card.endsIn', { time: formatDaysHours(e.endsAt - e.now) });
+      return `${ends} · ${t('event.card.progress', { solved: e.solved, total: e.total })}`;
+    }
+  }
+}
+
 /** The daily card's status line ("Not played yet", "Solved 4:12", "Unlocks after level 20"). */
 export function dailyStatusText(d: DailyCardView): string {
   switch (d.state) {
@@ -114,7 +147,37 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
     showTrophy: v.showTrophy,
     fbSafeZone: v.fbSafeZone,
   });
-  const topBar = createTopBar(topBarProps(view), { onHome: () => undefined, onSettings: () => cb.onSettings(), onTrophy: () => cb.onTrophy() });
+  // phase2b §2.5: the fish pill (with "+", the shop) at the top bar's lead, after the FB safe zone.
+  const fishPill = createFishPill({ count: view.fish, onPlus: () => cb.onShop() });
+  const topBar = createTopBar(
+    topBarProps(view),
+    { onHome: () => undefined, onSettings: () => cb.onSettings(), onTrophy: () => cb.onTrophy() },
+    { lead: fishPill.el },
+  );
+
+  // phase2b §4.4 event card (above the Level button): art, title, status line, 4 px progress bar.
+  const eventArtHost = h('span', { class: 'event-card__art', 'aria-hidden': 'true' });
+  const eventTitle = h('span', { class: 'event-card__title' });
+  const eventStatus = h('span', { class: 'event-card__sub' });
+  const eventFill = h('span', { class: 'event-card__fill' });
+  const eventCard = h(
+    'button',
+    {
+      type: 'button',
+      class: 'event-card',
+      hidden: true,
+      on: {
+        click: () => {
+          if (eventCard.getAttribute('aria-disabled') !== 'true') cb.onEvent();
+        },
+      },
+    },
+    eventArtHost,
+    h('span', { class: 'event-card__text' }, eventTitle, eventStatus),
+    h('span', { class: 'event-card__bar', 'aria-hidden': 'true' }, eventFill),
+    icon('icon-chevron', { class: 'event-card__chev' }),
+  );
+  let artFor: { id: string; fn: NonNullable<HomeEventCardView['art']> } | null = null;
 
   // Primary level button.
   const playLabel = h('span', { class: 'btn__label' });
@@ -159,7 +222,7 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
         h('p', { class: 'home__tagline' }, t('app.tagline')),
         h('div', { class: 'home__mascot' }, mascotIllustration('home', { label: t('a11y.mascot') })),
       ),
-      h('div', { class: 'home__actions' }, play, daily, cards),
+      h('div', { class: 'home__actions' }, eventCard, play, daily, cards),
       h('div', { class: 'home__stock stock' }, hintsItem, kittiesItem),
     ),
   );
@@ -167,8 +230,46 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
   let lastCards: readonly HomeCardView[] | null = null;
   let iconState: 'lock' | 'cal' | null = null;
 
+  const renderEvent = (e: HomeEventCardView | null): void => {
+    eventCard.hidden = e === null;
+    // Short screens make room for the card (screens.css: a smaller mascot, no tagline).
+    el.toggleAttribute('data-event', e !== null);
+    if (!e) return;
+    const name = translate(e.def.nameKey);
+    const status = eventStatusText(e);
+    eventCard.dataset.state = e.state;
+    eventCard.toggleAttribute('data-ends-soon', e.state === 'active' && e.endsSoon);
+    // A teaser is not tappable (§4.4): aria-disabled keeps it readable without a dead button press.
+    if (e.state === 'teaser') eventCard.setAttribute('aria-disabled', 'true');
+    else eventCard.removeAttribute('aria-disabled');
+    setText(eventTitle, name);
+    setText(eventStatus, status);
+    // The card is a button labelled with its status line (§7).
+    eventCard.setAttribute('aria-label', `${name}. ${status}`);
+    const frac = e.total > 0 ? Math.min(1, Math.max(0, e.solved / e.total)) : 0;
+    // A width (not a scale) so the fill starts at the inline start in RTL too (§6.5).
+    eventFill.style.width = `${(frac * 100).toFixed(2)}%`;
+    const fn = e.art ?? null;
+    if (!fn) {
+      if (artFor) clear(eventArtHost);
+      artFor = null;
+    } else if (!artFor || artFor.id !== e.def.id || artFor.fn !== fn) {
+      artFor = { id: e.def.id, fn };
+      clear(eventArtHost);
+      try {
+        eventArtHost.appendChild(fn(e.def, 'card'));
+      } catch {
+        // The art is decorative: the card still works without it.
+      }
+    }
+  };
+
   const render = (v: HomeView): void => {
     topBar.update(topBarProps(v));
+    fishPill.update({ count: v.fish, onPlus: () => cb.onShop() });
+    renderEvent(v.event);
+    el.toggleAttribute('data-banner', v.bannerReserved);
+    el.style.setProperty('--banner-reserve', `${cfg.ads.banner.reservePx}px`);
     setText(playLabel, v.continueLevel ? t('home.continue', { level: v.level }) : t('home.play', { level: v.level }));
     hardBadge.hidden = !v.hard;
     play.dataset.hard = String(v.hard);
@@ -218,6 +319,7 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
     update: render,
     destroy() {
       topBar.destroy();
+      fishPill.destroy();
       el.remove();
     },
   };

@@ -21,10 +21,11 @@ import {
   packsToPrefetch,
   substituteSpec,
 } from './progression';
+import { eventPuzzleId, eventRecordIn, eventSpec, isEventPack, type EventDef, type EventPack } from './events';
 import { DATE_KEY_RE } from './save-fields';
 import { tutorialPuzzle } from './tutorial';
 
-export type PuzzleSource = 'tutorial' | 'pack' | 'daily_pack' | 'generated' | 'substitute';
+export type PuzzleSource = 'tutorial' | 'pack' | 'daily_pack' | 'event_pack' | 'generated' | 'substitute';
 
 export interface LoadedPuzzle {
   readonly puzzle: Puzzle;
@@ -41,6 +42,12 @@ export interface LevelsRepoDeps {
   loadPack(packIndex: number): Promise<unknown>;
   /** Fetches and parses daily/YYYY-MM.json; resolves null when no file exists for that month. */
   loadDailyMonth(month: string): Promise<unknown | null>;
+  /**
+   * phase2b §4.2: fetches and parses an event pack ('events/<id>.json', EventDef.puzzles.file);
+   * resolves null when the build has no such file. Absent → every event puzzle is generated on the
+   * device from its seed (eventSpec), i.e. the same board the shipped pack holds.
+   */
+  loadEventPack?(file: string): Promise<unknown | null>;
   /** Engine worker generate(spec). */
   generate(spec: GenSpec): Promise<GenResult>;
   /** Backoff between pack retries (cfg.levels.fetchRetryDelaysMs). */
@@ -58,6 +65,12 @@ export interface LevelsRepo {
   getLevel(level: number): Promise<LoadedPuzzle>;
   /** Daily for YYYY-MM-DD: the month pack, else generated from the daily seed. */
   getDaily(dateKey: string): Promise<LoadedPuzzle>;
+  /**
+   * Event puzzle `index` (0-based) of `def` (phase2b §4.4): the event pack (fetched with the pack
+   * retries and deadline), else a substitute generated on the device from the puzzle's own seed.
+   * Rejects only when neither works.
+   */
+  getEventPuzzle(def: EventDef, index: number): Promise<LoadedPuzzle>;
   /** Resolves when the pack holding `level` is loaded (boot: pack-000 is instant). Never rejects. */
   ensurePackFor(level: number): Promise<void>;
   /** Background prefetch: packs per 03 §9.3, and endless L+1 generation (kept in memory). */
@@ -75,6 +88,9 @@ export type FallbackWhere =
   | 'daily_fetch'
   | 'daily_invalid'
   | 'daily_record'
+  | 'event_fetch'
+  | 'event_invalid'
+  | 'event_record'
   | 'generate';
 
 type PackResult = { pack: LevelPack } | { pack: null; reason: FallbackWhere };
@@ -88,6 +104,8 @@ export function createLevelsRepo(deps: LevelsRepoDeps): LevelsRepo {
   const substitutes = new Map<number, Promise<Puzzle>>(); // memory only, never in `puzzles`
   const months = new Map<string, Promise<DailyPack | null>>();
   const dailies = new Map<string, LoadedPuzzle>();
+  const eventPacks = new Map<string, Promise<EventPack | null>>();
+  const eventPuzzles = new Map<string, LoadedPuzzle>();
 
   const bundledOk = isPackFor(deps.bundled, 0);
   if (bundledOk) packs.set(0, deps.bundled);
@@ -257,10 +275,67 @@ export function createLevelsRepo(deps: LevelsRepoDeps): LevelsRepo {
     return loaded;
   }
 
+  /** The event's pack; null when there is none, it is invalid, or the network failed (retried next time). */
+  async function fetchEventPack(def: EventDef): Promise<EventPack | null> {
+    const load = deps.loadEventPack;
+    if (!load) return null;
+    const delays = c.levels.fetchRetryDelaysMs;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const raw = await load(def.puzzles.file);
+        if (raw === null || raw === undefined) return null;
+        if (isEventPack(raw, def.id)) return raw;
+        fallback('event_invalid');
+        return null;
+      } catch {
+        if (attempt >= delays.length) {
+          fallback('event_fetch');
+          throw new Error('event pack fetch failed');
+        }
+        await deps.delay(delays[attempt] ?? 0);
+      }
+    }
+  }
+
+  async function getEventPuzzle(def: EventDef, index: number): Promise<LoadedPuzzle> {
+    if (!Number.isInteger(index) || index < 0 || index >= def.puzzles.count) throw new RangeError(`getEventPuzzle: bad index ${index}`);
+    const id = eventPuzzleId(def.id, index);
+    const cached = eventPuzzles.get(id);
+    if (cached) return cached;
+    let pending = eventPacks.get(def.id);
+    if (!pending) {
+      const p: Promise<EventPack | null> = fetchEventPack(def).catch(() => {
+        if (eventPacks.get(def.id) === p) eventPacks.delete(def.id); // try the network again next time
+        return null;
+      });
+      eventPacks.set(def.id, (pending = p));
+    }
+    const pack = await pending;
+    const rec = pack ? eventRecordIn(pack, index) : null;
+    let loaded: LoadedPuzzle | null = null;
+    if (rec !== null) {
+      if (checkRecord(rec).ok) loaded = { puzzle: recordToPuzzle(rec, id), source: 'event_pack' };
+      else fallback('event_record');
+    }
+    if (!loaded) {
+      const spec = eventSpec(def, index, c);
+      if (!spec) throw new Error(`no pack and no generator spec for ${id}`);
+      const puzzle = await generatePuzzle(spec, id, { h: 0 }).catch((err: unknown) => {
+        fallback('generate');
+        throw err;
+      });
+      // Not cached: the pack may load next time, and a substitute board is never saved in progress.
+      return { puzzle, source: 'substitute' };
+    }
+    eventPuzzles.set(id, loaded);
+    return loaded;
+  }
+
   return {
     getTutorial: tutorialPuzzle,
     getLevel,
     getDaily,
+    getEventPuzzle,
     async ensurePackFor(level: number): Promise<void> {
       const k = packIndexFor(level, c);
       if (k === null || k === 0) return;

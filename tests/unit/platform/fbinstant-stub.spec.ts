@@ -96,4 +96,46 @@ describe('fbinstant-stub', () => {
     control.pause();
     expect(paused).toBe(1);
   });
+
+  // ── phase2b ──
+  it('banner: load shows a bar, a load within 45 s rejects RATE_LIMITED, hide removes it', async () => {
+    let t = 1_000_000;
+    const win = { setTimeout: realTimers, __stubNow: () => t } as FakeWindow & { __stubNow: () => number };
+    const { sdk, control } = load(win);
+    await sdk.loadBannerAdAsync!('b', 'bottom');
+    expect(control.state.bannerVisible).toBe(true);
+    await sdk.hideBannerAdAsync!();
+    expect(control.state.bannerVisible).toBe(false);
+    t += 44_999;
+    await expect(sdk.loadBannerAdAsync!('b', 'bottom')).rejects.toMatchObject({ code: 'RATE_LIMITED' });
+    t += 1;
+    await expect(sdk.loadBannerAdAsync!('b', 'bottom')).resolves.toBeUndefined();
+  });
+
+  it('leaderboards: classic by default, NEZP or none by preset; the API members follow getSupportedAPIs', () => {
+    const classic = load({ setTimeout: realTimers }).sdk;
+    expect(typeof classic.getLeaderboardAsync).toBe('function');
+    expect(classic.globalLeaderboards).toBeUndefined();
+    const nezp = load({ setTimeout: realTimers, __FB_STUB_CONFIG__: { presets: ['lb-nezp'] } }).sdk;
+    expect(nezp.getLeaderboardAsync).toBeUndefined();
+    expect(nezp.getSupportedAPIs()).toContain('globalLeaderboards.getTopEntriesAsync');
+    const none = load({ setTimeout: realTimers, location: { search: '?fbstub=lb-none' } }).sdk;
+    expect(none.getLeaderboardAsync).toBeUndefined();
+    expect(none.globalLeaderboards).toBeUndefined();
+  });
+
+  it('payments: ready after start, purchase → unconsumed until consumed, persisted across reloads', async () => {
+    const sessionStorage = new MemoryStorage();
+    const first = load({ setTimeout: realTimers, sessionStorage });
+    await first.sdk.initializeAsync();
+    await first.sdk.startGameAsync();
+    await new Promise<void>((r) => first.sdk.payments!.onReady(r));
+    const p = await first.sdk.payments!.purchaseAsync({ productID: 'fish_900', developerPayload: 'x' });
+    const second = load({ setTimeout: realTimers, sessionStorage });
+    expect((await second.sdk.payments!.getPurchasesAsync()).map((x) => x.purchaseToken)).toEqual([p.purchaseToken]);
+    await second.sdk.payments!.consumePurchaseAsync(p.purchaseToken);
+    expect(await second.sdk.payments!.getPurchasesAsync()).toEqual([]);
+    const ios = load({ setTimeout: realTimers, __FB_STUB_CONFIG__: { presets: ['ios'] } }).sdk;
+    expect(ios.payments).toBeUndefined();
+  });
 });

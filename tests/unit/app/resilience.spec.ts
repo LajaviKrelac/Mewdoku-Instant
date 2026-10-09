@@ -116,14 +116,14 @@ describe('logic-2 / RP-2: the overlay chunk cannot be loaded', () => {
     expect(h.store.get().ui.inputLocked).toBe(false);
   });
 
-  it('no O3 after a win: toast, then Home with the win saved', async () => {
+  it('no ranking panel after a win (chunk failed): toast, then Home with the win saved', async () => {
     const h = createHarness();
     await startLevel(h, 5);
     await solve(h);
     expect(h.game().status).toBe('won');
     await h.settle(h.config.fx.winOverlayDelayMs);
-    h.router.close('win');
-    h.bus.emit('overlay:failed', { id: 'win' });
+    h.router.close('ranking');
+    h.bus.emit('overlay:failed', { id: 'ranking' });
     expect(h.router.toasts).toEqual([t('toast.error')]);
     expect(h.homeCalls).toBe(1);
     expect(h.save().progress.level).toBe(6);
@@ -169,7 +169,7 @@ describe('logic-3: a TICK during the kitty engine call', () => {
   });
 });
 
-describe('logic-5 / SPEC-03: O7 for a daily solved after midnight', () => {
+describe('logic-5 / SPEC-03: the daily victory for a daily solved after midnight', () => {
   it('counts down to the midnight after the daily’s own date (already past), not 24 h ahead', async () => {
     const h = createHarness();
     const day = localDateKey(h.clock.now());
@@ -185,10 +185,12 @@ describe('logic-5 / SPEC-03: O7 for a daily solved after midnight', () => {
     expect(localDateKey(h.clock.now())).not.toBe(day);
     h.session.onCellDoubleTap(SOL5[4] as number);
     await h.settle(h.config.fx.winOverlayDelayMs);
-    const props = h.router.props.daily_result;
+    h.router.props.ranking?.onContinue();
+    const victory = h.router.props.victory;
+    const props = victory?.daily;
     expect(props?.dateKey).toBe(day); // credited to its original date (02 §12)
     expect(props?.nextPuzzleAt).toBe(localMidnightAfter(day));
-    expect((props?.nextPuzzleAt ?? Infinity) - (props?.now() ?? 0)).toBeLessThanOrEqual(0);
+    expect((props?.nextPuzzleAt ?? Infinity) - (victory?.now() ?? 0)).toBeLessThanOrEqual(0);
   });
 
   it('solved before midnight: the usual countdown to the next local midnight', async () => {
@@ -198,7 +200,8 @@ describe('logic-5 / SPEC-03: O7 for a daily solved after midnight', () => {
     await h.settle(h.config.fx.boardEntryMs);
     await solve(h);
     await h.settle(h.config.fx.winOverlayDelayMs);
-    const props = h.router.props.daily_result;
+    h.router.props.ranking?.onContinue();
+    const props = h.router.props.victory?.daily;
     expect(props?.nextPuzzleAt).toBe(h.clock.now() - h.config.fx.winOverlayDelayMs + msUntilLocalMidnight(h.clock.now() - h.config.fx.winOverlayDelayMs));
   });
 });

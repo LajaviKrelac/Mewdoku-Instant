@@ -305,6 +305,17 @@ export type I18nKey = keyof En;
 /** A full catalogue for another locale has every key (values are plain strings). */
 export type Catalog = { readonly [K in I18nKey]: string };
 
+/** Keys B such that both `${B}.one` and `${B}.other` exist (the bases tn() accepts). */
+export type PluralBase = {
+  [K in I18nKey]: K extends `${infer B}.one` ? (`${B}.other` extends I18nKey ? B : never) : never;
+}[I18nKey];
+
+/**
+ * The plural forms other languages add to a base (phase2b §6.4): `${base}.zero|two|few|many`. English
+ * has only `.one` / `.other`; a locale catalogue adds the categories Intl.PluralRules uses for it.
+ */
+export type PluralExtraKey = `${PluralBase}.${'zero' | 'two' | 'few' | 'many'}`;
+
 /** Ordered key lists for indexed strings. Appending a word means appending to its list too. */
 export const COLOR_KEYS = [
   'color.0', 'color.1', 'color.2', 'color.3', 'color.4', 'color.5',

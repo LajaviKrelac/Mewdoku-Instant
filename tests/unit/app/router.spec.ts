@@ -38,7 +38,7 @@ function fakeOverlay(id: string, modal: boolean, made: string[]): FakeOverlay {
 /** Resolves after the next animation frame (the router restores focus there, RP-3). */
 const nextFrame = (): Promise<void> => new Promise((r) => requestAnimationFrame(() => r()));
 
-function setup() {
+function setup(extra: Partial<RouterFactories> = {}, deps: { reducedMotion?: () => boolean } = {}) {
   document.body.innerHTML = '<button id="outside">outside</button><div id="app"></div>';
   const root = document.getElementById('app') as HTMLElement;
   const bus = createEventBus<AppEventMap>();
@@ -67,6 +67,7 @@ function setup() {
         destroy: () => void events.push('destroy:game'),
       }) as never,
     toastLayer: () => ({ el: document.createElement('div'), show: (m: string) => void events.push(`toast:${m}`), clear: () => undefined, destroy: () => undefined }),
+    screenTransition: null, // instant screen changes here; the transition cases are below
     trapFocus: (el, opts) => {
       const name = el.className;
       traps.push(`trap:${name}`);
@@ -81,7 +82,7 @@ function setup() {
       for (const e of els) inert.set(e, on);
     },
   };
-  const router = createRouter(root, { bus, factories });
+  const router = createRouter(root, { bus, factories: { ...factories, ...extra }, ...deps });
   return { root, router, events, made, overlays, traps, inert };
 }
 
@@ -440,5 +441,103 @@ describe('router: loading indicator (lead decision)', () => {
     s.router.setLoading(false);
     expect(layer.hidden).toBe(true);
     expect(s.root.hasAttribute('aria-busy')).toBe(false);
+  });
+});
+
+describe('router: screen transitions (phase2b §2.9) and the event screen (§4.4)', () => {
+  function withTransition(reduced = false) {
+    const calls: { kind: string; reduced: boolean; old: HTMLElement | null; next: HTMLElement; resolve: () => void }[] = [];
+    const s = setup(
+      {
+        screenTransition: (old, next, kind, r) =>
+          new Promise<void>((resolve) => void calls.push({ kind, reduced: r, old, next, resolve })),
+      },
+      { reducedMotion: () => reduced },
+    );
+    return { ...s, calls };
+  }
+
+  it('Home → game plays to_game: the old screen stays inert and aria-hidden until the transition ends, then it is destroyed', async () => {
+    const s = withTransition();
+    s.router.showHome({} as never, {} as never);
+    expect(s.calls).toEqual([]); // the first screen has nothing to transition from
+    s.router.showGame({} as never, {} as never);
+    expect(s.calls.map((c) => c.kind)).toEqual(['to_game']);
+    const host = s.root.querySelector('.app-screen') as HTMLElement;
+    const old = s.calls[0]?.old as HTMLElement;
+    expect(host.children.length).toBe(2);
+    expect(old.getAttribute('aria-hidden')).toBe('true');
+    expect(old.hasAttribute('inert')).toBe(true);
+    expect(s.events).not.toContain('destroy:home');
+    s.calls[0]?.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(host.children.length).toBe(1);
+    expect(s.events).toContain('destroy:home');
+  });
+
+  it('game → Home plays from_game; reduced motion is passed through', () => {
+    const s = withTransition(true);
+    s.router.showGame({} as never, {} as never);
+    s.router.showHome({} as never, {} as never);
+    expect(s.calls.map((c) => [c.kind, c.reduced])).toEqual([['from_game', true]]);
+  });
+
+  it('a new screen change during a transition ends the previous one at once', () => {
+    const s = withTransition();
+    s.router.showHome({} as never, {} as never);
+    s.router.showGame({} as never, {} as never);
+    s.router.showHome({} as never, {} as never);
+    const host = s.root.querySelector('.app-screen') as HTMLElement;
+    expect(s.events.filter((e) => e.startsWith('destroy:'))).toEqual(['destroy:home']);
+    expect(host.children.length).toBe(2); // the game fading out + the new Home
+  });
+
+  it('a transition that throws or never settles does not keep the old screen', async () => {
+    const s = setup({
+      screenTransition: () => {
+        throw new Error('no WAAPI');
+      },
+    });
+    s.router.showHome({} as never, {} as never);
+    s.router.showGame({} as never, {} as never);
+    expect(s.events).toContain('destroy:home');
+    expect((s.root.querySelector('.app-screen') as HTMLElement).children.length).toBe(1);
+  });
+
+  it('showEvent loads the event screen from the lazy chunk; a failed chunk resolves null and reports', async () => {
+    const made: string[] = [];
+    const ok = setup({
+      loadEventScreen: async () => (view) => {
+        made.push((view as { def: { id: string } }).def.id);
+        return { el: document.createElement('div'), update: () => undefined, destroy: () => undefined };
+      },
+    });
+    const v = await ok.router.showEvent({ def: { id: 'lantern-walk-2026' } } as never, {} as never);
+    expect(v).not.toBeNull();
+    expect(made).toEqual(['lantern-walk-2026']);
+    expect(ok.router.screen()).toBe('event');
+    const bad = setup({
+      loadEventScreen: async () => {
+        throw new Error('offline');
+      },
+    });
+    expect(await bad.router.showEvent({} as never, {} as never)).toBeNull();
+    expect(bad.router.screen()).toBe('boot');
+  });
+
+  it('showEvent resolves null when another screen was shown while the chunk loaded', async () => {
+    let release: () => void = () => undefined;
+    const s = setup({
+      loadEventScreen: () =>
+        new Promise((resolve) => {
+          release = () => resolve(() => ({ el: document.createElement('div'), update: () => undefined, destroy: () => undefined }));
+        }),
+    });
+    const pending = s.router.showEvent({} as never, {} as never);
+    s.router.showHome({} as never, {} as never);
+    release();
+    expect(await pending).toBeNull();
+    expect(s.router.screen()).toBe('home');
   });
 });

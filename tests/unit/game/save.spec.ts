@@ -1,7 +1,7 @@
 // Owner: C. Save schema v2 (phase2b §9; v1 = 04 §4.3, §7): defaults, migrate (garbage, partial, wrong
 // types, v1 → v2), merge table (§7.3 + phase2b §9.3), in-progress validation (§7.2), cells codec, size bound.
-// F0 (phase2b): the fixtures became v2 documents; the v1 → v2 and v2-field cases below cover the F0
-// baseline in save-v2.ts. C extends them to the full §9.4 list.
+// Phase 2b: the fixtures are v2 documents; the last two blocks cover the full §9.4 list (v1 → v2,
+// garbage per field, the merge table with the paid-grant repair, round trip, size bound, event slots).
 import { describe, expect, it } from 'vitest';
 import { mergeConfig } from '../../../src/app/config';
 import { toInProgress } from '../../../src/game/factory';
@@ -390,7 +390,7 @@ describe('save v2 (phase2b §9.2, §9.3): the F0 baseline', () => {
     expect(r.repairedFields).toContain(path);
   });
 
-  it('merge: points max, events by more solved, noAds OR, ledger union, wallet from the newer document', () => {
+  it('merge: points max, events by more solved, noAds OR, ledger union, wallet from the newer document + paid repair', () => {
     const a: SaveData = { ...full(), updatedAt: NOW - 10, points: { total: 900 }, purchases: { noAds: true, tokens: ['fish_900|old'] } };
     const b: SaveData = {
       ...full(),
@@ -401,7 +401,8 @@ describe('save v2 (phase2b §9.2, §9.3): the F0 baseline', () => {
       purchases: { noAds: false, tokens: ['hints_15|new'] },
     };
     const m = merge(a, b);
-    expect(m.wallet).toEqual({ fish: 5, earned: 5 });
+    // The newer wallet, plus the fish_900 that only the older copy holds (§9.3 paid-grant repair; paid fish are not "earned").
+    expect(m.wallet).toEqual({ fish: 905, earned: 5 });
     expect(m.points.total).toBe(900);
     expect(m.events['lantern-walk-2026']).toEqual({ solved: 4, ms: 900_000, lastAt: NOW });
     expect(m.purchases).toEqual({ noAds: true, tokens: ['fish_900|old', 'hints_15|new'] });
@@ -413,5 +414,128 @@ describe('save v2 (phase2b §9.2, §9.3): the F0 baseline', () => {
     expect(clearStaleSlots(s).inProgress.event).toBeNull(); // 3 solved, slot index 2
     const ahead: SaveData = { ...s, inProgress: { ...s.inProgress, event: { ...slot, id: 'Elantern-walk-2026/3' } } };
     expect(clearStaleSlots(ahead)).toBe(ahead);
+  });
+});
+
+describe('save v2 (phase2b §9.4): merge table, paid-grant repair, event slots, size', () => {
+  const T = (tokens: string[], updatedAt: number, extra: Partial<SaveData> = {}): SaveData => ({
+    ...full(),
+    updatedAt,
+    purchases: { noAds: false, tokens },
+    ...extra,
+  });
+
+  it('a fish_900 on the OLDER document survives a merge with a newer document that lacks it, exactly once', () => {
+    const older = T(['fish_900|tok-1'], NOW - 50, { wallet: { fish: 960, earned: 60 } });
+    const newer = T([], NOW, { wallet: { fish: 12, earned: 70 } });
+    const m = merge(older, newer);
+    expect(m.wallet.fish).toBe(912);
+    expect(m.purchases.tokens).toEqual(['fish_900|tok-1']);
+    // Merging the result again (with either copy) never grants it a second time.
+    expect(merge({ ...m, updatedAt: NOW + 5 }, older).wallet.fish).toBe(912);
+    expect(merge(newer, { ...m, updatedAt: NOW + 5 }).wallet.fish).toBe(912);
+    // Order of the arguments does not matter: the newer copy is picked by updatedAt.
+    expect(merge(newer, older).wallet.fish).toBe(912);
+  });
+
+  it('the repair covers hints and kitties packs; a token both copies hold is not re-applied', () => {
+    const older = T(['hints_15|a', 'kitties_8|b', 'fish_250|both'], NOW - 50);
+    const newer = T(['fish_250|both'], NOW, { stock: { hints: 1, kitties: 0 } });
+    const m = merge(older, newer);
+    expect(m.stock).toEqual({ hints: 16, kitties: 8 });
+    expect(m.wallet).toEqual(newer.wallet);
+  });
+
+  it('No Ads from either document survives (OR); its ledger entry adds nothing else', () => {
+    const older = T(['remove_ads|x'], NOW - 50, { purchases: { noAds: true, tokens: ['remove_ads|x'] } });
+    const newer = T([], NOW);
+    const m = merge(older, newer);
+    expect(m.purchases.noAds).toBe(true);
+    expect(m.stock).toEqual(newer.stock);
+    expect(m.wallet).toEqual(newer.wallet);
+  });
+
+  it('an older-only entry that does not survive the 50-entry ledger cap is not re-granted', () => {
+    const fifty = Array.from({ length: 50 }, (_, i) => `hints_15|n${i}`);
+    const older = T(['fish_900|ancient'], NOW - 50);
+    const newer = T(fifty, NOW);
+    const m = merge(older, newer);
+    expect(m.purchases.tokens).toEqual(fifty);
+    expect(m.wallet).toEqual(newer.wallet);
+  });
+
+  it('events: more solved wins, a tie keeps the smaller ms, lastAt is the max; groups: union with max', () => {
+    const a = T([], NOW - 50, {
+      events: { 'snow-paws-2026': { solved: 3, ms: 500, lastAt: 9 }, 'yarn-hearts-2027': { solved: 1, ms: 1, lastAt: 1 } },
+      groups: { g1: { endsAt: 100, total: 40, wins: 2, claimed: 0 } },
+    });
+    const b = T([], NOW, {
+      events: { 'snow-paws-2026': { solved: 3, ms: 400, lastAt: 3 } },
+      groups: { g1: { endsAt: 100, total: 30, wins: 3, claimed: 1 }, g2: { endsAt: 200, total: 5, wins: 1, claimed: 0 } },
+    });
+    const m = merge(a, b);
+    expect(m.events).toEqual({
+      'snow-paws-2026': { solved: 3, ms: 400, lastAt: 9 },
+      'yarn-hearts-2027': { solved: 1, ms: 1, lastAt: 1 },
+    });
+    expect(m.groups).toEqual({ g1: { endsAt: 100, total: 40, wins: 3, claimed: 1 }, g2: { endsAt: 200, total: 5, wins: 1, claimed: 0 } });
+  });
+
+  it('rank.pending and inProgress.event follow the newer document; lastSubmitAt is the max', () => {
+    const slot = { ...(full().inProgress.level as InProgressV2), id: 'Elantern-walk-2026/5' as const, mode: 'event' as const };
+    const a = T([], NOW - 50, { rank: { pending: { paw_points: 99 }, lastSubmitAt: 70 }, inProgress: { level: null, daily: null, event: slot } });
+    const b = T([], NOW, { rank: { pending: { daily_fastest: 5 }, lastSubmitAt: 10 } });
+    const m = merge(a, b);
+    expect(m.rank).toEqual({ pending: { daily_fastest: 5 }, lastSubmitAt: 70 });
+    expect(m.inProgress.event).toBeNull();
+    expect(merge(b, { ...a, updatedAt: NOW + 1 }).inProgress.event).toEqual(slot);
+  });
+
+  it('round trip: a v2 document with every new field set survives JSON + migrate unchanged', () => {
+    const slot = { ...(full().inProgress.level as InProgressV2), id: 'Elantern-walk-2026/3' as const, mode: 'event' as const };
+    const s: SaveData = {
+      ...full(),
+      inProgress: { ...full().inProgress, event: slot },
+      groups: { 'tour-1': { endsAt: NOW + 5, total: 120, wins: 4, claimed: 0 } },
+      purchases: { noAds: true, tokens: ['remove_ads|t1', 'fish_250|t2'] },
+      rank: { pending: { event_lantern_walk_2026: 3_000_123 }, lastSubmitAt: NOW - 3 },
+    };
+    const r = migrateReport(JSON.parse(JSON.stringify(s)) as unknown, NOW);
+    expect(r.outcome).toBe('ok');
+    expect(r.save).toEqual(s);
+  });
+
+  it('validateSlot accepts an event slot for its puzzle and rejects one for another id or mode', () => {
+    const ep = makePuzzle('Elantern-walk-2026/0', R5, S5);
+    const st = run(playing(ep, 'event'), [tap(1)]).state;
+    const slot = toInProgress(st, NOW);
+    expect(slot.mode).toBe('event');
+    expect(validateInProgress(slot, ep, { mode: 'event', id: ep.id }).ok).toBe(true);
+    expect(validateInProgress(slot, ep, { mode: 'event', id: 'Elantern-walk-2026/1' }).ok).toBe(false);
+    expect(validateInProgress({ ...slot, mode: 'level' }, ep, { mode: 'event', id: ep.id }).ok).toBe(false);
+  });
+
+  it('size bound: 1 000 levels, a year of dailies, 3 events, 10 groups and 50 ledger entries stay under 40 KB', () => {
+    const best: Record<number, [number, number]> = {};
+    for (let l = 1; l <= 1000; l++) best[l] = [3_599_999, 3];
+    const daily: Record<string, [number, number, number, number]> = {};
+    for (let d = 0; d < 366; d++) daily[new Date(Date.UTC(2026, 0, 1) + d * 86_400_000).toISOString().slice(0, 10)] = [3_599_999, 3, 9, 9];
+    const groups: SaveData['groups'] = {};
+    for (let g = 0; g < 10; g++) groups[`tournament-${g}-0123456789`] = { endsAt: NOW + g, total: 999_999, wins: 999, claimed: 1 };
+    const s: SaveData = {
+      ...full(),
+      progress: { level: 1001, completed: 1000, best },
+      daily,
+      events: {
+        'lantern-walk-2026': { solved: 21, ms: 99_999_999, lastAt: NOW },
+        'snow-paws-2026': { solved: 21, ms: 99_999_999, lastAt: NOW },
+        'yarn-hearts-2027': { solved: 21, ms: 99_999_999, lastAt: NOW },
+      },
+      groups,
+      purchases: { noAds: true, tokens: Array.from({ length: 50 }, (_, i) => `fish_900|${'x'.repeat(40)}${i}`) },
+    };
+    const json = JSON.stringify(s);
+    expect(json.length).toBeLessThan(40_000);
+    expect(migrate(JSON.parse(json) as unknown, NOW)).toEqual(s);
   });
 });

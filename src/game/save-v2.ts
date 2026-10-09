@@ -1,9 +1,9 @@
 // Owner: C (Phase 2b). F0 baseline of save schema v2 (phase2b §9): the v1 → v2 migration (§9.2),
 // validation of the fields v2 adds (§9.2, "an invalid field gets its default") and their merge rules
 // (§9.3). PURE. save.ts wires these into migrate() / merge().
-// F0 left two §9.3 rules to C (they need modules C writes): the paid-grant repair (purchases.ts
-// applyPurchase, re-applying ledger entries only the other document has) and clearing an
-// inProgress.event slot whose event has ended (needs the event defs and `now`, event-flow.ts).
+// Two §9.3 rules live elsewhere because they need other modules: the paid-grant repair
+// (purchases.ts repairPaidGrants, run by save.ts merge) and clearing an inProgress.event slot whose
+// event has ended (events.ts clearEndedEventSlot, run by app/event-flow.ts with the defs and `now`).
 import { cfg, type GameConfig, type LocaleId } from '../app/config';
 import { EVENT_ID_RE, isNonNegInt, isRecord, isTime } from './save-fields';
 import type { BoardKey, EventRecord, GroupRecord, SaveData } from './types';
@@ -190,7 +190,7 @@ function mergeGroups(a: Record<string, GroupRecord>, b: Record<string, GroupReco
  * The §9.3 rows for the v2 fields: wallet from the newer document; points max; events and groups
  * per id; noAds OR; ledger union (the newer document's order last), newest iap.tokensKept;
  * rank.pending from the newer document (lastSubmitAt max). settings and inProgress.event follow the
- * newer document in save.ts. TODO(C, §9.3): the paid-grant repair after this merge.
+ * newer document in save.ts, which then runs the paid-grant repair (purchases.ts).
  */
 export function mergeV2Fields(local: SaveData, cloud: SaveData, newer: SaveData, c: GameConfig = cfg): V2Fields {
   const older = newer === local ? cloud : local;

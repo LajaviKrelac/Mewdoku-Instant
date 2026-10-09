@@ -165,8 +165,10 @@ export interface RankingProvider {
   /**
    * Overlay view with names and photos. With `rect` it is placed inside it (only when
    * caps().overlayInRect); without, FB presents it its own way. null when unsupported or on error.
+   * [D addition, additive] `closed` settles when the view is gone for any reason (the player closed a
+   * full-screen list with its close control or Esc, or close() ran), so the caller can restore focus.
    */
-  showList(board: BoardKey, view: RankListView, rect?: DOMRect): Promise<{ close(): void } | null>;
+  showList(board: BoardKey, view: RankListView, rect?: DOMRect): Promise<{ close(): void; readonly closed?: Promise<void> } | null>;
 }
 
 // ─────────────────────────── Group challenges (phase2b §5.6) ───────────────────────────

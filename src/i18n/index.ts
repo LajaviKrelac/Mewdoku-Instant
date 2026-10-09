@@ -1,13 +1,18 @@
-// Owner: E (Phase 2b). t(key, params) with {param} interpolation, locale hook, formatting helpers
-// (02 §21, phase2b §6). Leaf module: imports only i18n/ and app/config.ts (lead decision, phase2b F0),
-// so ui/, app/ and platform/ may all use it.
-// Phase 2b F0: setLocale() is async (it will load the locale's lazy chunk, §6.3); getDir(),
-// onLocaleChanged(), buildLocales() and formatNumber() exist in a minimal working form so A–D can
-// call them from day 1. E replaces the resolution (locale.ts), plurals (plural.ts, Intl.PluralRules),
-// formatting (format.ts) and bidi isolation behind the same signatures.
+// Owner: E (Phase 2b). t(key, params) with {param} interpolation, locale resolution and loading,
+// plurals and formatting (02 §21, phase2b §6). Leaf module: imports only i18n/ and app/config.ts
+// (lead decision, phase2b F0), so ui/, app/ and platform/ may all use it.
+//
+// Locales (phase2b §6.3): setLocale() resolves the platform tag(s) and the saved override through
+// locale.ts against the locales this build contains (build-locales.ts), loads the locale's lazy
+// chunk, then switches the catalogue, sets <html lang> / <html dir> and notifies onLocaleChanged
+// listeners (the app forwards them as the `locale:changed` bus event). A catalogue that is already
+// loaded switches synchronously, so a prefetched locale applies before the first route even when the
+// caller does not await. Missing keys fall back to English.
 import { cfg, type LocaleId } from '../app/config';
-import { buildLocaleIds } from './build-locales';
-import { formatNumberFor } from './format';
+import { buildLocaleIds, localeLoader, type LocaleCatalog } from './build-locales';
+import { formatNumberFor, formatShortDateFor, isolate, pseudoLocalize } from './format';
+import { guessLocale, isLocaleId, isRtl, resolveLocale, type NavigatorLike } from './locale';
+import { pluralCategory } from './plural';
 import {
   COLOR_KEYS,
   en,
@@ -18,11 +23,15 @@ import {
   type Catalog,
   type En,
   type I18nKey,
+  type PluralBase,
 } from './en';
 
-export type { Catalog, I18nKey } from './en';
+export type { Catalog, I18nKey, PluralBase, PluralExtraKey } from './en';
 export type { LocaleId } from '../app/config';
+export type { LocaleCatalog } from './build-locales';
 export { COLOR_KEYS, GLYPH_KEYS, PRAISE_KEYS, TUTORIAL_STEP_KEYS } from './en';
+export { isLocaleId, localeCandidates, normalizeTag, resolveLocale, guessLocale } from './locale';
+export { stripIsolates } from './format';
 
 export type ParamValue = string | number;
 export type Params = Readonly<Record<string, ParamValue>>;
@@ -34,63 +43,181 @@ export type ParamsArg<K extends I18nKey> = [ParamsFor<K>] extends [never]
   ? []
   : [params: { readonly [P in ParamsFor<K>]: ParamValue }];
 
-/** Keys B such that both `${B}.one` and `${B}.other` exist. */
-export type PluralBase = {
-  [K in I18nKey]: K extends `${infer B}.one` ? (`${B}.other` extends I18nKey ? B : never) : never;
-}[I18nKey];
-
-const catalogs = new Map<string, Partial<Catalog>>([['en', en]]);
-let activeLang = 'en';
-let active: Partial<Catalog> = en;
-
-/** Registers a catalogue for a language code ('en', 'es', …). Missing keys fall back to English. */
-export function registerCatalog(lang: string, catalog: Partial<Catalog>): void {
-  catalogs.set(lang.toLowerCase(), catalog);
-}
-
-type LocaleListener = (locale: string, dir: 'ltr' | 'rtl') => void;
-const listeners = new Set<LocaleListener>();
+type Lookup = Readonly<Record<string, string | undefined>>;
 
 /**
- * Selects the catalogue for a platform locale such as 'en_US' or 'pt-BR' (FB: after
- * startGameAsync, 05 §4). Falls back to English. Resolves to the locale actually used and notifies
- * onLocaleChanged listeners when it changed. Never rejects.
- * Phase 2b (E, §6.3): resolve through locale.ts, load the locale's chunk (build-locales.ts loader),
- * set <html lang> / <html dir>. F0 keeps the Phase 2 lookup of registered catalogues.
+ * The "xx-long" pseudo-locale (phase2b §6.9): `?i18n=pseudo` in dev and e2e builds only (both flags
+ * are build-time constants, so production builds drop it). Every string is pseudo-translated on top
+ * of the active catalogue; tests/e2e/i18n.spec.ts uses it to find clipping and overflow.
  */
-export async function setLocale(platformLocale: string): Promise<string> {
-  const lang = platformLocale.toLowerCase().split(/[-_]/)[0] ?? 'en';
-  const found = catalogs.get(lang);
-  const prev = activeLang;
-  activeLang = found ? lang : 'en';
-  active = found ?? en;
-  if (activeLang !== prev) for (const l of [...listeners]) l(activeLang, getDir());
-  return activeLang;
+const PSEUDO: boolean = (() => {
+  const devOrE2e = Boolean(import.meta.env?.DEV) || (typeof __E2E__ !== 'undefined' && __E2E__);
+  if (!devOrE2e) return false;
+  try {
+    return typeof location !== 'undefined' && /[?&]i18n=pseudo(&|$)/.test(location.search);
+  } catch {
+    return false;
+  }
+})();
+
+/** Loaded catalogues by locale id ('en' is bundled). */
+const catalogs = new Map<string, LocaleCatalog>([['en', en]]);
+/** In-flight chunk loads, so a prefetch and a setLocale share one request. */
+const loading = new Map<string, Promise<LocaleCatalog | null>>();
+let activeLang: LocaleId = 'en';
+let active: Lookup = en;
+let activeDir: 'ltr' | 'rtl' = 'ltr';
+/** Bumped by every setLocale call: a slower, older load never overrides a newer choice. */
+let requestSeq = 0;
+
+/**
+ * Registers a catalogue under a locale id ('es', 'pt-BR', …; a bare language such as 'pt' maps like
+ * a platform tag). Tests and tools only: the game loads catalogues through the build's loader map.
+ */
+export function registerCatalog(lang: string, catalog: LocaleCatalog): void {
+  const id = isLocaleId(lang) ? lang : resolveLocale({ candidates: [lang], override: 'auto', available: cfg.i18n.locales });
+  catalogs.set(id, catalog);
 }
 
-export function getLocale(): string {
-  return activeLang;
-}
-
-/** 'rtl' for the locales in i18n.rtl (Arabic), else 'ltr' (phase2b §6.5). */
-export function getDir(): 'ltr' | 'rtl' {
-  return (cfg.i18n.rtl as readonly string[]).indexOf(activeLang) >= 0 ? 'rtl' : 'ltr';
-}
-
-/** Called after every locale change (phase2b §6.3); the app forwards it as the `locale:changed` bus event. Returns an unsubscribe. */
-export function onLocaleChanged(cb: LocaleListener): () => void {
-  listeners.add(cb);
-  return () => listeners.delete(cb);
-}
+type LocaleListener = (locale: LocaleId, dir: 'ltr' | 'rtl') => void;
+const listeners = new Set<LocaleListener>();
 
 /** The locales this build contains (phase2b §6.7): every i18n.locales entry with a catalogue, or only i18n.releaseLocales in a release build. Always includes 'en'. */
 export function buildLocales(): readonly LocaleId[] {
   return buildLocaleIds();
 }
 
+/** Loads (once) the catalogue of `id`; null for a locale this build lacks or a chunk that failed (a later call retries). */
+function loadCatalog(id: LocaleId): Promise<LocaleCatalog | null> {
+  const have = catalogs.get(id);
+  if (have) return Promise.resolve(have);
+  const pending = loading.get(id);
+  if (pending) return pending;
+  const loader = localeLoader(id);
+  if (!loader) return Promise.resolve(null);
+  const p = Promise.resolve()
+    .then(loader)
+    .then((mod) => {
+      const cat = mod?.catalog ?? null;
+      if (cat) catalogs.set(id, cat);
+      loading.delete(id);
+      return cat;
+    })
+    .catch(() => {
+      loading.delete(id);
+      return null;
+    });
+  loading.set(id, p);
+  return p;
+}
+
+/**
+ * Starts loading a locale's chunk without switching to it (the boot prefetch, §6.3). Resolves true
+ * when the catalogue is ready. Never rejects.
+ */
+export function prefetchLocale(id: LocaleId): Promise<boolean> {
+  if (buildLocales().indexOf(id) < 0) return Promise.resolve(false);
+  return loadCatalog(id).then((c) => c !== null);
+}
+
+/**
+ * The boot prefetch (§6.3): guesses the locale from navigator.language and starts loading its chunk
+ * (nothing for English). Returns the guess. Idempotent; never throws.
+ */
+export function prefetchGuess(nav: NavigatorLike | undefined = typeof navigator !== 'undefined' ? navigator : undefined): LocaleId {
+  let guess: LocaleId = 'en';
+  try {
+    guess = guessLocale(nav?.language, buildLocales());
+    if (guess !== 'en') void prefetchLocale(guess);
+  } catch {
+    // A broken navigator object only costs the prefetch.
+  }
+  return guess;
+}
+
+export interface SetLocaleOptions {
+  /** settings.locale: wins when the build contains it; otherwise the candidates decide ('auto'). */
+  readonly override?: 'auto' | LocaleId;
+  /** The document whose <html lang> / <html dir> follow the locale (default: the global document). */
+  readonly doc?: Document | null;
+}
+
+function applyLocale(id: LocaleId, doc: Document | null | undefined): void {
+  const prev = activeLang;
+  activeLang = id;
+  active = (catalogs.get(id) ?? en) as Lookup;
+  activeDir = isRtl(id) ? 'rtl' : 'ltr';
+  const d = doc === undefined ? (typeof document !== 'undefined' ? document : null) : doc;
+  const html = d?.documentElement;
+  if (html) {
+    if (html.getAttribute('lang') !== id) html.setAttribute('lang', id);
+    if (html.getAttribute('dir') !== activeDir) html.setAttribute('dir', activeDir);
+  }
+  if (id !== prev) {
+    for (const l of [...listeners]) {
+      try {
+        l(id, activeDir);
+      } catch {
+        // A failing listener never stops the others or the switch itself.
+      }
+    }
+  }
+}
+
+/**
+ * Switches the UI language (phase2b §6.3). `input` is a platform locale ('en_US', 'pt-BR'), a
+ * candidate list (the web's navigator.languages, in order) or a LocaleId; `opts.override` is the saved
+ * settings.locale. The result is resolved against buildLocales(): anything the build lacks falls
+ * back to English. The locale's chunk is loaded first (instant when prefetched), then the catalogue,
+ * <html lang> and <html dir> switch and onLocaleChanged listeners run. Resolves to the locale in use
+ * once this call settles; a newer call supersedes an older one still loading. Never rejects.
+ */
+export function setLocale(input: string | readonly string[], opts: SetLocaleOptions = {}): Promise<LocaleId> {
+  const seq = ++requestSeq;
+  let id: LocaleId;
+  try {
+    const candidates = typeof input === 'string' ? [input] : [...input];
+    id = resolveLocale({ candidates, override: opts.override ?? 'auto', available: buildLocales() });
+  } catch {
+    id = cfg.i18n.fallback;
+  }
+  if (catalogs.has(id)) {
+    applyLocale(id, opts.doc);
+    return Promise.resolve(id);
+  }
+  return loadCatalog(id).then((cat) => {
+    if (seq !== requestSeq) return activeLang;
+    applyLocale(cat ? id : cfg.i18n.fallback, opts.doc);
+    return activeLang;
+  });
+}
+
+/** The active locale id ('en' until boot resolves one). */
+export function getLocale(): LocaleId {
+  return activeLang;
+}
+
+/** 'rtl' for the locales in i18n.rtl (Arabic), else 'ltr' (phase2b §6.5). */
+export function getDir(): 'ltr' | 'rtl' {
+  return activeDir;
+}
+
+/** Called after every locale change (phase2b §6.3); the app forwards it as the `locale:changed` bus event. Returns an unsubscribe. */
+export function onLocaleChanged(cb: LocaleListener): () => void {
+  listeners.add(cb);
+  return () => {
+    listeners.delete(cb);
+  };
+}
+
 /** Fish, points and ranks (phase2b §6.4): Intl.NumberFormat of the active locale with Latin digits everywhere. */
 export function formatNumber(n: number): string {
   return formatNumberFor(activeLang, n);
+}
+
+/** The language's own name for the Settings Language row (`locale.name.<id>`, the same in every catalogue). */
+export function localeName(id: LocaleId): string {
+  return translate(`locale.name.${id}` as I18nKey);
 }
 
 /** Strictly typed lookup: params are required exactly when the English template has placeholders. */
@@ -100,20 +227,29 @@ export function t<K extends I18nKey>(key: K, ...args: ParamsArg<K>): string {
 
 /** Loosely typed lookup for computed keys. Unknown placeholders are left as `{name}`. */
 export function translate(key: I18nKey, params?: Params): string {
-  const template = active[key] ?? en[key];
+  const raw = active[key] ?? en[key];
+  const template = PSEUDO && key !== 'app.name' ? pseudoLocalize(raw) : raw;
   return params ? interpolate(template, params) : template;
 }
 
-/** Plural lookup: `${base}.one` when count === 1, else `${base}.other`; {count} is filled in. */
+/**
+ * Plural lookup (phase2b §6.4): `${base}.${Intl.PluralRules(locale).select(count)}`, falling back to
+ * `${base}.other`, then to English. {count} is filled with formatNumber(count) unless params.count
+ * is given.
+ */
 export function tn(base: PluralBase, count: number, params?: Params): string {
-  const key = `${base}.${count === 1 ? 'one' : 'other'}` as I18nKey;
-  return translate(key, { count, ...params });
+  const own = active[`${base}.${pluralCategory(activeLang, count)}`] ?? active[`${base}.other`];
+  const lookup = en as Lookup;
+  const raw = own ?? lookup[`${base}.${pluralCategory('en', count)}`] ?? lookup[`${base}.other`] ?? base;
+  const template = PSEUDO ? pseudoLocalize(raw) : raw;
+  return interpolate(template, { count: formatNumber(count), ...params });
 }
 
+/** Fills {name} placeholders; in RTL locales each value is wrapped in first-strong isolates (§6.4). */
 export function interpolate(template: string, params: Params): string {
   return template.replace(/\{(\w+)\}/g, (m, name: string) => {
     const v = params[name];
-    return v === undefined ? m : String(v);
+    return v === undefined ? m : isolate(String(v), activeDir);
   });
 }
 
@@ -139,7 +275,7 @@ export function praise(index: number): string {
   return translate(PRAISE_KEYS[((index % n) + n) % n] ?? 'win.praise.0');
 }
 
-/** "A", "A and B", "A, B and C" (02 §9.1). */
+/** "A", "A and B", "A, B and C" (02 §9.1), with the active catalogue's list.* templates. */
 export function joinList(items: readonly string[]): string {
   if (items.length === 0) return '';
   if (items.length === 1) return items[0] ?? '';
@@ -150,10 +286,17 @@ export function joinList(items: readonly string[]): string {
 }
 
 export function capitalizeFirst(s: string): string {
-  return s.length === 0 ? s : s.charAt(0).toLocaleUpperCase(activeLang) + s.slice(1);
+  if (s.length === 0) return s;
+  let upper: string;
+  try {
+    upper = s.charAt(0).toLocaleUpperCase(activeLang);
+  } catch {
+    upper = s.charAt(0).toUpperCase();
+  }
+  return upper + s.slice(1);
 }
 
-/** Solve-time style clock: "4:12", "12:03", "1:02:03". Negative values clamp to 0. */
+/** Solve-time style clock: "4:12", "12:03", "1:02:03" in every locale (§6.4). Negative values clamp to 0. */
 export function formatClock(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000));
   const h = Math.floor(total / 3600);
@@ -163,19 +306,27 @@ export function formatClock(ms: number): string {
   return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
 }
 
-/** Coarse duration for "Next puzzle in 7 h 48 min" (02 §5 O7). */
+/** Coarse duration: "7 h 48 min", "2 d 5 h" from a day on (event cards, §6.4), "under a minute". */
 export function formatDuration(ms: number): string {
   const mins = Math.floor(Math.max(0, ms) / 60_000);
   if (mins < 1) return translate('time.underMinute');
   const h = Math.floor(mins / 60);
   const m = mins % 60;
+  if (h >= 24) return translate('time.daysHours', { d: Math.floor(h / 24), h: h % 24 });
   return h > 0 ? translate('time.hoursMinutes', { h, m }) : translate('time.minutes', { m });
 }
 
-/** "Tue 6 Oct" from a YYYY-MM-DD key; the weekday comes from the date string (02 §12). */
+/**
+ * "Tue 6 Oct" from a YYYY-MM-DD key (02 §12). English keeps the catalogue template; other locales use
+ * Intl.DateTimeFormat on the key's UTC date, with Latin digits (§6.4), and the template as a fallback.
+ */
 export function formatShortDate(dateKey: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey);
   if (!m) return dateKey;
+  if (activeLang !== 'en') {
+    const viaIntl = formatShortDateFor(activeLang, dateKey);
+    if (viaIntl !== null) return viaIntl;
+  }
   const y = Number(m[1]);
   const mo = Number(m[2]) - 1;
   const d = Number(m[3]);
@@ -186,3 +337,8 @@ export function formatShortDate(dateKey: string): string {
     month: translate(MONTH_KEYS[mo] ?? 'date.month.0'),
   });
 }
+
+// The boot prefetch (§6.3): in a browser, start loading the chunk of the locale navigator.language
+// suggests as soon as the main bundle runs, so it is usually ready when boot resolves the real locale
+// after start(). Boot may also call prefetchGuess()/prefetchLocale(); the request is shared.
+if (typeof document !== 'undefined') prefetchGuess();

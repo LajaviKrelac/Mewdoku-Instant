@@ -1,14 +1,18 @@
 // Owner: B (Phase 2b)
 // O5 settings (02 §5 O5, §14) with the "About & credits" sub-view (version, font licence, privacy link).
-// Toggles call onChange(patch) at once; the app saves and re-renders through update(). Esc in the
-// About view returns to the list; otherwise Esc, × and scrim taps call onClose.
+// Toggles call onChange(patch) at once; the app saves and re-renders through update(). Esc in a
+// sub-view returns to the list; otherwise Esc, × and scrim taps call onClose.
+// Phase 2b rows (§6.8, §8.5): Language (a sub-view listing "Automatic" and the endonyms of the
+// locales this build contains, a radio group), Shop and Remove ads. Each is shown only when its prop
+// is present (no look rows: one theme, §1.9).
 //
-// Classes: .overlay[data-overlay=settings] > .overlay__panel--dialog.settings[data-view=main|about]
+// Classes: .overlay[data-overlay=settings] > .overlay__panel--dialog.settings[data-view=main|about|language]
 //          .settings__view .overlay__head .settings__list .settings-row(--link) .settings-row__label
-//          .settings-row__note .switch(.switch__track .switch__knob .switch__state)
+//          .settings-row__note .settings-row__value .switch(.switch__track .switch__knob .switch__state)
 //          .segmented .segmented__opt .about__name .about__text .about__code .about__link
+//          .lang-list > .lang-opt[aria-checked]
 import type { LocaleId, ReduceMotionSetting, Settings } from '../../game/types';
-import { t } from '../../i18n';
+import { t, translate, type I18nKey } from '../../i18n';
 import { icon } from '../art/sprite';
 import { h, setText, type OverlayView } from '../dom';
 import { closeButton, createOverlayShell, makeButton, nextId } from './overlay-base';
@@ -39,6 +43,12 @@ export interface SettingsProps {
 }
 
 type SwitchKey = 'sound' | 'haptics' | 'patterns';
+type SettingsView = 'main' | 'about' | 'language';
+
+/** "Automatic" or the locale's endonym (locale.name.<id>, E's catalogue). */
+export function languageName(id: 'auto' | LocaleId): string {
+  return id === 'auto' ? t('settings.language.auto') : translate(`locale.name.${id}` as I18nKey);
+}
 const MOTION_OPTIONS: readonly ReduceMotionSetting[] = ['system', 'on', 'off'];
 
 function motionLabel(v: ReduceMotionSetting): string {
@@ -47,7 +57,7 @@ function motionLabel(v: ReduceMotionSetting): string {
 
 export function createSettingsModal(): OverlayView<SettingsProps> {
   let props: SettingsProps | null = null;
-  let view: 'main' | 'about' = 'main';
+  let view: SettingsView = 'main';
   const shell = createOverlayShell({ id: 'settings', scrim: 'soft', panel: 'dialog', onScrimTap: () => props?.onClose() });
   shell.panel.classList.add('settings');
 
@@ -94,14 +104,20 @@ export function createSettingsModal(): OverlayView<SettingsProps> {
     props.onChange({ reduceMotion: v });
   });
 
-  const linkRow = (label: string, onPress: () => void, cls: string): HTMLButtonElement =>
+  const linkRow = (label: string, onPress: () => void, cls: string, value?: HTMLElement): HTMLButtonElement =>
     makeButton({
       variant: 'ghost',
       label,
       className: `settings-row settings-row--link ${cls}`,
-      trailing: icon('icon-chevron', { class: 'btn__chev' }),
+      trailing: [value ?? null, icon('icon-chevron', { class: 'btn__chev' })],
       onPress,
     });
+
+  // ── phase2b rows ──
+  const languageValue = h('span', { class: 'settings-row__value' });
+  const languageLink = linkRow(t('settings.language'), () => showView('language'), 'settings__language-link', languageValue);
+  const shopLink = linkRow(t('settings.shop'), () => props?.onShop?.(), 'settings__shop-link');
+  const removeAdsLink = linkRow(t('settings.removeAds'), () => props?.onRemoveAds?.(), 'settings__removeads-link');
 
   const vibrationRow = switchRow('haptics', t('settings.vibration'));
   const aboutLink = linkRow(t('settings.about'), () => showView('about'), 'settings__about-link');
@@ -116,6 +132,9 @@ export function createSettingsModal(): OverlayView<SettingsProps> {
       vibrationRow,
       switchRow('patterns', t('settings.patterns'), t('settings.patterns.note')),
       h('div', { class: 'settings-row settings-row--motion' }, h('span', { class: 'settings-row__label', id: motionLabelId }, t('settings.reduceMotion')), segmented),
+      languageLink,
+      shopLink,
+      removeAdsLink,
       linkRow(t('settings.howToPlay'), () => props?.onHowToPlay(), 'settings__howto-link'),
       aboutLink,
     ),
@@ -151,15 +170,80 @@ export function createSettingsModal(): OverlayView<SettingsProps> {
     ),
     privacy,
   );
-  shell.panel.append(mainView, aboutView);
+  // ── language view (§6.8): a radio group of "Automatic" + the build's locales ──
+  const langTitleId = nextId('lang-title');
+  const langBack = makeButton({
+    variant: 'icon',
+    icon: 'icon-chevron',
+    ariaLabel: t('common.back'),
+    className: 'overlay__back',
+    onPress: () => showView('main'),
+  });
+  const langList = h('div', { class: 'lang-list', role: 'radiogroup', 'aria-labelledby': langTitleId });
+  const langView = h(
+    'div',
+    { class: 'settings__view settings__view--language', hidden: true, role: 'group', 'aria-labelledby': langTitleId },
+    h('div', { class: 'overlay__head' }, langBack, h('h2', { class: 'overlay__title', id: langTitleId }, t('settings.language')), closeButton(() => props?.onClose())),
+    langList,
+  );
+  let langKey = '';
+  const langOpts: HTMLButtonElement[] = [];
+  const langIds: ('auto' | LocaleId)[] = [];
+  const pickLanguage = (id: 'auto' | LocaleId): void => {
+    const l = props?.language;
+    if (l && l.current !== id) l.onPick(id);
+  };
+  langList.addEventListener('keydown', (ev) => {
+    const step = ev.key === 'ArrowDown' || ev.key === 'ArrowRight' ? 1 : ev.key === 'ArrowUp' || ev.key === 'ArrowLeft' ? -1 : 0;
+    if (!step || langOpts.length === 0) return;
+    ev.preventDefault();
+    const i = langOpts.indexOf(ev.target as HTMLButtonElement);
+    const next = (Math.max(0, i) + step + langOpts.length) % langOpts.length;
+    langOpts[next]?.focus();
+    const id = langIds[next];
+    if (id) pickLanguage(id);
+  });
+  const renderLanguages = (l: NonNullable<SettingsProps['language']>): void => {
+    const key = l.locales.join(',');
+    if (key !== langKey) {
+      langKey = key;
+      langList.textContent = '';
+      langOpts.length = 0;
+      langIds.length = 0;
+      for (const id of ['auto' as const, ...l.locales]) {
+        const opt = h(
+          'button',
+          { type: 'button', class: 'lang-opt', role: 'radio', 'aria-checked': 'false', lang: id === 'auto' ? null : id, dataset: { locale: id } },
+          h('span', { class: 'lang-opt__name' }, languageName(id)),
+          h('span', { class: 'lang-opt__check', 'aria-hidden': 'true' }),
+        );
+        opt.addEventListener('click', () => pickLanguage(id));
+        langOpts.push(opt);
+        langIds.push(id);
+        langList.appendChild(opt);
+      }
+    }
+    langOpts.forEach((opt, i) => {
+      const on = langIds[i] === l.current;
+      opt.setAttribute('aria-checked', String(on));
+      opt.tabIndex = on ? 0 : -1;
+    });
+  };
 
-  function showView(v: 'main' | 'about', moveFocus = true): void {
+  shell.panel.append(mainView, aboutView, langView);
+
+  function showView(v: SettingsView, moveFocus = true): void {
+    const from = view;
     view = v;
     shell.panel.dataset.view = v;
     mainView.hidden = v !== 'main';
     aboutView.hidden = v !== 'about';
-    shell.panel.setAttribute('aria-labelledby', v === 'main' ? shell.titleId : aboutTitleId);
-    if (moveFocus) (v === 'about' ? back : aboutLink).focus();
+    langView.hidden = v !== 'language';
+    shell.panel.setAttribute('aria-labelledby', v === 'main' ? shell.titleId : v === 'about' ? aboutTitleId : langTitleId);
+    if (!moveFocus) return;
+    if (v === 'about') back.focus();
+    else if (v === 'language') (langOpts.find((o) => o.tabIndex === 0) ?? langBack).focus();
+    else (from === 'language' ? languageLink : aboutLink).focus();
   }
 
   const render = (p: SettingsProps): void => {
@@ -171,6 +255,13 @@ export function createSettingsModal(): OverlayView<SettingsProps> {
       if (state) setText(state, on ? t('common.on') : t('common.off'));
     }
     vibrationRow.hidden = !p.showVibration;
+    languageLink.hidden = !p.language;
+    if (p.language) {
+      setText(languageValue, languageName(p.language.current));
+      renderLanguages(p.language);
+    }
+    shopLink.hidden = !p.onShop;
+    removeAdsLink.hidden = !p.onRemoveAds;
     motionOpts.forEach((opt, i) => {
       const checked = MOTION_OPTIONS[i] === p.settings.reduceMotion;
       opt.setAttribute('aria-checked', String(checked));
@@ -203,7 +294,7 @@ export function createSettingsModal(): OverlayView<SettingsProps> {
     },
     dismiss() {
       if (!props || !shell.isOpen()) return false;
-      if (view === 'about') showView('main');
+      if (view !== 'main') showView('main');
       else props.onClose();
       return true;
     },

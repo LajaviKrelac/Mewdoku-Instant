@@ -1,8 +1,8 @@
 // Owner: D
 // The lazy `fb-social` chunk (phase2b §11): rankings, overlay views, groups and payments. fb/index.ts
 // loads it with ONE dynamic import after start(), without blocking the first route (vite.config.ts
-// names the chunk assets/fb-social-*.js). Nothing in the main bundle may import these modules
-// statically. F0: the barrel only.
+// names the chunk assets/fb-social-*.js), through fb-social-glue.ts. Nothing in the main bundle may
+// import these modules statically (the probes they re-export live in the main-bundle fb-probe.ts).
 export { createFbGroups, groupsSupported } from './fb-groups';
 export { createFbOverlayViews } from './fb-overlay-views';
 export { createFbPayments, paymentsSupported } from './fb-payments';

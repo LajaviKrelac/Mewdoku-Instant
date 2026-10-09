@@ -44,6 +44,12 @@ export const enUi2b = {
   'rank.records.solved': 'Levels solved',
   'rank.records.total': 'Total points',
   'rank.hub': 'Rankings',
+  'rank.entries.one': '{count} player',
+  'rank.entries.other': '{count} players',
+  'rank.records.thisPuzzle': 'This puzzle',
+  'rank.tab.today': 'Today',
+  'rank.tab.event': 'Event',
+  'rank.tab.groups': 'Groups',
 
   // ── Group challenges (§5.6): never say "won" in participation mode ─────────
   'group.title': 'Group challenge',
@@ -58,6 +64,7 @@ export const enUi2b = {
   'group.take': 'Take {count}',
   'group.double': 'Watch a video for {count}',
   'group.participation': 'Thanks for playing: +{count} fish',
+  'group.wins': '{wins} / {needed} wins',
 
   // ── Shop (§8.5); product names are ours, never the dashboard's text ───────
   'shop.title': 'Shop',
@@ -68,6 +75,9 @@ export const enUi2b = {
   'shop.swap.kitty': '1 kitty',
   'shop.swap.action': 'Swap',
   'shop.notEnough': 'Not enough fish yet.',
+  'shop.swap.a11y': 'Swap {price} fish for {item}',
+  'shop.buy.a11y': 'Buy {name}, {price}',
+  'shop.retry': 'Try again',
   'shop.loading': 'Getting the shop ready…',
   'shop.unavailable': "Purchases aren't available here.",
   'shop.thanks': 'Thank you! Your items are in.',
@@ -85,4 +95,9 @@ export const enUi2b = {
 
   // ── Rewarded prompt O2 swap (§2.8) ─────────────────────────────────────────
   'rewarded.swap': 'Swap {count} fish',
+
+  // ── Event screen milestone track (§4.4, §7) ────────────────────────────────
+  'event.track.title': 'Rewards',
+  'event.track.node': '{at} solved: {reward}',
+  'event.track.reached': '{at} solved: {reward}. Reached.',
 } as const;

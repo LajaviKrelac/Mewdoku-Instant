@@ -1,7 +1,7 @@
 // Owner: A (Phase 2b)
-// Pure sizing math (02 §19), tile insets (phase2b §1.5 even gutters; the Phase 2 region-aware
-// insets of 02 §17.4 are retired and A deletes regionInsets), hit-testing and drag interpolation
-// (02 §6.1, 04 §5.4). No DOM access except readViewport().
+// Pure sizing math (02 §19), tile insets (phase2b §1.5: even gutters, like the original; the Phase 2
+// region-aware insets are deleted, §1.8), hit-testing and drag interpolation (02 §6.1, 04 §5.4).
+// No DOM access except readViewport().
 import { cfg, type GameConfig } from '../../app/config';
 import type { CellIndex } from '../../engine/types';
 
@@ -61,7 +61,7 @@ export function computeLayout(input: LayoutInput, c: GameConfig = cfg): GameLayo
   return { colW, compact, topBar, pills, chips, tools, boardMax, pad, slot, board };
 }
 
-/** Inset of a tile inside its slot per side: 1.5 px toward the same region, 3.5 px toward another (or the edge). */
+/** Inset of a tile inside its slot per side (CSS px). With even gutters all four sides are equal. */
 export interface CellInsets {
   readonly top: number;
   readonly right: number;
@@ -81,22 +81,6 @@ export function evenInsets(n: number, slotPx: number, c: GameConfig = cfg): Cell
   return Array.from({ length: Math.max(0, n * n) }, () => one);
 }
 
-/** @deprecated phase2b §1.8: region-aware insets are retired; use evenInsets. A deletes this. */
-export function regionInsets(n: number, regions: Uint8Array, c: GameConfig = cfg): CellInsets[] {
-  const same = c.layout.insetSamePx;
-  const diff = c.layout.insetDiffPx;
-  const out: CellInsets[] = [];
-  for (let i = 0; i < n * n; i++) {
-    const r = Math.floor(i / n);
-    const col = i % n;
-    const g = regions[i];
-    const side = (rr: number, cc: number): number =>
-      rr >= 0 && rr < n && cc >= 0 && cc < n && regions[rr * n + cc] === g ? same : diff;
-    out.push({ top: side(r - 1, col), right: side(r, col + 1), bottom: side(r + 1, col), left: side(r, col - 1) });
-  }
-  return out;
-}
-
 /** Where the board's cell grid sits on screen. left/top = client coords of the card's outer corner. */
 export interface BoardGeometry {
   readonly left: number;
@@ -113,8 +97,8 @@ function clampIndex(v: number, n: number): number {
 /** Cell under a client point; the gap belongs to the nearest cell; clamped to the grid (02 §6.1). */
 export function hitTest(clientX: number, clientY: number, g: BoardGeometry): CellIndex {
   const slot = g.slot > 0 ? g.slot : 1;
-  // Insets are symmetric across every slot boundary (1.5|1.5 or 3.5|3.5), so the slot edge is the
-  // midpoint of each gap and floor() assigns each half-gap to its nearest tile.
+  // Insets are even (the same on every side of every tile), so the slot edge is the midpoint of each
+  // gap and floor() assigns each half-gap to its nearest tile.
   const col = clampIndex(Math.floor((clientX - g.left - g.pad) / slot), g.n);
   const row = clampIndex(Math.floor((clientY - g.top - g.pad) / slot), g.n);
   return row * g.n + col;

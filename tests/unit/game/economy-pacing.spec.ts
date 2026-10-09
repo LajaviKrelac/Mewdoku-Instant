@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { createFakeClock } from '../../../src/app/clock';
 import { mergeConfig } from '../../../src/app/config';
 import {
+  bannerGate,
   canShowInterstitial,
   cooldownSecFor,
   interstitialGate,
@@ -178,5 +179,70 @@ describe('interstitial gate truth table (fake clock)', () => {
     const base = defaults(T0);
     const save: SaveData = { ...base, progress: { ...base.progress, completed: 5 }, daily: { '2026-10-01': [1, 0, 0, 0], '2026-10-02': [1, 0, 0, 0], '2026-10-03': [1, 0, 0, 0], '2026-10-04': [1, 0, 0, 0], '2026-10-05': [1, 0, 0, 0] } };
     expect(interstitialGate({ trigger: 'daily_done', now: T0 + DAY, sessionStartedAt: T0, save, interstitialSupported: true })).toBe('min_levels');
+  });
+});
+
+describe('phase2b §3: cadence parity and the banner gate', () => {
+  it('the interstitial cooldown stays the original\'s 120 / 100 / 90 s by tenure (§3.7)', () => {
+    expect(cooldownSecFor(0)).toBe(120);
+    expect(cooldownSecFor(1)).toBe(120);
+    expect(cooldownSecFor(2)).toBe(100);
+    expect(cooldownSecFor(6)).toBe(100);
+    expect(cooldownSecFor(7)).toBe(90);
+    expect(cooldownSecFor(400)).toBe(90);
+  });
+
+  it('event_next is an interstitial trigger like next_level', () => {
+    const save = { ...defaults(T0 - 10 * DAY), progress: { level: 30, completed: 29, best: {} } };
+    const input = { now: T0, sessionStartedAt: T0 - 600 * SEC, save, interstitialSupported: true };
+    expect(interstitialGate({ ...input, trigger: 'event_next' })).toBe('ok');
+    expect(interstitialGate({ ...input, trigger: 'event_next' }, mergeConfig({ ads: { interstitial: { triggers: ['next_level'] } } }))).toBe('trigger');
+  });
+
+  it('owning No Ads turns interstitials off (§8.3)', () => {
+    const save = { ...defaults(T0 - 10 * DAY), progress: { level: 30, completed: 29, best: {} }, purchases: { noAds: true, tokens: [] } };
+    const input = { trigger: 'next_level' as const, now: T0, sessionStartedAt: T0 - 600 * SEC, save, interstitialSupported: true };
+    expect(interstitialGate(input)).toBe('no_ads');
+    expect(canShowInterstitial({ ...input, save: { ...save, purchases: { ...save.purchases, noAds: false } } })).toBe(true);
+  });
+
+  type BannerRow = {
+    screen: Parameters<typeof bannerGate>[0]['screen'];
+    completed: number;
+    noAds: boolean;
+    supported: boolean;
+    tutorial: boolean;
+    want: ReturnType<typeof bannerGate>;
+  };
+  const ok = { completed: 10, noAds: false, supported: true, tutorial: false } as const;
+  const BANNER_ROWS: BannerRow[] = [
+    { screen: 'home', ...ok, want: 'ok' },
+    { screen: 'victory', ...ok, want: 'ok' },
+    { screen: 'event', ...ok, want: 'ok' },
+    { screen: 'game', ...ok, want: 'screen' },
+    { screen: 'ranking', ...ok, want: 'screen' },
+    { screen: 'boot', ...ok, want: 'screen' },
+    { screen: 'overlay', ...ok, want: 'screen' },
+    { screen: 'home', ...ok, completed: 9, want: 'min_levels' },
+    { screen: 'home', ...ok, noAds: true, want: 'no_ads' },
+    { screen: 'home', ...ok, supported: false, want: 'unsupported' },
+    { screen: 'victory', ...ok, tutorial: true, want: 'tutorial' },
+    { screen: 'game', ...ok, supported: false, completed: 0, want: 'unsupported' },
+  ];
+  it.each(BANNER_ROWS)('bannerGate $screen completed=$completed noAds=$noAds supported=$supported tutorial=$tutorial → $want', (row) => {
+    const save = {
+      progress: { level: row.completed + 1, completed: row.completed, best: {} },
+      purchases: { noAds: row.noAds, tokens: [] },
+    };
+    expect(bannerGate({ screen: row.screen, save, bannerSupported: row.supported, firstRunTutorial: row.tutorial })).toBe(row.want);
+  });
+
+  it('bannerGate: disabled in config, and a config variant for the screens and the start level', () => {
+    const save = { progress: { level: 31, completed: 30, best: {} }, purchases: { noAds: false, tokens: [] } };
+    const base = { screen: 'home' as const, save, bannerSupported: true, firstRunTutorial: false };
+    expect(bannerGate(base, mergeConfig({ ads: { banner: { enabled: false } } }))).toBe('disabled');
+    expect(bannerGate(base, mergeConfig({ ads: { enabled: false } }))).toBe('disabled');
+    expect(bannerGate(base, mergeConfig({ ads: { banner: { screens: ['victory'] } } }))).toBe('screen');
+    expect(bannerGate(base, mergeConfig({ ads: { banner: { fromCompletedLevels: 31 } } }))).toBe('min_levels');
   });
 });

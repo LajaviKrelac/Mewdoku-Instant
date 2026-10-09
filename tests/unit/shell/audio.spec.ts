@@ -176,6 +176,23 @@ describe('sfx', () => {
   });
 });
 
+describe('fish sounds (phase2b §2.2)', () => {
+  it('fish_plink rises audio.fishPlinkStepSemitones per arriving fish; fish_pop is a short rising bloop', () => {
+    const f = (i: number): number => (recipe('fish_plink', { index: i })[0] as ToneVoice).f0;
+    const step = Math.pow(2, cfg.audio.fishPlinkStepSemitones / 12);
+    expect(f(1) / f(0)).toBeCloseTo(step, 9);
+    expect(f(2) / f(1)).toBeCloseTo(step, 9);
+    expect(f(-3)).toBe(f(0));
+    const pop = recipe('fish_pop')[0] as ToneVoice;
+    expect(pop.f1).toBeGreaterThan(pop.f0);
+    for (const id of ['fish_pop', 'fish_plink'] as const) {
+      const voices = recipe(id, { index: 2 });
+      expect(Math.max(...voices.map((v) => v.at + v.dur))).toBeLessThan(0.35);
+      for (const v of voices) expect(v.peak).toBeLessThanOrEqual(0.55);
+    }
+  });
+});
+
 describe('lazy sfx (04 §9 budget)', () => {
   it('drops plays until the recipes land, then delegates; load() is idempotent and retries after a failure', async () => {
     const { createLazySfx } = await import('../../../src/audio/lazy-sfx');

@@ -1,10 +1,15 @@
 /* Owner: A (Phase 2b)
-   Board card, cells, insets (phase2b §1.5 even gutters), glyph states (data-s), region fade (data-done) (02 §17.4, 04 §5.3).
-   DOM (ui/board/board-view.ts):
+   The Classic board (phase2b §1.5): a white card (padding 10, radius 18, soft shadow), rounded flat
+   tiles (radius 20 % of the slot) with even white gutters (2 px insets, 1.5 px below a 30 px slot), no
+   grid lines or region strokes; the white X over its tinted edge; Tux at 0.84 × slot; the solved-board
+   glow. Glyph states (data-s), region fade (data-done) (02 §17.4, 04 §5.3). Tokens only.
+   DOM (ui/board/board-view.ts, board-cells.ts):
      .board[role=grid][data-mood][data-hl][data-patterns][aria-disabled] (--n --slot --pad)
        > .board__row[role=row] > button.cell[data-i][data-s=e|m|c|w|g][data-done][data-f][data-ghost][data-mood]
-           (--c --it --ir --ib --il --row --blink-dur --blink-delay)
-           > .cell__tile + .cell__glow + svg.cell__g > .cell__pat? .cell__x ×2 .cell__catg?(.cell__cat .cell__blink .cell__ear) */
+           (--c --xe --it --ir --ib --il --row --blink-dur --blink-delay)
+           > .cell__tile + .cell__glow + svg.cell__g > .cell__pat? .cell__xe ×2 .cell__x ×2 .cell__catg?(.cell__cat .cell__blink .cell__ear)
+   Layering: tiles, then every glow (z 1, so a glow spills over the neighbouring tiles), then every
+   cell's SVG (z 2: X marks and cats stay above all glows). The card's `contain` keeps it local. */
 
 .board {
   --slot: 36px;
@@ -15,9 +20,9 @@
   width: calc(var(--slot) * var(--n) + 2 * var(--pad));
   height: calc(var(--slot) * var(--n) + 2 * var(--pad));
   padding: var(--pad);
-  border-radius: var(--board-radius, 16px);
-  background: var(--card);
-  box-shadow: 0 1px 0 rgba(59, 48, 68, 0.04), 0 3px 0 rgba(59, 48, 68, 0.05), 0 14px 34px rgba(59, 48, 68, 0.1);
+  border-radius: var(--board-radius, 18px);
+  background: var(--board-card);
+  box-shadow: var(--shadow-card);
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
@@ -57,7 +62,7 @@
   right: var(--ir);
   bottom: var(--ib);
   left: var(--il);
-  border-radius: calc(var(--slot) * var(--cell-r, 0.18));
+  border-radius: calc(var(--slot) * var(--cell-r, 0.2));
   background: var(--c);
 }
 
@@ -105,26 +110,57 @@
   height: 100%;
   overflow: visible;
   pointer-events: none;
+  z-index: 2;
 }
 
-/* Mark X (02 §17.4): --ink at 70 %, 52 % of the cell, stroke 10 %, round caps. The numbers come
-   from cfg.layout via the board's --mark-* variables (board-view.ts applyRenderVars). */
-.cell__x {
+/* The X mark (phase2b §1.5): a white X, round caps, 54 % of the cell (23→77), stroke 12 units, over an
+   edge stroke of 12 + 2 × 4 = 20 units in --xe (the tile mixed 70 % toward --ink; its stroke-width is
+   set from cfg.layout by board-cells.ts). White alone is only 1.23–2.39:1 on our tiles, so the edge
+   carries WCAG 1.4.11 (≥ 3.32:1 on every tile; white vs edge ≥ 6.27, scripts/palette-check.ts).
+   --mark-w, --mark-op and --x-len come from cfg.layout (board-view.ts applyRenderVars). */
+.cell__x,
+.cell__xe {
   display: none;
   fill: none;
-  stroke: var(--ink);
-  stroke-width: var(--mark-w, 10);
   stroke-linecap: round;
-  stroke-dasharray: var(--x-len, 74);
+  stroke-dasharray: var(--x-len, 77);
   stroke-dashoffset: 0;
-  opacity: var(--mark-op, 0.7);
 }
 
-.cell[data-s='m'] .cell__x {
+.cell__x {
+  stroke: #fff;
+  stroke-width: var(--mark-w, 12);
+  opacity: var(--mark-op, 1);
+}
+
+.cell__xe {
+  stroke: var(--xe, var(--ink));
+}
+
+.cell[data-s='m'] .cell__x,
+.cell[data-s='m'] .cell__xe {
   display: inline;
 }
 
-/* Wrong: --wrong X at full opacity plus a 2 px inner ring (02 §17.4, contrast-checked). */
+/* The edge draws in with the white X (same timing as fx.css's x-draw on .cell__x). */
+.cell.fx-draw .cell__xe {
+  animation: xe-draw var(--x-draw-ms, 85ms) ease-out both;
+}
+
+.cell.fx-draw .cell__xe + .cell__xe {
+  animation-delay: var(--x-draw-gap, 35ms);
+}
+
+@keyframes xe-draw {
+  from {
+    stroke-dashoffset: var(--x-len, 77);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Wrong: --wrong X at full opacity plus a 2 px inner ring (02 §17.4, contrast-checked); no white X. */
 .cell[data-s='w'] .cell__x {
   display: inline;
   stroke: var(--wrong);
@@ -141,7 +177,7 @@
   cursor: default;
 }
 
-/* Cats (0.82 × cell, 02 §17.3) and the idle blink lid. */
+/* Cats (0.84 × cell, phase2b §1.5) and the idle blink lid. */
 .cell__catg {
   display: none;
   transform-box: fill-box;
@@ -154,7 +190,7 @@
 }
 
 .cell[data-s='g'] .cell__tile {
-  box-shadow: inset 0 0 0 2px rgba(59, 48, 68, 0.28);
+  box-shadow: inset 0 0 0 2px rgba(var(--ink-rgb), 0.28);
 }
 
 .cell__blink {
@@ -188,13 +224,13 @@
   opacity: var(--pat-op-done, 0.65);
 }
 
-/* Keyboard focus (02 §18): 3 px --accent ring, lifted above the neighbours. */
+/* Keyboard focus (02 §18): 3 px --focus ring, lifted above the neighbours. */
 .cell:focus-visible {
-  z-index: 2;
+  z-index: 3;
 }
 
 .cell:focus-visible .cell__tile {
-  box-shadow: 0 0 0 2px var(--card), 0 0 0 5px var(--accent);
+  box-shadow: 0 0 0 2px var(--card), 0 0 0 5px var(--focus);
 }
 
 /* Touch-first devices: the board takes focus when a level starts (A11Y-4), and with no interaction
@@ -211,7 +247,7 @@
   }
 
   .board:not([data-kbd]) .cell[data-s='g']:focus-visible .cell__tile {
-    box-shadow: inset 0 0 0 2px rgba(59, 48, 68, 0.28);
+    box-shadow: inset 0 0 0 2px rgba(var(--ink-rgb), 0.28);
   }
 }
 
@@ -239,7 +275,7 @@
 .board[data-hl] .cell[data-f],
 .board[data-hl] .cell[data-ghost] {
   opacity: 1;
-  z-index: 1;
+  z-index: 3;
 }
 
 .board[data-hl] .cell[data-ghost]:not([data-f]) {
@@ -247,7 +283,7 @@
 }
 
 .board[data-hl] .cell[data-f] .cell__tile {
-  box-shadow: 0 0 0 2px var(--card), 0 0 0 4.5px var(--accent), 0 6px 14px rgba(23, 128, 111, 0.35);
+  box-shadow: 0 0 0 2px var(--card), 0 0 0 4.5px var(--accent), 0 6px 14px rgba(var(--accent-rgb), 0.35);
 }
 
 .board[data-hl='coach'] .cell[data-f] .cell__tile {
@@ -255,8 +291,9 @@
   animation: coach-ring 1.3s ease-in-out infinite;
 }
 
-/* Ghost X on Empty effect cells: what Apply would cross out. */
-.cell[data-ghost='x'][data-s='e'] .cell__x {
+/* Ghost X on Empty effect cells: what Apply would cross out (the white X and its edge, faint). */
+.cell[data-ghost='x'][data-s='e'] .cell__x,
+.cell[data-ghost='x'][data-s='e'] .cell__xe {
   display: inline;
   opacity: 0.4;
   animation: ghost-pulse 1.2s ease-in-out infinite;
@@ -297,20 +334,38 @@
   animation: spark 620ms var(--ease-out) var(--sd, 0ms) both;
 }
 
-/* phase2b F0: inert nodes B animates (§2.2 glow, §2.9 ear flick). Invisible until A styles the glow
-   (a radial gradient of --glow, fx.win.glowScale × slot, behind the cat) and B adds .is-flick. */
+/* The solved-board glow (phase2b §1.5, §2.2): a soft radial of --glow, fx.win.glowScale × slot,
+   centred behind the cat. Invisible (opacity 0) until B's playGlow animates it (0 → 1 → 0.7).
+   --glow-scale defaults to cfg.fx.win.glowScale (a test keeps them equal); an event may tint --glow. */
 .cell__glow {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 0;
-  height: 0;
+  z-index: 1;
+  width: calc(var(--slot) * var(--glow-scale, 1.3));
+  height: calc(var(--slot) * var(--glow-scale, 1.3));
+  margin: calc(var(--slot) * var(--glow-scale, 1.3) * -0.5) 0 0 calc(var(--slot) * var(--glow-scale, 1.3) * -0.5);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--glow) 0%, var(--glow) 62%, var(--glow-0) 100%);
   opacity: 0;
   pointer-events: none;
 }
 
+/* Board cats' ear flick (phase2b §2.9): B adds .is-flick and rotates the overlay (fx.css); while it
+   shows, the idle head's own left (notched) ear hides (the cat-idle symbol reads --flick-hide). The
+   pivot is that ear's base, (27, 33.4) on the head grid (cat-parts EAR_FLICK_PIVOT), mapped into the
+   cell's 100-unit box at catScale 0.84: 8 + 27 × 0.84, 8 + 33.4 × 0.84. */
 .cell__ear {
   display: none;
+}
+
+.board .cell.is-flick .cell__ear {
+  transform-box: view-box;
+  transform-origin: 30.7px 36.1px;
+}
+
+.cell.is-flick {
+  --flick-hide: 0;
 }
 
 .cell.is-flick .cell__ear {

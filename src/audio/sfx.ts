@@ -17,8 +17,8 @@ export type SfxId =
   | 'hint_apply' // whoosh
   | 'kitty' // sparkle + pop
   | 'ui' // click
-  | 'fish_pop' // phase2b §2.2: soft "bloop" as a fish pops at its cat [F0 placeholder recipe; B designs it]
-  | 'fish_plink'; // phase2b §2.2: arrival "plink", +audio.fishPlinkStepSemitones per fish (opts.index) [F0 placeholder]
+  | 'fish_pop' // phase2b §2.2: soft water-drop "bloop" as a fish pops at its cat
+  | 'fish_plink'; // phase2b §2.2: bright arrival "plink", +audio.fishPlinkStepSemitones per fish (opts.index)
 
 export const SFX_IDS: readonly SfxId[] = [
   'mark', 'unmark', 'cat', 'region', 'mistake', 'heart_last', 'win', 'hint_open', 'hint_apply', 'kitty', 'ui', 'fish_pop', 'fish_plink',
@@ -152,11 +152,27 @@ export function recipe(id: SfxId, opts: { index?: number } = {}, rand: () => num
       return [...sparkleVoices(0, [2637, 3322, 3951], 0.05), tone('sine', 300, 0.13, 0.09, 0.4, { f1: 820, attack: 0.003 })];
     case 'ui':
       return [tone('square', 1100, 0, 0.018, 0.07, { lowpass: 3000, attack: 0.001 }), noise('highpass', 2000, 0, 0.012, 0.04)];
-    // F0 placeholders (our own simple synth voices) so the win flow can call them; B replaces them.
+    // phase2b §2.2, our own design. The pop is a rounded water-drop "bloop": a sine that bends up an
+    // octave and a half in 70 ms, a quieter sub-octave body and a tiny low-passed splash. Kept soft
+    // (peak 0.32) because three of them fall 150 ms apart.
     case 'fish_pop':
-      return [tone('sine', 420, 0, 0.09, 0.3, { f1: 760, attack: 0.004 })];
-    case 'fish_plink':
-      return [tone('sine', semis(1568, Math.max(0, opts.index ?? 0) * cfg.audio.fishPlinkStepSemitones), 0, 0.16, 0.2, { attack: 0.002 })];
+      return [
+        tone('sine', 360, 0, 0.11, 0.32, { f1: 1020, attack: 0.004 }),
+        tone('sine', 180, 0, 0.08, 0.12, { f1: 420, attack: 0.004 }),
+        noise('lowpass', 1800, 0.004, 0.035, 0.05, { q: 0.9 }),
+      ];
+    // The arrival is a bell-like "plink" on the pentatonic E ladder, each fish
+    // audio.fishPlinkStepSemitones higher (opts.index 0, 1, 2): a sine fundamental, an inharmonic
+    // partial (×2.76) for the metallic sheen, and a short high click.
+    case 'fish_plink': {
+      const f = semis(1318.5, Math.max(0, opts.index ?? 0) * cfg.audio.fishPlinkStepSemitones);
+      return [
+        tone('sine', f, 0, 0.26, 0.22, { attack: 0.002 }),
+        tone('sine', f * 2.76, 0, 0.12, 0.05, { attack: 0.002 }),
+        tone('triangle', f * 2, 0.01, 0.08, 0.04, { attack: 0.002 }),
+        noise('highpass', 5200, 0, 0.015, 0.035),
+      ];
+    }
   }
 }
 

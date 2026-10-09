@@ -1,5 +1,1327 @@
-/* Owner: B (phase2b §2.4, §2.5, §4.4, §5.5, §8.5)
-   The new screens and overlays: ranking panel, victory screen, shop sheet, rankings hub, group
-   result, event screen, the fish pill and the Home event card. Tokens only (no colour literals outside
-   tokens.css, tests/unit/ui/css-rules.spec.ts); logical properties for the inline start/end (RTL,
-   phase2b §6.5). Empty at F0. */
+/* Owner: B (phase2b §2.4, §2.5, §4.4, §5.5, §5.6, §8.5)
+   The new screens and overlays: the fish pill, the Home event card, the game screen's win-flow
+   scrim, the ranking panel, the victory screen, the shop sheet, the rankings hub, the group result,
+   the event screen, the Settings language view and the O2 swap button. Tokens only (no colour literals
+   outside tokens.css, tests/unit/ui/css-rules.spec.ts); logical properties for the inline start/end
+   (RTL, phase2b §6.5); progress fills are widths, so they start at the inline start in RTL too.
+   Motion (keyframes, durations) lives in fx.css. Browser baseline (04 §1): no flex `gap`, no `inset`,
+   no `dvh`, no `:has()`. */
+
+/* ── Fish pill (phase2b §2.5) ──────────────────────────────────────────── */
+.fish-pill {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  height: 40px;
+  padding-inline-start: 4px;
+  padding-inline-end: 14px;
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  box-shadow: var(--shadow-1);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-l);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.fish-pill[data-plus] {
+  padding-inline-end: 4px;
+}
+
+.fish-pill__main {
+  display: inline-flex;
+  align-items: center;
+}
+
+.fish-pill__icon {
+  width: 32px;
+  height: 32px;
+  margin-inline-end: 4px;
+  color: var(--ink);
+  transform-origin: 50% 70%;
+}
+
+/* The number rolls inside a clipped box (fx.css fish-roll-in / -out). */
+.fish-pill__count {
+  position: relative;
+  display: inline-block;
+  overflow: hidden;
+  height: 1.3em;
+  line-height: 1.3em;
+  font-variant-numeric: tabular-nums;
+}
+
+.fish-pill__n {
+  display: block;
+}
+
+.fish-pill__n.is-out {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.fish-pill__plus {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-inline-start: 10px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 2px 0 var(--accent-deep);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* 44 px touch target around the 32 px disc. */
+.fish-pill__plus::after {
+  content: '';
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  bottom: -6px;
+  left: -6px;
+}
+
+.fish-pill__plus:active {
+  transform: translateY(2px);
+  box-shadow: 0 0 0 var(--accent-deep);
+}
+
+.fish-pill__plus-icon {
+  width: 20px;
+  height: 20px;
+}
+
+/* The rising "+3" (fx.css fish-label-rise; reduced: a WAAPI fade in place): a chip centred on the
+   pill that rises fx.win.plusLabelRisePx. White on --accent-text is 5.71:1 (small text allowed). */
+.fish-pill__label {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+/* Reduced motion: no rise; the chip fades in and out where the rise would end, clear of the count. */
+.fish-pill__label[data-reduced] {
+  transform: translateY(var(--label-rise, -24px));
+}
+
+.fish-pill__chip {
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-text);
+  box-shadow: 0 2px 6px rgba(var(--ink-rgb), 0.25);
+  color: #fff;
+  font-weight: 600;
+  font-size: var(--fs-m);
+  line-height: 1.1;
+}
+
+/* In the game's pills row (win flow only): the row's height, centred between the two pills. */
+.fish-pill[data-in-game] {
+  height: 100%;
+  margin: 0 8px;
+}
+
+.pills[data-compact] .fish-pill {
+  font-size: var(--fs-m);
+}
+
+.pills[data-compact] .fish-pill__icon {
+  width: 26px;
+  height: 26px;
+}
+
+/* ── Game screen: the win flow's scrim (§2.2 t = 4 200) ─────────────────── */
+.game__scrim {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 5;
+  background: var(--scrim);
+}
+
+/* A modal overlay brings its own scrim (same colour): this one steps aside, so they never stack. */
+[inert] .game__scrim {
+  opacity: 0;
+}
+
+/* ── Home: the event card (§4.4) ───────────────────────────────────────── */
+.event-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 72px;
+  padding: 0;
+  padding-inline-end: 14px;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-l);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  box-shadow: 0 3px 0 var(--line-2), var(--shadow-1);
+}
+
+.event-card:active:not([aria-disabled='true']) {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--line-2), var(--shadow-1);
+}
+
+.event-card__art {
+  position: relative;
+  display: block;
+  flex: none;
+  width: 76px;
+  height: 100%;
+  overflow: hidden;
+  background: var(--accent-soft);
+}
+
+.event-card__art > * {
+  width: 100%;
+  height: 100%;
+}
+
+.event-card__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  padding-inline-start: 12px;
+  padding-bottom: 4px;
+}
+
+.event-card__title {
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-l);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.event-card__sub {
+  display: -webkit-box;
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+  line-height: 1.3;
+  -webkit-line-clamp: 2; /* "Ends in 3 d 4 h · 7 / 21 solved" may take two lines on a 320 px phone */
+  -webkit-box-orient: vertical;
+}
+
+.event-card[data-ends-soon] .event-card__sub {
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.event-card__bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--page-2);
+}
+
+.event-card__fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--accent);
+}
+
+.event-card__chev {
+  width: 20px;
+  height: 20px;
+  color: var(--ink-3);
+}
+
+.event-card[data-state='teaser'],
+.event-card[data-state='locked'] {
+  background: var(--page-2);
+  box-shadow: none;
+}
+
+.event-card[aria-disabled='true'] {
+  cursor: default;
+}
+
+.event-card[aria-disabled='true'] .event-card__chev {
+  visibility: hidden;
+}
+
+.event-card[data-state='teaser'] .event-card__bar,
+.event-card[data-state='locked'] .event-card__bar {
+  display: none;
+}
+
+/* ── Ranking panel (§2.4): a stage card on the scrim, the footer below it ── */
+/* The panel pops (fx.css); the overlay itself does not fade, so its scrim takes over from the game
+   screen's scrim without a flash. */
+.overlay[data-overlay='ranking'] {
+  animation: none;
+}
+
+.overlay__panel--stage.ranking {
+  max-width: 400px;
+  padding: 0;
+  overflow: visible;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  animation: none;
+}
+
+.ranking__card {
+  max-height: 78vh;
+  overflow-y: auto;
+  padding: 20px 16px 16px;
+  border-radius: 20px;
+  background: var(--stage);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 18px 50px rgba(0, 0, 0, 0.35);
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.overlay[data-overlay='ranking'] .ranking__title {
+  color: var(--title-on-dark);
+  font-size: 1.75rem;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.25);
+}
+
+.ranking__sub {
+  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.82);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-l);
+}
+
+/* Hidden until the tap gate opens (beats the stage's opaque gated-button rule in overlays.css). */
+.overlay[data-overlay='ranking'] .ranking__tap.btn {
+  display: flex;
+  margin: 24px auto 0;
+  background: transparent;
+  color: var(--tap-text);
+  font-size: 1.125rem;
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+
+.overlay[data-overlay='ranking'].is-ready .ranking__tap.btn {
+  opacity: 1;
+}
+
+.ranking__tap.btn:active {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ranking__tap.btn:focus-visible {
+  outline-color: var(--tap-text);
+}
+
+/* ── The rank list (shared by the panel, dark, and the hub, light) ──────── */
+.rank-list {
+  min-height: 112px;
+  margin-top: 16px;
+  color: #fff;
+}
+
+/* The FB overlay view is placed over this area (overlay mode): reserve its height. */
+.rank-list[data-kind='overlay'] {
+  height: min(440px, 46vh);
+}
+
+.rank-list__skeleton {
+  display: block;
+}
+
+.rank-list__bar {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 12px;
+  border-radius: var(--radius-m);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.rank-list__bar + .rank-list__bar {
+  margin-top: 6px;
+}
+
+.rank-list__dot {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.rank-list__line {
+  flex: 1;
+  height: 10px;
+  margin-inline-start: 12px;
+  margin-inline-end: 30%;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.rank-list__note {
+  margin-top: 12px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: var(--fs-s);
+  line-height: 1.45;
+}
+
+.rank-mine {
+  padding: 14px 12px;
+  border-radius: var(--radius-l);
+  background: rgba(255, 255, 255, 0.06);
+  border-inline-start: 4px solid var(--accent);
+}
+
+.rank-mine__rank {
+  color: #fff;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-xxl);
+}
+
+.rank-mine__score {
+  margin-top: 2px;
+  color: rgba(255, 255, 255, 0.86);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-l);
+}
+
+.rank-mine__count {
+  margin-top: 2px;
+  color: rgba(255, 255, 255, 0.66);
+  font-size: var(--fs-s);
+}
+
+.rank-list__seetop {
+  margin-top: 14px;
+}
+
+.rank-records {
+  margin: 0;
+  padding: 4px 14px;
+  border-radius: var(--radius-l);
+  background: rgba(255, 255, 255, 0.06);
+  text-align: start;
+}
+
+.rank-records__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 10px 0;
+}
+
+.rank-records__row + .rank-records__row {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.rank-records__label {
+  min-width: 0;
+  padding-inline-end: 12px;
+  color: rgba(255, 255, 255, 0.74);
+}
+
+.rank-records__value {
+  margin: 0;
+  color: #fff;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-l);
+}
+
+.rank-records__event {
+  padding: 10px 0;
+  color: #fff;
+  font-weight: 600;
+}
+
+/* Light variant (the rankings hub sheet). */
+.rank-list--light {
+  margin-top: 0;
+  color: var(--ink);
+}
+
+.rank-list--light .rank-list__bar {
+  background: var(--page-2);
+}
+
+.rank-list--light .rank-list__dot,
+.rank-list--light .rank-list__line {
+  background: rgba(var(--ink-rgb), 0.08);
+}
+
+.rank-list--light .rank-list__note {
+  color: var(--ink-2);
+}
+
+.rank-list--light .rank-mine,
+.rank-list--light .rank-records {
+  background: var(--page-2);
+}
+
+.rank-list--light .rank-mine__rank,
+.rank-list--light .rank-records__value,
+.rank-list--light .rank-records__event {
+  color: var(--ink);
+}
+
+.rank-list--light .rank-mine__score {
+  color: var(--ink);
+}
+
+.rank-list--light .rank-mine__count,
+.rank-list--light .rank-records__label {
+  color: var(--ink-2);
+}
+
+.rank-list--light .rank-records__row + .rank-records__row {
+  border-top-color: var(--line);
+}
+
+/* ── Victory screen (§2.5): full screen on the page colour ──────────────── */
+.overlay[data-overlay='victory'] {
+  justify-content: flex-start;
+  padding: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: var(--page);
+  -webkit-overflow-scrolling: touch;
+}
+
+.victory {
+  position: relative;
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: calc(10px + var(--safe-top)) 16px calc(16px + var(--safe-bottom));
+  text-align: center;
+  outline: none;
+}
+
+/* FB banner band (phase2b §3.2): the buttons stay ads.banner.buttonClearancePx above the reserve. */
+.victory[data-banner] {
+  padding-bottom: calc(var(--banner-reserve, 58px) + var(--banner-clear, 16px) + var(--safe-bottom));
+}
+
+.victory__top {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 48px;
+}
+
+.victory__col {
+  position: relative;
+  z-index: 0; /* a stacking context: the rays (z −1) paint behind every line of text */
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.victory__praise {
+  color: var(--accent-title);
+  font-size: 2.5rem;
+  line-height: 1.1;
+  text-wrap: balance;
+}
+
+.victory__stage {
+  position: relative;
+  width: 210px;
+  height: 210px;
+  margin: 6px 0 10px;
+}
+
+/* 12 rays (30° period: 15° ray, 15° gap), softened toward the edge. */
+.victory__rays {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 440px;
+  height: 440px;
+  margin: -220px 0 0 -220px;
+  border-radius: 50%;
+  background: repeating-conic-gradient(from 0deg, var(--accent-soft) 0deg 15deg, transparent 15deg 30deg);
+  -webkit-mask-image: radial-gradient(closest-side, rgba(0, 0, 0, 1) 30%, rgba(0, 0, 0, 0) 100%);
+  mask-image: radial-gradient(closest-side, rgba(0, 0, 0, 1) 30%, rgba(0, 0, 0, 0) 100%);
+  z-index: -1;
+  pointer-events: none;
+}
+
+.victory__art {
+  position: relative;
+}
+
+.victory__art > svg {
+  width: 210px;
+  height: 210px;
+}
+
+.victory__sub {
+  color: var(--ink-2);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.125rem;
+}
+
+.victory__daily {
+  margin-top: 6px;
+}
+
+.victory__time {
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-xxl);
+}
+
+.victory__stats {
+  margin-top: 2px;
+  color: var(--ink-2);
+}
+
+.victory__next {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-weight: 600;
+  font-size: var(--fs-s);
+}
+
+.victory__reward {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 14px;
+  padding: 6px 16px;
+  padding-inline-start: 10px;
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  box-shadow: var(--shadow-1);
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+.victory__fishes {
+  display: inline-flex;
+  align-items: center;
+}
+
+.victory__fish {
+  width: 30px;
+  height: 30px;
+  color: var(--ink);
+}
+
+.victory__fish + .victory__fish {
+  margin-inline-start: -9px;
+}
+
+.victory__plus {
+  margin-inline-start: 8px;
+  margin-inline-end: 12px;
+  color: var(--accent-text);
+  font-size: var(--fs-xl);
+}
+
+.victory__total {
+  padding-inline-start: 12px;
+  border-inline-start: 1px solid var(--line-2);
+  color: var(--ink-2);
+  font-size: var(--fs-m);
+}
+
+.victory__chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.victory__chip {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  margin: 3px;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-s);
+}
+
+.victory__chip--bonus {
+  background: var(--hard);
+  color: #fff;
+}
+
+.victory__chip--bonus[data-kind='daily'] {
+  background: var(--accent-text);
+}
+
+.victory__chip--points {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.victory__event {
+  width: 100%;
+  max-width: 320px;
+  margin-top: 12px;
+}
+
+.victory__event-label {
+  color: var(--ink-2);
+  font-weight: 600;
+  font-size: var(--fs-s);
+}
+
+.victory__bar {
+  height: 10px;
+  margin-top: 6px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: var(--page-2);
+  box-shadow: inset 0 1px 2px rgba(var(--ink-rgb), 0.1);
+}
+
+.victory__bar-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 400ms var(--ease-out);
+}
+
+.victory--bar-static .victory__bar-fill {
+  transition: none;
+}
+
+.victory__milestone {
+  margin-top: 8px;
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.victory__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  margin-top: 20px;
+}
+
+/* The wide orange "Level N" (§2.5): column − 32 px, 64 px tall, a 24 px label. */
+.victory__primary.btn {
+  width: 100%;
+  min-height: 64px;
+  font-size: 1.5rem;
+}
+
+.victory__home {
+  margin-top: 8px;
+}
+
+/* ── Shop sheet (§8.5) ─────────────────────────────────────────────────── */
+.shop {
+  text-align: start;
+}
+
+.shop .overlay__head {
+  margin-bottom: 4px;
+}
+
+.shop__balance.fish-pill {
+  height: 36px;
+  margin-inline-end: 8px;
+  background: var(--page-2);
+  box-shadow: none;
+}
+
+.shop__balance .fish-pill__icon {
+  width: 28px;
+  height: 28px;
+}
+
+.shop__section {
+  margin-top: 12px;
+}
+
+.shop__heading {
+  margin-bottom: 4px;
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.shop__row {
+  display: flex;
+  align-items: center;
+  min-height: 64px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+
+.shop__icon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin-inline-end: 12px;
+  border-radius: 14px;
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+}
+
+.shop__icon .icon {
+  width: 28px;
+  height: 28px;
+}
+
+.shop__row[data-item='hint'] .shop__icon,
+.shop__row[data-item='hints_15'] .shop__icon {
+  background: var(--gold-soft);
+  color: var(--gold-deep);
+  --icon-fill: var(--gold);
+}
+
+.shop__row[data-item='fish_250'] .shop__icon,
+.shop__row[data-item='fish_900'] .shop__icon {
+  color: var(--ink);
+}
+
+.shop__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.shop__name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-l);
+}
+
+.shop__desc {
+  margin-top: 1px;
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+}
+
+.shop__action.btn {
+  flex: none;
+  min-height: 44px;
+  margin-inline-start: 10px;
+  padding: 0 14px;
+  font-size: var(--fs-m);
+}
+
+.shop__price {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px 2px 2px;
+  border-radius: var(--radius-pill);
+  background: var(--page-2);
+}
+
+.shop__price-icon {
+  width: 22px;
+  height: 22px;
+  color: var(--ink);
+}
+
+.shop__cost {
+  color: var(--accent-text);
+}
+
+.shop__owned {
+  flex: none;
+  margin-inline-start: 10px;
+  color: var(--accent-text);
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+.shop__note,
+.shop__state {
+  margin-top: 6px;
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+}
+
+.shop__retry.btn {
+  margin-top: 10px;
+  margin-inline-start: 0;
+}
+
+/* ── Rankings hub (§5.5) ───────────────────────────────────────────────── */
+.rank-hub {
+  text-align: start;
+}
+
+.rank-hub__tabs {
+  display: flex;
+  margin: 2px 0 14px;
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--page-2);
+}
+
+.rank-hub__tab {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 8px;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink-2);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-s);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.rank-hub__tab[aria-selected='true'] {
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: var(--shadow-1);
+}
+
+.rank-hub__panel {
+  outline: none;
+}
+
+.rank-hub__heading {
+  margin-bottom: 10px;
+  color: var(--ink);
+  font-size: var(--fs-l);
+}
+
+.rank-groups__body {
+  color: var(--ink-2);
+  line-height: 1.45;
+}
+
+.rank-groups__active {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-weight: 600;
+  font-size: var(--fs-s);
+}
+
+.rank-groups__start {
+  margin-top: 16px;
+}
+
+/* ── Group result (§5.6) ───────────────────────────────────────────────── */
+.group-result__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 12px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+}
+
+.group-result__icon .icon {
+  width: 40px;
+  height: 40px;
+}
+
+/* ── Event screen (§4.4) ───────────────────────────────────────────────── */
+.screen--event {
+  background-color: var(--page);
+  background-image: var(--page-art, none);
+}
+
+.screen--event > :first-child {
+  width: 100%;
+  flex: none;
+}
+
+.event__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  width: 100%;
+  max-width: 512px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 16px 16px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.event__header {
+  position: relative;
+  flex: none;
+  overflow: hidden;
+  padding: 0 16px 16px;
+  border-radius: var(--radius-xl);
+  background: var(--card);
+  box-shadow: var(--shadow-1);
+  text-align: center;
+}
+
+.event__art {
+  height: 112px;
+  margin: 0 -16px 10px;
+  overflow: hidden;
+  background: var(--accent-soft);
+}
+
+.event__art > * {
+  width: 100%;
+  height: 100%;
+}
+
+.event__name {
+  color: var(--accent-title);
+  font-size: 2rem;
+  line-height: 1.1;
+}
+
+.event__tagline {
+  margin-top: 4px;
+  color: var(--ink-2);
+}
+
+.event__ends {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--page-2);
+  color: var(--ink-2);
+  font-weight: 600;
+  font-size: var(--fs-s);
+}
+
+.event__ends[data-soon] {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.event__track {
+  flex: none;
+  margin-top: 14px;
+  padding: 14px 16px 12px;
+  border-radius: var(--radius-l);
+  background: var(--card);
+  box-shadow: var(--shadow-1);
+}
+
+.event__track-title {
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* The rail and the node row share 18 px side margins, so a node's dot sits over its point on the rail. */
+.event__rail {
+  height: 8px;
+  margin: 28px 18px 0;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--page-2);
+}
+
+.event__rail-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.event__nodes {
+  display: flex;
+  margin: -21px 18px 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Each node spans the rail from the previous milestone (--seg of the whole); its dot ends the span. */
+.event__node {
+  display: flex;
+  flex: 0 0 calc(var(--seg, 0.2) * 100%);
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 0;
+}
+
+.event__node-dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  margin-inline-end: -17px;
+  border: 2px solid var(--line-2);
+  border-radius: 50%;
+  background: var(--card);
+  color: var(--ink-2);
+}
+
+.event__node-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.event__node[data-reached] .event__node-dot {
+  border-color: var(--accent-deep);
+  background: var(--accent);
+  color: #fff;
+  --icon-fill: rgba(255, 255, 255, 0.3);
+}
+
+.event__node-at {
+  width: 34px;
+  margin-top: 2px;
+  margin-inline-end: -17px;
+  color: var(--ink-2);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-s);
+  text-align: center;
+}
+
+.event__progress {
+  margin-top: 8px;
+  color: var(--ink-2);
+  font-weight: 600;
+  font-size: var(--fs-s);
+  text-align: center;
+}
+
+.event__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  margin-top: auto;
+  padding-top: 16px;
+}
+
+.event__actions > * + * {
+  margin-top: 12px;
+}
+
+.event__actions > .event__home {
+  align-self: center;
+  margin-top: 4px;
+}
+
+.event__play.btn {
+  font-size: 1.5rem;
+}
+
+.event__done {
+  color: var(--accent-text);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-l);
+  text-align: center;
+}
+
+/* ── Settings: value on a link row, the language list (§6.8) ───────────── */
+.settings-row__value {
+  margin-inline-end: 6px;
+  color: var(--ink-2);
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: var(--fs-m);
+  white-space: nowrap;
+}
+
+.lang-list {
+  max-height: 60vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.lang-opt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 4px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-l);
+  text-align: start;
+  cursor: pointer;
+}
+
+.lang-list > .lang-opt:first-child {
+  border-top: 0;
+}
+
+.lang-opt__check {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-inline-start: 12px;
+  border: 2px solid var(--line-2);
+  border-radius: 50%;
+  transition: border-width 120ms ease;
+}
+
+.lang-opt[aria-checked='true'] .lang-opt__check {
+  border: 7px solid var(--accent);
+}
+
+.lang-opt:focus-visible {
+  border-radius: var(--radius-m);
+  outline-offset: -2px;
+}
+
+/* ── O2: the swap button (§2.8) ────────────────────────────────────────── */
+.rewarded__swap .btn__icon {
+  width: 1.6em;
+  height: 1.6em;
+}
+
+/* ── Short screens (compact, < 640 px high, 02 §19) ────────────────────── */
+@media (max-height: 639px) {
+  /* Home with the event card: a smaller mascot and no tagline keep the wordmark clear of the top bar. */
+  .screen--home[data-event] .home__tagline {
+    display: none;
+  }
+
+  .screen--home[data-event] .home__mascot {
+    margin-top: 4px;
+  }
+
+  .screen--home[data-event] .home__mascot > svg {
+    width: 112px;
+    height: 112px;
+  }
+
+  .victory__praise {
+    font-size: 2rem;
+  }
+
+  .victory__stage,
+  .victory__art > svg {
+    width: 150px;
+    height: 150px;
+  }
+
+  .victory__rays {
+    width: 320px;
+    height: 320px;
+    margin: -160px 0 0 -160px;
+  }
+
+  .victory__actions {
+    margin-top: 14px;
+  }
+
+  .event__art {
+    height: 84px;
+  }
+
+  .event__name {
+    font-size: 1.625rem;
+  }
+}
+
+/* Narrow phones (320–359 px). */
+@media (max-width: 359px) {
+  .rank-hub__tab {
+    padding: 0 6px;
+    font-size: var(--fs-xs);
+  }
+
+  .shop__icon {
+    width: 36px;
+    height: 36px;
+    margin-inline-end: 10px;
+  }
+
+  .shop__icon .icon {
+    width: 24px;
+    height: 24px;
+  }
+
+  .shop__action.btn {
+    padding: 0 10px;
+  }
+
+  .fish-pill {
+    font-size: var(--fs-m);
+  }
+
+  .victory__praise {
+    font-size: 2rem;
+  }
+
+  .shop__name {
+    font-size: var(--fs-m);
+  }
+}

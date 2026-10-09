@@ -2,14 +2,16 @@
 // Cell DOM for the board (04 §5.3, 02 §17.4, §18): one <button class="cell"> per cell holding a
 // coloured tile (inset per the even gutters, phase2b §1.5) and one inline SVG with the X strokes, plus
 // the cat, blink lid and pattern glyph <use>s created on demand. State lives in data-s (e|m|c|w|g).
-// Phase 2b F0 (phase2b §1.10, §12.3 A → B): two inert nodes B animates — `span.cell__glow` behind
-// the cat (every cell; the solved-board glow) and `use.cell__ear` (href #cat-ear-flick) in the cat
-// group (every cat cell; shown only on .cell.is-flick). A adds the X edge underlay (.cell__xe, --xe)
-// and styles both nodes.
+// The X (phase2b §1.5): two white strokes (.cell__x) over two edge strokes (.cell__xe) in --xe, the
+// tile colour mixed 70 % toward --ink (xEdgeColor), set per cell. The edge carries WCAG 1.4.11.
+// Two inert nodes B animates (phase2b §12.3 A → B), styled in board.css: `span.cell__glow` behind the
+// cat (every cell; the solved-board glow) and `use.cell__ear` (href #cat-ear-flick) in the cat group
+// (every cat cell; shown only on .cell.is-flick).
 import { cfg } from '../../app/config';
 import type { CellIndex } from '../../engine/types';
 import { CellState } from '../../game/types';
 import { colorName, glyphName, t } from '../../i18n';
+import { xEdgeColor } from '../art/palette';
 import type { CatMood } from './board-types';
 import type { CellInsets } from './layout';
 
@@ -76,6 +78,7 @@ export function buildCell(cell: CellIndex, paletteIndex: number, insets: CellIns
   el.dataset.s = 'e';
   const st = el.style;
   st.setProperty('--c', `var(--r${paletteIndex})`);
+  st.setProperty('--xe', xEdgeColor(paletteIndex));
   st.setProperty('--it', `${insets.top}px`);
   st.setProperty('--ir', `${insets.right}px`);
   st.setProperty('--ib', `${insets.bottom}px`);
@@ -92,13 +95,19 @@ export function buildCell(cell: CellIndex, paletteIndex: number, insets: CellIns
   svg.setAttribute('viewBox', '0 0 100 100');
   svg.setAttribute('aria-hidden', 'true');
   svg.setAttribute('focusable', 'false');
-  const a = Math.round(((1 - cfg.layout.markScale) / 2) * 100); // 52 % of the cell → 24..76
+  const a = Math.round(((1 - cfg.layout.markScale) / 2) * 100); // 54 % of the cell → 23..77
   const b = 100 - a;
-  for (const d of [`M${a} ${a} ${b} ${b}`, `M${b} ${a} ${a} ${b}`]) {
-    const p = doc.createElementNS(SVG_NS, 'path');
-    p.setAttribute('class', 'cell__x');
-    p.setAttribute('d', d);
-    svg.appendChild(p);
+  const strokes = [`M${a} ${a} ${b} ${b}`, `M${b} ${a} ${a} ${b}`];
+  // The edge underlay first (both strokes), then the white X: `.cell__x + .cell__x` stays the second stroke.
+  const edgeW = String(Math.round((cfg.layout.markStrokeFraction + 2 * cfg.layout.markEdgeFraction) * 1000) / 10); // 12 + 2 × 4 = 20
+  for (const cls of ['cell__xe', 'cell__x']) {
+    for (const d of strokes) {
+      const p = doc.createElementNS(SVG_NS, 'path');
+      p.setAttribute('class', cls);
+      p.setAttribute('d', d);
+      if (cls === 'cell__xe') p.setAttribute('stroke-width', edgeW);
+      svg.appendChild(p);
+    }
   }
   // phase2b §2.2 glow node (inert until B animates it; A styles it in board.css).
   const glow = doc.createElement('span');
@@ -119,7 +128,7 @@ function makeUse(cls: string, href: string, box: readonly [number, number, numbe
   return use;
 }
 
-/** The cat <use> (0.82 × cell, 02 §17.3) plus its blink lid; created the first time a cell needs a cat. */
+/** The cat <use> (0.84 × cell, phase2b §1.5) plus its blink lid and ear-flick overlay; created the first time a cell needs a cat. */
 export function ensureCat(refs: CellRefs, mood: CatMood): SVGUseElement {
   if (refs.cat) return refs.cat;
   const size = Math.round(cfg.layout.catScale * 100);

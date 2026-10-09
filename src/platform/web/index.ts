@@ -9,7 +9,7 @@ import { canVibrate, createVibrateHaptics } from '../shared/haptics';
 import { createSystemTimers } from '../shared/timers';
 import type { AdResult, Capabilities, ExternalSave, PlatformAdapter, PlatformAds, PlatformTimers } from '../types';
 import { createLocalStore } from './local-storage';
-import { createMockAds, readMockAdMode, type MockAdMode } from './mock-ads';
+import { createMockAds, createMockBanner, readMockAdMode, type MockAdMode } from './mock-ads';
 
 export interface WebPlatformOptions {
   /** location.search, for ?ads= (dev/e2e only). */
@@ -31,7 +31,10 @@ type MockFactory = (search: string, deps: { doc: Document; timers: PlatformTimer
 
 const mockFactory: MockFactory = (search, deps) => {
   const mode = readMockAdMode(search);
-  return { mode, ads: createMockAds(mode, deps) };
+  const ads = createMockAds(mode, deps);
+  // phase2b §3.3: the mock banner follows the same ?ads= mode (absent when 'unsupported').
+  const banner = createMockBanner(mode, deps);
+  return { mode, ads: banner ? { ...ads, banner } : ads };
 };
 
 const UNSUPPORTED: AdResult = Object.freeze({ ok: false, reason: 'unsupported' });
@@ -71,7 +74,7 @@ function buildWebPlatform(opts: WebPlatformOptions, makeMock: MockFactory | null
   const caps: Capabilities = Object.freeze({
     interstitial: adsOn,
     rewarded: adsOn,
-    banner: false,
+    banner: adsOn && mock?.ads.banner !== undefined, // dev/e2e mock banner only (phase2b §3.3)
     cloudSave: false,
     leaderboards: false,
     share: false,

@@ -1,12 +1,25 @@
 // Owner: A (Phase 2b; was ui-board)
-// Palette validation (02 §17.2, §18): pairwise CIEDE2000 ≥ 10, simulated deuteranopia/protanopia/
-// tritanopia ΔE report, --ink X glyph, cat outline, wrong-X and colour-pattern glyphs ≥ 3:1 against
-// every tile (normal and faded), UI text pairs ≥ 4.5:1 (WCAG 1.4.3) and UI glyphs ≥ 3:1, and
-// PALETTE_DE00 matches PALETTE.
+// Palette validation for the one token set of the Classic look (02 §17.2, §18; phase2b §1.4, §1.5,
+// §1.12): pairwise CIEDE2000 ≥ 10, simulated deuteranopia/protanopia/tritanopia ΔE report; on every
+// tile, normal and faded: the white X's edge vs the tile ≥ 3 AND white vs that edge ≥ 3, Tux's outline
+// and fur ≥ 3, the wrong X ≥ 3, the colour-pattern glyph ≥ 3; the UI pairs of §1.4 at 4.5:1 (WCAG
+// 1.4.3) or 3:1 for the listed large-text and graphic pairs; every event theme (§4.3): the text pairs on
+// its page and on its pattern's motif colours, and the faded-tile checks with its page; PALETTE_DE00
+// matches PALETTE.
 // Run: npx tsx scripts/palette-check.ts [--quiet]. Exits non-zero when a hard check fails.
 import { pathToFileURL } from 'node:url';
 import { cfg } from '../src/app/config';
-import { mixHex, PALETTE, PALETTE_DE00, PALETTE_SIZE, TOKENS } from '../src/ui/art/palette';
+import {
+  CAT_COLORS,
+  EVENT_PATTERN_COLORS,
+  EVENT_THEME_TOKENS,
+  mixHex,
+  PALETTE,
+  PALETTE_DE00,
+  PALETTE_SIZE,
+  TOKENS,
+  xEdgeColor,
+} from '../src/ui/art/palette';
 
 export type Lab = readonly [L: number, a: number, b: number];
 export type CvdKind = 'deuteranopia' | 'protanopia' | 'tritanopia';
@@ -156,6 +169,13 @@ export function over(fg: string, bg: string, alpha: number): string {
   return mixHex(bg, fg, alpha);
 }
 
+/** An `rgba(r,g,b,a)` token composited over `bg`. */
+export function rgbaOver(rgba: string, bg: string): string {
+  const m = /rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)/.exec(rgba);
+  if (!m) throw new Error(`bad rgba colour: ${rgba}`);
+  return over(toHex([Number(m[1]), Number(m[2]), Number(m[3])]), bg, Number(m[4]));
+}
+
 export interface PairResult {
   readonly i: number;
   readonly j: number;
@@ -184,26 +204,42 @@ export interface ContrastRow {
   readonly tile: number;
   readonly faded: boolean;
   readonly ratio: number;
+  /** The page the faded tile was mixed toward (an event id), or undefined for --page. */
+  readonly page?: string;
 }
 
 /**
- * Glyph-vs-tile contrast for the X mark, cat outline, wrong-X (and its ring, kept outside the fade
- * veil by board.css) and the colour-pattern glyph (02 §18 non-colour cue), on normal and faded tiles.
+ * Glyph-vs-tile contrast on every tile, normal and faded (faded = mixed toward `page` by
+ * fx.regionFadeMix, as the board's veil does): the white X carries WCAG 1.4.11 through its edge, so
+ * both the edge vs the tile and the white vs the edge must reach 3:1 (phase2b §1.5); Tux's outline and
+ * fur, the wrong X (its ring stays outside the veil, board.css) and the colour-pattern glyph (02 §18).
  */
-export function glyphContrast(): ContrastRow[] {
+export function glyphContrast(page: string = TOKENS.page, pageName?: string): ContrastRow[] {
   const rows: ContrastRow[] = [];
   const L = cfg.layout;
   PALETTE.forEach((tileHex, tile) => {
+    const edge = xEdgeColor(tile);
     for (const faded of [false, true]) {
-      const bg = faded ? mixHex(tileHex, TOKENS.page, cfg.fx.regionFadeMix) : tileHex;
-      rows.push({ what: 'mark X (--ink @ markOpacity)', tile, faded, ratio: contrastRatio(over(TOKENS.ink, bg, L.markOpacity), bg) });
-      rows.push({ what: 'cat outline (--ink)', tile, faded, ratio: contrastRatio(TOKENS.ink, bg) });
-      rows.push({ what: 'wrong X (--wrong)', tile, faded, ratio: contrastRatio(TOKENS.wrong, bg) });
+      const bg = faded ? mixHex(tileHex, page, cfg.fx.regionFadeMix) : tileHex;
+      const row = (what: string, ratio: number): void => {
+        rows.push(pageName ? { what, tile, faded, ratio, page: pageName } : { what, tile, faded, ratio });
+      };
+      row('X edge (--xe) vs tile', contrastRatio(edge, bg));
+      row('white X vs its edge', contrastRatio('#FFFFFF', edge));
+      row('cat outline', contrastRatio(CAT_COLORS.outline, bg));
+      row('cat fur', contrastRatio(CAT_COLORS.fur, bg));
+      row('wrong X (--wrong)', contrastRatio(TOKENS.wrong, bg));
       const patOp = faded ? L.patternOpacityDone : L.patternOpacity;
-      rows.push({ what: 'pattern glyph (--ink @ patternOpacity)', tile, faded, ratio: contrastRatio(over(TOKENS.ink, bg, patOp), bg) });
+      row('pattern glyph (--ink @ patternOpacity)', contrastRatio(over(TOKENS.ink, bg, patOp), bg));
     }
   });
   return rows;
+}
+
+/** How plain white fares on the tiles (informational: why the X needs its edge, phase2b §1.5). */
+export function whiteOnTiles(): { readonly min: number; readonly max: number } {
+  const r = PALETTE.map((t) => contrastRatio('#FFFFFF', t));
+  return { min: Math.min(...r), max: Math.max(...r) };
 }
 
 export interface UiContrastRow {
@@ -215,26 +251,76 @@ export interface UiContrastRow {
   readonly min: number;
 }
 
-/** UI colour pairs that carry text or meaning (02 §17.2 tokens after the Phase 2 contrast pass). */
+/**
+ * UI colour pairs that carry text or meaning (phase2b §1.4). "white on --accent" is a large-text pair
+ * (min 3), valid only because primary-button labels are ≥ 1.5rem (base.css; css-rules.spec.ts asserts it).
+ */
 export function uiContrast(): UiContrastRow[] {
   const white = '#FFFFFF';
   const T = TOKENS;
+  const scrimOnPage = rgbaOver(T.scrim, T.page);
   const pairs: readonly (readonly [what: string, fg: string, bg: string, min: number])[] = [
-    ['primary button label (white on --accent)', white, T.accent, MIN_TEXT_CONTRAST],
-    ['tool count badge (white on --accent)', white, T.accent, MIN_TEXT_CONTRAST],
-    ['fail "+1" badge (white on --accent-deep)', white, T['accent-deep'], MIN_TEXT_CONTRAST],
-    ['empty tool badge (white on --ink-2)', white, T['ink-2'], MIN_TEXT_CONTRAST],
+    ['body text (--ink on --page)', T.ink, T.page, MIN_TEXT_CONTRAST],
+    ['body text (--ink on --page-2)', T.ink, T['page-2'], MIN_TEXT_CONTRAST],
     ['secondary text (--ink-2 on --page)', T['ink-2'], T.page, MIN_TEXT_CONTRAST],
     ['secondary text (--ink-2 on --page-2)', T['ink-2'], T['page-2'], MIN_TEXT_CONTRAST],
     ['secondary text (--ink-2 on --card)', T['ink-2'], T.card, MIN_TEXT_CONTRAST],
-    ['accent text (--accent-deep on --card)', T['accent-deep'], T.card, MIN_TEXT_CONTRAST],
+    ['primary button label, large text (white on --accent)', white, T.accent, MIN_CONTRAST],
+    ['accent as a graphic (--accent on --card)', T.accent, T.card, MIN_CONTRAST],
+    ['kitty tool icon (--accent on --card)', T.accent, T.card, MIN_CONTRAST],
+    ['large title (--accent-title on --page)', T['accent-title'], T.page, MIN_CONTRAST],
+    ['large title (--accent-title on --card)', T['accent-title'], T.card, MIN_CONTRAST],
+    ['accent text (--accent-text on --page)', T['accent-text'], T.page, MIN_TEXT_CONTRAST],
+    ['accent text (--accent-text on --page-2)', T['accent-text'], T['page-2'], MIN_TEXT_CONTRAST],
+    ['accent text (--accent-text on --card)', T['accent-text'], T.card, MIN_TEXT_CONTRAST],
+    ['count badge (white on --accent-text)', white, T['accent-text'], MIN_TEXT_CONTRAST],
+    ['focus ring (--focus on --page)', T.focus, T.page, MIN_CONTRAST],
+    ['focus ring (--focus on --card)', T.focus, T.card, MIN_CONTRAST],
+    ['ranking title, large text (--title-on-dark on --stage)', T['title-on-dark'], T.stage, MIN_CONTRAST],
+    ['stage text (white on --stage)', white, T.stage, MIN_TEXT_CONTRAST],
+    ['scrim text (white on --scrim over --page)', white, scrimOnPage, MIN_TEXT_CONTRAST],
+    ['"Tap to keep going" (--tap-text on --scrim over --page)', T['tap-text'], scrimOnPage, MIN_TEXT_CONTRAST],
+    ['Hard badge (white on --hard)', white, T.hard, MIN_TEXT_CONTRAST],
+    ['empty tool badge (white on --ink-2)', white, T['ink-2'], MIN_TEXT_CONTRAST],
+    ['free tool badge (--ink on --gold)', T.ink, T.gold, MIN_TEXT_CONTRAST],
     ['"In progress" (--amber-text on --card)', T['amber-text'], T.card, MIN_TEXT_CONTRAST],
-    ['body text (--ink on --page-2)', T.ink, T['page-2'], MIN_TEXT_CONTRAST],
-    ['focus ring (--accent on --card)', T.accent, T.card, MIN_CONTRAST],
-    ['focus ring (--accent on --page)', T.accent, T.page, MIN_CONTRAST],
-    ['wordmark, large text (--accent on --page)', T.accent, T.page, MIN_CONTRAST],
+    ['fish outline (--ink on --fish)', T.ink, T.fish, MIN_CONTRAST],
   ];
   return pairs.map(([what, fg, bg, min]) => ({ what, fg, bg, min, ratio: contrastRatio(fg, bg) }));
+}
+
+/**
+ * Every event theme (phase2b §1.12, §4.3): the text pairs re-checked on the event page and on each of
+ * its pattern's motif colours, the focus ring on the page, and the faded-tile glyph checks with the
+ * event page.
+ */
+export function eventContrast(): { readonly ui: UiContrastRow[]; readonly glyphs: ContrastRow[] } {
+  const T = TOKENS;
+  const ui: UiContrastRow[] = [];
+  const glyphs: ContrastRow[] = [];
+  const artOf: Readonly<Record<string, keyof typeof EVENT_PATTERN_COLORS>> = {
+    'lantern-walk-2026': 'lanterns',
+    'snow-paws-2026': 'snowflakes',
+    'yarn-hearts-2027': 'yarn',
+  };
+  for (const [id, theme] of Object.entries(EVENT_THEME_TOKENS)) {
+    const art = artOf[id];
+    const motifs = art ? [EVENT_PATTERN_COLORS[art].a, EVENT_PATTERN_COLORS[art].b] : [];
+    const surfaces: readonly (readonly [string, string])[] = [[`${id} page`, theme.page], ...motifs.map((m, k) => [`${id} motif ${k ? 'b' : 'a'}`, m] as const)];
+    for (const [where, bg] of surfaces) {
+      const add = (what: string, fg: string, min: number): void => {
+        ui.push({ what: `${what} on ${where}`, fg, bg, min, ratio: contrastRatio(fg, bg) });
+      };
+      add('--ink', T.ink, MIN_TEXT_CONTRAST);
+      add('--ink-2', T['ink-2'], MIN_TEXT_CONTRAST);
+      add('--accent-text', T['accent-text'], MIN_TEXT_CONTRAST);
+      add('--accent-title (large)', T['accent-title'], MIN_CONTRAST);
+      add('focus ring', T.focus, MIN_CONTRAST);
+    }
+    ui.push({ what: `board card (--ink-2 on ${id} card)`, fg: T['ink-2'], bg: theme.boardCard, min: MIN_TEXT_CONTRAST, ratio: contrastRatio(T['ink-2'], theme.boardCard) });
+    glyphs.push(...glyphContrast(theme.page, id).filter((r) => r.faded));
+  }
+  return { ui, glyphs };
 }
 
 const fmt = (v: number): string => v.toFixed(2);
@@ -270,21 +356,27 @@ export function main(argv: readonly string[]): void {
     const low = sim.filter((q) => q.de < MIN_DE00);
     log(`${kind.padEnd(13)} min ΔE00 ${fmt((sim[0] as PairResult).de)}; ${low.length} pair(s) < ${MIN_DE00}${low.length ? `: ${low.map((q) => `${pairName(q)} ${fmt(q.de)}`).join(', ')}` : ''}`);
   }
-  log('  (pairs below the threshold rely on region-aware gaps and the Colour patterns glyphs)');
+  log('  (pairs below the threshold rely on the Colour patterns glyphs, phase2b §7)');
 
   // 4. Non-text contrast of the glyphs on every tile, normal and faded (WCAG 1.4.11).
-  const rows = glyphContrast();
+  const white = whiteOnTiles();
+  log(`plain white on the tiles ${fmt(white.min)}–${fmt(white.max)}:1 (why the X carries an edge)`);
+  const events = eventContrast();
+  const rows = [...glyphContrast(), ...events.glyphs];
   const byWhat = new Map<string, ContrastRow>();
   for (const r of rows) {
     const cur = byWhat.get(r.what);
     if (!cur || r.ratio < cur.ratio) byWhat.set(r.what, r);
-    if (r.ratio < MIN_CONTRAST) failures.push(`${r.what} on ${NAMES[r.tile]}${r.faded ? ' (faded)' : ''}: ${fmt(r.ratio)}:1 < ${MIN_CONTRAST}:1`);
+    const where = `${NAMES[r.tile]}${r.faded ? ` (faded${r.page ? ` on ${r.page}` : ''})` : ''}`;
+    if (r.ratio < MIN_CONTRAST) failures.push(`${r.what} on ${where}: ${fmt(r.ratio)}:1 < ${MIN_CONTRAST}:1`);
   }
-  for (const [what, r] of byWhat) log(`${what.padEnd(30)} min ${fmt(r.ratio)}:1 on ${NAMES[r.tile]}${r.faded ? ' (faded)' : ''}`);
+  for (const [what, r] of byWhat) {
+    log(`${what.padEnd(40)} min ${fmt(r.ratio)}:1 on ${NAMES[r.tile]}${r.faded ? ` (faded${r.page ? ` on ${r.page}` : ''})` : ''}`);
+  }
 
-  // 5. UI text (WCAG 1.4.3, 4.5:1) and UI glyphs / large text (3:1).
-  for (const r of uiContrast()) {
-    log(`${r.what.padEnd(44)} ${fmt(r.ratio)}:1 (min ${r.min})`);
+  // 5. UI text (WCAG 1.4.3, 4.5:1) and UI glyphs / large text (3:1), then the event themes.
+  for (const r of [...uiContrast(), ...events.ui]) {
+    log(`${r.what.padEnd(58)} ${fmt(r.ratio)}:1 (min ${r.min})`);
     if (r.ratio < r.min) failures.push(`${r.what}: ${fmt(r.ratio)}:1 < ${r.min}:1`);
   }
 

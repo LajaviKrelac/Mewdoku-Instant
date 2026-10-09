@@ -1,23 +1,107 @@
 /* Owner: B (Phase 2b; was ui-board)
-   Keyframes (drop, draw-in, crack, confetti) and reduced-motion overrides (02 §17.5).
-   Only transform and opacity are animated (04 §5.3), plus stroke-dashoffset for the X draw-in. */
+   Keyframes (drop, draw-in, heart break, confetti, board entry, idle loops, the win-flow fish) and
+   reduced-motion overrides (02 §17.5, phase2b §2.2, §2.7, §2.9). Only transform and opacity are
+   animated (04 §5.3), plus stroke-dashoffset for the X draw-in and the heart's crack line.
+   Durations that JS also reads come from cfg through custom properties set by the components
+   (--entry-*, --breathe-*, --flick-ms, --t-break, --bump-ms, --label-ms, --rays-ms, --pop-ms, …);
+   keyframe percentages, angles and scales are CSS-only constants (phase2b §0.4).
+   Reduced motion: the universal rule at the end cuts CSS animations to 1 ms, so every reduced
+   variant that must still be seen (board fade, "+3" label, ranking and victory fades) runs on WAAPI. */
 
-/* ── Board ─────────────────────────────────────────────────────────────── */
-.board.fx-entry .cell__tile,
-.board.fx-entry .cell__g {
-  animation: tile-in var(--entry-ms, 160ms) var(--ease-out) both;
-  animation-delay: calc(var(--row, 0) * var(--entry-stagger, 8ms));
+/* ── Board entry (phase2b §2.9) ────────────────────────────────────────────
+   The card rises --entry-rise and fades in over --entry-card-ms; tile (r, c) scales 0.6 → 1.04 → 1
+   over --entry-ms, starting at --entry-start + (r + c) × --entry-stagger (a diagonal wave). */
+.board.fx-entry {
+  animation: board-rise var(--entry-card-ms, 250ms) var(--ease-out) both;
 }
 
-@keyframes tile-in {
+.board.fx-entry .cell__tile,
+.board.fx-entry .cell__g {
+  animation: tile-wave var(--entry-ms, 220ms) var(--ease-out) both;
+  animation-delay: calc(var(--entry-start, 80ms) + var(--diag, 0) * var(--entry-stagger, 18ms));
+}
+
+/* Reduced motion: board-view fades the whole card on WAAPI; no wave. */
+.board.fx-entry[data-entry-reduced],
+.board.fx-entry[data-entry-reduced] .cell__tile,
+.board.fx-entry[data-entry-reduced] .cell__g {
+  animation: none;
+}
+
+@keyframes board-rise {
   from {
     opacity: 0;
-    transform: scale(0.9);
+    transform: translateY(var(--entry-rise, 24px));
   }
   to {
     opacity: 1;
     transform: none;
   }
+}
+
+@keyframes tile-wave {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  40% {
+    opacity: 1;
+  }
+  70% {
+    transform: scale(1.04);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ── Board-cat idle loops (phase2b §2.9) ───────────────────────────────────
+   Breathing: scale 1 → --breathe-k → 1 over --breathe-ms with a per-cat phase (--breathe-delay),
+   on the cell's SVG box (composited; the drop and hop animate the cat group inside it). Only in the
+   idle mood (happy, sad and surprised stop it) and never during the entry wave. */
+.board:not(.fx-entry)[data-mood='idle'] .cell[data-s='c']:not([data-mood]) .cell__g,
+.board:not(.fx-entry)[data-mood='idle'] .cell[data-s='g']:not([data-mood]) .cell__g {
+  transform-origin: 50% 88%;
+  animation: cat-breathe var(--breathe-ms, 2800ms) ease-in-out var(--breathe-delay, 0ms) infinite;
+}
+
+@keyframes cat-breathe {
+  0%,
+  100% {
+    transform: none;
+  }
+  50% {
+    transform: scale(var(--breathe-k, 1.02));
+  }
+}
+
+/* Ear flick: board-view adds .is-flick for --flick-ms every 8–14 s per cat; the cat-ear-flick overlay
+   turns 10° about the ear's base (on the cell's 100-unit grid). */
+.cell.is-flick .cell__ear {
+  transform-box: view-box;
+  transform-origin: 37px 38px;
+  animation: ear-flick var(--flick-ms, 160ms) ease-in-out both;
+}
+
+@keyframes ear-flick {
+  0%,
+  100% {
+    transform: none;
+  }
+  45% {
+    transform: rotate(-10deg);
+  }
+}
+
+/* Event accessory over the board cats (phase2b §4.4); A styles the symbol's look. */
+.cell__acc {
+  display: none;
+}
+
+.cell[data-s='c'] .cell__acc,
+.cell[data-s='g'] .cell__acc {
+  display: inline;
 }
 
 /* X stroke draw-in: 120 ms ease-out, the second stroke slightly behind the first. */
@@ -143,10 +227,10 @@
 @keyframes coach-ring {
   0%,
   100% {
-    box-shadow: 0 0 0 2px var(--card), 0 0 0 5px var(--gold), 0 0 0 5px rgba(255, 212, 92, 0.5);
+    box-shadow: 0 0 0 2px var(--card), 0 0 0 5px var(--gold), 0 0 0 5px rgba(var(--gold-rgb), 0.5);
   }
   50% {
-    box-shadow: 0 0 0 2px var(--card), 0 0 0 5px var(--gold), 0 0 0 13px rgba(255, 212, 92, 0);
+    box-shadow: 0 0 0 2px var(--card), 0 0 0 5px var(--gold), 0 0 0 13px rgba(var(--gold-rgb), 0);
   }
 }
 
@@ -194,47 +278,155 @@
   }
 }
 
-/* ── HUD ───────────────────────────────────────────────────────────────── */
+/* ── HUD: heart break (phase2b §2.9) ──────────────────────────────────────
+   One timeline of --t-break (fx.heartBreakMs, 700 ms) for every part; the percentages are the spec's
+   phase times over 700 ms: shake 0–120 (0–17.1 %), crack 120–220 (17.1–31.4 %), halves fall 220–700
+   (31.4–100 %), shards 220–600 (31.4–85.7 %), the empty outline 400–700 (57.1–100 %). */
+.heart--break .heart__full {
+  opacity: 0;
+  transition: none;
+}
+
+.heart--break .heart__empty {
+  animation: heart-empty-in var(--t-break, 700ms) linear both;
+}
+
+@keyframes heart-empty-in {
+  0%,
+  57.1% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.heart__crack .heart__shake {
+  animation: heart-shake var(--t-break, 700ms) linear both;
+}
+
+@keyframes heart-shake {
+  0%,
+  17.1%,
+  100% {
+    transform: none;
+  }
+  3.4%,
+  10.3% {
+    transform: translateX(1.7px);
+  }
+  6.9%,
+  13.7% {
+    transform: translateX(-1.7px);
+  }
+}
+
 .heart__half {
   transform-box: fill-box;
   transform-origin: 50% 80%;
 }
 
 .heart__crack .heart__half--l {
-  animation: crack-l var(--t-crack) ease-in both;
+  animation: half-l var(--t-break, 700ms) linear both;
 }
 
 .heart__crack .heart__half--r {
-  animation: crack-r var(--t-crack) ease-in both;
+  animation: half-r var(--t-break, 700ms) linear both;
 }
 
-@keyframes crack-l {
-  0% {
+@keyframes half-l {
+  0%,
+  31.4% {
     opacity: 1;
     transform: none;
-  }
-  25% {
-    opacity: 1;
-    transform: translateX(-4%) rotate(-6deg);
+    animation-timing-function: cubic-bezier(0.5, 0, 0.9, 0.6);
   }
   100% {
     opacity: 0;
-    transform: translate(-22%, 40%) rotate(-28deg);
+    transform: translate(-22%, 60%) rotate(-28deg);
   }
 }
 
-@keyframes crack-r {
-  0% {
+@keyframes half-r {
+  0%,
+  31.4% {
     opacity: 1;
     transform: none;
-  }
-  25% {
-    opacity: 1;
-    transform: translateX(4%) rotate(6deg);
+    animation-timing-function: cubic-bezier(0.5, 0, 0.9, 0.6);
   }
   100% {
     opacity: 0;
-    transform: translate(22%, 40%) rotate(28deg);
+    transform: translate(22%, 60%) rotate(28deg);
+  }
+}
+
+/* The unclipped heart hides the seam between the two clipped halves until they start to fall. */
+.heart__crack .heart__whole {
+  animation: heart-whole var(--t-break, 700ms) step-end both;
+}
+
+@keyframes heart-whole {
+  0% {
+    opacity: 1;
+  }
+  31.4%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* The white zigzag crack (pathLength 1) draws in, then fades as the halves part. */
+.heart__zig {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  animation: heart-zig var(--t-break, 700ms) linear both;
+}
+
+@keyframes heart-zig {
+  0%,
+  17.1% {
+    opacity: 1;
+    stroke-dashoffset: 1;
+  }
+  31.4%,
+  38% {
+    opacity: 1;
+    stroke-dashoffset: 0;
+  }
+  50%,
+  100% {
+    opacity: 0;
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Three shards in --heart fly 18 units outward (--dx, --dy set per shard) and fade by 600 ms. */
+.heart__shard {
+  fill: var(--heart);
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: heart-shard var(--t-break, 700ms) linear both;
+}
+
+@keyframes heart-shard {
+  0%,
+  31.3% {
+    opacity: 0;
+    transform: none;
+  }
+  31.4% {
+    opacity: 1;
+    transform: none;
+    animation-timing-function: cubic-bezier(0.2, 0.7, 0.4, 1);
+  }
+  85.7%,
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx, 0), var(--dy, -18px)) rotate(var(--spin, 90deg));
   }
 }
 
@@ -304,7 +496,7 @@
   width: calc(10px * var(--s, 1));
   height: calc(10px * var(--s, 1));
   margin: calc(-5px * var(--s, 1)) 0 0 calc(-5px * var(--s, 1));
-  background: var(--c, #ffd45c);
+  background: var(--c, var(--gold));
   border-radius: 2px;
   animation: confetti-y var(--dur, 1600ms) linear var(--delay, 0ms) both;
 }
@@ -423,6 +615,160 @@
   }
 }
 
+/* ── Win flow (phase2b §2.2, §2.3): the fx layer, the flying fish, the trail ── */
+.fx-layer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 30; /* above the screen and its scrim, below the overlays (40) */
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.fx-fish {
+  position: absolute;
+  transform: scale(0);
+  will-change: transform;
+}
+
+.fx-fish__icon {
+  display: block;
+  width: 100%;
+  height: 100%;
+  color: var(--ink);
+  filter: drop-shadow(0 2px 2px rgba(var(--ink-rgb), 0.28));
+}
+
+/* The symbol faces right; a fish flying left is mirrored (fish-flight.ts tilts it along the path). */
+.fx-fish[data-dir='l'] .fx-fish__icon {
+  transform: scaleX(-1);
+}
+
+/* A trail sparkle: a small four-point star in --gold (fish-flight.ts fades and shrinks it). */
+.fx-dot {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  background: var(--gold);
+  -webkit-clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+}
+
+/* ── Fish pill (phase2b §2.2, §2.5): fade-in, number roll, icon bump, rising label ── */
+.fish-pill--in {
+  animation: mw-fade-in var(--fade-ms, 200ms) ease-out both;
+}
+
+.fish-pill--bump .fish-pill__icon {
+  animation: bump var(--bump-ms, 360ms) var(--ease-drop);
+}
+
+.fish-pill__n.is-in {
+  animation: fish-roll-in var(--bump-ms, 360ms) var(--ease-out) both;
+}
+
+.fish-pill__n.is-out {
+  animation: fish-roll-out var(--bump-ms, 360ms) var(--ease-out) both;
+}
+
+@keyframes fish-roll-in {
+  from {
+    opacity: 0;
+    transform: translateY(80%);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fish-roll-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-80%);
+  }
+}
+
+.fish-pill__label:not([data-reduced]) {
+  animation: fish-label-rise var(--label-ms, 700ms) var(--ease-out) both;
+}
+
+/* The chip pops out of the pill's centre, then rises --label-rise and fades. */
+@keyframes fish-label-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(4px) scale(0.6);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  65% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(var(--label-rise, -24px)) scale(1);
+  }
+}
+
+/* ── Ranking panel (phase2b §2.4): pop, tap pulse, fade-out ── */
+.ranking__card {
+  animation: rank-pop var(--pop-ms, 260ms) var(--ease-out) both;
+}
+
+@keyframes rank-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.03);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.overlay[data-overlay='ranking'].is-ready .ranking__tap {
+  animation: tap-pulse var(--pulse-ms, 1400ms) ease-in-out infinite;
+}
+
+@keyframes tap-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.overlay[data-overlay='ranking'].is-leaving {
+  opacity: 0;
+  transition: opacity var(--out-ms, 200ms) ease;
+}
+
+/* ── Victory screen (phase2b §2.5): the sun rays turn once per --rays-ms ── */
+.victory__rays {
+  animation: rays-turn var(--rays-ms, 20000ms) linear infinite;
+}
+
+@keyframes rays-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* ── Reduced motion (02 §17.5): no shake, confetti, stagger or loops; fades ≤ 150 ms ──
    One universal rule: every animation jumps to its end state (static rings, hidden lids, landed
    cats), transitions shorten to 150 ms. The WAAPI shake is skipped in JS (fx/shake.ts). */
@@ -436,6 +782,15 @@
 }
 
 [data-motion='reduced'] .confetti,
-[data-motion='reduced'] .cell__spark {
+[data-motion='reduced'] .cell__spark,
+[data-motion='reduced'] .heart__crack,
+[data-motion='reduced'] .fx-dot {
   display: none;
+}
+
+/* Static rays, a steady footer, no breathing (phase2b §2.5, §2.7, §2.9). */
+[data-motion='reduced'] .victory__rays,
+.victory[data-reduced] .victory__rays,
+[data-motion='reduced'] .overlay[data-overlay='ranking'] .ranking__tap {
+  animation: none;
 }

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Owner: platform
+// Owner: D (Phase 2b; was platform)
 // Web adapter (04 §6.2): capabilities per mock mode, storage via the local store (cloud ignored),
 // memory fallback hook, no-op lifecycle and analytics, haptics capability, other tabs' writes.
 import { describe, expect, it } from 'vitest';
@@ -43,10 +43,28 @@ describe('createWebPlatform', () => {
     ['?ads=nofill', true],
     ['?ads=close', true],
     ['?ads=unsupported', false],
-  ])('mock ads %j → ad capabilities %s', (search, on) => {
+  ])('mock ads %j → ad capabilities %s (the mock banner too, phase2b §3.3)', (search, on) => {
     const p = make({ mockAds: true, search });
     expect(p.capabilities().interstitial).toBe(on);
     expect(p.capabilities().rewarded).toBe(on);
+    expect(p.capabilities().banner).toBe(on);
+    expect(p.ads.banner !== undefined).toBe(on);
+  });
+
+  it('production web has no banner, rankings, groups or payments (phase2b §0.6)', () => {
+    const p = make({ mockAds: false });
+    expect(p.ads.banner).toBeUndefined();
+    expect(p.ranking).toBeUndefined();
+    expect(p.groups).toBeUndefined();
+    expect(p.payments).toBeUndefined();
+  });
+
+  it('the mock banner shows and hides through the adapter', async () => {
+    const p = make({ mockAds: true, search: '?ads=ok' });
+    await expect(p.ads.banner!.show('bottom')).resolves.toEqual({ ok: true });
+    expect(document.querySelector('[data-testid="mock-banner"]')).not.toBeNull();
+    await p.ads.banner!.hide();
+    expect(document.querySelector('[data-testid="mock-banner"]')).toBeNull();
   });
 
   it('mock nofill reaches the adapter result', async () => {

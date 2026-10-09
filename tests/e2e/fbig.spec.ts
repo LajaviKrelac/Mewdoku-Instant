@@ -5,6 +5,11 @@
 // Runs in the `fbig-390` project against dist/fbig-e2e (hooks on, test placement IDs).
 // Review fixes covered here: a late cloud read (PLAT-1), per-player mirrors (PLAT-2), a blocked
 // localStorage with cloud save (PLAT-3), a startGameAsync that fails (PLAT-8).
+// Phase 2b (§3.6, §5.10, §8.8): the win flow (ranking panel → victory "Level N"), banners (none
+// before 10 completed levels; Home and victory with the 58 px reserve; never while the game screen
+// shows), the paw_points score reaching the stub's leaderboard (classic: "Your rank", NEZP: "Your
+// score"), and purchases (hints_15 granted and consumed once; remove_ads ends interstitials and
+// banners; no Buy section on iOS).
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -29,6 +34,7 @@ interface StubControl {
   state: { initialized: boolean; started: boolean; progress: number[] };
   names(): string[];
   count(name: string): number;
+  find(name: string): StubCall[];
   pause(): void;
   clearCalls(): void;
 }
@@ -37,7 +43,10 @@ type TestWindow = Window & { __fbStub?: StubControl; __FB_STUB_CONFIG__?: unknow
 // ── selectors (one place to adjust if the UI copy changes; strings come from src/i18n/en.ts) ──
 const sel = {
   playButton: (page: Page) => page.getByRole('button', { name: /^(Continue · )?Level \d+$/ }).first(),
-  nextButton: (page: Page) => page.getByRole('button', { name: /^Next: Level \d+$/ }),
+  /** phase2b: the victory screen's wide "Level N" button (victory.next). */
+  victoryNext: (page: Page) => page.getByRole('button', { name: /^Level \d+$/ }),
+  rankingTap: (page: Page) => page.getByRole('button', { name: 'Tap to keep going' }),
+  shop: (page: Page) => page.getByRole('button', { name: 'Shop' }).first(),
   hintTool: (page: Page) => page.getByRole('button', { name: /^Hint\b/ }),
   watchVideo: (page: Page) => page.getByRole('button', { name: 'Watch video' }),
   cell: (page: Page, row: number, col: number) => page.locator(`[aria-label^="Row ${row + 1}, column ${col + 1},"]`).first(),
@@ -87,15 +96,35 @@ async function startLevel(page: Page): Promise<void> {
   await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
 }
 
-/** Double-taps every solution cell (one cat per row) to win the current board. */
-async function solve(page: Page): Promise<void> {
+/**
+ * Double-taps every solution cell (one cat per row) to win the current board. `slow`: the last cat
+ * lands after rank.minSolveMs (3 s), so the score is submitted (phase2b §5.3: faster solves are not).
+ */
+async function solve(page: Page, opts: { slow?: boolean; clock?: boolean } = {}): Promise<void> {
   const cols = await page.evaluate(() => (window as TestWindow).__mewdoku!.solution());
   expect(cols).not.toBeNull();
-  for (const [row, col] of (cols ?? []).entries()) {
+  const list = cols ?? [];
+  for (const [row, col] of list.entries()) {
+    if (opts.slow && row === list.length - 1) {
+      if (opts.clock) await page.clock.fastForward(3_500);
+      else await page.waitForTimeout(3_500);
+    }
     await sel.cell(page, row, col).dblclick();
   }
   await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'won');
 }
+
+/** phase2b win flow: the ranking panel (tap once its gate opens), then the victory screen's "Level N". */
+async function toVictory(page: Page): Promise<void> {
+  await expect(sel.rankingTap(page)).toBeVisible({ timeout: 15_000 });
+  await expect(async () => {
+    await sel.rankingTap(page).click({ timeout: 1_000 });
+    await expect(sel.rankingTap(page)).toHaveCount(0, { timeout: 1_000 });
+  }).toPass({ timeout: 10_000 });
+  await expect(sel.victoryNext(page)).toBeEnabled({ timeout: 10_000 });
+}
+
+const count = (page: Page, name: string): Promise<number> => stub(page, new Function('s', `return s.count(${JSON.stringify(name)})`) as (s: StubControl) => number);
 
 test.describe('FBIG lifecycle', () => {
   test('initializeAsync first, progress 100 before startGameAsync, locale after start', async ({ page }) => {
@@ -240,13 +269,15 @@ test.describe('FBIG save robustness', () => {
 });
 
 test.describe('FBIG ads', () => {
-  test('an interstitial is shown at Next once 10 levels are done and the grace and cooldown passed', async ({ page }) => {
+  test('an interstitial is shown at the victory "Level N" once 10 levels are done and the grace and cooldown passed', async ({ page }) => {
     const t0 = Date.UTC(2026, 9, 7, 10, 0, 0);
     await openGame(page, { data: { save: seededSave(15, 14) } }, { clockAt: t0 });
     await startLevel(page);
     await solve(page);
     await page.clock.fastForward(65_000); // past ads.interstitial.sessionGraceSec
-    await sel.nextButton(page).click();
+    await toVictory(page);
+    expect(await stub(page, (s) => s.calls.filter((c) => c.name === 'ad.showAsync').length)).toBe(0); // never during the win flow
+    await sel.victoryNext(page).click();
     await expect
       .poll(() => stub(page, (s) => s.calls.filter((c) => c.name === 'ad.showAsync' && c.args[0] === 'interstitial').length))
       .toBe(1);
@@ -258,7 +289,8 @@ test.describe('FBIG ads', () => {
     await startLevel(page);
     await solve(page);
     await page.clock.fastForward(65_000);
-    await sel.nextButton(page).click();
+    await toVictory(page);
+    await sel.victoryNext(page).click();
     await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
     expect(await stub(page, (s) => s.calls.filter((c) => c.name === 'ad.showAsync').length)).toBe(0);
   });
@@ -315,5 +347,158 @@ test.describe('FBIG layout', () => {
     await openGame(page, {});
     await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().session?.mode === 'tutorial');
     expect(await safeZoneHits(page)).toEqual([]);
+  });
+});
+
+// ─────────────────────────── phase2b ───────────────────────────
+
+/** Bottom of the band a banner may cover: the viewport height minus the 58 px reserve (ads.banner.reservePx). */
+const RESERVE_PX = 58;
+const CLEARANCE_PX = 16;
+
+/** The visible screen root's computed padding-bottom and data-banner flag. */
+const screenBand = (page: Page): Promise<{ banner: boolean; pad: number } | null> =>
+  page.evaluate(() => {
+    const el = Array.from(document.querySelectorAll<HTMLElement>('.screen, .victory')).find(
+      (e) => e.getBoundingClientRect().height > 0 && !e.closest('[inert]'),
+    );
+    if (!el) return null;
+    return { banner: el.hasAttribute('data-banner'), pad: parseFloat(getComputedStyle(el).paddingBottom) || 0 };
+  });
+
+test.describe('FBIG banners (phase2b §3)', () => {
+  test('no banner call before 10 completed levels, on Home or on the victory screen', async ({ page }) => {
+    await openGame(page, { data: { save: seededSave(6, 5) } });
+    await expect(sel.playButton(page)).toBeVisible();
+    await page.waitForTimeout(800);
+    await startLevel(page);
+    await solve(page);
+    await toVictory(page);
+    await page.waitForTimeout(800);
+    expect(await count(page, 'loadBannerAdAsync')).toBe(0);
+    await expect(page.getByTestId('fb-stub-banner')).toHaveCount(0);
+  });
+
+  test('banner on Home and on the victory screen from level 11, with the 58 px reserve; none while the game screen shows', async ({ page }) => {
+    test.setTimeout(90_000);
+    const t0 = Date.UTC(2026, 9, 7, 10, 0, 0);
+    await openGame(page, { data: { save: seededSave(11, 10) } }, { clockAt: t0 });
+    // Home: one load, at the bottom, with the reserve band.
+    await expect.poll(() => count(page, 'loadBannerAdAsync')).toBe(1);
+    expect((await stub(page, (s) => s.find('loadBannerAdAsync')[0]?.args)) ?? []).toEqual(['e2e-banner', 'bottom']);
+    await expect(page.getByTestId('fb-stub-banner')).toBeVisible();
+    await expect.poll(async () => (await screenBand(page))?.banner).toBe(true);
+    expect((await screenBand(page))?.pad ?? 0).toBeGreaterThanOrEqual(RESERVE_PX);
+    const play = await sel.playButton(page).boundingBox();
+    const vh = page.viewportSize()?.height ?? 844;
+    expect((play?.y ?? 0) + (play?.height ?? 0)).toBeLessThanOrEqual(vh - RESERVE_PX - CLEARANCE_PX + 0.5);
+
+    // Into the game: hidden before the game screen, and no load while it shows.
+    await startLevel(page);
+    expect(await count(page, 'hideBannerAdAsync')).toBeGreaterThanOrEqual(1);
+    await expect(page.getByTestId('fb-stub-banner')).toHaveCount(0);
+    await stub(page, (s) => s.clearCalls());
+    await page.clock.fastForward(61_000); // past ads.banner.minReloadSec while playing
+    await solve(page, { clock: true });
+    await page.clock.fastForward(5_000); // the win flow up to the ranking panel
+    expect(await count(page, 'loadBannerAdAsync')).toBe(0); // never in play, never on the ranking panel
+
+    // Victory: the second load, the reserve, and the "Level N" button clear of the band.
+    await toVictory(page);
+    await expect.poll(() => count(page, 'loadBannerAdAsync')).toBe(1);
+    await expect(page.getByTestId('fb-stub-banner')).toBeVisible();
+    const next = await sel.victoryNext(page).boundingBox();
+    expect((next?.y ?? 0) + (next?.height ?? 0)).toBeLessThanOrEqual(vh - RESERVE_PX - CLEARANCE_PX + 0.5);
+
+    // Leaving for the next board hides it again before the game screen.
+    await sel.victoryNext(page).click();
+    await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
+    expect(await count(page, 'hideBannerAdAsync')).toBeGreaterThanOrEqual(1);
+    await expect(page.getByTestId('fb-stub-banner')).toHaveCount(0);
+  });
+});
+
+test.describe('FBIG rankings (phase2b §5)', () => {
+  test('classic leaderboard: the paw_points score reaches the board; the panel shows "Your rank"', async ({ page }) => {
+    await openGame(page, { data: { save: seededSave(5, 4) } });
+    await startLevel(page);
+    await solve(page, { slow: true });
+    await expect.poll(() => stub(page, (s) => s.calls.filter((c) => c.name === 'leaderboard.setScoreAsync').map((c) => c.args[0])), { timeout: 8_000 }).toEqual([
+      'e2e_paw_points',
+    ]);
+    const posted = (await stub(page, (s) => s.find('leaderboard.setScoreAsync')[0]?.args[1])) as number;
+    expect(posted).toBe((await appState(page)).save.points.total);
+    await expect(page.getByRole('dialog').getByText(/^Your rank: #1$/)).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('NEZP leaderboard: the score is posted by id; the panel shows "Your score", never a rank', async ({ page }) => {
+    await openGame(page, { presets: ['lb-nezp'], data: { save: seededSave(5, 4) } });
+    await startLevel(page);
+    await solve(page, { slow: true });
+    await expect
+      .poll(() => stub(page, (s) => s.calls.filter((c) => c.name === 'globalLeaderboards.setScoreAsync').map((c) => c.args[0])), { timeout: 8_000 })
+      .toEqual(['e2e_paw_points']);
+    await expect(page.getByRole('dialog').getByText(/^Your score: /).first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('dialog').getByText(/Your rank/)).toHaveCount(0);
+  });
+
+  test('no leaderboard API: personal records only, no other players and no SDK leaderboard call', async ({ page }) => {
+    await openGame(page, { presets: ['lb-none'], data: { save: seededSave(5, 4) } });
+    await startLevel(page);
+    await solve(page, { slow: true });
+    await expect(sel.rankingTap(page)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('dialog').getByText('Total points')).toBeVisible();
+    expect(await stub(page, (s) => s.calls.filter((c) => /eaderboard/i.test(c.name)).length)).toBe(0);
+  });
+});
+
+test.describe('FBIG purchases (phase2b §8)', () => {
+  test('buying hints_15 grants +15 hints and consumes the purchase once', async ({ page }) => {
+    await openGame(page, { persist: false, data: { save: seededSave(5, 4, (s) => ({ ...s, stock: { hints: 2, kitties: 3 } })) } });
+    await sel.shop(page).click();
+    const buy = page.getByRole('button', { name: /^Buy Bulb Bundle, / });
+    await expect(buy).toBeVisible({ timeout: 8_000 });
+    await buy.click();
+    await expect.poll(async () => (await appState(page)).save.stock.hints, { timeout: 8_000 }).toBe(17);
+    await expect.poll(() => count(page, 'payments.consumePurchaseAsync')).toBe(1);
+    const s = (await appState(page)).save;
+    expect(s.purchases.tokens.some((t) => t.startsWith('hints_15|'))).toBe(true);
+    expect(await stub(page, (st) => st.calls.find((c) => c.name === 'payments.purchaseAsync')?.args[0])).toMatchObject({
+      productID: 'hints_15',
+      developerPayload: expect.stringMatching(/^stub-player-1:/),
+    });
+    await page.waitForTimeout(500);
+    expect(await count(page, 'payments.consumePurchaseAsync')).toBe(1);
+  });
+
+  test('remove_ads is consumed and kept: no interstitial and no banner afterwards', async ({ page }) => {
+    test.setTimeout(90_000);
+    const t0 = Date.UTC(2026, 9, 7, 10, 0, 0);
+    await openGame(page, { persist: false, data: { save: seededSave(15, 14) } }, { clockAt: t0 });
+    await expect.poll(() => count(page, 'loadBannerAdAsync')).toBe(1); // a banner on Home before the purchase
+    await sel.shop(page).click();
+    await page.getByRole('button', { name: /^Buy No Ads, / }).click();
+    await expect.poll(async () => (await appState(page)).save.purchases.noAds, { timeout: 8_000 }).toBe(true);
+    await expect.poll(() => count(page, 'payments.consumePurchaseAsync')).toBe(1);
+    await page.keyboard.press('Escape');
+    await stub(page, (s) => s.clearCalls());
+    await page.clock.fastForward(70_000); // past the session grace and the banner window
+    await startLevel(page);
+    await solve(page, { clock: true });
+    await page.clock.fastForward(65_000);
+    await toVictory(page);
+    await page.waitForTimeout(800);
+    await sel.victoryNext(page).click();
+    await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
+    expect(await stub(page, (s) => s.calls.filter((c) => c.name === 'ad.showAsync' || c.name === 'loadBannerAdAsync').map((c) => c.name))).toEqual([]);
+  });
+
+  test('iOS: no Buy section, only "Swap fish"', async ({ page }) => {
+    await openGame(page, { presets: ['ios'], data: { save: seededSave(5, 4) } });
+    await sel.shop(page).click();
+    await expect(page.getByText('Swap fish').first()).toBeVisible();
+    await expect(page.getByText("Purchases aren't available here.")).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByRole('button', { name: /^Buy / })).toHaveCount(0);
+    expect(await count(page, 'payments.purchaseAsync')).toBe(0);
   });
 });

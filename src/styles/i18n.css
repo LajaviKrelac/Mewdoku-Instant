@@ -1,3 +1,191 @@
 /* Owner: E (phase2b §6.5)
-   The few [dir='rtl'] overrides that logical properties in A's and B's stylesheets cannot express
-   (mirrored chevrons, coach hand art, progress fill direction…). The board stays LTR. Empty at F0. */
+   Right-to-left (Arabic) overrides. <html dir="rtl"> is set by i18n setLocale(); flex rows, grids
+   and inline text mirror on their own. This file holds what direction alone gets wrong:
+
+   1. What must NOT mirror (spec §6.5): the board, the top bar, digits and counters.
+   2. Icons that point somewhere: chevrons and the coach hand turn around.
+   3. Physical spacing (margin-left, padding-right, text-align: left …) that A's and B's stylesheets
+      still use. Each block names its source rule; the values are those rules' values, mirrored, so
+      the block stays correct after its owner switches the rule to a logical property, and can then
+      be deleted. Tokens only (css-rules.spec.ts). */
+
+/* ── 1. Not mirrored ─────────────────────────────────────────────────────── */
+
+/* Column 1 is always the leftmost: hint text and screen-reader labels count columns from the left,
+   and swipes and the fish flight use screen geometry. */
+[dir='rtl'] .board {
+  direction: ltr;
+}
+
+/* The FB safe zone is the top-left 64×64, so Home and Settings stay at the top right and the lead
+   slot (Home fish pill) stays after the safe zone. Only the title text runs right to left. */
+[dir='rtl'] .top-bar {
+  direction: ltr;
+}
+
+[dir='rtl'] .top-bar__title {
+  direction: rtl;
+}
+
+/* Digits and counters ("3 / 8", "128", clocks) read left to right, with Latin digits (§6.4). */
+[dir='rtl'] .num,
+[dir='rtl'] .pill__count,
+[dir='rtl'] .boot__pct,
+[dir='rtl'] .tool__badge {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* ── 2. Icons that point ─────────────────────────────────────────────────── */
+
+[dir='rtl'] .btn__chev,
+[dir='rtl'] .daily-card__chev,
+[dir='rtl'] .event-card__chev {
+  transform: scaleX(-1);
+}
+
+/* The coach hand is art; its swipe path comes from board geometry (LTR) and is unchanged. */
+[dir='rtl'] .coach__hand > svg {
+  transform: scaleX(-1);
+}
+
+/* Switches move their knob from the inline start: off at the right, on at the left. */
+[dir='rtl'] .switch__knob {
+  left: auto;
+  right: 3px;
+}
+
+[dir='rtl'] .switch[aria-checked='true'] .switch__knob {
+  transform: translateX(-20px);
+}
+
+/* ── 3. Physical spacing, mirrored (until the owner's rule is logical) ───── */
+
+/* base.css (A): .btn > * + * { margin-left } */
+[dir='rtl'] .btn > * + * {
+  margin-left: 0;
+  margin-right: var(--sp-2);
+}
+
+/* hud.css (A): the badge after the title, pills, rule chips, tool bar. */
+[dir='rtl'] .top-bar__title .badge {
+  margin-left: 0;
+  margin-right: var(--sp-2);
+}
+
+[dir='rtl'] .pill:not(.pill--hearts) {
+  padding: 0 10px 0 16px;
+}
+
+[dir='rtl'] .pill__icon {
+  margin-right: 0;
+  margin-left: 6px;
+}
+
+[dir='rtl'] .chip + .chip {
+  margin-left: 0;
+  margin-right: var(--sp-2);
+}
+
+[dir='rtl'] .chip__icon {
+  margin-right: 0;
+  margin-left: 6px;
+}
+
+[dir='rtl'] .rule-chips[data-compact] .chip__icon {
+  margin-left: 0;
+}
+
+[dir='rtl'] .tool + .tool {
+  margin-left: 0;
+  margin-right: 44px;
+}
+
+[dir='rtl'] .tool__badge {
+  right: auto;
+  left: -8px;
+}
+
+/* overlays.css (B): dialog heads, hint card, fail badge, settings, how to play, boot, Home. */
+[dir='rtl'] .overlay__head {
+  margin: -4px 0 8px -4px;
+  text-align: right;
+}
+
+[dir='rtl'] .overlay__back {
+  margin-right: 0;
+  margin-left: 8px;
+}
+
+[dir='rtl'] .hint-card__row,
+[dir='rtl'] .settings,
+[dir='rtl'] .howto,
+[dir='rtl'] .settings-row--link .btn__label,
+[dir='rtl'] .daily-card {
+  text-align: right;
+}
+
+[dir='rtl'] .hint-card__icon {
+  margin-right: 0;
+  margin-left: 12px;
+}
+
+[dir='rtl'] .hint-card__actions .overlay__close {
+  margin-left: 0;
+  margin-right: 12px;
+}
+
+[dir='rtl'] .fail__continue .btn__badge {
+  margin-left: 0;
+  margin-right: 10px;
+}
+
+[dir='rtl'] .fail__continue .btn__badge .icon {
+  margin-left: 0;
+  margin-right: 3px;
+}
+
+[dir='rtl'] .settings-row__label {
+  padding-right: 0;
+  padding-left: 12px;
+}
+
+[dir='rtl'] .settings-row--motion .segmented {
+  margin: 4px auto 4px 0;
+}
+
+[dir='rtl'] .switch {
+  padding: 4px 10px 4px 4px;
+}
+
+[dir='rtl'] .switch__state {
+  margin-right: 0;
+  margin-left: 8px;
+  text-align: left;
+}
+
+[dir='rtl'] .howto-rule__art {
+  margin-right: 0;
+  margin-left: 14px;
+}
+
+[dir='rtl'] .boot__pct {
+  margin-left: 0;
+  margin-right: 12px;
+  text-align: left;
+}
+
+[dir='rtl'] .home__play .btn__chev {
+  right: auto;
+  left: 22px;
+}
+
+[dir='rtl'] .daily-card__icon {
+  margin-right: 0;
+  margin-left: 12px;
+}
+
+[dir='rtl'] .stock__icon {
+  margin-right: 0;
+  margin-left: 6px;
+}

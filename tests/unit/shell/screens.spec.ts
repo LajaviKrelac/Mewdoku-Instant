@@ -36,7 +36,10 @@ function fakeView(name: string, extra: Record<string, unknown> = {}) {
     };
   };
 }
-vi.mock('../../../src/ui/hud/pills', () => ({ createPills: fakeView('pills') }));
+vi.mock('../../../src/ui/hud/pills', () => ({
+  createPills: fakeView('pills'),
+  createFishPill: fakeView('fishPill', { iconRect: () => null }),
+}));
 vi.mock('../../../src/ui/hud/rule-chips', () => ({ createRuleChips: fakeView('chips') }));
 vi.mock('../../../src/ui/hud/tool-bar', () => ({ createToolBar: fakeView('tools', { toolRect: () => null }) }));
 vi.mock('../../../src/ui/board/board-view', () => ({
@@ -55,6 +58,7 @@ vi.mock('../../../src/ui/board/board-view', () => ({
       setHighlight: log('setHighlight'),
       setLocked: log('setLocked'),
       setMood: log('setMood'),
+      setAccessory: log('setAccessory'),
       playEvent: log('playEvent'),
       playEntry: log('playEntry'),
       focusCell: log('focusCell'),

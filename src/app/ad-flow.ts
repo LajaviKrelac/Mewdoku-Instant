@@ -19,6 +19,11 @@ export interface AdFlowDeps {
   setInputLocked(locked: boolean): void;
   setMuted(muted: boolean): void;
   readonly config?: GameConfig;
+  /**
+   * phase2b §3.2: runs before any interstitial or rewarded ad shows (the banner is hidden first).
+   * Awaited for at most ads.readyTimeoutMs; it never blocks the ad.
+   */
+  beforeShow?(): Promise<void>;
 }
 
 export interface AdFlow {
@@ -81,6 +86,18 @@ export function createAdFlow(deps: AdFlowDeps): AdFlow {
     begin();
     let watchdog: TimerId | null = null;
     let result: AdFlowResult;
+    if (deps.beforeShow) {
+      let cap: TimerId | null = null;
+      await Promise.race([
+        Promise.resolve()
+          .then(() => deps.beforeShow?.())
+          .catch(() => undefined),
+        new Promise<void>((resolve) => {
+          cap = clock.setTimeout(resolve, c.ads.readyTimeoutMs);
+        }),
+      ]);
+      clock.clearTimeout(cap);
+    }
     try {
       const shown = Promise.resolve()
         .then(show)

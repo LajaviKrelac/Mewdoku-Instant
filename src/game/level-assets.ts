@@ -25,6 +25,19 @@ const DAILY_URLS: Record<string, string> = import.meta.glob<string>('./*.json', 
   base: '../data/daily',
 });
 
+// phase2b §4.2: the event packs (src/data/events/<id>.json; events.json itself is bundled by the app).
+const EVENT_URLS: Record<string, string> = import.meta.glob<string>(['./*.json', '!./events.json'], {
+  query: '?url',
+  import: 'default',
+  eager: true,
+  base: '../data/events',
+});
+
+/** URL of an event pack named 'events/<id>.json' (EventDef.puzzles.file), or null when not in the build. */
+export function eventPackUrl(file: string): string | null {
+  return file.startsWith('events/') ? (EVENT_URLS[`./${file.slice('events/'.length)}`] ?? null) : null;
+}
+
 /** URL of pack k (1..9), or null when that file is not in the build. */
 export function packUrl(packIndex: number): string | null {
   return PACK_URLS[`./pack-${String(packIndex).padStart(3, '0')}.json`] ?? null;
@@ -55,7 +68,7 @@ export function availableAssets(): { packs: number[]; months: string[] } {
  */
 export function createAssetLoaders(
   fetchJson: (url: string) => Promise<unknown>,
-): Pick<LevelsRepoDeps, 'bundled' | 'loadPack' | 'loadDailyMonth'> {
+): Pick<LevelsRepoDeps, 'bundled' | 'loadPack' | 'loadDailyMonth' | 'loadEventPack'> {
   return {
     bundled: BUNDLED_PACK,
     loadPack(packIndex: number): Promise<unknown> {
@@ -64,6 +77,10 @@ export function createAssetLoaders(
     },
     loadDailyMonth(month: string): Promise<unknown | null> {
       const url = dailyMonthUrl(month);
+      return url ? fetchJson(url) : Promise.resolve(null);
+    },
+    loadEventPack(file: string): Promise<unknown | null> {
+      const url = eventPackUrl(file);
       return url ? fetchJson(url) : Promise.resolve(null);
     },
   };

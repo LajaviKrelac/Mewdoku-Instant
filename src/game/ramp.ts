@@ -115,6 +115,8 @@ export const SEEDS = Object.freeze({
   daily: (dateKey: string): string => `mewdoku:daily:v1:${dateKey}`,
   fallback: (level: number): string => `mewdoku:fallback:v1:${level}`,
   retry: (seed: string): string => `${seed}:r1`,
+  /** Event puzzle `index` (0-based) of event `id` (phase2b §4.2). */
+  event: (id: string, index: number): string => `mewdoku:event:v1:${id}:${index}`,
 });
 
 // ─────────────────────────────── GenSpec builder ───────────────────────────────

@@ -1,6 +1,6 @@
 // Owner: C (Phase 2b)
 // Save schema v2 (phase2b §9; v1 = 04 §4.3): defaults, migration/validation, merge, cell encoding,
-// slot validation (04 §7). The v2 field rules live in save-v2.ts (F0 baseline; C completes §9.3).
+// slot validation (04 §7). The v2 field rules live in save-v2.ts; the paid-grant repair in purchases.ts.
 import { cfg, type GameConfig } from '../app/config';
 import {
   copySlot,
@@ -12,6 +12,7 @@ import {
   readBest,
   readDaily,
 } from './save-fields';
+import { repairPaidGrants } from './purchases';
 import { isLocaleSetting, mergeV2Fields, migrate_1_to_2, parseEventSlotId, readV2Fields, v2Defaults } from './save-v2';
 import type { DailyRecord, InProgressV2, LevelBest, ReduceMotionSetting, SaveData, SettingsV2 } from './types';
 
@@ -186,6 +187,7 @@ function isReduceMotion(x: unknown): x is ReduceMotionSetting {
 /** Local mirror vs cloud (04 §7.3 + phase2b §9.3 merge tables), then clears stale in-progress slots. */
 export function merge(local: SaveData, cloud: SaveData, c: GameConfig = cfg): SaveData {
   const newer = cloud.updatedAt > local.updatedAt ? cloud : local;
+  const older = newer === local ? cloud : local;
   const merged: SaveData = {
     v: 2,
     updatedAt: Math.max(local.updatedAt, cloud.updatedAt),
@@ -205,7 +207,8 @@ export function merge(local: SaveData, cloud: SaveData, c: GameConfig = cfg): Sa
     ext: { ...newer.ext },
     ...mergeV2Fields(local, cloud, newer, c),
   };
-  return clearStaleSlots(merged);
+  // §9.3: wallet and stock came from the newer copy; paid grants only the older copy holds are re-applied once.
+  return clearStaleSlots(repairPaidGrants(merged, older, newer, c));
 }
 
 /** Union of two record maps; per key the entry with the smaller ms ([0]) wins (ties keep `a`). */
@@ -221,8 +224,9 @@ function unionByMs<T extends readonly number[]>(a: Record<string, T>, b: Record<
 /**
  * 04 §7.3 "After merging": a level slot whose id is not L{progress.level} was already won elsewhere;
  * a daily slot whose date already has a record was solved elsewhere. Both are cleared. phase2b §9.3:
- * an event slot whose index is below events[id].solved was solved elsewhere. TODO(C, §9.3): also
- * clear an event slot whose event has ended (needs the event defs; event-flow does it at launch).
+ * an event slot whose index is below events[id].solved was solved elsewhere. An event slot whose event
+ * has ended needs the event defs and the clock: events.ts clearEndedEventSlot, run by event-flow at
+ * launch and after every late merge.
  */
 export function clearStaleSlots(save: SaveData): SaveData {
   const { level, daily, event } = save.inProgress;

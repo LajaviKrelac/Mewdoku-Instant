@@ -2,8 +2,9 @@
 // Phase 4: Graph API upload (05 §12): app token from FB_APP_ID / FB_APP_SECRET (env only), then
 // POST graph-video.facebook.com/{app_id}/assets with type=BUNDLE.
 //
-// Usage: tsx scripts/upload-fbig.ts [zip] [--comment "text"] [--dry-run]
-//   zip       defaults to the newest dist-zip/*-fbig-*.zip
+// Usage: tsx scripts/upload-fbig.ts [zip] [--comment "text"] [--dry-run] [--preview]
+//   zip       defaults to the newest release zip, dist-zip/*-fbig-<version>-<sha>.zip (phase2b: never a
+//             *-fbig-preview-* zip unless --preview is given)
 //   env       FB_APP_ID (required); FB_UPLOAD_TOKEN, or FB_APP_SECRET to mint an app token.
 // Secrets are read from the environment only and are never printed. The resumable flow in Meta's
 // uploader is unverified and not used (05 §12). After the upload, the build sits in Web Hosting as
@@ -45,11 +46,12 @@ async function appToken(env: UploadEnv, fetchFn: typeof fetch): Promise<string> 
   return body.access_token;
 }
 
-/** The newest dist-zip/*-fbig-*.zip, or null. */
-export function latestZip(dir = join(ROOT, 'dist-zip')): string | null {
+/** The newest release zip (dist-zip/*-fbig-*.zip that is not a preview), or with `preview` the newest preview zip; null if none. */
+export function latestZip(dir = join(ROOT, 'dist-zip'), opts: { preview?: boolean } = {}): string | null {
   if (!existsSync(dir)) return null;
+  const want = opts.preview ? /-fbig-preview-.*\.zip$/ : /-fbig-(?!preview-).*\.zip$/;
   const zips = readdirSync(dir)
-    .filter((f) => /-fbig-.*\.zip$/.test(f))
+    .filter((f) => want.test(f))
     .map((f) => join(dir, f))
     .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
   return zips[0] ?? null;
@@ -94,8 +96,15 @@ export async function main(argv: readonly string[]): Promise<void> {
     const flagIdx = argv.indexOf('--comment');
     const comment = flagIdx >= 0 ? argv[flagIdx + 1] : undefined;
     const positional = argv.filter((a, i) => !a.startsWith('--') && (flagIdx < 0 || i !== flagIdx + 1));
-    const zip = positional[0] ? resolve(positional[0]) : latestZip();
-    if (!zip) throw new Error('upload-fbig: no dist-zip/*-fbig-*.zip found (run "npm run zip:fbig")');
+    const preview = argv.includes('--preview');
+    const zip = positional[0] ? resolve(positional[0]) : latestZip(undefined, { preview });
+    if (!zip) {
+      throw new Error(
+        preview
+          ? 'upload-fbig: no dist-zip/*-fbig-preview-*.zip found (run "npm run zip:fbig -- --preview")'
+          : 'upload-fbig: no release zip dist-zip/*-fbig-*.zip found (run "npm run build:release", then "npm run zip:fbig")',
+      );
+    }
     const text = comment ?? defaultComment(zip);
     if (argv.includes('--dry-run')) {
       const env = readEnv();

@@ -2,6 +2,7 @@
 // Public shape of the level session (04 §3, §5.2): the commands screens and overlays call, the
 // Session handle, and its dependencies. Implemented by session.ts.
 import type { CellIndex, Puzzle } from '../engine/types';
+import type { EventDef } from '../game/events';
 import type { LevelsRepo } from '../game/levels-repo';
 import type { GameEvent, GameState, PaintMode } from '../game/types';
 import type { PlatformAdapter } from '../platform/types';
@@ -10,6 +11,10 @@ import type { AudioEngine } from '../audio/audio-engine';
 import type { Sfx } from '../audio/sfx';
 import type { EngineClient } from '../workers/engine-client';
 import type { AdFlow } from './ad-flow';
+import type { BannerFlow } from './banner-flow';
+import type { GroupFlow } from './group-flow';
+import type { RankingFlow } from './ranking-flow';
+import type { WinFlowFx } from './win-flow';
 import type { Clock } from './clock';
 import type { GameConfig } from './config';
 import type { AppBus, PauseReason } from './events';
@@ -34,7 +39,10 @@ export interface GameCommands {
   onContinue(): Promise<void>;
   /** O4 Retry: interstitial gate 'retry' → RETRY. */
   onRetry(): Promise<void>;
-  /** O3 Next: gate 'next_level' → next level (first-run tutorial: Level 2, no gate). */
+  /**
+   * Victory primary: gate 'next_level' → next level (first-run tutorial: Level 2, no gate); event:
+   * gate 'event_next' → the next puzzle, or back to the event screen after the last one.
+   */
   onNext(): Promise<void>;
   /** O7 Done: gate 'daily_done' → Home. */
   onDailyDone(): Promise<void>;
@@ -82,7 +90,26 @@ export interface SessionDeps {
   openSettings?(): void;
   /** Palette index per region (default: ui/art/palette regionColorsFor). */
   regionColors?(puzzle: Puzzle, fixed: readonly number[] | null): Uint8Array;
-  /** Index into PRAISE_KEYS for O3 (default: random). */
+  /** Index into PRAISE_KEYS for the victory screen (default: random). */
   pickPraise?(): number;
   readonly config?: GameConfig;
+  // ── phase2b (all optional: absent = the feature is off in this session) ──
+  /** Bundled event defs by id (event sessions, §4.4). */
+  readonly events?: { byId(id: string): EventDef | null };
+  /** Back to the event screen ("Back to event" after the last puzzle, §4.5). */
+  goEvent?(def: EventDef): void;
+  /** Post-win ranking (§5.5): submit, fetch, list state. Absent = personal records only. */
+  readonly rankings?: RankingFlow;
+  /** Group challenges (§5.6): a counted win's points. */
+  readonly groups?: Pick<GroupFlow, 'onWin'>;
+  /** Banners (§3.2): the victory screen shows one; hidden before every new board. */
+  readonly banners?: BannerFlow;
+  /** The fish pill's "+" on the victory screen (§2.5, §8.5). */
+  openShop?(): void;
+  /** The app root for the fish layer (§2.3); null without a DOM. */
+  root?(): HTMLElement | null;
+  /** B's fx functions for the win flow (test seam; default: ui/fx). */
+  readonly winFx?: Partial<WinFlowFx>;
+  /** Board size of a shipped level when known without loading (personal records). */
+  levelSize?(level: number): number | null;
 }

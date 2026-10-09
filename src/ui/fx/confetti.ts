@@ -6,8 +6,8 @@ import { cfg } from '../../app/config';
 import { PALETTE } from '../art/palette';
 
 const SHAPES = ['sq', 'rect', 'dot'] as const;
-/** Bright accents mixed into the region palette so the burst reads on the dark scrim. */
-const EXTRA = ['#FFD45C', '#FFFFFF', '#5FD3BD'];
+/** Bright accents mixed into the region palette so the burst reads on the dark scrim (tokens, phase2b §1.12). */
+const EXTRA = ['var(--gold)', '#fff', 'var(--accent)'];
 
 /** Appends the burst to `host`; returns a cleanup that removes it early. */
 export function burstConfetti(host: HTMLElement, opts?: { count?: number; durationMs?: number; random?: () => number }): () => void {
@@ -32,7 +32,7 @@ export function burstConfetti(host: HTMLElement, opts?: { count?: number; durati
     set('--fall', `${(38 + rnd() * 30).toFixed(1)}vmin`);
     set('--rot', `${Math.round((rnd() - 0.5) * 1440)}deg`);
     set('--delay', `${Math.round(rnd() * 120)}ms`);
-    set('--c', colors[Math.floor(rnd() * colors.length)] ?? '#FFD45C');
+    set('--c', colors[Math.floor(rnd() * colors.length)] ?? 'var(--gold)');
     set('--s', `${(0.7 + rnd() * 0.6).toFixed(2)}`);
     const inner = doc.createElement('b');
     piece.appendChild(inner);

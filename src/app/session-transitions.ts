@@ -1,7 +1,9 @@
 // Owner: C (Phase 2b; was app)
 // Transitions out of a finished or failed attempt (02 §4.2, §10, §13; 04 §5.7): O4 Continue / Retry,
-// O3 Next, O7 Done, Home (save or discard) and "I know how to play". Interstitials go through the
+// the victory screen's primary (next level / Play Level 2 / next event puzzle or back to the event /
+// daily Done), Home (save or discard) and "I know how to play". Interstitials go through the
 // pacing gate first, and the transition always goes ahead whatever the ad did.
+import type { EventDef } from '../game/events';
 import { canRevive } from '../game/reducer';
 import { applyTutorialDone } from '../game/stats';
 import type { Action, GameState, SaveData } from '../game/types';
@@ -41,6 +43,10 @@ export interface TransitionHost {
   closeFail(): void;
   /** After RETRY: start events, board entry and START after fx.boardEntryMs. */
   restartEntry(): void;
+  /** Event session: the next puzzle to play (events[id].solved), or null after the last one (phase2b §4.5). */
+  nextEventIndex?(): number | null;
+  /** "Back to event" (phase2b §4.5): the event screen. */
+  goEvent?(def: EventDef): void;
 }
 
 export type TransitionCommands = Pick<
@@ -90,6 +96,23 @@ export function createTransitions(host: TransitionHost): TransitionCommands {
         if (isReplay(m)) return cmds.onHome();
         host.leave('next');
         return host.start({ mode: 'level', level: Math.max(2, host.save().progress.level) });
+      }
+      if (m.mode === 'event' && m.event) {
+        // phase2b §4.5: "Puzzle {i+1}" or, after the last, "Back to event"; gate event_next either way.
+        const ev = m.event;
+        const mine = host.generation();
+        await host.runBusy(() => host.helpers.interstitial('event_next'));
+        if (host.generation() !== mine || host.disposed()) return;
+        const next = host.nextEventIndex?.() ?? null;
+        if (next === null) {
+          host.leave('home');
+          if (host.goEvent) host.goEvent(ev.def);
+          else host.goHome();
+          return;
+        }
+        host.leave('next');
+        await host.start({ mode: 'event', eventId: ev.def.id, index: next });
+        return;
       }
       if (m.mode !== 'level') return;
       const mine = host.generation();

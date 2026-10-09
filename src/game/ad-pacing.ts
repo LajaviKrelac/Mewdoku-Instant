@@ -12,24 +12,26 @@ export interface PacingInput {
   readonly now: number;
   /** Clock time when platform.start() resolved in this page load. */
   readonly sessionStartedAt: number;
-  readonly save: Pick<SaveData, 'progress' | 'ads' | 'firstSeenAt'>;
+  /** `purchases.noAds` (phase2b §8.3) turns interstitials off; absent = not owned. */
+  readonly save: Pick<SaveData, 'progress' | 'ads' | 'firstSeenAt'> & { readonly purchases?: Pick<SaveData['purchases'], 'noAds'> };
   /** capabilities().interstitial */
   readonly interstitialSupported: boolean;
 }
 
 /** Why the gate said no ('ok' = show). Logged as result 'gated' when not 'ok'. */
-export type GateDecision = 'ok' | 'disabled' | 'unsupported' | 'trigger' | 'min_levels' | 'grace' | 'cooldown';
+export type GateDecision = 'ok' | 'disabled' | 'no_ads' | 'unsupported' | 'trigger' | 'min_levels' | 'grace' | 'cooldown';
 
 const DAY_MS = 86_400_000;
 
 /**
  * 02 §13.2, checked in the spec's order; the first failing condition is the reason:
- * ads.enabled → capabilities.interstitial → trigger listed → completed ≥ minCompletedLevels (the
+ * ads.enabled → No Ads not owned (phase2b §8.3; rewarded ads stay) → capabilities.interstitial → trigger listed → completed ≥ minCompletedLevels (the
  * tutorial counts, dailies do not) → session grace → tenure cooldown since save.ads.lastAdAt.
  */
 export function interstitialGate(input: PacingInput, c: GameConfig = cfg): GateDecision {
   const ic = c.ads.interstitial;
   if (!c.ads.enabled) return 'disabled';
+  if (input.save.purchases?.noAds === true) return 'no_ads';
   if (!input.interstitialSupported) return 'unsupported';
   if (!ic.triggers.includes(input.trigger)) return 'trigger';
   if (input.save.progress.completed < ic.minCompletedLevels) return 'min_levels';
@@ -63,7 +65,7 @@ export function cooldownSecFor(tenure: number, c: GameConfig = cfg): number {
   return sec;
 }
 
-// ─────────────────────────────── banners (phase2b §3.2), F0 stub ───────────────────────────────
+// ─────────────────────────────── banners (phase2b §3.2) ───────────────────────────────
 
 export interface BannerGateInput {
   /** The screen about to show; only ads.banner.screens qualify (never the game screen, a full-screen overlay or the boot screen). */
@@ -83,7 +85,13 @@ export type BannerGateDecision = 'ok' | 'disabled' | 'unsupported' | 'screen' | 
  * tutorial. The 60 s reload window is banner-flow's (it needs the clock).
  */
 export function bannerGate(input: BannerGateInput, c: GameConfig = cfg): BannerGateDecision {
-  void input;
-  void c;
-  throw new Error('not implemented: bannerGate (C, phase2b §3.2)');
+  const b = c.ads.banner;
+  if (!c.ads.enabled || !b.enabled) return 'disabled';
+  if (!input.bannerSupported) return 'unsupported';
+  if (!(b.screens as readonly string[]).includes(input.screen)) return 'screen';
+  if (input.save.progress.completed < b.fromCompletedLevels) return 'min_levels';
+  if (input.save.purchases.noAds) return 'no_ads';
+  if (input.firstRunTutorial) return 'tutorial';
+  return 'ok';
 }
+

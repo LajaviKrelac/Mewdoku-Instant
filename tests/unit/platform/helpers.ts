@@ -25,6 +25,8 @@ export interface StubAdBehaviour {
 export interface StubConfig {
   supportedAPIs?: string[];
   locale?: string;
+  platform?: 'IOS' | 'ANDROID' | 'WEB' | 'MOBILE_WEB';
+  persist?: boolean;
   playerId?: string;
   initDelayMs?: number;
   startDelayMs?: number;
@@ -39,12 +41,41 @@ export interface StubConfig {
     startGameAsync?: (string | null)[];
   };
   ads?: { interstitial?: StubAdBehaviour; rewarded?: StubAdBehaviour };
+  // phase2b
+  banner?: { load?: string; loadDelayMs?: number; hide?: string; rateLimitMs?: number };
+  leaderboards?: {
+    api?: 'classic' | 'nezp' | 'both' | 'none';
+    names?: string[] | null;
+    entries?: Record<string, { playerId: string; score: number }[]>;
+    errors?: { setScore?: (string | null)[]; getEntries?: (string | null)[]; getPlayerEntry?: (string | null)[] };
+  };
+  overlay?: { load?: 'ok' | 'error' | 'never'; loadDelayMs?: number };
+  tournament?: { current?: { id: string; endTime: number; contextId?: string } | null; create?: string };
+  payments?: {
+    ready?: boolean;
+    readyDelayMs?: number;
+    catalog?: Record<string, unknown>[];
+    purchase?: string;
+    unconsumed?: Record<string, unknown>[];
+    errors?: { getCatalogAsync?: (string | null)[]; getPurchasesAsync?: (string | null)[]; consumePurchaseAsync?: (string | null)[] };
+  };
   presets?: string[];
 }
 
 export interface StubControl {
   calls: StubCall[];
-  state: { initialized: boolean; started: boolean; progress: number[]; flushing: boolean; adsCreated: number };
+  state: {
+    initialized: boolean;
+    started: boolean;
+    progress: number[];
+    flushing: boolean;
+    adsCreated: number;
+    bannerVisible: boolean;
+    bannerLastLoadAt: number | null;
+    overlaysOpen: number;
+    paymentsReady: boolean;
+    tournament: { id: string; endTime: number; score?: number } | null;
+  };
   names(): string[];
   count(name: string): number;
   find(name: string): StubCall[];
@@ -53,17 +84,27 @@ export interface StubControl {
   playerData(): Record<string, unknown>;
   setPlayerData(data: Record<string, unknown>): void;
   clearCalls(): void;
+  // phase2b
+  leaderboard(name: string): { playerId: string; score: number }[];
+  overlayEvent(name: string): void;
+  purchases(): { productID: string; purchaseToken: string; isConsumed: boolean }[];
+  setTournament(t: { id: string; endTime: number } | null): void;
 }
 
 const STUB_PATH = resolve(dirname(fileURLToPath(import.meta.url)), '../../fixtures/fbinstant-stub.js');
 let stubSrc: string | null = null;
 
-/** A fresh stub whose delays run on `timers` (a FakeClock in these tests). */
-export function createStub(config: StubConfig, timers: PlatformTimers): { sdk: FBInstantSDK; control: StubControl } {
+/**
+ * A fresh stub whose delays run on `timers` (a FakeClock in these tests). `doc` (jsdom) lets the stub
+ * draw its banner bar and build real iframes for overlay views.
+ */
+export function createStub(config: StubConfig, timers: PlatformTimers, doc?: Document): { sdk: FBInstantSDK; control: StubControl } {
   const root: Record<string, unknown> = {
     __FB_STUB_NO_INSTALL__: true,
     setTimeout: (fn: () => void, ms: number) => timers.setTimeout(fn, ms),
+    __stubNow: () => timers.now(), // the stub's banner rate limit and timestamps follow the test clock
   };
+  if (doc) root.document = doc;
   stubSrc ??= readFileSync(STUB_PATH, 'utf8');
   new Function('window', stubSrc)(root);
   const create = root.__createFbStub as (c: StubConfig) => { sdk: FBInstantSDK; control: StubControl };

@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
-// Owner: platform
-// web/mock-ads (04 §6.2): ?ads=ok|nofill|unsupported|close and the 1.5 s placeholder overlay.
+// Owner: D (Phase 2b; was platform)
+// web/mock-ads (04 §6.2): ?ads=ok|nofill|unsupported|close and the 1.5 s placeholder overlay; the
+// phase2b §3.3 mock banner bar driven by the same mode.
 import { describe, expect, it } from 'vitest';
 import { createFakeClock } from '../../../src/app/clock';
 import { cfg } from '../../../src/app/config';
-import { createMockAds, MOCK_AD_TEST_ID, readMockAdMode } from '../../../src/platform/web/mock-ads';
+import { createMockAds, createMockBanner, MOCK_AD_TEST_ID, MOCK_BANNER_HEIGHT_PX, MOCK_BANNER_TEST_ID, readMockAdMode } from '../../../src/platform/web/mock-ads';
 import { drain, track } from './helpers';
 
 const overlay = (): Element | null => document.querySelector(`[data-testid="${MOCK_AD_TEST_ID}"]`);
@@ -80,5 +81,29 @@ describe('createMockAds', () => {
     (overlay() as HTMLElement).click();
     expect(reached).toBe(0);
     await clock.advanceAsync(cfg.ads.mock.durationMs);
+  });
+});
+
+describe('createMockBanner (phase2b §3.3)', () => {
+  const bar = (): HTMLElement | null => document.querySelector(`[data-testid="${MOCK_BANNER_TEST_ID}"]`);
+
+  it('ok: a 50 px grey "Banner placeholder" bar fixed at the bottom; hide removes it; show is idempotent', async () => {
+    const banner = createMockBanner('ok', { doc: document })!;
+    await expect(banner.show('bottom')).resolves.toEqual({ ok: true });
+    await banner.show('bottom');
+    expect(document.querySelectorAll(`[data-testid="${MOCK_BANNER_TEST_ID}"]`)).toHaveLength(1);
+    const el = bar()!;
+    expect(el.textContent).toBe('Banner placeholder');
+    expect([el.style.position, el.style.bottom, el.style.height]).toEqual(['fixed', '0px', `${MOCK_BANNER_HEIGHT_PX}px`]);
+    await banner.hide();
+    expect(bar()).toBeNull();
+    await banner.hide(); // nothing up: fine
+  });
+
+  it('nofill answers no_fill without a bar; unsupported has no banner at all', async () => {
+    await expect(createMockBanner('nofill', { doc: document })!.show('bottom')).resolves.toEqual({ ok: false, reason: 'no_fill' });
+    expect(bar()).toBeNull();
+    expect(createMockBanner('unsupported', { doc: document })).toBeUndefined();
+    expect(createMockBanner('close', { doc: document })).toBeDefined();
   });
 });

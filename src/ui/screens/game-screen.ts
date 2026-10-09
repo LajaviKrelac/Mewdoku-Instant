@@ -1,8 +1,9 @@
 // Owner: B (Phase 2b)
 // S2 Game (02 §5): composes ui-board pieces (top bar, pills, rule chips, board, tool bar), runs the
 // 02 §19 layout on resize, and forwards input to the session through callbacks.
-// Phase 2b (B): the win-flow hooks C drives (fishRect, showFishPill, fishLabel, glow; phase2b §2.2),
-// the event title and data-event-theme (§4.4). F0 added the signatures; the bodies are B's.
+// Phase 2b (B): the win-flow hooks C drives (fishRect, showFishPill, fishLabel, glow, showScrim;
+// phase2b §2.2), the Home / Gear lock during the win flow (GameView.chromeLocked), and event mode
+// (§4.4): the "{event} · {index}" title, data-event-theme on the root and the accessory over the cats.
 // Row heights from computeLayout() are published as CSS variables on the root so the HUD rows,
 // the board stage and the tool row follow the same numbers (compact mode below 640 px).
 //
@@ -11,14 +12,15 @@
 // tool button is disabled, the coach's "Got it" goes away) it is moved back to the board.
 //
 // Classes: .screen.screen--game[data-mode][data-status][data-compact] > main.game__col
-//          (.game__hud .game__stage .game__tools); vars --col-w --top-bar --pills --chips --tools
-//          --board --vgap
+//          (.game__hud .game__stage .game__tools) + .game__scrim; vars --col-w --top-bar --pills
+//          --chips --tools --board --vgap
 import type { CellIndex } from '../../engine/types';
 import type { EventDef } from '../../game/events';
 import type { FxHandle } from '../fx/fish-flight';
+import { playGlow } from '../fx/glow';
 import type { GameEvent, ModeId, PaintMode, Status } from '../../game/types';
 import { cfg } from '../../app/config';
-import { formatShortDate, t } from '../../i18n';
+import { formatShortDate, t, translate } from '../../i18n';
 import { createBoardView, type BoardHighlight, type BoardModel } from '../board/board-view';
 import { computeLayout, readViewport, type GameLayout, type ViewportInfo } from '../board/layout';
 import { createPills, type PillsProps } from '../hud/pills';
@@ -57,6 +59,11 @@ export interface GameView {
    * data-event-theme={def.id}, the accessory over the board cats. null in every other mode.
    */
   readonly event: { readonly def: EventDef; readonly index: number } | null;
+  /**
+   * phase2b §2.2: the win flow runs and the ranking panel has not opened yet: the top bar's Home and
+   * Gear are aria-disabled and ignore presses. Optional (absent = false).
+   */
+  readonly chromeLocked?: boolean;
 }
 
 /** Session commands (app/session.ts GameCommands) bound by the app. */
@@ -88,10 +95,17 @@ export interface GameScreen extends View<GameView> {
   fishLabel(text: string): void;
   /** Win flow (§2.2 t = 300): ui/fx/glow.ts playGlow on these cat cells of this board, with the screen's reduced-motion flag. */
   glow(cells: readonly CellIndex[]): FxHandle;
+  /**
+   * Win flow (§2.2 t = 4 200): the dark --scrim fades in over the screen (fx.win.scrimFadeMs; 150 ms
+   * with reduced motion) so the ranking panel opens on it at 4 500. It hides itself while a modal
+   * overlay is open (the overlay brings its own scrim). Optional (phase2b B addition).
+   */
+  showScrim?(): void;
 }
 
-/** The top-bar title for a game view ("Level 37", "Daily · Tue 6 Oct"). */
-export function gameTitle(v: Pick<GameView, 'mode' | 'level' | 'dateKey'>): string {
+/** The top-bar title for a game view ("Level 37", "Daily · Tue 6 Oct", "Lantern Walk · 13"). */
+export function gameTitle(v: Pick<GameView, 'mode' | 'level' | 'dateKey'> & { readonly event?: GameView['event'] }): string {
+  if (v.event) return t('event.title.game', { event: translate(v.event.def.nameKey), index: v.event.index + 1 });
   if (v.mode === 'daily') return t('game.title.daily', { date: formatShortDate(v.dateKey ?? '') });
   return t('game.title.level', { level: v.level ?? 1 });
 }
@@ -123,6 +137,7 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
     hearts: v.hearts,
     maxHearts: v.maxHearts,
     compact: layout.compact,
+    reducedMotion: v.reducedMotion,
   });
   const chipsProps = (v: GameView): RuleChipsProps => ({ compact: layout.compact, highlight: v.chipHighlight });
   const toolProps = (v: GameView): ToolBarProps => ({
@@ -133,7 +148,16 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
     hintsFree: v.hintsFree,
   });
 
-  const topBar = createTopBar(topBarProps(view), { onHome: () => cb.onHome(), onSettings: () => cb.onSettings(), onTrophy: () => undefined });
+  const locked = (): boolean => current.chromeLocked === true;
+  const topBar = createTopBar(topBarProps(view), {
+    onHome: () => {
+      if (!locked()) cb.onHome();
+    },
+    onSettings: () => {
+      if (!locked()) cb.onSettings();
+    },
+    onTrophy: () => undefined,
+  });
   const pills = createPills(pillsProps(view));
   const chips = createRuleChips(chipsProps(view));
   const board = createBoardView(
@@ -150,12 +174,15 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
   const tools = createToolBar(toolProps(view), { onBulb: () => cb.onBulb(), onPaw: () => cb.onPaw() });
 
   const stage = h('div', { class: 'game__stage' }, board.el);
+  /** The win flow's scrim (§2.2 t = 4 200), under the overlays. */
+  const scrim = h('div', { class: 'game__scrim', 'aria-hidden': 'true', hidden: true });
   const el = h(
     'div',
     { class: 'screen screen--game' },
     topBar.el,
     // The play area is the page's main landmark (Home uses <main> too).
     h('main', { class: 'game__col' }, h('div', { class: 'game__hud' }, pills.el, chips.el), stage, h('div', { class: 'game__tools' }, tools.el)),
+    scrim,
   );
 
   const doc = el.ownerDocument;
@@ -243,10 +270,24 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
   doc.addEventListener('keydown', onDocKey);
   doc.addEventListener('focusout', onFocusOut, true);
 
+  /** Home and Gear while the win flow runs (§2.2): aria-disabled, presses ignored (see `locked`). */
+  const renderChromeLock = (on: boolean): void => {
+    for (const sel of ['.top-bar__btn--home', '.top-bar__btn--settings']) {
+      const b = topBar.el.querySelector<HTMLElement>(sel);
+      if (!b) continue;
+      if (on) b.setAttribute('aria-disabled', 'true');
+      else b.removeAttribute('aria-disabled');
+    }
+  };
+
   const render = (v: GameView, prev: GameView | null): void => {
     el.dataset.mode = v.mode;
     el.dataset.status = v.status;
+    if (v.event) el.dataset.eventTheme = v.event.def.id;
+    else delete el.dataset.eventTheme;
+    if (!prev || prev.event?.def.theme.accessory !== v.event?.def.theme.accessory) board.setAccessory(v.event?.def.theme.accessory ?? null);
     topBar.update(topBarProps(v));
+    if (!prev || (prev.chromeLocked === true) !== (v.chromeLocked === true)) renderChromeLock(v.chromeLocked === true);
     pills.update(pillsProps(v));
     chips.update(chipsProps(v));
     tools.update(toolProps(v));
@@ -294,9 +335,19 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
     fishRect: () => pills.fishRect(),
     showFishPill: (n) => pills.showFish(n),
     fishLabel: (text) => pills.fishLabel(text),
-    glow(cells) {
-      void cells;
-      throw new Error('not implemented: GameScreen.glow (B, phase2b §2.2)');
+    glow: (cells) => playGlow(board.el, cells, current.reducedMotion),
+    showScrim() {
+      if (!scrim.hidden) return;
+      const ms = current.reducedMotion ? cfg.fx.reducedMotionFadeMs : cfg.fx.win.scrimFadeMs;
+      scrim.style.setProperty('--scrim-ms', `${ms}ms`);
+      scrim.hidden = false;
+      if (typeof scrim.animate === 'function') {
+        try {
+          scrim.animate([{ opacity: 0 }, { opacity: 1 }], { duration: ms, easing: 'ease-out' });
+        } catch {
+          // the scrim simply shows
+        }
+      }
     },
     destroy() {
       w0?.removeEventListener('resize', onResize);

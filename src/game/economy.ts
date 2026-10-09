@@ -1,4 +1,4 @@
-// Owner: C (Phase 2b adds the fish wallet, phase2b §2.8; F0 stubs at the end)
+// Owner: C (Phase 2b adds the fish wallet and the fish swaps, phase2b §2.8)
 // Hint/kitty ledger and the free-fallback cooldown (02 §9, §13.3; Phase 3 hook: currency map). PURE:
 // every function returns a NEW SaveData (never mutates), with `now` passed in. updatedAt is left to
 // the save scheduler, which stamps every write (04 §7.1).
@@ -64,7 +64,7 @@ export function recordAdShown(save: SaveData, now: number): SaveData {
   return { ...save, ads: { ...save.ads, lastAdAt: now } };
 }
 
-// ─────────────────────────────── fish (phase2b §2.8), F0 stubs ───────────────────────────────
+// ─────────────────────────────── fish (phase2b §2.8) ───────────────────────────────
 
 /** Fish for one counted win: `base` (fish.perWin, or fish.tutorial) plus `bonus` (Hard or daily). */
 export interface FishAward {
@@ -74,36 +74,72 @@ export interface FishAward {
   readonly bonusKind: 'hard' | 'daily' | null;
 }
 
+const NO_FISH: FishAward = Object.freeze({ base: 0, bonus: 0, bonusKind: null });
+
 /**
  * The §2.8 earn table: level 3, Hard level 3 + 2, daily 3 + 2, event puzzle 3, first-run tutorial 3,
  * tutorial replay 0. Applied only when the win is counted (applyLevelWin's guard, a daily once per
- * date, an event puzzle once per index).
+ * date, an event puzzle once per index): the caller passes the award to addFish only then.
  */
 export function fishForWin(mode: ModeId, opts: { readonly hard: boolean; readonly replay: boolean }, c: GameConfig = cfg): FishAward {
-  void mode;
-  void opts;
-  void c;
-  throw new Error('not implemented: fishForWin (C, phase2b §2.8)');
+  const f = c.fish;
+  switch (mode) {
+    case 'tutorial':
+      return opts.replay ? NO_FISH : { base: f.tutorial, bonus: 0, bonusKind: null };
+    case 'level':
+      return opts.hard ? { base: f.perWin, bonus: f.hardBonus, bonusKind: 'hard' } : { base: f.perWin, bonus: 0, bonusKind: null };
+    case 'daily':
+      return { base: f.perWin, bonus: f.dailyBonus, bonusKind: 'daily' };
+    case 'event':
+      return { base: f.perWin, bonus: 0, bonusKind: null };
+    default:
+      return NO_FISH;
+  }
 }
 
-/** wallet.fish += n (capped at fish.max) and wallet.earned += n (lifetime, capped). Never negative. */
-export function addFish(save: SaveData, n: number, c: GameConfig = cfg): SaveData {
-  void save;
-  void n;
-  void c;
-  throw new Error('not implemented: addFish (C, phase2b §2.8)');
+/** base + bonus of an award. */
+export function fishTotal(award: FishAward): number {
+  return award.base + award.bonus;
+}
+
+/**
+ * wallet.fish += n (capped at fish.max) and wallet.earned += n (lifetime, capped). Never negative:
+ * a negative or fractional n throws a RangeError. n = 0 returns the same save. Paid fish packs do
+ * not count as earned (purchases.ts adds them with `{ earned: false }`).
+ */
+export function addFish(save: SaveData, n: number, c: GameConfig = cfg, opts: { readonly earned?: boolean } = {}): SaveData {
+  checkAmount(n, 'addFish');
+  if (n === 0) return save;
+  const max = c.fish.max;
+  const w = save.wallet;
+  const earned = opts.earned === false ? w.earned : Math.min(max, w.earned + n);
+  return { ...save, wallet: { fish: Math.min(max, w.fish + n), earned } };
 }
 
 /** wallet.fish −= price. Throws a RangeError when the wallet holds less (callers check canAfford first). */
 export function spendFish(save: SaveData, price: number): SaveData {
-  void save;
-  void price;
-  throw new Error('not implemented: spendFish (C, phase2b §2.8)');
+  checkAmount(price, 'spendFish');
+  const have = save.wallet.fish;
+  if (have < price) throw new RangeError(`spendFish: wallet ${have} < ${price}`);
+  if (price === 0) return save;
+  return { ...save, wallet: { ...save.wallet, fish: have - price } };
 }
 
-/** wallet.fish ≥ price. */
+/** wallet.fish ≥ price (a bad price is never affordable). */
 export function canAfford(save: SaveData, price: number): boolean {
-  void save;
-  void price;
-  throw new Error('not implemented: canAfford (C, phase2b §2.8)');
+  return Number.isInteger(price) && price >= 0 && save.wallet.fish >= price;
+}
+
+/** The swap price of one hint or kitty in fish (shop.hintFish / shop.kittyFish, §2.8). */
+export function swapPrice(item: 'hint' | 'kitty', c: GameConfig = cfg): number {
+  return item === 'hint' ? c.shop.hintFish : c.shop.kittyFish;
+}
+
+/**
+ * One swap (§2.8, §8.5): spends the price and grants one hint or kitty. Throws a RangeError when the
+ * wallet holds less than the price (callers check canAfford first).
+ */
+export function swapFish(save: SaveData, item: 'hint' | 'kitty', c: GameConfig = cfg): SaveData {
+  const paid = spendFish(save, swapPrice(item, c));
+  return grant(paid, item === 'hint' ? 'hints' : 'kitties', 1, c);
 }

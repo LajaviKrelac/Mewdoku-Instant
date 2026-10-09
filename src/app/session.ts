@@ -2,27 +2,35 @@
 // Level-session orchestrator (04 §3, §5.2, §5.7): reducer + effects (audio, haptics, announcer,
 // saves, analytics, FX routing), START / KITTY_DONE timers, 1 s TICK while visible, hint free-reopen
 // cache, helper and ad flows, tutorial filter/advance, win/lose bookkeeping and overlays.
+// Phase 2b: event puzzles (mode `event`, §4.4) and the post-win flow (§2.2): the rewards (fish,
+// points, event progress) are saved with the win at t = 0, the ranking submission and fetch start at
+// once, then win-flow.ts plays glow → fish → ranking panel → victory screen on the session clock.
 // Helper flows live in helper-flows.ts, pure effect tables in session-effects.ts, timers and overlay
 // props in session-parts.ts.
-import type { HintStep, Puzzle } from '../engine/types';
+import type { CellIndex, HintStep, Puzzle } from '../engine/types';
+import { eventEnd, eventRules, type EventDef } from '../game/events';
 import { newGame, restoreGame, toInProgress } from '../game/factory';
 import { getMode, rulesFor } from '../game/modes';
 import { isHard } from '../game/progression';
 import { reduce } from '../game/reducer';
 import { validateSlot } from '../game/save';
+import { encodeDailyScore, encodeEventScore, encodePointsScore } from '../game/scoring';
 import { advance, filterTutorialAction, tutorialStep } from '../game/tutorial';
-import type { Action, GameEvent, GameState, ModeId } from '../game/types';
+import type { Action, BoardKey, GameEvent, GameState, ModeId, RuleFlags } from '../game/types';
+import { fishSourceRows } from '../ui/fx/fish-flight';
+import type { RankingListState, RankScoreView } from '../ui/overlays/ranking-panel';
 import type { GameScreen, GameScreenCallbacks, GameView } from '../ui/screens/game-screen';
-import { t } from '../i18n';
+import { t, translate } from '../i18n';
 import type { TimerId } from './clock';
 import { cfg } from './config';
-import type { AnalyticsEvent } from './events';
+import type { AnalyticsEvent, RankResult } from './events';
 import { createHelperFlows } from './helper-flows';
-import { feedbackFor, failEvent, levelParam, mistakeEvent, startEvents, winBookkeeping } from './session-effects';
+import { feedbackFor, failEvent, levelParam, mistakeEvent, startEvents, winBookkeeping, type WinSummary } from './session-effects';
 import { createFeedbackPlayer, createSessionTimers, defaultColors, defaultPraise, overlayProps, withoutSlot, withSlot, type SaveSlot } from './session-parts';
 import { createTransitions } from './session-transitions';
 import { shallowEqual, type AppState, type OverlayId, type SessionMeta, type SessionRequest } from './store';
-import { asTutorialStep, boardLocked, selectGameView, type ViewContext } from './views';
+import { asTutorialStep, boardKindOf, boardLocked, personalRecords, selectGameView, selectRankingView, selectVictoryView, type ViewContext } from './views';
+import { createWinFlow, type WinFlowVariant } from './win-flow';
 
 export type { GameCommands, Session, SessionDeps } from './session-types';
 import type { Session, SessionDeps } from './session-types';
@@ -44,7 +52,12 @@ export function createSession(deps: SessionDeps): Session {
   const setLock = (inputLocked: boolean): void =>
     store.update((s) => (s.ui.inputLocked === inputLocked ? s : { ...s, ui: { ...s.ui, inputLocked } }));
   const slotFor = (m: SessionMeta): SaveSlot | null => (m.substitute ? null : getMode(m.mode).saveSlot);
-  const viewCtx = (): ViewContext => ({ now: clock.now(), capabilities: caps(), platformId: platform.id });
+  const viewCtx = (): ViewContext => ({
+    now: clock.now(),
+    capabilities: caps(),
+    platformId: platform.id,
+    ...(deps.levelSize ? { levelSize: deps.levelSize } : {}),
+  });
 
   let gen = 0;
   let disposed = false;
@@ -108,6 +121,27 @@ export function createSession(deps: SessionDeps): Session {
     afterKitty: () => {
       if (game()?.status === 'kitty') timers.later(c.kitty.revealMs, () => dispatch({ type: 'KITTY_DONE' }));
     },
+    walletChanged: () => emitWallet(),
+  });
+
+  function emitWallet(): void {
+    const { fish, earned } = save().wallet;
+    bus.emit('wallet', { fish, earned });
+  }
+
+  const winFlow = createWinFlow({
+    clock,
+    config: c,
+    sfx: { play: (id, opts) => fx.guard(() => deps.sfx.play(id, opts)) },
+    haptics: (pattern) => {
+      if (save().settings.haptics && caps().haptics) fx.guard(() => platform.haptics.pulse(pattern));
+    },
+    announce: (message) => fx.announce(message),
+    root: () => deps.root?.() ?? null,
+    ...(deps.winFx ? { fx: deps.winFx } : {}),
+    onError: (error) => bus.emit('error', { where: 'win_flow', error }),
+    openRanking: (opts) => openRanking(opts.tapMinMs),
+    openVictory: () => openVictory(),
   });
 
   // ─────────────────────────────── reduce + effects ───────────────────────────────
@@ -165,26 +199,208 @@ export function createSession(deps: SessionDeps): Session {
     if (m.mode === 'tutorial') tutorialAdvance();
   }
 
+  // ─────────────────────────────── win (phase2b §2.2) ───────────────────────────────
+
+  /** The current win, from WON until the session leaves the board. */
+  let win: {
+    readonly summary: WinSummary;
+    readonly meta: SessionMeta;
+    readonly praise: number;
+    readonly board: BoardKey | null;
+    result: RankResult | null;
+    panelOpen: boolean;
+    logged: boolean;
+  } | null = null;
+
+  /** The three fish source cats (§2.3): rows floor((n−1)/4), floor((n−1)/2), floor(3(n−1)/4). */
+  function fishSources(puzzle: Puzzle): CellIndex[] {
+    const n = puzzle.n;
+    let rows: readonly number[];
+    try {
+      rows = fishSourceRows(n);
+    } catch {
+      rows = [Math.floor((n - 1) / 4), Math.floor((n - 1) / 2), Math.floor((3 * (n - 1)) / 4)];
+    }
+    return rows.map((r) => r * n + (puzzle.solution[r] ?? 0));
+  }
+
+  /** Every cat cell in row order (the solution cells of a won board). */
+  function catCells(puzzle: Puzzle): CellIndex[] {
+    const out: CellIndex[] = [];
+    for (let r = 0; r < puzzle.n; r++) out.push(r * puzzle.n + (puzzle.solution[r] ?? 0));
+    return out;
+  }
+
+  /** The board a win ranks on and its score now (§5.3), or null (tutorial). */
+  function boardScore(summary: WinSummary, m: SessionMeta): { board: BoardKey; score: number } | null {
+    if (summary.mode === 'level') return { board: c.rank.boards.points, score: encodePointsScore(summary.pointsTotal, c) };
+    if (summary.mode === 'daily' && m.dateKey) return { board: c.rank.boards.daily, score: encodeDailyScore(m.dateKey, summary.ms, c) };
+    if (summary.mode === 'event' && summary.event) {
+      const e = summary.event;
+      return { board: e.def.leaderboard, score: encodeEventScore(e.solvedAfter, e.totalMs) };
+    }
+    return null;
+  }
+
+  /** My own score as I know it, for "Your score" when the provider cannot tell (never a guess). */
+  function myScoreView(summary: WinSummary): RankScoreView | null {
+    if (summary.mode === 'level') return { kind: 'points', points: summary.pointsTotal };
+    if (summary.mode === 'daily') return { kind: 'time', ms: summary.ms };
+    if (summary.mode === 'event' && summary.event) {
+      const e = summary.event;
+      return { kind: 'event', solved: e.solvedAfter, total: e.def.puzzles.count, ms: e.totalMs };
+    }
+    return null;
+  }
+
+  function listFor(w: NonNullable<typeof win>): RankingListState {
+    if (!w.result) return { kind: 'loading' };
+    const s = w.summary;
+    const records = personalRecords(store.get(), viewCtx(), {
+      board: boardKindOf(s.mode),
+      n: s.n,
+      thisMs: s.ms,
+      event: s.event?.def ?? null,
+    });
+    const ctx = { records, myScore: myScoreView(s), ...(s.event ? { eventTotal: s.event.def.puzzles.count } : {}) };
+    if (!deps.rankings) return { kind: 'records', records, reason: 'local' };
+    return deps.rankings.listState(w.result, ctx);
+  }
+
+  function rankingTitle(w: NonNullable<typeof win>): string {
+    const e = w.summary.event;
+    if (e) return t('rank.title.event', { event: translate(e.def.nameKey) });
+    return w.summary.mode === 'daily' ? t('rank.title.daily') : t('rank.title.points');
+  }
+
+  function logPanel(w: NonNullable<typeof win>): void {
+    if (w.logged || !w.panelOpen || !w.result || !w.board) return;
+    w.logged = true;
+    log({
+      name: 'rank_panel',
+      params: { board: w.board, api: w.result.api, ms: deps.rankings?.fetchMs(w.board) ?? 0, ok: w.result.ok ? 1 : 0 },
+    });
+  }
+
+  function rankingProps(w: NonNullable<typeof win>, tapMinMs: number) {
+    return {
+      ...selectRankingView(store.get(), viewCtx(), w.summary, listFor(w), { tapMinMs }),
+      onContinue: () => winFlow.continueFromRanking(),
+      onSeeTop: () => {
+        if (w.board) void deps.rankings?.showList(w.board, rankingTitle(w), undefined, w.summary.event?.def.puzzles.count);
+      },
+      onListArea: (rect: DOMRect) => {
+        if (!w.board || !deps.rankings) return;
+        void deps.rankings.showList(w.board, rankingTitle(w), rect, w.summary.event?.def.puzzles.count).then((ok) => {
+          if (ok || win !== w || !router.isOpen('ranking')) return;
+          // The overlay could not be placed: the honest fallback is my own records.
+          const records = personalRecords(store.get(), viewCtx(), { board: boardKindOf(w.summary.mode), n: w.summary.n, thisMs: w.summary.ms, event: w.summary.event?.def ?? null });
+          router.update('ranking', { ...rankingProps(w, tapMinMs), list: { kind: 'records', records, reason: 'unavailable' } });
+        });
+      },
+    };
+  }
+
+  let panelTapMinMs = c.rank.panelTapMinMs;
+  function openRanking(tapMinMs: number): void {
+    const w = win;
+    if (!w) return;
+    w.panelOpen = true;
+    panelTapMinMs = tapMinMs;
+    router.open('ranking', rankingProps(w, tapMinMs));
+    logPanel(w);
+  }
+
+  function openVictory(): void {
+    const w = win;
+    if (!w) return;
+    const firstRunTutorial = w.summary.mode === 'tutorial' && !w.summary.replay;
+    // §3.2: the victory screen may carry a banner in its own reserved band (set before the props are built).
+    if (deps.banners) void deps.banners.screenShown('victory', { firstRunTutorial }).catch(() => undefined);
+    const data = selectVictoryView(store.get(), viewCtx(), w.summary, { praise: w.praise }, c);
+    const m = w.meta;
+    router.open('victory', {
+      ...data,
+      now: () => clock.now(),
+      onPrimary: () => {
+        if (m.mode === 'daily') void session.onDailyDone();
+        else void session.onNext();
+      },
+      onHome: () => session.onHome(),
+      onShop: () => deps.openShop?.(),
+    });
+    if (router.isOpen('ranking')) router.close('ranking');
+    deps.rankings?.closeList();
+  }
+
   function onWon(state: GameState, m: SessionMeta, restored: boolean): void {
-    const book = winBookkeeping(save(), m, state);
+    const before = save();
+    const book = winBookkeeping(before, m, state, { now: clock.now(), event: m.event ?? null, restored, config: c });
     updateSave(() => book.save);
-    if (book.critical) deps.saves.critical();
+    if (book.critical) deps.saves.critical(); // t = 0: every reward is saved before any animation (§2.2)
     for (const e of book.events) log(e);
+    const s = book.summary;
+    if (book.fishEarned !== 0) emitWallet();
+    if (book.save.stock !== before.stock) bus.emit('stock', { hints: book.save.stock.hints, kitties: book.save.stock.kitties });
     if (m.mode === 'level' && m.level !== null) deps.levels.prefetch(m.level + 1);
     router.close('coach');
     if (!restored) timers.later(c.fx.winHappyDelayMs, () => fx.play({ sfx: 'win', haptic: c.haptics.win }));
-    timers.later(restored ? 0 : c.fx.winOverlayDelayMs, () => {
-      const props = overlayProps.win(state, m, {
-        clock,
-        config: c,
-        praise: (deps.pickPraise ?? defaultPraise)(),
-        reducedMotion: store.get().ui.reducedMotion,
-        onNext: () => void session.onNext(),
-        onHome: () => session.onHome(),
-        onDone: () => void session.onDailyDone(),
-      });
-      if (props.kind === 'daily') router.open('daily_result', props.props);
-      else router.open('win', props.props);
+
+    const variant: WinFlowVariant = restored
+      ? 'restored'
+      : s.mode === 'tutorial'
+        ? s.replay
+          ? 'tutorial_replay'
+          : 'tutorial'
+        : s.mode;
+    const target = s.mode !== 'tutorial' ? boardScore(s, m) : null;
+    win = {
+      summary: s,
+      meta: m,
+      praise: (deps.pickPraise ?? defaultPraise)(),
+      board: target?.board ?? null,
+      result: null,
+      panelOpen: false,
+      logged: false,
+    };
+    const w = win;
+    // §5.5: submit and fetch from t = 0, so the panel is ready at 4.5 s (deadline rank.fetchTimeoutMs).
+    if (target && s.counted) {
+      const r = deps.rankings;
+      if (r) {
+        void r
+          .flushPending()
+          .then(() => r.submit(target.board, target.score, s.ms))
+          .catch(() => undefined);
+      }
+      if (s.pointsEarned > 0) void deps.groups?.onWin(s.pointsEarned).catch(() => undefined);
+    }
+    if (target && variant !== 'restored') {
+      const fetched = deps.rankings ? deps.rankings.fetch(target.board) : Promise.resolve<RankResult>({ board: target.board, api: 'local', mine: null, top: [], ok: true });
+      void fetched.then(
+        (result) => {
+          if (win !== w) return;
+          w.result = result;
+          if (w.panelOpen && router.isOpen('ranking')) router.update('ranking', rankingProps(w, panelTapMinMs));
+          logPanel(w);
+        },
+        () => undefined,
+      );
+    }
+    const scr = screen;
+    if (!scr) {
+      openVictory();
+      return;
+    }
+    winFlow.start({
+      variant,
+      screen: scr,
+      catCells: catCells(state.puzzle),
+      fishSources: fishSources(state.puzzle),
+      fishBefore: s.fish?.before ?? before.wallet.fish,
+      fishBase: s.fish?.base ?? 0,
+      fishBonus: s.fish?.bonus ?? 0,
+      reducedMotion: store.get().ui.reducedMotion,
     });
   }
 
@@ -271,6 +487,9 @@ export function createSession(deps: SessionDeps): Session {
   function teardown(): void {
     gen++;
     busy = false;
+    winFlow.cancel();
+    deps.rankings?.closeList();
+    win = null;
     timers.clear();
     unbindView?.();
     unbindView = null;
@@ -300,7 +519,8 @@ export function createSession(deps: SessionDeps): Session {
     const slotKey = substitute ? null : gm.saveSlot;
     // The mode's RuleFlags under this session's config: the new board, the slot validation and the
     // restored board all use the same hearts / revive limits.
-    const rules = rulesFor(mode, c);
+    const eventDef = req.mode === 'event' ? (deps.events?.byId(req.eventId) ?? null) : null;
+    const rules: RuleFlags = eventDef ? eventRules(eventDef, c) : rulesFor(mode, c);
     let current = save();
     let state = newGame(puzzle, mode, rules);
     let cleared = false;
@@ -333,6 +553,7 @@ export function createSession(deps: SessionDeps): Session {
       colors: defaultColors(deps.regionColors, puzzle, gm.fixedColors),
       tutorialStep: mode === 'tutorial' ? 1 : null,
       substitute,
+      event: eventDef && req.mode === 'event' ? { def: eventDef, index: req.index } : null,
     };
     store.update((app) => ({ ...app, screen: 'game', game: state, session: m, save: current, ui: { ...app.ui, inputLocked: false } }));
     if (cleared) deps.saves.touch();
@@ -365,8 +586,13 @@ export function createSession(deps: SessionDeps): Session {
     onPaint: (cells, mode) => session.onPaint(cells, mode),
     onBulb: () => void session.onBulb(),
     onPaw: () => void session.onPaw(),
-    onHome: () => session.onHome(),
-    onSettings: () => deps.openSettings?.(),
+    // §2.2: the top bar's Home and Gear do nothing from WON until the ranking panel (or the victory) opens.
+    onHome: () => {
+      if (!winFlow.blocking()) session.onHome();
+    },
+    onSettings: () => {
+      if (!winFlow.blocking()) deps.openSettings?.();
+    },
   };
 
   const boardInput = (a: Action): void => {
@@ -398,6 +624,14 @@ export function createSession(deps: SessionDeps): Session {
       router.close('fail');
       failProps = null;
     },
+    nextEventIndex: () => {
+      const m = meta();
+      const ev = m?.event;
+      if (!ev) return null;
+      const solved = save().events[ev.def.id]?.solved ?? 0;
+      return solved < ev.def.puzzles.count ? solved : null;
+    },
+    goEvent: (def) => deps.goEvent?.(def),
     restartEntry: () => {
       const st = game();
       const m = meta();
@@ -415,9 +649,21 @@ export function createSession(deps: SessionDeps): Session {
         request.mode === 'level' && request.level <= 1 ? { mode: 'tutorial', replay: save().tutorialDone } : request;
       teardown();
       hideLoading();
+      deps.banners?.screenGone();
+      void deps.banners?.hide().catch(() => undefined); // §3.2: never a banner on the game screen
       const mine = gen;
       let puzzle: Puzzle;
       let substitute = false;
+      let eventDef: EventDef | null = null;
+      if (req.mode === 'event') {
+        eventDef = deps.events?.byId(req.eventId) ?? null;
+        if (!eventDef || clock.now() >= eventEnd(eventDef) || req.index < 0 || req.index >= eventDef.puzzles.count) {
+          toast(t('toast.error'));
+          store.update((app) => ({ ...app, game: null, session: null }));
+          deps.goHome?.();
+          return;
+        }
+      }
       try {
         if (req.mode === 'tutorial') puzzle = deps.levels.getTutorial();
         else {
@@ -431,7 +677,12 @@ export function createSession(deps: SessionDeps): Session {
           }, c.loading.indicatorDelayMs);
           // Last resort (04 §8: never a dead end): a board still not ready after loading.failSafeMs
           // goes back Home with a toast, like a failed load; a late result is ignored.
-          const load = req.mode === 'level' ? deps.levels.getLevel(req.level) : deps.levels.getDaily(req.dateKey);
+          const load =
+            req.mode === 'level'
+              ? deps.levels.getLevel(req.level)
+              : req.mode === 'daily'
+                ? deps.levels.getDaily(req.dateKey)
+                : deps.levels.getEventPuzzle(eventDef as EventDef, req.index);
           const lp = await Promise.race([
             load,
             new Promise<never>((_, reject) => {
@@ -516,12 +767,17 @@ export function createSession(deps: SessionDeps): Session {
       return toast(t('hint.unavailable'));
     }
     toast(t('toast.error'));
-    if (s?.status === 'won' ? id === 'win' || id === 'daily_result' : s?.status === 'lost' && id === 'fail') session.onHome();
+    const winOverlay = id === 'win' || id === 'daily_result' || id === 'ranking' || id === 'victory';
+    if (s?.status === 'won' ? winOverlay : s?.status === 'lost' && id === 'fail') session.onHome();
   }
 
   const offs = [
     bus.on('pause', ({ reason }) => timers.pause(reason)),
-    bus.on('resume', ({ reason }) => timers.resume(reason)),
+    bus.on('resume', ({ reason }) => {
+      timers.resume(reason);
+      // §2.2: back from a hidden page, every missed win-flow step runs once, at its end state.
+      if (reason === 'hidden' || reason === 'fb_pause') winFlow.catchUp();
+    }),
     bus.on('overlay:open', syncModal),
     bus.on('overlay:close', syncModal),
     bus.on('overlay:failed', ({ id }) => onOverlayFailed(id)),

@@ -7,10 +7,14 @@
 // `catalog: LocaleCatalog` (see LocaleModule).
 import { BUILD_LOCALES, LOCALE_LOADERS } from 'virtual:mewdoku-locales';
 import type { LocaleId } from '../app/config';
-import type { Catalog } from './en';
+import type { Catalog, PluralExtraKey } from './en';
 
-/** A translated catalogue (E's drafts). Missing keys fall back to English at runtime; the catalogue test (E) requires them all. */
-export type LocaleCatalog = Partial<Catalog>;
+/**
+ * A translated catalogue (E's drafts): the English keys plus the extra plural forms its language
+ * uses (`a11y.mistake.few`, …). Missing keys fall back to English at runtime; the catalogue test
+ * (tests/unit/i18n/catalogs.spec.ts) and `npm run i18n:check` require them all.
+ */
+export type LocaleCatalog = Partial<Catalog> & { readonly [K in PluralExtraKey]?: string };
 
 /** The shape of src/i18n/locales/<id>.ts. */
 export interface LocaleModule {

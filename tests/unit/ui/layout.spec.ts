@@ -1,9 +1,10 @@
 // Owner: A. Layout math (02 §19) over a grid of viewports, insets (phase2b §1.5 even gutters; the
-// region-aware insets of 02 §17.4 until A deletes them), hit-testing and drag interpolation (02 §6.1).
+// region-aware insets of 02 §17.4 are deleted, §1.8), hit-testing and drag interpolation (02 §6.1).
 // phase2b F0: readViewport / large-text computeLayout cases moved here from ui/review-fixes.spec.ts (B).
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cfg } from '../../../src/app/config';
-import { cellsAlongSegment, computeLayout, evenInsets, hitTest, readViewport, regionInsets } from '../../../src/ui/board/layout';
+import * as layout from '../../../src/ui/board/layout';
+import { cellsAlongSegment, computeLayout, evenInsets, hitTest, readViewport } from '../../../src/ui/board/layout';
 
 const L = cfg.layout;
 
@@ -75,27 +76,6 @@ describe('computeLayout (02 §19)', () => {
   });
 });
 
-describe('regionInsets (02 §17.4)', () => {
-  it('uses 1.5 px toward the same region and 3.5 px toward another region or the edge', () => {
-    // 2×2: A A / B A
-    const ins = regionInsets(2, Uint8Array.from([0, 0, 1, 0]));
-    expect(ins[0]).toEqual({ top: 3.5, right: 1.5, bottom: 3.5, left: 3.5 });
-    expect(ins[1]).toEqual({ top: 3.5, right: 3.5, bottom: 1.5, left: 1.5 });
-    expect(ins[2]).toEqual({ top: 3.5, right: 3.5, bottom: 3.5, left: 3.5 });
-    expect(ins[3]).toEqual({ top: 1.5, right: 3.5, bottom: 3.5, left: 3.5 });
-  });
-
-  it('is symmetric across every shared edge (so the gap midpoint is the slot edge)', () => {
-    const n = 6;
-    const regions = Uint8Array.from({ length: n * n }, (_, i) => ((i * 7) % 11) % n);
-    const ins = regionInsets(n, regions);
-    for (let i = 0; i < n * n; i++) {
-      if (i % n < n - 1) expect(ins[i]?.right).toBe(ins[i + 1]?.left);
-      if (i + n < n * n) expect(ins[i]?.bottom).toBe(ins[i + n]?.top);
-    }
-  });
-});
-
 describe('hitTest', () => {
   const g = { left: 100, top: 50, pad: 12, slot: 30, n: 6 };
   it('maps points to cells, gaps to the nearest cell, and clamps to the grid', () => {
@@ -155,6 +135,23 @@ describe('evenInsets (phase2b §1.5)', () => {
     expect(evenInsets(4, 30)[0]).toEqual({ top: cfg.layout.insetPx, right: 2, bottom: 2, left: 2 });
     for (const ins of evenInsets(12, 29.9)) expect(ins).toEqual({ top: 1.5, right: 1.5, bottom: 1.5, left: 1.5 });
     expect(evenInsets(0, 36)).toEqual([]);
+  });
+
+  it('gives the same inset on all four sides of every tile, so every gutter is even (2 × inset)', () => {
+    for (const slot of [22, 29, 30, 36, 42, 57]) {
+      const v = slot >= L.insetSmallBelowSlot ? L.insetPx : L.insetSmallPx;
+      for (const n of [4, 9, 12]) {
+        const ins = evenInsets(n, slot);
+        expect(ins).toHaveLength(n * n);
+        for (const i of ins) expect([i.top, i.right, i.bottom, i.left]).toEqual([v, v, v, v]);
+      }
+    }
+    expect(L.insetPx * 2).toBe(4); // a 4 px white gutter (§1.5)
+    expect(L.insetSmallPx * 2).toBe(3); // 3 px below a 30 px slot
+  });
+
+  it('the region-aware insets are gone (phase2b §1.8)', () => {
+    expect('regionInsets' in layout).toBe(false);
   });
 });
 

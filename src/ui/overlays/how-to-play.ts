@@ -32,7 +32,7 @@ function miniBoard(n: number, fills: readonly number[], marks: Readonly<Record<n
     const x = GAP + (i % n) * (TILE + GAP);
     const y = GAP + Math.floor(i / n) * (TILE + GAP);
     const p = fills[i] ?? -1;
-    const fill = hi.includes(i) ? 'var(--accent)' : p >= 0 ? `var(--r${p})` : 'var(--tile-plain, #ece6dc)';
+    const fill = hi.includes(i) ? 'var(--accent)' : p >= 0 ? `var(--r${p})` : 'var(--tile-plain, var(--page-2))';
     svg.appendChild(s('rect', { x, y, width: TILE, height: TILE, rx: 4, fill, 'fill-opacity': hi.includes(i) ? 0.35 : 1 }));
     const mark = marks[i];
     if (mark) {

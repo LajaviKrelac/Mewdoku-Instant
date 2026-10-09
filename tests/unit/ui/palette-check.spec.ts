@@ -8,6 +8,7 @@ import {
   computeMatrix,
   contrastRatio,
   deltaE2000,
+  eventContrast,
   glyphContrast,
   hexToLab,
   main,
@@ -15,10 +16,13 @@ import {
   MIN_DE00,
   MIN_TEXT_CONTRAST,
   pairwise,
+  rgbaOver,
   simulateCvd,
   uiContrast,
+  whiteOnTiles,
 } from '../../../scripts/palette-check';
-import { PALETTE, PALETTE_DE00, TOKENS } from '../../../src/ui/art/palette';
+import EVENTS from '../../../src/data/events/events.json';
+import { CAT_COLORS, EVENT_THEME_TOKENS, PALETTE, PALETTE_DE00, TOKENS, xEdgeColor } from '../../../src/ui/art/palette';
 
 describe('palette-check', () => {
   it('CIEDE2000 matches Sharma et al. (2005) reference pairs', () => {
@@ -61,15 +65,97 @@ describe('palette-check', () => {
     expect(cfg.layout.patternOpacity).toBeGreaterThanOrEqual(0.8);
   });
 
-  it('UI text pairs reach 4.5:1 and UI glyphs 3:1 (WCAG 1.4.3 / 1.4.11)', () => {
+  it('UI text pairs reach 4.5:1 and UI glyphs / large text 3:1 (WCAG 1.4.3 / 1.4.11, phase2b §1.4)', () => {
     const rows = uiContrast();
     for (const r of rows) expect(r.ratio, r.what).toBeGreaterThanOrEqual(r.min);
     const text = rows.filter((r) => r.min === MIN_TEXT_CONTRAST).map((r) => r.what);
-    expect(text).toContain('primary button label (white on --accent)');
+    const large = rows.filter((r) => r.min === MIN_CONTRAST).map((r) => r.what);
     expect(text).toContain('secondary text (--ink-2 on --page-2)');
-    // The spec's provisional values would fail: white on #1F9E89 is 3.3:1, #7A6E80 on --page-2 4.1:1.
-    expect(contrastRatio('#FFFFFF', '#1F9E89')).toBeLessThan(MIN_TEXT_CONTRAST);
-    expect(contrastRatio('#7A6E80', TOKENS['page-2'])).toBeLessThan(MIN_TEXT_CONTRAST);
+    expect(text).toContain('accent text (--accent-text on --page)');
+    expect(text).toContain('count badge (white on --accent-text)');
+    expect(text).toContain('"Tap to keep going" (--tap-text on --scrim over --page)');
+    // White on the orange accent is only a LARGE-text pair: valid because labels are ≥ 1.5rem (css-rules.spec.ts).
+    expect(large).toContain('primary button label, large text (white on --accent)');
+    expect(contrastRatio('#FFFFFF', TOKENS.accent)).toBeLessThan(MIN_TEXT_CONTRAST);
+    expect(large).toContain('focus ring (--focus on --page)');
+  });
+
+  it('reproduces the §1.4 table values (computed 2026-10-08)', () => {
+    const r = (fg: string, bg: string): number => Math.round(contrastRatio(fg, bg) * 100) / 100;
+    expect(r(TOKENS.ink, TOKENS.page)).toBe(12.97);
+    expect(r(TOKENS['ink-2'], TOKENS['page-2'])).toBe(5.2);
+    expect(r(TOKENS['ink-2'], TOKENS.page)).toBe(5.77);
+    expect(r('#FFFFFF', TOKENS.accent)).toBe(3.15);
+    expect(r(TOKENS['accent-title'], TOKENS.page)).toBe(3.55);
+    expect(r(TOKENS['accent-title'], TOKENS.card)).toBe(3.82);
+    expect(r(TOKENS['accent-text'], TOKENS.page)).toBe(5.31);
+    expect(r(TOKENS['accent-text'], TOKENS['page-2'])).toBe(4.78);
+    expect(r('#FFFFFF', TOKENS['accent-text'])).toBe(5.71);
+    expect(r(TOKENS.focus, TOKENS.page)).toBe(4.56);
+    expect(r(TOKENS.focus, TOKENS.card)).toBe(4.91);
+    expect(r(TOKENS['title-on-dark'], TOKENS.stage)).toBe(4.78);
+    expect(r(TOKENS['tap-text'], rgbaOver(TOKENS.scrim, TOKENS.page))).toBe(7.26);
+    expect(r('#FFFFFF', TOKENS.stage)).toBe(15.07);
+    expect(r('#FFFFFF', rgbaOver(TOKENS.scrim, TOKENS.page))).toBe(10.28);
+    expect(r('#FFFFFF', TOKENS.hard)).toBe(6.96);
+  });
+
+  it('the white X carries WCAG 1.4.11 through its edge on every tile, normal and faded (phase2b §1.5)', () => {
+    // plain white alone is far below 3:1 on our pastels
+    const w = whiteOnTiles();
+    expect(w.max).toBeLessThan(MIN_CONTRAST);
+    const rows = glyphContrast();
+    const edge = rows.filter((r) => r.what === 'X edge (--xe) vs tile');
+    const white = rows.filter((r) => r.what === 'white X vs its edge');
+    expect(edge).toHaveLength(PALETTE.length * 2);
+    expect(white).toHaveLength(PALETTE.length * 2);
+    for (const r of [...edge, ...white]) expect(r.ratio).toBeGreaterThanOrEqual(MIN_CONTRAST);
+    expect(Math.min(...edge.map((r) => r.ratio))).toBeCloseTo(3.32, 2); // worst: Slate
+    expect(Math.min(...white.map((r) => r.ratio))).toBeCloseTo(6.27, 2);
+    // a faded tile is lighter, so its edge contrast is higher than the normal tile's
+    for (let t = 0; t < PALETTE.length; t++) {
+      const [n, f] = edge.filter((r) => r.tile === t);
+      expect((f as { ratio: number }).ratio).toBeGreaterThan((n as { ratio: number }).ratio);
+    }
+    expect(xEdgeColor(10)).toMatch(/^#[0-9a-f]{6}$/);
+  });
+
+  it("Tux reads as a dark shape on every tile: fur ≥ 5.87, outline ≥ 7.68 (phase2b §1.6)", () => {
+    const rows = glyphContrast();
+    const fur = rows.filter((r) => r.what === 'cat fur').map((r) => r.ratio);
+    const outline = rows.filter((r) => r.what === 'cat outline').map((r) => r.ratio);
+    expect(Math.min(...fur)).toBeCloseTo(5.87, 2);
+    expect(Math.min(...outline)).toBeCloseTo(7.68, 2);
+    expect(CAT_COLORS.fur).toBe('#2E2A33');
+  });
+
+  it('re-checks every event theme: text on its page and pattern motifs, faded tiles with its page (§1.12)', () => {
+    const { ui, glyphs } = eventContrast();
+    for (const r of [...ui, ...glyphs]) expect(r.ratio, 'what' in r ? r.what : '').toBeGreaterThanOrEqual('min' in r ? r.min : MIN_CONTRAST);
+    for (const id of Object.keys(EVENT_THEME_TOKENS)) {
+      expect(ui.some((r) => r.what === `--ink-2 on ${id} page`)).toBe(true);
+      expect(glyphs.filter((r) => r.page === id)).toHaveLength(PALETTE.length * 6);
+    }
+    const min = (pred: (w: string) => boolean): number => Math.min(...ui.filter((r) => pred(r.what)).map((r) => r.ratio));
+    // the spec's numbers on the event pages (§1.12)
+    expect(min((w) => w.startsWith('--ink-2 on') && w.endsWith('page'))).toBeCloseTo(5.65, 2);
+    expect(min((w) => w.startsWith('--accent-text on') && w.endsWith('page'))).toBeCloseTo(5.21, 2);
+    expect(min((w) => w.startsWith('--accent-title') && w.endsWith('page'))).toBeCloseTo(3.48, 2);
+    expect(min((w) => w.startsWith('focus ring on') && w.endsWith('page'))).toBeCloseTo(4.48, 2);
+    const g = (what: string): number => Math.min(...glyphs.filter((r) => r.what === what).map((r) => r.ratio));
+    expect(g('wrong X (--wrong)')).toBeGreaterThanOrEqual(4.62);
+    expect(g('pattern glyph (--ink @ patternOpacity)')).toBeCloseTo(3.63, 2);
+  });
+
+  it('EVENT_THEME_TOKENS match the shipped event definitions (src/data/events/events.json)', () => {
+    const defs = EVENTS as unknown as { id: string; theme: { page: string; boardCard: string; glow: string } }[];
+    expect(defs.map((d) => d.id).sort()).toEqual(Object.keys(EVENT_THEME_TOKENS).sort());
+    for (const d of defs) {
+      const t = EVENT_THEME_TOKENS[d.id];
+      expect(t?.page.toLowerCase(), d.id).toBe(d.theme.page.toLowerCase());
+      expect(t?.boardCard.toLowerCase(), d.id).toBe(d.theme.boardCard.toLowerCase());
+      expect(t?.glow.replace(/\s/g, ''), d.id).toBe(d.theme.glow.replace(/\s/g, ''));
+    }
   });
 
   it('styles/tokens.css mirrors the TOKENS colours the checks validate', () => {

@@ -17,11 +17,13 @@ async function wonLevel(h: Harness, level = 15): Promise<void> {
   await startLevel(h, level);
   winGame(h);
   await h.settle(h.config.fx.winOverlayDelayMs);
-  expect(h.router.isOpen('win')).toBe(true);
+  expect(h.router.isOpen('ranking')).toBe(true); // phase2b §2.2: the ranking panel at 4.5 s, then the victory
+  h.router.props.ranking?.onContinue();
+  expect(h.router.isOpen('victory')).toBe(true);
   h.log.length = 0;
 }
 
-describe('next_level (O3 Next)', () => {
+describe('next_level (victory "Level N")', () => {
   it('shows the interstitial when the gate passes, then loads L+1', async () => {
     const h = createHarness({ save: veteran });
     await wonLevel(h);
@@ -106,14 +108,16 @@ describe('retry (O4 Retry)', () => {
   });
 });
 
-describe('daily_done (O7 Done)', () => {
+describe('daily_done (victory "Done")', () => {
   it('gate → interstitial → Home', async () => {
     const h = createHarness({ save: veteran });
     await h.session.start({ mode: 'daily', dateKey: '2026-10-07' });
     await h.settle(h.config.fx.boardEntryMs);
     winGame(h);
     await h.settle(h.config.fx.winOverlayDelayMs);
-    expect(h.router.isOpen('daily_result')).toBe(true);
+    expect(h.router.isOpen('ranking')).toBe(true);
+    h.router.props.ranking?.onContinue();
+    expect(h.router.props.victory?.variant).toBe('daily');
     h.log.length = 0;
     await h.session.onDailyDone();
     expect(slice(h.log, AD)).toEqual(['ad:interstitial:daily_done', 'goHome']);

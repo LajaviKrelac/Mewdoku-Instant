@@ -1,10 +1,13 @@
 // Owner: A (Phase 2b)
-// One hidden inline SVG sprite of <symbol>s (04 §5.3): cat moods, X, wrong-X, 12 pattern glyphs and
-// our icon set (02 §17.6). All drawn by us: the cat on a 100-unit grid, icons on a 24 px grid.
-// Phase 2b F0 (phase2b §0.2, §12.1 item 5): every NEW symbol id has a placeholder shape of our own
-// (PLACEHOLDERS below) so B can animate from day 1; A replaces each in place with the final art (§1.6,
-// §1.7, §4.4). The cat ids keep today's art as the interim until A draws Tux behind them.
-import { CAT, catBlink, catHead } from './cat-parts';
+// One hidden inline SVG sprite of <symbol>s (04 §5.3): Tux's moods, the white X with its edge, the
+// wrong X, 12 pattern glyphs, our icon set (02 §17.6, phase2b §1.7), the fish and the board cats'
+// ear-flick overlay (phase2b §1.6, §2.9). All drawn by us: the cat on a 100-unit grid, icons and the
+// fish on a 24 px grid. The cat ids are unchanged (cat-idle, cat-happy, cat-sad, cat-surprised,
+// cat-blink) and hold Tux; every <use> keeps working. The event accessories (acc-lantern, acc-scarf,
+// acc-yarn) are added to this sprite by art/accessories.ts from the lazy `events` chunk (phase2b §1.6
+// bundle column), so they cost the first load nothing.
+import { CAT, catBlink, catEarFlick, catHead } from './cat-parts';
+import { fishMarkup } from './fish';
 import { TOKENS } from './palette';
 
 export type CatSymbol = 'cat-idle' | 'cat-happy' | 'cat-sad' | 'cat-surprised';
@@ -12,7 +15,7 @@ export type CatSymbol = 'cat-idle' | 'cat-happy' | 'cat-sad' | 'cat-surprised';
 export type FishSymbol = 'icon-fish';
 /** The board cats' ear-flick overlay (phase2b §2.9), shown only on `.cell.is-flick`. */
 export type CatOverlaySymbol = 'cat-ear-flick';
-/** Event accessories layered on the head and pose (phase2b §4.4). */
+/** Event accessories layered on the head and pose (phase2b §4.4); mounted lazily by art/accessories.ts. */
 export type AccessorySymbol = 'acc-lantern' | 'acc-scarf' | 'acc-yarn';
 export type IconSymbol =
   | 'icon-house'
@@ -30,7 +33,7 @@ export type IconSymbol =
   | 'icon-rule-colours'
   | 'icon-rule-lines'
   | 'icon-rule-space'
-  // phase2b §1.7 (F0 placeholders; A draws them in the same 24-grid LINE style)
+  // phase2b §1.7: the fish and the new icons (same 24-grid LINE style)
   | 'icon-fish'
   | 'icon-plus'
   | 'icon-shop'
@@ -101,17 +104,27 @@ const GLYPHS: readonly string[] = [
 
 function catSymbols(): string {
   return (
-    sym('cat-idle', '0 0 100 100', catHead({ eyes: 'open', mouth: 'smile' })) +
-    sym('cat-happy', '0 0 100 100', catHead({ eyes: 'happy', mouth: 'open' })) +
+    // idle: the right ear hides under the ear-flick overlay while .cell.is-flick is on (board.css)
+    sym('cat-idle', '0 0 100 100', catHead({ eyes: 'open', mouth: 'smile', flickable: true })) +
+    sym('cat-happy', '0 0 100 100', catHead({ eyes: 'happy', mouth: 'open', ears: 'happy', blush: true })) +
     sym('cat-sad', '0 0 100 100', catHead({ eyes: 'sad', mouth: 'frown', ears: 'droop' })) +
-    sym('cat-surprised', '0 0 100 100', catHead({ eyes: 'round', mouth: 'o' })) +
-    sym('cat-blink', '0 0 100 100', catBlink('fixed'))
+    sym('cat-surprised', '0 0 100 100', catHead({ eyes: 'round', mouth: 'o', ears: 'prick' })) +
+    sym('cat-blink', '0 0 100 100', catBlink('fixed')) +
+    sym('cat-ear-flick', '0 0 100 100', catEarFlick('fixed'))
   );
 }
 
+/** The X mark: white, round caps, 23→77, stroke 12, over a 20-unit edge in --xe (phase2b §1.5). */
+export const MARK_X_PATH = 'M23 23 77 77M77 23 23 77';
+
 function markSymbols(): string {
   return (
-    sym('mark-x', '0 0 100 100', '<path d="M24 24 76 76M76 24 24 76" fill="none" stroke="currentColor" stroke-width="10" stroke-linecap="round"/>') +
+    sym(
+      'mark-x',
+      '0 0 100 100',
+      `<path d="${MARK_X_PATH}" fill="none" style="stroke:var(--xe,var(--ink,${TOKENS.ink}))" stroke-width="20" stroke-linecap="round"/>` +
+        `<path d="${MARK_X_PATH}" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/>`,
+    ) +
     sym(
       'wrong-x',
       '0 0 100 100',
@@ -173,29 +186,25 @@ function iconSymbols(): string {
   ].join('');
 }
 
-/**
- * F0 placeholder art (phase2b §0.2): plain shapes of our own, never final. A fish is an ellipse plus a
- * triangle, an accessory a small circle, the ear flick a single rotated triangle, the new icons simple
- * line marks. Replaced in place by A (same ids, same grids); the retired-look guard does not apply to
- * them because they use only currentColor and tokens.
- */
-const PLACEHOLDERS: readonly string[] = [
-  icon24(
-    'icon-fish',
-    `<ellipse cx="10.5" cy="12" rx="7" ry="4.6" style="fill:var(--fish,#FFB81F)" stroke="currentColor" stroke-width="1.4"/>` +
-      `<path d="M17 12 22 8.2V15.8Z" style="fill:var(--fish-deep,#C98200)" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>` +
-      `<circle cx="7.4" cy="11" r=".9" fill="currentColor"/>`,
-  ),
-  icon24('icon-plus', `<path d="M12 5.4v13.2M5.4 12h13.2" ${LINE} stroke-width="2.6"/>`),
-  icon24('icon-shop', `<path d="M4.4 9.6h15.2l-1.6 9.4a1.6 1.6 0 0 1-1.6 1.4H7.6A1.6 1.6 0 0 1 6 19L4.4 9.6ZM8.4 9.6 10.6 4.4M15.6 9.6 13.4 4.4" ${LINE} ${SOFT_FILL}/>`),
-  icon24('icon-globe', `<circle cx="12" cy="12" r="8.4" ${LINE} ${SOFT_FILL}/><path d="M3.6 12h16.8M12 3.6c2.4 2.4 3.4 5.2 3.4 8.4s-1 6-3.4 8.4c-2.4-2.4-3.4-5.2-3.4-8.4s1-6 3.4-8.4Z" ${LINE}/>`),
-  icon24('icon-crown', `<path d="M4 17.6 3.2 7.8l5 3.8L12 5l3.8 6.6 5-3.8-.8 9.8Z" ${LINE} ${SOFT_FILL}/>`),
-  icon24('icon-users', `<circle cx="9" cy="8.6" r="3.2" ${LINE}/><path d="M3.4 19.4a5.6 5.6 0 0 1 11.2 0M15.8 6a3 3 0 0 1 0 5.8M17.6 14.2a5 5 0 0 1 3 5.2" ${LINE}/>`),
-  sym('cat-ear-flick', '0 0 100 100', `<path d="M22 40 26 12 46 30Z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>`),
-  sym('acc-lantern', '0 0 100 100', `<circle cx="78" cy="22" r="9" fill="currentColor"/>`),
-  sym('acc-scarf', '0 0 100 100', `<circle cx="50" cy="88" r="9" fill="currentColor"/>`),
-  sym('acc-yarn', '0 0 100 100', `<circle cx="80" cy="80" r="9" fill="currentColor"/>`),
-];
+/** Phase 2b icons (phase2b §1.7) in the same 24-grid LINE style, plus the fish. */
+function newIcons(): string {
+  return [
+    sym('icon-fish', '0 0 24 24', fishMarkup()),
+    icon24('icon-plus', `<path d="M12 5.4v13.2M5.4 12h13.2" ${LINE} stroke-width="2.6"/>`),
+    icon24(
+      'icon-shop',
+      `<path d="M3.6 10.4h16.8l-1.7 8.2a2 2 0 0 1-2 1.6H7.3a2 2 0 0 1-2-1.6Z" ${LINE} ${SOFT_FILL}/>` +
+        `<path d="M7.2 10.4C7.2 4.6 16.8 4.6 16.8 10.4M8.9 13.4l.5 3.8M12 13.4v3.8M15.1 13.4l-.5 3.8" ${LINE}/>`,
+    ),
+    icon24('icon-globe', `<circle cx="12" cy="12" r="8.4" ${LINE} ${SOFT_FILL}/><path d="M3.6 12h16.8M12 3.6c2.4 2.4 3.4 5.2 3.4 8.4s-1 6-3.4 8.4c-2.4-2.4-3.4-5.2-3.4-8.4s1-6 3.4-8.4Z" ${LINE}/>`),
+    icon24(
+      'icon-crown',
+      `<path d="M4.4 17.2 3.2 8.4l5 3.6L12 5.6l3.8 6.4 5-3.6-1.2 8.8Z" ${LINE} ${SOFT_FILL}/><path d="M4.6 20.2h14.8" ${LINE}/>` +
+        `<circle cx="12" cy="13.6" r="1.3" fill="currentColor"/>`,
+    ),
+    icon24('icon-users', `<circle cx="9" cy="8.6" r="3.2" ${LINE} ${SOFT_FILL}/><path d="M3.4 19.4a5.6 5.6 0 0 1 11.2 0M15.8 6a3 3 0 0 1 0 5.8M17.6 14.2a5 5 0 0 1 3 5.2" ${LINE}/>`),
+  ].join('');
+}
 
 /** Clip paths that split icon-heart along a zig-zag crack (hud/pills heart crack, 02 §17.5). */
 const DEFS =
@@ -212,7 +221,7 @@ export function spriteMarkup(): string {
     markSymbols() +
     GLYPHS.map((g, i) => sym(`glyph-${i}`, '0 0 24 24', `<g fill="currentColor" transform="${GLYPH_FILL}">${g}</g>`)).join('') +
     iconSymbols() +
-    PLACEHOLDERS.join('');
+    newIcons();
   return cached;
 }
 
@@ -255,3 +264,5 @@ export function setIcon(svg: SVGSVGElement, id: SymbolId): void {
 
 /** Cat colours for CSS-free contexts (e.g. the boot splash before styles load). */
 export const CAT_FUR = CAT.fur;
+/** Tux's white mask colour, for the same contexts. */
+export const CAT_MASK = CAT.mask;

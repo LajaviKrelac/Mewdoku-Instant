@@ -12,6 +12,10 @@
 // 'overlay:open'), and its view is created, opened with the latest props and focused on arrival.
 // A failed chunk download is retried with a cache-busting URL (workers/lazy-chunk); when it still
 // fails, the queued overlays are closed and 'overlay:failed' tells the app (04 §8: never a dead end).
+// Phase 2b (§2.9): replacing a screen plays B's playScreenTransition ('to_game' into a game,
+// 'from_game' out of one; a crossfade with reduced motion). The outgoing screen stays in the DOM,
+// inert and aria-hidden, until the transition ends (or a safety deadline), then it is destroyed. The
+// event screen (§4.4) comes from the lazy `events` chunk (showEvent).
 import { focusableElements, setInert, trapFocus } from '../ui/a11y/focus-trap';
 import type { CoachProps } from '../ui/overlays/coach';
 import type { DailyResultProps } from '../ui/overlays/daily-result';
@@ -29,10 +33,13 @@ import { createLoadingIndicator, type LoadingIndicator } from '../ui/overlays/lo
 import { createToastLayer, type ToastLayer } from '../ui/overlays/toast';
 import type { WinOverlayProps } from '../ui/overlays/win-overlay';
 import type { BootScreen } from '../ui/screens/boot-screen';
+import type { EventScreenCallbacks, EventScreenView } from '../ui/screens/event-screen';
 import { createGameScreen, type GameScreen, type GameScreenCallbacks, type GameView } from '../ui/screens/game-screen';
 import { createHomeScreen, type HomeCallbacks, type HomeView } from '../ui/screens/home-screen';
 import type { OverlayView, View } from '../ui/dom';
+import { playScreenTransition, type ScreenTransitionKind } from '../ui/fx/transitions';
 import { loadChunk } from '../workers/lazy-chunk';
+import { cfg, type GameConfig } from './config';
 import type { AppBus } from './events';
 import type { OverlayId, ScreenId } from './store';
 
@@ -60,6 +67,11 @@ export interface Router {
   showBoot(): BootScreen;
   showHome(view: HomeView, cb: HomeCallbacks): View<HomeView>;
   showGame(view: GameView, cb: GameScreenCallbacks): GameScreen;
+  /**
+   * The event screen (phase2b §4.4) from the lazy `events` chunk. Resolves null when the chunk cannot
+   * be loaded (the caller stays where it is and toasts) or when another screen was shown meanwhile.
+   */
+  showEvent(view: EventScreenView, cb: EventScreenCallbacks): Promise<View<EventScreenView> | null>;
   /** Push (or re-open on top) an overlay. Modal overlays trap focus and make the rest inert. */
   open<K extends OverlayId>(id: K, props: OverlayPropsMap[K]): void;
   /** Update an open overlay's props (no-op when closed). */
@@ -101,6 +113,15 @@ export interface RouterFactories {
     opts?: { initialFocus?: HTMLElement | null; returnFocus?: HTMLElement | null; restoreOnNextFrame?: boolean },
   ): () => void;
   setInert(elements: readonly HTMLElement[], inert: boolean): void;
+  /** The event screen factory (default: from the lazy `events` chunk). */
+  eventScreen?(view: EventScreenView, cb: EventScreenCallbacks): View<EventScreenView>;
+  /** Loads the event screen factory (default: the lazy ./events-chunk). */
+  loadEventScreen(): Promise<(view: EventScreenView, cb: EventScreenCallbacks) => View<EventScreenView>>;
+  /**
+   * Screen transition (phase2b §2.9; default: ui/fx/transitions playScreenTransition). null = none:
+   * the old screen is destroyed at once (tests).
+   */
+  screenTransition: ((oldEl: HTMLElement | null, newEl: HTMLElement, kind: ScreenTransitionKind, reduced: boolean) => Promise<void>) | null;
 }
 
 export interface RouterDeps {
@@ -108,6 +129,16 @@ export interface RouterDeps {
   readonly bus?: AppBus;
   readonly doc?: Document;
   readonly factories?: Partial<RouterFactories>;
+  /** UiState.reducedMotion now (screen transitions crossfade with reduced motion). */
+  readonly reducedMotion?: () => boolean;
+  readonly config?: GameConfig;
+}
+
+/** Which transition a screen change plays (§2.9), or null for none (boot, same screen). */
+export function transitionKind(from: ScreenId, to: ScreenId): ScreenTransitionKind | null {
+  if (to === 'game' && (from === 'home' || from === 'game' || from === 'event')) return 'to_game';
+  if (from === 'game' && (to === 'home' || to === 'event')) return 'from_game';
+  return null;
 }
 
 /** Whether an overlay is modal before its view exists (only the coach is not, CONTRACTS §4). */
@@ -160,6 +191,13 @@ export function createRouter(root: HTMLElement, deps: RouterDeps = {}): Router {
   const trap = f.trapFocus ?? trapFocus;
   const inert = f.setInert ?? setInert;
   const { bus } = deps;
+  const c = deps.config ?? cfg;
+  const transition = f.screenTransition === undefined ? (o: HTMLElement | null, n: HTMLElement, k: ScreenTransitionKind, r: boolean) => playScreenTransition(o, n, k, r, c) : f.screenTransition;
+  const loadEventScreen =
+    f.loadEventScreen ?? (async () => (f.eventScreen ? f.eventScreen : (await loadChunk(() => import('./events-chunk'))).createEventScreen));
+  /** Screens still fading out: removed and destroyed when their transition ends. */
+  const leaving = new Set<{ el: HTMLElement; done: () => void }>();
+  let screenGen = 0;
 
   while (root.firstChild) root.removeChild(root.firstChild);
   const screenHost = doc.createElement('div');
@@ -172,7 +210,7 @@ export function createRouter(root: HTMLElement, deps: RouterDeps = {}): Router {
   let loadingLayer: LoadingIndicator | null = null;
 
   let screenId: ScreenId = 'boot';
-  let current: { destroy(): void } | null = null;
+  let current: { readonly el: HTMLElement; destroy(): void } | null = null;
   let destroyed = false;
   const views = new Map<OverlayId, AnyOverlay>();
   const order: OverlayId[] = [];
@@ -314,14 +352,61 @@ export function createRouter(root: HTMLElement, deps: RouterDeps = {}): Router {
     while (order.length) closeInternal(order[order.length - 1] as OverlayId);
   }
 
+  /** Ends every running transition at once (a newer screen change, destroy). */
+  function finishLeaving(): void {
+    for (const l of [...leaving]) l.done();
+  }
+
   function replaceScreen<T extends { readonly el: HTMLElement; destroy(): void }>(id: ScreenId, make: () => T): T {
     closeAll();
+    finishLeaving();
+    screenGen++;
     const prev = current;
+    const prevId = screenId;
     current = null;
-    prev?.destroy();
-    while (screenHost.firstChild) screenHost.removeChild(screenHost.firstChild);
+    const kind = prev ? transitionKind(prevId, id) : null;
+    const animate = kind !== null && transition !== null && !!prev && prev.el.parentNode === screenHost;
+    if (animate && prev) {
+      // The outgoing screen stays for its fade-out, inert and hidden from assistive tech (§2.9).
+      prev.el.setAttribute('aria-hidden', 'true');
+      prev.el.setAttribute('inert', '');
+      for (const child of Array.from(screenHost.childNodes)) if (child !== prev.el) screenHost.removeChild(child);
+    } else {
+      prev?.destroy();
+      while (screenHost.firstChild) screenHost.removeChild(screenHost.firstChild);
+    }
     const next = make();
     screenHost.appendChild(next.el);
+    if (animate && prev && kind && transition) {
+      const reduced = deps.reducedMotion?.() ?? false;
+      const win = doc.defaultView;
+      let timer: number | null = null;
+      const entry = {
+        el: prev.el,
+        done: () => {
+          if (!leaving.delete(entry)) return;
+          if (timer !== null) win?.clearTimeout(timer);
+          if (prev.el.parentNode) prev.el.parentNode.removeChild(prev.el);
+          try {
+            prev.destroy();
+          } catch (error) {
+            bus?.emit('error', { where: 'screen_destroy', error });
+          }
+        },
+      };
+      leaving.add(entry);
+      // Safety: a transition that never settles must not keep the old screen around.
+      const limit = c.fx.screenOutMs + c.fx.screenInDelayMs + Math.max(c.fx.screenInMs, c.fx.screenBackInMs) + 500;
+      if (win) timer = win.setTimeout(() => entry.done(), limit);
+      try {
+        void Promise.resolve(transition(prev.el, next.el, kind, reduced)).then(
+          () => entry.done(),
+          () => entry.done(),
+        );
+      } catch {
+        entry.done();
+      }
+    }
     // Short desktop windows scroll the 568 px column; a new screen starts at the top, not at the
     // offset used to reach its button on the previous screen.
     const scroller = doc.scrollingElement ?? doc.documentElement;
@@ -345,6 +430,18 @@ export function createRouter(root: HTMLElement, deps: RouterDeps = {}): Router {
     showBoot: () => replaceScreen('boot', () => (f.bootScreen ?? blankBootScreen(doc))()),
     showHome: (view, cb) => replaceScreen('home', () => (f.homeScreen ?? createHomeScreen)(view, cb)),
     showGame: (view, cb) => replaceScreen('game', () => (f.gameScreen ?? createGameScreen)(view, cb)),
+    async showEvent(view, cb) {
+      const mine = ++screenGen;
+      let make: (v: EventScreenView, c2: EventScreenCallbacks) => View<EventScreenView>;
+      try {
+        make = await loadEventScreen();
+      } catch (error) {
+        bus?.emit('error', { where: 'events_chunk', error });
+        return null;
+      }
+      if (destroyed || mine !== screenGen) return null; // another screen was shown meanwhile
+      return replaceScreen('event', () => make(view, cb));
+    },
     open(id, props) {
       if (destroyed) return;
       const v = overlay(id);
@@ -405,6 +502,7 @@ export function createRouter(root: HTMLElement, deps: RouterDeps = {}): Router {
     destroy() {
       destroyed = true;
       doc.removeEventListener('keydown', onKey);
+      finishLeaving();
       closeAll();
       pending.clear();
       for (const v of views.values()) v.destroy();

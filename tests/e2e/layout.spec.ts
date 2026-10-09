@@ -5,6 +5,9 @@
 // never covers the board or the top bar and hides under the hint card (UX-01, UX-06, SPEC-04); a
 // short desktop window (150-200 % zoom) plays without the rotate notice (UX-02, A11Y-1); keyboard
 // play starts without a click (SPEC-01, A11Y-4), and a phone shows no focus ring until a key is used.
+// Phase 2b (§3.6, §7): the mock banner's reserved band never overlaps the Home Level button or the
+// victory's primary button (the e2e build's ?ads= mock banner follows the FB rules), and a keyboard
+// alone gets through the win flow (Enter on the panel, Enter on "Level N") and the shop.
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -226,5 +229,94 @@ test('a phone starting the tutorial: the board has focus but shows no ring until
   expect(await ring()).toBe('none');
   await page.keyboard.press('ArrowDown'); // row 2, column 1: no coach highlight there
   await expect(page.locator('.cell[data-i="4"]')).toBeFocused();
-  expect(await ring()).toContain('rgb(23, 128, 111)'); // --accent ring once the keyboard is in use
+  expect(await ring()).toContain('rgb(185, 82, 10)'); // --focus ring (#B9520A, phase2b §1.4) once the keyboard is in use
+});
+
+// ── phase2b: banner reserve (§3.6) and keyboard through the win flow and the shop (§7) ──
+
+const veteranSave = (level = 15, patch: Partial<SaveData> = {}): SaveData => ({
+  ...defaults(Date.now() - 3 * 86_400_000),
+  tutorialDone: true,
+  progress: { level, completed: level - 1, best: {} },
+  ...patch,
+});
+
+async function bannerTop(page: Page): Promise<number> {
+  const bar = page.locator('[data-testid="mock-banner"]');
+  await expect(bar).toBeVisible();
+  const box = await bar.boundingBox();
+  if (!box) throw new Error('no banner');
+  return box.y;
+}
+
+/** The element's bottom sits at least ads.banner.buttonClearancePx (16) above the banner. */
+async function clearOfBanner(page: Page, selector: string): Promise<void> {
+  const top = await bannerTop(page);
+  const box = await page.locator(selector).boundingBox();
+  if (!box) throw new Error(`no ${selector}`);
+  expect(box.y + box.height).toBeLessThanOrEqual(top - 16 + 0.5);
+}
+
+test('the banner reserve never overlaps the Home Level button', async ({ page }) => {
+  await boot(page, veteranSave());
+  await expect(page.locator('.screen--home')).toHaveAttribute('data-banner', '');
+  await clearOfBanner(page, '.home__play');
+  await noHorizontalOverflow(page);
+});
+
+test('the banner reserve never overlaps the victory screen\'s primary button', async ({ page }) => {
+  await boot(page, veteranSave());
+  // Home showed a banner; the victory needs the 60 s reload window to pass, so start from a fresh page
+  // straight into a level (no Home banner first): Play is pressed before any banner can load.
+  await page.locator('.home__play').click();
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
+  await expect(page.locator('[data-testid="mock-banner"]')).toHaveCount(0); // never during play
+  await page.clock.install();
+  await page.clock.fastForward(61_000);
+  await page.evaluate(() => (window as TestWindow).__mewdoku?.solve());
+  await page.clock.runFor(5000);
+  const panel = page.locator('[data-overlay="ranking"]');
+  await expect(panel).toBeVisible();
+  await expect(page.locator('[data-testid="mock-banner"]')).toHaveCount(0); // not on the ranking panel
+  await page.clock.runFor(1500);
+  await panel.locator('.ranking__tap').click();
+  await page.clock.runFor(1000);
+  await expect(page.locator('.victory')).toHaveAttribute('data-banner', '');
+  await clearOfBanner(page, '.victory__primary');
+  await noHorizontalOverflow(page);
+});
+
+test('keyboard only: Enter continues the panel, Enter on "Level N", and the shop swaps with the keyboard', async ({ page }, info) => {
+  test.skip(info.project.name !== 'web-1280', 'desktop keyboard only');
+  await boot(page, veteranSave(5, { wallet: { fish: 40, earned: 40 }, stock: { hints: 0, kitties: 3 } }));
+  await page.locator('.home__play').focus();
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
+  await page.evaluate(() => (window as TestWindow).__mewdoku?.solve());
+  const panel = page.locator('[data-overlay="ranking"]');
+  await expect(panel).toBeVisible({ timeout: 10_000 });
+  await expect(panel.locator('.ranking__tap')).toBeEnabled({ timeout: 3000 });
+  await expect(panel.locator('.ranking__tap')).toBeFocused();
+  await page.keyboard.press('Enter');
+  const primary = page.locator('[data-overlay="victory"] .victory__primary');
+  await expect(primary).toBeEnabled({ timeout: 3000 });
+  await primary.focus();
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.puzzle.id === 'L6');
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
+  // Home → the fish pill "+" → the shop, all by keyboard.
+  await page.locator('.top-bar').getByRole('button', { name: 'Home' }).focus();
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');
+  const plus = page.locator('.screen--home .fish-pill__plus'); // the game screen may still be fading out
+  await plus.focus();
+  await expect(plus).toBeFocused();
+  await page.keyboard.press('Enter');
+  const shop = page.locator('[data-overlay="shop"]');
+  await expect(shop).toBeVisible();
+  await shop.locator('.shop__row[data-item="hint"] .shop__swap').focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(async () => page.evaluate(() => (window as TestWindow).__mewdoku?.app().save.stock.hints)).toBe(1);
+  await page.keyboard.press('Escape');
+  await expect(shop).toBeHidden();
 });

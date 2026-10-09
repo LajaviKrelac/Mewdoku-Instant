@@ -1,14 +1,31 @@
 /* Owner: A (Phase 2b; was ui-board)
-   Reset, font-face (our one OFL display font, 02 §17.6), body, buttons, icons, focus, helpers.
+   Reset, font faces (our one OFL display font, 02 §17.6; phase2b §6.6), body, buttons, icons, focus,
+   helpers. Tokens only: colour literals live in tokens.css (tests/unit/ui/css-rules.spec.ts).
    Shared vocabulary (used by ui-board and ui-shell DOM):
      .btn  --primary | --secondary | --ghost | --icon | --block | --lg ; .btn__icon .btn__label .btn__badge .btn__chev
-     .badge .badge--hard   .icon   .sr-only / .visually-hidden   .screen  --boot | --home | --game */
+     .badge .badge--hard   .icon   .num   .sr-only / .visually-hidden   .screen  --boot | --home | --game [data-banner] */
+
+/* Fredoka 600 (OFL), Latin. Latin extended (tr, pl) is a second face with its own unicode-range: the
+   browser fetches it only when such a glyph appears (phase2b §6.6). Other scripts use the system stacks
+   of tokens.css. */
 @font-face {
   font-family: 'Mewdoku Display';
   font-style: normal;
   font-weight: 600;
   font-display: swap;
   src: url('../assets/fonts/display-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F,
+    U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Mewdoku Display';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('../assets/fonts/display-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F,
+    U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 
 *,
@@ -39,8 +56,8 @@ body {
 @media (min-width: 560px) {
   body {
     background-color: var(--page-2);
-    background-image: radial-gradient(circle at 12px 12px, rgba(242, 154, 74, 0.13) 0 3px, transparent 3.5px),
-      radial-gradient(circle at 40px 40px, rgba(23, 128, 111, 0.1) 0 3px, transparent 3.5px);
+    background-image: radial-gradient(circle at 12px 12px, var(--side-dot-a) 0 3px, transparent 3.5px),
+      radial-gradient(circle at 40px 40px, var(--side-dot-b) 0 3px, transparent 3.5px);
     background-size: 56px 56px;
   }
 }
@@ -74,7 +91,7 @@ body {
 
 @media (min-width: 560px) {
   #app {
-    box-shadow: 0 0 0 1px var(--line), 0 0 60px rgba(59, 48, 68, 0.08);
+    box-shadow: 0 0 0 1px var(--line), 0 0 60px rgba(var(--ink-rgb), 0.08);
   }
 }
 
@@ -89,8 +106,14 @@ h1,
 h2,
 h3 {
   font-family: var(--font-display);
-  font-weight: 600;
+  font-weight: var(--display-weight);
   letter-spacing: 0.005em;
+}
+
+/* Numbers keep the display face (its Latin digits) in every script (phase2b §6.6). */
+.num {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
 }
 
 button {
@@ -129,7 +152,7 @@ svg {
   background: var(--card);
   color: var(--ink);
   font-family: var(--font-display);
-  font-weight: 600;
+  font-weight: var(--display-weight);
   font-size: var(--fs-l);
   line-height: 1.1;
   text-align: center;
@@ -159,15 +182,19 @@ svg {
   opacity: 0.85;
 }
 
+/* Primary: orange pill with a 4 px deep-orange edge. White on --accent is 3.15:1, so the label is
+   always ≥ 24 px (WCAG large text; phase2b §1.4 rule, checked by css-rules.spec.ts). */
 .btn--primary {
   background: var(--accent);
   color: #fff;
-  box-shadow: 0 4px 0 var(--accent-deep), 0 8px 18px rgba(23, 128, 111, 0.28);
+  font-size: var(--fs-btn);
+  text-shadow: 0 1px 0 rgba(var(--accent-shadow-rgb), 0.35);
+  box-shadow: 0 4px 0 var(--accent-deep), 0 8px 18px rgba(var(--accent-rgb), 0.28);
 }
 
 .btn--primary:active:not([aria-disabled='true']):not(:disabled) {
   transform: translateY(3px);
-  box-shadow: 0 1px 0 var(--accent-deep), 0 3px 8px rgba(23, 128, 111, 0.25);
+  box-shadow: 0 1px 0 var(--accent-deep), 0 3px 8px rgba(var(--accent-rgb), 0.25);
 }
 
 .btn--secondary {
@@ -220,7 +247,7 @@ svg {
 
 .btn--lg {
   min-height: 64px;
-  font-size: var(--fs-xl);
+  font-size: var(--fs-btn);
 }
 
 .btn[aria-disabled='true'],
@@ -254,6 +281,11 @@ svg {
   font-size: 0.75em;
 }
 
+/* Small white text never sits on --accent: a count badge on an orange button gets --accent-text. */
+.btn--primary .btn__badge {
+  background: var(--accent-text);
+}
+
 .badge {
   display: inline-flex;
   align-items: center;
@@ -261,7 +293,7 @@ svg {
   padding: 0 9px;
   border-radius: var(--radius-pill);
   font-family: var(--font-display);
-  font-weight: 600;
+  font-weight: var(--display-weight);
   font-size: var(--fs-xs);
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -271,7 +303,7 @@ svg {
 .badge--hard {
   background: var(--hard);
   color: #fff;
-  box-shadow: 0 2px 0 rgba(59, 48, 68, 0.18);
+  box-shadow: 0 2px 0 rgba(var(--ink-rgb), 0.18);
 }
 
 .btn--primary .badge--hard {
@@ -280,13 +312,13 @@ svg {
   box-shadow: none;
 }
 
-/* ── Focus (02 §18: visible 3 px --accent ring for keyboard users) ─────── */
+/* ── Focus (02 §18: visible 3 px ring for keyboard users; --focus ≥ 4.5:1 on page and card) ── */
 :focus:not(:focus-visible) {
   outline: none;
 }
 
 :focus-visible {
-  outline: var(--focus-ring) solid var(--accent);
+  outline: var(--focus-ring) solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -327,5 +359,11 @@ svg {
   overflow: hidden;
   padding-top: var(--safe-top);
   padding-bottom: var(--safe-bottom);
+}
+
+/* Banner reserve (phase2b §3.2): when a banner load is attempted on Home, victory or event, the
+   screen root gets data-banner and keeps the bottom band (the 50 px banner + 8 px) free. */
+.screen[data-banner] {
+  padding-bottom: calc(var(--banner-reserve) + var(--safe-bottom));
 }
 

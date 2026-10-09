@@ -6,7 +6,7 @@ import { cfg, mergeConfig, type DeepPartial, type GameConfig } from '../../../sr
 import { createEventBus, type AppBus, type AppEventMap, type AnalyticsEvent } from '../../../src/app/events';
 import type { OverlayPropsMap, Router } from '../../../src/app/router';
 import { createSaveScheduler, type SaveScheduler } from '../../../src/app/saves';
-import { createSession, type Session } from '../../../src/app/session';
+import { createSession, type Session, type SessionDeps } from '../../../src/app/session';
 import { createStore, initialAppState, type AppState, type OverlayId, type ScreenId, type Store } from '../../../src/app/store';
 import type { HintStep, Puzzle, PuzzleId } from '../../../src/engine/types';
 import type { LevelsRepo, LoadedPuzzle } from '../../../src/game/levels-repo';
@@ -14,8 +14,9 @@ import { defaults } from '../../../src/game/save';
 import { tutorialPuzzle } from '../../../src/game/tutorial';
 import type { SaveData } from '../../../src/game/types';
 import type { AdResult, Capabilities, PlatformAdapter, RawSave } from '../../../src/platform/types';
-import type { GameScreen, GameView } from '../../../src/ui/screens/game-screen';
-import type { HomeView } from '../../../src/ui/screens/home-screen';
+import type { GameScreen, GameScreenCallbacks, GameView } from '../../../src/ui/screens/game-screen';
+import type { EventScreenCallbacks, EventScreenView } from '../../../src/ui/screens/event-screen';
+import type { HomeCallbacks, HomeView } from '../../../src/ui/screens/home-screen';
 import { createEngineClient, type EngineClient } from '../../../src/workers/engine-client';
 
 // ─────────────────────────────── puzzles ───────────────────────────────
@@ -46,6 +47,7 @@ export const SOL5 = [at(0, 0), at(1, 2), at(2, 4), at(3, 1), at(4, 3)];
 export const WRONG5 = [at(0, 1), at(0, 2), at(1, 0), at(4, 4)];
 export const levelPuzzle = (level: number): Puzzle => makePuzzle(`L${level}`, R5, S5);
 export const dailyPuzzle = (date: string): Puzzle => makePuzzle(`D${date}`, R5, S5);
+export const eventPuzzle = (id: string, index: number): Puzzle => makePuzzle(`E${id}/${index}`, R5, S5);
 
 export const NOW = Date.UTC(2026, 9, 7, 12, 0, 0); // a Wednesday, noon UTC
 export const TODAY = '2026-10-07';
@@ -134,6 +136,8 @@ export function createFakePlatform(log: Log, caps: Partial<Capabilities> = {}): 
 
 export interface FakeGameScreen extends GameScreen {
   last: GameView;
+  /** The callbacks the session bound (top-bar Home / Gear, board input). */
+  cb: GameScreenCallbacks;
   readonly played: string[];
   entries: number;
 }
@@ -143,8 +147,11 @@ export interface FakeRouter extends Router {
   readonly toasts: string[];
   game: FakeGameScreen | null;
   homeView: HomeView | null;
-  /** Auto-answer for O2: 'accept' | 'decline' | null (stay open). */
-  rewardedAnswer: 'accept' | 'decline' | null;
+  homeCb: HomeCallbacks | null;
+  eventView: EventScreenView | null;
+  eventCb: EventScreenCallbacks | null;
+  /** Auto-answer for O2: 'accept' | 'decline' | 'swap' (phase2b §2.8; declines when no swap is offered) | null (stay open). */
+  rewardedAnswer: 'accept' | 'decline' | 'swap' | null;
   /** What overlaysReady() answers (false: the lazy overlay chunk cannot be loaded). */
   chunkOk: boolean;
 }
@@ -159,6 +166,9 @@ export function createFakeRouter(bus: AppBus, log: Log): FakeRouter {
     toasts: [],
     game: null,
     homeView: null,
+    homeCb: null,
+    eventView: null,
+    eventCb: null,
     rewardedAnswer: 'accept',
     chunkOk: true,
     root: fakeEl(),
@@ -167,22 +177,34 @@ export function createFakeRouter(bus: AppBus, log: Log): FakeRouter {
       screenId = 'boot';
       return { el: fakeEl(), setProgress: () => undefined, destroy: () => undefined };
     },
-    showHome(view) {
+    showHome(view, cb) {
       r.closeAll();
       screenId = 'home';
       r.homeView = view;
+      r.homeCb = cb;
       r.game = null;
       log.push('screen:home');
       bus.emit('screen', { screen: 'home' });
       return { el: fakeEl(), update: (v) => void (r.homeView = v), destroy: () => undefined };
     },
-    showGame(view) {
+    async showEvent(view, cb) {
+      r.closeAll();
+      screenId = 'event';
+      r.eventView = view;
+      r.eventCb = cb;
+      r.game = null;
+      log.push(`screen:event:${view.def.id}`);
+      bus.emit('screen', { screen: 'event' });
+      return { el: fakeEl(), update: (v) => void (r.eventView = v), destroy: () => undefined };
+    },
+    showGame(view, cb) {
       r.closeAll();
       screenId = 'game';
       log.push(`screen:game:${view.board.puzzleId}`);
       const g: FakeGameScreen = {
         el: fakeEl(),
         last: view,
+        cb,
         played: [],
         entries: 0,
         update: (v) => void (g.last = v),
@@ -213,7 +235,11 @@ export function createFakeRouter(bus: AppBus, log: Log): FakeRouter {
       if (id === 'rewarded' && r.rewardedAnswer) {
         const rp = props as OverlayPropsMap['rewarded'];
         const answer = r.rewardedAnswer;
-        queueMicrotask(() => (answer === 'accept' ? rp.onAccept() : rp.onDecline()));
+        queueMicrotask(() => {
+          if (answer === 'accept') rp.onAccept();
+          else if (answer === 'swap' && rp.swap) rp.swap.onSwap();
+          else rp.onDecline();
+        });
       }
     },
     update(id, props) {
@@ -253,6 +279,7 @@ export function createFakeLevels(overrides: Partial<LevelsRepo> = {}): LevelsRep
     getLevel: async (level): Promise<LoadedPuzzle> =>
       level === 1 ? { puzzle: tutorialPuzzle(), source: 'tutorial' } : { puzzle: levelPuzzle(level), source: 'pack' },
     getDaily: async (date): Promise<LoadedPuzzle> => ({ puzzle: dailyPuzzle(date), source: 'daily_pack' }),
+    getEventPuzzle: async (def, index): Promise<LoadedPuzzle> => ({ puzzle: eventPuzzle(def.id, index), source: 'event_pack' }),
     ensurePackFor: async () => undefined,
     prefetch: () => undefined,
     peekLevel: (level) => (level === 1 ? tutorialPuzzle() : levelPuzzle(level)),
@@ -310,6 +337,19 @@ export interface HarnessOptions {
   /** Clock time when platform.start() resolved; default: NOW − 10 min (grace passed). */
   readonly sessionStartedAt?: number;
   readonly failHint?: boolean;
+  /** phase2b: extra session deps (flows), built from the harness parts. */
+  readonly extra?: (parts: HarnessParts) => Partial<SessionDeps>;
+}
+
+export interface HarnessParts {
+  readonly log: Log;
+  readonly clock: FakeClock;
+  readonly bus: AppBus;
+  readonly store: Store<AppState>;
+  readonly platform: FakePlatform;
+  readonly router: FakeRouter;
+  readonly saves: SaveScheduler;
+  readonly config: GameConfig;
 }
 
 export interface Harness {
@@ -350,6 +390,7 @@ export function createHarness(opts: HarnessOptions = {}): Harness {
   const syncOverlays = (): void => store.update((s) => ({ ...s, overlays: router.stack() }));
   bus.on('overlay:open', syncOverlays);
   bus.on('overlay:close', syncOverlays);
+  const extra = opts.extra ? opts.extra({ log, clock, bus, store, platform, router, saves, config }) : {};
   const adFlow = createAdFlow({
     platform,
     clock,
@@ -394,6 +435,7 @@ export function createHarness(opts: HarnessOptions = {}): Harness {
       regionColors: (p) => Uint8Array.from({ length: p.n }, (_, i) => i),
       pickPraise: () => 0,
       config,
+      ...extra,
     }),
     save: () => store.get().save,
     game: () => {

@@ -1,21 +1,22 @@
 // Owner: C
 // The post-win orchestration (phase2b §2.2, §2.6, §2.7) on the session clock: rewards already saved
 // at t = 0 (critical save, same as the win), then glow (t = 300), the in-game fish pill (1 000), three
-// fish (1 200 …, B's flyFish), arrivals and labels, scrim (4 200), the ranking panel (4 500,
-// fx.winOverlayDelayMs), and on its tap the victory screen. Home and Gear are aria-disabled until the
-// panel opens; Esc does nothing. Teardown cancels every timer and WAAPI animation and empties the fish
-// layer. A hidden page keeps the schedule: on return every missed step runs once, in order, jumped to
-// its end state. Variants: tutorial (no panel; victory at fx.win.tutorialVictoryAtMs), replay (no fish;
-// victory at replayVictoryAtMs), restored full board (victory at once, no second award).
-// C-internal module: C may reshape WinFlowDeps and the handle; the B calls it makes are fixed
-// (GameScreen.glow/showFishPill/fishLabel/fishRect, flyFish, ensureFxLayer). F0 stub.
+// fish (1 200 …, B's flyFish), arrivals and labels, scrim (4 200, drawn by the panel), the ranking
+// panel (4 500, fx.winOverlayDelayMs), and on its tap the victory screen. Home and Gear are inert
+// until the panel opens (the session ignores them while blocking() is true); Esc does nothing.
+// Teardown cancels every timer and WAAPI animation and empties the fish layer. A hidden page keeps
+// the schedule: on return every missed step runs once, in order, jumped to its end state. Variants:
+// tutorial (no panel; victory at fx.win.tutorialVictoryAtMs), replay (no fish; victory at
+// replayVictoryAtMs), restored full board (victory at once, no glow, no second award).
+// C-internal module: the B calls it makes are fixed (GameScreen.glow/showFishPill/fishLabel/fishRect,
+// flyFish, ensureFxLayer). Every B call is guarded: a failing effect never stops the flow.
 import type { Sfx } from '../audio/sfx';
 import type { CellIndex } from '../engine/types';
+import { tn, t } from '../i18n';
+import { ensureFxLayer, fishSizePx, flyFish, type FlyFishOptions, type FxHandle } from '../ui/fx/fish-flight';
 import type { GameScreen } from '../ui/screens/game-screen';
-import type { Clock } from './clock';
-import type { GameConfig } from './config';
-import type { AppBus } from './events';
-import type { Router } from './router';
+import type { Clock, TimerId } from './clock';
+import { cfg, type GameConfig } from './config';
 
 export type WinFlowVariant = 'level' | 'daily' | 'event' | 'tutorial' | 'tutorial_replay' | 'restored';
 
@@ -30,32 +31,279 @@ export interface WinFlowInput {
   readonly fishBase: number;
   readonly fishBonus: number;
   readonly reducedMotion: boolean;
+  /** Board slot in CSS px (fish size); null = derive from the first source cell's rect. */
+  readonly slotPx?: number | null;
+}
+
+/** B's fx functions (a test seam; defaults are the real ui/fx modules). */
+export interface WinFlowFx {
+  flyFish(layer: HTMLElement, from: readonly DOMRect[], to: DOMRect, opts: FlyFishOptions): FxHandle;
+  ensureFxLayer(root: HTMLElement): HTMLElement;
+  fishSizePx(slotPx: number): number;
 }
 
 export interface WinFlowDeps {
   readonly clock: Clock;
-  readonly router: Router;
-  readonly bus: AppBus;
-  readonly sfx: Sfx;
+  readonly sfx: Pick<Sfx, 'play'>;
   readonly haptics: (pattern: number | readonly number[]) => void;
+  /** Screen-reader line ("You caught 3 fish. You have 128."). */
+  readonly announce?: (message: string) => void;
+  /** The app root (the fish layer goes there); null in tests without a DOM. */
+  readonly root: () => HTMLElement | null;
+  readonly fx?: Partial<WinFlowFx>;
   readonly config?: GameConfig;
   /** t = 4 500 (reduced: 1 200): open the ranking panel (ranking-flow supplies the props). */
-  openRanking(): void;
+  openRanking(opts: { readonly tapMinMs: number }): void;
   /** Open the victory screen (after the panel's tap, or at once for the variants without a panel). */
   openVictory(): void;
+  /** A guarded effect threw (reported, never rethrown). */
+  onError?(error: unknown): void;
 }
 
 export interface WinFlow {
   start(input: WinFlowInput): void;
-  /** Whether a flow is running (Home and Gear stay aria-disabled until the panel opens). */
+  /** Whether a flow is running (from start until the victory screen opens). */
   running(): boolean;
-  /** The panel accepted a tap (≥ rank.panelTapMinMs after it opened): fade it out, then the victory screen. */
+  /** Home and Gear stay inactive until the ranking panel (or, without a panel, the victory) opens. */
+  blocking(): boolean;
+  /** The panel accepted a tap (≥ its tap gate after it opened): the victory screen. */
   continueFromRanking(): void;
+  /** The page came back: every missed step runs now, in order, with its animation at the end state. */
+  catchUp(): void;
   /** Teardown: cancel every timer and animation, empty the fish layer. Rewards are already saved. */
   cancel(): void;
 }
 
+interface Step {
+  readonly at: number;
+  readonly name: string;
+  readonly run: (late: boolean) => void;
+}
+
+/** A step this much behind its time runs with its animation jumped to the end (§2.2 hidden page). */
+const LATE_MS = 250;
+
+/** Timeline steps of one flow, in time order (pure: unit-tested by name and time). */
+export function winTimeline(input: Pick<WinFlowInput, 'variant' | 'reducedMotion' | 'fishBase' | 'fishBonus'>, c: GameConfig = cfg): { at: number; name: string }[] {
+  const w = c.fx.win;
+  const out: { at: number; name: string }[] = [];
+  const { variant } = input;
+  if (variant === 'restored') return [{ at: 0, name: 'victory' }];
+  const reduced = input.reducedMotion;
+  const happy = c.fx.winHappyDelayMs;
+  out.push({ at: happy, name: 'glow' });
+  const fish = input.fishBase > 0;
+  if (fish) {
+    if (reduced) {
+      out.push({ at: happy, name: 'pill_total' });
+      out.push({ at: happy, name: 'plus_label' });
+      for (let k = 0; k < 3; k++) out.push({ at: arrivalAt(k, c), name: `plink_${k}` });
+    } else {
+      out.push({ at: w.fishPillInAtMs, name: 'pill_in' });
+      out.push({ at: w.fishAtMs, name: 'flight' });
+      for (let k = 0; k < 3; k++) out.push({ at: w.fishAtMs + k * w.fishStaggerMs, name: `pop_${k}` });
+      // Arrivals: B's flight reports them (onArrive); these steps count a fish only when no flight runs.
+      for (let k = 0; k < 3; k++) out.push({ at: arrivalAt(k, c), name: `arrive_${k}` });
+      const lastArrival = arrivalAt(2, c);
+      out.push({ at: lastArrival, name: 'plus_label' });
+      if (input.fishBonus > 0) out.push({ at: w.bonusLabelAtMs, name: 'bonus' });
+      // Safety net: a fish B's flight never delivered is counted here, before the scrim.
+      out.push({ at: Math.max(lastArrival, w.bonusLabelAtMs) + w.counterBumpMs, name: 'settle_fish' });
+    }
+  }
+  if (variant === 'tutorial') out.push({ at: reduced ? w.reduced.rankingAtMs : w.tutorialVictoryAtMs, name: 'victory' });
+  else if (variant === 'tutorial_replay') out.push({ at: w.replayVictoryAtMs, name: 'victory' });
+  else out.push({ at: reduced ? w.reduced.rankingAtMs : c.fx.winOverlayDelayMs, name: 'ranking' });
+  return out.sort((a, b) => a.at - b.at);
+}
+
+/** When fish k reaches the pill (§2.2: 2 250 / 2 400 / 2 550). */
+export function arrivalAt(k: number, c: GameConfig = cfg): number {
+  const w = c.fx.win;
+  return w.fishAtMs + k * w.fishStaggerMs + w.fishHoldMs + w.fishFlightMs;
+}
+
 export function createWinFlow(deps: WinFlowDeps): WinFlow {
-  void deps;
-  throw new Error('not implemented: createWinFlow (C, phase2b §2.2)');
+  const c = deps.config ?? cfg;
+  const { clock } = deps;
+  const fx: WinFlowFx = {
+    flyFish: deps.fx?.flyFish ?? ((layer, from, to, opts) => flyFish(layer, from, to, opts, c)),
+    ensureFxLayer: deps.fx?.ensureFxLayer ?? ensureFxLayer,
+    fishSizePx: deps.fx?.fishSizePx ?? ((slot) => fishSizePx(slot, c)),
+  };
+
+  let gen = 0;
+  let steps: Step[] = [];
+  let next = 0;
+  let t0 = 0;
+  let timer: TimerId | null = null;
+  let active = false;
+  let blockingUi = false;
+  let awaitingTap = false;
+  const handles: FxHandle[] = [];
+
+  const guard = (fn: () => void): void => {
+    try {
+      fn();
+    } catch (error) {
+      deps.onError?.(error);
+    }
+  };
+
+  function finishHandles(): void {
+    for (const h of handles) guard(() => h.finish());
+  }
+
+  function clearTimer(): void {
+    clock.clearTimeout(timer);
+    timer = null;
+  }
+
+  function schedule(): void {
+    clearTimer();
+    const step = steps[next];
+    if (!step || !active) return;
+    const mine = gen;
+    const wait = Math.max(0, t0 + step.at - clock.perf());
+    timer = clock.setTimeout(() => {
+      timer = null;
+      if (mine === gen) runDue();
+    }, wait);
+  }
+
+  /** Runs every step whose time has come, in order; each exactly once. */
+  function runDue(): void {
+    const mine = gen;
+    const now = clock.perf();
+    while (active && mine === gen && next < steps.length) {
+      const step = steps[next] as Step;
+      if (t0 + step.at > now) break;
+      next++;
+      const late = now - (t0 + step.at) > LATE_MS;
+      if (late) finishHandles();
+      guard(() => step.run(late));
+    }
+    if (mine === gen) schedule();
+  }
+
+  function stop(): void {
+    gen++;
+    clearTimer();
+    active = false;
+    blockingUi = false;
+    awaitingTap = false;
+    for (const h of handles.splice(0)) guard(() => h.cancel());
+    steps = [];
+    next = 0;
+  }
+
+  const flow: WinFlow = {
+    start(input) {
+      stop();
+      active = true;
+      blockingUi = true;
+      t0 = clock.perf();
+      const { screen } = input;
+      const base = input.fishBase;
+      const bonus = input.fishBonus;
+      const total = input.fishBefore + base + bonus;
+      const arrived = new Set<number>();
+      let flying = false;
+      const sounds = (k: number): void => {
+        guard(() => deps.sfx.play('fish_plink', { index: k }));
+        guard(() => deps.haptics(c.haptics.fish));
+      };
+      const arrive = (k: number): void => {
+        if (arrived.has(k) || k < 0 || k >= 3) return;
+        arrived.add(k);
+        guard(() => screen.showFishPill(input.fishBefore + Math.min(base, arrived.size)));
+        sounds(k);
+      };
+      const announce = (): void => {
+        if (base + bonus > 0) guard(() => deps.announce?.(tn('a11y.fishEarned', base + bonus, { total })));
+      };
+
+      const run: Record<string, (late: boolean) => void> = {
+        glow: () => {
+          if (input.catCells.length > 0) handles.push(screen.glow(input.catCells));
+        },
+        pill_in: () => screen.showFishPill(input.fishBefore),
+        pill_total: () => screen.showFishPill(total),
+        flight: (late) => {
+          const to = screen.fishRect();
+          const from: DOMRect[] = [];
+          for (const cell of input.fishSources) {
+            const r = screen.cellRect(cell);
+            if (r) from.push(r);
+          }
+          const root = deps.root();
+          if (late || !to || from.length === 0 || !root) return; // the arrivals are settled by settle_fish
+          const slot = input.slotPx ?? from[0]?.width ?? 0;
+          const h = fx.flyFish(fx.ensureFxLayer(root), from, to, {
+            sizePx: fx.fishSizePx(slot),
+            reduced: false,
+            onArrive: (i) => arrive(i),
+          });
+          handles.push(h);
+          flying = true;
+        },
+        plus_label: () => {
+          if (input.reducedMotion) {
+            // §2.7: no flight; the count already shows the total; the label fades in and out.
+            guard(() => screen.fishLabel(t('fish.plus', { count: base + bonus })));
+          } else {
+            for (let k = 0; k < 3; k++) arrive(k);
+            guard(() => screen.fishLabel(t('fish.plus', { count: base })));
+          }
+          announce();
+        },
+        bonus: () => {
+          guard(() => screen.fishLabel(t('fish.plus', { count: bonus })));
+          guard(() => screen.showFishPill(total));
+        },
+        settle_fish: () => {
+          for (let k = 0; k < 3; k++) arrive(k);
+          guard(() => screen.showFishPill(total));
+        },
+        ranking: () => {
+          blockingUi = false;
+          awaitingTap = true;
+          deps.openRanking({ tapMinMs: input.reducedMotion ? c.fx.win.reduced.tapMinMs : c.rank.panelTapMinMs });
+        },
+        victory: () => {
+          blockingUi = false;
+          active = false;
+          deps.openVictory();
+        },
+      };
+      for (let k = 0; k < 3; k++) {
+        run[`pop_${k}`] = (late) => {
+          if (!late) guard(() => deps.sfx.play('fish_pop', { index: k }));
+        };
+        run[`arrive_${k}`] = (late) => {
+          if (!flying || late) arrive(k);
+        };
+        run[`plink_${k}`] = () => sounds(k);
+      }
+      steps = winTimeline(input, c).map((s) => ({ at: s.at, name: s.name, run: run[s.name] ?? (() => undefined) }));
+      next = 0;
+      runDue();
+    },
+    running: () => active,
+    blocking: () => active && blockingUi,
+    continueFromRanking() {
+      if (!awaitingTap) return;
+      awaitingTap = false;
+      active = false;
+      clearTimer();
+      deps.openVictory();
+    },
+    catchUp() {
+      if (!active) return;
+      finishHandles();
+      runDue();
+    },
+    cancel: stop,
+  };
+  return flow;
 }

@@ -1,6 +1,8 @@
 // Owner: C (Phase 2b; was app)
 // Web build happy and sad paths (04 §11 cases 1–12) against dist/e2e (window.__mewdoku hooks on).
 // Saves are seeded through the hooks and applied with a reload; the mock ads are steered by ?ads=.
+// Phase 2b: a win goes ranking panel → victory screen; on the web the panel shows personal records
+// with the rank.localOnly line and no other player's row (§5.10); the shop offers only "Swap fish" (§8.8).
 import { expect, test, type Page } from '@playwright/test';
 import type { E2EHooks } from '../../src/app/boot';
 import { defaults } from '../../src/game/save';
@@ -119,14 +121,49 @@ test('3 · three mistakes → fail overlay → Retry → fresh board', async ({ 
   expect(g?.cells.every((v) => v === 0)).toBe(true);
 });
 
-test('4 · a win shows O3; Next loads the following level', async ({ page }) => {
+/** The ranking panel after a win: wait for it, then tap once its gate has passed. */
+async function continueFromPanel(page: Page): Promise<void> {
+  const panel = page.locator('[data-overlay="ranking"]');
+  await expect(panel).toBeVisible({ timeout: 10_000 });
+  await expect(panel.locator('.ranking__tap')).toBeEnabled({ timeout: 5000 });
+  await panel.locator('.ranking__tap').click();
+}
+
+test('4 · a win: ranking panel, then the victory screen; "Level 6" loads the following level', async ({ page }) => {
   await open(page, '', returning());
   await playLevel(page);
   const sol = await solution(page);
   for (let r = 0; r < sol.length; r++) await dbl(page, r * sol.length + (sol[r] as number));
-  await page.getByRole('button', { name: 'Next: Level 6' }).click();
+  await continueFromPanel(page);
+  await page.getByRole('button', { name: 'Level 6' }).click();
   await playing(page);
   expect((await game(page))?.id).toBe('L6');
+});
+
+test('4b · web rankings: my own records and the rankings-not-available line, never another player row', async ({ page }) => {
+  await open(page, '', returning());
+  await playLevel(page);
+  const sol = await solution(page);
+  for (let r = 0; r < sol.length; r++) await dbl(page, r * sol.length + (sol[r] as number));
+  const panel = page.locator('[data-overlay="ranking"]');
+  await expect(panel).toBeVisible({ timeout: 10_000 });
+  await expect(panel).toContainText("Rankings with other players aren't available in this version. Here are your own records.");
+  await expect(panel.locator('.rank-records')).toBeVisible();
+  await expect(panel).toContainText('Levels solved');
+  expect(await panel.locator('.rank-list__row, [data-rank-row]').count()).toBe(0);
+  expect((await app(page))?.save.wallet.fish).toBe(3);
+});
+
+test('4c · the shop on the web: only "Swap fish"; a swap works', async ({ page }) => {
+  await open(page, '', returning({ wallet: { fish: 40, earned: 40 }, stock: { hints: 0, kitties: 3 } }));
+  await page.locator('.screen--home .fish-pill__plus').click();
+  const shop = page.locator('[data-overlay="shop"]');
+  await expect(shop).toBeVisible();
+  await expect(shop.locator('.shop__section--swap')).toContainText('Swap fish');
+  await expect(shop.locator('.shop__section--buy')).toBeHidden();
+  await shop.locator('.shop__row[data-item="hint"] .shop__swap').click();
+  await expect.poll(async () => (await app(page))?.save.stock.hints).toBe(1);
+  expect((await app(page))?.save.wallet.fish).toBe(25);
 });
 
 test('5 · reload mid-level restores the exact board', async ({ page }) => {
@@ -287,7 +324,7 @@ async function flaky(page: Page, pattern: RegExp, fail: (n: number) => boolean):
   return seen;
 }
 
-test('14 · the overlay chunk failing once at boot: it is re-fetched (cache-busted) and O1 / O3 still open', async ({ page }) => {
+test('14 · the overlay chunk failing once at boot: it is re-fetched (cache-busted) and O1 / the post-win screens still open', async ({ page }) => {
   await open(page, '', returning());
   const seen = await flaky(page, /overlay-chunk-[\w-]+\.js(\?.*)?$/, (n) => n === 1);
   await page.reload();
@@ -301,7 +338,8 @@ test('14 · the overlay chunk failing once at boot: it is re-fetched (cache-bust
   await page.keyboard.press('Escape');
   const sol = await solution(page);
   for (let r = 0; r < sol.length; r++) await dbl(page, r * sol.length + (sol[r] as number));
-  await expect(page.getByRole('button', { name: /^Next/ })).toBeVisible();
+  await continueFromPanel(page);
+  await expect(page.getByRole('button', { name: 'Level 6' })).toBeVisible();
 });
 
 test('15 · the overlay chunk never loading: the bulb charges nothing, and a lost board goes Home kept', async ({ page }) => {

@@ -73,8 +73,10 @@ describe('tutorial session', () => {
       { step: 6 },
     ]);
     expect(h.router.isOpen('coach')).toBe(false);
-    await h.settle(h.config.fx.winOverlayDelayMs);
-    expect(h.router.props.win).toMatchObject({ variant: 'tutorial', nextLevel: 2 });
+    await h.settle(h.config.fx.win.tutorialVictoryAtMs); // phase2b §2.6: no ranking after the tutorial
+    expect(h.router.isOpen('ranking')).toBe(false);
+    expect(h.router.props.victory).toMatchObject({ variant: 'tutorial', nextLevel: 2, fish: { earned: 3, total: 3 }, pointsEarned: null });
+    expect(h.save().wallet.fish).toBe(3);
     h.log.length = 0;
     await h.session.onNext();
     expect(slice(h.log, /^(ad:|screen:)/)).toEqual(['screen:game:L2']);
@@ -108,8 +110,10 @@ describe('tutorial session', () => {
     expect(h.game().status).toBe('won');
     expect(h.save().progress).toEqual(before.progress);
     expect(h.platform.writes.some((w) => w.cloud === 'flush')).toBe(false);
-    await h.settle(h.config.fx.winOverlayDelayMs);
-    expect(h.router.props.win?.variant).toBe('tutorial_replay');
+    await h.settle(h.config.fx.win.replayVictoryAtMs);
+    expect(h.router.props.victory?.variant).toBe('tutorial_replay');
+    expect(h.router.props.victory?.fish).toBeNull();
+    expect(h.save().wallet).toEqual(before.wallet);
     await h.session.onNext();
     expect(h.homeCalls).toBe(1);
     h.session.onSkipTutorial(); // not offered in a replay

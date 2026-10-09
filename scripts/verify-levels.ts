@@ -3,6 +3,10 @@
 // and tight, band, shape filters, no duplicates, contiguous numbering, hard/breather schedule,
 // manifest SHA-256. Exit code 1 on any failure. Also home of the pack file format (03 §9.2) and the
 // manifest writer shared by gen-levels and gen-daily.
+// Phase 2b (§4.2): also the event packs (src/data/events/<id>.json, named by events.json, which is
+// validated too): count, puzzle numbers, the scheduled size and the event's band per puzzle, the same
+// record checks, and no board shared with a level, a daily or another event. The event packs are not
+// in the level manifest (that file is read-only in 2b); events.json names them.
 //
 // Usage: tsx scripts/verify-levels.ts [--data src/data] [--no-oracle]
 import { createHash } from 'node:crypto';
@@ -16,6 +20,7 @@ import { grade } from '../src/engine/grader';
 import { solveRows } from '../src/engine/solver-oracle';
 import { countSolutions } from '../src/engine/solver';
 import type { DailyPack, GradeBand, LevelPack, LevelRecord, PackManifest } from '../src/engine/types';
+import { eventSizeSchedule, isEventPack, validateEventDefs } from '../src/game/events';
 import { allowG5Steps, dailySlotFor, isHardLevel, shapeLimits } from '../src/game/ramp';
 import { TUTORIAL_RECORD } from '../src/game/tutorial';
 import { buildSchedule } from './level-schedule';
@@ -232,6 +237,9 @@ export function verifyAll(dataDir = 'src/data', opts: VerifyOptions = {}): Verif
     }
   }
 
+  // Event packs (phase2b §4.2), named by events.json.
+  verifyEvents(dataDir, oracle, issues, dup);
+
   // Files on disk that the manifest does not list.
   for (const sub of ['levels', 'daily']) {
     const dir = `${dataDir}/${sub}`;
@@ -241,6 +249,53 @@ export function verifyAll(dataDir = 'src/data', opts: VerifyOptions = {}): Verif
     }
   }
   return issues;
+}
+
+/** events.json and every event pack it names (phase2b §4.2, §4.9). */
+function verifyEvents(
+  dataDir: string,
+  oracle: boolean,
+  issues: VerifyIssue[],
+  dup: (file: string, key: string, ck: string | null) => void,
+): void {
+  const listPath = `${dataDir}/events/events.json`;
+  if (!existsSync(listPath)) return;
+  const { defs, errors } = validateEventDefs(readJson(listPath));
+  for (const e of errors) issues.push({ file: 'events/events.json', key: '-', message: e });
+  const named = new Set<string>(['events.json']);
+  for (const def of defs) {
+    const file = def.puzzles.file;
+    named.add(file.slice('events/'.length));
+    const issue = (key: string, message: string): void => void issues.push({ file, key, message });
+    const path = `${dataDir}/${file}`;
+    if (!existsSync(path)) {
+      issue('-', 'named by events.json but missing');
+      continue;
+    }
+    const pack = readJson(path);
+    if (!isEventPack(pack, def.id)) {
+      issue('-', 'not an event pack for this id');
+      continue;
+    }
+    if (pack.count !== def.puzzles.count) issue('-', `count ${pack.count}, events.json says ${def.puzzles.count}`);
+    if (!pack.gen.startsWith('mewdoku-gen/')) issue('-', `gen "${pack.gen}" is not ours`);
+    if (!def.gen) {
+      issue('-', 'events.json has no gen block (sizes and band) for this event');
+      continue;
+    }
+    const sizes = eventSizeSchedule(def.gen.sizes, def.puzzles.count);
+    pack.puzzles.forEach((rec, index) => {
+      const key = `puzzle ${index + 1}`;
+      if (rec.i !== index + 1) issue(key, `i=${rec.i}, expected ${index + 1}`);
+      if (rec.h !== 0 || rec.tut !== undefined || (rec.gv ?? '') !== '') issue(key, 'event records carry h=0 and no tut/gv');
+      const n = sizes[index] ?? rec.n;
+      const ex: Expect = { band: def.gen?.band ?? [1, 5], limits: shapeLimits(n, null), sizes: [n] };
+      dup(file, `${def.id} #${index + 1}`, verifyRecord(rec, ex, oracle, (m) => issue(key, m)));
+    });
+  }
+  for (const f of readdirSync(`${dataDir}/events`)) {
+    if (f.endsWith('.json') && !named.has(f)) issues.push({ file: `events/${f}`, key: '-', message: 'not named by events.json' });
+  }
 }
 
 /** "YYYY-MM" + 1 month. */
@@ -258,7 +313,8 @@ export function main(argv: readonly string[]): void {
   for (const i of issues.slice(0, 200)) process.stderr.write(`${i.file} [${i.key}]: ${i.message}\n`);
   if (issues.length > 200) process.stderr.write(`… and ${issues.length - 200} more\n`);
   const sec = ((performance.now() - t0) / 1000).toFixed(1);
-  process.stdout.write(`verify-levels: ${m?.packs.length ?? 0} level packs, ${m?.daily.length ?? 0} daily months, ${issues.length} issue(s), ${sec} s\n`);
+  const events = existsSync(`${dataDir}/events`) ? readdirSync(`${dataDir}/events`).filter((f) => f.endsWith('.json') && f !== 'events.json').length : 0;
+  process.stdout.write(`verify-levels: ${m?.packs.length ?? 0} level packs, ${m?.daily.length ?? 0} daily months, ${events} event packs, ${issues.length} issue(s), ${sec} s\n`);
   if (issues.length > 0) process.exitCode = 1;
 }
 

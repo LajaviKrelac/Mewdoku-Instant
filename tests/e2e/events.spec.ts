@@ -1,0 +1,91 @@
+// Owner: C
+// A limited-time event end to end (phase2b §4.4, §4.5, §4.9) with the page's Date fixed inside our
+// Lantern Walk (2026-11-13 → 2026-11-27 UTC): the Home card → the event screen (lazy events chunk) →
+// "Play puzzle 1" → win → the event ranking panel (web: my results) → the victory shows 1 / 21 →
+// back Home, where the card says 1 / 21 solved. Before the start the card teases; a locked player
+// gets the "Opens after level 10" toast.
+import { expect, test, type Page } from '@playwright/test';
+import type { E2EHooks } from '../../src/app/boot';
+import { defaults } from '../../src/game/save';
+import type { SaveData } from '../../src/game/types';
+
+type TestWindow = Window & { __mewdoku?: E2EHooks };
+
+const INSIDE = new Date('2026-11-14T12:00:00Z');
+const BEFORE = new Date('2026-11-12T00:00:00Z'); // 24 h before the start: the teaser
+
+const player = (level: number): SaveData => ({
+  ...defaults(INSIDE.getTime() - 3 * 86_400_000),
+  tutorialDone: true,
+  sessions: 3,
+  progress: { level, completed: level - 1, best: {} },
+});
+
+async function open(page: Page, when: Date, save: SaveData): Promise<void> {
+  await page.clock.setFixedTime(when);
+  await page.goto('/?ads=unsupported');
+  await page.waitForFunction(() => {
+    const s = (window as TestWindow).__mewdoku?.app().screen;
+    return s === 'home' || s === 'game';
+  });
+  await page.evaluate((json) => (window as TestWindow).__mewdoku?.seedSave(json), JSON.stringify(save));
+  await page.reload();
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');
+}
+
+test('Lantern Walk: card → event screen → puzzle 1 → win → victory 1 / 21 → Home card 1 / 21', async ({ page }) => {
+  await open(page, INSIDE, player(15));
+  const card = page.locator('.event-card');
+  await expect(card).toBeVisible();
+  await expect(card).toContainText('Lantern Walk');
+  await expect(card).toContainText('0 / 21 solved');
+  await card.click();
+
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'event');
+  const screen = page.locator('.screen--event');
+  await expect(screen).toContainText('Lantern Walk');
+  await expect(screen).toContainText('Light the way, one cat at a time.');
+  await screen.getByRole('button', { name: 'Play puzzle 1' }).click();
+
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
+  const id = await page.evaluate(() => (window as TestWindow).__mewdoku?.state()?.puzzle.id);
+  expect(id).toBe('Elantern-walk-2026/0');
+  const app = await page.evaluate(() => (window as TestWindow).__mewdoku?.app());
+  expect(app?.session?.mode).toBe('event');
+
+  await page.evaluate(() => (window as TestWindow).__mewdoku?.solve());
+  const saved = await page.evaluate(() => (window as TestWindow).__mewdoku?.app().save);
+  expect(saved?.events['lantern-walk-2026']?.solved).toBe(1);
+  expect(saved?.wallet.fish).toBe(3);
+
+  const panel = page.locator('[data-overlay="ranking"]');
+  await expect(panel).toBeVisible({ timeout: 10_000 });
+  await expect(panel).toContainText('1 / 21 solved');
+  await expect(panel).toContainText('Your results: 1 of 21');
+  await expect(panel.locator('.ranking__tap')).toBeEnabled({ timeout: 3000 });
+  await panel.locator('.ranking__tap').click();
+
+  const victory = page.locator('[data-overlay="victory"]');
+  await expect(victory).toBeVisible();
+  await expect(victory).toContainText('1 / 21 solved');
+  await expect(victory.locator('.victory__primary')).toHaveText(/Play puzzle 2/);
+  await victory.getByRole('button', { name: 'Home' }).click();
+
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');
+  await expect(page.locator('.event-card')).toContainText('1 / 21 solved');
+});
+
+test('before the start: a teaser card that is not a button target; locked players get a toast', async ({ page }) => {
+  await open(page, BEFORE, player(15));
+  const card = page.locator('.event-card');
+  await expect(card).toBeVisible();
+  await expect(card).toContainText('Starts in');
+  await card.click({ force: true });
+  expect(await page.evaluate(() => (window as TestWindow).__mewdoku?.app().screen)).toBe('home');
+
+  await open(page, INSIDE, player(8));
+  await expect(page.locator('.event-card')).toContainText('Opens after level 10');
+  await page.locator('.event-card').click();
+  await expect(page.locator('.toast')).toContainText('Opens after level 10');
+  expect(await page.evaluate(() => (window as TestWindow).__mewdoku?.app().screen)).toBe('home');
+});

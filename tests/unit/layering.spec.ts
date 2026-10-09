@@ -18,6 +18,8 @@ interface Edge {
   readonly spec: string;
   readonly target: string | null; // resolved repo-relative path, '@platform', or null (bare / node:)
   readonly typeOnly: boolean;
+  /** import(…) (also `typeof import(…)` in a type position): never part of the importer's chunk. */
+  readonly dynamic: boolean;
 }
 
 // ─────────────────────────────── scanning ───────────────────────────────
@@ -88,8 +90,8 @@ export function scanImports(fileAbs: string): Edge[] {
   const code = stripSource(readFileSync(fileAbs, 'utf8'), false);
   const from = posix(relative(ROOT, fileAbs));
   const edges: Edge[] = [];
-  const add = (spec: string, typeOnly: boolean): void => {
-    edges.push({ from, spec, target: resolveSpec(fileAbs, spec), typeOnly });
+  const add = (spec: string, typeOnly: boolean, dynamic = false): void => {
+    edges.push({ from, spec, target: resolveSpec(fileAbs, spec), typeOnly, dynamic });
   };
   const staticRe = /^[ \t]*(import|export)\s+(type\s+)?(?:[^;'"]*?\sfrom\s+)?['"]([^'"]+)['"]/gm;
   for (let m = staticRe.exec(code); m; m = staticRe.exec(code)) {
@@ -99,7 +101,7 @@ export function scanImports(fileAbs: string): Edge[] {
     add(m[3] as string, !!m[2]);
   }
   for (const re of [/\bimport\(\s*['"]([^'"]+)['"]\s*\)/g, /new\s+URL\(\s*['"]([^'"]+)['"]\s*,\s*import\.meta\.url\s*\)/g]) {
-    for (let m = re.exec(code); m; m = re.exec(code)) add(m[1] as string, false);
+    for (let m = re.exec(code); m; m = re.exec(code)) add(m[1] as string, false, true);
   }
   const globRe = /import\.meta\.glob(?:<[^>]*>)?\(\s*(\[[^\]]*\]|['"][^'"]+['"])/g;
   for (let m = globRe.exec(code); m; m = globRe.exec(code)) {
@@ -247,6 +249,16 @@ describe('layering (04 §2)', () => {
       for (const [re, what] of banned) if (re.test(code)) violations.push(`${posix(relative(ROOT, f))}: ${what}`);
     }
     expect(violations).toEqual([]);
+  });
+
+  it('lazy chunk entries are never imported statically from src/ (CONTRACTS-2b §2, §5.5)', () => {
+    // One dynamic import each; a static value import would pull the chunk into the importer's bundle.
+    const LAZY = ['src/app/overlay-chunk.ts', 'src/app/events-chunk.ts', 'src/app/social-flows.ts', 'src/platform/fb/fb-social.ts', 'src/audio/sfx.ts'];
+    const bad = srcFiles
+      .flatMap(scanImports)
+      .filter((e) => e.target !== null && LAZY.includes(e.target) && !e.dynamic && !e.typeOnly && !LAZY.includes(e.from))
+      .map((e) => `${e.from} → ${e.spec}`);
+    expect(bad).toEqual([]);
   });
 
   it('the checker itself flags the forbidden directions', () => {
