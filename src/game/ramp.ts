@@ -102,7 +102,33 @@ export function weekdayOfDateKey(dateKey: string): number {
   return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))).getUTCDay();
 }
 
+/**
+ * The 12×12 daily (Phase 2b parity, review PAR-1): the original's dailies can be 12×12 (01 §10.10,
+ * an iOS fixture), so from this Sunday on every second Sunday is 12×12 G4 and the others stay
+ * 11×11 G4. Dates before it keep WEEKDAY_SLOTS unchanged, so the daily packs up to and including
+ * the day this was decided (2026-10-09) did not change.
+ */
+export const DAILY_12_FROM = '2026-10-18';
+export const SUNDAY_12: DailySlot = Object.freeze<DailySlot>({ n: 12, band: [4, 4] });
+
+const DAY_MS = 86_400_000;
+
+function utcDayOf(dateKey: string): number {
+  const m = DATE_KEY.exec(dateKey);
+  if (!m) throw new Error(`bad date key: ${dateKey}`);
+  return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+}
+
+/** True for the Sundays from DAILY_12_FROM on that carry the 12×12 daily (every second week). */
+export function isTwelveSunday(dateKey: string): boolean {
+  if (weekdayOfDateKey(dateKey) !== 0 || dateKey < DAILY_12_FROM) return false;
+  const weeks = Math.round((utcDayOf(dateKey) - utcDayOf(DAILY_12_FROM)) / (7 * DAY_MS));
+  return weeks % 2 === 0;
+}
+
+/** The daily's size and band for a date key: the weekday table, and the 12×12 Sundays (PAR-1). */
 export function dailySlotFor(dateKey: string): DailySlot {
+  if (isTwelveSunday(dateKey)) return SUNDAY_12;
   return WEEKDAY_SLOTS[weekdayOfDateKey(dateKey)] as DailySlot;
 }
 

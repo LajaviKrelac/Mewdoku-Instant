@@ -19,8 +19,10 @@ import {
   bandFor,
   breatherBand,
   breatherPool,
+  DAILY_12_FROM,
   dailySlotFor,
   isHardLevel,
+  isTwelveSunday,
   RAMP,
   rampRowFor,
   shapeLimits,
@@ -174,6 +176,17 @@ describe('shipped content (03 §11.2)', () => {
       expect.soft(rec.n, date).toBe(dailySlotFor(date).n);
       expect.soft({ i: rec.i, h: rec.h, tut: rec.tut }, date).toEqual({ i: undefined, h: 0, tut: undefined });
     }
+  });
+
+  it('the daily packs carry the 12×12 G4 Sundays (review PAR-1), and nothing before DAILY_12_FROM changed size', () => {
+    const twelves = dailies.filter(([, rec]) => rec.n === 12);
+    expect(twelves.length).toBeGreaterThanOrEqual(50);
+    for (const [date, rec] of twelves) {
+      expect.soft(isTwelveSunday(date), date).toBe(true);
+      expect.soft(rec.g, date).toBe(4);
+    }
+    for (const [date, rec] of dailies.filter(([d]) => d < DAILY_12_FROM)) expect.soft(rec.n, date).toBeLessThanOrEqual(11);
+    expect(dailies.filter(([, rec]) => rec.n === 11).length).toBeGreaterThanOrEqual(50); // 11×11 Sundays stay too
   });
 
   it('effort rises inside each ramp row (03 §8.3): rank correlation ≥ 0.9 on rows with ≥ 40 sortable levels', () => {

@@ -8,7 +8,7 @@ import { createFakeClock } from '../../../src/app/clock';
 import { cfg, mergeConfig } from '../../../src/app/config';
 import { createFbOverlayViews, OVERLAY_HOST_TEST_ID } from '../../../src/platform/fb/fb-overlay-views';
 import { rankingCaps } from '../../../src/platform/fb/fb-probe';
-import { createFbRanking, mapSubmitError, parseLeaderboardMap, probeRankingApi } from '../../../src/platform/fb/fb-ranking';
+import { BAND_MAX_PAGES, createFbRanking, mapSubmitError, parseLeaderboardMap, probeRankingApi } from '../../../src/platform/fb/fb-ranking';
 import type { FBInstantSDK } from '../../../src/platform/fb/fbinstant';
 import { RANK_LIST_CLOSE_EVENT, rankListData, rankListTemplate } from '../../../src/platform/fb/views/rank-list';
 import type { BoardKey, RankListView } from '../../../src/platform/types';
@@ -165,9 +165,40 @@ describe('createFbRanking: classic API', () => {
     await expect(ranking.submit('daily_fastest', 5)).resolves.toBe('unsupported');
     await expect(ranking.submit('paw_points', 5)).resolves.toBe('error');
     await expect(ranking.submit('paw_points', 5)).resolves.toBe('ok');
-    // The failed lookup was not cached: the next call asks again.
-    await ranking.submit('daily_fastest', 5);
-    expect(control.find('getLeaderboardAsync').filter((c) => c.args[0] === 'df')).toHaveLength(2);
+    // Review FB2B-6: LEADERBOARD_NOT_FOUND latches the board for the session (no second lookup) …
+    await expect(ranking.submit('daily_fastest', 5)).resolves.toBe('unsupported');
+    expect(control.find('getLeaderboardAsync').filter((c) => c.args[0] === 'df')).toHaveLength(1);
+    expect(ranking.supports?.('daily_fastest')).toBe(false);
+    expect(ranking.supports?.('paw_points')).toBe(true);
+  });
+
+  it('a lookup that failed for another reason is not cached: the next call asks again', async () => {
+    const { ranking, sdk, control } = await setup();
+    const real = sdk.getLeaderboardAsync!.bind(sdk);
+    let fail = true;
+    sdk.getLeaderboardAsync = (name: string) => {
+      if (fail) {
+        fail = false;
+        return Promise.reject({ code: 'NETWORK_FAILURE', message: 'down' });
+      }
+      return real(name);
+    };
+    await expect(ranking.submit('paw_points', 5)).resolves.toBe('error');
+    await expect(ranking.submit('paw_points', 5)).resolves.toBe('ok');
+    expect(ranking.supports?.('paw_points')).toBe(true);
+    expect(control.count('leaderboard.setScoreAsync')).toBe(1);
+  });
+
+  it('reads of a board missing in the dashboard latch it too: [] / null / no list, then no SDK call (review FB2B-6)', async () => {
+    const { ranking, control } = await setup({ leaderboards: { names: [] } });
+    await expect(ranking.top('paw_points', 10)).resolves.toEqual([]);
+    await expect(ranking.mine('paw_points')).resolves.toBeNull();
+    expect(ranking.supports?.('paw_points')).toBe(false);
+    control.clearCalls();
+    await expect(ranking.top('paw_points', 10)).resolves.toEqual([]);
+    await expect(ranking.showList('paw_points', VIEW)).resolves.toBeNull();
+    await expect(ranking.submit('paw_points', 10)).resolves.toBe('unsupported');
+    expect(control.calls.filter((c) => /eaderboard/.test(c.name))).toEqual([]);
   });
 
   it('rejects invalid scores without an SDK call', async () => {
@@ -318,6 +349,61 @@ describe('createFbRanking: overlay list (showList)', () => {
     await again.ranking.submit('daily_fastest', day(3, 150));
     await again.ranking.showList('daily_fastest', view);
     expect(overlayData(again.control).rows.map((r) => `${r.id}:${r.kind}`)).toEqual(['p1:other', 'me:mine', 'p2:other']);
+  });
+
+  it('daily: twelve next-day entries above today do not hide today: the band is read past them and numbered from #1 (review FB2B-4)', async () => {
+    const day = (d: number, secs: number): number => d * 100_000 + (99_999 - secs);
+    const later = Array.from({ length: 12 }, (_, i) => ({ playerId: `t${i + 1}`, score: day(282, 10 + i) }));
+    const today = [
+      { playerId: 'a', score: day(281, 20) },
+      { playerId: 'b', score: day(281, 30) },
+      { playerId: 'c', score: day(281, 40) },
+    ];
+    const keep = (score: number): boolean => Math.floor(score / 100_000) === 281;
+    const view: RankListView = { ...VIEW, title: 'Today', scoreFormat: 'time', keep };
+    const { ranking, control } = await setup({ leaderboards: { entries: { df: [...later, ...today, { playerId: 'old', score: day(280, 5) }] } } });
+    await ranking.submit('daily_fastest', day(281, 4)); // my 4 s: the best of today, #13 on the board
+    await ranking.showList('daily_fastest', view);
+    const rows = overlayData(control).rows;
+    expect(rows.map((r) => `${r.rank}:${r.id}:${r.kind}`)).toEqual(['#1:me:mine', '#2:a:other', '#3:b:other', '#4:c:other']);
+    // The panel's reader (top with keep) gets the same band, numbered inside it.
+    await expect(ranking.top('daily_fastest', 10, keep)).resolves.toEqual([
+      { rank: 1, score: day(281, 4), isMe: true },
+      { rank: 2, score: day(281, 20), isMe: false },
+      { rank: 3, score: day(281, 30), isMe: false },
+      { rank: 4, score: day(281, 40), isMe: false },
+    ]);
+  });
+
+  it('daily band: pages through getEntriesAsync(fetchCount, offset) until the band ends, at most BAND_MAX_PAGES pages', async () => {
+    const day = (d: number, secs: number): number => d * 100_000 + (99_999 - secs);
+    const page = cfg.rank.fetchCount;
+    const later = Array.from({ length: page + 5 }, (_, i) => ({ playerId: `t${i}`, score: day(282, 10 + i) }));
+    const today = [{ playerId: 'a', score: day(281, 20) }];
+    const keep = (score: number): boolean => Math.floor(score / 100_000) === 281;
+    const { ranking, control } = await setup({ leaderboards: { entries: { df: [...later, ...today, { playerId: 'old', score: day(280, 5) }] } } });
+    await expect(ranking.top('daily_fastest', 10, keep)).resolves.toEqual([{ rank: 1, score: day(281, 20), isMe: false }]);
+    expect(control.find('leaderboard.getEntriesAsync').map((c) => c.args)).toEqual([
+      ['df', page, 0],
+      ['df', page, page],
+    ]);
+    // A band that starts beyond the cap: the honest empty list, never a guess.
+    const far = Array.from({ length: page * BAND_MAX_PAGES + 1 }, (_, i) => ({ playerId: `f${i}`, score: day(282, i) }));
+    const capped = await setup({ leaderboards: { entries: { df: [...far, ...today] } } });
+    await expect(capped.ranking.top('daily_fastest', 10, keep)).resolves.toEqual([]);
+    expect(capped.control.count('leaderboard.getEntriesAsync')).toBe(BAND_MAX_PAGES);
+  });
+
+  it('daily band: my row is pinned with its position in the band, and not at all when only the board knows it', async () => {
+    const day = (d: number, secs: number): number => d * 100_000 + (99_999 - secs);
+    const keep = (score: number): boolean => Math.floor(score / 100_000) === 281;
+    const today = Array.from({ length: 11 }, (_, i) => ({ playerId: `p${i}`, score: day(281, 10 + i) }));
+    const { ranking, control } = await setup({ leaderboards: { entries: { df: [{ playerId: 'x', score: day(282, 1) }, ...today] } } });
+    await ranking.submit('daily_fastest', day(281, 500)); // the slowest of the day: 12th in the band, 13th on the board
+    await ranking.showList('daily_fastest', { ...VIEW, title: 'Today', scoreFormat: 'time', keep });
+    const rows = overlayData(control).rows;
+    expect(rows).toHaveLength(11);
+    expect(rows[10]).toMatchObject({ id: 'me', rank: '#12', kind: 'mine' });
   });
 
   it('an empty board shows the honest empty state, no rows', async () => {

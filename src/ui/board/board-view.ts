@@ -1,7 +1,12 @@
 // Owner: B (Phase 2b)
-// The board card (04 §5.3): a role="grid" of <button class="cell"> built once per puzzle; per-cell
-// --c / --it --ir --ib --il / --pat variables; state in data-s (e|m|c|w|g); data-done for faded
-// regions; diff-only updates. Owns gestures + keyboard wiring and the board's transient FX.
+// The board card (04 §5.3): a role="grid" of <button class="cell"> built once per puzzle; state in
+// data-s (e|m|c|w|g); data-done for faded regions; diff-only updates. Owns gestures + keyboard wiring
+// and the board's transient FX.
+// PERF-1 (2b review): every custom property that is the same for all cells lives on the board, set
+// once — the even insets (--it --ir --ib --il, re-set when the slot crosses
+// layout.insetSmallBelowSlot) and the entry timing (--entry-*, set at build for n, so playEntry on the
+// attached board only adds .fx-entry and the new board's first style pass is the only one). The
+// per-cell ones sit on the element that reads them (board-cells.ts), never on the cell button.
 // Phase 2b (B, §2.9): the board entry (card rise + diagonal tile wave; playEntry returns
 // entryEndMs(n), when START is due), the board-cat idle loops (CSS breathing with a per-cat phase,
 // JS-timed ear flicks every fx.earFlickMinMs…MaxMs; both only in the idle mood and never with reduced
@@ -96,6 +101,27 @@ export function createBoardView(model: BoardModel, input: BoardInput, opts: Boar
   const cellMood = new Map<CellIndex, CatMood>(); // per-cell overrides (kitty: surprised)
 
   const paletteOf = (cell: CellIndex): number => m.colors[m.regions[cell] as number] as number;
+  /** Writes a board-level custom property only when it changes (an unchanged write still restyles). */
+  const setVar = (k: string, v: string): void => {
+    if (el.style.getPropertyValue(k) !== v) el.style.setProperty(k, v);
+  };
+  const applyInsets = (ins: CellInsets): void => {
+    setVar('--it', `${ins.top}px`);
+    setVar('--ir', `${ins.right}px`);
+    setVar('--ib', `${ins.bottom}px`);
+    setVar('--il', `${ins.left}px`);
+  };
+  /** The entry wave's timing for an n×n board (fx.css .board.fx-entry); reduced motion: a plain fade. */
+  const applyEntryVars = (n: number, rm: boolean): void => {
+    const { durationMs, staggerMs } = entryTiming(n, rm);
+    const f = cfg.fx;
+    setVar('--entry-ms', `${durationMs}ms`);
+    setVar('--entry-stagger', `${staggerMs}ms`);
+    setVar('--entry-start', `${rm ? 0 : f.boardEntryWaveStartMs}ms`);
+    setVar('--entry-card-ms', `${rm ? durationMs : f.boardEntryCardMs}ms`);
+    setVar('--entry-rise', `${rm ? 0 : f.boardEntryRisePx}px`);
+    if (el.hasAttribute('data-entry-reduced') !== rm) el.toggleAttribute('data-entry-reduced', rm);
+  };
   const label = (cell: CellIndex, state: number): string => cellLabel(cell, m.n, paletteOf(cell), state, m.patterns);
   const reduced = (): boolean => opts.reducedMotion();
 
@@ -199,8 +225,11 @@ export function createBoardView(model: BoardModel, input: BoardInput, opts: Boar
     el.setAttribute('aria-label', t('a11y.board', { n }));
     el.setAttribute('aria-rowcount', String(n));
     el.setAttribute('aria-colcount', String(n));
-    // phase2b §1.5 even gutters (F0 switched from the region-aware insets); setSlot re-applies them.
-    const insets = evenInsets(n, slotPx);
+    // phase2b §1.5 even gutters (F0 switched from the region-aware insets): one value for every tile,
+    // on the board (PERF-1); setSlot re-applies it. The entry timing for this n, before the board is
+    // attached, so playEntry writes nothing (PERF-1).
+    applyInsets(evenInsets(1, slotPx)[0] as CellInsets);
+    applyEntryVars(n, reduced());
     cells = [];
     rows = [];
     regionCells = Array.from({ length: n }, () => []);
@@ -210,10 +239,10 @@ export function createBoardView(model: BoardModel, input: BoardInput, opts: Boar
       row.setAttribute('role', 'row');
       for (let c = 0; c < n; c++) {
         const i = r * n + c;
-        const refs = buildCell(i, paletteOf(i), insets[i] as (typeof insets)[number], r);
-        // phase2b §2.9: the entry wave's diagonal and the breathing phase (fx.css).
-        refs.el.style.setProperty('--diag', String(r + c));
-        refs.el.style.setProperty('--breathe-delay', `${-Math.round(cellNoise(i, 4) * cfg.fx.catBreatheMs)}ms`);
+        // phase2b §2.9: the entry wave's diagonal (tile + SVG) and the breathing phase (the SVG box
+        // breathes, fx.css), each on the element that animates (PERF-1).
+        const refs = buildCell(i, paletteOf(i), null, r + c);
+        refs.svg.style.setProperty('--breathe-delay', `${-Math.round(cellNoise(i, 4) * cfg.fx.catBreatheMs)}ms`);
         cells.push(refs);
         regionCells[m.regions[i] as number]?.push(i);
         row.appendChild(refs.el);
@@ -356,18 +385,10 @@ export function createBoardView(model: BoardModel, input: BoardInput, opts: Boar
     },
     setSlot(px) {
       if (px === slotPx && el.style.getPropertyValue('--slot') !== '') return;
-      const before = evenInsets(1, slotPx)[0];
       slotPx = px;
-      const after = evenInsets(1, slotPx)[0] as CellInsets;
       // The inset size depends on the slot (phase2b §1.5): crossing layout.insetSmallBelowSlot
-      // re-applies it to every cell.
-      if (before?.top !== after.top) {
-        for (const refs of cells) {
-          for (const [k, v] of [['--it', after.top], ['--ir', after.right], ['--ib', after.bottom], ['--il', after.left]] as const) {
-            refs.el.style.setProperty(k, `${v}px`);
-          }
-        }
-      }
+      // changes the board's one inset value (no per-cell writes, PERF-1).
+      applyInsets(evenInsets(1, slotPx)[0] as CellInsets);
       el.style.setProperty('--slot', `${px}px`);
       el.style.setProperty('--pat-k', patternScaleFor(px).toFixed(3));
     },
@@ -402,15 +423,10 @@ export function createBoardView(model: BoardModel, input: BoardInput, opts: Boar
       // phase2b §2.9: the card rises boardEntryRisePx and fades in over boardEntryCardMs; tile (r, c)
       // scales in from boardEntryWaveStartMs + (r + c) × stagger (fx.css .board.fx-entry). Reduced
       // motion: a plain fade of reducedMotionFadeMs. START is due at the returned entryEndMs(n).
+      // PERF-1: the --entry-* values were set at build for this n; they are only written again when
+      // reduced motion changed since (an inline write on the attached board restyles every cell).
       const rm = reduced();
-      const { durationMs, staggerMs } = entryTiming(m.n, rm);
-      const f = cfg.fx;
-      el.style.setProperty('--entry-ms', `${durationMs}ms`);
-      el.style.setProperty('--entry-stagger', `${staggerMs}ms`);
-      el.style.setProperty('--entry-start', `${rm ? 0 : f.boardEntryWaveStartMs}ms`);
-      el.style.setProperty('--entry-card-ms', `${rm ? durationMs : f.boardEntryCardMs}ms`);
-      el.style.setProperty('--entry-rise', `${rm ? 0 : f.boardEntryRisePx}px`);
-      el.toggleAttribute('data-entry-reduced', rm);
+      applyEntryVars(m.n, rm);
       const end = entryEndMs(m.n, rm);
       flashClass(el, 'fx-entry', end + 80, timers);
       // The reduced fade runs on WAAPI: the global reduced-motion CSS rule shortens CSS animations to 1 ms.

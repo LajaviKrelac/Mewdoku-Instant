@@ -515,6 +515,15 @@ export interface GameConfig {
      */
     readonly releaseLocales: readonly LocaleId[];
   };
+  /**
+   * Settings → Feedback (review PAR-5; the original sends players to "Settings → Feedback", 01 §14.2).
+   * `feedbackUrl` is an https: or mailto: link; empty hides the row. On FBIG the row also needs
+   * `feedbackOnFbig` (off until Meta's external-link rules are checked, parity-spec §14).
+   */
+  readonly support: {
+    readonly feedbackUrl: string;
+    readonly feedbackOnFbig: boolean;
+  };
 }
 
 export const cfg: GameConfig = deepFreeze({
@@ -772,6 +781,7 @@ export const cfg: GameConfig = deepFreeze({
     localeTimeoutMs: 1200,
     releaseLocales: ['en'],
   },
+  support: { feedbackUrl: '', feedbackOnFbig: false },
 });
 
 /** Drag threshold for a cell of `cellPx` CSS px: max(8, 0.2 × cellPx) (02 §3 input.dragStartPx). */

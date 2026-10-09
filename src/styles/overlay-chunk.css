@@ -54,6 +54,14 @@
 .overlay__art { display: flex; justify-content: center; margin: 8px auto; }
 .overlay__art > svg { width: 168px; height: 168px; }
 
+/* FBIG (review UX-3): no control in FB's top-left 64 × 64 safe zone (02 §19, 05 §5.5), also in a
+   dialog whose head is mirrored in right-to-left layouts or a tall About view: dialogs and sheets
+   start below the zone. <html data-fb-safe> comes from the top bar (top-bar.ts). The victory screen
+   keeps its centred top row, and the hint card has its own rule (UX-9, below). */
+:root[data-fb-safe] .overlay:not([data-overlay='victory']):not([data-overlay='hint']) {
+  padding-top: max(calc(16px + var(--safe-top)), var(--fb-safe));
+}
+
 /* O1 hint card: bottom sheet over the tool row; the board stays visible above (clear scrim). */
 .overlay[data-overlay='hint'] { justify-content: flex-end; padding-bottom: calc(12px + var(--safe-bottom)); }
 .hint-card__row { display: flex; align-items: flex-start; text-align: start; }
@@ -69,6 +77,15 @@
 .overlay[data-overlay='hint'][data-placement='top'] { justify-content: flex-start; padding: 0 0 calc(16px + var(--safe-bottom)); }
 .overlay[data-overlay='hint'][data-placement='top'] .hint-card { margin-top: 0; margin-bottom: auto; padding-top: calc(16px + var(--safe-top));
   border-radius: 0 0 var(--radius-xl) var(--radius-xl); animation-name: mw-sheet-down; }
+
+/* Teaching copy (review PAR-7, src/ui/rich-text.ts): rule keywords in the accent text colour (5.71:1
+   on the card), a colour named "in its colour" with a swatch and an underline in the tile colour; the
+   name itself stays ink, since pastel text on white would fail WCAG 1.4.3. */
+.kw { color: var(--accent-text); font-weight: 700; }
+.color-name { white-space: nowrap; text-decoration-line: underline; text-decoration-color: var(--sw); text-decoration-thickness: 3px;
+  text-underline-offset: 3px; }
+.color-name__sw { display: inline-block; width: 0.8em; height: 0.8em; margin-inline-end: 0.25em; border-radius: 3px; background: var(--sw);
+  box-shadow: inset 0 0 0 1px rgba(var(--ink-rgb), 0.3); vertical-align: -0.06em; }
 
 /* O2 rewarded prompt */
 .rewarded__icon { display: flex; align-items: center; justify-content: center; width: 72px; height: 72px; margin: 0 auto 12px;
@@ -170,6 +187,10 @@
    inert; its card, hand, rings and dim disappear until the modal closes (UX-01, UX-07, SPEC-04). */
 .coach[inert] { visibility: hidden; }
 
+/* FBIG (review UX-9): a card flipped to the top starts its content below the FB safe zone; the
+   flip decision counts the taller card (hint-card.ts fbTopInset). */
+:root[data-fb-safe] .overlay[data-overlay='hint'][data-placement='top'] .hint-card { padding-top: max(calc(16px + var(--safe-top)), var(--fb-safe)); }
+
 @keyframes mw-sheet-down { from { opacity: 0; transform: translateY(-24px); } to { opacity: 1; transform: none; } }
 @keyframes mw-sheet-in { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
 @keyframes mw-coach-pulse { 0%, 100% { box-shadow: 0 0 0 3px var(--gold), 0 0 0 6px rgba(var(--gold-rgb), 0.45); }
@@ -188,6 +209,7 @@
   .hint-card__icon { width: 36px; height: 36px; padding: 6px; }
   .hint-card__actions { margin-top: 10px; }
   .overlay[data-overlay='hint'][data-placement='top'] .hint-card { padding-top: calc(12px + var(--safe-top)); }
+  :root[data-fb-safe] .overlay[data-overlay='hint'][data-placement='top'] .hint-card { padding-top: max(calc(12px + var(--safe-top)), var(--fb-safe)); }
   /* Compact coach card: it fits between the top bar and the board, or below the board (UX-06). */
   .coach__card { padding: 10px 14px; }
   .coach__text { font-size: var(--fs-m); line-height: 1.35; }
@@ -420,6 +442,10 @@
   text-align: start;
 }
 
+.rank-records__list {
+  margin: 0;
+}
+
 .rank-records__row {
   display: flex;
   align-items: baseline;
@@ -495,17 +521,26 @@
   border-top-color: var(--line);
 }
 
-/* ── Victory screen (§2.5): full screen on the page colour ──────────────── */
+/* ── Victory screen (§2.5): a dark full-screen overlay, like the fail card ──
+   Review PAR-3: the original's win and fail overlays are both dark (01 §12.7, parity-spec §1.2), so
+   the victory sits on opaque --stage (still a full non-gameplay screen for the §3.2 banner) with
+   light text and the orange "Level N". Pairs checked by scripts/palette-check.ts (victory on stage). */
 .overlay[data-overlay='victory'] {
   justify-content: flex-start;
   padding: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  background: var(--page);
+  background: var(--stage);
+  color: #fff;
   -webkit-overflow-scrolling: touch;
 }
 
 .victory {
+  /* The hero's sizes, smaller on short screens (media query below) and in each fit() step. */
+  --v-hero: 210px;
+  --v-rays: 440px;
+  --v-praise: 2.5rem;
+  --v-gap: 20px;
   position: relative;
   display: flex;
   flex: 1 0 auto;
@@ -524,7 +559,10 @@
   padding-bottom: calc(var(--banner-reserve, 58px) + var(--banner-clear, 16px) + var(--safe-bottom));
 }
 
+/* Above the column's stacking context, so the turning rays never paint over the fish pill (UX-13). */
 .victory__top {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -543,16 +581,20 @@
 }
 
 .victory__praise {
-  color: var(--accent-title);
-  font-size: 2.5rem;
+  color: var(--title-on-dark);
+  font-size: var(--v-praise);
   line-height: 1.1;
   text-wrap: balance;
 }
 
+.victory__stage,
+.victory__art > svg {
+  width: var(--v-hero);
+  height: var(--v-hero);
+}
+
 .victory__stage {
   position: relative;
-  width: 210px;
-  height: 210px;
   margin: 6px 0 10px;
 }
 
@@ -561,11 +603,11 @@
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 440px;
-  height: 440px;
-  margin: -220px 0 0 -220px;
+  width: var(--v-rays);
+  height: var(--v-rays);
+  margin: calc(var(--v-rays) / -2) 0 0 calc(var(--v-rays) / -2);
   border-radius: 50%;
-  background: repeating-conic-gradient(from 0deg, var(--accent-soft) 0deg 15deg, transparent 15deg 30deg);
+  background: repeating-conic-gradient(from 0deg, rgba(var(--accent-rgb), 0.16) 0deg 15deg, transparent 15deg 30deg);
   -webkit-mask-image: radial-gradient(closest-side, rgba(0, 0, 0, 1) 30%, rgba(0, 0, 0, 0) 100%);
   mask-image: radial-gradient(closest-side, rgba(0, 0, 0, 1) 30%, rgba(0, 0, 0, 0) 100%);
   z-index: -1;
@@ -576,13 +618,8 @@
   position: relative;
 }
 
-.victory__art > svg {
-  width: 210px;
-  height: 210px;
-}
-
 .victory__sub {
-  color: var(--ink-2);
+  color: rgba(255, 255, 255, 0.82);
   font-family: var(--font-display);
   font-weight: var(--display-weight);
   font-size: 1.125rem;
@@ -593,7 +630,7 @@
 }
 
 .victory__time {
-  color: var(--ink);
+  color: #fff;
   font-family: var(--font-num);
   font-weight: var(--display-weight);
   font-size: var(--fs-xxl);
@@ -601,7 +638,7 @@
 
 .victory__stats {
   margin-top: 2px;
-  color: var(--ink-2);
+  color: rgba(255, 255, 255, 0.82);
 }
 
 .victory__next {
@@ -698,7 +735,7 @@
 }
 
 .victory__event-label {
-  color: var(--ink-2);
+  color: rgba(255, 255, 255, 0.82);
   font-weight: 600;
   font-size: var(--fs-s);
 }
@@ -708,8 +745,8 @@
   margin-top: 6px;
   overflow: hidden;
   border-radius: 5px;
-  background: var(--page-2);
-  box-shadow: inset 0 1px 2px rgba(var(--ink-rgb), 0.1);
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25);
 }
 
 .victory__bar-fill {
@@ -727,16 +764,42 @@
 
 .victory__milestone {
   margin-top: 8px;
-  color: var(--accent-text);
+  color: var(--tap-text);
   font-weight: 600;
 }
 
+/* The buttons stay on screen and clear of the banner band whatever the content's height (UX-1,
+   I18N-LAYOUT-1): sticky at the bottom of the scrolling overlay, on the stage colour, which also fills
+   the band below them so scrolled content never shows between the buttons and the banner. */
 .victory__actions {
+  position: sticky;
+  bottom: calc(12px + var(--safe-bottom));
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   width: 100%;
-  margin-top: 20px;
+  margin-top: var(--v-gap);
+  padding-top: 8px;
+  background: var(--stage);
+}
+
+.victory__actions::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: 0;
+  height: calc(12px + var(--safe-bottom));
+  background: var(--stage);
+}
+
+.victory[data-banner] .victory__actions {
+  bottom: calc(var(--banner-reserve, 58px) + var(--banner-clear, 16px) + var(--safe-bottom));
+}
+
+.victory[data-banner] .victory__actions::after {
+  height: calc(var(--banner-reserve, 58px) + var(--banner-clear, 16px) + var(--safe-bottom));
 }
 
 /* The wide orange "Level N" (§2.5): column − 32 px, 64 px tall, a 24 px label. */
@@ -748,6 +811,67 @@
 
 .victory__home {
   margin-top: 8px;
+}
+
+/* Light ghost and focus ring on the dark screen (as on the fail card). */
+.victory__home.btn--ghost {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.victory__home.btn--ghost:active:not([aria-disabled='true']) {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.overlay[data-overlay='victory'] .btn:focus-visible {
+  outline-color: var(--tap-text);
+}
+
+/* fit() steps (victory-screen.ts): a smaller hero while the content is taller than the screen;
+   data-tight marks steps 2 and 3. */
+.victory[data-fit] {
+  --v-hero: 136px;
+  --v-rays: 300px;
+  --v-praise: 2rem;
+  --v-gap: 12px;
+}
+
+.victory[data-tight] {
+  --v-hero: 96px;
+  --v-rays: 220px;
+  --v-praise: 1.75rem;
+}
+
+.victory[data-fit='3'] {
+  --v-hero: 64px;
+}
+
+.victory[data-fit] .victory__stage {
+  margin: 4px 0 6px;
+}
+
+.victory[data-fit] .victory__reward {
+  margin-top: 10px;
+}
+
+.victory[data-tight] .victory__top {
+  height: 44px;
+}
+
+.victory[data-tight] .victory__time {
+  font-size: var(--fs-xl);
+}
+
+.victory[data-tight] .victory__next,
+.victory[data-tight] .victory__event {
+  margin-top: 6px;
+}
+
+.victory[data-tight] .victory__home {
+  margin-top: 2px;
+}
+
+.victory[data-fit='3'] .victory__rays {
+  display: none;
 }
 
 /* ── Shop sheet (§8.5) ─────────────────────────────────────────────────── */
@@ -829,9 +953,11 @@
 }
 
 .shop__name {
+  min-width: 0;
   font-family: var(--font-display);
   font-weight: var(--display-weight);
   font-size: var(--fs-l);
+  overflow-wrap: break-word;
 }
 
 .shop__desc {
@@ -902,7 +1028,7 @@
 .rank-hub__tab {
   flex: 1 1 auto;
   min-width: 0;
-  min-height: 40px;
+  min-height: 44px; /* the codebase's touch-target minimum (review A11Y-HUB-1) */
   padding: 0 8px;
   overflow: hidden;
   border: 0;
@@ -1036,24 +1162,35 @@
 
 /* Short screens (compact, < 640 px high, 02 §19). */
 @media (max-height: 639px) {
-  .victory__praise {
-    font-size: 2rem;
+  .victory:not([data-fit]) {
+    --v-hero: 150px;
+    --v-rays: 320px;
+    --v-praise: 2rem;
+    --v-gap: 14px;
+  }
+}
+
+/* Phones up to 389 px: the swap button stacks its label over the fish price, so a long localized
+   item name ("1 подсказка") keeps its room instead of running under the button (review UX-8). */
+@media (max-width: 389px) {
+  .shop__swap.btn {
+    flex-direction: column;
+    flex-shrink: 1;
+    min-width: 0;
+    padding: 4px 12px;
+    line-height: 1.05;
   }
 
-  .victory__stage,
-  .victory__art > svg {
-    width: 150px;
-    height: 150px;
+  .shop__swap.btn > * + *,
+  [dir='rtl'] .shop__swap.btn > * + .num {
+    margin-top: 2px;
+    margin-right: 0;
+    margin-left: 0;
   }
 
-  .victory__rays {
-    width: 320px;
-    height: 320px;
-    margin: -160px 0 0 -160px;
-  }
-
-  .victory__actions {
-    margin-top: 14px;
+  .shop__swap .shop__price {
+    padding: 0 6px 0 0;
+    background: transparent;
   }
 }
 
@@ -1062,6 +1199,17 @@
   .rank-hub__tab {
     padding: 0 6px;
     font-size: var(--fs-xs);
+  }
+
+  /* A little more room for the two-word button labels of German and Russian (review UX-8). */
+  .overlay__panel--dialog {
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+
+  .overlay__panel--dialog .overlay__actions .btn,
+  .overlay__panel--stage .overlay__actions .btn {
+    padding: 0 14px;
   }
 
   .shop__icon {
@@ -1079,8 +1227,8 @@
     padding: 0 10px;
   }
 
-  .victory__praise {
-    font-size: 2rem;
+  .victory:not([data-fit]) {
+    --v-praise: 2rem;
   }
 
   .shop__name {

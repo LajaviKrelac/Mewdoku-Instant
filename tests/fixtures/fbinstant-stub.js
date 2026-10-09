@@ -26,6 +26,8 @@
 //   banner          { load: 'ok' | 'never' | <ERROR_CODE>, loadDelayMs, hide: 'ok' | <ERROR_CODE>, rateLimitMs }
 //                   loadBannerAdAsync shows a 50 px bar (data-testid fb-stub-banner) in a browser; a load
 //                   within rateLimitMs (45 s, Meta's reported limit) of the last one rejects RATE_LIMITED.
+//                   errors.hideBannerAdAsync: a queue like the other errors (e.g. one NETWORK_FAILURE
+//                   and then success), on top of the fixed banner.hide.
 //   leaderboards    { api: 'classic' | 'nezp' | 'both', names: string[] | null (null = any name exists),
 //                     entries: { <boardName>: [{ playerId, score }] } (other players, seeded),
 //                     errors: { setScore: [], getEntries: [], getPlayerEntry: [] } }
@@ -104,7 +106,7 @@
     flushDelayMs: 0,
     data: null,
     persist: true,
-    errors: { getDataAsync: [], setDataAsync: [], flushDataAsync: [], startGameAsync: [] },
+    errors: { getDataAsync: [], setDataAsync: [], flushDataAsync: [], startGameAsync: [], hideBannerAdAsync: [] },
     ads: {
       interstitial: { load: 'ok', loadDelayMs: 0, show: 'ok', showDelayMs: 300 },
       rewarded: { load: 'ok', loadDelayMs: 0, show: 'ok', showDelayMs: 300 },
@@ -430,6 +432,8 @@
       var no = unsupported('hideBannerAdAsync');
       if (no) return no;
       if (cfg.banner.hide !== 'ok') return Promise.reject(fbError(cfg.banner.hide));
+      var queued = nextError('hideBannerAdAsync');
+      if (queued) return Promise.reject(queued);
       state.bannerVisible = false;
       bannerBar(false);
       return Promise.resolve();

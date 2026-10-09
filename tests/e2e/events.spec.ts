@@ -89,3 +89,35 @@ test('before the start: a teaser card that is not a button target; locked player
   await expect(page.locator('.toast')).toContainText('Opens after level 10');
   expect(await page.evaluate(() => (window as TestWindow).__mewdoku?.app().screen)).toBe('home');
 });
+
+test('an event screen left open across the end: Play goes Home quietly, never an error toast (review L2B-4)', async ({ page }) => {
+  const nearEnd = new Date('2026-11-26T23:57:00Z'); // Lantern Walk ends 2026-11-27T00:00Z
+  // Every toast text shown on the page, whenever it was shown (a toast lasts only fx.toastMs).
+  await page.addInitScript(() => {
+    const seen: string[] = [];
+    (window as unknown as { __toasts: string[] }).__toasts = seen;
+    new MutationObserver(() => {
+      for (const el of Array.from(document.querySelectorAll('.toast'))) {
+        const text = el.textContent ?? '';
+        if (text !== '' && !seen.includes(text)) seen.push(text);
+      }
+    }).observe(document, { subtree: true, childList: true, characterData: true });
+  });
+  await page.clock.install({ time: nearEnd });
+  await page.goto('/?ads=unsupported');
+  await page.waitForFunction(() => ['home', 'game'].includes((window as TestWindow).__mewdoku?.app().screen ?? ''));
+  await page.evaluate((json) => (window as TestWindow).__mewdoku?.seedSave(json), JSON.stringify(player(15)));
+  await page.reload();
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');
+  await page.locator('.event-card').click();
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'event');
+  const play = page.locator('.screen--event').getByRole('button', { name: 'Play puzzle 1' });
+  await expect(play).toBeVisible();
+  await page.clock.fastForward(4 * 60_000); // the event ends while its screen is open
+  await play.click();
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');
+  await page.waitForTimeout(600); // past the first toast's 150 ms settle delay (toast.ts)
+  expect(await page.evaluate(() => (window as unknown as { __toasts: string[] }).__toasts)).toEqual([]); // never toast.error
+  await expect(page.locator('.event-card')).toBeHidden(); // §4.4: after the end the card is gone
+});
+

@@ -39,6 +39,7 @@ export interface StubConfig {
     setDataAsync?: (string | null)[];
     flushDataAsync?: (string | null)[];
     startGameAsync?: (string | null)[];
+    hideBannerAdAsync?: (string | null)[];
   };
   ads?: { interstitial?: StubAdBehaviour; rewarded?: StubAdBehaviour };
   // phase2b

@@ -176,9 +176,9 @@ export const catalog: LocaleCatalog = {
 
   // ── How to play ────────────────────────────────────────────────────────────
   'howto.title': '遊び方',
-  'howto.rule.colours': 'どの色にも、ねこがちょうど1匹かくれています。',
-  'howto.rule.lines': 'どの行にも、どの列にも、ねこは1匹ずつ。',
-  'howto.rule.space': 'ねこは広々が好き。2匹のねこは、ななめも含めて決して隣り合いません。',
+  'howto.rule.colours': 'どの色にも、ねこが*ちょうど1匹*かくれています。',
+  'howto.rule.lines': 'どの行にも、どの列にも、ねこは*1匹ずつ*。',
+  'howto.rule.space': 'ねこは広々が好き。2匹のねこは、*ななめも含めて決して隣り合いません*。',
   'howto.controls': 'マスをタップするとバツがつきます。ダブルタップでねこを置きます。いくつかのマスをなぞると、まとめてバツをつけられます。',
   'howto.hearts': 'まちがったマスにねこを置くとハートが1つ減ります。3つともなくなったら、レベルをやり直せます。',
   'howto.helpers': '困ったら、電球が1手を説明します。肉球はねこを1匹見つけてくれます。',
@@ -193,10 +193,10 @@ export const catalog: LocaleCatalog = {
   'daily.done': '完了',
 
   // ── Tutorial coach ─────────────────────────────────────────────────────────
-  'tutorial.step1': 'どの色にも、ねこがちょうど1匹かくれています。この{color}は1マスだけ。ダブルタップしましょう。',
-  'tutorial.step2': 'ねこは自分の行と列をまるごと占めます。',
-  'tutorial.step3': 'ねこには広さが必要。ななめも含めて隣り合いません。これらのマスをなぞってバツをつけましょう。',
-  'tutorial.step4': '2行目の空きマスは残り1つ。ダブルタップしましょう。',
+  'tutorial.step1': 'どの色にも、ねこが*ちょうど1匹*かくれています。この{color}は1マスだけ。ダブルタップしましょう。',
+  'tutorial.step2': 'ねこは自分の*行と列をまるごと*占めます。',
+  'tutorial.step3': 'ねこには広さが必要。*ななめも含めて隣り合いません*。これらのマスをなぞってバツをつけましょう。',
+  'tutorial.step4': '2行目の*空きマスは残り1つ*。ダブルタップしましょう。',
   'tutorial.step5': '困ったら、電球をタップしてヒントを見ましょう。',
   'tutorial.step6': '最後のねこを置きましょう。',
   'tutorial.gotIt': 'わかった',
@@ -255,6 +255,7 @@ export const catalog: LocaleCatalog = {
   'settings.language.auto': '自動',
   'settings.shop': 'ショップ',
   'settings.removeAds': '広告を削除',
+  'settings.feedback': 'ご意見を送る',
   'howto.a11y': '色の見分けがつきにくいときは、設定で「色の模様」をオンにしましょう。',
   'fish.count.other': 'さかな{count}匹',
   'fish.plus': '+{count}',
@@ -313,6 +314,7 @@ export const catalog: LocaleCatalog = {
   'shop.swap.kitty': 'こねこ1匹',
   'shop.swap.action': '交換',
   'shop.notEnough': 'さかなが足りません。',
+  'shop.swap.done': '{item}を追加しました。残りのさかな: {count}匹',
   'shop.swap.a11y': 'さかな{price}匹で{item}と交換',
   'shop.buy.a11y': '{name}を購入、{price}',
   'shop.retry': 'もう一度',

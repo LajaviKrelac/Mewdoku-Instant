@@ -97,10 +97,44 @@ describe('BoardView.playEntry and idle loops', () => {
     expect(st.getPropertyValue('--entry-card-ms')).toBe(`${F.boardEntryCardMs}ms`);
     expect(st.getPropertyValue('--entry-rise')).toBe(`${F.boardEntryRisePx}px`);
     expect(board.el.classList.contains('fx-entry')).toBe(true);
+    // The diagonal sits on the two elements that animate (fx.css .cell__tile, .cell__g), PERF-1.
     const cells = Array.from(board.el.querySelectorAll<HTMLElement>('.cell'));
-    cells.forEach((c, i) => expect(c.style.getPropertyValue('--diag')).toBe(String(Math.floor(i / N) + (i % N))));
+    cells.forEach((c, i) => {
+      const diag = String(Math.floor(i / N) + (i % N));
+      expect((c.querySelector('.cell__tile') as HTMLElement).style.getPropertyValue('--diag')).toBe(diag);
+      expect((c.querySelector('.cell__g') as SVGElement).style.getPropertyValue('--diag')).toBe(diag);
+      expect(c.style.getPropertyValue('--diag')).toBe('');
+    });
     vi.advanceTimersByTime(end + 100);
     expect(board.el.classList.contains('fx-entry')).toBe(false);
+  });
+
+  it('PERF-1: the --entry-* timing is on the board before it is attached; playEntry then writes no inline style', () => {
+    const fresh = createBoardView(model({ n: N } as Partial<BoardModel>), input, { reducedMotion: () => false });
+    expect(fresh.el.isConnected).toBe(false);
+    expect(fresh.el.style.getPropertyValue('--entry-stagger')).toBe(`${entryStaggerMs(N)}ms`);
+    expect(fresh.el.style.getPropertyValue('--entry-rise')).toBe(`${F.boardEntryRisePx}px`);
+    document.body.appendChild(fresh.el);
+    vi.useFakeTimers();
+    const spy = vi.spyOn(CSSStyleDeclaration.prototype, 'setProperty');
+    fresh.playEntry();
+    const writes = spy.mock.calls.length;
+    spy.mockRestore();
+    // Only .fx-entry is added: an inline write on the attached board restyled every cell (418 ms at 4×).
+    expect(writes).toBe(0);
+    expect(fresh.el.classList.contains('fx-entry')).toBe(true);
+    fresh.destroy();
+  });
+
+  it('PERF-1: a change to reduced motion after the build still reaches the entry timing', () => {
+    let rm = false;
+    const b = createBoardView(model(), input, { reducedMotion: () => rm });
+    document.body.appendChild(b.el);
+    rm = true;
+    b.playEntry();
+    expect(b.el.style.getPropertyValue('--entry-stagger')).toBe('0ms');
+    expect(b.el.hasAttribute('data-entry-reduced')).toBe(true);
+    b.destroy();
   });
 
   it('reduced motion: a plain fade, START after 150 ms', () => {
@@ -114,7 +148,8 @@ describe('BoardView.playEntry and idle loops', () => {
   it('breathing: the period and scale come from cfg; each cat has its own phase', () => {
     expect(board.el.style.getPropertyValue('--breathe-ms')).toBe(`${F.catBreatheMs}ms`);
     expect(Number(board.el.style.getPropertyValue('--breathe-k'))).toBeCloseTo(1 + F.catBreatheScale, 9);
-    const delays = Array.from(board.el.querySelectorAll<HTMLElement>('.cell')).map((c) => c.style.getPropertyValue('--breathe-delay'));
+    // On the SVG box that breathes (fx.css .cell__g), not on the cell button (PERF-1).
+    const delays = Array.from(board.el.querySelectorAll<SVGElement>('.cell .cell__g')).map((g) => g.style.getPropertyValue('--breathe-delay'));
     for (const d of delays) {
       const ms = -parseInt(d, 10);
       expect(ms).toBeGreaterThanOrEqual(0);
@@ -188,5 +223,38 @@ describe('BoardView.playEntry and idle loops', () => {
     expect(accs()).toEqual(['#acc-scarf', '#acc-scarf', '#acc-scarf']);
     board.setAccessory(null);
     expect(accs()).toHaveLength(0);
+  });
+});
+
+describe('registerCellProperties (PERF-1)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  it('registers the per-cell properties once, NOT inherited, with the CSS fallbacks as initial values', async () => {
+    const calls: PropertyDefinition[] = [];
+    vi.stubGlobal('CSS', { registerProperty: (d: PropertyDefinition) => void calls.push(d), supports: () => true });
+    vi.resetModules();
+    const cellsMod = await import('../../../src/ui/board/board-cells');
+    cellsMod.buildCell(0, 1, null, 0);
+    cellsMod.buildCell(1, 2, null, 1);
+    expect(calls.map((d) => [d.name, d.inherits, d.initialValue])).toEqual([
+      ['--diag', false, '0'], // fx.css var(--diag, 0)
+      ['--breathe-delay', false, '0ms'], // fx.css var(--breathe-delay, 0ms)
+      ['--blink-dur', false, '5s'], // board.css var(--blink-dur, 5s)
+      ['--blink-delay', false, '0ms'], // board.css var(--blink-delay, 0ms)
+    ]);
+  });
+
+  it('an engine without the API (or with them already registered) still builds cells', async () => {
+    vi.stubGlobal('CSS', {
+      registerProperty: () => {
+        throw new DOMException('already registered', 'InvalidModificationError');
+      },
+    });
+    vi.resetModules();
+    const cellsMod = await import('../../../src/ui/board/board-cells');
+    expect(() => cellsMod.buildCell(0, 1, null, 0)).not.toThrow();
   });
 });

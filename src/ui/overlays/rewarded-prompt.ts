@@ -111,6 +111,9 @@ export function createRewardedPrompt(): OverlayView<RewardedPromptProps> {
 
   const render = (p: RewardedPromptProps): void => {
     props = p;
+    // Static labels follow the language on every open (review A11Y-I18N-1).
+    setButtonLabel(notNow, t('common.notNow'));
+    setButtonLabel(ok, t('common.ok'));
     shell.panel.dataset.variant = p.variant;
     shell.panel.dataset.placement = p.placement;
     clear(iconSlot);

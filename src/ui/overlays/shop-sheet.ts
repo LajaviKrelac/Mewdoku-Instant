@@ -10,12 +10,18 @@
 // Classes: .overlay[data-overlay=shop] > .overlay__panel--sheet.shop[data-buy]
 //          .overlay__head(.overlay__title .fish-pill .overlay__close) .shop__section(.shop__heading
 //          .shop__row[data-item](.shop__icon .shop__text(.shop__name .shop__desc) .shop__action)) .shop__note .shop__state
+//
+// Review fixes: a swap is confirmed to screen readers ("1 hint added. Fish left: 5.", plus "Not enough
+// fish yet." when the fish run out) through the sheet's own polite live region, and the gated swap
+// buttons are described by the "Not enough fish yet." note (A11Y-LIVE-1). Every label follows the
+// language, also in a sheet opened before the switch (A11Y-I18N-1).
 import type { ProductId } from '../../game/types';
 import { formatNumber, t, translate, type I18nKey } from '../../i18n';
 import { icon, type IconSymbol } from '../art/sprite';
 import { h, setText, type OverlayView } from '../dom';
 import { createFishPill } from '../hud/pills';
-import { closeButton, createOverlayShell, makeButton, setButtonLabel, setGated } from './overlay-base';
+import { createLocaleText } from '../locale-text';
+import { closeButton, createOverlayShell, makeButton, nextId, setButtonLabel, setGated } from './overlay-base';
 
 export interface ShopProductView {
   readonly id: ProductId;
@@ -74,15 +80,20 @@ export function createShopSheet(): OverlayView<ShopProps> {
   const shell = createOverlayShell({ id: 'shop', scrim: 'soft', panel: 'sheet', onScrimTap: () => void close() });
   shell.panel.classList.add('shop');
 
+  const L = createLocaleText();
   const balance = createFishPill({ count: 0, onPlus: null });
   balance.el.classList.add('shop__balance');
   const head = h(
     'div',
     { class: 'overlay__head' },
-    h('h2', { class: 'overlay__title', id: shell.titleId }, t('shop.title')),
+    L.text(h('h2', { class: 'overlay__title', id: shell.titleId }), () => t('shop.title')),
     balance.el,
-    closeButton(() => void close()),
+    L.attr(closeButton(() => void close()), 'aria-label', () => t('common.close')),
   );
+  /** Polite announcements of this sheet (A11Y-LIVE-1): a swap that went through. */
+  const live = h('p', { class: 'shop__live visually-hidden', role: 'status', 'aria-live': 'polite' });
+  /** The swap waiting for its result: the item, the price and the fish before it. */
+  let pendingSwap: { readonly item: 'hint' | 'kitty'; readonly price: number; readonly fishBefore: number } | null = null;
 
   // ── Swap fish ──
   const swapButton = (item: 'hint' | 'kitty'): HTMLButtonElement =>
@@ -91,7 +102,11 @@ export function createShopSheet(): OverlayView<ShopProps> {
       label: t('shop.swap.action'),
       className: 'shop__action shop__swap',
       trailing: h('span', { class: 'shop__price num' }, icon('icon-fish', { class: 'shop__price-icon' }), h('span', { class: 'shop__price-n' })),
-      onPress: () => props?.onSwap(item),
+      onPress: () => {
+        if (!props) return;
+        pendingSwap = { item, price: item === 'hint' ? props.hintPrice : props.kittyPrice, fishBefore: props.fish };
+        props.onSwap(item);
+      },
     });
   const swapHint = swapButton('hint');
   const swapKitty = swapButton('kitty');
@@ -103,29 +118,34 @@ export function createShopSheet(): OverlayView<ShopProps> {
       h('span', { class: 'shop__text' }, name, desc),
       action,
     );
-  const notEnough = h('p', { class: 'shop__note', role: 'note' }, t('shop.notEnough'));
-  const swapSection = h(
-    'section',
-    { class: 'shop__section shop__section--swap', 'aria-label': t('shop.swap') },
-    h('h3', { class: 'shop__heading' }, t('shop.swap')),
-    row('hint', 'icon-bulb', h('span', { class: 'shop__name' }, t('shop.swap.hint')), null, swapHint),
-    row('kitty', 'icon-paw', h('span', { class: 'shop__name' }, t('shop.swap.kitty')), null, swapKitty),
-    notEnough,
+  const noteId = nextId('shop-note');
+  const notEnough = L.text(h('p', { class: 'shop__note', role: 'note', id: noteId }), () => t('shop.notEnough'));
+  const swapSection = L.attr(
+    h(
+      'section',
+      { class: 'shop__section shop__section--swap' },
+      L.text(h('h3', { class: 'shop__heading' }), () => t('shop.swap')),
+      row('hint', 'icon-bulb', L.text(h('span', { class: 'shop__name' }), () => t('shop.swap.hint')), null, swapHint),
+      row('kitty', 'icon-paw', L.text(h('span', { class: 'shop__name' }), () => t('shop.swap.kitty')), null, swapKitty),
+      notEnough,
+    ),
+    'aria-label',
+    () => t('shop.swap'),
   );
 
   // ── Buy ──
   const buyList = h('div', { class: 'shop__list' });
   const buyState = h('p', { class: 'shop__state' });
-  const retry = makeButton({ variant: 'secondary', label: t('shop.retry'), className: 'shop__action shop__retry', onPress: () => props?.onRetry() });
-  const buySection = h(
-    'section',
-    { class: 'shop__section shop__section--buy', 'aria-label': t('shop.buy') },
-    h('h3', { class: 'shop__heading' }, t('shop.buy')),
-    buyList,
-    buyState,
-    retry,
+  const retry = L.label(
+    makeButton({ variant: 'secondary', label: '', className: 'shop__action shop__retry', onPress: () => props?.onRetry() }),
+    () => t('shop.retry'),
   );
-  shell.panel.append(head, swapSection, buySection);
+  const buySection = L.attr(
+    h('section', { class: 'shop__section shop__section--buy' }, L.text(h('h3', { class: 'shop__heading' }), () => t('shop.buy')), buyList, buyState, retry),
+    'aria-label',
+    () => t('shop.buy'),
+  );
+  shell.panel.append(head, swapSection, buySection, live);
 
   /** Arrow keys move between the sheet's action buttons (§7 "shop: arrows inside the list"). */
   shell.panel.addEventListener('keydown', (ev) => {
@@ -173,8 +193,23 @@ export function createShopSheet(): OverlayView<ShopProps> {
     }
   };
 
+  /** After a swap: the confirmation once the fish went down, nothing when it did not go through. */
+  const announceSwap = (p: ShopProps): void => {
+    const s = pendingSwap;
+    if (!s || p.busy) return;
+    pendingSwap = null;
+    if (p.fish > s.fishBefore - s.price) return; // refused or failed: the app's toast says why
+    const item = s.item === 'hint' ? t('shop.swap.hint') : t('shop.swap.kitty');
+    const done = t('shop.swap.done', { item, count: formatNumber(p.fish) });
+    const out = p.fish < Math.min(p.hintPrice, p.kittyPrice) ? ` ${t('shop.notEnough')}` : '';
+    // A fresh text node each time, so the same sentence twice in a row is read twice.
+    live.textContent = '';
+    live.appendChild(document.createTextNode(`${done}${out}`));
+  };
+
   const render = (p: ShopProps): void => {
     props = p;
+    L.apply();
     balance.update({ count: p.fish, onPlus: null });
     for (const [btn, price, item] of [
       [swapHint, p.hintPrice, t('shop.swap.hint')],
@@ -183,10 +218,15 @@ export function createShopSheet(): OverlayView<ShopProps> {
       const n = btn.querySelector('.shop__price-n');
       if (n) setText(n, formatNumber(price));
       btn.setAttribute('aria-label', t('shop.swap.a11y', { price: formatNumber(price), item }));
-      setGated(btn, p.busy || p.fish < price);
+      const gated = p.busy || p.fish < price;
+      setGated(btn, gated);
+      // A gated swap says why (the note), also when focus lands on it (A11Y-LIVE-1).
+      if (!p.busy && p.fish < price) btn.setAttribute('aria-describedby', noteId);
+      else btn.removeAttribute('aria-describedby');
       setButtonLabel(btn, t('shop.swap.action'));
     }
     notEnough.hidden = p.fish >= Math.min(p.hintPrice, p.kittyPrice);
+    announceSwap(p);
 
     const b = p.buy;
     shell.panel.dataset.buy = b.kind;
@@ -205,11 +245,20 @@ export function createShopSheet(): OverlayView<ShopProps> {
     shell.panel.setAttribute('aria-busy', String(p.busy));
   };
 
+  // Settings → Language while the sheet is up (A11Y-I18N-1): products are rebuilt with the new names.
+  L.watch(() => {
+    if (!props || !shell.isOpen()) return;
+    lastProducts = null;
+    render(props);
+  });
+
   return {
     el: shell.el,
     modal: true,
     open(p) {
       lastProducts = null;
+      pendingSwap = null;
+      live.textContent = '';
       render(p);
       shell.show();
     },
@@ -221,6 +270,7 @@ export function createShopSheet(): OverlayView<ShopProps> {
     },
     dismiss: close,
     destroy() {
+      L.dispose();
       balance.destroy();
       props = null;
       shell.el.remove();

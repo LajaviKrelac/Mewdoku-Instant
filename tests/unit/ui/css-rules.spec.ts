@@ -105,21 +105,49 @@ describe('the primary-button rule (phase2b §1.4)', () => {
     expect(/\.btn--lg\s*\{([^}]*)\}/.exec(base)?.[1]).toMatch(/font-size:\s*var\(--fs-btn\)/);
   });
 
-  it('no stylesheet sets a smaller font-size on a .btn--primary selector', () => {
+  it('no stylesheet sets a smaller font-size on a primary button or its label (review A11Y-CONTRAST-1)', () => {
+    // var(--fs-*) resolves from tokens.css; a value this test cannot resolve fails instead of passing.
+    const tokens = stripComments(read(join(STYLES, 'tokens.css')));
+    const fs = new Map<string, string>();
+    for (const m of tokens.matchAll(/--(fs-[\w-]+):\s*([^;]+);/g)) fs.set(m[1] as string, (m[2] as string).trim());
     const toPx = (v: string): number | null => {
-      const m = /^([\d.]+)(rem|em|px)$/.exec(v.trim());
-      if (!m) return v.includes('var(--fs-btn)') ? 24 : null;
-      return Number(m[1]) * (m[2] === 'px' ? 1 : 16);
+      const value = v.trim().replace(/^var\(--(fs-[\w-]+)\)$/, (_, name: string) => fs.get(name) ?? v);
+      const m = /^([\d.]+)(rem|em|px)$/.exec(value);
+      return m ? Number(m[1]) * (m[2] === 'px' ? 1 : 16) : null;
     };
-    for (const file of cssFiles) {
-      const css = stripComments(read(join(STYLES, file)));
-      for (const m of css.matchAll(/([^{}]*\.btn--primary[^{}]*)\{([^}]*)\}/g)) {
-        const size = /font-size:\s*([^;]+)/.exec(m[2] ?? '')?.[1];
-        if (!size) continue;
-        const px = toPx(size);
-        expect(px === null || px >= 24, `${file}: ${m[1]?.trim()} { font-size: ${size} }`).toBe(true);
+    expect(toPx('var(--fs-btn)')).toBe(24);
+    expect(toPx('var(--fs-l)')).toBe(18);
+    // Classes that sit on primary buttons (white on --accent): every makeButton({ variant: 'primary' })
+    // className and the hand-built ones (Home's Level button), so a rule naming only them is caught.
+    const PRIMARY = ['btn--primary', 'btn--lg', 'home__play', 'victory__primary', 'event__play', 'daily-result__done', 'hint-card__apply', 'coach__gotit', 'rewarded__accept', 'rewarded__ok', 'fail__continue', 'group-result__take'];
+    const ui = walk(join(ROOT, 'src/ui'), ['.ts']).map((f) => read(f));
+    for (const src of ui) {
+      for (const m of src.matchAll(/variant:\s*'primary'[^}]*?className:\s*'([^']+)'/g)) {
+        for (const cls of (m[1] as string).split(/\s+/)) expect(PRIMARY, `primary button class .${cls}`).toContain(cls);
       }
     }
+    const subjectIsPrimaryText = (selector: string): boolean => {
+      const compounds = selector.trim().split(/\s*[>+~]\s*|\s+/).filter(Boolean);
+      const last = compounds[compounds.length - 1] ?? '';
+      const onPrimary = (c: string): boolean => PRIMARY.some((p) => new RegExp(`\\.${p}(?![\\w-])`).test(c));
+      // The button itself, or its visible label inside a primary button.
+      return onPrimary(last) || (/\.btn__label(?![\w-])/.test(last) && compounds.slice(0, -1).some(onPrimary));
+    };
+    let checked = 0;
+    for (const file of cssFiles) {
+      const css = stripComments(read(join(STYLES, file)));
+      for (const m of css.matchAll(/([^{}@]*)\{([^{}]*)\}/g)) {
+        const size = /font-size:\s*([^;]+)/.exec(m[2] ?? '')?.[1];
+        if (!size) continue;
+        for (const sel of (m[1] ?? '').split(',')) {
+          if (!subjectIsPrimaryText(sel)) continue;
+          checked++;
+          const px = toPx(size);
+          expect(px !== null && px >= 24, `${file}: ${sel.trim()} { font-size: ${size} }`).toBe(true);
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(2);
   });
 
   it('small white text on orange uses --accent-text: count badges on primary buttons and tools', () => {

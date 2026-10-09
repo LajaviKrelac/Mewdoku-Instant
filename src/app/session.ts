@@ -30,7 +30,7 @@ import { createFeedbackPlayer, createSessionTimers, defaultColors, defaultPraise
 import { createTransitions } from './session-transitions';
 import { shallowEqual, type AppState, type OverlayId, type SessionMeta, type SessionRequest } from './store';
 import { asTutorialStep, boardKindOf, boardLocked, personalRecords, selectGameView, selectRankingView, selectVictoryView, type ViewContext } from './views';
-import { createWinFlow, type WinFlowVariant } from './win-flow';
+import { createWinFlow, victoryCrossfadeMs, type WinFlowVariant } from './win-flow';
 
 export type { GameCommands, Session, SessionDeps } from './session-types';
 import type { Session, SessionDeps } from './session-types';
@@ -339,8 +339,15 @@ export function createSession(deps: SessionDeps): Session {
       onHome: () => session.onHome(),
       onShop: () => deps.openShop?.(),
     });
-    if (router.isOpen('ranking')) router.close('ranking');
     deps.rankings?.closeList();
+    // UX-4: a crossfade. The victory opens over the ranking panel at the tap and fades in (the overlay
+    // fade, fx.overlayFadeMs; reduced: fx.screenReducedMs); the panel, fading out under it, closes
+    // only once the victory is opaque, so the dimmed screen never drops back to the bare board.
+    if (router.isOpen('ranking')) {
+      timers.later(victoryCrossfadeMs(store.get().ui.reducedMotion, c), () => {
+        if (router.isOpen('ranking')) router.close('ranking');
+      });
+    }
   }
 
   function onWon(state: GameState, m: SessionMeta, restored: boolean): void {
@@ -679,6 +686,9 @@ export function createSession(deps: SessionDeps): Session {
           return;
         }
       }
+      // PERF-1: the screen being left (or the victory over it) starts fading out now, at the tap; the
+      // board is built after the next frame, so the tap answers at once even when the build is long.
+      const leaving = router.beginLeave?.('game') ?? null;
       try {
         if (req.mode === 'tutorial') puzzle = deps.levels.getTutorial();
         else {
@@ -717,6 +727,10 @@ export function createSession(deps: SessionDeps): Session {
         return;
       }
       if (gen !== mine || disposed) return;
+      if (leaving) {
+        await leaving;
+        if (gen !== mine || disposed) return;
+      }
       hideLoading();
       mount(req, puzzle, substitute);
     },

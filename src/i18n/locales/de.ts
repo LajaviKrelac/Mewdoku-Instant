@@ -175,9 +175,9 @@ export const catalog: LocaleCatalog = {
 
   // ── How to play ────────────────────────────────────────────────────────────
   'howto.title': 'So wird gespielt',
-  'howto.rule.colours': 'Jede Farbe versteckt genau eine Katze.',
-  'howto.rule.lines': 'Auch jede Zeile und jede Spalte enthält eine Katze.',
-  'howto.rule.space': 'Katzen mögen Abstand: Zwei Katzen berühren sich nie, auch nicht an den Ecken.',
+  'howto.rule.colours': 'Jede Farbe versteckt *genau eine Katze*.',
+  'howto.rule.lines': 'Auch jede Zeile und jede Spalte enthält *eine Katze*.',
+  'howto.rule.space': 'Katzen mögen Abstand: Zwei Katzen *berühren sich nie, auch nicht an den Ecken*.',
   'howto.controls': 'Tippe auf ein Feld, um es durchzustreichen. Doppeltippe, um eine Katze zu setzen. Wische über Felder, um mehrere auf einmal durchzustreichen.',
   'howto.hearts': 'Eine Katze auf dem falschen Feld kostet ein Herz. Sind alle drei weg, kannst du das Level neu versuchen.',
   'howto.helpers': 'Du kommst nicht weiter? Die Glühbirne erklärt einen Schritt. Die Pfote findet eine Katze für dich.',
@@ -192,10 +192,10 @@ export const catalog: LocaleCatalog = {
   'daily.done': 'Fertig',
 
   // ── Tutorial coach ─────────────────────────────────────────────────────────
-  'tutorial.step1': 'Jede Farbe versteckt genau eine Katze. Die Farbe {color} hat nur ein Feld – doppeltippe darauf.',
-  'tutorial.step2': 'Eine Katze beansprucht ihre ganze Zeile und Spalte.',
-  'tutorial.step3': 'Katzen brauchen Platz – sie berühren sich nicht, auch nicht an den Ecken. Wische über diese Felder, um sie durchzustreichen.',
-  'tutorial.step4': 'In Zeile 2 ist nur noch ein Feld frei. Doppeltippe darauf.',
+  'tutorial.step1': 'Jede Farbe versteckt *genau eine Katze*. Die Farbe {color} hat nur ein Feld – doppeltippe darauf.',
+  'tutorial.step2': 'Eine Katze beansprucht ihre *ganze Zeile und Spalte*.',
+  'tutorial.step3': 'Katzen brauchen Platz – sie *berühren sich nicht, auch nicht an den Ecken*. Wische über diese Felder, um sie durchzustreichen.',
+  'tutorial.step4': 'In Zeile 2 ist nur noch *ein Feld frei*. Doppeltippe darauf.',
   'tutorial.step5': 'Du kommst nicht weiter? Tippe auf die Glühbirne für einen Tipp.',
   'tutorial.step6': 'Setz die letzte Katze.',
   'tutorial.gotIt': 'Alles klar',
@@ -257,6 +257,7 @@ export const catalog: LocaleCatalog = {
   'settings.language.auto': 'Automatisch',
   'settings.shop': 'Shop',
   'settings.removeAds': 'Werbung entfernen',
+  'settings.feedback': 'Feedback senden',
   'howto.a11y': 'Farben schwer zu unterscheiden? Schalte in den Einstellungen die Farbmuster ein.',
   'fish.count.one': '{count} Fisch',
   'fish.count.other': '{count} Fische',
@@ -319,6 +320,7 @@ export const catalog: LocaleCatalog = {
   'shop.swap.kitty': '1 Kätzchen',
   'shop.swap.action': 'Tauschen',
   'shop.notEnough': 'Noch nicht genug Fische.',
+  'shop.swap.done': '{item} hinzugefügt. Übrige Fische: {count}.',
   'shop.swap.a11y': '{price} Fische gegen {item} tauschen',
   'shop.buy.a11y': '{name} kaufen, {price}',
   'shop.retry': 'Noch mal versuchen',

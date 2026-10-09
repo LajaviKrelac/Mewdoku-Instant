@@ -175,9 +175,9 @@ export const catalog: LocaleCatalog = {
 
   // ── How to play ────────────────────────────────────────────────────────────
   'howto.title': 'Cara bermain',
-  'howto.rule.colours': 'Setiap warna menyembunyikan tepat satu kucing.',
-  'howto.rule.lines': 'Setiap baris dan kolom juga berisi satu kucing.',
-  'howto.rule.space': 'Kucing suka ruang sendiri: dua kucing tidak pernah bersentuhan, bahkan di sudut.',
+  'howto.rule.colours': 'Setiap warna menyembunyikan *tepat satu kucing*.',
+  'howto.rule.lines': 'Setiap baris dan kolom juga berisi *satu kucing*.',
+  'howto.rule.space': 'Kucing suka ruang sendiri: dua kucing *tidak pernah bersentuhan, bahkan di sudut*.',
   'howto.controls': 'Ketuk kotak untuk mencoretnya. Ketuk dua kali untuk menaruh kucing. Geser di atas beberapa kotak untuk mencoret sekaligus.',
   'howto.hearts': 'Kucing di kotak yang salah memakan satu hati. Jika ketiganya habis, kamu bisa mengulang level.',
   'howto.helpers': 'Buntu? Bohlam menjelaskan satu langkah. Cakar menemukan satu kucing untukmu.',
@@ -192,10 +192,10 @@ export const catalog: LocaleCatalog = {
   'daily.done': 'Selesai',
 
   // ── Tutorial coach ─────────────────────────────────────────────────────────
-  'tutorial.step1': 'Setiap warna menyembunyikan tepat satu kucing. Warna {color} ini hanya satu kotak, ketuk dua kali.',
-  'tutorial.step2': 'Seekor kucing menguasai seluruh baris dan kolomnya.',
-  'tutorial.step3': 'Kucing butuh ruang: mereka tidak boleh bersentuhan, bahkan di sudut. Geser di atas kotak-kotak ini untuk mencoretnya.',
-  'tutorial.step4': 'Baris 2 tinggal punya satu kotak kosong. Ketuk dua kali.',
+  'tutorial.step1': 'Setiap warna menyembunyikan *tepat satu kucing*. Warna {color} ini hanya satu kotak, ketuk dua kali.',
+  'tutorial.step2': 'Seekor kucing menguasai *seluruh baris dan kolomnya*.',
+  'tutorial.step3': 'Kucing butuh ruang: mereka *tidak boleh bersentuhan, bahkan di sudut*. Geser di atas kotak-kotak ini untuk mencoretnya.',
+  'tutorial.step4': 'Baris 2 tinggal punya *satu kotak kosong*. Ketuk dua kali.',
   'tutorial.step5': 'Buntu? Ketuk bohlam untuk petunjuk.',
   'tutorial.step6': 'Taruh kucing terakhir.',
   'tutorial.gotIt': 'Mengerti',
@@ -254,6 +254,7 @@ export const catalog: LocaleCatalog = {
   'settings.language.auto': 'Otomatis',
   'settings.shop': 'Toko',
   'settings.removeAds': 'Hapus iklan',
+  'settings.feedback': 'Kirim masukan',
   'howto.a11y': 'Sulit membedakan warna? Aktifkan pola warna di Pengaturan.',
   'fish.count.other': '{count} ikan',
   'fish.plus': '+{count}',
@@ -312,6 +313,7 @@ export const catalog: LocaleCatalog = {
   'shop.swap.kitty': '1 meong',
   'shop.swap.action': 'Tukar',
   'shop.notEnough': 'Ikannya belum cukup.',
+  'shop.swap.done': '{item} ditambahkan. Sisa ikan: {count}.',
   'shop.swap.a11y': 'Tukar {price} ikan dengan {item}',
   'shop.buy.a11y': 'Beli {name}, {price}',
   'shop.retry': 'Coba lagi',

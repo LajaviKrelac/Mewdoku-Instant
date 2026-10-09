@@ -86,3 +86,19 @@
   right: auto;
   left: 22px;
 }
+
+/* A button's price that follows its label ("شراء $3.99"): .num is forced LTR above, so its logical
+   margin (base.css .btn > * + *) resolves to its outer edge. The gap goes on the side facing the
+   label (review UX-10; physical, as the other offsets in this section). */
+[dir='rtl'] .btn > * + .num {
+  margin-left: 0;
+  margin-right: var(--sp-2);
+}
+
+/* ── 4. Line breaking ─────────────────────────────────────────────────────── */
+
+/* Japanese: break between phrases, never inside a word ("つづけ / る", "合 / 計"; review UX-8). An
+   engine without auto-phrase keeps its default breaking. */
+:root:lang(ja) {
+  word-break: auto-phrase;
+}

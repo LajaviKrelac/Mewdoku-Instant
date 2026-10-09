@@ -131,6 +131,35 @@ describe('setLocale', () => {
     await expect(retry).resolves.toBe('fr');
   });
 
+  it('a chunk whose failed import named its URL is retried from a cache-busting URL (review ROB-2)', async () => {
+    // Chromium keeps the failed module record: importing the same specifier again rejects at once
+    // without a request, so the plain loader can never recover. The retry must use a fresh URL.
+    const urls: string[] = [];
+    i18n.setLocaleUrlImport((url) => {
+      urls.push(url);
+      return Promise.resolve(cat('Einstellungen'));
+    });
+    try {
+      const first = i18n.setLocale('de', { doc: null });
+      await settle();
+      pending.get('de')?.reject(new TypeError('Failed to fetch dynamically imported module: http://127.0.0.1:4173/assets/locale-de-C80p9Ncn.js'));
+      await expect(first).resolves.toBe('en');
+      // Settings → Language → Deutsch again.
+      await expect(i18n.setLocale('de', { doc: null })).resolves.toBe('de');
+      expect(calls.filter((c) => c === 'de')).toHaveLength(1); // the plain loader was not asked again
+      expect(urls).toEqual(['http://127.0.0.1:4173/assets/locale-de-C80p9Ncn.js?retry=1']);
+      expect(i18n.t('settings.title')).toBe('Einstellungen');
+    } finally {
+      i18n.setLocaleUrlImport(null);
+    }
+  });
+
+  it('failedChunkUrl reads the chunk URL from Chromium and Firefox import errors', () => {
+    expect(i18n.failedChunkUrl(new TypeError('Failed to fetch dynamically imported module: https://x.test/a/locale-fr-1.js'))).toBe('https://x.test/a/locale-fr-1.js');
+    expect(i18n.failedChunkUrl(new TypeError('error loading dynamically imported module: http://h/locale-ar-9.js'))).toBe('http://h/locale-ar-9.js');
+    expect(i18n.failedChunkUrl(new Error('offline'))).toBeNull();
+  });
+
   it('prefetch shares the request with a later setLocale', async () => {
     expect(i18n.prefetchGuess({ language: 'ja-JP' })).toBe('ja');
     const pre = i18n.prefetchLocale('ja');

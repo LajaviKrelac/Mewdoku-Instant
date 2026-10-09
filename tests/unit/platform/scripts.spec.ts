@@ -9,7 +9,7 @@ import { unzipSync } from 'fflate';
 import { afterEach, describe, expect, it } from 'vitest';
 import { BUDGETS, checkSizes, FB_MAX_FILES, FIRST_LOAD_GZIP_MAX, FIRST_LOAD_LOCALE_MAX, FIRST_LOAD_MAX } from '../../../scripts/size-check';
 import { latestZip, uploadBundle } from '../../../scripts/upload-fbig';
-import { BUDGET_ZIP_BYTES, localeChunkIds, zipFbig } from '../../../scripts/zip-fbig';
+import { BUDGET_ZIP_BYTES, fbIdWarnings, localeChunkIds, zipFbig } from '../../../scripts/zip-fbig';
 
 const dirs: string[] = [];
 function tempDir(name: string): string {
@@ -274,6 +274,22 @@ describe('zip-fbig', () => {
     fakeBuild(d);
     writeTree(d, { 'assets/index-abc.js': 'if(x)window.__mewdoku=createHooks();' });
     expect(() => zipFbig({ distDir: d, outDir: tempDir('zip'), sha: 'x', quiet: true, release: false })).toThrow(/e2e test hooks/);
+  });
+
+  it('a release zip warns about empty VITE_FB_* placement and leaderboard ids (from the build marker); a preview does not', () => {
+    const d = tempDir('fbig');
+    fakeBuild(d);
+    writeTree(d, { 'assets/index-abc.js': 'const a="mewdoku-fb-ids:i1r0b0l1";' });
+    const r = zipFbig({ distDir: d, outDir: tempDir('zip'), sha: 'x', quiet: true });
+    expect(r.warnings).toEqual([
+      'VITE_FB_PLACEMENT_REWARDED was empty in this build: no rewarded videos (the free fallback grant only) (fb-dashboard.md §1)',
+      'VITE_FB_PLACEMENT_BANNER was empty in this build: no banners (fb-dashboard.md §1)',
+    ]);
+    expect(zipFbig({ distDir: d, outDir: tempDir('zip'), sha: 'x', quiet: true, release: false }).warnings).toEqual([]);
+    writeTree(d, { 'assets/index-abc.js': 'const a="mewdoku-fb-ids:i1r1b1l1";' });
+    expect(zipFbig({ distDir: d, outDir: tempDir('zip'), sha: 'x', quiet: true }).warnings).toEqual([]);
+    expect(fbIdWarnings(['no marker here'])).toEqual([expect.stringMatching(/no VITE_FB_\* marker/)]);
+    expect(fbIdWarnings(['x', '"mewdoku-fb-ids:i0r0b0l0"'])).toHaveLength(4);
   });
 
   it('phase2b: the default source is the release build (dist/release-fbig)', () => {

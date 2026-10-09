@@ -154,3 +154,159 @@ test.describe('Classic look, visual review (phase2b §1.12)', () => {
     await shot(page, 'event');
   });
 });
+
+// ── Phase 2b review fixes (group U): short phones with the banner band ─────────────────────────────
+// The banner band never covers a primary action (UX-1, I18N-LAYOUT-1): the victory screen's "Done",
+// "Level N" and "Puzzle N" and its Home, and the event screen's Play, Top list and Home sit at least
+// ads.banner.buttonClearancePx (16) above the mock banner at 320 × 568 (web-320) and 360 × 640 and
+// 375 × 667 (web-390). Home with the event card and the banner never overlaps itself (UX-2,
+// I18N-LAYOUT-2). The victory rays never paint over the fish pill (UX-13).
+
+const IN_EVENT = new Date('2026-11-16T12:00:00Z').getTime(); // Lantern Walk: 2026-11-13 → 2026-11-27
+const CLEARANCE = 16;
+type Size = readonly [number, number];
+const shortPhones = (project: string): readonly Size[] =>
+  project === 'web-320' ? [[320, 568]] : project === 'web-390' ? [[360, 640], [375, 667]] : [];
+
+interface Box {
+  readonly top: number;
+  readonly bottom: number;
+  readonly left: number;
+  readonly right: number;
+}
+const boxOf = (page: Page, sel: string): Promise<Box | null> =>
+  page.evaluate((s) => {
+    const el = Array.from(document.querySelectorAll<HTMLElement>(s)).find((e) => e.getBoundingClientRect().height > 0);
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { top: r.top, bottom: r.bottom, left: r.left, right: r.right };
+  }, sel);
+/** The element at the centre of `sel` is `sel` itself (nothing, the banner included, covers it). */
+const onTop = (page: Page, sel: string): Promise<boolean> =>
+  page.evaluate((s) => {
+    const el = Array.from(document.querySelectorAll<HTMLElement>(s)).find((e) => e.getBoundingClientRect().height > 0);
+    if (!el) return false;
+    const r = el.getBoundingClientRect();
+    return el.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+  }, sel);
+
+async function bannerTop(page: Page): Promise<number> {
+  const b = await boxOf(page, '[data-testid="mock-banner"]');
+  expect(b, 'the mock banner shows').not.toBeNull();
+  return (b as Box).top;
+}
+
+/** Above the band by the clearance, and really on top (a tap lands on it). */
+async function clearOfBand(page: Page, sel: string, top: number, clearance = CLEARANCE): Promise<void> {
+  const b = await boxOf(page, sel);
+  expect(b, sel).not.toBeNull();
+  expect((b as Box).bottom, `${sel} bottom vs the banner at ${top}`).toBeLessThanOrEqual(top - clearance + 0.5);
+  expect(await onTop(page, sel), `${sel} is not covered`).toBe(true);
+}
+
+async function openAt(page: Page, [w, h]: Size, query = '?ads=ok'): Promise<void> {
+  await page.setViewportSize({ width: w, height: h });
+  await page.clock.install({ time: IN_EVENT });
+  await page.goto(`/${query}`);
+  await ready(page);
+  await page.evaluate((json) => (window as TestWindow).__mewdoku?.seedSave(json), JSON.stringify(returning({ progress: { level: 37, completed: 36, best: {} } })));
+  await page.reload();
+  await ready(page, 'home');
+  await page.clock.runFor(1500);
+}
+
+async function playUntilVictory(page: Page): Promise<void> {
+  for (let i = 0; i < 40; i++) {
+    await page.clock.runFor(250);
+    if ((await page.evaluate(() => (window as TestWindow).__mewdoku?.state()?.status)) === 'playing') break;
+  }
+  await page.clock.fastForward(61_000); // past the banner's reload window
+  await page.evaluate(() => (window as TestWindow).__mewdoku?.solve());
+  await page.clock.runFor(6500);
+  await page.locator('[data-overlay="ranking"] .ranking__tap').click();
+  await page.clock.runFor(1500);
+  await page.waitForTimeout(300);
+  await page.clock.runFor(1000);
+  await expect(page.locator('.victory')).toHaveAttribute('data-banner', '');
+}
+
+test.describe('short phones with the banner band (review UX-1, UX-2, I18N-LAYOUT-1, I18N-LAYOUT-2)', () => {
+  for (const variant of ['level', 'daily', 'event'] as const) {
+    test(`the ${variant} victory keeps its buttons above the banner`, async ({ page }, info) => {
+      const sizes = shortPhones(info.project.name);
+      test.skip(sizes.length === 0, 'phone sizes only');
+      for (const size of sizes) {
+        await openAt(page, size);
+        if (variant === 'daily') await page.locator('.daily-card').click();
+        else if (variant === 'level') await page.locator('.home__play').click();
+        else {
+          await page.locator('.event-card').click();
+          await page.clock.runFor(1500);
+          await ready(page, 'event');
+          await page.locator('.screen--event .event__play').click();
+        }
+        await playUntilVictory(page);
+        const top = await bannerTop(page);
+        await clearOfBand(page, '.victory__primary', top);
+        if (variant !== 'daily') await clearOfBand(page, '.victory__home', top, 0);
+        await shot(page, `review-victory-${variant}-banner-${size[1]}`);
+      }
+    });
+  }
+
+  test('the event screen keeps Play, Top list and Home above the banner', async ({ page }, info) => {
+    const sizes = shortPhones(info.project.name);
+    test.skip(sizes.length === 0, 'phone sizes only');
+    for (const size of sizes) {
+      await openAt(page, size);
+      await page.clock.fastForward(61_000); // the banner may load again on the next screen
+      await page.locator('.event-card').click();
+      await page.clock.runFor(2000);
+      await ready(page, 'event');
+      await page.clock.runFor(1500);
+      await expect(page.locator('.screen--event')).toHaveAttribute('data-banner', '');
+      const top = await bannerTop(page);
+      await clearOfBand(page, '.event__play', top);
+      await clearOfBand(page, '.event__top', top, 0);
+      await clearOfBand(page, '.event__home', top, 0);
+    }
+  });
+
+  test('Home with the event card and the banner never overlaps itself', async ({ page }, info) => {
+    const sizes = shortPhones(info.project.name);
+    test.skip(sizes.length === 0, 'phone sizes only');
+    for (const size of sizes) {
+      await openAt(page, size);
+      await page.waitForTimeout(400);
+      await expect(page.locator('.screen--home')).toHaveAttribute('data-event', '');
+      await expect(page.locator('.screen--home')).toHaveAttribute('data-banner', '');
+      const bar = (await boxOf(page, '.screen--home .top-bar')) as Box;
+      const word = (await boxOf(page, '.home__wordmark')) as Box;
+      const card = (await boxOf(page, '.event-card')) as Box;
+      const mascot = await boxOf(page, '.home__mascot > svg');
+      expect(word.top, 'the wordmark starts below the top bar').toBeGreaterThanOrEqual(bar.bottom - 0.5);
+      if (mascot) expect(mascot.bottom, 'the mascot ends above the event card').toBeLessThanOrEqual(card.top + 0.5);
+      await clearOfBand(page, '.home__play', await bannerTop(page));
+      await shot(page, `review-home-event-banner-${size[1]}`);
+    }
+  });
+
+  test('the victory rays never paint over the fish pill (UX-13)', async ({ page }, info) => {
+    test.skip(info.project.name !== 'web-390', 'one size is enough');
+    await page.setViewportSize({ width: 360, height: 640 });
+    await open(page, returning());
+    await solve(page);
+    await expect(page.locator('.overlay[data-overlay="ranking"]')).toBeVisible({ timeout: 8000 });
+    await page.waitForTimeout(2000);
+    await page.mouse.click(10, 630);
+    await expect(page.locator('.overlay[data-overlay="victory"]')).toBeVisible({ timeout: 4000 });
+    // Make the rays solid, huge and hit-testable (hit testing follows paint order): the pill must
+    // still be the element on top.
+    await page.addStyleTag({
+      content:
+        '.victory__rays{pointer-events:auto!important;background:#f00!important;-webkit-mask-image:none!important;mask-image:none!important;width:3000px!important;height:3000px!important;margin:-1500px 0 0 -1500px!important}',
+    });
+    expect(await onTop(page, '.victory__top .fish-pill__count')).toBe(true);
+    expect(await onTop(page, '.victory__top .fish-pill__plus')).toBe(true);
+  });
+});

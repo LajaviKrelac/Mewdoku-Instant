@@ -18,10 +18,12 @@ export type SfxId =
   | 'kitty' // sparkle + pop
   | 'ui' // click
   | 'fish_pop' // phase2b §2.2: soft water-drop "bloop" as a fish pops at its cat
-  | 'fish_plink'; // phase2b §2.2: bright arrival "plink", +audio.fishPlinkStepSemitones per fish (opts.index)
+  | 'fish_plink' // phase2b §2.2: bright arrival "plink", +audio.fishPlinkStepSemitones per fish (opts.index)
+  | 'board_in'; // review PAR-8: a soft rising swell as a board enters (01 §13.1 lists a board-entry cue)
 
 export const SFX_IDS: readonly SfxId[] = [
   'mark', 'unmark', 'cat', 'region', 'mistake', 'heart_last', 'win', 'hint_open', 'hint_apply', 'kitty', 'ui', 'fish_pop', 'fish_plink',
+  'board_in',
 ];
 
 export interface Sfx {
@@ -173,6 +175,16 @@ export function recipe(id: SfxId, opts: { index?: number } = {}, rand: () => num
         noise('highpass', 5200, 0, 0.015, 0.035),
       ];
     }
+    // Review PAR-8, our own design: the board entry wave (fx.boardEntryMs, 700 ms) gets a quiet
+    // "whoosh-up": a low-passed noise swell that opens upwards under two soft sine notes a fifth apart
+    // (G4 then D5) with slow attacks. Peaks stay low (≤ 0.16): it plays at every level start.
+    case 'board_in':
+      return [
+        noise('bandpass', 500, 0, 0.42, 0.09, { freq1: 2600, q: 0.7, attack: 0.18 }),
+        tone('sine', 392, 0.04, 0.34, 0.16, { attack: 0.08 }),
+        tone('sine', 587.33, 0.16, 0.4, 0.13, { attack: 0.08 }),
+        tone('triangle', 1174.66, 0.18, 0.22, 0.03, { attack: 0.05 }),
+      ];
   }
 }
 

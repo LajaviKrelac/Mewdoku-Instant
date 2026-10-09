@@ -320,3 +320,43 @@ test('keyboard only: Enter continues the panel, Enter on "Level N", and the shop
   await page.keyboard.press('Escape');
   await expect(shop).toBeHidden();
 });
+
+// ── 2b review fixes (R): A11Y-FOCUS-1 — focus is never lost through a screen change (spec §7) ──
+
+test('keyboard only: focus moves into every new screen (event card → event, event Home → Home, victory Home → Home)', async ({ page }, info) => {
+  test.skip(info.project.name !== 'web-1280', 'desktop keyboard only');
+  // Inside our Lantern Walk (2026-11-13 → 27 UTC), so Home has the event card.
+  await page.clock.setFixedTime(new Date('2026-11-14T12:00:00Z'));
+  await boot(page, veteranSave(15));
+  const focusIn = (sel: string): Promise<boolean> =>
+    page.evaluate((s) => {
+      const a = document.activeElement;
+      return !!a && a !== document.body && !!a.closest(s) && !a.closest('[inert]');
+    }, sel);
+  // No .focus() after a navigation: only the control about to be pressed is focused, before it.
+  await page.locator('.event-card').focus();
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'event');
+  await expect(page.locator('.event__play')).toBeFocused(); // its [data-autofocus] (was: <body>)
+  await page.locator('.screen--event .event__home').focus();
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');
+  await expect.poll(() => focusIn('.screen--home')).toBe(true); // was: <body>
+  // A level, won, then Home from the victory screen.
+  await page.locator('.home__play').focus();
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
+  await page.evaluate(() => (window as TestWindow).__mewdoku?.solve());
+  const panel = page.locator('[data-overlay="ranking"]');
+  await expect(panel.locator('.ranking__tap')).toBeEnabled({ timeout: 10_000 });
+  await page.keyboard.press('Enter');
+  const home = page.locator('[data-overlay="victory"] .victory__home');
+  await expect(home).toBeVisible();
+  await home.focus();
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');
+  await expect.poll(() => focusIn('.screen--home')).toBe(true); // was: <body>
+  // And Tab goes on from there inside Home, not from the top of the document.
+  await page.keyboard.press('Tab');
+  expect(await focusIn('.screen--home')).toBe(true);
+});

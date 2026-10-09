@@ -176,9 +176,9 @@ export const catalog: LocaleCatalog = {
 
   // ── How to play ────────────────────────────────────────────────────────────
   'howto.title': '게임 방법',
-  'howto.rule.colours': '모든 색에는 고양이가 딱 한 마리 숨어 있어요.',
-  'howto.rule.lines': '모든 행과 열에도 고양이가 한 마리씩 있어요.',
-  'howto.rule.space': '고양이는 넓은 곳을 좋아해요. 두 고양이는 대각선으로도 절대 붙어 있지 않아요.',
+  'howto.rule.colours': '모든 색에는 고양이가 *딱 한 마리* 숨어 있어요.',
+  'howto.rule.lines': '모든 행과 열에도 고양이가 *한 마리씩* 있어요.',
+  'howto.rule.space': '고양이는 넓은 곳을 좋아해요. 두 고양이는 *대각선으로도 절대 붙어 있지 않아요*.',
   'howto.controls': '칸을 탭하면 X가 표시돼요. 두 번 탭하면 고양이를 놓아요. 여러 칸을 쓸어 넘기면 한 번에 X를 표시해요.',
   'howto.hearts': '틀린 칸에 고양이를 놓으면 하트가 하나 줄어요. 세 개를 모두 잃으면 레벨을 다시 할 수 있어요.',
   'howto.helpers': '막혔나요? 전구는 한 단계를 설명해 줘요. 발바닥은 고양이 한 마리를 찾아 줘요.',
@@ -193,10 +193,10 @@ export const catalog: LocaleCatalog = {
   'daily.done': '완료',
 
   // ── Tutorial coach ─────────────────────────────────────────────────────────
-  'tutorial.step1': '모든 색에는 고양이가 딱 한 마리 숨어 있어요. 이 {color} 색은 한 칸뿐이에요. 두 번 탭하세요.',
-  'tutorial.step2': '고양이는 자기 행과 열 전체를 차지해요.',
-  'tutorial.step3': '고양이는 공간이 필요해요. 대각선으로도 붙어 있지 않아요. 이 칸들을 쓸어 넘겨 X를 표시하세요.',
-  'tutorial.step4': '2행에 빈칸이 하나 남았어요. 두 번 탭하세요.',
+  'tutorial.step1': '모든 색에는 고양이가 *딱 한 마리* 숨어 있어요. 이 {color} 색은 한 칸뿐이에요. 두 번 탭하세요.',
+  'tutorial.step2': '고양이는 자기 *행과 열 전체*를 차지해요.',
+  'tutorial.step3': '고양이는 공간이 필요해요. *대각선으로도 붙어 있지 않아요*. 이 칸들을 쓸어 넘겨 X를 표시하세요.',
+  'tutorial.step4': '2행에 *빈칸이 하나* 남았어요. 두 번 탭하세요.',
   'tutorial.step5': '막혔나요? 전구를 탭하면 힌트가 나와요.',
   'tutorial.step6': '마지막 고양이를 놓으세요.',
   'tutorial.gotIt': '알겠어요',
@@ -255,6 +255,7 @@ export const catalog: LocaleCatalog = {
   'settings.language.auto': '자동',
   'settings.shop': '상점',
   'settings.removeAds': '광고 제거',
+  'settings.feedback': '의견 보내기',
   'howto.a11y': '색 구분이 어렵나요? 설정에서 색상 무늬를 켜 보세요.',
   'fish.count.other': '물고기 {count}마리',
   'fish.plus': '+{count}',
@@ -313,6 +314,7 @@ export const catalog: LocaleCatalog = {
   'shop.swap.kitty': '냥이 1마리',
   'shop.swap.action': '교환',
   'shop.notEnough': '물고기가 아직 부족해요.',
+  'shop.swap.done': '{item} 추가됨. 남은 물고기: {count}마리',
   'shop.swap.a11y': '물고기 {price}마리로 {item} 교환',
   'shop.buy.a11y': '{name} 구매, {price}',
   'shop.retry': '다시 시도',

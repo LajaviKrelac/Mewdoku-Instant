@@ -9,6 +9,8 @@ export const enUi2b = {
   'settings.language.auto': 'Automatic',
   'settings.shop': 'Shop',
   'settings.removeAds': 'Remove ads',
+  // Review PAR-5: the Feedback row (shown only when config app.feedbackUrl is set).
+  'settings.feedback': 'Send feedback',
   'howto.a11y': 'Colours hard to tell apart? Turn on colour patterns in Settings.',
 
   // ── Fish (§2.2, §2.5, §7) ──────────────────────────────────────────────────
@@ -75,6 +77,8 @@ export const enUi2b = {
   'shop.swap.kitty': '1 kitty',
   'shop.swap.action': 'Swap',
   'shop.notEnough': 'Not enough fish yet.',
+  // Review A11Y-LIVE-1: read out after a swap ({item} is shop.swap.hint / shop.swap.kitty).
+  'shop.swap.done': '{item} added. Fish left: {count}.',
   'shop.swap.a11y': 'Swap {price} fish for {item}',
   'shop.buy.a11y': 'Buy {name}, {price}',
   'shop.retry': 'Try again',

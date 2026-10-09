@@ -15,7 +15,19 @@ import {
   t,
   tn,
 } from '../../../src/i18n';
-import { FSI, formatNumberFor, formatShortDateFor, isolate, latnTag, PDI, pseudoLocalize } from '../../../src/i18n/format';
+import {
+  FSI,
+  formatNumberFor,
+  formatShortDateFor,
+  isolate,
+  latnTag,
+  markCount,
+  PDI,
+  pseudoLocalize,
+  RLI,
+  splitMarks,
+  stripMarks,
+} from '../../../src/i18n/format';
 import { pluralCategory, requiredPluralCategories } from '../../../src/i18n/plural';
 
 const NON_LATN_DIGITS = /[٠-٩۰-۹०-९๐-๙]/;
@@ -140,6 +152,48 @@ describe('bidi isolation (RTL only)', () => {
     expect(getDir()).toBe('ltr');
     expect(t('home.play', { level: 37 })).toBe('Level 37');
     expect(interpolate('{a}/{b}', { a: 1, b: 2 })).toBe('1/2');
+  });
+});
+
+describe('nested isolates (review I18N-RTL-1)', () => {
+  it('a value whose only strong letters are in a nested right-to-left isolate gets an explicit RLI', () => {
+    // "+⁨تلميحان⁩": a first-strong isolate would skip the nested one, resolve LTR and draw the "+" last.
+    expect(isolate(`+${FSI}تلميحان${PDI}`, 'rtl')).toBe(`${RLI}+${FSI}تلميحان${PDI}${PDI}`);
+    expect(isolate(`+${FSI}3${PDI}`, 'rtl')).toBe(`${FSI}+${FSI}3${PDI}${PDI}`);
+    expect(isolate('Lavender', 'rtl')).toBe(`${FSI}Lavender${PDI}`);
+    expect(isolate('قطة', 'rtl')).toBe(`${FSI}قطة${PDI}`);
+    expect(isolate(`+${FSI}تلميحان${PDI}`, 'ltr')).toBe(`+${FSI}تلميحان${PDI}`);
+  });
+
+  it('the Arabic event reward line keeps the "+" before the word', async () => {
+    await setLocale('ar', { doc });
+    try {
+      const reward = t('fish.plus', { count: tn('event.reward.hints', 2) });
+      expect(t('victory.eventReward', { reward })).toContain(`${RLI}+`);
+    } finally {
+      await setLocale('en', { doc });
+    }
+  });
+});
+
+describe('keyword markers (review PAR-7)', () => {
+  it('split, strip and count *…* pairs', () => {
+    expect(splitMarks('Every colour hides *exactly one cat*.')).toEqual([
+      { text: 'Every colour hides ', kw: false },
+      { text: 'exactly one cat', kw: true },
+      { text: '.', kw: false },
+    ]);
+    expect(stripMarks('a *b* c')).toBe('a b c');
+    expect(markCount('a *b* c *d*')).toBe(2);
+    expect(markCount('a *b c')).toBeNull();
+    expect(markCount('plain')).toBe(0);
+  });
+
+  it('t() never shows a marker; the teaching keys carry exactly one in English', () => {
+    for (const key of ['tutorial.step1', 'tutorial.step2', 'tutorial.step3', 'tutorial.step4', 'howto.rule.colours', 'howto.rule.lines', 'howto.rule.space'] as const) {
+      expect(t(key as 'tutorial.step2'), key).not.toContain('*');
+    }
+    expect(t('howto.rule.lines')).toBe('Every row and every column holds one cat too.');
   });
 });
 

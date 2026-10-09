@@ -10,7 +10,7 @@
 // caller does not await. Missing keys fall back to English.
 import { cfg, type LocaleId } from '../app/config';
 import { buildLocaleIds, localeLoader, type LocaleCatalog } from './build-locales';
-import { formatNumberFor, formatShortDateFor, isolate, pseudoLocalize } from './format';
+import { formatNumberFor, formatShortDateFor, isolate, pseudoLocalize, stripMarks } from './format';
 import { guessLocale, isLocaleId, isRtl, resolveLocale, type NavigatorLike } from './locale';
 import { pluralCategory } from './plural';
 import {
@@ -31,7 +31,7 @@ export type { LocaleId } from '../app/config';
 export type { LocaleCatalog } from './build-locales';
 export { COLOR_KEYS, GLYPH_KEYS, PRAISE_KEYS, TUTORIAL_STEP_KEYS } from './en';
 export { isLocaleId, localeCandidates, normalizeTag, resolveLocale, guessLocale } from './locale';
-export { stripIsolates } from './format';
+export { markCount, splitMarks, stripIsolates, stripMarks } from './format';
 
 export type ParamValue = string | number;
 export type Params = Readonly<Record<string, ParamValue>>;
@@ -87,7 +87,33 @@ export function buildLocales(): readonly LocaleId[] {
   return buildLocaleIds();
 }
 
-/** Loads (once) the catalogue of `id`; null for a locale this build lacks or a chunk that failed (a later call retries). */
+/**
+ * Locale chunks whose last load failed, with the chunk URL the import error named (null when it
+ * named none). Chromium keeps a failed dynamic import() in its module map, so importing the same
+ * specifier again rejects at once without a request (src/workers/lazy-chunk.ts): the next attempt
+ * imports the URL plus a cache-busting query instead (review ROB-2). Without a URL (Safari) the
+ * plain loader is tried again.
+ */
+const failedChunks = new Map<LocaleId, string | null>();
+let busts = 0;
+type UrlImport = (url: string) => Promise<unknown>;
+const defaultUrlImport: UrlImport = (url) => import(/* @vite-ignore */ url);
+let urlImport: UrlImport = defaultUrlImport;
+
+/** Test seam: the importer used for a cache-busting retry (null restores the dynamic import()). */
+export function setLocaleUrlImport(fn: UrlImport | null): void {
+  urlImport = fn ?? defaultUrlImport;
+}
+
+/** The chunk URL named by a failed import's error (Chromium, Firefox), else null. */
+export function failedChunkUrl(err: unknown): string | null {
+  return /\b(?:https?|file):\/\/[^\s'"<>]+?\.m?js\b/.exec(String((err as Error | null)?.message ?? err))?.[0] ?? null;
+}
+
+/**
+ * Loads (once) the catalogue of `id`; null for a locale this build lacks or a chunk that failed. A
+ * later call retries, from a cache-busting URL when the failed import named one (ROB-2).
+ */
 function loadCatalog(id: LocaleId): Promise<LocaleCatalog | null> {
   const have = catalogs.get(id);
   if (have) return Promise.resolve(have);
@@ -95,15 +121,25 @@ function loadCatalog(id: LocaleId): Promise<LocaleCatalog | null> {
   if (pending) return pending;
   const loader = localeLoader(id);
   if (!loader) return Promise.resolve(null);
+  const failedUrl = failedChunks.get(id) ?? null;
+  const attempt = failedUrl
+    ? (): Promise<{ catalog?: LocaleCatalog } | null | undefined> =>
+        urlImport(`${failedUrl}${failedUrl.indexOf('?') < 0 ? '?' : '&'}retry=${++busts}`) as Promise<{ catalog?: LocaleCatalog }>
+    : loader;
   const p = Promise.resolve()
-    .then(loader)
+    .then(attempt)
     .then((mod) => {
       const cat = mod?.catalog ?? null;
-      if (cat) catalogs.set(id, cat);
+      if (cat) {
+        catalogs.set(id, cat);
+        failedChunks.delete(id);
+      }
       loading.delete(id);
       return cat;
     })
-    .catch(() => {
+    .catch((err: unknown) => {
+      // Keep the first URL we learned: a cache-busted retry's own error names the busted URL.
+      failedChunks.set(id, failedUrl ?? failedChunkUrl(err));
       loading.delete(id);
       return null;
     });
@@ -225,11 +261,25 @@ export function t<K extends I18nKey>(key: K, ...args: ParamsArg<K>): string {
   return translate(key, args[0] as Params | undefined);
 }
 
-/** Loosely typed lookup for computed keys. Unknown placeholders are left as `{name}`. */
-export function translate(key: I18nKey, params?: Params): string {
+/** The active template of `key` (English fallback, pseudo-localized in ?i18n=pseudo builds), markers kept. */
+function template(key: I18nKey): string {
   const raw = active[key] ?? en[key];
-  const template = PSEUDO && key !== 'app.name' ? pseudoLocalize(raw) : raw;
-  return params ? interpolate(template, params) : template;
+  return PSEUDO && key !== 'app.name' ? pseudoLocalize(raw) : raw;
+}
+
+/** Loosely typed lookup for computed keys. Unknown placeholders are left as `{name}`; keyword markers are removed. */
+export function translate(key: I18nKey, params?: Params): string {
+  const tpl = stripMarks(template(key));
+  return params ? interpolate(tpl, params) : tpl;
+}
+
+/**
+ * translate() that keeps the `*keyword*` markers of teaching copy (review PAR-7), for the UI's rich
+ * text renderer (src/ui/rich-text.ts). Never show its result as plain text.
+ */
+export function translateMarked(key: I18nKey, params?: Params): string {
+  const tpl = template(key);
+  return params ? interpolate(tpl, params) : tpl;
 }
 
 /**

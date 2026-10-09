@@ -4,6 +4,7 @@
 import { t } from '../../i18n';
 import { icon } from '../art/sprite';
 import type { View } from '../dom';
+import { createLocaleText } from '../locale-text';
 
 export type RuleChip = 'colours' | 'lines' | 'space';
 
@@ -23,17 +24,16 @@ export function createRuleChips(props: RuleChipsProps): View<RuleChipsProps> {
   const el = document.createElement('ul');
   el.className = 'rule-chips';
   const items = new Map<RuleChip, HTMLLIElement>();
+  // The chip texts follow the language (review A11Y-I18N-1).
+  const L = createLocaleText();
   for (const c of CHIPS) {
-    const li = document.createElement('li');
+    const li = L.attr(document.createElement('li'), 'title', () => t(c.long));
     li.className = `chip chip--${c.id}`;
-    li.title = t(c.long);
-    const text = document.createElement('span');
+    const text = L.text(document.createElement('span'), () => t(c.text));
     text.className = 'chip__text';
     text.setAttribute('aria-hidden', 'true');
-    text.textContent = t(c.text);
-    const sr = document.createElement('span');
+    const sr = L.text(document.createElement('span'), () => t(c.long));
     sr.className = 'sr-only';
-    sr.textContent = t(c.long);
     li.append(icon(c.icon, { class: 'chip__icon' }), text, sr);
     items.set(c.id, li);
     el.appendChild(li);
@@ -43,10 +43,12 @@ export function createRuleChips(props: RuleChipsProps): View<RuleChipsProps> {
     for (const [id, li] of items) li.toggleAttribute('data-hl', p.highlight === id);
   };
   render(props);
+  L.watch();
   return {
     el,
     update: render,
     destroy() {
+      L.dispose();
       el.parentNode?.removeChild(el);
     },
   };

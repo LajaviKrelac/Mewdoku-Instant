@@ -16,7 +16,8 @@ import { BANNED_PHRASES } from '../../scripts/i18n-check';
  * (our copy says "fish", differences §4). One list, shared with scripts/i18n-check.ts so the two
  * guards cannot drift; lowercase, matched case-insensitively in every catalogue.
  */
-const REQUIRED_BANNED = ['meowdoku', 'meow cup', 'long live meow', 'moonlit meows', 'golden fish', 'exclusive territory', 'one per color', 'no touching'];
+// 'kelas master': the original's Indonesian victory label (differences-vs-original §2.3; review CLEAN-1).
+const REQUIRED_BANNED = ['meowdoku', 'meow cup', 'long live meow', 'moonlit meows', 'golden fish', 'exclusive territory', 'one per color', 'no touching', 'kelas master'];
 
 /** Every translated catalogue that exists (src/i18n/locales/<id>.ts, E), keyed by file. */
 const LOCALE_MODULES = import.meta.glob<{ catalog?: Record<string, string> }>('../../src/i18n/locales/*.ts', { eager: true });

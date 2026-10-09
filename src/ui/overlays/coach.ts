@@ -16,10 +16,17 @@
 //
 // Classes: .coach[data-step][data-hand] > .coach__dim .coach__ring .coach__hand .coach__card[data-pending]
 //          .coach__text .coach__gotit
+//
+// Review fixes: the step text prints its rule keywords in the accent colour and the colour it names
+// with a swatch in that tile colour (PAR-7, rich text; textContent is unchanged); the tool row is a
+// light soft obstacle, so the card takes the gap between the board and the tools when there is one,
+// and a card left over the tools reaches up past their count badges instead of cutting them in half
+// (UX-14); the texts follow the language (A11Y-I18N-1).
 import { tutorialStep, type CoachHand, type TutorialStepIndex } from '../../game/tutorial';
-import { colorName, t, translate, TUTORIAL_STEP_KEYS } from '../../i18n';
+import { colorName, onLocaleChanged, t, translate, translateMarked, TUTORIAL_STEP_KEYS } from '../../i18n';
 import { clear, h, s, type OverlayView } from '../dom';
-import { makeButton, nextId, setTextKeepTogether } from './overlay-base';
+import { colorToken, setRichText } from '../rich-text';
+import { makeButton, nextId, setButtonLabel } from './overlay-base';
 
 export interface CoachProps {
   readonly step: TutorialStepIndex;
@@ -72,27 +79,67 @@ export interface SoftRect extends RectLike {
   readonly weight?: number;
 }
 
-/** The step's coach sentence, with {color} filled in. */
+/** The step's coach sentence, with {color} filled in (plain text: what a screen reader reads). */
 export function coachText(step: TutorialStepIndex, colorParam: number | null): string {
   const key = TUTORIAL_STEP_KEYS[step - 1] ?? 'tutorial.step1';
   return translate(key, colorParam === null ? {} : { color: colorName(colorParam) });
 }
 
+/** The same sentence with its `*keyword*` markers and the colour as a rich-text token (PAR-7). */
+export function coachRichText(step: TutorialStepIndex, colorParam: number | null): string {
+  const key = TUTORIAL_STEP_KEYS[step - 1] ?? 'tutorial.step1';
+  return translateMarked(key, colorParam === null ? {} : { color: colorToken(colorParam) });
+}
+
+/** How far above the tools' count badges a card over the tool row reaches (UX-14). */
+const BADGE_COVER = 4;
+
 /**
- * Card top (CSS px). Candidates, in order of preference: the bottom of the screen (over the tool row,
- * like the wireframe), above the targets, below them, next to each soft obstacle (just below the top
+ * A card placed over the tool row reaches up past the count badges ("Free", "3") so none is cut in
+ * half (UX-14). Returns the new top, or `top` unchanged when the card is clear of the tools or the
+ * taller card would reach the board (`floor`, its bottom) or come within CARD_GAP of a target.
+ */
+export function coverBadges(
+  top: number,
+  cardH: number,
+  tools: RectLike | null,
+  badgeTop: number | null,
+  floor: number,
+  targets: readonly RectLike[] = [],
+): number {
+  if (!tools || badgeTop === null) return top;
+  const overTools = top < tools.bottom && top + cardH > tools.top;
+  if (!overTools || top <= badgeTop - BADGE_COVER) return top;
+  const next = badgeTop - BADGE_COVER;
+  if (next < floor) return top;
+  const bottom = top + cardH;
+  if (targets.some((r) => next < r.bottom + CARD_GAP && bottom > r.top - CARD_GAP)) return top;
+  return next;
+}
+
+/**
+ * Card top (CSS px). Candidates, in order of preference: the `preferred` slots (the gap between the
+ * board and the tool row, UX-14), the bottom of the screen (over the tool row, like the wireframe),
+ * above the targets, below them, next to each soft obstacle (just below the top
  * bar, just above the board…), the top edge, then (with soft obstacles) the screen edges with a
  * smaller margin. A candidate must stay on screen and keep CARD_GAP from
  * every target; among those, the one covering the least of the soft obstacles wins (ties keep the
  * preference order). With no soft obstacles this is the bottom slot, else above, else below the
  * targets; when nothing fits, below the targets clamped to the bottom slot.
  */
-export function placeCard(targets: readonly RectLike[], cardH: number, vh: number, soft: readonly SoftRect[] = []): number {
+export function placeCard(
+  targets: readonly RectLike[],
+  cardH: number,
+  vh: number,
+  soft: readonly SoftRect[] = [],
+  preferred: readonly number[] = [],
+): number {
   const bottomTop = vh - EDGE - cardH;
-  if (targets.length === 0 && soft.length === 0) return bottomTop;
+  if (targets.length === 0 && soft.length === 0 && preferred.length === 0) return bottomTop;
   const top = targets.length ? Math.min(...targets.map((r) => r.top)) : Infinity;
   const bottom = targets.length ? Math.max(...targets.map((r) => r.bottom)) : -Infinity;
-  const candidates: number[] = [bottomTop];
+  // `preferred` slots come first, so they win every tie (UX-14: the gap above the tool row).
+  const candidates: number[] = [...preferred, bottomTop];
   if (targets.length) candidates.push(top - CARD_GAP - cardH, bottom + CARD_GAP);
   for (const r of soft) candidates.push(r.bottom + SOFT_GAP, r.top - SOFT_GAP - cardH);
   candidates.push(EDGE);
@@ -156,6 +203,22 @@ function screenSoftRects(doc: Document): SoftRect[] {
   return out;
 }
 
+/** The tool row with its count badges (which stick out above the buttons), and the badges' top. */
+function toolRow(doc: Document): { readonly rect: RectLike; readonly badgeTop: number | null } | null {
+  const els = Array.from(doc.querySelectorAll('.screen--game .tool, .screen--game .tool__badge'));
+  let rect: RectLike | null = null;
+  let badgeTop: number | null = null;
+  for (const el of els) {
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 && r.height === 0) continue;
+    rect = rect
+      ? { left: Math.min(rect.left, r.left), top: Math.min(rect.top, r.top), right: Math.max(rect.right, r.right), bottom: Math.max(rect.bottom, r.bottom) }
+      : { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+    if (el.classList.contains('tool__badge')) badgeTop = badgeTop === null ? r.top : Math.min(badgeTop, r.top);
+  }
+  return rect ? { rect, badgeTop } : null;
+}
+
 /** Our own pointing hand (48×48, fingertip at TIP_X, TIP_Y). */
 function handArt(): SVGSVGElement {
   const line = { fill: 'var(--card)', stroke: 'var(--ink)', 'stroke-width': 2.5, 'stroke-linejoin': 'round' };
@@ -185,10 +248,12 @@ export function createCoach(): OverlayView<CoachProps> {
   const hand = h('div', { class: 'coach__hand', 'aria-hidden': 'true' }, handArt());
   const text = h('p', { class: 'coach__text' });
   const gotIt = makeButton({ variant: 'primary', label: t('tutorial.gotIt'), className: 'coach__gotit', onPress: () => props?.onGotIt() });
+  /** The rich sentence of the step on show (null before the first one). */
+  let shown: { readonly step: TutorialStepIndex; readonly colorParam: number | null } | null = null;
   const card = h('div', { class: 'coach__card', role: 'note', 'aria-live': 'polite' }, text, gotIt);
   const el = h('div', { class: 'coach', hidden: true }, dim, rings, hand, card);
-  /** The step text waiting for the freshly shown live region (first appearance), or null. */
-  let pendingText: string | null = null;
+  /** The step waiting for the freshly shown live region (first appearance), or null. */
+  let pendingText: { readonly step: TutorialStepIndex; readonly colorParam: number | null } | null = null;
   let liveTimer: ReturnType<typeof setTimeout> | null = null;
 
   const layout = (): void => {
@@ -241,11 +306,26 @@ export function createCoach(): OverlayView<CoachProps> {
         })
       : rects;
     const soft = props.softRects ? props.softRects() : screenSoftRects(doc);
-    card.style.top = `${placeCard(avoid, card.offsetHeight, vh, soft)}px`;
+    card.style.minHeight = '';
+    const cardH = card.offsetHeight;
+    // UX-14: the gap between the board and the tool row (badges included) is the first choice when
+    // the card fits there without covering anything; otherwise the bottom slot over the tools, as
+    // before, reaching up past the count badges (never onto the board or a target).
+    const tools = props.softRects ? null : toolRow(doc);
+    const gap = tools ? [tools.rect.top - SOFT_GAP - cardH] : [];
+    const top = placeCard(avoid, cardH, vh, soft, gap);
+    const board = doc.querySelector('.screen--game .board')?.getBoundingClientRect();
+    const raised = coverBadges(top, cardH, tools?.rect ?? null, tools?.badgeTop ?? null, board ? board.bottom + 2 : -Infinity, avoid);
+    card.style.top = `${raised}px`;
+    if (raised < top) card.style.minHeight = `${top + cardH - raised}px`;
   };
 
-  const showText = (value: string): void => {
-    setTextKeepTogether(text, value);
+  /** The step's sentence: rule keywords and the colour styled (PAR-7); textContent stays the plain sentence. */
+  const showText = (step: TutorialStepIndex, colorParam: number | null): void => {
+    shown = { step, colorParam };
+    setRichText(text, coachRichText(step, colorParam), {
+      color: (id) => ({ palette: id, name: colorName(id) }),
+    });
   };
   const cancelLive = (): void => {
     if (liveTimer !== null) clearTimeout(liveTimer);
@@ -262,6 +342,12 @@ export function createCoach(): OverlayView<CoachProps> {
   };
 
   const onResize = (): void => layout();
+  /**
+   * The text's own size changes after placement when the display font arrives or the rich text
+   * rewraps (a third line): place the card again then, or a stale slot can cover the board.
+   */
+  const RO = (el.ownerDocument.defaultView as (Window & { ResizeObserver?: typeof ResizeObserver }) | null)?.ResizeObserver;
+  const textObserver = RO ? new RO(() => schedule()) : null;
   let listening = false;
   const listen = (on: boolean): void => {
     const win = el.ownerDocument.defaultView;
@@ -270,9 +356,11 @@ export function createCoach(): OverlayView<CoachProps> {
     if (on) {
       win.addEventListener('resize', onResize);
       win.visualViewport?.addEventListener('resize', onResize);
+      textObserver?.observe(text);
     } else {
       win.removeEventListener('resize', onResize);
       win.visualViewport?.removeEventListener('resize', onResize);
+      textObserver?.disconnect();
     }
   };
 
@@ -282,7 +370,8 @@ export function createCoach(): OverlayView<CoachProps> {
     props = p;
     el.dataset.step = String(p.step);
     el.dataset.hand = p.hand;
-    const value = coachText(p.step, p.colorParam);
+    setButtonLabel(gotIt, t('tutorial.gotIt'));
+    const value = { step: p.step, colorParam: p.colorParam };
     if (fresh || pendingText !== null) {
       // Show the empty region first; the text follows once assistive tech has seen the region.
       if (pendingText === null) text.textContent = '';
@@ -294,12 +383,12 @@ export function createCoach(): OverlayView<CoachProps> {
           const v = pendingText;
           pendingText = null;
           card.removeAttribute('data-pending');
-          if (v !== null) showText(v);
+          if (v !== null) showText(v.step, v.colorParam);
           layout();
         }, LIVE_SETTLE_MS);
       }
     } else {
-      showText(value);
+      showText(value.step, value.colorParam);
     }
     gotIt.hidden = !p.showGotIt;
     layout();
@@ -307,6 +396,14 @@ export function createCoach(): OverlayView<CoachProps> {
     // Step 2 locks the board: move keyboard focus to "Got it" (02 §11.5, §18).
     if (p.showGotIt && stepChanged && !card.contains(el.ownerDocument.activeElement)) gotIt.focus();
   };
+
+  // A language switch with the coach up (a first run that boots before its locale chunk lands, or
+  // Settings → Language during the tutorial): the card follows (A11Y-I18N-1).
+  const offLocale = onLocaleChanged(() => {
+    setButtonLabel(gotIt, t('tutorial.gotIt'));
+    if (shown && pendingText === null && !el.hidden) showText(shown.step, shown.colorParam);
+    if (!el.hidden) layout();
+  });
 
   return {
     el,
@@ -330,6 +427,7 @@ export function createCoach(): OverlayView<CoachProps> {
     },
     dismiss: () => false,
     destroy() {
+      offLocale();
       cancelLive();
       listen(false);
       el.ownerDocument.defaultView?.cancelAnimationFrame(raf);

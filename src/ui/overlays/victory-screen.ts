@@ -12,6 +12,13 @@
 // Reduced motion: a crossfade of fx.screenReducedMs (WAAPI), static rays, no progress-bar fill.
 // Lazy overlay chunk.
 //
+// Review fixes: a dark full-screen overlay like the fail card (PAR-3, the original's "dark full-screen
+// overlays for win and fail"): light text on --stage, the orange "Level N". The buttons never sit under
+// the banner band (UX-1, I18N-LAYOUT-1): the actions are sticky at the bottom of the scrolling overlay
+// (clear of the reserve plus buttonClearancePx), and fit() compacts the hero in steps (data-fit 1–3)
+// while the content is taller than the screen, so on short phones nothing needs a scroll. The event
+// bar is named by its "3 / 21 solved" line (A11Y-NAME-1); static labels follow the language.
+//
 // Classes: .overlay[data-overlay=victory] > .victory[data-variant][data-banner]
 //          > .victory__top(.fish-pill) .victory__col(.victory__praise .victory__stage(.victory__rays .victory__art)
 //            .victory__sub .victory__daily .victory__reward(.victory__fishes .victory__plus .victory__total)
@@ -24,6 +31,7 @@ import { illustration } from '../art/illustrations';
 import { icon } from '../art/sprite';
 import { h, setText, type OverlayView } from '../dom';
 import { createFishPill, type FishPillView } from '../hud/pills';
+import { createLocaleText } from '../locale-text';
 import { createDelay, createOverlayShell, createTicker, makeButton, nextId, setButtonLabel, setGated, setTextKeepTogether } from './overlay-base';
 
 /**
@@ -114,6 +122,17 @@ export function primaryLabel(p: Pick<VictoryProps, 'variant' | 'nextLevel' | 'ev
 
 /** Countdown refresh period (minute resolution text). */
 const REFRESH_MS = 1000;
+/** Compaction steps of fit() (overlay-chunk.css .victory[data-fit]). */
+export const FIT_LEVELS = 3;
+
+/**
+ * The compaction step that lets the content fit: the first of 0…FIT_LEVELS whose measured overflow
+ * (`overflowAt(level)`, content height minus the screen) is ≤ 0, else the last step.
+ */
+export function fitLevel(overflowAt: (level: number) => number): number {
+  for (let level = 0; level < FIT_LEVELS; level++) if (overflowAt(level) <= 1) return level;
+  return FIT_LEVELS;
+}
 /** Three fish in the reward row, whatever the count (bonuses add a number, not more fish, §2.14). */
 const ROW_FISH = 3;
 
@@ -130,9 +149,11 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
   let pill: FishPillView | null = null;
   const top = h('div', { class: 'victory__top' });
 
+  const L = createLocaleText();
   const title = h('h2', { class: 'victory__praise', id: shell.titleId });
   const rays = h('div', { class: 'victory__rays', 'aria-hidden': 'true' });
-  const art = h('div', { class: 'victory__art' }, illustration('win', { label: t('a11y.illustration.win') }));
+  const winArt = L.attr(illustration('win', { label: t('a11y.illustration.win') }), 'aria-label', () => t('a11y.illustration.win'));
+  const art = h('div', { class: 'victory__art' }, winArt);
   const sub = h('p', { class: 'victory__sub', id: shell.descId });
 
   // Daily: time, mistakes and hints, countdown.
@@ -154,10 +175,11 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
   const chipsId = nextId('victory-chips');
   const chips = h('div', { class: 'victory__chips', id: chipsId }, bonusChip, pointsChip);
 
-  // Event: progress bar + milestone line.
-  const eventLabel = h('p', { class: 'victory__event-label' });
+  // Event: progress bar + milestone line. The bar's name is its visible "3 / 21 solved" line (A11Y-NAME-1).
+  const eventLabelId = nextId('victory-event-label');
+  const eventLabel = h('p', { class: 'victory__event-label', id: eventLabelId });
   const barFill = h('span', { class: 'victory__bar-fill' });
-  const bar = h('div', { class: 'victory__bar', role: 'progressbar', 'aria-valuemin': '0' }, barFill);
+  const bar = h('div', { class: 'victory__bar', role: 'progressbar', 'aria-valuemin': '0', 'aria-labelledby': eventLabelId }, barFill);
   const milestone = h('p', { class: 'victory__milestone' });
   const eventId = nextId('victory-event');
   const event = h('div', { class: 'victory__event', id: eventId }, eventLabel, bar, milestone);
@@ -170,7 +192,10 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
     className: 'btn--lg victory__primary',
     onPress: () => props?.onPrimary(),
   });
-  const home = makeButton({ variant: 'ghost', label: t('common.home'), icon: 'icon-house', className: 'victory__home', onPress: () => props?.onHome() });
+  const home = L.label(
+    makeButton({ variant: 'ghost', label: '', icon: 'icon-house', className: 'victory__home', onPress: () => props?.onHome() }),
+    () => t('common.home'),
+  );
 
   const col = h(
     'div',
@@ -203,8 +228,44 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
     bar.setAttribute('aria-valuemax', String(totalCount));
   };
 
+  // ── fit (UX-1, I18N-LAYOUT-1): compact the hero while the content is taller than the screen ──
+  const scroller = shell.el;
+  /** data-fit = the step (1–3); data-tight marks steps 2 and 3 (overlay-chunk.css). */
+  const setFit = (lv: number): void => {
+    if (lv === 0) delete root.dataset.fit;
+    else root.dataset.fit = String(lv);
+    root.toggleAttribute('data-tight', lv >= 2);
+  };
+  const fit = (): void => {
+    if (!shell.isOpen() || !scroller.isConnected) return;
+    setFit(
+      fitLevel((lv) => {
+        setFit(lv);
+        return scroller.scrollHeight - scroller.clientHeight;
+      }),
+    );
+  };
+  let fitRaf = 0;
+  const win = (): Window | null => shell.el.ownerDocument.defaultView;
+  /** fit() now (the screen is shown) and once more on the next frame (fonts, the pill, late layout). */
+  const refit = (): void => {
+    fit();
+    const w = win();
+    if (!w || typeof w.requestAnimationFrame !== 'function') return;
+    w.cancelAnimationFrame(fitRaf);
+    fitRaf = w.requestAnimationFrame(() => {
+      fitRaf = 0;
+      fit();
+    });
+  };
+  const stopFit = (): void => {
+    if (fitRaf) win()?.cancelAnimationFrame(fitRaf);
+    fitRaf = 0;
+  };
+
   const render = (p: VictoryProps, opening: boolean): void => {
     props = p;
+    L.apply();
     root.dataset.variant = p.variant;
     root.toggleAttribute('data-banner', p.bannerReserved);
     root.toggleAttribute('data-reduced', p.reducedMotion);
@@ -285,7 +346,13 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
     setButtonLabel(primary, primaryLabel(p));
     // The ghost Home only where the primary does not already lead home (§2.5 Variants).
     home.hidden = p.variant === 'tutorial' || p.variant === 'tutorial_replay' || p.variant === 'daily';
+    if (!opening) refit();
   };
+
+  // A language switch while the screen is up relabels it (A11Y-I18N-1).
+  L.watch(() => {
+    if (props && shell.isOpen()) render(props, false);
+  });
 
   return {
     el: shell.el,
@@ -297,6 +364,8 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
       if (p.daily) ticker.start(REFRESH_MS, renderNext);
       else ticker.stop();
       shell.show();
+      refit();
+      win()?.addEventListener('resize', refit);
       if (p.reducedMotion && typeof shell.el.animate === 'function') {
         try {
           shell.el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: cfg.fx.screenReducedMs, easing: 'linear' });
@@ -312,6 +381,8 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
       delay.cancel();
       barDelay.cancel();
       ticker.stop();
+      stopFit();
+      win()?.removeEventListener('resize', refit);
       shell.hide();
     },
     dismiss: () => false,
@@ -319,6 +390,9 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
       delay.cancel();
       barDelay.cancel();
       ticker.stop();
+      stopFit();
+      win()?.removeEventListener('resize', refit);
+      L.dispose();
       pill?.destroy();
       props = null;
       shell.el.remove();

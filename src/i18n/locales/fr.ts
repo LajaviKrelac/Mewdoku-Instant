@@ -175,9 +175,9 @@ export const catalog: LocaleCatalog = {
 
   // ── How to play ────────────────────────────────────────────────────────────
   'howto.title': 'Comment jouer',
-  'howto.rule.colours': 'Chaque couleur cache exactement un chat.',
-  'howto.rule.lines': 'Chaque ligne et chaque colonne contient aussi un chat.',
-  'howto.rule.space': 'Les chats aiment leur espace : deux chats ne se touchent jamais, même pas en diagonale.',
+  'howto.rule.colours': 'Chaque couleur cache *exactement un chat*.',
+  'howto.rule.lines': 'Chaque ligne et chaque colonne contient aussi *un chat*.',
+  'howto.rule.space': 'Les chats aiment leur espace : deux chats *ne se touchent jamais, même pas en diagonale*.',
   'howto.controls': 'Touche une case pour la barrer. Touche deux fois pour poser un chat. Glisse sur plusieurs cases pour les barrer d’un coup.',
   'howto.hearts': 'Un chat sur la mauvaise case coûte un cœur. Si tu perds les trois, tu peux recommencer le niveau.',
   'howto.helpers': 'Bloqué ? L’ampoule explique une étape. La patte trouve un chat pour toi.',
@@ -192,10 +192,10 @@ export const catalog: LocaleCatalog = {
   'daily.done': 'Terminé',
 
   // ── Tutorial coach ─────────────────────────────────────────────────────────
-  'tutorial.step1': 'Chaque couleur cache exactement un chat. La couleur {color} n’a qu’une case : touche-la deux fois.',
-  'tutorial.step2': 'Un chat occupe toute sa ligne et toute sa colonne.',
-  'tutorial.step3': 'Les chats ont besoin d’espace : ils ne se touchent pas, même en diagonale. Glisse sur ces cases pour les barrer.',
-  'tutorial.step4': 'La ligne 2 n’a plus qu’une case libre. Touche-la deux fois.',
+  'tutorial.step1': 'Chaque couleur cache *exactement un chat*. La couleur {color} n’a qu’une case : touche-la deux fois.',
+  'tutorial.step2': 'Un chat occupe *toute sa ligne et toute sa colonne*.',
+  'tutorial.step3': 'Les chats ont besoin d’espace : ils *ne se touchent pas, même en diagonale*. Glisse sur ces cases pour les barrer.',
+  'tutorial.step4': 'La ligne 2 n’a plus qu’*une case libre*. Touche-la deux fois.',
   'tutorial.step5': 'Bloqué ? Touche l’ampoule pour un indice.',
   'tutorial.step6': 'Pose le dernier chat.',
   'tutorial.gotIt': 'Compris',
@@ -257,6 +257,7 @@ export const catalog: LocaleCatalog = {
   'settings.language.auto': 'Automatique',
   'settings.shop': 'Boutique',
   'settings.removeAds': 'Retirer les pubs',
+  'settings.feedback': 'Envoyer un avis',
   'howto.a11y': 'Couleurs difficiles à distinguer ? Active les motifs de couleur dans les Réglages.',
   'fish.count.one': '{count} poisson',
   'fish.count.other': '{count} poissons',
@@ -319,6 +320,7 @@ export const catalog: LocaleCatalog = {
   'shop.swap.kitty': '1 minou',
   'shop.swap.action': 'Échanger',
   'shop.notEnough': 'Pas encore assez de poissons.',
+  'shop.swap.done': 'Ajouté : {item}. Poissons restants : {count}.',
   'shop.swap.a11y': 'Échanger {price} poissons contre {item}',
   'shop.buy.a11y': 'Acheter {name}, {price}',
   'shop.retry': 'Réessayer',

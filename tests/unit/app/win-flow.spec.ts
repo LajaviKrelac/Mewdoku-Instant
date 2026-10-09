@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { createFakeClock } from '../../../src/app/clock';
 import { cfg } from '../../../src/app/config';
-import { arrivalAt, createWinFlow, winTimeline, type WinFlowInput } from '../../../src/app/win-flow';
+import { arrivalAt, createWinFlow, victoryCrossfadeMs, winTimeline, type WinFlowInput } from '../../../src/app/win-flow';
 import type { FxHandle } from '../../../src/ui/fx/fish-flight';
 import type { GameScreen } from '../../../src/ui/screens/game-screen';
 import { createHarness, last, SOL5, startLevel, winGame, type Harness, tapRanking } from './harness';
@@ -161,7 +161,7 @@ describe('win timeline (§2.2)', () => {
     expect(s.log).toContain('2550:say:You caught 5 fish. You have 130.');
   });
 
-  it('Home and Gear stay inactive (blocking, reported for aria-disabled) until the panel opens; the tap fades the panel, then the victory', () => {
+  it('Home and Gear stay inactive (blocking, reported for aria-disabled) until the panel opens; the tap opens the victory at once (a crossfade, UX-4)', () => {
     const s = setup();
     s.flow.start(s.input());
     expect(s.flow.blocking()).toBe(true);
@@ -174,28 +174,32 @@ describe('win timeline (§2.2)', () => {
     expect(s.flow.running()).toBe(true);
     s.clock.advance(2000);
     s.flow.continueFromRanking();
-    // §2.2 "tap": the panel fades out over rank.panelOutMs; the victory comes in after it.
-    expect(s.log.some((l) => l.endsWith('victory'))).toBe(false);
-    s.flow.continueFromRanking(); // only once
-    s.clock.advance(cfg.rank.panelOutMs - 1);
-    expect(s.log.some((l) => l.endsWith('victory'))).toBe(false);
-    s.clock.advance(1);
-    expect(last(s.log)).toBe(`${6500 + cfg.rank.panelOutMs}:victory`);
+    // §2.2 "tap": the panel fades out over rank.panelOutMs while the victory fades in over it — both
+    // start at the tap (UX-4: waiting for the panel's fade showed the bare board in between).
+    expect(last(s.log)).toBe('6500:victory');
     expect(s.flow.running()).toBe(false);
+    s.flow.continueFromRanking(); // only once
     s.flow.continueFromRanking();
     s.clock.advance(1000);
     expect(s.log.filter((l) => l.endsWith('victory'))).toHaveLength(1);
     expect(s.blocking).toEqual([true, false]);
   });
 
-  it('teardown during the panel fade-out never opens the victory', () => {
+  it('teardown before the tap never opens the victory; after it nothing more runs', () => {
     const s = setup();
     s.flow.start(s.input());
     s.clock.advance(4500);
-    s.flow.continueFromRanking();
     s.flow.cancel();
+    s.flow.continueFromRanking();
     s.clock.advance(1000);
     expect(s.log.some((l) => l.endsWith('victory'))).toBe(false);
+    const t = setup();
+    t.flow.start(t.input());
+    t.clock.advance(4500);
+    t.flow.continueFromRanking();
+    t.flow.cancel();
+    t.clock.advance(1000);
+    expect(t.log.filter((l) => l.endsWith('victory'))).toEqual(['4500:victory']);
   });
 
   it('the scrim comes at 4 200 only before a ranking panel: not with reduced motion, not for the tutorial variants', () => {
@@ -356,6 +360,28 @@ describe('session win flow (§2.2 t = 0 and §2.6)', () => {
     const v = h.router.props.victory;
     expect(v).toMatchObject({ variant: 'level', level: 5, nextLevel: 6, fish: { earned: 3, total: 3 }, bonus: null, pointsEarned: 45, buttonDelayMs: 600 });
     expect(h.router.isOpen('ranking')).toBe(false);
+  });
+
+  it('UX-4: the tap crossfades — the victory opens over the panel at once; the panel closes only once the victory is opaque', async () => {
+    const h = createHarness();
+    await wonLevel(h);
+    await h.settle(cfg.fx.winOverlayDelayMs);
+    await h.settle(cfg.rank.panelTapMinMs);
+    h.router.props.ranking?.onContinue();
+    // Never a frame with neither layer up: the victory is on top of the (fading) panel from the tap.
+    expect(h.router.isOpen('victory')).toBe(true);
+    expect(h.router.stack()).toEqual(['ranking', 'victory']);
+    const closeAt = victoryCrossfadeMs(false);
+    expect(closeAt).toBeGreaterThan(Math.max(cfg.rank.panelOutMs, cfg.fx.overlayFadeMs));
+    await h.settle(closeAt - 1);
+    expect(h.router.isOpen('ranking')).toBe(true);
+    await h.settle(1);
+    expect(h.router.isOpen('ranking')).toBe(false);
+    expect(h.router.stack()).toEqual(['victory']);
+  });
+
+  it('UX-4: with reduced motion the panel closes after the 120 ms crossfade (and the panel fade)', () => {
+    expect(victoryCrossfadeMs(true)).toBe(Math.max(cfg.rank.panelOutMs, cfg.fx.screenReducedMs) + 50);
   });
 
   it('a Hard level adds the +2 bonus chip; a daily the daily bonus (points +15)', async () => {

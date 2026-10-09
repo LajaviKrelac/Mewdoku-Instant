@@ -167,12 +167,14 @@
 }
 
 /* ── Home: the event card (§4.4) ───────────────────────────────────────── */
+/* At least 72 px, taller when larger text or a longer name needs it (review I18N-TEXT-1: a fixed
+   height clipped the title at 130 % text size). The art stretches to the card's height. */
 .event-card {
   position: relative;
   display: flex;
   align-items: center;
   width: 100%;
-  height: 72px;
+  min-height: 72px;
   padding: 0;
   padding-inline-end: 14px;
   overflow: hidden;
@@ -193,10 +195,13 @@
 
 .event-card__art {
   position: relative;
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex: none;
+  align-self: stretch;
   width: 76px;
-  height: 100%;
+  min-height: 72px;
   overflow: hidden;
   background: var(--accent-soft);
 }
@@ -211,17 +216,18 @@
   flex: 1;
   flex-direction: column;
   min-width: 0;
+  padding-top: 6px;
+  padding-bottom: 8px;
   padding-inline-start: 12px;
-  padding-bottom: 4px;
 }
 
+/* A long localized name wraps to a second line instead of losing its end. */
 .event-card__title {
-  overflow: hidden;
   font-family: var(--font-display);
   font-weight: var(--display-weight);
   font-size: var(--fs-l);
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  line-height: 1.2;
+  overflow-wrap: break-word;
 }
 
 .event-card__sub {
@@ -303,6 +309,13 @@
   .screen--home[data-banner] .home__mascot > svg {
     width: 120px;
     height: 120px;
+  }
+
+  /* Both: the smaller of the two, not whichever rule came last (review UX-2). home-screen.ts
+     fitHero() shrinks it further when the localized text still needs the room. */
+  .screen--home[data-event][data-banner] .home__mascot > svg {
+    width: 96px;
+    height: 96px;
   }
 }
 

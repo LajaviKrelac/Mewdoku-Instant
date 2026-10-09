@@ -130,6 +130,21 @@ describe('i18n-check catches seeded faults', () => {
     expect(checkCatalog('ru', ru).errors.join('\n')).toContain('plural fish.count lacks .few');
   });
 
+  it('the original\'s Indonesian victory label is a banned phrase (review CLEAN-1)', () => {
+    const id = { ...(CATALOGS.get('id') ?? {}), 'win.levelComplete': 'Kelas Master {level}' };
+    expect(checkCatalog('id', id).errors.join('\n')).toContain('banned phrase "kelas master"');
+  });
+
+  it('keyword markers must pair up and match English (review PAR-7)', () => {
+    expect(en['tutorial.step1']).toContain('*exactly one cat*');
+    const unpaired = { ...de, 'tutorial.step2': 'Eine Katze beansprucht ihre *ganze Zeile und Spalte.' };
+    expect(checkCatalog('de', unpaired).errors.join('\n')).toContain('tutorial.step2 has an unpaired keyword marker');
+    const missing = { ...de, 'howto.rule.lines': 'Auch jede Zeile und jede Spalte enthält eine Katze.' };
+    expect(checkCatalog('de', missing).errors.join('\n')).toContain('howto.rule.lines marks 0 keyword(s), English 1');
+    const extra = { ...de, 'hint.title': '*Tipp*' };
+    expect(checkCatalog('de', extra).errors.join('\n')).toContain('hint.title marks 1 keyword(s), English 0');
+  });
+
   it('warns on an over-long string and on a stale translation', () => {
     const long = { ...de, 'game.chip.colours': 'Eine Katze in jeder einzelnen Farbe' };
     expect(checkCatalog('de', long).warnings.join('\n')).toContain('game.chip.colours');

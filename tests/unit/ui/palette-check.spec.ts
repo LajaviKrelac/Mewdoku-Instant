@@ -80,6 +80,21 @@ describe('palette-check', () => {
     expect(large).toContain('focus ring (--focus on --page)');
   });
 
+  it('checks the dark victory screen\'s text and graphics on --stage (review PAR-3) and the keyword colour (PAR-7)', () => {
+    const rows = uiContrast();
+    const victory = rows.filter((r) => r.what.startsWith('victory'));
+    expect(victory.map((r) => r.what)).toEqual(
+      expect.arrayContaining([
+        'victory praise, large text (--title-on-dark on --stage)',
+        'victory lines (white .82 on --stage)',
+        'victory event reward (--tap-text on --stage)',
+        'victory focus ring (--tap-text on --stage)',
+      ]),
+    );
+    for (const r of victory) expect(r.bg === TOKENS.stage || r.what.includes('bar') || r.what.includes('chips'), r.what).toBe(true);
+    expect(rows.find((r) => r.what.startsWith('rule keyword'))?.fg).toBe(TOKENS['accent-text']);
+  });
+
   it('reproduces the §1.4 table values (computed 2026-10-08)', () => {
     const r = (fg: string, bg: string): number => Math.round(contrastRatio(fg, bg) * 100) / 100;
     expect(r(TOKENS.ink, TOKENS.page)).toBe(12.97);

@@ -9,6 +9,7 @@
 import { cfg } from '../../app/config';
 import { t } from '../../i18n';
 import { h, s } from '../dom';
+import { createLocaleText } from '../locale-text';
 
 /** Short side of a phone screen (CSS px): tablets and desktops are wider than this. */
 const PHONE_MAX_SHORT_SIDE = 600;
@@ -43,13 +44,16 @@ function rotateArt(): SVGSVGElement {
 }
 
 export function mountRotateNotice(host: HTMLElement, win: Window = window): { readonly el: HTMLElement; destroy(): void } {
+  // The notice is mounted at boot, before the locale is known: it follows the language (A11Y-I18N-1).
+  const L = createLocaleText();
   const el = h(
     'div',
     { class: 'rotate-notice', role: 'alert', hidden: true },
     rotateArt(),
-    h('p', { class: 'rotate-notice__title' }, t('rotate.title')),
-    h('p', { class: 'rotate-notice__body' }, t('rotate.body')),
+    L.text(h('p', { class: 'rotate-notice__title' }), () => t('rotate.title')),
+    L.text(h('p', { class: 'rotate-notice__body' }), () => t('rotate.body')),
   );
+  L.watch();
   host.appendChild(el);
 
   const check = (): void => {
@@ -67,6 +71,7 @@ export function mountRotateNotice(host: HTMLElement, win: Window = window): { re
   return {
     el,
     destroy() {
+      L.dispose();
       win.removeEventListener('resize', check);
       win.removeEventListener('orientationchange', check);
       win.visualViewport?.removeEventListener('resize', check);

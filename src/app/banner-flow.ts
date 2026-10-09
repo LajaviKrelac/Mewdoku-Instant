@@ -7,6 +7,11 @@
 // rewarded ad, and when a modal opens over the screen (not re-shown on close unless the window
 // passed). UiState.bannerReserved is set when a load is attempted and kept until the screen unmounts,
 // so nothing jumps; a failed load keeps the reserve. `unsupported` latches banners off for the session.
+// A load that answered 'timeout' (ads.readyTimeoutMs) may still land and show itself, so it counts as
+// "maybe up" until the next hide(): that hide always reaches the adapter, which takes the banner down
+// (or makes the late load hide itself when it lands). Review FB2B-1: before, a slow load left the
+// banner up through play with no hide at all. Owning No Ads (a purchase, the boot restore or a late
+// cloud merge) takes a banner on show down at once (entitlementChanged, L2B-2).
 // C-internal module: platform.ads.banner (D) and bannerReserved (B) are fixed.
 import { bannerGate } from '../game/ad-pacing';
 import type { BannerScreen, GameConfig } from './config';
@@ -34,6 +39,12 @@ export interface BannerFlow {
   screenGone(): void;
   /** A modal closed over `screen`: show again only when the reload window has passed. */
   modalClosed(): Promise<void>;
+  /**
+   * The No Ads entitlement may have changed (a purchase, the boot restore, a merged cloud save): when
+   * the gate now says no, a banner that is up (or still loading) is hidden at once. The reserve stays
+   * until the screen unmounts (§3.2: nothing jumps).
+   */
+  entitlementChanged(): Promise<void>;
   /** Whether a banner is currently shown (tests, analytics). */
   showing(): boolean;
 }
@@ -45,6 +56,12 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
   let lastLoadAt: number | null = null;
   let latched = false;
   let shown = false;
+  /**
+   * A load was asked for and has not been answered with a result that rules a banner out: it is in
+   * flight, or it answered 'timeout' / threw, so the SDK may still show it. hide() must reach the
+   * adapter then (FB2B-1).
+   */
+  let pending = false;
   /** The eligible screen on show now (null after screenGone). */
   let current: { screen: BannerScreen; firstRunTutorial: boolean } | null = null;
   let gen = 0;
@@ -82,21 +99,27 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
     lastLoadAt = now;
     setReserved(true);
     const mine = ++gen;
+    pending = true;
     let r;
     try {
       r = await banner.show(c.ads.banner.position);
     } catch (error) {
       deps.onError?.(error);
+      // Unknown outcome: the next hide() still reaches the adapter (pending stays as it is).
       return;
     }
     if (r.ok) {
       shown = true;
+      pending = false;
       // The screen went away (or a modal opened) while the banner was loading: hide it again at once.
       if (mine !== gen || current === null) await flow.hide();
       return;
     }
     if (r.reason === 'unsupported') latched = true;
-    // Any other failure keeps the reserve until the screen unmounts (nothing jumps).
+    // 'timeout': the load goes on in the adapter and may still land; a hide since then (gen moved on)
+    // already told the adapter, which hides a late banner itself. Any other answer: nothing is up.
+    if (r.reason !== 'timeout' || mine !== gen) pending = false;
+    // Any failure keeps the reserve until the screen unmounts (nothing jumps).
   }
 
   const flow: BannerFlow = {
@@ -107,8 +130,10 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
     async hide() {
       gen++;
       const banner = api();
-      if (!shown || !banner) return;
+      // Nothing was ever asked for since the last hide: no adapter call (it would be a no-op anyway).
+      if (!banner || (!shown && !pending)) return;
       shown = false;
+      pending = false;
       try {
         await banner.hide();
       } catch (error) {
@@ -122,6 +147,10 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
     },
     async modalClosed() {
       if (current && !shown) await attempt();
+    },
+    async entitlementChanged() {
+      if (!store.get().save.purchases.noAds) return;
+      await flow.hide();
     },
     showing: () => shown,
   };

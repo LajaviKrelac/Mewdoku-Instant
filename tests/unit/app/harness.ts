@@ -8,6 +8,7 @@ import type { OverlayPropsMap, Router } from '../../../src/app/router';
 import { createSaveScheduler, type SaveScheduler } from '../../../src/app/saves';
 import { createSession, type Session, type SessionDeps } from '../../../src/app/session';
 import { createStore, initialAppState, type AppState, type OverlayId, type ScreenId, type Store } from '../../../src/app/store';
+import { victoryCrossfadeMs } from '../../../src/app/win-flow';
 import type { HintStep, Puzzle, PuzzleId } from '../../../src/engine/types';
 import type { LevelsRepo, LoadedPuzzle } from '../../../src/game/levels-repo';
 import { defaults } from '../../../src/game/save';
@@ -156,6 +157,10 @@ export interface FakeRouter extends Router {
   rewardedAnswer: 'accept' | 'decline' | 'swap' | null;
   /** What overlaysReady() answers (false: the lazy overlay chunk cannot be loaded). */
   chunkOk: boolean;
+  /** beginLeave() calls (PERF-1), in order. */
+  readonly leaves: ScreenId[];
+  /** What beginLeave() returns (null: nothing to wait for; a promise holds the board build until it settles). */
+  leaveWait: (() => Promise<void> | null) | null;
 }
 
 const fakeEl = (): HTMLElement => ({}) as HTMLElement;
@@ -173,6 +178,12 @@ export function createFakeRouter(bus: AppBus, log: Log): FakeRouter {
     eventCb: null,
     rewardedAnswer: 'accept',
     chunkOk: true,
+    leaves: [],
+    leaveWait: null,
+    beginLeave(to) {
+      r.leaves.push(to);
+      return r.leaveWait ? r.leaveWait() : null;
+    },
     root: fakeEl(),
     screen: () => screenId,
     showBoot() {
@@ -487,7 +498,8 @@ export function winGame(h: Harness): void {
  */
 export async function tapRanking(h: Harness): Promise<void> {
   h.router.props.ranking?.onContinue();
-  await h.settle(h.config.rank.panelOutMs);
+  // UX-4: the victory opens at the tap over the fading panel; the panel closes once the victory is opaque.
+  await h.settle(victoryCrossfadeMs(h.store.get().ui.reducedMotion, h.config));
 }
 
 export function slice(log: Log, keep: RegExp): string[] {

@@ -20,7 +20,8 @@
 import { cfg } from '../../app/config';
 import { formatClock, formatNumber, t, tn, translate, type I18nKey } from '../../i18n';
 import { h, setText, type OverlayView } from '../dom';
-import { createDelay, createOverlayShell, makeButton, setGated } from './overlay-base';
+import { createLocaleText } from '../locale-text';
+import { createDelay, createOverlayShell, makeButton, setGated, setButtonLabel } from './overlay-base';
 
 /** Which board the panel or hub tab shows (phase2b §5.3). */
 export type RankingBoardKind = 'points' | 'daily' | 'event';
@@ -158,6 +159,8 @@ function recordsBlock(r: PersonalRecordsView): HTMLElement {
   const rows: [string, string][] = [];
   if (r.thisMs > 0) rows.push([r.board === 'points' ? t('rank.records.thisLevel') : t('rank.records.thisPuzzle'), formatClock(r.thisMs)]);
   if (r.board === 'event' && r.event) {
+    // The summary line, then the rows in their own <dl>: a dt/dd pair is valid only inside a <dl>
+    // (review A11Y-DL-1).
     const card = h('div', { class: 'rank-records' });
     card.appendChild(
       h(
@@ -166,7 +169,11 @@ function recordsBlock(r: PersonalRecordsView): HTMLElement {
         t('event.results.local', { solved: formatNumber(r.event.solved), total: formatNumber(r.event.total), time: formatClock(r.event.totalMs) }),
       ),
     );
-    for (const [label, value] of rows) card.appendChild(recordRow(label, value));
+    if (rows.length > 0) {
+      const dl = h('dl', { class: 'rank-records__list' });
+      for (const [label, value] of rows) dl.appendChild(recordRow(label, value));
+      card.appendChild(dl);
+    }
     return card;
   }
   if (r.n > 0) rows.push([t('rank.records.bestSize', { n: r.n }), r.bestSizeMs === null ? '—' : formatClock(r.bestSizeMs)]);
@@ -239,6 +246,9 @@ export function createRankingPanel(): OverlayView<RankingPanelProps> {
   const list = h('div', { class: 'rank-list' });
   const live = h('p', { class: 'sr-only', role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true' });
   const tap = makeButton({ variant: 'ghost', label: t('rank.tap'), autofocus: true, className: 'ranking__tap', onPress: () => tryContinue() });
+  // The footer follows the language (A11Y-I18N-1).
+  const L = createLocaleText();
+  L.run(() => setButtonLabel(tap, t('rank.tap')));
   shell.panel.append(h('div', { class: 'ranking__card' }, title, sub, list), tap, live);
   shell.el.style.setProperty('--pop-ms', `${cfg.rank.panelPopMs}ms`);
   shell.el.style.setProperty('--out-ms', `${cfg.rank.panelOutMs}ms`);
@@ -285,6 +295,7 @@ export function createRankingPanel(): OverlayView<RankingPanelProps> {
 
   const render = (p: RankingPanelProps): void => {
     props = p;
+    L.apply();
     shell.panel.dataset.board = p.board;
     setText(title, rankTitle(p.board, p.eventNameKey));
     setText(sub, resultText(p.result));

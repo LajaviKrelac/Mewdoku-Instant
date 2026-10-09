@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { createFakeClock } from '../../../src/app/clock';
 import { cfg } from '../../../src/app/config';
-import { bannerSupported, createFbBanner, mapBannerError } from '../../../src/platform/fb/fb-banner';
+import { bannerSupported, createFbBanner, HIDE_RETRIES, HIDE_RETRY_MS, mapBannerError, stuckLoadMs } from '../../../src/platform/fb/fb-banner';
 import type { FBInstantSDK } from '../../../src/platform/fb/fbinstant';
 import { createStub, drain, track, type StubConfig } from './helpers';
 
@@ -135,6 +135,93 @@ describe('createFbBanner', () => {
     expect(shown.value).toEqual({ ok: false, reason: 'timeout' });
     await banner.hide();
     expect(control.count('hideBannerAdAsync')).toBe(0);
+  });
+
+  // ── review FB2B-1: never a banner in play ──
+
+  it('a load slower than ads.readyTimeoutMs answers timeout, and a hide() after that still hides the late banner', async () => {
+    const slow = cfg.ads.readyTimeoutMs + 2_000;
+    const { banner, control, clock } = setup({ banner: { loadDelayMs: slow } });
+    const shown = track(banner.show('bottom'));
+    await clock.advanceAsync(cfg.ads.readyTimeoutMs);
+    await drain();
+    expect(shown.value).toEqual({ ok: false, reason: 'timeout' });
+    await clock.advanceAsync(1_000);
+    await banner.hide(); // the player tapped Play after the timeout, before the load landed
+    await clock.advanceAsync(1_000);
+    await drain();
+    expect(control.count('hideBannerAdAsync')).toBe(1);
+    expect(control.state.bannerVisible).toBe(false);
+  });
+
+  it('a failed hideBannerAdAsync is retried on a timer until it succeeds', async () => {
+    const { banner, control, clock } = setup({ errors: { hideBannerAdAsync: ['NETWORK_FAILURE', 'NETWORK_FAILURE'] } });
+    await banner.show('bottom');
+    await banner.hide();
+    expect(control.count('hideBannerAdAsync')).toBe(1);
+    expect(control.state.bannerVisible).toBe(true);
+    await clock.advanceAsync(HIDE_RETRY_MS);
+    await drain();
+    expect(control.count('hideBannerAdAsync')).toBe(2);
+    expect(control.state.bannerVisible).toBe(true);
+    await clock.advanceAsync(HIDE_RETRY_MS);
+    await drain();
+    expect(control.count('hideBannerAdAsync')).toBe(3);
+    expect(control.state.bannerVisible).toBe(false);
+    await clock.advanceAsync(10 * HIDE_RETRY_MS);
+    await drain();
+    expect(control.count('hideBannerAdAsync')).toBe(3); // done: no more calls
+  });
+
+  it('the timer retries are bounded; the next hide() tries again; a new show() cancels them', async () => {
+    const { banner, control, clock } = setup({ banner: { hide: 'NETWORK_FAILURE' } });
+    await banner.show('bottom');
+    await banner.hide();
+    await clock.advanceAsync(20 * HIDE_RETRY_MS);
+    await drain();
+    expect(control.count('hideBannerAdAsync')).toBe(1 + HIDE_RETRIES);
+    await banner.hide();
+    expect(control.count('hideBannerAdAsync')).toBe(2 + HIDE_RETRIES);
+    await banner.show('bottom'); // wanted again (the same banner is still up): no retry may take it down
+    await clock.advanceAsync(20 * HIDE_RETRY_MS);
+    await drain();
+    expect(control.count('hideBannerAdAsync')).toBe(2 + HIDE_RETRIES);
+  });
+
+  it('a late-landing load whose own hide fails is retried too', async () => {
+    const { banner, control, clock } = setup({ banner: { loadDelayMs: 1_000 }, errors: { hideBannerAdAsync: ['NETWORK_FAILURE'] } });
+    void banner.show('bottom');
+    await drain();
+    await banner.hide();
+    await clock.advanceAsync(1_000);
+    await drain();
+    expect(control.count('hideBannerAdAsync')).toBe(1);
+    expect(control.state.bannerVisible).toBe(true);
+    await clock.advanceAsync(HIDE_RETRY_MS);
+    await drain();
+    expect(control.count('hideBannerAdAsync')).toBe(2);
+    expect(control.state.bannerVisible).toBe(false);
+  });
+
+  it('a load that never settles is given up after stuckLoadMs (under the 60 s window, over Meta\'s 45 s): a later show() loads again', async () => {
+    expect(stuckLoadMs()).toBeGreaterThan(45_000);
+    expect(stuckLoadMs()).toBeLessThan(cfg.ads.banner.minReloadSec * 1000);
+    const { banner, control, clock } = setup({ banner: { load: 'never' } });
+    void banner.show('bottom');
+    await clock.advanceAsync(cfg.ads.readyTimeoutMs);
+    await drain();
+    await banner.hide();
+    await clock.advanceAsync(stuckLoadMs() - cfg.ads.readyTimeoutMs - 1);
+    const reused = track(banner.show('bottom')); // not yet given up: the same (hung) load
+    await clock.advanceAsync(cfg.ads.readyTimeoutMs);
+    await drain();
+    expect(reused.value).toEqual({ ok: false, reason: 'timeout' });
+    expect(control.count('loadBannerAdAsync')).toBe(1);
+    control.configure({ banner: { load: 'ok' } });
+    await clock.advanceAsync(1_000);
+    await expect(banner.show('bottom')).resolves.toEqual({ ok: true });
+    expect(control.count('loadBannerAdAsync')).toBe(2);
+    expect(control.state.bannerVisible).toBe(true);
   });
 
   it('an empty placement never touches the SDK', async () => {

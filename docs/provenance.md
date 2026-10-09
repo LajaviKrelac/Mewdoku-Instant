@@ -112,6 +112,7 @@ Every drawing is SVG path data typed by hand in TypeScript, on a 100-unit grid (
 |---|---|---|---|
 | `fish_pop` ("bloop" as each fish pops) | `src/audio/sfx.ts` | workstream B, 2026-10-09 | Synthesized: a sine bending 360 → 1 020 Hz in 110 ms, a sub-octave body and a short low-passed noise splash |
 | `fish_plink` (each arrival) | `src/audio/sfx.ts` | workstream B, 2026-10-09 | Synthesized: a sine at E6 raised `audio.fishPlinkStepSemitones` per fish, an inharmonic ×2.76 partial, a soft ×2 triangle and a 15 ms high-passed click |
+| `board_in` (a board enters; review PAR-8) | `src/audio/sfx.ts` | review fix group U, 2026-10-09 | Synthesized: a band-passed noise swell opening 500 → 2 600 Hz over 420 ms under two soft sines a fifth apart (G4, then D5) and a faint ×2 triangle; our own recipe from the words "a board-entry sound" (01 §13.1), no reference audio |
 
 ### 8.4 Text and translations
 

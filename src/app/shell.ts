@@ -7,7 +7,7 @@
 // (§6.8, §8.5), and the banner rules on Home and the event screen (§3.2: shown after the screen
 // mounts, hidden before it goes and while a modal is open).
 import type { AudioEngine } from '../audio/audio-engine';
-import type { EventDef } from '../game/events';
+import { isEventLive, type EventDef } from '../game/events';
 import { dailyCardState, dateKeyOf, localDateKey, localMidnightAfter, msUntilLocalMidnight } from '../game/progression';
 import type { LocaleId, SaveData, Settings } from '../game/types';
 import type { PlatformAdapter } from '../platform/types';
@@ -125,9 +125,13 @@ export function createShell(deps: ShellDeps): Shell {
     if (screen !== 'event') releaseEvent();
     deps.banners?.screenGone(); // §3.2: the reserve belongs to the screen that set it
   });
-  /** §3.2: a banner screen (Home, event) under a modal hides its banner; on close it may show again. */
+  /**
+   * §3.2: a banner screen under a modal hides its banner; on close it may show again (after the 60 s
+   * window). The victory screen is a banner screen too, although it is an overlay on the game screen
+   * (reviews L2B-1, FB2B-2: the shop opened from its fish pill "+" left the banner over its Buy buttons).
+   */
   const MODALS: readonly OverlayId[] = ['settings', 'how_to_play', 'shop', 'rank_hub', 'ranking', 'group_result', 'daily_result'];
-  const bannerScreen = (): boolean => router.screen() === 'home' || router.screen() === 'event';
+  const bannerScreen = (): boolean => router.screen() === 'home' || router.screen() === 'event' || router.isOpen('victory');
   const offOpen = deps.bus.on('overlay:open', ({ id }) => {
     if (MODALS.includes(id) && bannerScreen()) void deps.banners?.hide().catch(() => undefined);
   });
@@ -185,8 +189,11 @@ export function createShell(deps: ShellDeps): Shell {
           }
         : {}),
       ...(shop ? { onShop: () => shell.openShop() } : {}),
-      // §8.5: "Remove ads" only on FB with payments ready and No Ads not owned.
-      ...(shop && buy?.kind === 'ready' && !s.purchases.noAds ? { onRemoveAds: () => shell.openShop() } : {}),
+      // §8.5: "Remove ads" only on FB with payments ready, the catalogue listing remove_ads (review
+      // FB2B-3: never a row that opens an empty Buy section) and No Ads not owned.
+      ...(shop && buy?.kind === 'ready' && buy.products.some((p) => p.id === 'remove_ads') && !s.purchases.noAds
+        ? { onRemoveAds: () => shell.openShop() }
+        : {}),
     };
   }
 
@@ -260,12 +267,17 @@ export function createShell(deps: ShellDeps): Shell {
     async showEvent(def) {
       const ev = def ?? deps.events?.active() ?? null;
       if (!ev) return shell.showHome();
+      // §4.4 "After the end: the card and screen are gone" (review L2B-4): "Back to event" after an
+      // event ended mid-puzzle lands on Home, not on a dead event screen.
+      if (!isEventLive(ev, clock.now())) return shell.showHome();
       const view = selectEventView(store.get(), ctx(), ev);
       if (!view) return shell.showHome();
       const mine = ++navGen;
       void deps.banners?.hide().catch(() => undefined);
       const screen = await router.showEvent(view, {
         onPlay: () => {
+          // The screen was left open across the event's end (L2B-4): Home, not an error toast.
+          if (!isEventLive(ev, clock.now())) return shell.showHome();
           const v = selectEventView(store.get(), ctx(), ev);
           if (v && v.nextIndex !== null) void deps.session().start({ mode: 'event', eventId: ev.id, index: v.nextIndex });
         },

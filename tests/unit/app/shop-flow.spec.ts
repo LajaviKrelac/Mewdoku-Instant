@@ -223,6 +223,54 @@ describe('the Buy section (§8.5, §8.6)', () => {
   });
 });
 
+describe('review fixes: catalogue failure (FB2B-3) and iOS (FB2B-5)', () => {
+  it('an empty catalogue (the provider maps an SDK failure or timeout to []) shows error with Retry, never cached', async () => {
+    const s = setup();
+    let calls = 0;
+    s.pay.catalog = async () => (++calls === 1 ? [] : CATALOG);
+    s.flow.open();
+    await settle();
+    expect(s.props()?.buy).toEqual({ kind: 'error' });
+    expect(s.flow.buyState()).toEqual({ kind: 'error' }); // Settings does not offer "Remove ads" on it
+    s.props()?.onRetry();
+    await settle();
+    expect(calls).toBe(2); // a fresh request, not a cached empty list
+    expect(s.props()?.buy).toEqual({ kind: 'ready', products: CATALOG.map((p) => ({ id: p.id, price: p.price, owned: false })) });
+  });
+
+  it('closing and reopening after a failed catalogue asks again by itself (the failure is not cached for iap.catalogCacheMs)', async () => {
+    const s = setup();
+    let calls = 0;
+    s.pay.catalog = async () => (++calls === 1 ? [] : CATALOG);
+    s.flow.open();
+    await settle();
+    expect(s.props()?.buy).toEqual({ kind: 'error' });
+    s.props()?.onClose();
+    s.flow.open(); // no Retry tap needed
+    await settle();
+    expect(calls).toBe(2);
+    expect(s.props()?.buy.kind).toBe('ready');
+  });
+
+  it('payments known to be unavailable (iOS: no provider, capability off) say so at once, not "Getting the shop ready…"', async () => {
+    const ios = setup({ caps: false, provider: false });
+    ios.flow.open(); // t = 0, inside iap.readyTimeoutMs
+    await settle();
+    expect(ios.props()?.buy).toEqual({ kind: 'unavailable' });
+    const off = setup({ caps: false, ready: false });
+    off.flow.open();
+    await settle();
+    expect(off.props()?.buy).toEqual({ kind: 'unavailable' });
+  });
+
+  it('supported but onReady still pending (Messenger.com, slow onReady): the 5 s "loading" wait stays', async () => {
+    const s = setup({ ready: false });
+    s.flow.open();
+    await settle();
+    expect(s.props()?.buy).toEqual({ kind: 'loading' });
+  });
+});
+
 describe('fish swaps in the shop (§2.8, §8.5)', () => {
   it('insufficient balance: nothing happens (toast); exact balance: swapped and saved at once', () => {
     const s = setup({ save: { wallet: { fish: 14, earned: 14 } } });

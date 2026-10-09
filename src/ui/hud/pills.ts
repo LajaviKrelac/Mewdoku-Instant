@@ -10,7 +10,7 @@
 // src/styles/screens.css (fish pill).
 import { cfg } from '../../app/config';
 import type { GameEvent } from '../../game/types';
-import { formatNumber, t, tn } from '../../i18n';
+import { formatNumber, onLocaleChanged, t, tn } from '../../i18n';
 import { icon } from '../art/sprite';
 import type { View } from '../dom';
 
@@ -98,7 +98,8 @@ function buildFishPill(props: FishPillProps, opts: { inGame: boolean; reduced: (
   const plus = document.createElement('button');
   plus.type = 'button';
   plus.className = 'fish-pill__plus';
-  plus.setAttribute('aria-label', t('shop.title'));
+  const relabelPlus = (): void => plus.setAttribute('aria-label', t('shop.title'));
+  relabelPlus();
   plus.appendChild(icon('icon-plus', { class: 'fish-pill__plus-icon' }));
   let onPlus = props.onPlus;
   plus.addEventListener('click', () => onPlus?.());
@@ -143,6 +144,13 @@ function buildFishPill(props: FishPillProps, opts: { inGame: boolean; reduced: (
   };
   el.style.setProperty('--bump-ms', `${cfg.fx.win.counterBumpMs}ms`);
   render(props);
+  // The labels and the number format follow the language (review A11Y-I18N-1).
+  const offLocale = onLocaleChanged(() => {
+    relabelPlus();
+    if (count < 0) return;
+    label(count);
+    numEl.textContent = formatNumber(count);
+  });
 
   return {
     el,
@@ -178,6 +186,7 @@ function buildFishPill(props: FishPillProps, opts: { inGame: boolean; reduced: (
     },
     iconRect: () => (el.isConnected && !el.hidden ? fishIcon.getBoundingClientRect() : null),
     destroy() {
+      offLocale();
       for (const id of timers) clearTimeout(id);
       timers.clear();
       el.parentNode?.removeChild(el);

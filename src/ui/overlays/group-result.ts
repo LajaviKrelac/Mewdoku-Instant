@@ -72,6 +72,7 @@ export function createGroupResult(): OverlayView<GroupResultProps> {
 
   const render = (p: GroupResultProps): void => {
     props = p;
+    setText(title, t('group.title')); // follows the language (review A11Y-I18N-1)
     const o = p.outcome;
     shell.panel.dataset.kind = o.kind;
     setText(body, groupResultBody(o));

@@ -340,6 +340,29 @@ describe('createFbPlatform: phase2b social facades (lazy fb-social chunk)', () =
     await expect(ranking.submit('event_snow_paws_2026', 5)).resolves.toBe('unsupported');
   });
 
+  it('the facade forwards the daily band filter (FB2B-4) and the missing-board latch (FB2B-6)', async () => {
+    const day = (d: number, secs: number): number => d * 100_000 + (99_999 - secs);
+    const { platform } = setup(
+      { playerId: 'me', leaderboards: { names: ['pp'], entries: { df: [{ playerId: 'x', score: day(282, 1) }, { playerId: 'y', score: day(281, 9) }] } } },
+      { leaderboards: BOARDS_JSON, loadSocial: realChunk },
+    );
+    await platform.start();
+    const ranking = platform.ranking!;
+    expect(ranking.supports?.('paw_points')).toBe(true);
+    expect(ranking.supports?.('event_snow_paws_2026')).toBe(false); // no id in this build
+    // daily_fastest is not in the dashboard (names: ['pp']): the read finds out, then supports() is false.
+    expect(ranking.supports?.('daily_fastest')).toBe(true);
+    await expect(ranking.top('daily_fastest', 10)).resolves.toEqual([]);
+    expect(ranking.supports?.('daily_fastest')).toBe(false);
+    const banded = setup(
+      { playerId: 'me', leaderboards: { entries: { df: [{ playerId: 'x', score: day(282, 1) }, { playerId: 'y', score: day(281, 9) }] } } },
+      { leaderboards: BOARDS_JSON, loadSocial: realChunk },
+    );
+    await banded.platform.start();
+    const keep = (score: number): boolean => Math.floor(score / 100_000) === 281;
+    await expect(banded.platform.ranking!.top('daily_fastest', 10, keep)).resolves.toEqual([{ rank: 1, score: day(281, 9), isMe: false }]);
+  });
+
   it('NEZP: no rank of my own; the facade answers null for mine without loading', async () => {
     let loads = 0;
     const { platform } = setup({ presets: ['lb-nezp', 'no-overlay', 'no-tournament', 'no-payments'] }, { leaderboards: BOARDS_JSON, loadSocial: () => (loads++, realChunk()) });

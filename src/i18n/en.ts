@@ -184,9 +184,9 @@ export const enCore = {
 
   // ── How to play (O6) ───────────────────────────────────────────────────────
   'howto.title': 'How to play',
-  'howto.rule.colours': 'Every colour hides exactly one cat.',
-  'howto.rule.lines': 'Every row and every column holds one cat too.',
-  'howto.rule.space': 'Cats like their space: two cats never touch, not even at the corners.',
+  'howto.rule.colours': 'Every colour hides *exactly one cat*.',
+  'howto.rule.lines': 'Every row and every column holds *one cat* too.',
+  'howto.rule.space': 'Cats like their space: two cats *never touch, not even at the corners*.',
   'howto.controls': 'Tap a tile to cross it out. Double-tap to place a cat. Swipe across tiles to cross out several at once.',
   'howto.hearts': 'A cat on the wrong tile costs a heart. Lose all three and you can try the level again.',
   'howto.helpers': 'Stuck? The bulb explains one step. The paw finds a cat for you.',
@@ -201,10 +201,10 @@ export const enCore = {
   'daily.done': 'Done',
 
   // ── Tutorial coach (O8, 02 §11.5) ──────────────────────────────────────────
-  'tutorial.step1': 'Every colour hides exactly one cat. This {color} colour is a single tile — double-tap it.',
-  'tutorial.step2': 'A cat claims its whole row and column.',
-  'tutorial.step3': "Cats need space — they can't touch, not even at the corners. Swipe across these tiles to cross them out.",
-  'tutorial.step4': 'Row 2 has one open tile left. Double-tap it.',
+  'tutorial.step1': 'Every colour hides *exactly one cat*. This {color} colour is a single tile — double-tap it.',
+  'tutorial.step2': 'A cat claims its *whole row and column*.',
+  'tutorial.step3': "Cats need space — they *can't touch, not even at the corners*. Swipe across these tiles to cross them out.",
+  'tutorial.step4': 'Row 2 has *one open tile* left. Double-tap it.',
   'tutorial.step5': 'Stuck? Tap the bulb for a hint.',
   'tutorial.step6': 'Place the last cat.',
   'tutorial.gotIt': 'Got it',

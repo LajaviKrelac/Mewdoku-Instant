@@ -93,7 +93,13 @@
 /* ── S1 home ── */
 .screen--home > :first-child, .screen--game > :first-child { width: 100%; flex: none; }
 .home__body { display: flex; flex: 1; flex-direction: column; width: 100%; max-width: 512px; min-height: 0; padding: 0 16px 16px; }
-.home__hero { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; min-height: 0; text-align: center; }
+/* Centred with auto margins, not justify-content: when the hero is taller than its space it overflows
+   downward only (home-screen.ts fitHero() then shrinks the mascot), never up under the top bar
+   (review UX-2, I18N-LAYOUT-2; `justify-content: safe center` is above the 04 §1 baseline). */
+.home__hero { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: flex-start; min-height: 0; text-align: center; }
+.home__hero > :first-child { margin-top: auto; }
+.home__hero > :last-child { margin-bottom: auto; }
+.screen--home[data-tight] .home__tagline, .screen--home[data-tight='2'] .home__mascot { display: none; }
 .home__wordmark { color: var(--accent-title); font-size: min(3rem, 15vw); line-height: 1; overflow-wrap: anywhere; }
 .home__tagline { margin-top: 6px; color: var(--ink-2); }
 /* A dialog over Home (Settings, About, the daily result) would slice through the wordmark: the
@@ -129,8 +135,10 @@
 @keyframes mw-pop-in { from { opacity: 0; transform: translateY(10px) scale(0.97); } to { opacity: 1; transform: none; } }
 
 /* Narrow phones (320–359 px) and short screens (compact, < 640 px high, 02 §19). */
+/* The Level label keeps its 24 px on narrow phones too: white on --accent needs it (3.15:1, WCAG large
+   text; phase2b §1.4). A long "Continue · Level 1000" wraps inside the 64 px button instead
+   (review A11Y-CONTRAST-1). */
 @media (max-width: 359px) {
-  .home__play.btn--lg { font-size: var(--fs-l); }
   .home__play .btn__chev { display: none; }
   .daily-card__title { font-size: var(--fs-m); }
 }

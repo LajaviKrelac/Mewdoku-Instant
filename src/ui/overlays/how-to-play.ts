@@ -5,9 +5,14 @@
 //
 // Classes: .overlay[data-overlay=how_to_play] > .overlay__panel--dialog.howto
 //          .howto__rules .howto-rule .howto-rule__art .howto-rule__text .howto__notes .howto__extra
-import { t } from '../../i18n';
+//
+// Review fixes: the rules' keywords print in the accent colour (PAR-7; `*…*` in the catalogue, rich
+// text), and every text follows the language (A11Y-I18N-1).
+import { t, translate, translateMarked, type I18nKey } from '../../i18n';
 import { icon, type SymbolId } from '../art/sprite';
 import { h, s, type OverlayView } from '../dom';
+import { createLocaleText } from '../locale-text';
+import { setRichText } from '../rich-text';
 import { closeButton, createOverlayShell, makeButton } from './overlay-base';
 
 export interface HowToPlayProps {
@@ -72,36 +77,54 @@ export function createHowToPlay(): OverlayView<HowToPlayProps> {
   const shell = createOverlayShell({ id: 'how_to_play', scrim: 'soft', panel: 'dialog', onScrimTap: () => props?.onClose() });
   shell.panel.classList.add('howto');
 
-  const rule = (art: SVGSVGElement, text: string): HTMLElement =>
-    h('li', { class: 'howto-rule' }, art, h('p', { class: 'howto-rule__text' }, text));
+  const L = createLocaleText();
+  const rule = (art: SVGSVGElement, key: I18nKey): HTMLElement => {
+    const text = h('p', { class: 'howto-rule__text' });
+    L.run(() => setRichText(text, translateMarked(key)));
+    return h('li', { class: 'howto-rule' }, art, text);
+  };
+  const note = (key: I18nKey): HTMLElement => L.text(h('span'), () => translate(key));
 
-  const skip = makeButton({ variant: 'secondary', label: t('howto.skip'), block: true, className: 'howto__skip', onPress: () => props?.onSkip() });
-  const replay = makeButton({ variant: 'secondary', label: t('howto.replay'), block: true, className: 'howto__replay', onPress: () => props?.onReplay() });
+  const skip = L.label(
+    makeButton({ variant: 'secondary', label: '', block: true, className: 'howto__skip', onPress: () => props?.onSkip() }),
+    () => t('howto.skip'),
+  );
+  const replay = L.label(
+    makeButton({ variant: 'secondary', label: '', block: true, className: 'howto__replay', onPress: () => props?.onReplay() }),
+    () => t('howto.replay'),
+  );
   const extra = h('div', { class: 'overlay__actions howto__extra' }, skip, replay);
 
   shell.panel.append(
-    h('div', { class: 'overlay__head' }, h('h2', { class: 'overlay__title', id: shell.titleId }, t('howto.title')), closeButton(() => props?.onClose())),
+    h(
+      'div',
+      { class: 'overlay__head' },
+      L.text(h('h2', { class: 'overlay__title', id: shell.titleId }), () => t('howto.title')),
+      L.attr(closeButton(() => props?.onClose()), 'aria-label', () => t('common.close')),
+    ),
     h(
       'ol',
       { class: 'howto__rules', id: shell.descId },
-      rule(artColours(), t('howto.rule.colours')),
-      rule(artLines(), t('howto.rule.lines')),
-      rule(artSpace(), t('howto.rule.space')),
+      rule(artColours(), 'howto.rule.colours'),
+      rule(artLines(), 'howto.rule.lines'),
+      rule(artSpace(), 'howto.rule.space'),
     ),
     h(
       'div',
       { class: 'howto__notes' },
-      h('p', null, icon('icon-paw', { class: 'howto__note-icon howto__note-icon--paw' }), h('span', null, t('howto.controls'))),
+      h('p', null, icon('icon-paw', { class: 'howto__note-icon howto__note-icon--paw' }), note('howto.controls')),
       // Keyboard play (02 §6.3); CSS shows it only where a mouse or trackpad is present.
-      h('p', { class: 'howto__keys' }, icon('icon-paw', { class: 'howto__note-icon howto__note-icon--paw' }), h('span', null, t('howto.keys'))),
-      h('p', null, icon('icon-heart', { class: 'howto__note-icon howto__note-icon--heart' }), h('span', null, t('howto.hearts'))),
-      h('p', null, icon('icon-bulb', { class: 'howto__note-icon howto__note-icon--bulb' }), h('span', null, t('howto.helpers'))),
+      h('p', { class: 'howto__keys' }, icon('icon-paw', { class: 'howto__note-icon howto__note-icon--paw' }), note('howto.keys')),
+      h('p', null, icon('icon-heart', { class: 'howto__note-icon howto__note-icon--heart' }), note('howto.hearts')),
+      h('p', null, icon('icon-bulb', { class: 'howto__note-icon howto__note-icon--bulb' }), note('howto.helpers')),
     ),
     extra,
   );
+  L.watch();
 
   const render = (p: HowToPlayProps): void => {
     props = p;
+    L.apply();
     skip.hidden = !p.showSkip;
     replay.hidden = !p.showReplay;
     extra.hidden = !p.showSkip && !p.showReplay;
@@ -126,6 +149,7 @@ export function createHowToPlay(): OverlayView<HowToPlayProps> {
       return true;
     },
     destroy() {
+      L.dispose();
       props = null;
       shell.el.remove();
     },

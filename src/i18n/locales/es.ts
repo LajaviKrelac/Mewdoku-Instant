@@ -175,9 +175,9 @@ export const catalog: LocaleCatalog = {
 
   // ── How to play ────────────────────────────────────────────────────────────
   'howto.title': 'Cómo jugar',
-  'howto.rule.colours': 'Cada color esconde exactamente un gato.',
-  'howto.rule.lines': 'Cada fila y cada columna también tiene un gato.',
-  'howto.rule.space': 'A los gatos les gusta su espacio: dos gatos nunca se tocan, ni siquiera en diagonal.',
+  'howto.rule.colours': 'Cada color esconde *exactamente un gato*.',
+  'howto.rule.lines': 'Cada fila y cada columna también tiene *un gato*.',
+  'howto.rule.space': 'A los gatos les gusta su espacio: dos gatos *nunca se tocan, ni siquiera en diagonal*.',
   'howto.controls': 'Toca una casilla para tacharla. Toca dos veces para poner un gato. Desliza el dedo sobre varias casillas para tacharlas de una vez.',
   'howto.hearts': 'Un gato en la casilla equivocada cuesta un corazón. Si pierdes los tres, puedes volver a intentar el nivel.',
   'howto.helpers': '¿Atascado? La bombilla explica un paso. La patita encuentra un gato por ti.',
@@ -192,10 +192,10 @@ export const catalog: LocaleCatalog = {
   'daily.done': 'Listo',
 
   // ── Tutorial coach ─────────────────────────────────────────────────────────
-  'tutorial.step1': 'Cada color esconde exactamente un gato. El color {color} tiene una sola casilla: tócala dos veces.',
-  'tutorial.step2': 'Un gato ocupa toda su fila y su columna.',
-  'tutorial.step3': 'Los gatos necesitan espacio: no se tocan, ni siquiera en diagonal. Desliza el dedo sobre estas casillas para tacharlas.',
-  'tutorial.step4': 'A la fila 2 le queda una sola casilla libre. Tócala dos veces.',
+  'tutorial.step1': 'Cada color esconde *exactamente un gato*. El color {color} tiene una sola casilla: tócala dos veces.',
+  'tutorial.step2': 'Un gato ocupa *toda su fila y su columna*.',
+  'tutorial.step3': 'Los gatos necesitan espacio: *no se tocan, ni siquiera en diagonal*. Desliza el dedo sobre estas casillas para tacharlas.',
+  'tutorial.step4': 'A la fila 2 le queda *una sola casilla libre*. Tócala dos veces.',
   'tutorial.step5': '¿Atascado? Toca la bombilla para recibir una pista.',
   'tutorial.step6': 'Pon el último gato.',
   'tutorial.gotIt': 'Entendido',
@@ -257,6 +257,7 @@ export const catalog: LocaleCatalog = {
   'settings.language.auto': 'Automático',
   'settings.shop': 'Tienda',
   'settings.removeAds': 'Quitar anuncios',
+  'settings.feedback': 'Enviar comentarios',
   'howto.a11y': '¿Te cuesta distinguir los colores? Activa los patrones de color en Ajustes.',
   'fish.count.one': '{count} pez',
   'fish.count.other': '{count} peces',
@@ -319,6 +320,7 @@ export const catalog: LocaleCatalog = {
   'shop.swap.kitty': '1 gatito',
   'shop.swap.action': 'Canjear',
   'shop.notEnough': 'Aún no tienes suficientes peces.',
+  'shop.swap.done': 'Añadido: {item}. Peces restantes: {count}.',
   'shop.swap.a11y': 'Canjear {price} peces por {item}',
   'shop.buy.a11y': 'Comprar {name}, {price}',
   'shop.retry': 'Reintentar',

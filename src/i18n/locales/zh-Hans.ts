@@ -176,9 +176,9 @@ export const catalog: LocaleCatalog = {
 
   // ── How to play ────────────────────────────────────────────────────────────
   'howto.title': '玩法说明',
-  'howto.rule.colours': '每种颜色里恰好藏着一只猫。',
-  'howto.rule.lines': '每一行和每一列也各有一只猫。',
-  'howto.rule.space': '猫咪喜欢空间：两只猫从不相邻，斜角也不行。',
+  'howto.rule.colours': '每种颜色里*恰好藏着一只猫*。',
+  'howto.rule.lines': '每一行和每一列也各有*一只猫*。',
+  'howto.rule.space': '猫咪喜欢空间：两只猫*从不相邻，斜角也不行*。',
   'howto.controls': '点一下格子可以划掉它。点两下可以放一只猫。在几个格子上滑过，可以一次划掉多个。',
   'howto.hearts': '把猫放错格子会失去一颗心。三颗心都用完后，可以重新挑战本关。',
   'howto.helpers': '卡住了？灯泡会讲解一步。爪子会帮你找到一只猫。',
@@ -193,10 +193,10 @@ export const catalog: LocaleCatalog = {
   'daily.done': '完成',
 
   // ── Tutorial coach ─────────────────────────────────────────────────────────
-  'tutorial.step1': '每种颜色里恰好藏着一只猫。这片{color}色只有一个格子，点两下吧。',
-  'tutorial.step2': '一只猫会占据它所在的整行和整列。',
-  'tutorial.step3': '猫咪需要空间：它们不会相邻，斜角也不行。在这些格子上滑过，把它们划掉。',
-  'tutorial.step4': '第2行只剩一个空格。点两下吧。',
+  'tutorial.step1': '每种颜色里*恰好藏着一只猫*。这片{color}色只有一个格子，点两下吧。',
+  'tutorial.step2': '一只猫会占据它所在的*整行和整列*。',
+  'tutorial.step3': '猫咪需要空间：它们*不会相邻，斜角也不行*。在这些格子上滑过，把它们划掉。',
+  'tutorial.step4': '第2行只剩*一个空格*。点两下吧。',
   'tutorial.step5': '卡住了？点灯泡看提示。',
   'tutorial.step6': '放下最后一只猫。',
   'tutorial.gotIt': '知道了',
@@ -255,6 +255,7 @@ export const catalog: LocaleCatalog = {
   'settings.language.auto': '自动',
   'settings.shop': '商店',
   'settings.removeAds': '移除广告',
+  'settings.feedback': '发送反馈',
   'howto.a11y': '颜色不好分辨？在设置里打开“颜色图案”。',
   'fish.count.other': '{count}条小鱼',
   'fish.plus': '+{count}',
@@ -313,6 +314,7 @@ export const catalog: LocaleCatalog = {
   'shop.swap.kitty': '1只猫咪',
   'shop.swap.action': '兑换',
   'shop.notEnough': '小鱼还不够。',
+  'shop.swap.done': '已添加{item}。剩余小鱼：{count}条。',
   'shop.swap.a11y': '用{price}条小鱼兑换{item}',
   'shop.buy.a11y': '购买{name}，{price}',
   'shop.retry': '重试',

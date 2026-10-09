@@ -285,6 +285,16 @@ export function uiContrast(): UiContrastRow[] {
     ['free tool badge (--ink on --gold)', T.ink, T.gold, MIN_TEXT_CONTRAST],
     ['"In progress" (--amber-text on --card)', T['amber-text'], T.card, MIN_TEXT_CONTRAST],
     ['fish outline (--ink on --fish)', T.ink, T.fish, MIN_CONTRAST],
+    // The dark victory screen (review PAR-3): light text on opaque --stage, like the fail card.
+    ['victory praise, large text (--title-on-dark on --stage)', T['title-on-dark'], T.stage, MIN_CONTRAST],
+    ['victory lines (white .82 on --stage)', over(white, T.stage, 0.82), T.stage, MIN_TEXT_CONTRAST],
+    ['victory ghost Home (white .9 on --stage)', over(white, T.stage, 0.9), T.stage, MIN_TEXT_CONTRAST],
+    ['victory event reward (--tap-text on --stage)', T['tap-text'], T.stage, MIN_TEXT_CONTRAST],
+    ['victory focus ring (--tap-text on --stage)', T['tap-text'], T.stage, MIN_CONTRAST],
+    ['victory event bar (--accent on white .14 over --stage)', T.accent, over(white, T.stage, 0.14), MIN_CONTRAST],
+    ['victory chips (--accent-text on --accent-soft)', T['accent-text'], T['accent-soft'], MIN_TEXT_CONTRAST],
+    // Rule keywords in teaching copy (review PAR-7): accent text on the coach card and the dialogs.
+    ['rule keyword (--accent-text on --card)', T['accent-text'], T.card, MIN_TEXT_CONTRAST],
   ];
   return pairs.map(([what, fg, bg, min]) => ({ what, fg, bg, min, ratio: contrastRatio(fg, bg) }));
 }

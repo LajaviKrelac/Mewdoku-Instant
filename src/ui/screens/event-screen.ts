@@ -7,10 +7,14 @@
 // bannerReserved, data-banner (phase2b §3.2). Tab order: header → play → top list → home (§7); the
 // top bar keeps only the Gear (Home is the ghost button at the bottom).
 //
+// Review fixes (UX-1): the actions are a footer outside the scrolling body, so Play, Top list and
+// Home are always on screen, with Play at least ads.banner.buttonClearancePx above the banner band;
+// the header and the track scroll above them. The static labels follow the language (A11Y-I18N-1).
+//
 // Classes: .screen.screen--event[data-event-theme][data-banner] > header.top-bar + main.event__body
 //          > .event__header(.event-art .event__name .event__tagline .event__ends[data-soon])
 //            .event__track(.event__track-title .event__rail(.event__rail-fill) ol.event__nodes > li.event__node[data-reached])
-//            .event__progress .event__actions(.event__play .event__top .event__home)
+//            .event__progress; then the footer .event__actions(.event__done .event__play .event__top .event__home)
 import { cfg } from '../../app/config';
 import type { EventDef, Milestone, Reward } from '../../game/events';
 import { formatNumber, t, tn, translate } from '../../i18n';
@@ -18,6 +22,7 @@ import { eventArt } from '../art/event-art';
 import { icon, type IconSymbol } from '../art/sprite';
 import { clear, h, setText, type View } from '../dom';
 import { createTopBar, type TopBarProps } from '../hud/top-bar';
+import { createLocaleText } from '../locale-text';
 import { makeButton, setButtonLabel } from '../overlays/overlay-base';
 import { formatDaysHours } from './home-screen';
 
@@ -92,10 +97,11 @@ export function createEventScreen(view: EventScreenView, cb: EventScreenCallback
   const railFill = h('span', { class: 'event__rail-fill' });
   const nodes = h('ol', { class: 'event__nodes' });
   const progress = h('p', { class: 'event__progress num' });
+  const L = createLocaleText();
   const track = h(
     'section',
     { class: 'event__track', 'aria-labelledby': 'event-track-title' },
-    h('h2', { class: 'event__track-title', id: 'event-track-title' }, t('event.track.title')),
+    L.text(h('h2', { class: 'event__track-title', id: 'event-track-title' }), () => t('event.track.title')),
     h('div', { class: 'event__rail', 'aria-hidden': 'true' }, railFill),
     nodes,
     progress,
@@ -103,14 +109,21 @@ export function createEventScreen(view: EventScreenView, cb: EventScreenCallback
 
   const play = makeButton({ variant: 'primary', label: '', block: true, autofocus: true, className: 'btn--lg event__play', onPress: () => cb.onPlay() });
   const done = h('p', { class: 'event__done' });
-  const top = makeButton({ variant: 'secondary', label: t('event.topList'), icon: 'icon-trophy', block: true, className: 'event__top', onPress: () => cb.onTopList() });
-  const home = makeButton({ variant: 'ghost', label: t('common.home'), icon: 'icon-house', className: 'event__home', onPress: () => cb.onHome() });
+  const top = L.label(
+    makeButton({ variant: 'secondary', label: '', icon: 'icon-trophy', block: true, className: 'event__top', onPress: () => cb.onTopList() }),
+    () => t('event.topList'),
+  );
+  const home = L.label(
+    makeButton({ variant: 'ghost', label: '', icon: 'icon-house', className: 'event__home', onPress: () => cb.onHome() }),
+    () => t('common.home'),
+  );
 
   const el = h(
     'div',
     { class: 'screen screen--event' },
     topBar.el,
-    h('main', { class: 'event__body' }, header, track, h('div', { class: 'event__actions' }, done, play, top, home)),
+    h('main', { class: 'event__body' }, header, track),
+    h('div', { class: 'event__actions' }, done, play, top, home),
   );
 
   let artFor: string | null = null;
@@ -148,7 +161,10 @@ export function createEventScreen(view: EventScreenView, cb: EventScreenCallback
     setText(progress, t('event.card.progress', { solved: formatNumber(v.solved), total: formatNumber(v.total) }));
   };
 
+  let last = view;
   const render = (v: EventScreenView): void => {
+    last = v;
+    L.apply();
     topBar.update(topBarProps(v));
     el.dataset.eventTheme = v.def.id;
     el.toggleAttribute('data-banner', v.bannerReserved);
@@ -179,11 +195,17 @@ export function createEventScreen(view: EventScreenView, cb: EventScreenCallback
     el.toggleAttribute('data-reduced', v.reducedMotion);
   };
   render(view);
+  // Settings → Language over the event screen (A11Y-I18N-1): the milestone labels are rebuilt too.
+  L.watch(() => {
+    trackKey = '';
+    render(last);
+  });
 
   return {
     el,
     update: render,
     destroy() {
+      L.dispose();
       topBar.destroy();
       el.remove();
     },

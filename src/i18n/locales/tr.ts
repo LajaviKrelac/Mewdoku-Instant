@@ -177,9 +177,9 @@ export const catalog: LocaleCatalog = {
 
   // ── How to play ────────────────────────────────────────────────────────────
   'howto.title': 'Nasıl oynanır',
-  'howto.rule.colours': 'Her renk tam olarak bir kedi saklar.',
-  'howto.rule.lines': 'Her satır ve her sütunda da bir kedi bulunur.',
-  'howto.rule.space': 'Kediler alan sever: iki kedi asla birbirine değmez, köşeden bile.',
+  'howto.rule.colours': 'Her renk *tam olarak bir kedi* saklar.',
+  'howto.rule.lines': 'Her satır ve her sütunda da *bir kedi* bulunur.',
+  'howto.rule.space': 'Kediler alan sever: iki kedi *asla birbirine değmez, köşeden bile*.',
   'howto.controls': 'Bir kareye çarpı koymak için dokun. Kedi koymak için iki kez dokun. Birkaç kareye birden çarpı koymak için üzerlerinden kaydır.',
   'howto.hearts': 'Yanlış kareye konan kedi bir kalbe mal olur. Üçünü de kaybedersen bölümü yeniden deneyebilirsin.',
   'howto.helpers': 'Takıldın mı? Ampul bir adımı açıklar. Pati senin için bir kedi bulur.',
@@ -194,10 +194,10 @@ export const catalog: LocaleCatalog = {
   'daily.done': 'Bitti',
 
   // ── Tutorial coach ─────────────────────────────────────────────────────────
-  'tutorial.step1': 'Her renk tam olarak bir kedi saklar. Bu {color} rengi tek bir kare: ona iki kez dokun.',
-  'tutorial.step2': 'Bir kedi tüm satırını ve sütununu kaplar.',
-  'tutorial.step3': 'Kedilerin alana ihtiyacı var: köşeden bile birbirlerine değmezler. Çarpı koymak için bu karelerin üzerinden kaydır.',
-  'tutorial.step4': '2. satırda tek bir boş kare kaldı. Ona iki kez dokun.',
+  'tutorial.step1': 'Her renk *tam olarak bir kedi* saklar. Bu {color} rengi tek bir kare: ona iki kez dokun.',
+  'tutorial.step2': 'Bir kedi *tüm satırını ve sütununu* kaplar.',
+  'tutorial.step3': 'Kedilerin alana ihtiyacı var: *köşeden bile birbirlerine değmezler*. Çarpı koymak için bu karelerin üzerinden kaydır.',
+  'tutorial.step4': '2. satırda *tek bir boş kare* kaldı. Ona iki kez dokun.',
   'tutorial.step5': 'Takıldın mı? İpucu için ampule dokun.',
   'tutorial.step6': 'Son kediyi yerleştir.',
   'tutorial.gotIt': 'Anladım',
@@ -259,6 +259,7 @@ export const catalog: LocaleCatalog = {
   'settings.language.auto': 'Otomatik',
   'settings.shop': 'Mağaza',
   'settings.removeAds': 'Reklamları kaldır',
+  'settings.feedback': 'Geri bildirim gönder',
   'howto.a11y': 'Renkleri ayırt etmek zor mu? Ayarlar’dan renk desenlerini aç.',
   'fish.count.one': '{count} balık',
   'fish.count.other': '{count} balık',
@@ -321,6 +322,7 @@ export const catalog: LocaleCatalog = {
   'shop.swap.kitty': '1 pisi',
   'shop.swap.action': 'Takas et',
   'shop.notEnough': 'Henüz yeterli balık yok.',
+  'shop.swap.done': '{item} eklendi. Kalan balık: {count}.',
   'shop.swap.a11y': '{price} balık karşılığında {item}',
   'shop.buy.a11y': '{name} satın al, {price}',
   'shop.retry': 'Yeniden dene',

@@ -6,7 +6,9 @@
 //                errors   — a missing or unknown key (English-only date parts and unused `.one`
 //                           forms excepted), an empty value, a placeholder set that differs
 //                           from English, a missing plural category, a translatable value identical
-//                           to English (outside meta.ts SAME_AS_ENGLISH), a banned phrase;
+//                           to English (outside meta.ts SAME_AS_ENGLISH), a banned phrase, keyword
+//                           markers (`*…*`, review PAR-7) that do not pair up or whose count differs
+//                           from English;
 //                warnings — a value over meta.ts maxLength (display width), a translation whose
 //                           English source changed since the draft (docs/i18n/drafted-from.json).
 //   --release: every release locale other than 'en' has a catalogue that passes, and a line in
@@ -19,6 +21,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { cfg, type GameConfig, type LocaleId } from '../src/app/config';
 import { en } from '../src/i18n/en';
+import { markCount } from '../src/i18n/format';
 import { displayWidth, isEnglishOnly, META, placeholdersOf, SAME_AS_ENGLISH, sampleText } from '../src/i18n/meta';
 import { pluralCategory, requiredPluralCategories, type PluralCategory } from '../src/i18n/plural';
 
@@ -48,6 +51,8 @@ export const BANNED_PHRASES: readonly string[] = [
   'long live meow',
   'moonlit meows',
   'golden fish',
+  // The original's Indonesian victory label (differences-vs-original §2.3; review CLEAN-1).
+  'kelas master',
 ];
 
 type Strings = Readonly<Record<string, string | undefined>>;
@@ -142,6 +147,19 @@ export function checkCatalog(
     const withoutCount = want.filter((p) => p !== 'count');
     if (exact && sameSet(withoutCount, got)) continue;
     errors.push(`${locale}: ${key} placeholders {${got.join('},{')}} ≠ English {${want.join('},{')}}`);
+  }
+
+  // Keyword markers (review PAR-7): `*…*` pairs, as many as English has (a translator places them).
+  for (const [key, value] of Object.entries(catalog)) {
+    if (typeof value !== 'string') continue;
+    const english = source[key] ?? source[`${key.slice(0, key.lastIndexOf('.'))}.other`];
+    const got = markCount(value);
+    if (got === null) {
+      errors.push(`${locale}: ${key} has an unpaired keyword marker (*)`);
+      continue;
+    }
+    const want = english === undefined ? 0 : markCount(english);
+    if (want !== null && got !== want) errors.push(`${locale}: ${key} marks ${got} keyword(s), English ${want}`);
   }
 
   // Identical to English: only for keys meta marks non-translatable, or listed per locale.

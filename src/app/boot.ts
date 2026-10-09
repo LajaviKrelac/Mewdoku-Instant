@@ -22,8 +22,8 @@ import { migrate } from '../game/save';
 import type { GenResult, GenSpec } from '../engine/types';
 import { CellState, type GameState, type SaveData } from '../game/types';
 import type { PlatformAdapter, RawSave } from '../platform/types';
-import { getDir, getLocale, onLocaleChanged, prefetchGuess, prefetchLocale, setLocale, t } from '../i18n';
-import { localeCandidates } from '../i18n/locale';
+import { buildLocales, getDir, getLocale, onLocaleChanged, prefetchGuess, prefetchLocale, setLocale, t } from '../i18n';
+import { localeCandidates, resolveLocale } from '../i18n/locale';
 import { createAnnouncer, type Announcer } from '../ui/a11y/announcer';
 import { mountSprite } from '../ui/art/sprite';
 import { applyMotion, resolveReducedMotion, systemPrefersReducedMotion, watchSystemReducedMotion } from '../ui/fx/motion';
@@ -202,6 +202,9 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
   const nav = win?.navigator;
   const guess = attempt(() => prefetchGuess(nav), 'en' as const);
   const localeChunk = guess === 'en' ? undefined : within(clock, cfg.i18n.localeTimeoutMs, prefetchLocale(guess), false);
+  // One bounded wait for the guessed chunk (review PERF-2): step 4 waits for the same chunk only for
+  // what is left of this budget, never a second full i18n.localeTimeoutMs.
+  const guessDeadline = clock.now() + cfg.i18n.localeTimeoutMs;
   await Promise.all([pack, font, overlays, localeChunk]);
   progress(100);
 
@@ -215,7 +218,25 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
     setLocale(localeCandidates(platform.id, attempt(() => platform.getLocale(), 'en'), nav), { override, doc }).catch(() => undefined);
   const syncLocaleUi = (locale: AppState['ui']['locale'], dir: 'ltr' | 'rtl'): void =>
     store.update((s) => (s.ui.locale === locale && s.ui.dir === dir ? s : { ...s, ui: { ...s.ui, locale, dir } }));
-  await within(clock, cfg.i18n.localeTimeoutMs, applyLocale(store.get().save.settings.locale), undefined);
+  // §6.3: the bounded wait applies "if it differs" from the guess. The same locale already had its
+  // wait at step 3 (review PERF-2: a slow chunk held the first screen twice, 2.4 s instead of 1.2 s).
+  const override = store.get().save.settings.locale;
+  const target = attempt(
+    () => resolveLocale({ candidates: localeCandidates(platform.id, attempt(() => platform.getLocale(), 'en'), nav), override, available: buildLocales() }),
+    null,
+  );
+  const localeWaitMs = target === guess ? Math.max(0, guessDeadline - clock.now()) : cfg.i18n.localeTimeoutMs;
+  const localeApplied = applyLocale(override);
+  if (localeWaitMs > 0) {
+    // FBIG has no boot screen after startGameAsync: show the loading indicator if the wait runs long,
+    // so the page is never blank (PERF-2). The web keeps its boot screen up meanwhile.
+    const indicator = bootScreen ? null : clock.setTimeout(() => attempt(() => router.setLoading(true), undefined), cfg.loading.indicatorDelayMs);
+    await within(clock, localeWaitMs, localeApplied, undefined);
+    if (indicator !== null) {
+      clock.clearTimeout(indicator);
+      attempt(() => router.setLoading(false), undefined);
+    }
+  }
 
   // 5. Restore rules 1–3 (02 §15); slower checks happen when the board is opened.
   const today = localDateKey(clock.now());
@@ -320,7 +341,12 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
       const s = store.get().save;
       bus.emit('stock', { hints: s.stock.hints, kitties: s.stock.kitties });
       bus.emit('wallet', { fish: s.wallet.fish, earned: s.wallet.earned });
+      // A No Ads purchase or boot restore takes a banner on show down at once (review L2B-2).
+      void banners.entitlementChanged().catch(() => undefined);
     },
+    // §3.2: the shop is a modal over a banner screen (Home, event, victory): hide the banner first
+    // (reviews L2B-1, FB2B-2; the shell also hides on overlay:open and re-gates on close).
+    onOpen: () => void banners.hide().catch(() => undefined),
   });
   let session: Session | null = null;
   const getSession = (): Session => {
@@ -441,6 +467,8 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
             store.update((s) => ({ ...s, save: next }));
             attempt(() => events.clearEnded(), false); // §9.3: an ended event's slot never comes back
             attempt(() => shell.applySettings(), undefined);
+            // §9.3 merges noAds by OR: a copy that brings No Ads takes a banner on show down (L2B-2).
+            if (next.purchases.noAds && !live.purchases.noAds) void banners.entitlementChanged().catch(() => undefined);
           }
           if (copy.source === 'cloud') saves.touch();
         }),

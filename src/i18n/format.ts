@@ -72,17 +72,80 @@ export function formatShortDateFor(locale: string, dateKey: string): string | nu
 }
 
 /** First-strong isolate (U+2068) and pop directional isolate (U+2069), §6.4. */
-export const FSI = '⁨';
-export const PDI = '⁩';
+export const FSI = '\u2068';
+export const PDI = '\u2069';
+/** Left-to-right (U+2066) and right-to-left (U+2067) isolates. */
+export const LRI = '\u2066';
+export const RLI = '\u2067';
 
-/** In RTL locales each interpolated parameter is wrapped in U+2068 … U+2069 (first-strong isolate), §6.4. */
+/** A strong right-to-left letter (Hebrew, Arabic, Syriac, Thaana, N'Ko and their presentation forms). */
+const STRONG_RTL = /[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufefc]/;
+/** A strong left-to-right letter (any letter that is not right to left). */
+const STRONG_LTR = /\p{L}/u;
+
+/**
+ * The direction of `value`'s first strong character at the top level, skipping nested isolates the
+ * way the bidi algorithm does (UAX #9 P2), or null when the top level has none.
+ */
+function topLevelDir(value: string): 'ltr' | 'rtl' | null {
+  let depth = 0;
+  for (const ch of value) {
+    if (ch === LRI || ch === RLI || ch === FSI) depth++;
+    else if (ch === PDI) depth = Math.max(0, depth - 1);
+    else if (depth === 0) {
+      if (STRONG_RTL.test(ch)) return 'rtl';
+      if (STRONG_LTR.test(ch)) return 'ltr';
+    }
+  }
+  return null;
+}
+
+/**
+ * In RTL locales each interpolated parameter is wrapped in U+2068 … U+2069 (first-strong isolate),
+ * §6.4. A value whose top level has no strong character but holds an isolated right-to-left word
+ * ("+⁨تلميحان⁩", a plural inside the "+{count}" template) gets an explicit RLI instead: a first-strong
+ * isolate skips the nested isolate (UAX #9 P2), resolves to LTR and would draw the "+" on the wrong
+ * side (review I18N-RTL-1).
+ */
 export function isolate(value: string, dir: 'ltr' | 'rtl'): string {
-  return dir === 'rtl' && value.length > 0 ? `${FSI}${value}${PDI}` : value;
+  if (dir !== 'rtl' || value.length === 0) return value;
+  if (topLevelDir(value) === null && STRONG_RTL.test(value)) return `${RLI}${value}${PDI}`;
+  return `${FSI}${value}${PDI}`;
 }
 
 /** Removes the isolates again (tests, analytics, anything that compares text). */
 export function stripIsolates(text: string): string {
-  return text.replace(/[⁦-⁩]/g, '');
+  return text.replace(/[\u2066-\u2069]/g, '');
+}
+
+// ── Keyword markers (review PAR-7) ──────────────────────────────────────────────────────────────
+
+/**
+ * Rule keywords in teaching copy (the tutorial coach, How to play) are wrapped in `*…*` in the
+ * catalogues, so the UI can print them in the accent colour (01 §9.3). translate() and t() strip the
+ * markers; translateMarked() keeps them for the rich-text renderer. A catalogue's markers must pair
+ * up and match English's count (scripts/i18n-check.ts).
+ */
+export const MARK = '*';
+
+/** The text without its keyword markers. */
+export function stripMarks(text: string): string {
+  return text.indexOf(MARK) < 0 ? text : text.split(MARK).join('');
+}
+
+/** Number of marked spans in a template (null when the markers do not pair up). */
+export function markCount(text: string): number | null {
+  const n = text.split(MARK).length - 1;
+  return n % 2 === 0 ? n / 2 : null;
+}
+
+/** `*a* b *c*` → [{text:'a', kw:true}, {text:' b ', kw:false}, {text:'c', kw:true}] (empty parts dropped). */
+export function splitMarks(text: string): { readonly text: string; readonly kw: boolean }[] {
+  const out: { text: string; kw: boolean }[] = [];
+  text.split(MARK).forEach((part, i) => {
+    if (part !== '') out.push({ text: part, kw: i % 2 === 1 });
+  });
+  return out;
 }
 
 // ── Pseudo-locale "xx-long" (phase2b §6.9; dev and e2e builds only) ─────────────────────────────

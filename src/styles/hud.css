@@ -51,13 +51,25 @@
   padding: 0 var(--sp-2);
 }
 
+/* The name shrinks with an ellipsis; the " · 13" / date suffix never does (review I18N-TEXT-2, UX-8). */
 .top-bar__text {
+  display: flex;
   min-width: 0;
   overflow: hidden;
   font-size: var(--fs-xl);
   line-height: 1.2;
   white-space: nowrap;
+}
+
+.top-bar__name {
+  min-width: 0;
+  overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.top-bar__suffix {
+  flex: none;
+  white-space: pre; /* keeps the separator's spaces at the flex item's edge */
 }
 
 .top-bar__title .badge {

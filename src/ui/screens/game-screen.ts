@@ -20,7 +20,7 @@ import type { FxHandle } from '../fx/fish-flight';
 import { playGlow } from '../fx/glow';
 import type { GameEvent, ModeId, PaintMode, Status } from '../../game/types';
 import { cfg } from '../../app/config';
-import { formatShortDate, t, translate } from '../../i18n';
+import { formatShortDate, onLocaleChanged, t, translate } from '../../i18n';
 import { createBoardView, type BoardHighlight, type BoardModel } from '../board/board-view';
 import { computeLayout, readViewport, type GameLayout, type ViewportInfo } from '../board/layout';
 import { createPills, type PillsProps } from '../hud/pills';
@@ -306,6 +306,12 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
   // The router appends the screen right after creating it; focus left on <body> (the previous screen
   // was removed) goes to the board so keyboard play works without a click (02 §6.3, §18).
   recoverFocusSoon();
+  // Settings → Language during a level (review A11Y-I18N-1): the title and the pills follow at once
+  // (the chips and tools relabel themselves); the board and its state are untouched.
+  const offLocale = onLocaleChanged(() => {
+    topBar.update(topBarProps(current));
+    pills.update(pillsProps(current));
+  });
 
   return {
     el,
@@ -350,6 +356,7 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
       }
     },
     destroy() {
+      offLocale();
       w0?.removeEventListener('resize', onResize);
       w0?.visualViewport?.removeEventListener('resize', onResize);
       doc.removeEventListener('keydown', onDocKey);

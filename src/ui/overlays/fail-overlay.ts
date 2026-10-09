@@ -9,7 +9,8 @@ import { t } from '../../i18n';
 import { illustration } from '../art/illustrations';
 import { icon } from '../art/sprite';
 import { h, type OverlayView } from '../dom';
-import { createDelay, createOverlayShell, makeButton, setGated } from './overlay-base';
+import { createLocaleText } from '../locale-text';
+import { createDelay, createOverlayShell, makeButton, setButtonLabel, setGated } from './overlay-base';
 
 export interface FailOverlayProps {
   /** 'video' = rewarded ad; 'free' = fallback grant (no video icon); null = hide Continue. */
@@ -32,12 +33,14 @@ export function createFailOverlay(): OverlayView<FailOverlayProps> {
   const delay = createDelay();
 
   const videoIcon = icon('icon-play-video', { class: 'btn__icon' });
+  // Static texts follow the language on every open (review A11Y-I18N-1).
+  const L = createLocaleText();
   const cont = makeButton({
     variant: 'primary',
     label: t('fail.continue'),
     block: true,
     className: 'fail__continue',
-    trailing: h('span', { class: 'btn__badge', 'aria-hidden': 'true' }, t('fail.continue.bonus'), icon('icon-heart')),
+    trailing: h('span', { class: 'btn__badge', 'aria-hidden': 'true' }, L.text(document.createTextNode(''), () => t('fail.continue.bonus')), icon('icon-heart')),
     onPress: () => props?.onContinue(),
   });
   const retry = makeButton({
@@ -54,10 +57,15 @@ export function createFailOverlay(): OverlayView<FailOverlayProps> {
     className: 'fail__home',
     onPress: () => props?.onHome(),
   });
+  L.run(() => {
+    setButtonLabel(cont, t('fail.continue'));
+    setButtonLabel(retry, t('fail.retry'));
+    setButtonLabel(home, t('common.home'));
+  });
   shell.panel.append(
-    h('h2', { class: 'overlay__title', id: shell.titleId }, t('fail.title')),
-    h('div', { class: 'overlay__art fail__art' }, illustration('fail', { label: t('a11y.illustration.fail') })),
-    h('p', { class: 'overlay__body fail__body', id: shell.descId }, t('fail.body')),
+    L.text(h('h2', { class: 'overlay__title', id: shell.titleId }), () => t('fail.title')),
+    h('div', { class: 'overlay__art fail__art' }, L.attr(illustration('fail', { label: t('a11y.illustration.fail') }), 'aria-label', () => t('a11y.illustration.fail'))),
+    L.text(h('p', { class: 'overlay__body fail__body', id: shell.descId }), () => t('fail.body')),
     h('div', { class: 'overlay__actions overlay__actions--stack' }, cont, retry, home),
   );
 
@@ -70,6 +78,7 @@ export function createFailOverlay(): OverlayView<FailOverlayProps> {
 
   const render = (p: FailOverlayProps): void => {
     props = p;
+    L.apply();
     cont.hidden = p.continueOffer === null;
     if (p.continueOffer === 'video') {
       if (videoIcon.parentNode !== cont) cont.insertBefore(videoIcon, cont.firstChild);

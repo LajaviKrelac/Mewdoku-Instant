@@ -358,3 +358,36 @@ test('15 · the overlay chunk never loading: the bulb charges nothing, and a los
   expect(slot?.hearts).toBe(0);
   expect(slot?.revivesUsed).toBe(0);
 });
+
+// ── 2b review fixes (R): ROB-1 — a lazy chunk's stylesheet failing once is fetched again ──
+
+test('16 · the overlay stylesheet failing once at boot: it is re-fetched (cache-busted) and the hint card is styled', async ({ page }) => {
+  await open(page, '', returning());
+  const seen = await flaky(page, /overlay-chunk-[\w-]+\.css(\?.*)?$/, (n) => n === 1);
+  await page.reload();
+  await ready(page, 'home');
+  await playLevel(page);
+  await hintTool(page).click();
+  const card = page.locator('[data-overlay="hint"]');
+  await expect(card).toBeVisible();
+  expect(seen.length).toBe(2); // was: requested once, never again (every overlay unstyled)
+  expect(seen[1]).toMatch(/\?retry=\d+$/);
+  // Styled: the overlay root is the fixed full-screen layer of overlay-chunk.css (unstyled it is static).
+  expect(await card.evaluate((el) => getComputedStyle(el).position)).toBe('fixed');
+  expect((await app(page))?.save.stock.hints).toBe(4);
+});
+
+test('17 · the event screen stylesheet failing once: it is re-fetched and the event screen is styled', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-11-14T12:00:00Z')); // inside Lantern Walk
+  await open(page, '?ads=unsupported', returning({ progress: { level: 15, completed: 14, best: {} } }));
+  const seen = await flaky(page, /events-chunk-[\w-]+\.css(\?.*)?$/, (n) => n === 1);
+  await page.reload();
+  await ready(page, 'home');
+  await page.locator('.event-card').click();
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'event', undefined, { timeout: 15_000 });
+  expect(seen.length).toBe(2);
+  expect(seen[1]).toMatch(/\?retry=\d+$/);
+  // Styled: the reward track's nodes are laid out in a row (unstyled they are a plain numbered list).
+  const listStyle = await page.locator('.event__nodes').evaluate((el) => getComputedStyle(el).listStyleType);
+  expect(listStyle).toBe('none');
+});

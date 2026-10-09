@@ -2,8 +2,11 @@
 // 02 §9.1 hint explanation templates and unit names, rendered with i18n. Split from hint-card.ts so
 // the session's live announcements (02 §18) can use them while the O1 card itself stays in the lazy
 // overlay chunk (04 §9 budget). hint-card.ts re-exports everything here.
+// Review PAR-7: hintRichText() renders the same sentence with each colour as a token, so the card can
+// show the colour name with a swatch in its tile colour (src/ui/rich-text.ts); the words are identical.
 import type { HintStep, Unit, UnitKind } from '../../engine/types';
 import { capitalizeFirst, colorName, glyphName, joinList, t } from '../../i18n';
+import { CAP, colorToken } from '../rich-tokens';
 
 export interface HintTextContext {
   readonly n: number;
@@ -22,29 +25,46 @@ export function regionName(label: number, ctx: HintTextContext): string {
   return ctx.patterns ? t('unit.colorWithGlyph', { color, glyph: glyphName(p) }) : color;
 }
 
-/** "row 3", "column 5", "Lavender" (02 §9.1 unit names; rows/columns 1-based). */
-export function unitName(unit: Unit, ctx: HintTextContext): string {
+/** How a sentence names a region and capitalises its start: plain text, or rich-text tokens. */
+interface Namer {
+  region(label: number, ctx: HintTextContext): string;
+  capitalize(s: string): string;
+}
+const PLAIN: Namer = { region: regionName, capitalize: capitalizeFirst };
+/** Colour tokens carry the region label; CAP asks the renderer to capitalise the first text it emits. */
+const RICH: Namer = { region: (label) => colorToken(label), capitalize: (s) => `${CAP}${s}` };
+
+function unitNameWith(unit: Unit, ctx: HintTextContext, nm: Namer): string {
   switch (unit.kind) {
     case 'row':
       return t('unit.row', { index: unit.index + 1 });
     case 'col':
       return t('unit.col', { index: unit.index + 1 });
     case 'region':
-      return regionName(unit.index, ctx);
+      return nm.region(unit.index, ctx);
   }
 }
 
-/** "rows 2, 4 and 5", "columns 1 and 3", "Lavender and Mint"; a single unit uses unitName(). */
-export function unitListName(units: readonly Unit[], ctx: HintTextContext): string {
+/** "row 3", "column 5", "Lavender" (02 §9.1 unit names; rows/columns 1-based). */
+export function unitName(unit: Unit, ctx: HintTextContext): string {
+  return unitNameWith(unit, ctx, PLAIN);
+}
+
+function unitListNameWith(units: readonly Unit[], ctx: HintTextContext, nm: Namer): string {
   const first = units[0];
   if (!first) return '';
-  if (units.length === 1) return unitName(first, ctx);
+  if (units.length === 1) return unitNameWith(first, ctx, nm);
   const sameKind = units.every((u) => u.kind === first.kind);
   if (sameKind && first.kind !== 'region') {
     const list = joinList(units.map((u) => String(u.index + 1)));
     return first.kind === 'row' ? t('unit.rows', { list }) : t('unit.cols', { list });
   }
-  return joinList(units.map((u) => unitName(u, ctx)));
+  return joinList(units.map((u) => unitNameWith(u, ctx, nm)));
+}
+
+/** "rows 2, 4 and 5", "columns 1 and 3", "Lavender and Mint"; a single unit uses unitName(). */
+export function unitListName(units: readonly Unit[], ctx: HintTextContext): string {
+  return unitListNameWith(units, ctx, PLAIN);
 }
 
 /** "rows", "columns", "colours" ({T-kind} in the pigeonhole template). */
@@ -56,6 +76,21 @@ const isLine = (u: Unit): boolean => u.kind === 'row' || u.kind === 'col';
 
 /** The explanation sentence for a step (02 §9.1 templates). Also used for the live announcement. */
 export function hintText(step: HintStep, ctx: HintTextContext): string {
+  return compose(step, ctx, PLAIN);
+}
+
+/**
+ * hintText() with every colour as a rich-text token (its region label) for setRichText(); the card
+ * resolves each token to the colour name with a swatch (PAR-7). Same words as hintText().
+ */
+export function hintRichText(step: HintStep, ctx: HintTextContext): string {
+  return compose(step, ctx, RICH);
+}
+
+function compose(step: HintStep, ctx: HintTextContext, nm: Namer): string {
+  const unitName = (u: Unit, c: HintTextContext): string => unitNameWith(u, c, nm);
+  const unitListName = (u: readonly Unit[], c: HintTextContext): string => unitListNameWith(u, c, nm);
+  const capitalizeFirst = nm.capitalize;
   const units = step.focusUnits;
   const u0 = units[0];
   // A step whose units are missing should never reach the UI; keep the card readable anyway.

@@ -156,6 +156,8 @@ export interface RankListView {
    * Which entries the list may show (additive, 2b integration): daily_fastest is one board for every
    * day, and its readers keep only the shown day's entries (phase2b §5.3). Supplied by the app (it
    * decodes scores); absent = every entry. A filtered list shows fewer rows, never padded ones.
+   * The band is read past the entries above it, and its rows are numbered by their position inside
+   * it (review FB2B-4; see RankingProvider.top).
    */
   readonly keep?: (score: number) => boolean;
 }
@@ -166,8 +168,20 @@ export interface RankingProvider {
   submit(board: BoardKey, score: number): Promise<'ok' | 'not_improved' | 'unsupported' | 'error'>;
   /** null unless caps().myRank, and on error or timeout (rank.fetchTimeoutMs). Never rejects. */
   mine(board: BoardKey): Promise<RankEntry | null>;
-  /** [] when unsupported, on error or timeout. Never fabricated: only rows the API returned. Never rejects. */
-  top(board: BoardKey, n: number): Promise<readonly RankEntry[]>;
+  /**
+   * [] when unsupported, on error or timeout. Never fabricated: only rows the API returned. Never rejects.
+   * [additive, review FB2B-4] `keep` (daily_fastest: the shown day, phase2b §5.3): only the entries it
+   * accepts, best first, read past the entries above that band (later time zones that already posted
+   * the next day's daily), with `rank` = the 1-based position inside the band (every better entry of
+   * the band was read, so it is the true rank for that day).
+   */
+  top(board: BoardKey, n: number, keep?: (score: number) => boolean): Promise<readonly RankEntry[]>;
+  /**
+   * [additive, review FB2B-6] false once this build knows the board cannot be served: no platform id,
+   * or the platform said it does not exist (FB LEADERBOARD_NOT_FOUND: an id in VITE_FB_LEADERBOARDS
+   * that the dashboard lacks). Absent = unknown (treated as supported).
+   */
+  supports?(board: BoardKey): boolean;
   /**
    * Overlay view with names and photos. With `rect` it is placed inside it (only when
    * caps().overlayInRect); without, FB presents it its own way. null when unsupported or on error.

@@ -9,16 +9,34 @@
 // Classes: .screen.screen--home[data-banner] > .home__body > .home__hero(.home__wordmark .home__tagline .home__mascot)
 //          .home__actions(.home__cards > .event-card[data-state] .home__play .badge.badge--hard
 //          .daily-card[data-state] .home-card) .home__stock(.stock__item); the top bar's lead slot holds .fish-pill
+// Review fixes: the hero never overlaps the top bar or the cards below it (UX-2, I18N-LAYOUT-2): it is
+// centred with auto margins (overflow can only go down), and fitHero() shrinks the mascot (then
+// drops the tagline) until the hero fits the space the event card, the banner reserve and the
+// localized text leave. The static texts follow the language (A11Y-I18N-1).
 import { cfg } from '../../app/config';
 import type { EventDef } from '../../game/events';
 import type { DailyCardState } from '../../game/progression';
-import { formatClock, formatDuration, formatShortDate, t, translate } from '../../i18n';
+import { formatClock, formatDuration, formatShortDate, onLocaleChanged, t, translate } from '../../i18n';
 import { mascotIllustration } from '../art/mascot';
 import { icon } from '../art/sprite';
 import { clear, h, setText, type View } from '../dom';
 import { createFishPill } from '../hud/pills';
 import { createTopBar, type TopBarProps } from '../hud/top-bar';
+import { createLocaleText } from '../locale-text';
 import { setTextKeepTogether } from '../overlays/overlay-base';
+
+/** The smallest Home mascot (CSS px) before the tagline, and then the mascot, give way (fitHero). */
+export const MASCOT_MIN_PX = 64;
+
+/**
+ * The mascot size that makes the hero fit: `size` shrunk by the overflow below the hero's bottom,
+ * or null when even MASCOT_MIN_PX does not fit (the caller drops the tagline, then the mascot).
+ */
+export function fittedMascot(size: number, overflowPx: number): number | null {
+  if (overflowPx <= 0.5) return size;
+  const next = Math.floor(size - overflowPx);
+  return next >= MASCOT_MIN_PX ? next : null;
+}
 
 export interface DailyCardView {
   readonly state: DailyCardState;
@@ -179,9 +197,10 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
   );
   let artFor: { id: string; fn: NonNullable<HomeEventCardView['art']> } | null = null;
 
+  const L = createLocaleText();
   // Primary level button.
   const playLabel = h('span', { class: 'btn__label' });
-  const hardBadge = h('span', { class: 'badge badge--hard' }, t('common.hard'));
+  const hardBadge = L.text(h('span', { class: 'badge badge--hard' }), () => t('common.hard'));
   const play = h(
     'button',
     { type: 'button', class: 'btn btn--primary btn--block btn--lg home__play', on: { click: () => cb.onPlay() } },
@@ -208,6 +227,10 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
   const hintsItem = h('span', { class: 'stock__item stock__item--hints', role: 'img' }, icon('icon-bulb', { class: 'stock__icon' }), hintsCount);
   const kittiesItem = h('span', { class: 'stock__item stock__item--kitties', role: 'img' }, icon('icon-paw', { class: 'stock__icon' }), kittiesCount);
 
+  const mascot = L.attr(mascotIllustration('home', { label: t('a11y.mascot') }), 'aria-label', () => t('a11y.mascot'));
+  const mascotBox = h('div', { class: 'home__mascot' }, mascot);
+  const tagline = L.text(h('p', { class: 'home__tagline' }), () => t('app.tagline'));
+  const hero = h('div', { class: 'home__hero' }, L.text(h('h1', { class: 'home__wordmark' }), () => t('app.name')), tagline, mascotBox);
   const el = h(
     'div',
     { class: 'screen screen--home' },
@@ -215,17 +238,54 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
     h(
       'main',
       { class: 'home__body' },
-      h(
-        'div',
-        { class: 'home__hero' },
-        h('h1', { class: 'home__wordmark' }, t('app.name')),
-        h('p', { class: 'home__tagline' }, t('app.tagline')),
-        h('div', { class: 'home__mascot' }, mascotIllustration('home', { label: t('a11y.mascot') })),
-      ),
+      hero,
       h('div', { class: 'home__actions' }, eventCard, play, daily, cards),
       h('div', { class: 'home__stock stock' }, hintsItem, kittiesItem),
     ),
   );
+
+  // ── fitHero (UX-2, I18N-LAYOUT-2) ──
+  /**
+   * Measures the hero after layout and shrinks the mascot by what overflows below the hero (the
+   * cards start there), then drops the tagline, then the mascot. Reads, then writes once per step;
+   * runs on the next frame after a render and on resize. A no-op without layout (tests).
+   */
+  const fitHero = (): void => {
+    if (!el.isConnected) return;
+    mascot.style.removeProperty('width');
+    mascot.style.removeProperty('height');
+    el.removeAttribute('data-tight');
+    const heroBottom = (): number => hero.getBoundingClientRect().bottom;
+    const over = (): number => mascotBox.getBoundingClientRect().bottom - heroBottom();
+    const natural = mascot.getBoundingClientRect().height;
+    if (natural <= 0) return;
+    let size = fittedMascot(natural, over());
+    if (size === null) {
+      el.setAttribute('data-tight', '1'); // no tagline (screens.css)
+      size = fittedMascot(natural, over());
+    }
+    if (size === null) {
+      el.setAttribute('data-tight', '2'); // no mascot either: the wordmark alone
+      return;
+    }
+    if (size < natural - 0.5) {
+      mascot.style.width = `${size}px`;
+      mascot.style.height = `${size}px`;
+    }
+  };
+  let fitRaf = 0;
+  const win = (): Window | null => el.ownerDocument.defaultView;
+  const scheduleFit = (): void => {
+    const w = win();
+    if (!w || typeof w.requestAnimationFrame !== 'function') return;
+    w.cancelAnimationFrame(fitRaf);
+    fitRaf = w.requestAnimationFrame(() => {
+      fitRaf = 0;
+      fitHero();
+    });
+  };
+  const w0 = win();
+  w0?.addEventListener('resize', scheduleFit);
 
   let lastCards: readonly HomeCardView[] | null = null;
   let iconState: 'lock' | 'cal' | null = null;
@@ -264,7 +324,10 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
     }
   };
 
+  let last = view;
   const render = (v: HomeView): void => {
+    last = v;
+    L.apply();
     topBar.update(topBarProps(v));
     fishPill.update({ count: v.fish, onPlus: () => cb.onShop() });
     renderEvent(v.event);
@@ -311,13 +374,20 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
       }
       cards.hidden = v.extraCards.length === 0;
     }
+    scheduleFit();
   };
   render(view);
+  // Settings → Language over Home (A11Y-I18N-1): every text follows, also while a dialog is open.
+  const offLocale = onLocaleChanged(() => render(last));
 
   return {
     el,
     update: render,
     destroy() {
+      offLocale();
+      L.dispose();
+      w0?.removeEventListener('resize', scheduleFit);
+      if (fitRaf) win()?.cancelAnimationFrame(fitRaf);
       topBar.destroy();
       fishPill.destroy();
       el.remove();

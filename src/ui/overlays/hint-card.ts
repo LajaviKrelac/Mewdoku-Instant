@@ -11,15 +11,30 @@
 //
 // Classes: .overlay[data-overlay=hint][data-placement] > .overlay__scrim--clear + .overlay__panel--sheet.hint-card
 //          .hint-card__icon .hint-card__text .hint-card__where .hint-card__actions
+// Review fixes: the sentence names each colour with a swatch in its tile colour (PAR-7, rich text;
+// same words as hintText()); static labels follow the language (A11Y-I18N-1); on FBIG a top-placed
+// card keeps its content below the FB top-left safe zone (UX-9; :root[data-fb-safe], set by the top bar).
+import { cfg } from '../../app/config';
 import type { HintStep } from '../../engine/types';
-import { t } from '../../i18n';
+import { capitalizeFirst, t } from '../../i18n';
 import { icon } from '../art/sprite';
 import { readViewport } from '../board/layout';
 import { h, setText, type OverlayView } from '../dom';
+import { createLocaleText } from '../locale-text';
+import { setRichText } from '../rich-text';
 import { closeButton, createOverlayShell, makeButton } from './overlay-base';
-import { hintText, regionName, type HintTextContext } from './hint-text';
+import { hintRichText, regionName, type HintTextContext } from './hint-text';
 
-export { hintText, unitKindPlural, unitListName, unitName, type HintTextContext } from './hint-text';
+export { hintRichText, hintText, unitKindPlural, unitListName, unitName, type HintTextContext } from './hint-text';
+
+/** Top padding of a compact top-placed card (overlay-chunk.css): the FB inset adds what exceeds it. */
+const TOP_PAD_COMPACT = 12;
+
+/** Extra height a top-placed card gets on FBIG, where its content starts below the safe zone (UX-9). */
+export function fbTopInset(doc: Document, safeTop: number): number {
+  if (!doc.documentElement.hasAttribute('data-fb-safe')) return safeTop;
+  return Math.max(safeTop, cfg.layout.fbSafeZonePx - TOP_PAD_COMPACT);
+}
 
 export interface HintCardProps extends HintTextContext {
   readonly step: HintStep;
@@ -89,18 +104,22 @@ export function createHintCard(): OverlayView<HintCardProps> {
   const shell = createOverlayShell({ id: 'hint', scrim: 'clear', panel: 'sheet', onScrimTap: () => void close() });
   shell.panel.classList.add('hint-card');
 
-  const title = h('h2', { class: 'overlay__title visually-hidden', id: shell.titleId }, t('hint.title'));
+  const L = createLocaleText();
+  const title = L.text(h('h2', { class: 'overlay__title visually-hidden', id: shell.titleId }), () => t('hint.title'));
   const text = h('p', { class: 'hint-card__text' });
   const where = h('span', { class: 'hint-card__where visually-hidden' });
   const desc = h('div', { class: 'hint-card__desc', id: shell.descId }, text, where);
-  const apply = makeButton({
-    variant: 'primary',
-    label: t('hint.apply'),
-    autofocus: true,
-    className: 'hint-card__apply',
-    onPress: () => props?.onApply(),
-  });
-  const closeBtn = closeButton(() => void close(), t('hint.close'));
+  const apply = L.label(
+    makeButton({
+      variant: 'primary',
+      label: '',
+      autofocus: true,
+      className: 'hint-card__apply',
+      onPress: () => props?.onApply(),
+    }),
+    () => t('hint.apply'),
+  );
+  const closeBtn = L.attr(closeButton(() => void close()), 'aria-label', () => t('hint.close'));
   shell.panel.append(
     h('div', { class: 'hint-card__row' }, icon('icon-bulb', { class: 'hint-card__icon' }), title, desc),
     h('div', { class: 'overlay__actions hint-card__actions' }, apply, closeBtn),
@@ -123,7 +142,7 @@ export function createHintCard(): OverlayView<HintCardProps> {
     // the overlay root is position:fixed at 0,0, so offsetTop is the client top.
     const r = { top: shell.panel.offsetTop, height: shell.panel.offsetHeight };
     const w = win();
-    const safeTop = w ? readViewport(w).safeTop : 0;
+    const safeTop = fbTopInset(shell.el.ownerDocument, w ? readViewport(w).safeTop : 0);
     const next = sheetPlacement(r, avoid, safeTop);
     if (shell.el.dataset.placement !== next) shell.el.dataset.placement = next;
   };
@@ -148,15 +167,25 @@ export function createHintCard(): OverlayView<HintCardProps> {
 
   const render = (p: HintCardProps): void => {
     props = p;
+    L.apply();
     closable = p.closable ?? !coachShown(shell.el.ownerDocument);
     closeBtn.hidden = !closable;
-    setText(text, hintText(p.step, p));
+    setRichText(text, hintRichText(p.step, p), {
+      color: (label) => ({ palette: p.colors[label] ?? label, name: regionName(label, p) }),
+      capitalize: capitalizeFirst,
+      keepTogether: false,
+    });
     const loc = hintLocation(p.step, p);
     setText(where, loc ? ` ${loc}` : ''); // a space, so the description reads "…here. Highlighted tile…"
     shell.panel.dataset.kind = p.step.kind;
     if (!shell.el.dataset.placement) shell.el.dataset.placement = 'bottom';
     place();
   };
+
+  // A language switch while the card is open re-renders it in the new language (A11Y-I18N-1).
+  L.watch(() => {
+    if (props && shell.isOpen()) render(props);
+  });
 
   return {
     el: shell.el,
@@ -179,6 +208,7 @@ export function createHintCard(): OverlayView<HintCardProps> {
     destroy() {
       win()?.removeEventListener('resize', place);
       stopPlace();
+      L.dispose();
       props = null;
       shell.el.remove();
     },

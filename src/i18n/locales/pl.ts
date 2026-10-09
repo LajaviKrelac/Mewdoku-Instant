@@ -176,9 +176,9 @@ export const catalog: LocaleCatalog = {
 
   // ── How to play ────────────────────────────────────────────────────────────
   'howto.title': 'Jak grać',
-  'howto.rule.colours': 'Każdy kolor ukrywa dokładnie jednego kota.',
-  'howto.rule.lines': 'Każdy wiersz i każda kolumna też ma jednego kota.',
-  'howto.rule.space': 'Koty lubią przestrzeń: dwa koty nigdy się nie stykają, nawet rogami.',
+  'howto.rule.colours': 'Każdy kolor ukrywa *dokładnie jednego kota*.',
+  'howto.rule.lines': 'Każdy wiersz i każda kolumna też ma *jednego kota*.',
+  'howto.rule.space': 'Koty lubią przestrzeń: dwa koty *nigdy się nie stykają, nawet rogami*.',
   'howto.controls': 'Dotknij pola, aby je skreślić. Dotknij dwa razy, aby postawić kota. Przeciągnij palcem po polach, aby skreślić kilka naraz.',
   'howto.hearts': 'Kot na złym polu kosztuje jedno serce. Gdy stracisz wszystkie trzy, możesz zagrać poziom jeszcze raz.',
   'howto.helpers': 'Utknięcie? Żarówka wyjaśnia jeden krok. Łapka znajduje dla ciebie kota.',
@@ -193,10 +193,10 @@ export const catalog: LocaleCatalog = {
   'daily.done': 'Gotowe',
 
   // ── Tutorial coach ─────────────────────────────────────────────────────────
-  'tutorial.step1': 'Każdy kolor ukrywa dokładnie jednego kota. Kolor {color} to tylko jedno pole – dotknij go dwa razy.',
-  'tutorial.step2': 'Kot zajmuje cały swój wiersz i całą kolumnę.',
-  'tutorial.step3': 'Koty potrzebują miejsca – nie stykają się, nawet rogami. Przeciągnij palcem po tych polach, aby je skreślić.',
-  'tutorial.step4': 'W wierszu 2 zostało jedno wolne pole. Dotknij go dwa razy.',
+  'tutorial.step1': 'Każdy kolor ukrywa *dokładnie jednego kota*. Kolor {color} to tylko jedno pole – dotknij go dwa razy.',
+  'tutorial.step2': 'Kot zajmuje *cały swój wiersz i całą kolumnę*.',
+  'tutorial.step3': 'Koty potrzebują miejsca – *nie stykają się, nawet rogami*. Przeciągnij palcem po tych polach, aby je skreślić.',
+  'tutorial.step4': 'W wierszu 2 zostało *jedno wolne pole*. Dotknij go dwa razy.',
   'tutorial.step5': 'Utknięcie? Dotknij żarówki, aby dostać podpowiedź.',
   'tutorial.step6': 'Postaw ostatniego kota.',
   'tutorial.gotIt': 'Jasne',
@@ -264,6 +264,7 @@ export const catalog: LocaleCatalog = {
   'settings.language.auto': 'Automatycznie',
   'settings.shop': 'Sklep',
   'settings.removeAds': 'Usuń reklamy',
+  'settings.feedback': 'Wyślij opinię',
   'howto.a11y': 'Trudno odróżnić kolory? Włącz wzory kolorów w Ustawieniach.',
   'fish.count.one': '{count} rybka',
   'fish.count.few': '{count} rybki',
@@ -334,6 +335,7 @@ export const catalog: LocaleCatalog = {
   'shop.swap.kitty': '1 kotek',
   'shop.swap.action': 'Wymień',
   'shop.notEnough': 'Na razie za mało rybek.',
+  'shop.swap.done': 'Dodano: {item}. Pozostałe rybki: {count}.',
   'shop.swap.a11y': 'Wymień rybki ({price}) na: {item}',
   'shop.buy.a11y': 'Kup: {name}, {price}',
   'shop.retry': 'Spróbuj ponownie',

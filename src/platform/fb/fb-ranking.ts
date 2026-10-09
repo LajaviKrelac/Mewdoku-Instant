@@ -16,6 +16,17 @@
 // entries with a missing or invalid score are dropped, never patched. A NEZP entry without a rank
 // takes its 1-based position in the API's ordered top list.
 //
+// daily_fastest (review FB2B-4): one board for every day, and a newer day outranks any older one
+// (§5.3), so players in later time zones who already posted the next day's daily sit above the shown
+// day. With a `keep` filter (RankListView.keep, top(…, keep)) the reader pages past them (classic:
+// getEntriesAsync(fetchCount, offset), at most BAND_MAX_PAGES pages; NEZP: one read, it has no
+// offset) until the shown day's band ends, and numbers the band's rows by their position inside it.
+// My row is pinned only when it was found inside that band, with that position.
+//
+// LEADERBOARD_NOT_FOUND from any call (an id in VITE_FB_LEADERBOARDS the dashboard lacks) latches the
+// board as missing for the session (review FB2B-6): every later call answers unsupported / null / []
+// without an SDK call, and supports(board) is false, so the app shows personal records.
+//
 // [uncertain: §14 G1] which API 8.0 serves (Meta's 2026 search results call the NEZP
 // globalLeaderboards the older way and point zero-permissions games at their own backend); classic
 // setScoreAsync answering the stored (better) entry when the new score does not beat it (7.1
@@ -50,6 +61,9 @@ export function probeRankingApi(sdk: FBInstantSDK): RankingCaps['api'] {
 
 /** Largest score a board takes (int32, §5.3: every encoded score < 2³¹). */
 const MAX_SCORE = 2_147_483_647;
+
+/** Pages of rank.fetchCount entries a `keep` (daily) read goes through at most (FB2B-4). */
+export const BAND_MAX_PAGES = 4;
 
 /** An entry as read from the SDK, with the id the overlay binds names to. Internal. */
 interface RawEntry {
@@ -97,7 +111,16 @@ export function createFbRanking(sdk: FBInstantSDK, opts: FbRankingOptions): Rank
   const writing = new Map<BoardKey, Promise<unknown>>();
   const settled = (board: BoardKey): Promise<unknown> => writing.get(board) ?? Promise.resolve();
 
-  const nameOf = (board: BoardKey): string | null => (caps.global ? (boards[board] ?? null) : null);
+  /** Dashboard names the platform answered LEADERBOARD_NOT_FOUND for: unsupported for the session. */
+  const missing = new Set<string>();
+  const note = (name: string, err: unknown): void => {
+    if (fbErrorCode(err) === 'LEADERBOARD_NOT_FOUND') missing.add(name);
+  };
+
+  const nameOf = (board: BoardKey): string | null => {
+    const name = caps.global ? (boards[board] ?? null) : null;
+    return name !== null && !missing.has(name) ? name : null;
+  };
 
   const myId = (): string | null => safe(() => sdk.player.getID()) ?? null;
 
@@ -106,7 +129,8 @@ export function createFbRanking(sdk: FBInstantSDK, opts: FbRankingOptions): Rank
     if (!p) {
       p = (sdk.getLeaderboardAsync as (n: string) => Promise<FBLeaderboard>)(name);
       classic.set(name, p);
-      p.catch(() => {
+      p.catch((err: unknown) => {
+        note(name, err);
         if (classic.get(name) === p) classic.delete(name);
       });
     }
@@ -154,7 +178,48 @@ export function createFbRanking(sdk: FBInstantSDK, opts: FbRankingOptions): Rank
     };
     try {
       return await within(timers, run(), deadline, (): RawEntry[] => []);
-    } catch {
+    } catch (err) {
+      note(name, err);
+      return [];
+    }
+  };
+
+  /**
+   * The entries `keep` accepts, best first, renumbered 1… by position inside the band (FB2B-4): read
+   * from the top, past the entries above the band, until the band ends, the board ends or
+   * BAND_MAX_PAGES pages were read. [] on any failure.
+   */
+  const bandRaw = async (board: BoardKey, keep: (score: number) => boolean): Promise<RawEntry[]> => {
+    const name = nameOf(board);
+    const page = clampCount(c.rank.fetchCount);
+    if (!name || page === 0) return [];
+    const run = async (): Promise<RawEntry[]> => {
+      await settled(board);
+      const band: RawEntry[] = [];
+      /** Adds the kept entries of one page; true once the band has ended. */
+      const take = (list: readonly RawEntry[]): boolean => {
+        for (const r of list) {
+          if (keep(r.entry.score)) band.push(r);
+          else if (band.length > 0) return true;
+        }
+        return false;
+      };
+      if (api === 'classic') {
+        const lb = await leaderboard(name);
+        for (let i = 0; i < BAND_MAX_PAGES; i++) {
+          const raw: unknown = await lb.getEntriesAsync(page, i * page);
+          if (take(readAll(raw, page))) break;
+          if (!Array.isArray(raw) || raw.length < page) break; // the end of the board
+        }
+      } else {
+        take(readAll(await sdk.globalLeaderboards!.getTopEntriesAsync(name, page), page));
+      }
+      return band.map((r, i) => ({ ...r, entry: { ...r.entry, rank: i + 1 } }));
+    };
+    try {
+      return await within(timers, run(), deadline, (): RawEntry[] => []);
+    } catch (err) {
+      note(name, err);
       return [];
     }
   };
@@ -172,7 +237,8 @@ export function createFbRanking(sdk: FBInstantSDK, opts: FbRankingOptions): Rank
     };
     try {
       return await within(timers, run(), deadline, (): RawEntry | null => null);
-    } catch {
+    } catch (err) {
+      note(name, err);
       return null;
     }
   };
@@ -200,6 +266,7 @@ export function createFbRanking(sdk: FBInstantSDK, opts: FbRankingOptions): Rank
     try {
       return await within(timers, attempt, deadline, (): 'error' => 'error');
     } catch (err) {
+      note(name, err);
       return mapSubmitError(err);
     }
   };
@@ -207,16 +274,26 @@ export function createFbRanking(sdk: FBInstantSDK, opts: FbRankingOptions): Rank
   const showList = async (board: BoardKey, view: RankListView, rect?: DOMRect): Promise<{ close(): void } | null> => {
     try {
       if (!overlays || !nameOf(board)) return null;
-      const [allTop, myEntry] = await Promise.all([topRaw(board, view.count), view.highlightMe ? mineRaw(board) : Promise.resolve(null)]);
-      // RankListView.keep (daily_fastest: only the shown day's entries, phase2b §5.3); fewer rows, never padded.
+      // RankListView.keep (daily_fastest: only the shown day's entries, phase2b §5.3): the day's band,
+      // read past the later time zones' next-day entries and numbered inside it (FB2B-4); fewer rows,
+      // never padded.
       const keep = view.keep;
-      const top = keep ? allTop.filter((r) => keep(r.entry.score)) : allTop;
-      const mine = myEntry && (!keep || keep(myEntry.entry.score)) ? myEntry : null;
+      const count = clampCount(view.count);
+      const [listed, myEntry] = await Promise.all([
+        keep ? bandRaw(board, keep) : topRaw(board, count),
+        view.highlightMe ? mineRaw(board) : Promise.resolve(null),
+      ]);
+      const top = listed.slice(0, count);
+      const ownEntry = myEntry && (!keep || keep(myEntry.entry.score)) ? myEntry : null;
       // My own entry's id also marks me in the top list (in case the list's ids could not be compared).
-      const isMine = (r: RawEntry): boolean => r.entry.isMe || (mine !== null && mine.id !== '' && r.id === mine.id);
+      const sameAsMe = (r: RawEntry): boolean => r.entry.isMe || (ownEntry !== null && ownEntry.id !== '' && r.id === ownEntry.id);
+      // A day's band: my row only as found inside it, with its position there; the board's own rank
+      // would count the other days' entries (never shown, §5.1).
+      const mine = keep ? (listed.find(sameAsMe) ?? null) : ownEntry;
+      const isMine = (r: RawEntry): boolean => sameAsMe(r);
       const rows: RankListRow[] = top.map((r) => toRow(isMine(r) ? { ...r, entry: { ...r.entry, isMe: true } } : r, view));
       // Pin my row at the bottom when I am outside the list (§2.4); only an entry the API returned.
-      if (mine && !top.some(isMine)) rows.push(toRow(mine, view));
+      if (mine && !top.some(isMine)) rows.push(toRow({ ...mine, entry: { ...mine.entry, isMe: true } }, view));
       const { xml, css } = rankListTemplate();
       const inRect = rect !== undefined && caps.overlayInRect;
       const data = rankListData(
@@ -235,10 +312,12 @@ export function createFbRanking(sdk: FBInstantSDK, opts: FbRankingOptions): Rank
     async mine(board) {
       return (await mineRaw(board))?.entry ?? null;
     },
-    async top(board, n) {
+    async top(board, n, keep) {
+      if (keep) return (await bandRaw(board, keep)).slice(0, clampCount(n)).map((r) => r.entry);
       return (await topRaw(board, n)).map((r) => r.entry);
     },
     showList,
+    supports: (board) => nameOf(board) !== null,
   };
 }
 

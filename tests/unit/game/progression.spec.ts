@@ -27,6 +27,7 @@ import {
   substituteSpec,
   weekdayOf,
 } from '../../../src/game/progression';
+import { DAILY_12_FROM, dailySlotFor, isTwelveSunday } from '../../../src/game/ramp';
 import { defaults } from '../../../src/game/save';
 import type { InProgressV2, SaveData } from '../../../src/game/types';
 import { rec5 } from './fixtures';
@@ -135,6 +136,32 @@ describe('generated boards (02 §11.4, §12)', () => {
     expect(dailySpec('2026-10-06')).toMatchObject({ n: 8, seed: 'mewdoku:daily:v1:2026-10-06', gradeBand: [3, 3], minRegion: 2, maxRegion: 20 });
     expect(dailySpec('2026-10-11')).toMatchObject({ n: 11, gradeBand: [4, 4] }); // Sunday
     expect(dailySpec('2026-10-06').sizePool).toBeUndefined();
+  });
+
+  it('a 12×12 G4 daily every second Sunday from DAILY_12_FROM (review PAR-1); earlier dates keep the weekday table', () => {
+    expect(DAILY_12_FROM).toBe('2026-10-18');
+    expect(dailySpec('2026-10-04')).toMatchObject({ n: 11, gradeBand: [4, 4] }); // before: unchanged
+    expect(dailySpec('2026-10-11')).toMatchObject({ n: 11, gradeBand: [4, 4] });
+    expect(dailySpec('2026-10-18')).toMatchObject({ n: 12, gradeBand: [4, 4], seed: 'mewdoku:daily:v1:2026-10-18' });
+    expect(dailySpec('2026-10-25')).toMatchObject({ n: 11, gradeBand: [4, 4] });
+    expect(dailySpec('2026-11-01')).toMatchObject({ n: 12, gradeBand: [4, 4] });
+    expect(dailySlotFor('2027-01-10')).toEqual({ n: 12, band: [4, 4] }); // 12 weeks after the first: even
+    expect(dailySlotFor('2027-01-17')).toEqual({ n: 11, band: [4, 4] });
+    // Only Sundays: every other weekday keeps its slot, before and after.
+    for (const [date, n] of [['2026-10-19', 8], ['2026-10-20', 8], ['2026-10-21', 9], ['2026-10-22', 9], ['2026-10-23', 10], ['2026-10-24', 10]] as const) {
+      expect(dailySlotFor(date).n, date).toBe(n);
+      expect(isTwelveSunday(date)).toBe(false);
+    }
+    // Over a year: half of the Sundays are 12×12.
+    let sundays = 0;
+    let twelves = 0;
+    for (let d = Date.UTC(2027, 0, 3); d < Date.UTC(2028, 0, 1); d += 7 * 86_400_000) {
+      const key = new Date(d).toISOString().slice(0, 10);
+      sundays++;
+      if (dailySlotFor(key).n === 12) twelves++;
+    }
+    expect(sundays).toBe(52);
+    expect(twelves).toBe(26);
   });
 });
 

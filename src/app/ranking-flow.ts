@@ -6,7 +6,11 @@
 // data, else the personal records. Emits 'rank:result'. Also feeds the rankings hub and the event
 // screen's top list. C-internal module; the RankingProvider (D) and RankingPanelProps (B) are fixed.
 // platform.ranking is read at call time: the FB adapter adds it when its lazy chunk lands after start().
-import { canSubmit, dayIndex, decodeScore, boardFormat } from '../game/scoring';
+// Review fixes: daily_fastest reads the shown day's band past the later time zones' next-day entries,
+// and "Your rank" there is my position inside that band, never the board's global rank (FB2B-4); a
+// board the provider reports missing (supports() false, LEADERBOARD_NOT_FOUND) gets personal records
+// (FB2B-6); "Your score" for the solve just made shows the same time as the panel's headline (FB2B-7).
+import { canSubmit, dayIndex, decodeScore, boardFormat, encodeDailyScore, encodeEventScore } from '../game/scoring';
 import { localDateKey } from '../game/progression';
 import type { BoardKey, SaveData } from '../game/types';
 import type { PlatformAdapter, RankingCaps, RankingProvider, RankListView } from '../platform/types';
@@ -47,8 +51,11 @@ export interface RankingFlow {
    * queued under the rate limit waits for the next win or boot). Never rejects.
    */
   flushPending(opts?: { readonly except?: BoardKey }): Promise<void>;
-  /** mine + top for a board within rank.fetchTimeoutMs; 'local' without a provider. Never rejects. */
-  fetch(board: BoardKey): Promise<RankResult>;
+  /**
+   * mine + top for a board within rank.fetchTimeoutMs; 'local' without a provider. Never rejects.
+   * daily_fastest: `top` is the band of `day` (default today), numbered inside it (FB2B-4).
+   */
+  fetch(board: BoardKey, day?: string): Promise<RankResult>;
   /** The list state for a fetched result (never padded). */
   listState(result: RankResult, ctx: ListContext): RankingListState;
   /** Milliseconds the last fetch of `board` took (rank_panel analytics), or null. */
@@ -146,6 +153,44 @@ export function createRankingFlow(deps: RankingFlowDeps): RankingFlow {
     });
   }
 
+  /** The provider's supports(board) (FB2B-6); absent or throwing = supported. */
+  const supports = (p: RankingProvider, board: BoardKey): boolean => {
+    try {
+      return p.supports?.(board) !== false;
+    } catch {
+      return true;
+    }
+  };
+
+  /**
+   * My rank for the shown day (FB2B-4): my position among that day's entries in `top`. `top` is read
+   * best-first from the top of the board (a provider honouring `keep` gives exactly the day's band),
+   * so every better entry of the day comes before mine and the position is the true rank for the day.
+   * null when my entry is not among them: the board's own rank counts other days and is never shown.
+   */
+  function bandRank(result: RankResult, keep: (score: number) => boolean): number | null {
+    let pos = 0;
+    for (const e of result.top) {
+      if (!keep(e.score)) continue;
+      pos++;
+      if (e.isMe) return pos;
+    }
+    return null;
+  }
+
+  /** Whether a board entry is the encoding of my own score as I know it (the solve just made, FB2B-7). */
+  function isMySolve(board: BoardKey, score: number, ctx: ListContext): boolean {
+    const m = ctx.myScore;
+    if (!m) return false;
+    try {
+      if (m.kind === 'time') return board === c.rank.boards.daily && ctx.day !== undefined && encodeDailyScore(ctx.day, m.ms, c) === score;
+      if (m.kind === 'event') return boardFormat(board, c) === 'event' && encodeEventScore(m.solved, m.ms) === score;
+    } catch {
+      // a bad day key: the board's own value
+    }
+    return false;
+  }
+
   const setPending = (board: BoardKey, score: number | null): void => {
     deps.updateSave((s) => {
       const has = Object.prototype.hasOwnProperty.call(s.rank.pending, board);
@@ -204,23 +249,31 @@ export function createRankingFlow(deps: RankingFlowDeps): RankingFlow {
         bus.emit('error', { where: 'rank_flush', error });
       }
     },
-    async fetch(board) {
+    async fetch(board, day) {
       const p = provider();
       const started = clock.perf();
       let result: RankResult;
       const caps = p ? capsOf(p) : null;
+      const none = (): RankResult => ({ board, api: 'none', mine: null, top: [], ok: true });
       if (!p || !caps) result = { board, api: 'local', mine: null, top: [], ok: true };
-      else if (caps.api === 'none' || unsupported.has(board)) result = { board, api: 'none', mine: null, top: [], ok: true }; // no API, or no id for this board
+      else if (caps.api === 'none' || unsupported.has(board) || !supports(p, board)) result = none(); // no API, or no id for this board
       else {
+        const keep = dayFilter(board, day ?? localDateKey(clock.now()), c);
         const both = Promise.all([
           caps.myRank ? Promise.resolve().then(() => p.mine(board)) : Promise.resolve(null),
-          Promise.resolve().then(() => p.top(board, c.rank.fetchCount)),
+          Promise.resolve().then(() => (keep ? p.top(board, c.rank.fetchCount, keep) : p.top(board, c.rank.fetchCount))),
         ]);
         const r = await within(both, null);
         result =
           r === TIMEOUT || r === null
             ? { board, api: caps.api, mine: null, top: [], ok: false }
             : { board, api: caps.api, mine: r[0] ?? null, top: Array.isArray(r[1]) ? r[1] : [], ok: true };
+        // The reads found out that the board does not exist (FB LEADERBOARD_NOT_FOUND): personal
+        // records, as for a board without an id (FB2B-6), never an empty "See top players".
+        if (!supports(p, board)) {
+          unsupported.add(board);
+          result = none();
+        }
       }
       lastMs.set(board, Math.max(0, Math.round(clock.perf() - started)));
       bus.emit('rank:result', result);
@@ -236,9 +289,10 @@ export function createRankingFlow(deps: RankingFlowDeps): RankingFlow {
       const keep = ctx.day === undefined ? undefined : dayFilter(result.board, ctx.day, c);
       const me = result.mine && (!keep || keep(result.mine.score)) ? result.mine : null;
       const mine: RankMineView = {
-        rank: caps.myRank && me ? me.rank : null,
-        // The provider's own entry for me, else my own score as I know it locally ("Your score"), never a guess.
-        score: me ? scoreView(result.board, me.score, ctx.eventTotal, c) : ctx.myScore,
+        rank: caps.myRank && me ? (keep ? bandRank(result, keep) : me.rank) : null,
+        // The provider's own entry for me, else my own score as I know it locally ("Your score"), never
+        // a guess. The entry of the solve just made shows my own time (one value per solve, FB2B-7).
+        score: me ? (isMySolve(result.board, me.score, ctx) ? ctx.myScore : scoreView(result.board, me.score, ctx.eventTotal, c)) : ctx.myScore,
         count: null,
       };
       if (caps.overlayInRect) return { kind: 'overlay' };
@@ -251,7 +305,7 @@ export function createRankingFlow(deps: RankingFlowDeps): RankingFlow {
       const mine = ++listGen;
       const p = provider();
       const caps = p ? capsOf(p) : null;
-      if (!p || !caps || !caps.overlay) return false;
+      if (!p || !caps || !caps.overlay || unsupported.has(board) || !supports(p, board)) return false;
       const view: { -readonly [K in keyof RankListView]: RankListView[K] } = {
         title,
         scoreFormat: boardFormat(board, c),

@@ -250,8 +250,80 @@ describe('fetch and the list states (§2.4, §5.4)', () => {
     const r: RankResult = { board: 'daily_fastest', api: 'classic', mine: { rank: 3, score: yesterday(60), isMe: true }, top: [], ok: true };
     const daily: ListContext = { records: { ...records, board: 'daily' }, myScore: { kind: 'time', ms: 188_000 }, day };
     expect(s.flow.listState(r, daily)).toEqual({ kind: 'see_top', mine: { rank: null, score: { kind: 'time', ms: 188_000 }, count: null } });
+    // Review FB2B-4: the board's own rank (2) counts other days' entries; it is never shown for the
+    // daily. Without my entry among the day's rows: score only.
     const r2: RankResult = { ...r, mine: { rank: 2, score: today(150), isMe: true } };
-    expect(s.flow.listState(r2, daily)).toEqual({ kind: 'see_top', mine: { rank: 2, score: { kind: 'time', ms: 150_000 }, count: null } });
+    expect(s.flow.listState(r2, daily)).toEqual({ kind: 'see_top', mine: { rank: null, score: { kind: 'time', ms: 150_000 }, count: null } });
+  });
+
+  it('daily_fastest "Your rank" is my position among the shown day\'s entries, never the global rank (review FB2B-4)', () => {
+    const s = setup(provider({ overlay: true }));
+    const day = '2026-10-09';
+    const at = (d: number, secs: number): number => (dayIndex(day) + d) * 100_000 + (99_999 - secs);
+    // Twelve players in later time zones already posted tomorrow's daily; three of today are slower than me.
+    const tomorrow = Array.from({ length: 12 }, (_, i): RankEntry => ({ rank: i + 1, score: at(1, 30 + i), isMe: false }));
+    const top: RankEntry[] = [...tomorrow, { rank: 13, score: at(0, 4), isMe: true }, { rank: 14, score: at(0, 20), isMe: false }, { rank: 15, score: at(0, 40), isMe: false }];
+    const r: RankResult = { board: 'daily_fastest', api: 'classic', mine: { rank: 13, score: at(0, 4), isMe: true }, top, ok: true };
+    const ctx: ListContext = { records: { ...records, board: 'daily' }, myScore: { kind: 'time', ms: 3348 }, day };
+    const state = s.flow.listState(r, ctx);
+    expect(state.kind === 'see_top' && state.mine.rank).toBe(1);
+    // A provider that already gives the day's band (numbered inside it): the same answer.
+    const band: RankResult = { ...r, top: [{ rank: 1, score: at(0, 2), isMe: false }, { rank: 2, score: at(0, 4), isMe: true }] };
+    const state2 = s.flow.listState(band, ctx);
+    expect(state2.kind === 'see_top' && state2.mine.rank).toBe(2);
+  });
+
+  it('the solve just made shows one time: "Your score" is my own time, not the board\'s rounded-up second (review FB2B-7)', () => {
+    const s = setup(provider({ overlay: true }));
+    const day = '2026-10-09';
+    const mineScore = dayIndex(day) * 100_000 + (99_999 - 4); // 3 348 ms posts as 4 s (ceil, §5.3)
+    const r: RankResult = { board: 'daily_fastest', api: 'classic', mine: { rank: 1, score: mineScore, isMe: true }, top: [], ok: true };
+    const ctx: ListContext = { records: { ...records, board: 'daily' }, myScore: { kind: 'time', ms: 3348 }, day };
+    const state = s.flow.listState(r, ctx);
+    expect(state.kind === 'see_top' && state.mine.score).toEqual({ kind: 'time', ms: 3348 }); // 0:03, as the headline
+    // An older, better entry of the same day (not this solve) keeps the board's value.
+    const older: RankResult = { ...r, mine: { rank: 1, score: mineScore + 1, isMe: true } };
+    const state2 = s.flow.listState(older, ctx);
+    expect(state2.kind === 'see_top' && state2.mine.score).toEqual({ kind: 'time', ms: 3000 });
+    // Event boards: the same rule with the event encoding.
+    const ev: RankResult = { board: 'event_lantern_walk_2026', api: 'classic', mine: { rank: 4, score: 3 * 1_000_000 + 999_999 - 401, isMe: true }, top: [], ok: true };
+    const evCtx: ListContext = { records, myScore: { kind: 'event', solved: 3, total: 21, ms: 400_200 }, eventTotal: 21 };
+    const state3 = s.flow.listState(ev, evCtx);
+    expect(state3.kind === 'see_top' && state3.mine.score).toEqual({ kind: 'event', solved: 3, total: 21, ms: 400_200 });
+  });
+
+  it('fetch(daily_fastest) asks the provider for the shown day\'s band (keep), other boards unfiltered (review FB2B-4)', async () => {
+    const p = provider();
+    const keeps: (((score: number) => boolean) | undefined)[] = [];
+    p.top = (board, n, keep) => (keeps.push(keep), Promise.resolve(p.topValue));
+    const s = setup(p);
+    await s.flow.fetch('daily_fastest', '2026-10-09');
+    await s.flow.fetch('paw_points');
+    expect(keeps[0]).toBeTypeOf('function');
+    expect(keeps[0]?.(dayIndex('2026-10-09') * 100_000 + 5)).toBe(true);
+    expect(keeps[0]?.((dayIndex('2026-10-09') + 1) * 100_000 + 5)).toBe(false);
+    expect(keeps[1]).toBeUndefined();
+  });
+
+  it('a board the provider reports missing (supports() false, LEADERBOARD_NOT_FOUND) gives personal records, no list (review FB2B-6)', async () => {
+    const p = provider({ overlay: true });
+    let known = true;
+    p.supports = () => known;
+    p.top = async (board, n) => {
+      p.calls.push(`top:${board}:${n}`);
+      known = false; // the read found out
+      return [];
+    };
+    const s = setup(p);
+    const first = await s.flow.fetch('paw_points');
+    expect(first.api).toBe('none');
+    expect(s.flow.listState(first, { records, myScore: null }).kind).toBe('records');
+    p.calls.length = 0;
+    const again = await s.flow.fetch('paw_points');
+    expect(again.api).toBe('none');
+    expect(await s.flow.showList('paw_points', 'Paw points')).toBe(false);
+    await s.flow.submit('paw_points', 10, 60_000);
+    expect(p.calls).toEqual([]); // latched: no more provider calls for that board
   });
 
   it('flushPending skips the board just submitted (its newer score supersedes the queued one)', async () => {

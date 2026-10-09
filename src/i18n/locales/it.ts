@@ -175,9 +175,9 @@ export const catalog: LocaleCatalog = {
 
   // ── How to play ────────────────────────────────────────────────────────────
   'howto.title': 'Come si gioca',
-  'howto.rule.colours': 'Ogni colore nasconde esattamente un gatto.',
-  'howto.rule.lines': 'Anche ogni riga e ogni colonna contiene un gatto.',
-  'howto.rule.space': 'I gatti amano i loro spazi: due gatti non si toccano mai, nemmeno in diagonale.',
+  'howto.rule.colours': 'Ogni colore nasconde *esattamente un gatto*.',
+  'howto.rule.lines': 'Anche ogni riga e ogni colonna contiene *un gatto*.',
+  'howto.rule.space': 'I gatti amano i loro spazi: due gatti *non si toccano mai, nemmeno in diagonale*.',
   'howto.controls': 'Tocca una casella per barrarla. Tocca due volte per mettere un gatto. Scorri su più caselle per barrarle tutte insieme.',
   'howto.hearts': 'Un gatto sulla casella sbagliata costa un cuore. Se li perdi tutti e tre, puoi riprovare il livello.',
   'howto.helpers': 'Bloccato? La lampadina spiega un passaggio. La zampa trova un gatto per te.',
@@ -192,10 +192,10 @@ export const catalog: LocaleCatalog = {
   'daily.done': 'Fatto',
 
   // ── Tutorial coach ─────────────────────────────────────────────────────────
-  'tutorial.step1': 'Ogni colore nasconde esattamente un gatto. Il colore {color} ha una sola casella: toccala due volte.',
-  'tutorial.step2': 'Un gatto occupa tutta la sua riga e la sua colonna.',
-  'tutorial.step3': 'I gatti hanno bisogno di spazio: non si toccano, nemmeno in diagonale. Scorri su queste caselle per barrarle.',
-  'tutorial.step4': 'La riga 2 ha una sola casella libera. Toccala due volte.',
+  'tutorial.step1': 'Ogni colore nasconde *esattamente un gatto*. Il colore {color} ha una sola casella: toccala due volte.',
+  'tutorial.step2': 'Un gatto occupa *tutta la sua riga e la sua colonna*.',
+  'tutorial.step3': 'I gatti hanno bisogno di spazio: *non si toccano, nemmeno in diagonale*. Scorri su queste caselle per barrarle.',
+  'tutorial.step4': 'La riga 2 ha *una sola casella libera*. Toccala due volte.',
   'tutorial.step5': 'Bloccato? Tocca la lampadina per un indizio.',
   'tutorial.step6': 'Metti l’ultimo gatto.',
   'tutorial.gotIt': 'Capito',
@@ -257,6 +257,7 @@ export const catalog: LocaleCatalog = {
   'settings.language.auto': 'Automatica',
   'settings.shop': 'Negozio',
   'settings.removeAds': 'Rimuovi pubblicità',
+  'settings.feedback': 'Invia un commento',
   'howto.a11y': 'Colori difficili da distinguere? Attiva i motivi colore nelle Impostazioni.',
   'fish.count.one': '{count} pesce',
   'fish.count.other': '{count} pesci',
@@ -319,6 +320,7 @@ export const catalog: LocaleCatalog = {
   'shop.swap.kitty': '1 micio',
   'shop.swap.action': 'Scambia',
   'shop.notEnough': 'Non hai ancora abbastanza pesci.',
+  'shop.swap.done': 'Aggiunto: {item}. Pesci rimasti: {count}.',
   'shop.swap.a11y': 'Scambia {price} pesci con {item}',
   'shop.buy.a11y': 'Compra {name}, {price}',
   'shop.retry': 'Riprova',

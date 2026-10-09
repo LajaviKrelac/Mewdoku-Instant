@@ -46,16 +46,48 @@ describe('createBoardView', () => {
     expect(buttons).toHaveLength(16);
     expect(cell(1).getAttribute('aria-label')).toBe('Row 1, column 2, Lavender, empty');
     expect(cell(0).dataset.s).toBe('e');
-    expect(cell(0).style.getPropertyValue('--c')).toBe('var(--r4)');
-    // phase2b §1.5 even gutters (no region dependence): 1.5 px below a 30 px slot, 2 px from 30 px.
-    expect(cell(0).style.getPropertyValue('--ir')).toBe('1.5px');
-    expect(cell(0).style.getPropertyValue('--ib')).toBe('1.5px');
+    // The region colour sits on the tile that paints it (PERF-1: never on the cell button).
+    expect((cell(0).querySelector('.cell__tile') as HTMLElement).style.getPropertyValue('--c')).toBe('var(--r4)');
+    // phase2b §1.5 even gutters (no region dependence): 1.5 px below a 30 px slot, 2 px from 30 px —
+    // one board-level value that every tile inherits (PERF-1).
+    expect(board.el.style.getPropertyValue('--ir')).toBe('1.5px');
+    expect(board.el.style.getPropertyValue('--ib')).toBe('1.5px');
     board.setSlot(36);
-    for (const k of ['--it', '--ir', '--ib', '--il']) expect(cell(5).style.getPropertyValue(k)).toBe('2px');
+    for (const k of ['--it', '--ir', '--ib', '--il']) expect(board.el.style.getPropertyValue(k)).toBe('2px');
     board.setSlot(24);
-    expect(cell(5).style.getPropertyValue('--il')).toBe('1.5px');
+    expect(board.el.style.getPropertyValue('--il')).toBe('1.5px');
     // roving tabindex: only the first cell is tabbable
     expect(Array.from(buttons).filter((b) => b.getAttribute('tabindex') === '0')).toHaveLength(1);
+  });
+
+  it('PERF-1: no per-cell custom property is inherited by a cell\'s subtree (only the leaf readers carry one)', () => {
+    board.update(model({ cells: withCells({ 1: CellState.Cat }) }));
+    for (let i = 0; i < 16; i++) {
+      const c = cell(i);
+      // The cell button carries --xe only (the two edge strokes read it); nothing else that its
+      // ~10 descendants would inherit (a board-level change restyled ~1 400 nodes at 12×12).
+      const own = Array.from(c.style).filter((k) => k.startsWith('--'));
+      expect(own).toEqual(['--xe']);
+      for (const node of Array.from(c.querySelectorAll<HTMLElement | SVGElement>('[style]'))) {
+        const props = Array.from(node.style).filter((k) => k.startsWith('--'));
+        const cls = node.getAttribute('class');
+        if (cls === 'cell__tile') expect(props.sort()).toEqual(['--c', '--diag']);
+        else if (cls === 'cell__g') expect(props.sort()).toEqual(['--breathe-delay', '--diag']);
+        else if (cls === 'cell__blink') expect(props.sort()).toEqual(['--blink-delay', '--blink-dur']);
+        else expect(props).toEqual([]);
+      }
+    }
+    const blink = cell(1).querySelector('.cell__blink') as SVGElement;
+    expect(parseInt(blink.style.getPropertyValue('--blink-dur'), 10)).toBeGreaterThanOrEqual(cfg.fx.catBlinkMinMs);
+    expect(parseInt(blink.style.getPropertyValue('--blink-dur'), 10)).toBeLessThanOrEqual(cfg.fx.catBlinkMaxMs);
+  });
+
+  it('PERF-1: setSlot changes one board-level inset value, never a per-cell one', () => {
+    const spy = vi.spyOn(CSSStyleDeclaration.prototype, 'setProperty');
+    board.setSlot(36); // crosses layout.insetSmallBelowSlot: 1.5 px → 2 px
+    const targets = spy.mock.contexts.filter((st) => st !== board.el.style);
+    spy.mockRestore();
+    expect(targets).toHaveLength(0);
   });
 
   it('diffs updates: only changed cells are touched, elements are reused', () => {

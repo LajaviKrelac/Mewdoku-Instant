@@ -66,7 +66,8 @@ export function createRankHubFlow(deps: RankHubFlowDeps): RankHubFlow {
       myScore = rec ? { kind: 'time', ms: rec[0] } : null;
     } else if (tab === 'event' && ev) {
       const rec = eventRecord(save, ev.id);
-      thisMs = rec.ms;
+      // No puzzle was just played here: thisMs stays 0, so the card shows no "This puzzle" row (the
+      // event total is in its own "N of 21, total m:ss" line; review RANK-1).
       myScore = rec.solved > 0 ? { kind: 'event', solved: rec.solved, total: ev.puzzles.count, ms: rec.ms } : null;
     } else {
       const last = save.progress.level - 1;

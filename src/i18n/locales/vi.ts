@@ -175,9 +175,9 @@ export const catalog: LocaleCatalog = {
 
   // ── How to play ────────────────────────────────────────────────────────────
   'howto.title': 'Cách chơi',
-  'howto.rule.colours': 'Mỗi màu giấu đúng một chú mèo.',
-  'howto.rule.lines': 'Mỗi hàng và mỗi cột cũng có một chú mèo.',
-  'howto.rule.space': 'Mèo thích không gian riêng: hai chú mèo không bao giờ chạm nhau, kể cả ở góc.',
+  'howto.rule.colours': 'Mỗi màu giấu *đúng một chú mèo*.',
+  'howto.rule.lines': 'Mỗi hàng và mỗi cột cũng có *một chú mèo*.',
+  'howto.rule.space': 'Mèo thích không gian riêng: hai chú mèo *không bao giờ chạm nhau, kể cả ở góc*.',
   'howto.controls': 'Chạm vào một ô để gạch ô đó. Chạm hai lần để đặt mèo. Vuốt qua nhiều ô để gạch cùng lúc.',
   'howto.hearts': 'Đặt mèo sai ô sẽ mất một tim. Mất cả ba tim thì bạn có thể chơi lại màn đó.',
   'howto.helpers': 'Bí rồi à? Bóng đèn giải thích một bước. Bàn chân tìm giúp bạn một chú mèo.',
@@ -192,10 +192,10 @@ export const catalog: LocaleCatalog = {
   'daily.done': 'Xong',
 
   // ── Tutorial coach ─────────────────────────────────────────────────────────
-  'tutorial.step1': 'Mỗi màu giấu đúng một chú mèo. Màu {color} này chỉ có một ô, hãy chạm hai lần vào nó.',
-  'tutorial.step2': 'Một chú mèo chiếm cả hàng và cột của nó.',
-  'tutorial.step3': 'Mèo cần không gian: chúng không chạm nhau, kể cả ở góc. Vuốt qua các ô này để gạch chúng.',
-  'tutorial.step4': 'Hàng 2 chỉ còn một ô trống. Hãy chạm hai lần vào ô đó.',
+  'tutorial.step1': 'Mỗi màu giấu *đúng một chú mèo*. Màu {color} này chỉ có một ô, hãy chạm hai lần vào nó.',
+  'tutorial.step2': 'Một chú mèo chiếm *cả hàng và cột* của nó.',
+  'tutorial.step3': 'Mèo cần không gian: chúng *không chạm nhau, kể cả ở góc*. Vuốt qua các ô này để gạch chúng.',
+  'tutorial.step4': 'Hàng 2 chỉ còn *một ô trống*. Hãy chạm hai lần vào ô đó.',
   'tutorial.step5': 'Bí rồi à? Chạm vào bóng đèn để xem gợi ý.',
   'tutorial.step6': 'Đặt chú mèo cuối cùng.',
   'tutorial.gotIt': 'Đã hiểu',
@@ -254,6 +254,7 @@ export const catalog: LocaleCatalog = {
   'settings.language.auto': 'Tự động',
   'settings.shop': 'Cửa hàng',
   'settings.removeAds': 'Bỏ quảng cáo',
+  'settings.feedback': 'Gửi góp ý',
   'howto.a11y': 'Khó phân biệt màu? Hãy bật họa tiết màu trong Cài đặt.',
   'fish.count.other': '{count} cá',
   'fish.plus': '+{count}',
@@ -312,6 +313,7 @@ export const catalog: LocaleCatalog = {
   'shop.swap.kitty': '1 mèo con',
   'shop.swap.action': 'Đổi',
   'shop.notEnough': 'Chưa đủ cá.',
+  'shop.swap.done': 'Đã thêm {item}. Cá còn lại: {count}.',
   'shop.swap.a11y': 'Đổi {price} cá lấy {item}',
   'shop.buy.a11y': 'Mua {name}, {price}',
   'shop.retry': 'Thử lại',

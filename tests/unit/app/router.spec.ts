@@ -5,6 +5,7 @@
 import { last } from './harness';
 import { describe, expect, it } from 'vitest';
 import { createEventBus, type AppEventMap } from '../../../src/app/events';
+import { cfg } from '../../../src/app/config';
 import { createRouter, type OverlayFactories, type RouterFactories } from '../../../src/app/router';
 import type { OverlayId } from '../../../src/app/store';
 import type { OverlayView } from '../../../src/ui/dom';
@@ -538,5 +539,323 @@ describe('router: screen transitions (phase2b §2.9) and the event screen (§4.4
     release();
     expect(await pending).toBeNull();
     expect(s.router.screen()).toBe('home');
+  });
+});
+
+// ─────────────────── 2b review fixes (R): PAR-6 / UX-4, PERF-1, A11Y-FOCUS-1 ───────────────────
+
+describe('router: leaving the victory screen (PAR-6 / UX-4)', () => {
+  function victorySetup() {
+    const calls: { old: HTMLElement | null; next: HTMLElement; kind: string; resolve: () => void }[] = [];
+    const made: string[] = [];
+    const s = setup({
+      overlays: Object.fromEntries(
+        (['victory', 'ranking', 'settings'] as OverlayId[]).map((id) => [id, () => fakeOverlay(id, true, made) as never]),
+      ) as unknown as OverlayFactories,
+      screenTransition: (old, next, kind) => new Promise<void>((resolve) => void calls.push({ old, next, kind, resolve })),
+    });
+    return { ...s, calls };
+  }
+
+  it('the victory, not the solved board under it, is the outgoing layer; the board goes at once (Home)', async () => {
+    const s = victorySetup();
+    s.router.showGame({} as never, {} as never);
+    const host = s.root.querySelector('.app-screen') as HTMLElement;
+    const board = host.firstElementChild as HTMLElement;
+    s.router.open('victory', {} as never);
+    const victory = s.root.querySelector('.ov-victory') as HTMLElement;
+    s.router.showHome({} as never, {} as never);
+    expect(s.calls).toHaveLength(1);
+    expect(s.calls[0]?.kind).toBe('from_game');
+    expect(s.calls[0]?.old).toBe(victory); // was: the old game screen, with the solved board on it
+    // The board is gone before the first frame of the transition; the victory stays up, inert.
+    expect(board.isConnected).toBe(false);
+    expect(s.events).toContain('destroy:game');
+    expect(Array.from(host.children)).toHaveLength(1);
+    expect(victory.hidden).toBe(false);
+    expect(victory.hasAttribute('inert')).toBe(true);
+    expect(victory.getAttribute('aria-hidden')).toBe('true');
+    expect(s.router.isOpen('victory')).toBe(false); // closed for the app; only its picture fades
+    s.calls[0]?.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(victory.hidden).toBe(true);
+    expect(victory.hasAttribute('inert')).toBe(false);
+    expect(victory.hasAttribute('aria-hidden')).toBe(false);
+  });
+
+  it('victory → next level: to_game from the victory; the old game screen is never the outgoing element', () => {
+    const s = victorySetup();
+    s.router.showGame({} as never, {} as never);
+    const oldGame = (s.root.querySelector('.app-screen') as HTMLElement).firstElementChild;
+    s.router.open('victory', {} as never);
+    s.router.showGame({} as never, {} as never);
+    expect(s.calls.map((c) => c.kind)).toEqual(['to_game']);
+    expect(s.calls[0]?.old).not.toBe(oldGame);
+    expect(s.calls[0]?.old?.className).toBe('ov-victory');
+    expect(oldGame?.isConnected).toBe(false);
+  });
+
+  it('a victory opened again while its old picture fades stays open', async () => {
+    const s = victorySetup();
+    s.router.showGame({} as never, {} as never);
+    s.router.open('victory', {} as never);
+    s.router.showGame({} as never, {} as never);
+    s.router.open('victory', {} as never);
+    s.calls[0]?.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect((s.root.querySelector('.ov-victory') as HTMLElement).hidden).toBe(false);
+    expect(s.router.isOpen('victory')).toBe(true);
+  });
+
+  it('without the victory (a fail overlay, settings) the old screen leaves as before', () => {
+    const s = victorySetup();
+    s.router.showGame({} as never, {} as never);
+    const oldGame = (s.root.querySelector('.app-screen') as HTMLElement).firstElementChild;
+    s.router.open('settings', {} as never);
+    s.router.showHome({} as never, {} as never);
+    expect(s.calls[0]?.old).toBe(oldGame);
+  });
+});
+
+describe('router: beginLeave answers the tap before the build (PERF-1)', () => {
+  function leaveSetup(opts: { animates?: boolean } = {}) {
+    const outs: { el: HTMLElement; kind: string }[] = [];
+    const calls: { old: HTMLElement | null; next: HTMLElement; kind: string; resolve: () => void }[] = [];
+    const made: string[] = [];
+    const s = setup({
+      overlays: Object.fromEntries(
+        (['victory', 'settings'] as OverlayId[]).map((id) => [id, () => fakeOverlay(id, true, made) as never]),
+      ) as unknown as OverlayFactories,
+      screenTransition: (old, next, kind) => new Promise<void>((resolve) => void calls.push({ old, next, kind, resolve })),
+      screenOut: (el, kind) => {
+        outs.push({ el, kind });
+        return opts.animates ?? true;
+      },
+    });
+    return { ...s, outs, calls };
+  }
+
+  it('starts the outgoing half at once, resolves after a frame, and the next showGame joins it', async () => {
+    const s = leaveSetup();
+    s.router.showHome({} as never, {} as never);
+    const home = (s.root.querySelector('.app-screen') as HTMLElement).firstElementChild as HTMLElement;
+    s.router.open('settings', {} as never);
+    const p = s.router.beginLeave('game');
+    expect(p).not.toBeNull();
+    expect(s.outs).toEqual([{ el: home, kind: 'to_game' }]);
+    expect(home.hasAttribute('inert')).toBe(true);
+    expect(s.router.stack()).toEqual([]); // the overlays close with the tap
+    expect(s.calls).toHaveLength(0); // nothing is built yet
+    await p;
+    s.router.showGame({} as never, {} as never);
+    expect(s.outs).toHaveLength(1); // joined, not restarted
+    expect(s.calls.map((c) => [c.old, c.kind])).toEqual([[home, 'to_game']]);
+    expect(s.router.screen()).toBe('game');
+  });
+
+  it('from the victory: the victory fades and the board under it goes at the tap', () => {
+    const s = leaveSetup();
+    s.router.showGame({} as never, {} as never);
+    const board = (s.root.querySelector('.app-screen') as HTMLElement).firstElementChild as HTMLElement;
+    s.router.open('victory', {} as never);
+    void s.router.beginLeave('game');
+    expect(s.outs.map((o) => o.el.className)).toEqual(['ov-victory']);
+    expect(board.isConnected).toBe(false);
+    expect(s.events).toContain('destroy:game');
+  });
+
+  it('an outgoing half whose fade is over is removed before the new screen is appended', async () => {
+    const s = leaveSetup();
+    s.router.showHome({} as never, {} as never);
+    const home = (s.root.querySelector('.app-screen') as HTMLElement).firstElementChild as HTMLElement;
+    let homeInDomAtBuild: boolean | null = null;
+    const r = createRouter(s.root, {
+      factories: {
+        homeScreen: () => ({ el: home, update: () => undefined, destroy: () => undefined }),
+        gameScreen: () => {
+          homeInDomAtBuild = home.isConnected;
+          return { el: document.createElement('section'), update: () => undefined, destroy: () => undefined } as never;
+        },
+        screenTransition: () => Promise.resolve(),
+        screenOut: () => true,
+      },
+    });
+    r.showHome({} as never, {} as never);
+    await r.beginLeave('game');
+    await new Promise((res) => setTimeout(res, cfg.fx.screenOutMs + 5)); // a slow build: the fade is long over
+    r.showGame({} as never, {} as never);
+    expect(homeInDomAtBuild).toBe(false);
+  });
+
+  it('nothing to animate → null (boot, transitions off, no WAAPI): the caller does not wait', () => {
+    const s = leaveSetup();
+    s.router.showBoot();
+    expect(s.router.beginLeave('game')).toBeNull(); // boot → game has no transition
+    const off = setup(); // screenTransition: null
+    off.router.showHome({} as never, {} as never);
+    expect(off.router.beginLeave('game')).toBeNull();
+    const still = leaveSetup({ animates: false });
+    still.router.showHome({} as never, {} as never);
+    expect(still.router.beginLeave('game')).toBeNull();
+  });
+
+  it('a screen change to somewhere else ends the early half at once (a failed load goes Home)', () => {
+    const s = leaveSetup();
+    s.router.showHome({} as never, {} as never);
+    void s.router.beginLeave('game');
+    s.router.showHome({} as never, {} as never);
+    expect(s.events.filter((e) => e === 'destroy:home')).toHaveLength(1);
+    expect((s.root.querySelector('.app-screen') as HTMLElement).children).toHaveLength(1);
+  });
+});
+
+describe('router: page scroll is read before the build (PERF-1)', () => {
+  it('reads scrollTop before the new screen exists, and writes it only when the page was scrolled', () => {
+    const order: string[] = [];
+    let top = 0;
+    const scroller = document.scrollingElement ?? document.documentElement;
+    const desc = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollTop');
+    Object.defineProperty(scroller, 'scrollTop', {
+      configurable: true,
+      get: () => (order.push('read'), top),
+      set: (v: number) => void (order.push(`write:${v}`), (top = v)),
+    });
+    try {
+      const s = setup({
+        gameScreen: () => (order.push('build'), { el: document.createElement('section'), update: () => undefined, destroy: () => undefined }) as never,
+      });
+      s.router.showHome({} as never, {} as never);
+      order.length = 0;
+      s.router.showGame({} as never, {} as never);
+      // A read after the new screen is appended forces a full-document style pass (127–170 ms at 4×).
+      expect(order).toEqual(['read', 'build']);
+      top = 206;
+      order.length = 0;
+      s.router.showGame({} as never, {} as never);
+      expect(order).toEqual(['read', 'build', 'write:0']);
+    } finally {
+      delete (scroller as unknown as Record<string, unknown>).scrollTop;
+      if (desc) Object.defineProperty(Element.prototype, 'scrollTop', desc);
+    }
+  });
+});
+
+describe('router: focus moves into the new screen (A11Y-FOCUS-1)', () => {
+  const twoFrames = async (): Promise<void> => {
+    await nextFrame();
+    await nextFrame();
+    await nextFrame();
+  };
+  function focusSetup(home: () => HTMLElement) {
+    const s = setup({
+      homeScreen: () => ({ el: home(), update: () => undefined, destroy: () => undefined }),
+      gameScreen: () => {
+        const el = document.createElement('section');
+        const btn = document.createElement('button');
+        btn.className = 'top-home';
+        el.appendChild(btn);
+        return { el, update: () => undefined, destroy: () => undefined } as never;
+      },
+    });
+    return s;
+  }
+  const withAutofocus = (): HTMLElement => {
+    const el = document.createElement('main');
+    el.innerHTML = '<h1>Mewdoku</h1><button class="first">Shop</button><button class="play" data-autofocus>Level 3</button>';
+    return el;
+  };
+
+  it('focus in the old screen → the new screen\'s [data-autofocus] control', async () => {
+    const s = focusSetup(withAutofocus);
+    s.router.showGame({} as never, {} as never);
+    (s.root.querySelector('.top-home') as HTMLButtonElement).focus();
+    s.router.showHome({} as never, {} as never);
+    await twoFrames();
+    expect((document.activeElement as HTMLElement).className).toBe('play');
+  });
+
+  it('without [data-autofocus]: the first heading, made focusable (tabindex −1)', async () => {
+    const s = focusSetup(() => {
+      const el = document.createElement('main');
+      el.innerHTML = '<div><h1>Mewdoku</h1></div><button>Level 3</button>';
+      return el;
+    });
+    s.router.showGame({} as never, {} as never);
+    (s.root.querySelector('.top-home') as HTMLButtonElement).focus();
+    s.router.showHome({} as never, {} as never);
+    await twoFrames();
+    expect(document.activeElement?.tagName).toBe('H1');
+    expect(document.activeElement?.getAttribute('tabindex')).toBe('-1');
+  });
+
+  it('focus not in the app (first route, a tap that focuses nothing) → focus stays put', async () => {
+    const s = focusSetup(withAutofocus);
+    (document.getElementById('outside') as HTMLButtonElement).focus();
+    s.router.showHome({} as never, {} as never);
+    await twoFrames();
+    expect(document.activeElement?.id).toBe('outside');
+  });
+
+  it('never over an open modal, and not on the game screen (it focuses its own board)', async () => {
+    const s = focusSetup(withAutofocus);
+    s.router.showGame({} as never, {} as never);
+    (s.root.querySelector('.top-home') as HTMLButtonElement).focus();
+    s.router.showHome({} as never, {} as never);
+    s.router.open('settings', {} as never);
+    await twoFrames();
+    expect((document.activeElement as HTMLElement).textContent).toBe('settings');
+    const g = focusSetup(withAutofocus);
+    g.router.showHome({} as never, {} as never);
+    (g.root.querySelector('.play') as HTMLButtonElement).focus();
+    g.router.showGame({} as never, {} as never);
+    await twoFrames();
+    expect((document.activeElement as HTMLElement).className).not.toBe('top-home');
+  });
+});
+
+describe('router: the new screen goes before a screen still fading out (PERF-1)', () => {
+  it('the leaving screen is the LAST child (its removal then never restyles the new screen)', async () => {
+    const calls: { resolve: () => void }[] = [];
+    const s = setup({ screenTransition: () => new Promise<void>((resolve) => void calls.push({ resolve })) });
+    s.router.showHome({} as never, {} as never);
+    const host = s.root.querySelector('.app-screen') as HTMLElement;
+    const home = host.firstElementChild as HTMLElement;
+    s.router.showGame({} as never, {} as never);
+    expect(host.children).toHaveLength(2);
+    expect(host.lastElementChild).toBe(home); // was: appended after it, so removing Home restyled the game screen
+    expect(host.firstElementChild?.tagName).toBe('SECTION');
+    calls[0]?.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(Array.from(host.children).map((c) => c.tagName)).toEqual(['SECTION']);
+  });
+});
+
+describe('router: focus intent survives a quick second screen change (A11Y-FOCUS-1)', () => {
+  it('Home shown twice in a row (the shell re-renders it) still gets focus', async () => {
+    const homes: HTMLElement[] = [];
+    const s = setup({
+      homeScreen: () => {
+        const el = document.createElement('main');
+        el.innerHTML = '<button class="play" data-autofocus>Level 3</button>';
+        homes.push(el);
+        return { el, update: () => undefined, destroy: () => undefined };
+      },
+      gameScreen: () => {
+        const el = document.createElement('section');
+        el.innerHTML = '<button class="top-home">Home</button>';
+        return { el, update: () => undefined, destroy: () => undefined } as never;
+      },
+    });
+    s.router.showGame({} as never, {} as never);
+    (s.root.querySelector('.top-home') as HTMLButtonElement).focus();
+    s.router.showHome({} as never, {} as never);
+    s.router.showHome({} as never, {} as never); // focus is on <body> by now
+    await nextFrame();
+    await nextFrame();
+    await nextFrame();
+    expect(document.activeElement).toBe(homes[1]?.querySelector('.play'));
   });
 });

@@ -121,3 +121,95 @@ test('a Hard level shows the bonus chip and +5 fish in total', async ({ page }) 
   await expect(victory).toContainText('Hard level bonus +2');
   expect(await page.evaluate(() => (window as TestWindow).__mewdoku?.app().save.wallet.fish)).toBe(15);
 });
+
+// ── 2b review fixes (R): PAR-6 / UX-4 — no frame falls back to the bare or stale board ──
+
+/**
+ * Installs a rAF sampler (page side) that records, every frame, the ranking and victory overlays'
+ * computed opacities and every game screen still in the document with its title and opacity.
+ */
+async function startSampler(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    type Sample = { t: number; rank: number; vic: number; games: { title: string; op: number }[] };
+    const w = window as Window & { __samples?: Sample[]; __sampling?: boolean };
+    w.__samples = [];
+    w.__sampling = true;
+    const t0 = performance.now();
+    const op = (el: Element | null): number => {
+      if (!el || (el as HTMLElement).hidden || !el.isConnected) return 0;
+      let o = 1;
+      for (let n: Element | null = el; n && n !== document.documentElement; n = n.parentElement) o *= Number(getComputedStyle(n).opacity);
+      return o;
+    };
+    const tick = (): void => {
+      if (!w.__sampling) return;
+      w.__samples?.push({
+        t: Math.round(performance.now() - t0),
+        rank: op(document.querySelector('[data-overlay="ranking"]')),
+        vic: op(document.querySelector('[data-overlay="victory"]')),
+        games: Array.from(document.querySelectorAll('.app-screen > .screen--game')).map((g) => ({
+          title: g.querySelector('.top-bar__title')?.textContent ?? '',
+          op: op(g),
+        })),
+      });
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+}
+
+async function stopSampler(page: Page): Promise<{ t: number; rank: number; vic: number; games: { title: string; op: number }[] }[]> {
+  return page.evaluate(() => {
+    const w = window as Window & { __samples?: { t: number; rank: number; vic: number; games: { title: string; op: number }[] }[]; __sampling?: boolean };
+    w.__sampling = false;
+    return w.__samples ?? [];
+  });
+}
+
+async function toVictory(page: Page): Promise<void> {
+  await open(page, atLevel(2));
+  await playNext(page);
+  await solve(page);
+  const panel = page.locator('[data-overlay="ranking"]');
+  await expect(panel.locator('.ranking__tap')).toBeEnabled({ timeout: 10_000 });
+  await startSampler(page);
+  await panel.locator('.ranking__tap').click();
+  const primary = page.locator('[data-overlay="victory"] .victory__primary');
+  await expect(primary).toBeEnabled({ timeout: 3000 });
+  await page.waitForTimeout(300);
+  const samples = await stopSampler(page);
+  // UX-4: panel → victory is a crossfade; the solved board is never left bare (it was, for ~150 ms,
+  // between the panel's fade-out and the victory's fade-in). Coverage = 1 − (1 − panel)(1 − victory).
+  const worst = Math.min(...samples.map((s) => 1 - (1 - s.rank) * (1 - s.vic)));
+  expect(samples.length).toBeGreaterThan(5);
+  expect(worst).toBeGreaterThanOrEqual(0.6);
+}
+
+test('PAR-6 / UX-4: panel → victory crossfades, and "Level 3" never shows the solved Level 2 board again', async ({ page }) => {
+  await toVictory(page);
+  await startSampler(page);
+  await page.locator('[data-overlay="victory"] .victory__primary').click();
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.puzzle.id === 'L3');
+  await page.waitForTimeout(500);
+  const samples = await stopSampler(page);
+  expect(samples.length).toBeGreaterThan(5);
+  // The old screen (title "Level 2") may only exist while the victory still covers it completely.
+  const stale = samples.filter((s) => s.games.some((g) => /^Level 2(?!\d)/.test(g.title) && g.op > 0.02) && s.vic < 0.98);
+  expect(stale).toEqual([]);
+  // The victory is what fades out (§2.9 "victory → next game: outgoing fade"), into the new board.
+  expect(samples.some((s) => s.vic > 0.05 && s.vic < 0.95)).toBe(true);
+  const end = samples[samples.length - 1]?.games ?? [];
+  expect(end).toHaveLength(1);
+  expect(end[0]?.title).toMatch(/^Level 3(?!\d)/);
+});
+
+test('PAR-6: Home from the victory never shows the solved board again', async ({ page }) => {
+  await toVictory(page);
+  await startSampler(page);
+  await page.locator('[data-overlay="victory"] .victory__home').click();
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');
+  await page.waitForTimeout(400);
+  const samples = await stopSampler(page);
+  const stale = samples.filter((s) => s.games.some((g) => g.op > 0.02) && s.vic < 0.98);
+  expect(stale).toEqual([]);
+});

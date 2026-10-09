@@ -7,6 +7,15 @@
 // Two inert nodes B animates (phase2b §12.3 A → B), styled in board.css: `span.cell__glow` behind the
 // cat (every cell; the solved-board glow) and `use.cell__ear` (href #cat-ear-flick) in the cat group
 // (every cat cell; shown only on .cell.is-flick).
+// PERF-1 (2b review): per-cell custom properties sit on the element that reads them, not on the
+// <button>: an inline custom property on the button is inherited by every node below it, so a 12×12
+// board had ~1 400 nodes with their own variable sets and any board-level change (the entry, inert,
+// a slot) restyled all of them (400 → 60 ms at 4× CPU). The tile carries --c and --diag, the cat SVG
+// --diag and --breathe-delay (board-view), the blink lid --blink-dur / --blink-delay; --xe stays on the
+// button (the two edge strokes and A's tests read it there); the even insets are board-level
+// (board-view). --diag, --breathe-delay and the blink pair are registered as NON-inherited
+// (registerCellProperties; their initial values equal the CSS fallbacks), so they never reach a
+// descendant either. --row was never read by any rule and is gone.
 import { cfg } from '../../app/config';
 import type { CellIndex } from '../../engine/types';
 import { CellState } from '../../game/types';
@@ -38,8 +47,50 @@ export interface CellRefs {
   readonly el: HTMLButtonElement;
   readonly tile: HTMLElement;
   readonly svg: SVGSVGElement;
+  /** The cell index (the blink lid's per-cat timing comes from it). */
+  readonly index: CellIndex;
   cat: SVGUseElement | null;
   pattern: SVGUseElement | null;
+}
+
+/**
+ * The per-cell custom properties that must not inherit (PERF-1): registered once per document with
+ * inherits: false and the initial value of their CSS fallback (fx.css `var(--diag, 0)`,
+ * `var(--breathe-delay, 0ms)`; board.css `var(--blink-dur, 5s) var(--blink-delay, 0ms)`), so every
+ * rule computes exactly what it did before. Without CSS.registerProperty (older engines, jsdom) they
+ * inherit as before: same look, slower restyles.
+ */
+export const CELL_PROPERTIES: readonly { readonly name: string; readonly syntax: string; readonly initialValue: string }[] = [
+  { name: '--diag', syntax: '<number>', initialValue: '0' },
+  { name: '--breathe-delay', syntax: '<time>', initialValue: '0ms' },
+  { name: '--blink-dur', syntax: '<time>', initialValue: '5s' },
+  { name: '--blink-delay', syntax: '<time>', initialValue: '0ms' },
+];
+
+let registered = false;
+
+/** Registers CELL_PROPERTIES (once; an engine that already has one, or lacks the API, is fine). */
+export function registerCellProperties(): void {
+  if (registered) return;
+  registered = true;
+  const api = (globalThis as { CSS?: { registerProperty?: (d: PropertyDefinition) => void } }).CSS;
+  if (typeof api?.registerProperty !== 'function') return;
+  for (const p of CELL_PROPERTIES) {
+    try {
+      api.registerProperty({ name: p.name, syntax: p.syntax, inherits: false, initialValue: p.initialValue });
+    } catch {
+      // already registered (a second app instance, HMR): the first registration stands
+    }
+  }
+}
+
+/** The blink lid's period and phase for a cell (fx.catBlinkMinMs…MaxMs, a stable per-cell phase). */
+export function blinkTiming(cell: CellIndex): { readonly dur: string; readonly delay: string } {
+  const span = cfg.fx.catBlinkMaxMs - cfg.fx.catBlinkMinMs;
+  return {
+    dur: `${Math.round(cfg.fx.catBlinkMinMs + cellNoise(cell, 1) * span)}ms`,
+    delay: `${-Math.round(cellNoise(cell, 2) * cfg.fx.catBlinkMaxMs)}ms`,
+  };
 }
 
 /** Colour name for a palette index, with its glyph name when patterns are on (02 §18). */
@@ -67,7 +118,12 @@ function cellNoise(cell: CellIndex, salt: number): number {
   return (x >>> 0) / 4294967296;
 }
 
-export function buildCell(cell: CellIndex, paletteIndex: number, insets: CellInsets, rowIndex: number): CellRefs {
+/**
+ * One cell. `insets`: the tile insets for a cell outside a board (a board sets them once on itself,
+ * PERF-1, and passes null). `diag`: the entry wave's diagonal r + c (fx.css), on the tile and the SVG.
+ */
+export function buildCell(cell: CellIndex, paletteIndex: number, insets: CellInsets | null = null, diag = 0): CellRefs {
+  registerCellProperties();
   const doc = document;
   const el = doc.createElement('button');
   el.type = 'button';
@@ -76,25 +132,24 @@ export function buildCell(cell: CellIndex, paletteIndex: number, insets: CellIns
   el.tabIndex = -1;
   el.dataset.i = String(cell);
   el.dataset.s = 'e';
-  const st = el.style;
-  st.setProperty('--c', `var(--r${paletteIndex})`);
-  st.setProperty('--xe', xEdgeColor(paletteIndex));
-  st.setProperty('--it', `${insets.top}px`);
-  st.setProperty('--ir', `${insets.right}px`);
-  st.setProperty('--ib', `${insets.bottom}px`);
-  st.setProperty('--il', `${insets.left}px`);
-  st.setProperty('--row', String(rowIndex));
-  const span = cfg.fx.catBlinkMaxMs - cfg.fx.catBlinkMinMs;
-  st.setProperty('--blink-dur', `${Math.round(cfg.fx.catBlinkMinMs + cellNoise(cell, 1) * span)}ms`);
-  st.setProperty('--blink-delay', `${-Math.round(cellNoise(cell, 2) * cfg.fx.catBlinkMaxMs)}ms`);
+  el.style.setProperty('--xe', xEdgeColor(paletteIndex));
+  if (insets) {
+    el.style.setProperty('--it', `${insets.top}px`);
+    el.style.setProperty('--ir', `${insets.right}px`);
+    el.style.setProperty('--ib', `${insets.bottom}px`);
+    el.style.setProperty('--il', `${insets.left}px`);
+  }
 
   const tile = doc.createElement('span');
   tile.className = 'cell__tile';
+  tile.style.setProperty('--c', `var(--r${paletteIndex})`);
+  tile.style.setProperty('--diag', String(diag));
   const svg = doc.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('class', 'cell__g');
   svg.setAttribute('viewBox', '0 0 100 100');
   svg.setAttribute('aria-hidden', 'true');
   svg.setAttribute('focusable', 'false');
+  svg.style.setProperty('--diag', String(diag));
   const a = Math.round(((1 - cfg.layout.markScale) / 2) * 100); // 54 % of the cell → 23..77
   const b = 100 - a;
   const strokes = [`M${a} ${a} ${b} ${b}`, `M${b} ${a} ${a} ${b}`];
@@ -114,7 +169,7 @@ export function buildCell(cell: CellIndex, paletteIndex: number, insets: CellIns
   glow.className = 'cell__glow';
   glow.setAttribute('aria-hidden', 'true');
   el.append(tile, glow, svg);
-  return { el, tile, svg, cat: null, pattern: null };
+  return { el, tile, svg, index: cell, cat: null, pattern: null };
 }
 
 function makeUse(cls: string, href: string, box: readonly [number, number, number]): SVGUseElement {
@@ -137,6 +192,10 @@ export function ensureCat(refs: CellRefs, mood: CatMood): SVGUseElement {
   g.setAttribute('class', 'cell__catg');
   const cat = makeUse('cell__cat', `#cat-${mood}`, [off, off, size]);
   const blink = makeUse('cell__blink', '#cat-blink', [off, off, size]);
+  // The lid's own timing (board.css .cell__blink animation), on the lid itself (PERF-1).
+  const bt = blinkTiming(refs.index);
+  blink.style.setProperty('--blink-dur', bt.dur);
+  blink.style.setProperty('--blink-delay', bt.delay);
   // phase2b §2.9 ear flick overlay: hidden unless the cell has .is-flick (B toggles it).
   const ear = makeUse('cell__ear', '#cat-ear-flick', [off, off, size]);
   g.append(cat, blink, ear);

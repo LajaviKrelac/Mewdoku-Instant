@@ -137,13 +137,15 @@ export function createSocialGlue(opts: SocialGlueOptions): SocialGlue {
     caps,
     submit: (board, score) => (hasBoard(board) ? via((r) => r.ranking.submit(board, score), 'error' as const) : Promise.resolve('unsupported')),
     mine: (board) => (hasBoard(board) && caps().myRank ? via((r) => r.ranking.mine(board), null) : Promise.resolve(null)),
-    top: (board, n) => (hasBoard(board) ? via((r) => r.ranking.top(board, n), []) : Promise.resolve([])),
+    top: (board, n, keep) => (hasBoard(board) ? via((r) => r.ranking.top(board, n, keep), []) : Promise.resolve([])),
     async showList(board, view, rect) {
       if (!hasBoard(board) || !caps().overlay) return null;
       // Only the chunk load is bounded here: the real call has its own deadline and closes a late view itself.
       const r = await within(timers, load(), deadline, () => null).catch(() => null);
       return r ? r.ranking.showList(board, view, rect) : null;
     },
+    // FB2B-6: unknown until the chunk has answered for the board (then its LEADERBOARD_NOT_FOUND latch).
+    supports: (board) => hasBoard(board) && real?.ranking.supports?.(board) !== false,
   };
 
   // No deadline on create(): it waits on FB's dialog. The chunk load inside is bounded by chunks.timeoutMs.

@@ -176,9 +176,9 @@ export const catalog: LocaleCatalog = {
 
   // ── How to play ────────────────────────────────────────────────────────────
   'howto.title': 'Como jogar',
-  'howto.rule.colours': 'Cada cor esconde exatamente um gato.',
-  'howto.rule.lines': 'Cada linha e cada coluna também tem um gato.',
-  'howto.rule.space': 'Gatos gostam de espaço: dois gatos nunca se tocam, nem na diagonal.',
+  'howto.rule.colours': 'Cada cor esconde *exatamente um gato*.',
+  'howto.rule.lines': 'Cada linha e cada coluna também tem *um gato*.',
+  'howto.rule.space': 'Gatos gostam de espaço: dois gatos *nunca se tocam, nem na diagonal*.',
   'howto.controls': 'Toque em uma casa para riscá-la. Toque duas vezes para colocar um gato. Deslize sobre várias casas para riscar todas de uma vez.',
   'howto.hearts': 'Um gato na casa errada custa um coração. Se perder os três, você pode tentar o nível de novo.',
   'howto.helpers': 'Travou? A lâmpada explica um passo. A patinha encontra um gato para você.',
@@ -193,10 +193,10 @@ export const catalog: LocaleCatalog = {
   'daily.done': 'Pronto',
 
   // ── Tutorial coach ─────────────────────────────────────────────────────────
-  'tutorial.step1': 'Cada cor esconde exatamente um gato. A cor {color} tem uma casa só: toque nela duas vezes.',
-  'tutorial.step2': 'Um gato ocupa toda a linha e a coluna dele.',
-  'tutorial.step3': 'Gatos precisam de espaço: eles não se tocam, nem na diagonal. Deslize sobre estas casas para riscá-las.',
-  'tutorial.step4': 'A linha 2 tem só uma casa livre. Toque nela duas vezes.',
+  'tutorial.step1': 'Cada cor esconde *exatamente um gato*. A cor {color} tem uma casa só: toque nela duas vezes.',
+  'tutorial.step2': 'Um gato ocupa *toda a linha e a coluna* dele.',
+  'tutorial.step3': 'Gatos precisam de espaço: eles *não se tocam, nem na diagonal*. Deslize sobre estas casas para riscá-las.',
+  'tutorial.step4': 'A linha 2 tem *só uma casa livre*. Toque nela duas vezes.',
   'tutorial.step5': 'Travou? Toque na lâmpada para ver uma dica.',
   'tutorial.step6': 'Coloque o último gato.',
   'tutorial.gotIt': 'Entendi',
@@ -258,6 +258,7 @@ export const catalog: LocaleCatalog = {
   'settings.language.auto': 'Automático',
   'settings.shop': 'Loja',
   'settings.removeAds': 'Remover anúncios',
+  'settings.feedback': 'Enviar comentário',
   'howto.a11y': 'Difícil distinguir as cores? Ative os padrões de cor nos Ajustes.',
   'fish.count.one': '{count} peixe',
   'fish.count.other': '{count} peixes',
@@ -320,6 +321,7 @@ export const catalog: LocaleCatalog = {
   'shop.swap.kitty': '1 gatinho',
   'shop.swap.action': 'Trocar',
   'shop.notEnough': 'Ainda não há peixes suficientes.',
+  'shop.swap.done': 'Adicionado: {item}. Peixes restantes: {count}.',
   'shop.swap.a11y': 'Trocar {price} peixes por {item}',
   'shop.buy.a11y': 'Comprar {name}, {price}',
   'shop.retry': 'Tentar de novo',

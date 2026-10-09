@@ -12,6 +12,9 @@
 //     .gz/.br files, the e2e test hooks (a dist/fbig-e2e build), more than 500 files (platform cap,
 //     05 §5.3) and a zip over 1 MB (ours). Warned: more than 100 files or a zip over 750 KB
 //     (the §11 budget).
+//   - Warned for a release zip: an empty VITE_FB_* placement or leaderboard id (the build's
+//     `mewdoku-fb-ids:` marker, src/platform/fb/index.ts): that feature is silently off in the
+//     released game (no interstitials, free rewarded fallback, no banner, personal records only).
 //
 // Usage: tsx scripts/zip-fbig.ts [--preview] [--dist <dir>] [--out dist-zip]
 // The zip is deterministic (sorted entries, fixed timestamps), so the same build gives the same bytes.
@@ -27,6 +30,35 @@ export interface ZipResult {
   readonly file: string;
   readonly bytes: number;
   readonly fileCount: number;
+  /** Non-fatal problems (also printed unless quiet): budgets, and empty VITE_FB_* ids in a release. */
+  readonly warnings: readonly string[];
+}
+
+/** The build marker of src/platform/fb/index.ts (FB_IDS_MARKER). */
+const FB_IDS_RE = /mewdoku-fb-ids:i([01])r([01])b([01])l([01])/;
+const FB_IDS: readonly { readonly name: string; readonly off: string }[] = [
+  { name: 'VITE_FB_PLACEMENT_INTERSTITIAL', off: 'no interstitials' },
+  { name: 'VITE_FB_PLACEMENT_REWARDED', off: 'no rewarded videos (the free fallback grant only)' },
+  { name: 'VITE_FB_PLACEMENT_BANNER', off: 'no banners' },
+  { name: 'VITE_FB_LEADERBOARDS', off: 'no leaderboards (personal records only)' },
+];
+
+/**
+ * Warnings for the VITE_FB_* ids a build was made with, from its marker (empty = that feature off).
+ * `js` is the text of the build's JS files. One warning when no marker is found (not an FB build of
+ * this tree, or one made before the marker existed).
+ */
+export function fbIdWarnings(js: readonly string[]): string[] {
+  for (const text of js) {
+    const m = FB_IDS_RE.exec(text);
+    if (!m) continue;
+    const out: string[] = [];
+    FB_IDS.forEach((v, i) => {
+      if (m[i + 1] === '0') out.push(`${v.name} was empty in this build: ${v.off} (fb-dashboard.md §1)`);
+    });
+    return out;
+  }
+  return ['no VITE_FB_* marker found in the build: cannot tell whether its placement and leaderboard ids were set'];
 }
 
 export interface ZipOptions {
@@ -110,7 +142,8 @@ export function zipFbig(opts: ZipOptions = {}): ZipResult {
   const forbidden = files.filter((f) => FORBIDDEN.test(f.path)).map((f) => f.path);
   if (forbidden.length > 0) problems.push(`refusing source maps / precompressed files: ${forbidden.join(', ')}`);
   if (files.length > MAX_FILES) problems.push(`${files.length} files, over the platform cap of ${MAX_FILES}`);
-  const hooks = files.filter((f) => f.path.endsWith('.js') && readFileSync(join(distDir, f.path), 'utf8').includes(E2E_MARKER));
+  const js = files.filter((f) => f.path.endsWith('.js')).map((f) => ({ path: f.path, text: readFileSync(join(distDir, f.path), 'utf8') }));
+  const hooks = js.filter((f) => f.text.includes(E2E_MARKER));
   if (hooks.length > 0) problems.push(`refusing a build with the e2e test hooks (${hooks.map((f) => f.path).join(', ')}): zip a release or preview build`);
   if (release) {
     const allowed = new Set(opts.releaseLocales ?? cfg.i18n.releaseLocales);
@@ -138,18 +171,21 @@ export function zipFbig(opts: ZipOptions = {}): ZipResult {
   const file = join(outDir, name);
   writeFileSync(file, zip);
 
+  const kb = (n: number): string => `${(n / 1000).toFixed(1)} KB`;
+  const warnings: string[] = [];
+  if (files.length > FB_MAX_FILES) warnings.push(`more than ${FB_MAX_FILES} files (phase2b §11 budget)`);
+  if (zip.length > BUDGET_ZIP_BYTES) warnings.push(`zip over the ${kb(BUDGET_ZIP_BYTES)} budget (phase2b §11)`);
+  if (release) warnings.push(...fbIdWarnings(js.map((f) => f.text)));
   if (!opts.quiet) {
-    const kb = (n: number): string => `${(n / 1000).toFixed(1)} KB`;
     console.log(`FB bundle: ${relative(ROOT, file)}`);
     for (const f of files) console.log(`  ${f.path.padEnd(48)} ${kb(f.bytes).padStart(10)}`);
     console.log(`  ${'total (raw)'.padEnd(48)} ${kb(rawBytes).padStart(10)}`);
     console.log(`  ${'zip'.padEnd(48)} ${kb(zip.length).padStart(10)}`);
     console.log(`  files: ${files.length} (budget ${FB_MAX_FILES}, platform cap ${MAX_FILES})`);
     console.log(`  ${release ? 'release zip' : 'PREVIEW zip (not for production)'}; locales: en${localeChunkIds(files.map((f) => f.path)).map((id) => `, ${id}`).join('')}`);
-    if (files.length > FB_MAX_FILES) console.warn(`  warning: more than ${FB_MAX_FILES} files (phase2b §11 budget)`);
-    if (zip.length > BUDGET_ZIP_BYTES) console.warn(`  warning: zip over the ${kb(BUDGET_ZIP_BYTES)} budget (phase2b §11)`);
+    for (const w of warnings) console.warn(`  warning: ${w}`);
   }
-  return { file, bytes: zip.length, fileCount: files.length };
+  return { file, bytes: zip.length, fileCount: files.length, warnings };
 }
 
 function argValue(argv: readonly string[], flag: string): string | undefined {

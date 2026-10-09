@@ -7,7 +7,7 @@
 import { formatClock, formatDuration, formatShortDate, t } from '../../i18n';
 import { illustration } from '../art/illustrations';
 import { h, setText, type OverlayView } from '../dom';
-import { createOverlayShell, createTicker, makeButton, setTextKeepTogether } from './overlay-base';
+import { createOverlayShell, createTicker, makeButton, setButtonLabel, setTextKeepTogether } from './overlay-base';
 
 export interface DailyResultProps {
   readonly dateKey: string;
@@ -51,6 +51,7 @@ export function createDailyResult(): OverlayView<DailyResultProps> {
   };
   const render = (p: DailyResultProps): void => {
     props = p;
+    setButtonLabel(done, t('daily.done')); // follows the language (review A11Y-I18N-1)
     // The date stays on one line ("Daily puzzle · Wed 7" / "Oct" was the old break, UX-15).
     const date = formatShortDate(p.dateKey);
     setTextKeepTogether(title, t('daily.title', { date }), [date]);

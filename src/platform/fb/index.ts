@@ -316,7 +316,23 @@ export function createFbPlatform(opts: FbPlatformOptions = {}): PlatformAdapter 
   };
 }
 
+/**
+ * Which VITE_FB_* values this build was given, never the values themselves: i/r/b = the interstitial,
+ * rewarded and banner placements, l = the leaderboard map; 1 = set, 0 = empty. The minifier folds it
+ * into one string literal, and scripts/zip-fbig.ts reads it from the bundle to warn about a release
+ * zip whose ads or rankings are switched off by a missing id (platform review, 2026-10-09).
+ */
+export const FB_IDS_MARKER =
+  'mewdoku-fb-ids:' +
+  (import.meta.env.VITE_FB_PLACEMENT_INTERSTITIAL ? 'i1' : 'i0') +
+  (import.meta.env.VITE_FB_PLACEMENT_REWARDED ? 'r1' : 'r0') +
+  (import.meta.env.VITE_FB_PLACEMENT_BANNER ? 'b1' : 'b0') +
+  (import.meta.env.VITE_FB_LEADERBOARDS ? 'l1' : 'l0');
+
 /** Entry used by main.ts through the '@platform' alias in the fbig build. */
 export function createPlatform(): PlatformAdapter {
-  return createFbPlatform();
+  const platform = createFbPlatform();
+  // Keeps the marker in the bundle (read by the zip script, not by the game).
+  Object.defineProperty(platform, 'buildIds', { value: FB_IDS_MARKER });
+  return platform;
 }

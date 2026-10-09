@@ -11,10 +11,14 @@
 //
 // Classes: .overlay[data-overlay=rank_hub] > .overlay__panel--sheet.rank-hub[data-tab]
 //          .overlay__head .rank-hub__tabs > .rank-hub__tab[aria-selected] ; .rank-hub__panel > .rank-list | .rank-groups
+//
+// Review fixes (A11Y-HUB-1): 44 px tabs (overlay-chunk.css), and ArrowRight / ArrowLeft move to the
+// tab on that side in right-to-left layouts too. The labels follow the language (A11Y-I18N-1).
 import { formatNumber, t, tn, translate, type I18nKey } from '../../i18n';
 import { h, setText, type OverlayView } from '../dom';
+import { createLocaleText } from '../locale-text';
 import { formatDaysHours } from '../screens/home-screen';
-import { closeButton, createOverlayShell, makeButton, nextId, setGated } from './overlay-base';
+import { arrowStep, closeButton, createOverlayShell, inlineDir, makeButton, nextId, setGated } from './overlay-base';
 import { rankTitle, renderRankList, type RankingListState } from './ranking-panel';
 
 export type RankHubTab = 'points' | 'daily' | 'event' | 'groups';
@@ -83,12 +87,21 @@ export function createRankHub(): OverlayView<RankHubProps> {
   // ── Groups tab ──
   const groupsBody = h('p', { class: 'rank-groups__body' });
   const groupsActive = h('p', { class: 'rank-groups__active' });
-  const start = makeButton({ variant: 'secondary', label: t('group.start'), icon: 'icon-users', block: true, className: 'rank-groups__start', onPress: () => props?.onStartGroup() });
+  const L = createLocaleText();
+  const start = L.label(
+    makeButton({ variant: 'secondary', label: '', icon: 'icon-users', block: true, className: 'rank-groups__start', onPress: () => props?.onStartGroup() }),
+    () => t('group.start'),
+  );
   const groups = h('div', { class: 'rank-groups' }, groupsBody, groupsActive, start);
 
   const tabPanel = h('div', { class: 'rank-hub__panel', role: 'tabpanel', id: panelId, tabindex: '-1' }, heading, list, groups);
   shell.panel.append(
-    h('div', { class: 'overlay__head' }, h('h2', { class: 'overlay__title', id: shell.titleId }, t('rank.hub')), closeButton(() => void close())),
+    h(
+      'div',
+      { class: 'overlay__head' },
+      L.text(h('h2', { class: 'overlay__title', id: shell.titleId }), () => t('rank.hub')),
+      L.attr(closeButton(() => void close()), 'aria-label', () => t('common.close')),
+    ),
     tabs,
     tabPanel,
   );
@@ -105,8 +118,9 @@ export function createRankHub(): OverlayView<RankHubProps> {
     const i = order.indexOf((ev.target as HTMLElement).dataset.tab as RankHubTab);
     if (i < 0) return;
     let next = -1;
-    if (ev.key === 'ArrowRight' || ev.key === 'ArrowDown') next = (i + 1) % order.length;
-    else if (ev.key === 'ArrowLeft' || ev.key === 'ArrowUp') next = (i - 1 + order.length) % order.length;
+    // The visual neighbour: in a right-to-left row the first tab is on the right.
+    const step = arrowStep(ev.key, inlineDir(tabs) === 'rtl');
+    if (step) next = (i + step + order.length) % order.length;
     else if (ev.key === 'Home') next = 0;
     else if (ev.key === 'End') next = order.length - 1;
     if (next < 0) return;
@@ -116,8 +130,9 @@ export function createRankHub(): OverlayView<RankHubProps> {
     press(tab);
   });
 
+  let tabsLang = '';
   const renderTabs = (p: RankHubProps): void => {
-    const key = `${p.tabs.join(',')}|${p.eventNameKey ?? ''}`;
+    const key = `${p.tabs.join(',')}|${p.eventNameKey ?? ''}|${tabsLang}`;
     if (key !== tabsKey) {
       tabsKey = key;
       tabs.textContent = '';
@@ -187,6 +202,7 @@ export function createRankHub(): OverlayView<RankHubProps> {
 
   const render = (p: RankHubProps): void => {
     props = p;
+    L.apply();
     shell.panel.dataset.tab = p.tab;
     renderTabs(p);
     const isGroups = p.tab === 'groups';
@@ -208,6 +224,14 @@ export function createRankHub(): OverlayView<RankHubProps> {
     reportListArea();
   };
 
+  // A language switch rebuilds the tab labels and the list (A11Y-I18N-1).
+  L.watch(() => {
+    tabsLang = String(Number(tabsLang || '0') + 1);
+    if (!props || !shell.isOpen()) return;
+    listKind = null;
+    render(props);
+  });
+
   return {
     el: shell.el,
     modal: true,
@@ -226,6 +250,7 @@ export function createRankHub(): OverlayView<RankHubProps> {
     },
     dismiss: close,
     destroy() {
+      L.dispose();
       props = null;
       shell.el.remove();
     },

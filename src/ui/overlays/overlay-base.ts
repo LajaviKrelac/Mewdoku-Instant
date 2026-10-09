@@ -143,15 +143,22 @@ const KEEP = '\\S+ [·—–](?= )|[^\\s-]+(?:-[^\\s-]+)+';
  * `el.textContent` stays exactly `text`, so screen readers and tests see the plain sentence.
  */
 export function setTextKeepTogether(el: HTMLElement, text: string, phrases: readonly string[] = []): void {
+  el.textContent = '';
+  el.append(...keepTogetherNodes(text, phrases));
+}
+
+/** The nodes setTextKeepTogether() appends: plain text with `.nowrap` spans around the kept phrases. */
+export function keepTogetherNodes(text: string, phrases: readonly string[] = []): (Node | string)[] {
   const alts = phrases.filter((p) => p !== '').map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
   const re = new RegExp([...alts, KEEP].join('|'), 'g');
-  el.textContent = '';
+  const out: (Node | string)[] = [];
   let last = 0;
   for (const m of text.matchAll(re)) {
-    el.append(text.slice(last, m.index), h('span', { class: 'nowrap' }, m[0]));
+    out.push(text.slice(last, m.index), h('span', { class: 'nowrap' }, m[0]));
     last = (m.index ?? 0) + m[0].length;
   }
-  el.append(text.slice(last));
+  out.push(text.slice(last));
+  return out.filter((n) => n !== '');
 }
 
 /** Sets a button's visible label (the .btn__label span). */
@@ -211,4 +218,29 @@ export function createTicker(): Ticker {
       id = null;
     },
   };
+}
+
+// ─────────────────────────────── keyboard ───────────────────────────────
+
+/**
+ * The index step of an arrow key in a one-dimensional group (radio groups, tabs). Horizontal keys
+ * follow the visual order: in a right-to-left layout the first option sits on the right, so
+ * ArrowRight steps back (review A11Y-HUB-1). 0 for any other key.
+ */
+export function arrowStep(key: string, rtl: boolean): number {
+  if (key === 'ArrowDown') return 1;
+  if (key === 'ArrowUp') return -1;
+  if (key === 'ArrowRight') return rtl ? -1 : 1;
+  if (key === 'ArrowLeft') return rtl ? 1 : -1;
+  return 0;
+}
+
+/** The inline direction of `el` (computed; 'ltr' without a window). */
+export function inlineDir(el: Element): 'ltr' | 'rtl' {
+  const view = el.ownerDocument.defaultView;
+  try {
+    return view && view.getComputedStyle(el).direction === 'rtl' ? 'rtl' : 'ltr';
+  } catch {
+    return 'ltr';
+  }
 }

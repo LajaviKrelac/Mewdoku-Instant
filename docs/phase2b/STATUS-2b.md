@@ -90,7 +90,17 @@ What the pass did, and what it left:
 - **Duplication.** Checked from the source maps: only the engine modules appear twice (the worker and the main-thread fallback chunks), by design.
 - **Kept in the main bundle, on purpose:** the game screen and board (a first run starts on the tutorial board), pack-000 (the first 100 levels play without a fetch), the save migration and merge, the win flow (it must start on the `WON` frame; lazy-loading it would save about 8 KB and add a load race at the moment that matters), and D's social facades (they keep `capabilities()` final at `init()`).
 
-Time to start: 118 KB gzipped is about 0.6 s at 1.6 Mbit/s ("slow 4G"), well within Meta's < 5 s guideline.
+**Time to start (measured, review DOC-1).** The earlier estimate here ("118 KB gzipped is about 0.6 s at 1.6 Mbit/s") counted transfer time alone; it ignored the round trips of each request chain (HTML → JS/CSS → pack, font, worker) and parse and run time, and understated the real first load 4–7×. Measured on 2026-10-09 (group P fix pass) with the perf review's first-load script (`scratchpad/review2b-perf/14-firstload.mjs`): Chromium, phone viewport, cache disabled, 4× CPU slowdown, DevTools network presets (Slow 4G: 562.5 ms latency, 1.44 Mbit/s down; Fast 4G: 165 ms, 8.1 Mbit/s), median of 3 runs, time until Home's Level button (returning player) or the tutorial board (first run) is usable. The builds were the e2e builds of the working tree (hooks on; a release build is the same code without them). **The FBIG figures exclude the fbinstant SDK download**: the stub SDK was served locally and unthrottled.
+
+| Build, player | Slow 4G gzip | Slow 4G uncompressed | Fast 4G gzip | Fast 4G uncompressed |
+|---|---|---|---|---|
+| Web, first run (tutorial board) | 2.99 s | 4.39 s | 1.17 s | 1.34 s |
+| Web, returning (Home) | 2.77 s | 3.85 s | 1.05 s | 1.18 s |
+| FBIG, first run (tutorial board) | 2.93 s | 4.45 s | 1.32 s | 1.36 s |
+| FBIG, returning (Home) | 2.23 s | 3.39 s | 0.90 s | 1.08 s |
+| FBIG, time to `startGameAsync` (first run / returning) | 2.62 / 1.90 s | 4.08 / 3.07 s | 0.88 / 0.69 s | — |
+
+Everything is inside Meta's < 5 s guideline, but with little headroom where FB serves the files uncompressed (05 §5.3): the FBIG first run on Slow 4G is at 4.45 s before the SDK download is counted. The 05 §5.4 target "time to `startGameAsync` ≤ 2 s on a mid-range Android over 4G" is met on Fast 4G and for a returning player on gzip Slow 4G, and **missed** on Slow 4G otherwise (2.6–4.1 s). The perf reviewers' run on cc0aac4 gave the same picture, a little faster (web 2.63 / 2.91 s gzip, FBIG 2.10 / 2.83 s gzip and 3.20 / 4.30 s uncompressed on Slow 4G). **Release check:** run the script against the release FBIG build before each upload; the uncompressed FBIG first run on Slow 4G should stay under about 4.5 s.
 
 ## 5. Screenshots (`docs/phase2b/screenshots/final-*.png`)
 
@@ -201,3 +211,28 @@ All requests from the five workstreams' hand-offs (`2b-requests.json`). "Done" i
 - **A failed CSS download for a lazy chunk** (network loss at that moment) leaves that chunk's overlays unstyled until reload: Vite's preload helper does not re-add a stylesheet it already tried. The JS retry path is unaffected. Not seen in testing; in the FB zip the files are local.
 - `win.next` (the O3 "Next" label) is now unused; keys are never removed (CONTRACTS §6.2).
 - The B-* harness screenshots predate the integration (they show B's harness, not the app).
+
+## 11. Review fixes, group P (platform, banner, economy, rankings, events, data; 2026-10-09)
+
+A six-lens review of cc0aac4 found these; each was reproduced by an independent verifier, fixed at the root, and covered by tests that fail on cc0aac4 (unit tests checked against the old modules; e2e tests run against a cc0aac4 build).
+
+| Finding | Fix | Tests |
+|---|---|---|
+| **FB2B-1 (blocker)** A banner load slower than `ads.readyTimeoutMs`, a load that never settles, or one failed `hideBannerAdAsync` left the banner up during play, and ads then showed over it | `banner-flow`: a load that answered `timeout` (or threw) counts as maybe up, so the next `hide()` always reaches the adapter, which hides a late banner when it lands. `fb-banner`: a failed hide keeps the banner counted as up and is retried (`HIDE_RETRY_MS` 1 s, 3 times, and on every later hide); a load that never settles is given up after `stuckLoadMs` (56 s: under the 60 s window, over Meta's 45 s), so a later screen loads again | `banner-flow.spec` (6), `fb-banner.spec` (5), `fbig.spec` "banners never in play" (4: a 6 s load with Play at 1 s and 5 s, a failing hide, a never-settling load, hide before the interstitial) |
+| **FB2B-2 / L2B-1** The shop opened from the victory fish pill left the banner over its Buy buttons; No Ads bought there left it up | the shell treats an open victory overlay as a banner screen (modal open hides, close re-gates after the window); boot passes the shop's `onOpen` hook (hide) | `shell-2b.spec` (3), `fbig.spec` victory shop |
+| **L2B-2** No Ads becoming true (boot restore, purchase, late cloud merge) did not take a banner on show down | `BannerFlow.entitlementChanged()`, called from the shop's `changed` and from the external-save merge when it brings No Ads; the reserve stays until the screen unmounts (§3.2) | `banner-flow.spec` (2), `fbig.spec` boot restore |
+| **FB2B-3** A failed or slow `getCatalogAsync` gave an empty Buy section, cached 10 min, and Settings still offered Remove ads | an empty catalogue is the `error` state with Retry and is never cached; reopening the shop asks again; Remove ads only when the catalogue lists `remove_ads` | `shop-flow.spec` (2), `shell-2b.spec`, `fbig.spec` catalogue Retry |
+| **FB2B-4** `daily_fastest` lists hid today's players once later time zones posted the next day, and "Your rank" was the board's global rank | readers page past the next-day entries to the shown day's band (`RankingProvider.top(…, keep)`, `RankListView.keep`; classic `getEntriesAsync(50, offset)`, at most 4 pages) and number rows inside it; the panel's rank is my position in that band, never the board's (fb-dashboard §3) | `fb-ranking.spec` (3), `fb-platform.spec`, `ranking-flow.spec` (2), `fbig.spec` daily across time zones |
+| **FB2B-5** iOS showed "Getting the shop ready…" for 5 s | payments known to be unavailable answer `unavailable` at once | `shop-flow.spec`, `fbig.spec` iOS |
+| **FB2B-6** A board in `VITE_FB_LEADERBOARDS` but missing in the dashboard opened an empty list | `LEADERBOARD_NOT_FOUND` from any call latches the board for the session; `RankingProvider.supports(board)` (additive) lets ranking-flow show personal records | `fb-ranking.spec` (3), `fb-platform.spec`, `ranking-flow.spec` |
+| **FB2B-7** "Solved in 0:03" next to "Your score: 0:04" | the board entry of the solve just made shows my own time (daily and event encodings) | `ranking-flow.spec`, `fbig.spec` daily |
+| **RANK-1** The event Top list labelled the event total "This puzzle" | no "This puzzle" row outside a just-played puzzle | `shell-2b.spec` |
+| **L2B-4** (shell part) After an event ended, "Back to event" and the event screen's Play ended in `toast.error` | `showEvent` and Play go Home once the event has ended (§4.4) | `shell-2b.spec` (2), `events.spec` e2e |
+| **PERF-2** A slow locale chunk held the first screen twice (2.4 s instead of 1.2 s), with a blank FBIG page after `startGameAsync` | step 4 waits for the guessed chunk only what step 3 left of its budget; a full wait only when the resolved locale differs; the loading indicator shows during a long step-4 wait on FBIG | `boot-locale.spec` (3) |
+| **PAR-1** Dailies were never 12×12 | every second Sunday from 2026-10-18 is 12×12 G4 (`DAILY_12_FROM`, `isTwelveSunday`); the daily packs were regenerated (`gen-daily --from 2026-10`): exactly the 58 such Sundays changed, every other day is byte-identical; `verify-levels` 0 issues. The packs (2026-10 to 2028-12) now hold 8×8 on 234 days, 9×9 on 235, 10×10 on 236, 11×11 on 60 and 12×12 on 58. On-device generation of a 12×12 G4 after the packs (2029 on) took a median 0.3 s and at most 1.9 s in Node, far inside `loading.failSafeMs` (25 s) | `progression.spec`, `tests/property/levels.spec.ts` |
+| **DOC-1** The time-to-start estimate | measured table in §4 | — |
+| Platform note | a release zip with an empty `VITE_FB_*` placement or leaderboard id now warns (the build carries a `mewdoku-fb-ids:` marker, never the ids) | `scripts.spec` |
+
+Not fixed in group P's files (requests to their owners): the victory fish pill does not follow the wallet after a purchase or swap made from it (L2B-3, `session.ts`); the event victory still offers "Play puzzle N+1" after the end and `nextEventIndex` ignores the end (L2B-4 rest, `views.ts`, `session.ts`; the shell now lands such a "Back to event" on Home); the spec and 02 §12 still describe the daily table without the 12×12 Sundays, and §8.6 says "hidden" where §8.5 and the build say `shop.unavailable` (lead docs).
+
+Known limits left: the FB overlay list shows my own row with the board's whole-second value (0:04 for a 3.3 s solve) while the panel shows 0:03; a day's band that starts more than 200 entries down the board shows the empty list (fb-dashboard §3 names the Phase 4 alternatives).

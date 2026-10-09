@@ -6,11 +6,14 @@ import { describe, expect, it } from 'vitest';
 import { createAdFlow } from '../../../src/app/ad-flow';
 import { createBannerFlow } from '../../../src/app/banner-flow';
 import { createFakeClock } from '../../../src/app/clock';
+import { cfg } from '../../../src/app/config';
 import { createEventBus, type AppEventMap } from '../../../src/app/events';
 import { createStore, initialAppState, type AppState } from '../../../src/app/store';
 import { defaults } from '../../../src/game/save';
 import type { SaveData } from '../../../src/game/types';
+import { createFbBanner } from '../../../src/platform/fb/fb-banner';
 import type { AdResult } from '../../../src/platform/types';
+import { createStub, drain } from '../platform/helpers';
 import { createFakePlatform, createHarness, NOW, startLevel, winGame, type FakePlatform, tapRanking } from './harness';
 
 const veteran = (s: SaveData): SaveData => ({ ...s, progress: { level: 15, completed: 14, best: {} } });
@@ -124,6 +127,97 @@ describe('banner-flow (§3.2)', () => {
     await shown;
     expect(s.flow.showing()).toBe(false);
     expect(s.log).toContain('banner:hide');
+  });
+
+  // ── review FB2B-1: a slow, stuck or timed-out load must never leave a banner in play ──
+
+  it('a show() that answered timeout may still land: the next hide() reaches the adapter', async () => {
+    const s = setup({ results: [{ ok: false, reason: 'timeout' }] });
+    await s.flow.screenShown('home');
+    expect(s.flow.showing()).toBe(false);
+    await s.flow.hide(); // into the game
+    expect(s.log).toEqual(['banner:show:bottom', 'banner:hide']);
+    await s.flow.hide(); // nothing asked for since: no second adapter call
+    expect(s.log).toEqual(['banner:show:bottom', 'banner:hide']);
+  });
+
+  it('a hide() while the load is still in flight reaches the adapter at once (it hides the banner when it lands)', async () => {
+    const s = setup();
+    let release: (r: AdResult) => void = () => undefined;
+    if (s.platform.ads.banner) s.platform.ads.banner.show = () => (s.log.push('banner:show:bottom'), new Promise((r) => (release = r)));
+    const shown = s.flow.screenShown('home');
+    await s.flow.hide();
+    expect(s.log).toEqual(['banner:show:bottom', 'banner:hide']);
+    release({ ok: false, reason: 'timeout' });
+    await shown;
+    await s.flow.hide(); // already told: nothing more to do
+    expect(s.log).toEqual(['banner:show:bottom', 'banner:hide']);
+  });
+
+  it('a show() that threw counts as maybe up; a definite failure (no fill) does not', async () => {
+    const threw = setup();
+    if (threw.platform.ads.banner) threw.platform.ads.banner.show = async () => Promise.reject(new Error('boom'));
+    await threw.flow.screenShown('home');
+    await threw.flow.hide();
+    expect(threw.log).toEqual(['banner:hide']);
+    const nofill = setup({ results: [{ ok: false, reason: 'no_fill' }] });
+    await nofill.flow.screenShown('home');
+    await nofill.flow.hide();
+    expect(nofill.log).toEqual(['banner:show:bottom']);
+  });
+
+  it('with the real FB banner: a 6 s load (over ads.readyTimeoutMs) is never left on the game screen', async () => {
+    const clock = createFakeClock(NOW);
+    const { sdk, control } = createStub({ banner: { loadDelayMs: cfg.ads.readyTimeoutMs + 2_000 } }, clock);
+    const save: SaveData = { ...defaults(NOW), tutorialDone: true, progress: { level: 12, completed: 11, best: {} } };
+    const store = createStore<AppState>(initialAppState(save));
+    const platform = createFakePlatform([], { banner: true });
+    platform.ads.banner = createFbBanner(sdk, { placement: 'ban-1', timers: clock });
+    const flow = createBannerFlow({ platform, store, clock });
+    const home = flow.screenShown('home');
+    await clock.advanceAsync(cfg.ads.readyTimeoutMs);
+    await home;
+    expect(flow.showing()).toBe(false); // the show() timed out, the load goes on
+    await clock.advanceAsync(800);
+    flow.screenGone();
+    await flow.hide(); // session.start: into the game before the load lands
+    await clock.advanceAsync(2_000);
+    await drain();
+    expect(control.count('loadBannerAdAsync')).toBe(1);
+    expect(control.count('hideBannerAdAsync')).toBe(1);
+    expect(control.state.bannerVisible).toBe(false);
+  });
+
+  // ── review L2B-2: No Ads takes a banner on show down at once ──
+
+  it('entitlementChanged: No Ads now owned hides the banner on show (the reserve stays until unmount)', async () => {
+    const s = setup();
+    await s.flow.screenShown('home');
+    await s.flow.entitlementChanged(); // something else changed (a fish swap): nothing to do
+    expect(s.log).toEqual(['banner:show:bottom']);
+    s.store.update((st) => ({ ...st, save: { ...st.save, purchases: { noAds: true, tokens: [] } } }));
+    await s.flow.entitlementChanged();
+    expect(s.log).toEqual(['banner:show:bottom', 'banner:hide']);
+    expect(s.flow.showing()).toBe(false);
+    expect(s.reserved()).toBe(true);
+    await s.flow.modalClosed(); // no reload: the gate now says no_ads
+    s.clock.advance(61_000);
+    await s.flow.modalClosed();
+    expect(s.log).toEqual(['banner:show:bottom', 'banner:hide']);
+  });
+
+  it('entitlementChanged while the load is in flight: the adapter is told, so the late banner never shows', async () => {
+    const s = setup();
+    let release: (r: AdResult) => void = () => undefined;
+    if (s.platform.ads.banner) s.platform.ads.banner.show = () => (s.log.push('banner:show:bottom'), new Promise((r) => (release = r)));
+    const shown = s.flow.screenShown('home');
+    s.store.update((st) => ({ ...st, save: { ...st.save, purchases: { noAds: true, tokens: [] } } }));
+    await s.flow.entitlementChanged();
+    expect(s.log).toEqual(['banner:show:bottom', 'banner:hide']);
+    release({ ok: true });
+    await shown;
+    expect(s.flow.showing()).toBe(false);
+    expect(s.log.filter((l) => l === 'banner:hide').length).toBeGreaterThanOrEqual(1);
   });
 
   it('the game, ranking, boot and overlay screens never qualify', async () => {

@@ -1,7 +1,7 @@
 // Owner: A (Phase 2b; was ui-board)
 // Bulb and Paw tool buttons with count badges (02 §5 S2, §9).
 // Classes: .tool-bar > .tool.tool--bulb|paw[data-empty][data-free] > .tool__icon .tool__badge
-import { t } from '../../i18n';
+import { onLocaleChanged, t } from '../../i18n';
 import { icon } from '../art/sprite';
 import type { View } from '../dom';
 
@@ -73,12 +73,20 @@ export function createToolBar(props: ToolBarProps, cb: ToolBarCallbacks): ToolBa
     paw.btn.disabled = !p.pawEnabled;
   };
   render(props);
+  // The labels follow the language (review A11Y-I18N-1): re-render the last props without a bump.
+  const offLocale = onLocaleChanged(() => {
+    const last = prev;
+    if (!last) return;
+    prev = null;
+    render(last);
+  });
 
   return {
     el,
     update: render,
     toolRect: (k) => (k === 'bulb' ? bulb.btn : paw.btn).getBoundingClientRect(),
     destroy() {
+      offLocale();
       el.parentNode?.removeChild(el);
     },
   };

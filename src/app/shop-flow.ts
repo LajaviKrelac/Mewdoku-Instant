@@ -110,7 +110,14 @@ export function createShopFlow(deps: ShopFlowDeps): ShopFlow {
       .then(() => p.catalog())
       .then(
         (list) => {
-          catalog = Array.isArray(list) ? list : [];
+          // The provider never rejects (PaymentsProvider): an SDK failure or a timeout arrives as an
+          // empty list. Our catalogue always has products, so empty means "failed": the sheet shows
+          // shop.error with Retry, and nothing is cached (review FB2B-3).
+          if (!Array.isArray(list) || list.length === 0) {
+            catalogState = 'error';
+            return;
+          }
+          catalog = list;
           catalogAt = clock.now();
           catalogState = 'ready';
         },
@@ -123,9 +130,11 @@ export function createShopFlow(deps: ShopFlowDeps): ShopFlow {
 
   function computeBuy(): ShopBuyState {
     if (deps.platformId !== 'fbig' || !isFlagOn('shop')) return { kind: 'hidden' };
+    // capabilities() is final after init (FB iOS: no payments at all): no "Getting the shop ready…"
+    // wait where payments can never come (review FB2B-5; §8.5 iOS and Messenger show shop.unavailable).
+    if (!capsPayments()) return { kind: 'unavailable' };
     const p = provider();
     const waiting = clock.now() - deps.startedAt < c.iap.readyTimeoutMs;
-    if (p && !capsPayments() && !waiting) return { kind: 'unavailable' }; // iOS, Messenger.com
     if (!p || !isReady(p)) return waiting ? { kind: 'loading' } : { kind: 'unavailable' };
     if (catalogState === 'ready' && clock.now() - catalogAt > c.iap.catalogCacheMs) catalogState = 'idle';
     if (catalogState === 'idle') loadCatalog(p);
@@ -211,6 +220,8 @@ export function createShopFlow(deps: ShopFlowDeps): ShopFlow {
   const flow: ShopFlow = {
     open() {
       deps.onOpen?.();
+      // A catalogue that failed earlier is asked for again on every open (FB2B-3), not only on Retry.
+      if (catalogState === 'error') catalogState = 'idle';
       hookReady();
       deps.overlay.open(props());
     },
