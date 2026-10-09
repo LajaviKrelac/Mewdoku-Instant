@@ -1,11 +1,24 @@
-// Owner: foundation (game workstream: additive only).
-// Game state, actions, events (04 §4.2) and save data (04 §4.3). PURE types.
+// Owner: C (Phase 2b; F0 added the v2 contract types: additive only, ask the lead to change a shape).
+// Game state, actions, events (04 §4.2) and save data (04 §4.3, phase2b §9). PURE types.
+import type { LocaleId, ProductId } from '../app/config';
 import type { CellIndex, HintStep, Puzzle, PuzzleId } from '../engine/types';
 
 export { CellState } from '../engine/types';
 export type { CellIndex, PuzzleId } from '../engine/types';
+/** The 17 locale ids (phase2b §6.2); defined in app/config.ts, the leaf every layer may import. */
+export type { LocaleId, ProductId } from '../app/config';
 
-export type ModeId = 'tutorial' | 'level' | 'daily';
+/** Phase 2b adds `event` (limited-time event puzzles, phase2b §4.4). */
+export type ModeId = 'tutorial' | 'level' | 'daily' | 'event';
+
+/** Event id (phase2b §4.2): /^[a-z0-9-]{3,40}$/, e.g. 'lantern-walk-2026'. */
+export type EventId = string;
+
+/**
+ * Ranking boards (phase2b §5.3, §5.4): the post-win points board, the one daily board, and one board
+ * per event (`event_<id with - → _>`). Re-exported by platform/types.ts (platform may import game types).
+ */
+export type BoardKey = 'paw_points' | 'daily_fastest' | `event_${string}`;
 export type Status = 'ready' | 'playing' | 'hint' | 'kitty' | 'won' | 'lost';
 /** Drag mode, chosen by the start cell: Mark → erase, anything else → mark (02 §6.1). */
 export type PaintMode = 'mark' | 'erase';
@@ -131,6 +144,51 @@ export interface SaveDataV1 {
   };
   ext: Record<string, unknown>; // Phase 3 hook: new data without a schema bump
 }
+
+// ─────────────────────────── Save data v2 (phase2b §9.1) ───────────────────────────
+
+/** A v1 slot is a valid v2 slot; v2 adds mode 'event' (id `E<eventId>/<i>`, i 0-based; the UI shows i + 1). */
+export interface InProgressV2 extends Omit<InProgressV1, 'mode'> {
+  mode: 'level' | 'daily' | 'event';
+}
+
+/** v2 settings: v1 plus the language override ('auto' = follow the platform, phase2b §6.3). No look settings (one theme). */
+export type SettingsV2 = Settings & { locale: 'auto' | LocaleId };
+
+/** Per-event progress (phase2b §4.6): puzzles solved, total ms of the solves, last win time. */
+export interface EventRecord {
+  solved: number;
+  ms: number;
+  lastAt: number;
+}
+
+/** One group challenge (FB tournament, phase2b §5.6). */
+export interface GroupRecord {
+  endsAt: number;
+  total: number;
+  wins: number;
+  claimed: 0 | 1;
+}
+
+export interface SaveDataV2 extends Omit<SaveDataV1, 'v' | 'settings' | 'inProgress'> {
+  v: 2;
+  settings: SettingsV2;
+  inProgress: { level: InProgressV2 | null; daily: InProgressV2 | null; event: InProgressV2 | null };
+  /** Fish (phase2b §2.8); earned = lifetime total, for stats. Both 0…fish.max. */
+  wallet: { fish: number; earned: number };
+  /** Paw points (phase2b §5.3), 0…points.max. */
+  points: { total: number };
+  events: Record<EventId, EventRecord>;
+  /** ≤ groups.keep entries (oldest endsAt dropped). */
+  groups: Record<string, GroupRecord>;
+  /** noAds entitlement; ledger "<productId>|<purchaseToken>", ≤ iap.tokensKept entries (newest kept), phase2b §8.4. */
+  purchases: { noAds: boolean; tokens: string[] };
+  /** Unsent scores (retried on the next win or boot) and the submit limiter (phase2b §5.3). */
+  rank: { pending: Partial<Record<BoardKey, number>>; lastSubmitAt: number };
+}
+
+/** The current save schema. Every consumer types its save as SaveData; SaveDataV1 is the stored v1 shape only. */
+export type SaveData = SaveDataV2;
 
 /** How urgently to persist (04 §7.1, 02 §15). */
 export type SaveMode = 'touch' | 'now' | 'critical';

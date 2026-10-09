@@ -1,4 +1,4 @@
-// Owner: platform
+// Owner: D (Phase 2b; was platform)
 // Test helpers: load tests/fixtures/fbinstant-stub.js into an isolated fake `window`, a Map-backed
 // Storage, and a microtask drain that works with the FakeClock.
 import { readFileSync } from 'node:fs';

@@ -1,5 +1,7 @@
-// Owner: app
+// Owner: C (Phase 2b)
 // Selectors from AppState to the UI view models (UI modules define the view types; the app maps).
+// Phase 2b: F0 added the Home fish / event / banner fields (event: null until C's event-flow) and
+// the stubs of the three new selectors (C → B contract, CONTRACTS-2b §4.3).
 import { getMode } from '../game/modes';
 import { dailyCardState, isHard, localDateKey } from '../game/progression';
 import { dailySlotFor } from '../game/ramp';
@@ -7,6 +9,9 @@ import { tutorialAllowsTool, tutorialStep, TUTORIAL_STEP_COUNT, type TutorialSte
 import type { Capabilities, PlatformId } from '../platform/types';
 import type { BoardHighlight } from '../ui/board/board-view';
 import type { RuleChip } from '../ui/hud/rule-chips';
+import type { RankingPanelProps } from '../ui/overlays/ranking-panel';
+import type { VictoryProps } from '../ui/overlays/victory-screen';
+import type { EventScreenView } from '../ui/screens/event-screen';
 import type { GameView } from '../ui/screens/game-screen';
 import type { HomeView } from '../ui/screens/home-screen';
 import { cfg, type GameConfig } from './config';
@@ -50,6 +55,9 @@ export function selectHomeView(state: AppState, ctx: ViewContext, c: GameConfig 
     showTrophy: ctx.capabilities.leaderboards,
     fbSafeZone: ctx.platformId === 'fbig',
     extraCards: [],
+    fish: save.wallet.fish,
+    event: null, // TODO(C, phase2b §4.4): activeEvent / teaserEvent → HomeEventCardView
+    bannerReserved: state.ui.bannerReserved,
   };
 }
 
@@ -114,5 +122,37 @@ export function selectGameView(state: AppState, ctx: ViewContext): GameView | nu
     chipHighlight: step !== null && game.status !== 'won' ? (STEP_CHIPS[step] ?? null) : null,
     fbSafeZone: ctx.platformId === 'fbig',
     reducedMotion: ui.reducedMotion,
+    event: null, // TODO(C, phase2b §4.4): { def, index } in event mode
   };
+}
+
+// ─────────────────────────── phase2b selectors (F0 stubs, C) ───────────────────────────
+
+/**
+ * The victory screen's props for the win that just happened (phase2b §2.5, §2.6). The callbacks are
+ * bound by the caller (win-flow); this maps the data.
+ */
+export type VictoryData = Omit<VictoryProps, 'now' | 'onPrimary' | 'onHome' | 'onShop'>;
+export function selectVictoryView(state: AppState, ctx: ViewContext, c: GameConfig = cfg): VictoryData {
+  void state;
+  void ctx;
+  void c;
+  throw new Error('not implemented: selectVictoryView (C, phase2b §2.5)');
+}
+
+/** The ranking panel's data (phase2b §2.4, §5.5); `list` follows the ranking-flow's result. */
+export type RankingData = Omit<RankingPanelProps, 'onContinue' | 'onSeeTop' | 'onListArea'>;
+export function selectRankingView(state: AppState, ctx: ViewContext, c: GameConfig = cfg): RankingData {
+  void state;
+  void ctx;
+  void c;
+  throw new Error('not implemented: selectRankingView (C, phase2b §2.4)');
+}
+
+/** The event screen's view (phase2b §4.4), or null when no event is active. */
+export function selectEventView(state: AppState, ctx: ViewContext, c: GameConfig = cfg): EventScreenView | null {
+  void state;
+  void ctx;
+  void c;
+  throw new Error('not implemented: selectEventView (C, phase2b §4.4)');
 }

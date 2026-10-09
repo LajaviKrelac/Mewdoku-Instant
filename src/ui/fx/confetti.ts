@@ -1,4 +1,4 @@
-// Owner: ui-board
+// Owner: B (Phase 2b; was ui-board)
 // CSS particle burst: cfg.fx.confettiCount absolutely positioned <i> with random CSS variables,
 // removed after cfg.fx.confettiMs (02 §17.5). Skipped under reduced motion by the caller.
 // The keyframes (confetti-x / confetti-y, a launch-then-gravity curve) live in styles/fx.css.

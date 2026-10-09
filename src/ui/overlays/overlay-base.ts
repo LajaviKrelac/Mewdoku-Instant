@@ -1,4 +1,4 @@
-// Owner: ui-shell
+// Owner: B (Phase 2b; was ui-shell)
 // Shared scaffolding for the overlays (02 §5 O1–O7, §18): a fixed full-screen root that holds a
 // scrim and a panel with dialog semantics, `hidden` toggling (the fade-in is CSS), scrim taps routed
 // to dismiss(), and guarded buttons that ignore presses while aria-disabled (delayed or busy).

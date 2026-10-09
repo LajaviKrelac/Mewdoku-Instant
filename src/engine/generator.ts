@@ -1,4 +1,4 @@
-// Owner: engine
+// Owner: read-only (Phase 2b; was engine)
 // Generator pipeline (03 §4): plant a king permutation, grow regions, repair uniqueness, filter.
 // Deterministic for a seed (03 §7): integer arithmetic only, index-ordered iteration. PURE.
 import { canonicalLabels, encodeRegions, encodeSolution, MAX_N, MIN_N } from './codec';

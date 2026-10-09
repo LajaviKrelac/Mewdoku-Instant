@@ -1,4 +1,4 @@
-// Owner: game. A mini tutorial session for the tests (04 §4.2 "Tutorial input filter"): the filter runs
+// Owner: C (Phase 2b; was game). A mini tutorial session for the tests (04 §4.2 "Tutorial input filter"): the filter runs
 // before reduce(), advance() after every reduce and on Got it, and scripted marks bypass the filter.
 import { expect } from 'vitest';
 import { getHintStep } from '../../../src/engine/hint';

@@ -1,4 +1,4 @@
-// Owner: engine
+// Owner: read-only (Phase 2b; was engine)
 // 04 §2 / 03 §7: engine/ is pure and deterministic. A static scan of src/engine/*.ts for imports
 // outside engine/, DOM and timer globals, wall clocks, Math.random and floating-point generator
 // weights. (tests/unit/layering.spec.ts checks the import graph of the whole app.)

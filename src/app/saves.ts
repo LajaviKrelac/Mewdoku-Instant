@@ -1,4 +1,4 @@
-// Owner: app
+// Owner: C (Phase 2b; was app)
 // SaveScheduler (04 §7.1, 02 §15): stamps updatedAt and writes through platform.storage.
 //   touch()    → local write debounced save.localDebounceMs, cloud 'debounced'
 //   now()      → cancel debounces, local + cloud 'now' (page hide, onPause, Home, stock changes)

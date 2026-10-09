@@ -1,10 +1,10 @@
-// Owner: app
+// Owner: C (Phase 2b; was app)
 // Pure parts of the session's effects layer (04 §5.2): per-event feedback (sound, vibration, live
 // announcement; 02 §16, §18), analytics payloads (02 §20) and win bookkeeping (02 §10.1).
 import type { SfxId } from '../audio/sfx';
 import { getMode } from '../game/modes';
 import { applyDailyWin, applyLevelWin, applyTutorialDone } from '../game/stats';
-import type { GameEvent, GameState, SaveDataV1 } from '../game/types';
+import type { GameEvent, GameState, SaveData } from '../game/types';
 import { colorName, t, tn } from '../i18n';
 import { cfg, type GameConfig } from './config';
 import type { AnalyticsEvent } from './events';
@@ -107,14 +107,14 @@ export function mistakeEvent(meta: SessionMeta, state: GameState): AnalyticsEven
 }
 
 export interface WinBookkeeping {
-  readonly save: SaveDataV1;
+  readonly save: SaveData;
   /** One `critical` save (02 §15); false for a tutorial replay, which saves nothing. */
   readonly critical: boolean;
   readonly events: readonly AnalyticsEvent[];
 }
 
 /** 02 §10.1 win bookkeeping per mode: level, daily, first-run tutorial, tutorial replay (none). */
-export function winBookkeeping(save: SaveDataV1, meta: SessionMeta, state: GameState): WinBookkeeping {
+export function winBookkeeping(save: SaveData, meta: SessionMeta, state: GameState): WinBookkeeping {
   const size = state.puzzle.n;
   const flow = getMode(meta.mode).winFlow;
   if (flow === 'level') {
@@ -146,6 +146,9 @@ export function winBookkeeping(save: SaveDataV1, meta: SessionMeta, state: GameS
       events: [{ name: 'daily_win', params: { date, size, ms: ms(state.elapsedMs), mistakes: state.mistakes } }],
     };
   }
+  // TODO(C, phase2b §2.10, §4.3): event wins (applyEventWin) and the fish / points rewards
+  // ({ save, fishEarned, pointsEarned, bonus }). No event session can start before C's event-flow.
+  if (flow === 'event') throw new Error('not implemented: event win bookkeeping (C, phase2b §4.3)');
   if (meta.request.mode === 'tutorial' && meta.request.replay) return { save, critical: false, events: [] };
   return {
     save: applyTutorialDone(save),

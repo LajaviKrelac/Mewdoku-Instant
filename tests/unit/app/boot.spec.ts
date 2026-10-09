@@ -19,7 +19,7 @@ import { createFakeClock } from '../../../src/app/clock';
 import type { OverlayFactories, RouterFactories } from '../../../src/app/router';
 import type { OverlayId } from '../../../src/app/store';
 import { defaults, encodeCells } from '../../../src/game/save';
-import type { SaveDataV1 } from '../../../src/game/types';
+import type { SaveData } from '../../../src/game/types';
 import { t } from '../../../src/i18n';
 import type { HomeCallbacks, HomeView } from '../../../src/ui/screens/home-screen';
 import { createFakeAudio, createFakeLevels, createFakePlatform, createLoggedEngine, NOW, TODAY, type FakePlatform } from './harness';
@@ -66,11 +66,15 @@ function fakeUi(log: string[]): Ui {
         update: () => undefined,
         destroy: () => undefined,
         playEvent: () => undefined,
-        playEntry: () => undefined,
+        playEntry: () => 0,
         cellRect: () => null,
         toolRect: () => null,
         boardRect: () => null,
         focusBoard: () => undefined,
+        fishRect: () => null,
+        showFishPill: () => undefined,
+        fishLabel: () => undefined,
+        glow: () => ({ done: Promise.resolve(), cancel: () => undefined, finish: () => undefined }),
       };
     },
     toastLayer: () => ({ el: document.createElement('div'), show: (m) => void log.push(`toast:${m}`), clear: () => undefined, destroy: () => undefined }),
@@ -92,7 +96,7 @@ interface StartOpts {
 }
 
 /** boot() without awaiting it, for tests that drive the fake clock while it runs. */
-function begin(local: SaveDataV1 | null, opts: StartOpts = {}) {
+function begin(local: SaveData | null, opts: StartOpts = {}) {
   document.body.innerHTML = '<div id="app"></div>';
   const root = document.getElementById('app') as HTMLElement;
   const log: string[] = [];
@@ -117,7 +121,7 @@ function begin(local: SaveDataV1 | null, opts: StartOpts = {}) {
   return { done, root, log, clock, platform, ui, muted: fa.muted };
 }
 
-async function start(local: SaveDataV1 | null, opts: StartOpts = {}) {
+async function start(local: SaveData | null, opts: StartOpts = {}) {
   const b = begin(local, opts);
   const app = await b.done;
   return { ...b, app };
@@ -128,7 +132,7 @@ async function settle(turns = 10): Promise<void> {
   for (let i = 0; i < turns; i++) await new Promise<void>((r) => setTimeout(r, 0));
 }
 
-const returning = (patch: Partial<SaveDataV1> = {}): SaveDataV1 => ({
+const returning = (patch: Partial<SaveData> = {}): SaveData => ({
   ...defaults(NOW - 3 * 86_400_000),
   tutorialDone: true,
   sessions: 4,
@@ -183,7 +187,7 @@ describe('boot', () => {
       elapsedMs: 1000,
       savedAt: NOW - 86_400_000,
     });
-    const s = await start(returning({ inProgress: { level: slot('L25', 'level'), daily: slot('D2026-10-06', 'daily') } }));
+    const s = await start(returning({ inProgress: { level: slot('L25', 'level'), daily: slot('D2026-10-06', 'daily'), event: null } }));
     const save = s.app.store.get().save;
     expect(save.inProgress.daily).toBeNull();
     expect(save.inProgress.level?.id).toBe('L25');
@@ -403,7 +407,7 @@ describe('boot: save copies that arrive after launch (PLAT-1, RP-5)', () => {
     };
     return h;
   };
-  const cloudCopy = (): SaveDataV1 => ({
+  const cloudCopy = (): SaveData => ({
     ...returning(),
     updatedAt: NOW - 3_600_000,
     progress: { level: 40, completed: 39, best: { 12: [33_000, 0] } },
@@ -449,7 +453,7 @@ describe('boot: save copies that arrive after launch (PLAT-1, RP-5)', () => {
     const s = await start(returning({ progress: { level: 5, completed: 4, best: {} } }), { prepare: h.prepare });
     await s.clock.advanceAsync(400);
     s.platform.writes.length = 0;
-    const other: SaveDataV1 = { ...returning(), updatedAt: NOW + 5_000, progress: { level: 6, completed: 5, best: { 5: [2_246, 0] } } };
+    const other: SaveData = { ...returning(), updatedAt: NOW + 5_000, progress: { level: 6, completed: 5, best: { 5: [2_246, 0] } } };
     h.cb?.({ source: 'tab', value: other });
     expect(s.app.store.get().save.progress).toEqual({ level: 6, completed: 5, best: { 5: [2_246, 0] } });
     await s.clock.advanceAsync(10_000);

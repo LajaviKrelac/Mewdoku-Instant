@@ -1,4 +1,4 @@
-// Owner: platform
+// Owner: D (Phase 2b; was platform)
 // navigator.vibrate wrapper with feature detection (02 §16, 04 §6.2–6.3).
 import type { PlatformAdapter } from '../types';
 

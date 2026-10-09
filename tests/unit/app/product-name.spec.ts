@@ -1,4 +1,4 @@
-// Owner: app. The product name has ONE source of truth, the i18n key 'app.name' (LEGAL-1): the
+// Owner: C (Phase 2b; was app). The product name has ONE source of truth, the i18n key 'app.name' (LEGAL-1): the
 // working title "Mewdoku" is a code name (06 §6.1), so a rename before Phase 4 must be a one-line
 // change in src/i18n/en.ts plus the <title> this test keeps in sync. Also: index.html links our own
 // favicon (RP-7), so the web build never requests a missing /favicon.ico.

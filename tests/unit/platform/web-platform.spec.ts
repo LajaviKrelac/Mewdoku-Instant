@@ -5,11 +5,11 @@
 import { describe, expect, it } from 'vitest';
 import { createFakeClock } from '../../../src/app/clock';
 import { cfg } from '../../../src/app/config';
-import type { SaveDataV1 } from '../../../src/game/types';
+import type { SaveData } from '../../../src/game/types';
 import { createWebPlatform } from '../../../src/platform/web';
 import { MemoryStorage } from './helpers';
 
-const save = (n: number) => ({ v: 1, sessions: n }) as unknown as SaveDataV1;
+const save = (n: number) => ({ v: 1, sessions: n }) as unknown as SaveData;
 
 function make(opts: { mockAds?: boolean; search?: string; storage?: Storage | null; nav?: Navigator } = {}) {
   const clock = createFakeClock();
@@ -29,6 +29,8 @@ describe('createWebPlatform', () => {
       share: false,
       payments: false,
       haptics: false,
+      overlayViews: false, // phase2b: never on the web
+      groups: false,
     });
     expect(p.ads.isReady('rewarded')).toBe(false);
     await expect(p.ads.showRewarded('hint')).resolves.toEqual({ ok: false, reason: 'unsupported' });

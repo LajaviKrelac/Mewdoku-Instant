@@ -1,4 +1,4 @@
-// Owner: ui-shell. Phase 2 review fixes in the overlays: tutorial hint card (SPEC-04), hint location
+// Owner: B (Phase 2b; was ui-shell). Phase 2 review fixes in the overlays: tutorial hint card (SPEC-04), hint location
 // for screen readers (A11Y-7), coach placement and ring (UX-06, UX-11), live regions created before
 // their text (A11Y-11), toast placement (UX-03), loading veil over an overlay (UX-10), line breaks
 // (UX-15), keyboard copy (A11Y-8), the rotate notice on desktops and under pinch-zoom (UX-02, A11Y-1,

@@ -1,4 +1,4 @@
-// Owner: engine
+// Owner: read-only (Phase 2b; was engine)
 // Human techniques L0–L5 over a knowledge state (03 §5.2). Each finder returns the FIRST productive
 // step in the 03 §5.2 scan order as a HintStep (without applying it), or null. PURE.
 import { unitFromId } from './geometry';

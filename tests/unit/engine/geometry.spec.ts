@@ -1,4 +1,4 @@
-// Owner: engine
+// Owner: read-only (Phase 2b; was engine)
 // 03 §2 geometry: indices, neighbours, unit ids and the per-puzzle tables against naive definitions.
 import { describe, expect, it } from 'vitest';
 import {

@@ -1,6 +1,8 @@
-// Owner: ui-shell
+// Owner: B (Phase 2b)
 // S2 Game (02 §5): composes ui-board pieces (top bar, pills, rule chips, board, tool bar), runs the
 // 02 §19 layout on resize, and forwards input to the session through callbacks.
+// Phase 2b (B): the win-flow hooks C drives (fishRect, showFishPill, fishLabel, glow; phase2b §2.2),
+// the event title and data-event-theme (§4.4). F0 added the signatures; the bodies are B's.
 // Row heights from computeLayout() are published as CSS variables on the root so the HUD rows,
 // the board stage and the tool row follow the same numbers (compact mode below 640 px).
 //
@@ -12,6 +14,8 @@
 //          (.game__hud .game__stage .game__tools); vars --col-w --top-bar --pills --chips --tools
 //          --board --vgap
 import type { CellIndex } from '../../engine/types';
+import type { EventDef } from '../../game/events';
+import type { FxHandle } from '../fx/fish-flight';
 import type { GameEvent, ModeId, PaintMode, Status } from '../../game/types';
 import { cfg } from '../../app/config';
 import { formatShortDate, t } from '../../i18n';
@@ -48,6 +52,11 @@ export interface GameView {
   readonly chipHighlight: RuleChip | null;
   readonly fbSafeZone: boolean;
   readonly reducedMotion: boolean;
+  /**
+   * Event mode (phase2b §4.4): title "{event} · {index + 1}" (event.title.game), root
+   * data-event-theme={def.id}, the accessory over the board cats. null in every other mode.
+   */
+  readonly event: { readonly def: EventDef; readonly index: number } | null;
 }
 
 /** Session commands (app/session.ts GameCommands) bound by the app. */
@@ -64,13 +73,21 @@ export interface GameScreenCallbacks {
 export interface GameScreen extends View<GameView> {
   /** Forwarded reducer events: board FX and heart crack. */
   playEvent(ev: GameEvent): void;
-  /** Board entry animation after a (re)mount. */
-  playEntry(): void;
+  /** Board entry animation after a (re)mount; returns BoardView.playEntry()'s entryEndMs (when START is due). */
+  playEntry(): number;
   cellRect(cell: CellIndex): DOMRect | null;
   toolRect(tool: 'bulb' | 'paw'): DOMRect | null;
   /** Client rect of the board card (O1 hint card placement: HintCardProps.avoidRect). */
   boardRect(): DOMRect | null;
   focusBoard(): void;
+  /** Win flow (phase2b §2.3): the fish pill icon's client rect (flight target), null while hidden. */
+  fishRect(): DOMRect | null;
+  /** Win flow (§2.2 t = 1 000): show the fish pill in the pills row with `count`; a higher count later = an arrival bump. */
+  showFishPill(count: number): void;
+  /** Win flow (§2.2): the rising "+3" / "+2" label at the fish pill. */
+  fishLabel(text: string): void;
+  /** Win flow (§2.2 t = 300): ui/fx/glow.ts playGlow on these cat cells of this board, with the screen's reduced-motion flag. */
+  glow(cells: readonly CellIndex[]): FxHandle;
 }
 
 /** The top-bar title for a game view ("Level 37", "Daily · Tue 6 Oct"). */
@@ -265,14 +282,22 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
       // Re-apply the layout now that the screen is in the document (the viewport reading is cached
       // since creation; a resize re-reads it).
       relayout();
-      board.playEntry();
+      const startInMs = board.playEntry();
       // A (re)started level (mount, Retry, revive): keyboard focus belongs on the board.
       recoverFocusSoon();
+      return startInMs;
     },
     cellRect: (cell) => board.cellRect(cell),
     toolRect: (tool) => tools.toolRect(tool),
     boardRect: () => (board.el.isConnected ? board.el.getBoundingClientRect() : null),
     focusBoard: () => focusBoard(),
+    fishRect: () => pills.fishRect(),
+    showFishPill: (n) => pills.showFish(n),
+    fishLabel: (text) => pills.fishLabel(text),
+    glow(cells) {
+      void cells;
+      throw new Error('not implemented: GameScreen.glow (B, phase2b §2.2)');
+    },
     destroy() {
       w0?.removeEventListener('resize', onResize);
       w0?.visualViewport?.removeEventListener('resize', onResize);

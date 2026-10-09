@@ -1,4 +1,4 @@
-// Owner: foundation (app may extend). Injectable clock (04 §3): wall time, monotonic time and
+// Owner: C (Phase 2b; was foundation). Injectable clock (04 §3): wall time, monotonic time and
 // timers behind one interface, with a deterministic fake for tests.
 
 export type TimerId = number;

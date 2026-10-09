@@ -1,13 +1,13 @@
-// Owner: app. Helper flows in the exact 04 §5.7 order: stock check → O2 → ad or fallback →
+// Owner: C (Phase 2b; was app). Helper flows in the exact 04 §5.7 order: stock check → O2 → ad or fallback →
 // (+1, saves.now) → engine → debit + saves.now → dispatch (02 §9, §10.2, §13.3).
 import { describe, expect, it } from 'vitest';
-import type { SaveDataV1 } from '../../../src/game/types';
+import type { SaveData } from '../../../src/game/types';
 import { t } from '../../../src/i18n';
 import { createHarness, loseGame, slice, startLevel, NOW, WRONG5, type Harness } from './harness';
 
 const FLOW = /^(open:rewarded|close:rewarded|ad:|save:|engine:|status:|open:hint|toast:)/;
 
-function withStock(hints: number, kitties: number): (s: SaveDataV1) => SaveDataV1 {
+function withStock(hints: number, kitties: number): (s: SaveData) => SaveData {
   return (s) => ({ ...s, stock: { hints, kitties } });
 }
 

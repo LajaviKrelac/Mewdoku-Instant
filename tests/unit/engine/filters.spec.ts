@@ -1,4 +1,4 @@
-// Owner: engine
+// Owner: read-only (Phase 2b; was engine)
 // 03 §4.5 / §8.4 filters: region sizes, shape limits, 8-symmetry canonical key.
 import { describe, expect, it } from 'vitest';
 import { canonicalLabels, decodeRegions, encodeRegions } from '../../../src/engine/codec';

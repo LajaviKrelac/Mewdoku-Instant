@@ -1,4 +1,4 @@
-// Owner: engine
+// Owner: read-only (Phase 2b; was engine)
 // Hint engine from the player's live board (03 §6) and the kitty target (02 §9.2). PURE, synchronous.
 // The app calls these through the async wrapper in workers/engine-client.ts.
 //

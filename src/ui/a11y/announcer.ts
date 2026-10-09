@@ -1,4 +1,4 @@
-// Owner: ui-board
+// Owner: B (Phase 2b; was ui-board)
 // Polite aria-live region (02 §18): "Cat placed. 4 of 8.", "Wrong tile. 2 hearts left.", "Lavender done."
 
 export interface Announcer {

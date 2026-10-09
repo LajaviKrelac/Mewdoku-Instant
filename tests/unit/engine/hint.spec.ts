@@ -1,4 +1,4 @@
-// Owner: engine
+// Owner: read-only (Phase 2b; was engine)
 // 03 §6 / §11.1 hint engine and kitty target: mistaken Marks come first, steps are sound and make
 // progress on random partial boards, repeated Apply reaches the solution, pickKittyCell rules.
 import { describe, expect, it } from 'vitest';

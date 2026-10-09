@@ -1,10 +1,10 @@
-/* Owner: ui-board
-   Board card, cells, region-aware insets, glyph states (data-s), region fade (data-done) (02 §17.4, 04 §5.3).
+/* Owner: A (Phase 2b)
+   Board card, cells, insets (phase2b §1.5 even gutters), glyph states (data-s), region fade (data-done) (02 §17.4, 04 §5.3).
    DOM (ui/board/board-view.ts):
      .board[role=grid][data-mood][data-hl][data-patterns][aria-disabled] (--n --slot --pad)
        > .board__row[role=row] > button.cell[data-i][data-s=e|m|c|w|g][data-done][data-f][data-ghost][data-mood]
            (--c --it --ir --ib --il --row --blink-dur --blink-delay)
-           > .cell__tile + svg.cell__g > .cell__pat? .cell__x ×2 .cell__catg?(.cell__cat .cell__blink) */
+           > .cell__tile + .cell__glow + svg.cell__g > .cell__pat? .cell__x ×2 .cell__catg?(.cell__cat .cell__blink .cell__ear) */
 
 .board {
   --slot: 36px;
@@ -295,4 +295,24 @@
   -webkit-clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
   clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
   animation: spark 620ms var(--ease-out) var(--sd, 0ms) both;
+}
+
+/* phase2b F0: inert nodes B animates (§2.2 glow, §2.9 ear flick). Invisible until A styles the glow
+   (a radial gradient of --glow, fx.win.glowScale × slot, behind the cat) and B adds .is-flick. */
+.cell__glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cell__ear {
+  display: none;
+}
+
+.cell.is-flick .cell__ear {
+  display: inline;
 }

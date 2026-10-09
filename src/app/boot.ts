@@ -1,4 +1,4 @@
-// Owner: app
+// Owner: C (Phase 2b; was app)
 // Boot sequence (04 §5.1): platform.init → sprite/tokens → load + migrate + merge save → sessions+1
 // → ensure pack → fonts (+ the overlay chunk with the coach, first run only) → progress 100 → platform.start → locale → restore rules → route → preload ads.
 // Nothing on the way to platform.start() may wait without a bound (05 §5.4, RP-1): the pack and the
@@ -15,7 +15,7 @@ import { createLevelsRepo, type LevelsRepo } from '../game/levels-repo';
 import { localDateKey } from '../game/progression';
 import { migrate } from '../game/save';
 import type { GenResult, GenSpec } from '../engine/types';
-import type { GameState, SaveDataV1 } from '../game/types';
+import type { GameState, SaveData } from '../game/types';
 import type { PlatformAdapter, RawSave } from '../platform/types';
 import { setLocale, t } from '../i18n';
 import { createAnnouncer, type Announcer } from '../ui/a11y/announcer';
@@ -73,7 +73,7 @@ export interface E2EHooks {
   app(): AppState;
   /** Solution columns per row of the current puzzle, or null. */
   solution(): number[] | null;
-  /** Replaces the save (JSON of SaveDataV1) and writes it; reload to apply. */
+  /** Replaces the save (JSON of SaveData) and writes it; reload to apply. */
   seedSave(json: string): void;
   /**
    * The generator as the game runs it (03 §11.3 cross-engine check): 'worker' goes through the
@@ -146,7 +146,7 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
   // 2. Save: load both copies, migrate, merge; sessions + 1 (firstSeenAt is set by defaults()).
   const raw = await platform.storage.load().catch(() => EMPTY_RAW);
   const loaded = loadSave(raw, clock.now());
-  const first: SaveDataV1 = { ...loaded.save, sessions: loaded.save.sessions + 1 };
+  const first: SaveData = { ...loaded.save, sessions: loaded.save.sessions + 1 };
   const store = createStore<AppState>(initialAppState(first));
   store.update((s) => ({ ...s, ui: { ...s.ui, storage: attempt(() => platform.storage.status(), 'ok') } }));
   const saves = createSaveScheduler({ store, storage: platform.storage, clock, bus });
@@ -177,7 +177,10 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
   // 4. Start: the game becomes visible; locale is valid only now (05 §4).
   await retryOnce(clock, cfg.boot.platformRetryDelayMs, () => platform.start());
   const sessionStartedAt = clock.now();
-  setLocale(attempt(() => platform.getLocale(), 'en'));
+  // TODO(C + E, phase2b §6.3): resolve with i18n/locale.ts (override, FB/web sources), prefetch during
+  // boot, and wait ≤ i18n.localeTimeoutMs for the chunk before the first route. F0: setLocale is async
+  // but settles at once (no chunk to load yet), so not awaiting it keeps the Phase 2 boot timing.
+  void setLocale(attempt(() => platform.getLocale(), 'en')).catch(() => undefined);
 
   // 5. Restore rules 1–3 (02 §15); slower checks happen when the board is opened.
   const today = localDateKey(clock.now());
@@ -387,7 +390,7 @@ export function createE2EHooks(
     },
     seedSave(json) {
       const now = clock.now();
-      const data: SaveDataV1 = { ...migrate(JSON.parse(json) as unknown, now), updatedAt: now };
+      const data: SaveData = { ...migrate(JSON.parse(json) as unknown, now), updatedAt: now };
       saves.dispose(); // nothing from this page load may overwrite the seeded save before the reload
       store.update((s) => ({ ...s, save: data }));
       void platform.storage.save(data, { cloud: 'now' });

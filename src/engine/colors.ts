@@ -1,4 +1,4 @@
-// Owner: engine
+// Owner: read-only (Phase 2b; was engine)
 // Region → palette assignment by adjacency and ΔE (03 §8.5). Palette-agnostic: the ΔE matrix and
 // palette size come from ui/art/palette.ts (PALETTE_DE00) via the caller. Deterministic. PURE.
 import { popcount } from './bits';

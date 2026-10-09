@@ -1,4 +1,4 @@
-// Owner: engine
+// Owner: read-only (Phase 2b; was engine)
 // 03 §11.3 determinism golden: generate() output for 20 fixed specs (N = 5–12) must stay
 // byte-identical. An intentional generator change bumps cfg.gen.version and regenerates the file:
 //   UPDATE_GOLDEN=1 npx vitest run --project unit tests/unit/engine/golden.spec.ts

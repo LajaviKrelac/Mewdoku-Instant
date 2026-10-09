@@ -1,5 +1,13 @@
-// Owner: foundation. t(key, params) with {param} interpolation, locale hook, formatting helpers
-// (02 §21). Leaf module: imports only ./en, so ui/, app/ and platform/ may all use it.
+// Owner: E (Phase 2b). t(key, params) with {param} interpolation, locale hook, formatting helpers
+// (02 §21, phase2b §6). Leaf module: imports only i18n/ and app/config.ts (lead decision, phase2b F0),
+// so ui/, app/ and platform/ may all use it.
+// Phase 2b F0: setLocale() is async (it will load the locale's lazy chunk, §6.3); getDir(),
+// onLocaleChanged(), buildLocales() and formatNumber() exist in a minimal working form so A–D can
+// call them from day 1. E replaces the resolution (locale.ts), plurals (plural.ts, Intl.PluralRules),
+// formatting (format.ts) and bidi isolation behind the same signatures.
+import { cfg, type LocaleId } from '../app/config';
+import { buildLocaleIds } from './build-locales';
+import { formatNumberFor } from './format';
 import {
   COLOR_KEYS,
   en,
@@ -13,6 +21,7 @@ import {
 } from './en';
 
 export type { Catalog, I18nKey } from './en';
+export type { LocaleId } from '../app/config';
 export { COLOR_KEYS, GLYPH_KEYS, PRAISE_KEYS, TUTORIAL_STEP_KEYS } from './en';
 
 export type ParamValue = string | number;
@@ -39,20 +48,49 @@ export function registerCatalog(lang: string, catalog: Partial<Catalog>): void {
   catalogs.set(lang.toLowerCase(), catalog);
 }
 
+type LocaleListener = (locale: string, dir: 'ltr' | 'rtl') => void;
+const listeners = new Set<LocaleListener>();
+
 /**
  * Selects the catalogue for a platform locale such as 'en_US' or 'pt-BR' (FB: after
- * startGameAsync, 05 §4). Falls back to English. Returns the language actually used.
+ * startGameAsync, 05 §4). Falls back to English. Resolves to the locale actually used and notifies
+ * onLocaleChanged listeners when it changed. Never rejects.
+ * Phase 2b (E, §6.3): resolve through locale.ts, load the locale's chunk (build-locales.ts loader),
+ * set <html lang> / <html dir>. F0 keeps the Phase 2 lookup of registered catalogues.
  */
-export function setLocale(platformLocale: string): string {
+export async function setLocale(platformLocale: string): Promise<string> {
   const lang = platformLocale.toLowerCase().split(/[-_]/)[0] ?? 'en';
   const found = catalogs.get(lang);
+  const prev = activeLang;
   activeLang = found ? lang : 'en';
   active = found ?? en;
+  if (activeLang !== prev) for (const l of [...listeners]) l(activeLang, getDir());
   return activeLang;
 }
 
 export function getLocale(): string {
   return activeLang;
+}
+
+/** 'rtl' for the locales in i18n.rtl (Arabic), else 'ltr' (phase2b §6.5). */
+export function getDir(): 'ltr' | 'rtl' {
+  return (cfg.i18n.rtl as readonly string[]).indexOf(activeLang) >= 0 ? 'rtl' : 'ltr';
+}
+
+/** Called after every locale change (phase2b §6.3); the app forwards it as the `locale:changed` bus event. Returns an unsubscribe. */
+export function onLocaleChanged(cb: LocaleListener): () => void {
+  listeners.add(cb);
+  return () => listeners.delete(cb);
+}
+
+/** The locales this build contains (phase2b §6.7): every i18n.locales entry with a catalogue, or only i18n.releaseLocales in a release build. Always includes 'en'. */
+export function buildLocales(): readonly LocaleId[] {
+  return buildLocaleIds();
+}
+
+/** Fish, points and ranks (phase2b §6.4): Intl.NumberFormat of the active locale with Latin digits everywhere. */
+export function formatNumber(n: number): string {
+  return formatNumberFor(activeLang, n);
 }
 
 /** Strictly typed lookup: params are required exactly when the English template has placeholders. */

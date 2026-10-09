@@ -1,4 +1,4 @@
-// Owner: ui-shell. O1/O3/O4/O6/O7: open/close, Esc (dismiss), delayed and busy buttons, and the
+// Owner: B (Phase 2b; was ui-shell). O1/O3/O4/O6/O7: open/close, Esc (dismiss), delayed and busy buttons, and the
 // router-style focus trap + inert background working with the overlays' markup (02 §18).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 

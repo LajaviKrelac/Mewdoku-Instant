@@ -1,0 +1,5 @@
+/* Owner: A (phase2b §1.10, §2.9, §4.4)
+   Art-bound motion and event art: the Home mascot's tail sway (.pose__tail) and head tilt
+   (.pose__head), the event page patterns and accessories. Tokens only (no colour literals outside
+   tokens.css, tests/unit/ui/css-rules.spec.ts). CSS-only motion constants may live as custom
+   properties at the top of this file (phase2b §0.4). Empty at F0. */

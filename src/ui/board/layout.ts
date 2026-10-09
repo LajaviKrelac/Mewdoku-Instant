@@ -1,5 +1,6 @@
-// Owner: ui-board
-// Pure sizing math (02 §19), region-aware insets (02 §17.4), hit-testing and drag interpolation
+// Owner: A (Phase 2b)
+// Pure sizing math (02 §19), tile insets (phase2b §1.5 even gutters; the Phase 2 region-aware
+// insets of 02 §17.4 are retired and A deletes regionInsets), hit-testing and drag interpolation
 // (02 §6.1, 04 §5.4). No DOM access except readViewport().
 import { cfg, type GameConfig } from '../../app/config';
 import type { CellIndex } from '../../engine/types';
@@ -68,6 +69,19 @@ export interface CellInsets {
   readonly left: number;
 }
 
+/**
+ * Even gutters (phase2b §1.5): every tile gets the same inset on all sides, layout.insetPx (2 px, a
+ * 4 px white gutter) or layout.insetSmallPx (1.5 px) when the slot is below layout.insetSmallBelowSlot
+ * (30 px). Nothing depends on regions. One entry per cell, in today's CellInsets shape.
+ */
+export function evenInsets(n: number, slotPx: number, c: GameConfig = cfg): CellInsets[] {
+  const L = c.layout;
+  const v = slotPx >= L.insetSmallBelowSlot ? L.insetPx : L.insetSmallPx;
+  const one: CellInsets = Object.freeze({ top: v, right: v, bottom: v, left: v });
+  return Array.from({ length: Math.max(0, n * n) }, () => one);
+}
+
+/** @deprecated phase2b §1.8: region-aware insets are retired; use evenInsets. A deletes this. */
 export function regionInsets(n: number, regions: Uint8Array, c: GameConfig = cfg): CellInsets[] {
   const same = c.layout.insetSamePx;
   const diff = c.layout.insetDiffPx;

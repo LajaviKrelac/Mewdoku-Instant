@@ -1,4 +1,4 @@
-// Owner: app. RPC over postMessage and the engine client's worker / main-thread fallback (04 §5.5),
+// Owner: C (Phase 2b; was app). RPC over postMessage and the engine client's worker / main-thread fallback (04 §5.5),
 // including the worker deadline and the worker answering when the hint chunk cannot load (04 §8).
 import { describe, expect, it } from 'vitest';
 import { mergeConfig } from '../../../src/app/config';

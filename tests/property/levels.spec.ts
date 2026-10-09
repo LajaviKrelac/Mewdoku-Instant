@@ -1,4 +1,4 @@
-// Owner: content
+// Owner: read-only (Phase 2b; was content)
 // Property tests over the shipped content (03 §11.2): every record in src/data/levels/*.json and
 // src/data/daily/*.json. Checks are written against the engine and game/ramp.ts directly (not via
 // scripts/verify-levels.ts), so the CI script and these tests are independent witnesses.

@@ -4,6 +4,8 @@ Status: Phase 2b spec, ready to build after review · Date: 2026-10-08 · Owner:
 
 Review pass (2026-10-08): checked with three lenses (implementer, platform truth, originality) and fixed in place. Appendix C lists what changed and why.
 
+Revision (2026-10-08, user decisions): **one theme only** (the Classic look; the ginger skin and the skin system are removed); defaults for the open decisions; **parity first** (where the draft deviated from the original for taste, it now follows the original). Appendix D lists what changed.
+
 Inputs: [differences-vs-original](../phase2/differences-vs-original.md) (the 8 headline differences, tables §2–§6), [01](../phase1/01-game-deconstruction.md) (what we know about the original, with confidence tags), [02](../phase1/02-rebuild-spec.md), [04](../phase1/04-architecture.md), [05](../phase1/05-fbig-platform.md), [06](../phase1/06-legal-and-originality.md), [STATUS](../phase2/STATUS.md), [CONTRACTS](../phase2/CONTRACTS.md) and the current source (`src/**`, read 2026-10-08).
 
 ---
@@ -12,9 +14,14 @@ Inputs: [differences-vs-original](../phase2/differences-vs-original.md) (the 8 h
 
 ### 0.1 The decision and what this spec covers
 
-The user's decision: **close all 8 headline differences, and make the game match the original visually as closely as possible.** Each section §1–§8 maps to one headline item and has the same parts: target, what the original does (with our confidence), our design, exact numbers, data/config/save changes, code areas, FB vs web, tests, and `[DECISION]`s for every unknown. §9–§13 cover the save migration, config, bundle budget, the parallel work plan and acceptance.
+The user's decisions:
 
-"Mewdoku" stays the code name. Every user-facing name comes from `app.name` (06 §6; the public name is still pending).
+- **Close all 8 headline differences, and make the game match the original as closely as possible.** Phase 2 (2b included) is about parity; Phase 3 will differentiate later. Where this spec still differs from the original, the reason is a platform rule, legality (the clean-room rules, §0.2–§0.3) or an original behaviour we do not know, never taste; the accessibility extras the user kept (headline 7) are the only other exception. §0.7 lists each remaining difference with its reason.
+- **One theme only.** The Classic look (our own "Tux" tuxedo-style cat, orange accents, white X, even gutters, off-white page) is *the* look of the game. It replaces the current ginger look: the ginger art, the teal tokens and the region-aware gaps are deleted from the codebase, not kept as an alternative. There is no skin system and no skin setting. Design tokens still live in CSS custom properties, as one set.
+
+Each section §1–§8 maps to one headline item and has the same parts: target, what the original does (with our confidence), our design, exact numbers, data/config/save changes, code areas, FB vs web, tests, and `[DECISION]`s for every unknown. §9–§13 cover the save migration, config, bundle budget, the parallel work plan and acceptance.
+
+"Mewdoku" stays the code name. Every user-facing name comes from `app.name` (06 §6). The public name is still pending `[DECISION: default, user may change]`: the build runs under the code name, and choosing the name gates the public release (G-NAME, §13), not the build.
 
 ### 0.2 The clean-room line, including "steal animations"
 
@@ -25,7 +32,7 @@ The user asked us to "steal animations if needed until we finish the first phase
 3. Temporary placeholders tend to ship. The publisher is in active IP litigation (01 §1.10), so a single leaked frame is a takedown risk for the whole project.
 4. There is little to copy anyway: the original's animation timings are not known, except as **wait times** that automation tools allow (4.5 s for the fish, about 8 s until the leaderboard closes, 3 s for the next board). We use those waits as our **total-duration targets** (§2.2).
 
-So that animation work is never blocked by art, F0 puts **our own placeholder shapes** behind every new symbol id: a fish is an ellipse plus a triangle, and a cat is a circle with two ears. B animates them from day 1, and A replaces them as the final symbols land (§12.1).
+So that animation work is never blocked by art, F0 puts **our own placeholder shapes** behind every new symbol id: a fish is an ellipse plus a triangle, and an accessory is a small circle. The existing cat symbols and poses keep today's art as the interim until A replaces it in place with Tux. B animates from day 1, and A replaces each placeholder as the final art lands (§12.1). None of the old ginger art ships (§1.8).
 
 Hard rules, unchanged from 06 and repeated here:
 
@@ -37,22 +44,22 @@ Our copy says "fish", never "golden fish" (differences §4: the fish *presentati
 
 ### 0.3 Legal risk the user has accepted (read before shipping)
 
-**Residual trade-dress risk, in short (for the user).** Every drawing, sound and word in Classic is ours, so nothing in it copies the original's protected *expression*. The risk that remains is the *overall look*: a black-and-white cat on pastel tiles with white crosses, orange buttons and titles, and an off-white page is the combination players know from Meowdoku. Some jurisdictions protect such a combination as trade dress, or treat it as passing off when it could confuse players about who made the game. Store or platform review can also reject it as a look-alike. The publisher is reported to be in active IP disputes (06 §1), which raises the chance that someone acts on it. The risk is highest with a confusable name such as "Mewdoku", and drops a lot with a distinct public name, our own cat with visible signature marks, and our own event and store art. Work goes ahead. Before any public release we need a lawyer's review (gate G-LEGAL below), and we keep a one-line switch back to Ginger (R2). This is our own reasoning, not legal advice (06).
+**Residual trade-dress risk, in short (for the user).** Every drawing, sound and word in the game is ours, so nothing in it copies the original's protected *expression*. The risk that remains is the *overall look*: a black-and-white cat on pastel tiles with white crosses, orange buttons and titles, and an off-white page is the combination players know from Meowdoku. Some jurisdictions protect such a combination as trade dress, or treat it as passing off when it could confuse players about who made the game. Store or platform review can also reject it as a look-alike. The publisher is reported to be in active IP disputes (06 §1), which raises the chance that someone acts on it. The risk is highest with a confusable name such as "Mewdoku", and drops a lot with a distinct public name, our own cat with visible signature marks, and our own event and store art. Work goes ahead, and the user accepts this residual risk. Before any public release we need a lawyer's review (gate G-LEGAL below). This is our own reasoning, not legal advice (06).
 
 This spec deliberately reverses two Phase 1 rules:
 
 - 06 §3, "Trade dress combination": the *combination* of tuxedo cat, cream page, orange pill buttons and white X on pastel tiles.
 - 06 §7 and differences §4: "any future leaderboard or victory screen must not bring back orange titles or buttons".
 
-The Classic skin brings that combination back on purpose. Mitigations, all required:
+The Classic look brings that combination back on purpose, as the game's only look. Mitigations, all required:
 
 | # | Mitigation | Where |
 |---|---|---|
 | R1 | Every drawing, sound and string is our own, with a provenance row. Our cat has its own signature marks (§1.6: an asymmetric blaze and a notched ear), its own poses and its own fish. | §1.6, §2.8, provenance |
-| R2 | One config line flips the default skin back to Ginger with no rebuild of assets: `skins.default`. | §1.9 |
-| R3 | **Gate G-LEGAL.** No public release (FB production or a public web URL) until an IP lawyer has reviewed the Classic skin together with the final public name. Add it to the 05 §13 checklist. | §13 |
+| R2 | *Withdrawn (user decision 2026-10-08).* There is no fallback look: Classic is the only theme, and the user accepts the residual risk above. | — |
+| R3 | **Gate G-LEGAL.** No public release (FB production or a public web URL) until an IP lawyer has reviewed the Classic look together with the final public name. Add it to the 05 §13 checklist. | §13 |
 | R4 | Update 06 §3 and §7 in the same PR: mark both rows "reversed by user decision 2026-10-08, see phase2b/parity-spec §0.3". | Appendix B |
-| R5 | A distinct public name is now a **hard prerequisite**. "Mewdoku" plus the Classic look is the highest-risk combination (06 §6.1; naming shortlist). | §13 |
+| R5 | A distinct public name is now a **hard prerequisite for release** (not for the build). "Mewdoku" plus the Classic look is the highest-risk combination (06 §6.1; naming shortlist). | §0.1, §13 |
 | R6 | No colour, size or timing is **sampled** from the original (no colour picker on screenshots or video, no frame counting from recordings). The parity review (§1.14) reports impressions in words; we then pick our own values. | §1.14 |
 | R7 | Store art and the listing (Phase 4) do not use the Classic board as their hero image next to orange captions. They use our cat's poses and our event art, in a caption style unlike the original's sky-blue band (06 §3, Branding). | Phase 4 |
 
@@ -64,6 +71,7 @@ The Classic skin brings that combination back on purpose. Mitigations, all requi
   - *[uncertain]*: neither 05 nor that search settles it.
   - Every tag except *[05: confirmed]* must be verified on developers.facebook.com before the feature is switched on in production (§14). Until then, the design must still work when the API is missing: each FB feature has a stated fallback.
 - **`[DECISION]`** marks our own choice wherever the original is unknown. Every number that code reads lives in `GameConfig` (§10).
+- **`[DECISION: default, user may change]`** marks a default the user accepted on 2026-10-08 for an open question. It holds until the user changes it, and it lives in config wherever it can (§0.8).
 - **CSS-only motion constants** (keyframe percentages, rotation angles, sway amplitudes) may live as custom properties at the top of `fx.css`, as Phase 2 did with `--t-drop`. Any value that JS also reads (durations that gate input, timers, sizes used for geometry) lives in `GameConfig` and is mirrored into CSS by the screen.
 - Sizes are CSS px. "Slot" is the cell's grid slot (02 §19). Times are ms from the event named.
 - File paths are relative to the repo root. **New** marks a file that does not exist yet.
@@ -72,35 +80,76 @@ The Classic skin brings that combination back on purpose. Mitigations, all requi
 
 Rules, the reducer and the mistake model; gestures; the engine; the 1 000 levels and the daily packs; hearts, revive and the hint and kitty behaviour; the tutorial script; the save-merge principles; the clean-room process. The layering rules of CONTRACTS §2 still hold.
 
+The paw booster keeps its current user-facing name, **Kitty** (`game.tool.kitty`, plural "kitties"). All new copy (shop, rewards, events, groups) uses that name.
+
 ### 0.6 Platform matrix (summary)
 
 | Feature | FBIG build | Web build (production) |
 |---|---|---|
-| Classic and Ginger skins, win flow, fish, motion | yes | yes |
-| Interstitials | yes, from completed level 10, cooldown 90/75/60 s | none (no ad network) |
-| Banners | yes, from completed level 10, on **Home, the victory screen and the event screen only, never during play** (Meta's guidance, §3.2), **if** the SDK reports both banner APIs | none |
+| The look (one theme), win flow, fish, motion | yes | yes |
+| Interstitials | yes, from completed level 10, cooldown 120/100/90 s (the original's reported values, unchanged from Phase 2) | none (no ad network) |
+| Banners | yes, from completed level 10, on **Home, the victory screen and the event screen only, never during play** (Meta's guidance, §3.2), **if** the SDK reports both banner APIs `[DECISION: default, user may change]` | none |
 | Rewarded (hint, kitty, revive, group ×2) | yes | free fallback grant, 10-minute cooldown (unchanged) |
 | Events | yes | yes (event top list shows personal results only) |
 | Rankings | FB leaderboards (whichever of the two leaderboard APIs the SDK reports, §5.4) and overlay views; each part capability-gated, falling back to personal records | personal records and an honest empty state |
 | Group challenges | FB tournaments, behind flag `groupChallenges` until §14 G2 is verified | hidden |
-| Languages (17) | yes; locale from `FBInstant.getLocale()` | yes; locale from `navigator.languages` |
+| Languages (17) | locale from `FBInstant.getLocale()`. Dev and preview builds carry all 17; release builds only `i18n.releaseLocales` (§6.7) | locale from `navigator.languages`; the same build rule |
 | Purchases | facebook.com and Android only (not iOS, not Messenger.com), when `onReady` fires | hidden; the shop sheet offers only "swap fish" |
+
+### 0.7 Where 2b still differs from the original, and why
+
+Parity is the goal (§0.1). Every difference that remains is there because of a platform rule, legality or an original behaviour we do not know, or because the user chose to keep it for accessibility (headline 7, and the accessibility minimum behind the X edge). None is there for taste: the draft's taste-driven differences were reverted in this revision (last table).
+
+| Difference | Reason |
+|---|---|
+| Our own cat (Tux, with signature marks; no tears, no instrument), fish art, sounds, strings, event names and event themes; copy says "fish", never "golden fish" | legality (R1; 06 §3; differences §4) |
+| Our own colour, size and timing values: the region palette, every token, all durations (fitted to the reported wait times, §0.2) | legality (R6: no sampled values); the original's values are unknown |
+| A thin tinted edge under the white X (1 px at a 25 px slot) | the accessibility minimum (02 §0, WCAG 1.4.11); white alone is 1.23–2.39:1 on our tiles (§1.5) |
+| Banners never during play (the original may show them in play); they start, like the original's reported start, at about level 10 | platform (Meta's guidance, §3.1) `[DECISION: default, user may change]` |
+| No ads on the production web build; a free fallback grant instead | platform (no ad network) |
+| Other players' names only inside FB overlay views; personal records on the web; group rewards for taking part | platform (§5.2, §5.6) |
+| No subscriptions; no purchases on iOS, Messenger.com or the web | platform (§8.2) |
+| What fish buy, the points table, what each board ranks, event contents (21 puzzles, milestones, no pass) | the original is unknown (differences §6 #1, #2, #13) |
+| The style of the board entry, screen transitions, idle motion, heart break and the victory-screen layout | the original is unknown (only "the board animates in" is *likely*) |
+| 17 languages (the iOS app lists 62) | the Android list is unknown; more can follow in Phase 3 |
+| Accessibility extras (colour patterns, Reduce motion, screen reader, keyboard) | kept by the user's headline-7 decision; all off or invisible by default |
+| A web boot screen; keyboard and mouse input | platform (web) |
+
+Reverted to the original's behaviour in this revision:
+
+| Draft | Now |
+|---|---|
+| Interstitial cooldown 90/75/60 s, lowered for taste | the original's reported 120/100/90 s (§3) |
+| "Wider gaps between colours" option (region-aware insets) | even gutters only, like the original; region-aware gaps are deleted (§1.5) |
+| "Dark crosses" option (the old ink X) | white X only, like the original (§1.5) |
+
+### 0.8 Open decisions and their defaults
+
+Each row is `[DECISION: default, user may change]`.
+
+| Decision | Default | Where |
+|---|---|---|
+| Banners | Home, victory and event screens only (where Meta's guidance allows), from 10 completed levels, never during play | §3.2 |
+| Fish exchange rates | 1 hint = 15 fish, 1 kitty = 30 fish | §2.8, `shop.*` |
+| IAP prices | No Ads 3.99, Bulb Bundle 1.99, Kitty Basket 1.99, Fish Bucket 1.99, Fish Crate 4.99 (USD, set in the dashboard) | §8.3 |
+| Translations | AI drafts for all 16 locales now. Release builds ship only the locales in `i18n.releaseLocales` (default `['en']`); dev and web preview builds show all 17 | §6.7, `i18n.*` |
+| Public name | Still pending. The build runs under the code name through `app.name`; the choice gates the public release (G-NAME), not the build | §0.1, §13 |
 
 ---
 
-## 1. Classic skin (headline 1)
+## 1. The look: Classic, the only theme (headline 1)
 
 ### 1.1 Target
 
-A new default skin, **Classic**, that matches the original's look:
+One look, **Classic**, that matches the original's look and replaces today's everywhere:
 
-- our own dark tuxedo-style cat;
+- our own dark tuxedo-style cat, "Tux";
 - orange primary buttons and titles;
 - white X marks on pastel tiles;
 - even white gutters between all tiles, rounded flat tiles, no grid lines;
 - an off-white page.
 
-The current look stays as the alternate skin **Ginger**, selectable in Settings. Skins switch at runtime with no reload.
+The current ginger look is **removed**, not kept: the ginger cat parts and poses, the teal tokens, the ginger colour literals and the region-aware gaps are replaced in place (§1.8). There is no skin system, no runtime switching and no skin setting.
 
 ### 1.2 What the original does
 
@@ -116,83 +165,79 @@ The current look stays as the alternate skin **Ginger**, selectable in Settings.
 | Solved board | Cats glow | confirmed (iOS store art), presumed on Play |
 | Chrome | Heavy rounded type, white pill counters, rounded cards with soft shadows, dark full-screen overlays | likely (Web-Y) |
 
-### 1.3 Skin system (runtime theming)
+### 1.3 Theme tokens (one set)
 
 | Piece | Spec |
 |---|---|
-| Skin ids | `type SkinId = 'classic' \| 'ginger'` (`src/game/types.ts`). |
-| Switch | `applySkin(skin)` in **new** `src/ui/art/skins.ts`. It: (1) sets `document.documentElement.dataset.skin`; (2) rebuilds only the cat `<symbol>`s inside the sprite (`#mewdoku-sprite`), keeping every symbol id (`cat-idle`, `cat-happy`, `cat-sad`, `cat-surprised`, `cat-blink`, plus the new `cat-ear-flick`), so every `<use>` on the board updates with no board rebuild; (3) emits `skin:changed` on the bus, so Home, the victory screen and O4 re-render their full-body poses. |
-| Tokens | `src/styles/tokens.css` keeps the shared, skin-independent tokens (type scale, spacing, radii, motion, layout). **New** `src/styles/skins.css` holds two blocks, `:root, [data-skin='classic'] {…}` and `[data-skin='ginger'] {…}`, which set every colour token in §1.4 and the board-geometry tokens in §1.5. No other stylesheet uses a literal colour. |
-| TS mirror | `src/ui/art/palette.ts` exports `SKIN_TOKENS: Record<SkinId, Readonly<Record<TokenName, string>>>`. `TOKENS` stays as an alias of `SKIN_TOKENS.ginger`, for compatibility. `palette-check` reads `SKIN_TOKENS` (§1.12). |
-| Region palette | **[DECISION] Both skins use the same 12 region colours (02 §17.2), indexed alike.** Why: (a) the original's tile colours are known only in words ("fairly saturated pastels"), and our palette already fits that description; (b) colour assignment (`regionColorsFor`) and colour names in hints stay skin-independent, so switching skin mid-level never recolours a region; (c) the passing ΔE and CVD results stay valid. |
-| Lazy Ginger | The Ginger cat parts and poses move to the lazy chunk `skin-ginger` (`import('../ui/art/ginger')`), so first load carries only the Classic art. When `settings.skin === 'ginger'`, boot fetches the chunk inside the existing parallel bounded wait (`boot.skinTimeoutMs` = 1 500 ms). If the wait expires, the game starts in Classic and swaps to Ginger when the chunk lands. |
-| Event overrides | An active event can set the attribute `[data-event-theme='<id>']` on the event screen and the event game screen only (§4.4). It may override `--page`, `--page-art`, `--board-card` and `--glow`, plus the cat accessory. It may never override region colours, `--ink`, `--wrong` or the X tokens. |
+| Tokens | `src/styles/tokens.css` holds the **one** token set: the shared tokens (type scale, spacing, radii, motion, layout) and every colour token of §1.4. The §1.4 values replace today's values in place. No other stylesheet uses a literal colour (§1.12). Tinted shadows and glows use RGB-triplet tokens (`--ink-rgb`, `--accent-rgb`, `--gold-rgb`), written as `rgba(var(--accent-rgb), .28)`; that syntax works on the 04 §1 browser baseline. |
+| TS mirror | `src/ui/art/palette.ts`: `TOKENS` gets the §1.4 values and `CAT_COLORS` the Tux colours (§1.6), both replacing today's values; new `xEdgeColor(paletteIndex)` (§1.5). `palette-check` reads `TOKENS` (§1.12). |
+| Region palette | **[DECISION] Keep our 12 region colours (02 §17.2), indexed as today.** Why: (a) the original's tile colours are known only in words ("fairly saturated pastels"), and our palette already fits that description; (b) R6 forbids sampling theirs; (c) the passing ΔE and CVD results, colour assignment (`regionColorsFor`) and the colour names in hints stay valid. |
+| Cat symbols | The sprite's cat symbols keep their ids (`cat-idle`, `cat-happy`, `cat-sad`, `cat-surprised`, `cat-blink`) and get Tux content; `cat-ear-flick` is new. Every `<use>` on the board is unchanged. |
+| Event overrides | An active event can set the attribute `[data-event-theme='<id>']` on the event screen and the event game screen only (§4.4). Its blocks live in `tokens.css`. It may override `--page`, `--page-art`, `--board-card` and `--glow`, plus the cat accessory. It may never override region colours, `--ink`, `--wrong` or the X tokens. |
 
-### 1.4 Colour tokens (Classic values chosen by us; Ginger unchanged)
+### 1.4 Colour tokens (values chosen by us)
 
 Contrast ratios below were computed with `scripts/palette-check.ts`'s own `contrastRatio` on 2026-10-08.
 
-| Token | Classic | Ginger | Use | Checked contrast (Classic) |
-|---|---|---|---|---|
-| `--page` | `#FAF6F0` | `#FBF6EE` | page | — |
-| `--page-2` | `#F1EADF` | `#F4ECE0` | wells, desktop side fill | — |
-| `--card` | `#FFFFFF` | `#FFFFFF` | board card, pills, sheets | — |
-| `--ink` | `#2F2A35` | `#3B3044` | text, outlines | 12.97 on page |
-| `--ink-2` | `#665E6C` | `#6F6375` | secondary text | 5.20 on page-2, 5.77 on page |
-| `--ink-3` | `#B2AAB4` | `#B3A9B6` | disabled, hairlines | no text use |
-| `--accent` | `#E57010` | `#17806F` | primary button fill, focus fill, hint ring | white label **3.15** → allowed only for labels ≥ 24 px (WCAG large text); 3.15 vs card as a graphic |
-| `--accent-deep` | `#B4560A` | `#0F5A4E` | 4 px bottom edge of primary buttons | — |
-| `--accent-title` | `#D2620C` | `#0F5A4E` | large titles (≥ 24 px) on light surfaces | 3.55 on page, 3.82 on card |
-| `--accent-text` | `#A84B08` | `#0F5A4E` | small accent text; background of small badges with white text | 5.31 on page, 4.78 on page-2; white on it 5.71 |
-| `--accent-soft` | `#FDE9D6` | `#DCF2EC` | icon wells, victory rays | — |
-| `--focus` | `#B9520A` | `#17806F` | focus ring | 4.56 on page, 4.91 on card |
-| `--title-on-dark` | `#E57010` | `#FFD45C` | ranking-panel title on `--stage` | 4.78 |
-| `--tap-text` | `#FFD45C` | `#FFD45C` | "Tap to keep going" on the scrim | 7.26 |
-| `--stage` | `#2A2430` | `#2D2435` | solid dark panels (ranking, O4) | white on it 15.07 |
-| `--scrim` | `rgba(28,23,32,.82)` | `rgba(30,22,36,.75)` | full-screen dim | white on scrim-over-page 10.28 |
-| `--gold` | `#FFC23D` | `#FFD45C` | glow, sparkles (graphics only) | — |
-| `--fish`, `--fish-deep`, `--fish-hi` | `#FFB81F`, `#C98200`, `#FFE08A` | same | fish art | fish outline is `--ink` |
-| `--glow` | `rgba(255,194,61,.65)` | `rgba(255,212,92,.6)` | solved-board glow | — |
-| `--heart`, `--danger`, `--wrong`, `--hard` | unchanged (`#E8506A`, `#D33A4A`, `#A3193A`, `#6C3FB5`) | unchanged | — | `--wrong` ≥ 3.18 on every tile; white on `--hard` 6.96 |
+| Token | Value | Use | Checked contrast |
+|---|---|---|---|
+| `--page` | `#FAF6F0` | page | — |
+| `--page-2` | `#F1EADF` | wells, desktop side fill | — |
+| `--card` | `#FFFFFF` | board card, pills, sheets | — |
+| `--ink` | `#2F2A35` | text, outlines | 12.97 on page |
+| `--ink-2` | `#665E6C` | secondary text | 5.20 on page-2, 5.77 on page |
+| `--ink-3` | `#B2AAB4` | disabled, hairlines | no text use |
+| `--accent` | `#E57010` | primary button fill, focus fill, hint ring | white label **3.15** → allowed only for labels ≥ 24 px (WCAG large text); 3.15 vs card as a graphic |
+| `--accent-deep` | `#B4560A` | 4 px bottom edge of primary buttons | — |
+| `--accent-title` | `#D2620C` | large titles (≥ 24 px) on light surfaces | 3.55 on page, 3.82 on card |
+| `--accent-text` | `#A84B08` | small accent text; background of small badges with white text | 5.31 on page, 4.78 on page-2; white on it 5.71 |
+| `--accent-soft` | `#FDE9D6` | icon wells, victory rays | — |
+| `--focus` | `#B9520A` | focus ring | 4.56 on page, 4.91 on card |
+| `--title-on-dark` | `#E57010` | ranking-panel title on `--stage` | 4.78 |
+| `--tap-text` | `#FFD45C` | "Tap to keep going" on the scrim | 7.26 |
+| `--stage` | `#2A2430` | solid dark panels (ranking, O4) | white on it 15.07 |
+| `--scrim` | `rgba(28,23,32,.82)` | full-screen dim | white on scrim-over-page 10.28 |
+| `--gold` | `#FFC23D` | glow, sparkles (graphics only) | — |
+| `--fish`, `--fish-deep`, `--fish-hi` | `#FFB81F`, `#C98200`, `#FFE08A` | fish art | fish outline is `--ink` |
+| `--glow` | `rgba(255,194,61,.65)` | solved-board glow | — |
+| `--heart`, `--danger`, `--wrong`, `--hard` | unchanged (`#E8506A`, `#D33A4A`, `#A3193A`, `#6C3FB5`) | — | `--wrong` ≥ 3.18 on every tile; white on `--hard` 6.96 |
 
-Primary-button rule in Classic:
+Primary-button rule:
 
 - `.btn--primary` always uses `font-size: 1.5rem` (24 px) with `text-shadow: 0 1px 0 rgba(120,50,0,.35)`.
 - No smaller white text ever sits on `--accent`. Count badges on orange use the `--accent-text` background.
-- `palette-check` enforces this: the pair "white on `--accent`" is listed with `min: 3` **only** when `SKIN_LARGE_LABELS.classic` is true. A CSS unit test asserts the 1.5rem rule (§1.12).
+- `palette-check` lists the pair "white on `--accent`" as a large-text pair (`min: 3`), which is valid only because of the 1.5rem rule. A CSS unit test asserts that rule (§1.12).
 
 ### 1.5 Board look
 
-| Item | Classic | Ginger |
-|---|---|---|
-| Card | white, padding 10 px, radius 18 px, shadow `0 2px 0 rgba(47,42,53,.05), 0 10px 26px rgba(47,42,53,.08)` | unchanged (12 px, 16 px) |
-| Gutters | **even**: every tile inset 2 px on all sides (4 px white gutter) when slot ≥ 30 px; 1.5 px (3 px gutter) below 30 px | region-aware 1.5 / 3.5 px (unchanged) |
-| Optional region gaps | Setting "Wider gaps between colours" (`settings.regionGaps`, default **off**) switches Classic to the region-aware insets | always on |
-| Tile radius | 20 % of slot | 18 % |
-| Grid lines, region strokes, frame | none | none |
-| X mark | **White** X, round caps, 54 % of the cell (path 23→77 on the 100-unit box), stroke 12 units. Under it, an **edge** stroke of 12 + 2×4 = 20 units in `--xe`, where `--xe` = `mixHex(tileColour, --ink, 0.70)` per palette index (`xEdgeColor(skin, paletteIndex)` in `skins.ts`; board-cells sets `--xe` on each cell). That is 1 px at a 25 px slot and 1.44 px at a 36 px slot. | dark ink X at 70 % (unchanged) |
-| X contrast (checked) | white vs tile only 1.23–2.39, so **the edge carries WCAG 1.4.11**: edge vs tile ≥ **3.32** (worst: Slate), white vs edge ≥ **6.27**; on faded tiles the edge vs tile is higher | ink X ≥ 3:1 (unchanged) |
-| Dark-marks option | Setting "Dark crosses" (`settings.darkMarks`, default **off**) draws the Ginger ink X in Classic | n/a |
-| Wrong cell | `--wrong` X (stroke 11) plus a 2 px ring (unchanged); ≥ 3.18 on every tile | unchanged |
-| Cat size | 0.84 × slot | 0.82 × slot |
-| Done region | veil 45 % toward `--page`, 400 ms (unchanged) | unchanged |
-| Solved glow | §2.2 | §2.2 |
-| Pattern glyphs | unchanged (`--ink` at 85 % / 65 %); ≥ 3:1 on every tile | unchanged |
+| Item | Spec |
+|---|---|
+| Card | white, padding 10 px, radius 18 px, shadow `0 2px 0 rgba(47,42,53,.05), 0 10px 26px rgba(47,42,53,.08)` |
+| Gutters | **even**, like the original: every tile inset 2 px on all sides (4 px white gutter) when slot ≥ 30 px; 1.5 px (3 px gutter) below 30 px. No inset depends on regions; the region-aware insets are deleted. |
+| Tile radius | 20 % of slot |
+| Grid lines, region strokes, frame | none |
+| X mark | **White** X, round caps, 54 % of the cell (path 23→77 on the 100-unit box), stroke 12 units. Under it, an **edge** stroke of 12 + 2×4 = 20 units in `--xe`, where `--xe` = `mixHex(tileColour, --ink, 0.70)` per palette index (`xEdgeColor(paletteIndex)` in `palette.ts`; board-cells sets `--xe` on each cell). That is 1 px at a 25 px slot and 1.44 px at a 36 px slot. The white X is the only mark style; the old ink X is deleted. |
+| X contrast (checked) | white vs tile only 1.23–2.39, so **the edge carries WCAG 1.4.11**: edge vs tile ≥ **3.32** (worst: Slate), white vs edge ≥ **6.27**; on faded tiles the edge vs tile is higher |
+| Wrong cell | `--wrong` X (stroke 11) plus a 2 px ring (unchanged); ≥ 3.18 on every tile |
+| Cat size | 0.84 × slot |
+| Done region | veil 45 % toward `--page`, 400 ms (unchanged) |
+| Solved glow | §2.2 |
+| Pattern glyphs | unchanged (`--ink` at 85 % / 65 %); ≥ 3:1 on every tile |
 
-### 1.6 Cat design brief: "Tux" (Classic) — our own character
+### 1.6 Cat design brief: "Tux" — our own character
 
-Drawn by hand as SVG path data on the same grids as today: a 100-unit grid for board heads and a 200-unit grid for poses. **No reference images**: draw from this brief, and log it in provenance.
+Tux replaces the ginger cat everywhere: board heads, moods and every pose. Drawn by hand as SVG path data on the same grids as today: a 100-unit grid for board heads and a 200-unit grid for poses. **No reference images**: draw from this brief, and log it in provenance.
 
 **Silhouette and signature marks**
 
 | Part | Shape (100-unit head grid) |
 |---|---|
-| Head | A wide, soft "bun", 80 wide × 60 tall (x 10–90, y 28–88). Flatter on top than Ginger's loaf; cheeks bulge slightly below the eye line. |
+| Head | A wide, soft "bun", 80 wide × 60 tall (x 10–90, y 28–88). Flat on top; cheeks bulge slightly below the eye line. |
 | Ears | Rounded triangles: base 26, height 24, tilted 12° outward. **The left ear has a small rounded notch, 3 units deep, near the tip** (signature mark). |
 | Mask (white) | An inverted-V blaze that starts between the eyes at y 40 and widens to the muzzle (x 32–68 at y 70) and the chin (y 86). **Asymmetric: on the right side it reaches up to the right eyebrow** (signature mark). |
 | Eyes | Iris ellipses rx 6.2 / ry 7 in `#BFE38A`, pupils rx 3.6 / ry 5.4 in `#16131A`, one 1.6 catchlight each, centres at x 36 / 64, y 54. |
 | Nose, mouth | Rounded-triangle nose `#F28AA0` at y 62; a small ink "w" mouth on the white mask. |
-| Whiskers | Two per side, `#F6F0E8` at 70 % over the fur and ink at 40 % over the mask. One fewer than Ginger, so the head reads cleaner at small sizes. |
+| Whiskers | Two per side, `#F6F0E8` at 70 % over the fur and ink at 40 % over the mask. Only two, so the head reads cleanly at small sizes. |
 | Body (poses) | Dark body, white bib (a rounded shield on the chest), white front-paw socks, and a dark tail with a white tip. |
 
 **Palette (ours)**
@@ -218,19 +263,19 @@ Checked against every tile, normal and faded: fur ≥ 5.87:1, outline ≥ 7.68:1
 
 No tears, in any mood or pose (06 §3: the original's fail cat cries).
 
-**Poses** (200-unit grid; `src/ui/art/tux-poses.ts`)
+**Poses** (200-unit grid). They replace today's poses in the same modules, so every export keeps its name and signature: `home` and `boot` in `src/ui/art/mascot.ts` (`mascotIllustration(kind)`), the others in `src/ui/art/illustrations.ts` (`illustration(kind)`).
 
 | Pose | Description | Bundle |
 |---|---|---|
-| `home` | Sitting upright, front paws together (white socks), tail curled right with its white tip; head tilted 4°. Idle loop: §2.9. | main |
+| `home` | Sitting upright, front paws together (white socks), tail curled right with its white tip; head tilted 4°. The tail and head are separate groups (`.pose__tail`, `.pose__head`) for the idle loop (§2.9). | main |
 | `boot` | Curled asleep, nose under tail; two floating Zs (existing CSS). | main (web only) |
-| `win` | Mid-leap, both front paws holding one of our fish above the head, eyes `^ ^`, three sparkles. **No instrument.** | lazy |
-| `fail` | Lying flat (pancake), ears back, one paw over the eyes, two small sweat drops. **No heart, no tears.** | lazy |
-| `daily` | Peeking over a calendar page; one paw on the page edge. | lazy |
-| `tutorial` | Sitting, one paw raised (wave loop, existing CSS). | lazy |
+| `win` | Mid-leap, both front paws holding one of our fish above the head, eyes `^ ^`, three sparkles. **No instrument.** | overlay chunk (as today) |
+| `fail` | Lying flat (pancake), ears back, one paw over the eyes, two small sweat drops. **No heart, no tears.** | overlay chunk |
+| `daily` | Peeking over a calendar page; one paw on the page edge. | overlay chunk |
+| `tutorial` | Sitting, one paw raised (wave loop, existing CSS). | overlay chunk |
 | accessories | `acc-lantern`, `acc-scarf`, `acc-yarn` (§4.4): separate symbols layered on head and pose. | lazy (events chunk) |
 
-**Idle loop** (both skins): §2.9.
+**Idle loop:** §2.9.
 
 ### 1.7 Fish and new icons (A draws; B animates)
 
@@ -239,36 +284,38 @@ No tears, in any mood or pose (06 §3: the original's fail cat cries).
 | `icon-fish` | A plump fish facing right: body ellipse 16 × 10 in `--fish`; a belly band in `--fish-deep` at 40 %; a forked tail; a top fin in `--fish-deep`; eye white r 1.6 with an ink pupil r 0.9; a sheen arc in `--fish-hi`; ink outline 1.4. It must read at 16 px. |
 | `icon-plus`, `icon-shop` (basket), `icon-globe` (language), `icon-crown` (rank #1), `icon-users` (group) | Same 24 grid and line style as the existing icons (`LINE` in `sprite.ts`). |
 
-### 1.8 Ginger (alternate)
+### 1.8 What is removed
 
-Ginger keeps today's tokens, cat, poses and region-aware gaps exactly. The new screens (ranking panel, victory, shop, event) use tokens only, so Ginger renders them in teal with no extra work.
+The ginger look is replaced in place, not kept. By the end of 2b none of the following exists in `src/` (a test enforces it, §1.12):
+
+- the ginger cat: its head parts, moods and poses (`cat-parts.ts`, `mascot.ts`, `illustrations.ts` now hold Tux), and the ginger `CAT_COLORS`;
+- the teal tokens and every ginger or teal colour literal (the side-pattern dots, the button and hint glows, `#c8651e` on the paw icon);
+- the dark-ink X mark (`layout.markOpacity` 0.7) and the region-aware insets (the region branch of `layout.ts`);
+- the descriptions of the ginger cat in existing a11y strings (their English values change, Appendix A).
+
+The new screens (ranking panel, victory, shop, event) use tokens only. Provenance marks the ginger-art rows "retired in 2b" (Appendix B).
 
 ### 1.9 Data, config, save
 
-- Save `settings.skin: SkinId` (default from `cfg.skins.default`), `settings.regionGaps: boolean` (false), `settings.darkMarks: boolean` (false). See §9.
-- Config `skins.default: 'classic'`, `skins.available`, `skinLayout` (insets, X stroke, edge, cat scale, card) and `boot.skinTimeoutMs` (§10).
-- Settings O5 gets new rows:
-  - "Cat style" (Classic / Ginger, segmented);
-  - "Wider gaps between colours" (Classic only);
-  - "Dark crosses" (Classic only).
+- Save: no look settings. There is no skin, gaps or mark-style setting (§9).
+- Config: the existing `layout.*` keys get the §1.5 values, and five `layout.*` keys are new (insets, X edge); `layout.insetSamePx` and `layout.insetDiffPx` are no longer read (§10).
+- Settings O5 gets no look rows. Its new rows are Language (§6) and Shop / Remove ads (§8).
 
 ### 1.10 Code areas
 
 | File | Change |
 |---|---|
-| `src/styles/tokens.css`, **new** `src/styles/skins.css` | split shared vs skin tokens (§1.3). Skin-tinted shadows and glows use RGB-triplet tokens per skin (`--ink-rgb`, `--accent-rgb`, `--gold-rgb`), written as `rgba(var(--accent-rgb), .28)`. That syntax works on the 04 §1 browser baseline. |
-| `src/styles/board.css`, `hud.css`, `base.css` | tokens only. Phase 2 left colour literals in these files: the ginger and teal side-pattern dots, the teal button and hint glows, `#c8651e` on the paw icon, `#d8c6cd`. A turns each into a token. Also: the X edge underlay; the `[data-skin='classic'] .btn--primary` 1.5rem rule; the banner reserve hook `.screen[data-banner] { padding-bottom: calc(var(--banner-reserve) + var(--safe-bottom)) }` (§3.2) |
-| `src/ui/art/palette.ts` | `SKIN_TOKENS`, `SkinId` tokens, `xEdgeColor()` |
-| **new** `src/ui/art/skins.ts` | `applySkin`, `skinGeometry(skin, settings)`, `xEdgeColor` |
-| **new** `src/ui/art/tux-parts.ts`, `tux-poses.ts` | Classic cat (main bundle) |
-| `src/ui/art/cat-parts.ts`, `mascot.ts`, `illustrations.ts` | move to **new** `src/ui/art/ginger/` (lazy); `illustration(kind)` dispatches by the current skin |
-| `src/ui/art/sprite.ts` | `mountSprite(doc?, skin?)` (new parameter optional, default `'classic'`), `rebuildCatSymbols(skin)`, new icons, `cat-ear-flick`. F0 puts placeholder art behind every new symbol id (§12.1). |
-| `src/ui/board/layout.ts` | `regionInsets(n, regions, opts?: { mode: 'even' \| 'region'; geom: SkinGeometry })`. Without `opts` the result is today's region-aware insets, so B's existing call in `board-view.ts` keeps compiling. |
+| `src/styles/tokens.css` | the one token set of §1.3 and §1.4, replacing today's values; RGB-triplet tokens for tinted shadows and glows; the `[data-event-theme]` blocks (§4.4); the per-script `--font-display` stacks (§6.6) |
+| `src/styles/board.css`, `hud.css`, `base.css` | tokens only. Phase 2 left colour literals in these files: the ginger and teal side-pattern dots, the teal button and hint glows, `#c8651e` on the paw icon, `#d8c6cd`. A turns each into a token. Also: the X edge underlay; the `.cell__glow` look (a radial gradient of `--glow`, 1.3 × slot) and the `.cell__ear` overlay that B animates; the `.btn--primary` 1.5rem rule; the banner reserve hook `.screen[data-banner] { padding-bottom: calc(var(--banner-reserve) + var(--safe-bottom)) }` (§3.2); the latin-ext `@font-face` (§6.6) |
+| **new** `src/styles/art.css` | art-bound motion: the Home mascot's tail sway and head tilt (§2.9), accessory and event-pattern styles |
+| `src/ui/art/palette.ts` | `TOKENS` and `CAT_COLORS` with the new values; `xEdgeColor(paletteIndex)` |
+| `src/ui/art/cat-parts.ts`, `mascot.ts`, `illustrations.ts` | Tux replaces the ginger art in place (§1.6); exports keep their names and signatures. `mascot.ts` also runs the Home mascot's head-tilt timer (§2.9). |
+| `src/ui/art/sprite.ts` | Tux moods behind the existing cat ids, new icons, `cat-ear-flick`; `mountSprite(doc?)` unchanged. F0 puts placeholder art behind every new symbol id (§12.1). |
+| `src/ui/board/layout.ts` | **new** `evenInsets(n, slotPx, c?)`: every cell gets the same inset (`layout.insetPx`, or `layout.insetSmallPx` below `layout.insetSmallBelowSlot`), returned as today's `CellInsets[]`. F0 adds it and switches B's call in `board-view.ts`; A then deletes `regionInsets`. |
 | `src/ui/board/board-cells.ts` | X underlay `<path class="cell__xe">` and the per-cell `--xe`. Every cell also gets two inert nodes that B animates: `.cell__glow` (an empty `<span>` behind the cat, for §2.2) and `<use class="cell__ear" href="#cat-ear-flick">` (hidden unless `.is-flick`, for §2.9). |
 | `src/ui/hud/top-bar.ts` | fish pill slot on Home (§2.5) |
-| `src/ui/overlays/settings-modal.ts` (B) | the three new rows |
 | `src/styles/overlays.css`, `fx.css` (B) | B removes the colour literals left in its own stylesheets (the stage button states, `#fff6d6`, the gold coach and hint pulses, the confetti fallback), using A's tokens |
-| `scripts/palette-check.ts` | skin loop (§1.12) |
+| `scripts/palette-check.ts` | the new token pairs and the X edge checks (§1.12) |
 
 ### 1.11 FB vs web
 
@@ -278,26 +325,27 @@ Identical. On FBIG the FB safe zone (top-left 64 × 64) is unchanged.
 
 | Test | What |
 |---|---|
-| `scripts/palette-check.ts` (extended; `npm run palette:check`) | For **each skin**: ΔE matrix and pairwise ≥ 10 (same palette); CVD report. For each tile, normal and faded: the X (Ginger: ink at 70 % ≥ 3; Classic: edge vs tile ≥ 3 **and** white vs edge ≥ 3; Classic with dark marks: ink ≥ 3), cat outline ≥ 3, cat fur ≥ 3, wrong X ≥ 3, pattern glyph ≥ 3. UI pairs of §1.4 at 4.5, or 3 for listed large-text and graphic pairs. Event themes (§4.3): every text pair re-checked on the event `--page`, and the faded-tile checks repeated with that `--page` (computed 2026-10-08 for all three themes: `--ink-2` ≥ 5.65, `--accent-text` ≥ 5.21, `--accent-title` ≥ 3.48 (large text), focus ring ≥ 4.48 (needs 3), X edge ≥ 3.32, faded wrong X ≥ 4.62, faded pattern glyph ≥ 3.63). |
-| `tests/unit/ui/skins.spec.ts` (new) | `applySkin` sets `data-skin`; rebuilds the cat symbols with unchanged ids; emits `skin:changed`; a board `<use href="#cat-idle">` resolves to the new art; Ginger lazy chunk timeout path. |
-| `tests/unit/ui/layout.spec.ts` | Classic: every inset equals 2 px (slot ≥ 30) or 1.5 px; Classic with `regionGaps`: region-aware; Ginger: region-aware. |
-| `tests/unit/ui/art-a11y-fx.spec.ts` | Classic cell has `.cell__xe` and `--xe` equal to `xEdgeColor`; dark-marks mode removes it. |
-| `tests/unit/ui/css-rules.spec.ts` (new) | Parses every file in `src/styles/`. Colour literals (hex, `rgb()`/`rgba()`/`hsl()` with numbers, named colours) are allowed only in `tokens.css` and `skins.css`. Allowlist elsewhere: `#fff`/`#ffffff`, `rgba(255,255,255,α)`, `rgba(0,0,0,α)`, `transparent`, `currentColor`, `inherit`. The Classic `.btn--primary` is ≥ 1.5rem. |
-| `tests/e2e/visual.spec.ts` (new, A) | Screenshots at 320, 390 and 1280 for Classic and Ginger: Home, mid-game, ranking, victory, fail, settings, shop, event. Stored under `docs/phase2b/screenshots/`; reviewed by a person, not diffed in CI. Also switches skin from Settings mid-level and checks that a board cat's `<use>` now resolves to the other skin's art, with the board state unchanged. |
+| `scripts/palette-check.ts` (extended; `npm run palette:check`) | For the one token set: ΔE matrix and pairwise ≥ 10; CVD report. For each tile, normal and faded: the X edge vs tile ≥ 3 **and** white vs edge ≥ 3, cat outline ≥ 3, cat fur ≥ 3, wrong X ≥ 3, pattern glyph ≥ 3. UI pairs of §1.4 at 4.5, or 3 for listed large-text and graphic pairs. Event themes (§4.3): every text pair re-checked on the event `--page`, and the faded-tile checks repeated with that `--page` (computed 2026-10-08 for all three themes: `--ink-2` ≥ 5.65, `--accent-text` ≥ 5.21, `--accent-title` ≥ 3.48 (large text), focus ring ≥ 4.48 (needs 3), X edge ≥ 3.32, faded wrong X ≥ 4.62, faded pattern glyph ≥ 3.63). |
+| `tests/unit/ui/art-a11y-fx.spec.ts` | Every cell has `.cell__xe` and `--xe` equal to `xEdgeColor(paletteIndex)`; the sprite's cat ids are unchanged and resolve to Tux art; `illustration(kind)` and `mascotIllustration(kind)` render every pose with its label. |
+| `tests/unit/ui/layout.spec.ts` | `evenInsets`: every inset equals 2 px (slot ≥ 30) or 1.5 px below, whatever the regions. |
+| `tests/unit/ui/css-rules.spec.ts` (new) | Parses every file in `src/styles/`. Colour literals (hex, `rgb()`/`rgba()`/`hsl()` with numbers, named colours) are allowed only in `tokens.css`. Allowlist elsewhere: `#fff`/`#ffffff`, `rgba(255,255,255,α)`, `rgba(0,0,0,α)`, `transparent`, `currentColor`, `inherit`. `.btn--primary` is ≥ 1.5rem. **Retired-look guard:** none of the retired Phase 2 values (the teal `#17806F` and `#0F5A4E`, the ginger fur `#F29A4A`, `#c8651e`, …; the list lives in the test) appears anywhere in `src/`, and no source file mentions `data-skin`. |
+| `tests/e2e/visual.spec.ts` (new, A) | Screenshots at 320, 390 and 1280: Home, mid-game, ranking, victory, fail, settings, shop, event. Stored under `docs/phase2b/screenshots/`; reviewed by a person, not diffed in CI. |
 
 ### 1.13 Decisions
 
-- `[DECISION]` Same region palette for both skins (§1.3).
-- `[DECISION]` The white X keeps WCAG 1.4.11 through a tinted edge (70 % ink mix). A plain drop shadow was rejected: it fails 3:1 on Slate and Lavender.
-- `[DECISION]` In Classic, region-aware gaps are an option (default off). The non-colour cue is the patterns option and the gaps option (§7). This is a conscious step back from 02 §18 "always on", so Classic can look like the original.
+- `[DECISION]` (user, 2026-10-08) One theme. No skin system, no skin setting, no fallback look.
+- `[DECISION]` Keep our 12 region colours (§1.3).
+- `[DECISION]` The white X keeps WCAG 1.4.11 through a tinted edge (70 % ink mix). A plain drop shadow was rejected: it fails 3:1 on Slate and Lavender. This is the one default-look difference made for accessibility (§0.7).
+- `[DECISION]` (parity) Even gutters always, like the original. The region-aware gaps of 02 §18 ("always on") are deleted, not kept as an option. The non-colour cue for regions is the colour-patterns option (§7).
+- `[DECISION]` (parity) The white X is the only mark style; the draft's "Dark crosses" option is dropped.
 - `[DECISION]` Cat eyes use light irises, because dark eyes vanish on dark fur.
-- `[DECISION]` Skin applies to the whole UI; events can only theme the page and board (§4.4).
+- `[DECISION]` Events can only theme the page and board (§4.4).
 
 ### 1.14 Visual parity review (words only)
 
-Matching "visually fully" is checked **by a person playing the Play Store app** in a 30–45 minute session. Differences §6 already lists the session; this spec adds the visual items below. The person writes what they see **in words, with no screenshots handed to implementers** (06 §2). Each finding becomes a token or timing change in config, never a traced shape.
+Matching "visually fully" is checked **by a person playing the Play Store app** in a 30–45 minute session. Differences §6 already lists the session; this spec adds the visual items below. The person writes what they see **in words, with no screenshots handed to implementers** (06 §2). Each finding becomes a token or timing change, never a traced shape.
 
-Write findings as comparisons with our build ("their gutter looks about twice as wide as ours", "their win reaches the leaderboard about a second later"), or as rough durations counted in seconds. Never write a hex value read with a colour picker, a pixel size measured on a screenshot, or a frame count from a recording (R6). The lead turns each finding into a new value of our own.
+Write findings as comparisons with our build ("their gutter looks about twice as wide as ours", "their win reaches the leaderboard about a second later"), or as rough durations counted in seconds. Never write a hex value read with a colour picker, a pixel size measured on a screenshot, or a frame count from a recording (R6). Each finding becomes a new value of our own: A applies the visual ones as token changes, and the lead applies config changes (config is frozen after F0).
 
 Checklist: page tone; board card or no card; gutter width relative to tile; tile corner roundness; X thickness; cat size in cell; button height, corner and edge; title weights; HUD order; glow look; fish count and arc; ranking layout; victory layout; transition style; idle motion. Record the results in `docs/phase2b/parity-review.md`.
 
@@ -332,7 +380,7 @@ Our target: the same five beats, with our timings fitted to those wait times, ou
 | 2 550 | A "+3" label rises 24 px from the pill and fades (700 ms). A bonus (hard or daily, §2.8) shows "+2" at 2 900 ms; the count then jumps by the bonus. | `plusLabelMs` 700, `plusLabelRisePx` 24, `bonusLabelAtMs` 2900 |
 | 4 200 | Scrim fades in over 300 ms | `scrimAtMs` 4200, `scrimFadeMs` 300 |
 | **4 500** | **Ranking panel** opens (pop, 260 ms). Total time to here: 4.5 s, matching the solver's allowance. | `fx.winOverlayDelayMs` → **4500** (was 800), `rank.panelPopMs` 260 |
-| 5 700 | "Tap to keep going" becomes active and starts pulsing (opacity .55 ↔ 1, 1 400 ms). An Android macro closes the original's leaderboard about 8 s after the last cat; ours can close from 5.7 s. | `rank.panelTapMinMs` 1200, `rank.tapPulseMs` 1400 |
+| 5 700 | "Tap to keep going" becomes active and starts pulsing (opacity .55 ↔ 1, 1 400 ms). An Android macro closes the original's leaderboard about 8 s after the last cat; that is the macro's wait, and the original's own tap gate is unknown. Ours can close from 5.7 s. | `rank.panelTapMinMs` 1200, `rank.tapPulseMs` 1400 |
 | tap | The panel fades out (200 ms); the **victory screen** comes in (screen transition, §2.9) | `rank.panelOutMs` 200 |
 | +600 | The victory button turns active | `fx.winButtonDelayMs` → **600** (was 1 000) |
 | tap "Level N" | Interstitial gate (§3), then the next board: transition, then board entry (700 ms) | — |
@@ -360,7 +408,7 @@ Interruptions:
 | Part | Spec |
 |---|---|
 | Container | Full screen: `--scrim` over the board. Centred panel in `--stage`, max-width 400 px, radius 20 px, padding 20/16; max-height 78 % of the viewport. |
-| Title | `--title-on-dark` (orange in Classic), 28 px display font; copy by board (Appendix A, `rank.title.*`) |
+| Title | `--title-on-dark` (orange), 28 px display font; copy by board (Appendix A, `rank.title.*`) |
 | Subtitle | My result for this win: "+55 points · 2:14" (level), "Solved in 3:08" (daily), "13 of 21 solved" (event) |
 | List (FB, overlay views can be placed in a rect) | An FB overlay view rendered into the panel's list area (§5.4): up to `rank.topCount` (10) rows of rank, photo, name and score. When the provider can identify my entry (`caps().myRank`), my row is pinned at the bottom when I am outside the top 10, with a 4 px `--accent` bar at the inline start; otherwise no row is highlighted. |
 | List (FB, overlay views exist but cannot be placed) | Our panel shows my line (below) and a secondary button "See top players" (`rank.seeTop`). It opens the overlay view however FB presents it (full screen, FB-owned); closing it returns to our panel. |
@@ -418,10 +466,10 @@ The original's fish meaning is unknown (differences §6 #1). We pick the smalles
 | Group challenge, taking part (not winning) | 10 (§5.6) |
 | IAP fish packs (FB) | 250 / 900 (§8) |
 
-| Spend | Price |
+| Spend | Price `[DECISION: default, user may change]` |
 |---|---|
-| 1 hint | 15 fish |
-| 1 kitty | 30 fish |
+| 1 hint | 15 fish (`shop.hintFish`) |
+| 1 kitty | 30 fish (`shop.kittyFish`) |
 
 Revive cannot be bought with fish. It stays rewarded-ad or free-fallback only, to keep the ad model of 02 §13.
 
@@ -459,8 +507,8 @@ During a transition the outgoing screen is `inert` and `aria-hidden`. Focus move
 
 | Where | Loop |
 |---|---|
-| Board cats (both skins) | Blink every 3–7 s (unchanged). Breathing: scale 1 → 1.02 → 1 over 2 800 ms with a per-cat phase from `cellNoise`. Ear flick: the `cat-ear-flick` overlay rotates one ear 10° for 160 ms, every 8–14 s per cat. All of it stops during sad, happy and surprised moods. |
-| Home mascot | Breathing 3 200 ms (existing); tail sway ±6° over 2 800 ms; head tilt ±3° every 6–10 s; blink 4.6 s (existing) |
+| Board cats (B) | Blink every 3–7 s (unchanged). Breathing: scale 1 → 1.02 → 1 over 2 800 ms with a per-cat phase from `cellNoise`. Ear flick: the `cat-ear-flick` overlay rotates one ear 10° for 160 ms, every 8–14 s per cat. All of it stops during sad, happy and surprised moods. |
+| Home mascot (A, inside the pose: `art.css` and `mascot.ts`) | Breathing 3 200 ms (existing); tail sway ±6° over 2 800 ms (`.pose__tail`); head tilt ±3° every 6–10 s (`.pose__head`); blink 4.6 s (existing) |
 | Reduced motion | Static, eyes open |
 
 **Heart break** (O-HUD pills; replaces the 400 ms crack):
@@ -493,7 +541,8 @@ Config: `fx.heartBreakMs` 700; `fx.heartCrackMs` (400) is kept for the falling h
 | B | **new** `src/ui/fx/fish-flight.ts` | `flyFish(layer, from: DOMRect[], to: DOMRect, opts): { done: Promise<void>; cancel() }` |
 | B | **new** `src/ui/fx/glow.ts` | `playGlow(board, cells, reduced)` |
 | B | **new** `src/ui/fx/transitions.ts` | `playScreenTransition(oldEl, newEl, kind, reduced): Promise<void>` |
-| B | `src/ui/board/board-view.ts`, `board-fx.ts` | new entry, idle loops, glow hooks, `entryEndMs(n)` |
+| B | `src/ui/board/board-view.ts`, `board-fx.ts` | new entry, board-cat idle loops, glow hooks, `entryEndMs(n)` |
+| A | `src/ui/art/mascot.ts`, **new** `src/styles/art.css` | the Home mascot idle loop (§2.9); it runs inside the pose, so B only mounts it |
 | B | `src/ui/hud/pills.ts` | fish pill, heart break, `fishRect()` |
 | B | **new** `src/ui/overlays/ranking-panel.ts`, `victory-screen.ts` | §2.4, §2.5 |
 | B | `src/ui/overlays/win-overlay.ts`, `daily-result.ts` | kept for one release and no longer opened |
@@ -526,7 +575,8 @@ Two differences: the panel content (§2.4), and on FBIG a possible banner in its
 ### 2.14 Decisions
 
 - `[DECISION]` Three fish per win, every time; bonuses add a number, not more fish.
-- `[DECISION]` Fish buy hints (15) and kitties (30); revives are not for sale.
+- `[DECISION]` Fish buy hints and kitties; revives are not for sale.
+- `[DECISION: default, user may change]` The rates: 15 fish per hint, 30 per kitty (§2.8).
 - `[DECISION]` No auto-close of the ranking panel.
 - `[DECISION]` The tutorial earns fish but shows no ranking.
 
@@ -550,15 +600,15 @@ Two differences: the panel content (§2.4), and on FBIG a possible banner in its
 | Meta enforces a **45 s rate limit** on `loadBannerAdAsync`; a call inside it fails with `RATE_LIMITED` | [search: Meta docs] |
 | **Meta's guidance: no banners during active gameplay.** Show them on menus, level select, shops, pause and results screens; hide them when gameplay begins | [search: Meta docs] |
 
-The original may show banners in play. We cannot copy that on FB, so our banners follow Meta's guidance. The original's *cadence* (an interstitial after nearly every level) is what a player notices most, and that we match.
+The original may show banners in play. We cannot copy that on FB, so our banners follow Meta's guidance. The original's *cadence* (an interstitial after nearly every level) is what a player notices most; we keep its reported grace and cooldowns (§3.2), which Phase 2 already uses.
 
 ### 3.2 Design (FBIG)
 
 | Format | Rule |
 |---|---|
-| Interstitial | Triggers `next_level`, `retry`, `daily_done` and new `event_next`, on the victory or O4 button tap, **never** during the win flow. Gate (02 §13.2, unchanged logic): completed ≥ 10, session grace 60 s, and the cooldown **changed to 90 / 75 / 60 s** for tenure days 0–2 / 2–7 / 7+. With level times of 1–4 min, this shows an ad after nearly every level once past the grace period. Rewarded ads still reset the clock. Owning No Ads (§8) turns interstitials off. |
+| Interstitial | Triggers `next_level`, `retry`, `daily_done` and new `event_next`, on the victory or O4 button tap, **never** during the win flow. Gate (02 §13.2, unchanged): completed ≥ 10, session grace 60 s, and the cooldown **120 / 100 / 90 s** for tenure days 0–2 / 2–7 / 7+, the original's reported values (01 §11.4), unchanged from Phase 2. With level times of 1–4 min, this shows an ad after most levels once past the grace period. Rewarded ads still reset the clock. Owning No Ads (§8) turns interstitials off. |
 | Banner: capability | `banner` is true only when **both** `loadBannerAdAsync` and `hideBannerAdAsync` are in `getSupportedAPIs()` and `VITE_FB_PLACEMENT_BANNER` is non-empty. Without a working hide we could not keep banners out of play, so no banner is ever shown. `unsupported` from any banner call latches the banner off for the session (05 §6.2). |
-| Banner: where | On the **Home**, **victory** and **event** screens only (`ads.banner.screens`), when `progress.completed ≥ 10`, not on the first-run tutorial's victory screen, and not `noAds`. Never on the game screen (any status, including the hint card and O4), the ranking panel, the boot screen or a full-screen overlay. |
+| Banner: where `[DECISION: default, user may change]` | On the **Home**, **victory** and **event** screens only (`ads.banner.screens`), when `progress.completed ≥ 10` (`ads.banner.fromCompletedLevels`), not on the first-run tutorial's victory screen, and not `noAds`. Never on the game screen (any status, including the hint card and O4), the ranking panel, the boot screen or a full-screen overlay. |
 | Banner: show | When an eligible screen mounts, after its entry transition: if the last `loadBannerAdAsync` call was at least `ads.banner.minReloadSec` (60 s, above Meta's 45 s) ago, call it with position bottom. Otherwise **skip the banner on this screen**. No retry loop, because a load inside the window would only hit `RATE_LIMITED`. |
 | Banner: hide | `hideBannerAdAsync()` *before* the eligible screen unmounts or a transition to the game screen starts, before any interstitial or rewarded ad, and when a modal overlay opens over the screen (settings, how to play, shop). It is not re-shown when the overlay closes unless the 60 s window has passed. |
 | Banner: layout | When a load is attempted, the screen root gets `data-banner` and reserves `ads.banner.reservePx` (58 px = the 50 px banner + 8 px) plus `safeBottom`. Primary buttons sit at least 16 px above that band, so a tap meant for "Level N" never lands on the ad. If the load fails, the reserve stays until the screen unmounts, so nothing jumps. |
@@ -572,7 +622,7 @@ The original may show banners in play. We cannot copy that on FB, so our banners
 ### 3.4 Data, config, save
 
 - Config (§10):
-  - `ads.interstitial.cooldownSec` becomes `[{0,90},{2,75},{7,60}]`;
+  - `ads.interstitial.cooldownSec` stays `[{0,120},{2,100},{7,90}]`;
   - `ads.interstitial.triggers` gains `event_next`;
   - `ads.banner` becomes `{ enabled: true, fromCompletedLevels: 10, screens: ['home','victory','event'], position: 'bottom', reservePx: 58, minReloadSec: 60, buttonClearancePx: 16 }`;
   - new `ads.rewarded.placements`.
@@ -592,7 +642,7 @@ The original may show banners in play. We cannot copy that on FB, so our banners
 
 | Test | What |
 |---|---|
-| `tests/unit/game/economy-pacing.spec.ts` | New cooldown table; the `event_next` trigger; `bannerGate` truth table (completed, screen, `noAds`, capability, first-run tutorial) |
+| `tests/unit/game/economy-pacing.spec.ts` | The cooldown table stays 120/100/90; the `event_next` trigger; `bannerGate` truth table (completed, screen, `noAds`, capability, first-run tutorial) |
 | `tests/unit/app/banner-flow.spec.ts` (new) | Show on Home, victory and event; never on the game screen or the ranking panel; hide before game, ads and modal overlays; skip inside the 60 s window; `unsupported` latch; reserve kept after a failure; no banner when `hideBannerAdAsync` is missing |
 | `tests/unit/platform/fb-banner.spec.ts` (new) | SDK calls and error mapping (`RATE_LIMITED` → `rate_limited`), against the stub |
 | `tests/e2e/fbig.spec.ts` | No banner before 10 completed; banner on Home and on the victory screen at level 11 with a 58 px reserve; no banner call while the game screen is shown |
@@ -600,8 +650,8 @@ The original may show banners in play. We cannot copy that on FB, so our banners
 
 ### 3.7 Decisions
 
-- `[DECISION]` Cooldown 90/75/60 s instead of the reported 120/100/90 s, to get "almost every level" at our shorter early-level times. All in config.
-- `[DECISION]` Banners on Home, victory and event screens, never in play, following Meta's guidance (§3.1). This replaces the first draft's "game screen only", which contradicted that guidance. A banner on the victory screen sits in its own reserved band below the "Level N" button.
+- `[DECISION]` (parity) Keep the original's reported cooldown, 120/100/90 s (Phase 2's value). The draft lowered it to 90/75/60 s for taste; that is reverted (§0.7). All in config.
+- `[DECISION: default, user may change]` Banners on Home, victory and event screens only, from 10 completed levels, never in play, following Meta's guidance (§3.1). This replaces the first draft's "game screen only", which contradicted that guidance. A banner on the victory screen sits in its own reserved band below the "Level N" button.
 
 ---
 
@@ -684,8 +734,8 @@ Rules:
 | Element | Spec |
 |---|---|
 | Resolution | `activeEvent(defs, now)` returns the event with `start ≤ now < end`. Events never overlap; a test enforces it. `teaserEvent(defs, now)` returns the next event within `events.teaseHours` (72 h). Times use the device clock `[DECISION]`; there is no server. |
-| Home card | Sits above the Level button when an event is active or teased. Height 72 px: the event pattern behind it, the Tux pose with the accessory (48 px), title, then a status line. Status lines: "Ends in 3 d 4 h · 7 / 21 solved", "Starts in 2 d" (teaser, not tappable) or "Opens after level 10" (locked). A progress bar in `--accent` is 4 px tall. |
-| Event screen (**new** screen `event`) | Header art (pattern + pose); name and tagline; "Ends in …"; milestone track (5 nodes on a bar; reached nodes filled, with the reward icon); primary "Play puzzle {i}"; "Top list" (FB: opens the ranking panel for the event board; web: personal results); "Home". |
+| Home card | Sits above the Level button when an event is active or teased. Height 72 px: the event pattern behind it, the Tux pose with the accessory (48 px; both from A's `eventArt(def, 'card')`), title, then a status line. Status lines: "Ends in 3 d 4 h · 7 / 21 solved", "Starts in 2 d" (teaser, not tappable) or "Opens after level 10" (locked). A progress bar in `--accent` is 4 px tall. |
+| Event screen (**new** screen `event`) | Header art (pattern + pose, A's `eventArt(def, 'header')`); name and tagline; "Ends in …"; milestone track (5 nodes on a bar; reached nodes filled, with the reward icon); primary "Play puzzle {i}"; "Top list" (FB: opens the ranking panel for the event board; web: personal results); "Home". |
 | Event game | Mode `event` (new `ModeId`); title "Lantern Walk · 13"; the game screen has `data-event-theme` (page pattern, card, glow, accessory over the board cats); rules = level rules with optional hearts. Save slot `inProgress.event`, id `E<eventId>/<index>`; fish and points as §2.8 and §5.3; interstitial trigger `event_next`. The win flow is §2.6 (event board). |
 | After the end | The card and screen are gone; an unfinished `inProgress.event` slot is cleared at launch; records stay in the save. |
 
@@ -709,7 +759,7 @@ The progress bar animates from the old to the new value (400 ms). On a milestone
 |---|---|
 | C | **new** `src/game/events.ts` (types, `validateEventDef`, `activeEvent`, `teaserEvent`, `applyEventWin`, milestones), `src/game/modes.ts` (`event` mode), `src/game/levels-repo.ts` (`getEventPuzzle(id, i)` with fetch deadline and substitute generation as for packs), `src/game/progression.ts`, `src/game/types.ts`, **new** `src/app/event-flow.ts`, `src/app/views.ts` (`selectHomeView.extraCards` gets the event card; `selectEventView`), `src/data/events/**`, `scripts/gen-events.ts`, `scripts/verify-levels.ts`, `src/i18n/en/events.ts` |
 | B | **new** `src/ui/screens/event-screen.ts`, `home-screen.ts` (event card variant of `extraCards`), `victory-screen.ts` (event variant) |
-| A | **new** `src/ui/art/event-art.ts` (patterns as CSS-ready SVG data, accessories), `skins.css` (`[data-event-theme]` blocks) |
+| A | **new** `src/ui/art/event-art.ts` (patterns as CSS-ready SVG data, accessories, and `eventArt(def, 'card' \| 'header')`, the art part of the Home card and the event-screen header), `tokens.css` (`[data-event-theme]` blocks), `art.css` (pattern and accessory styles) |
 
 ### 4.8 FB vs web
 
@@ -972,13 +1022,13 @@ Plural categories come from `Intl.PluralRules`; the test (§6.9) derives the req
 | **Not** mirrored | **The board** (`.board { direction: ltr }`): column 1 is always the leftmost, so hint text and screen-reader labels stay correct. Also the top-bar action buttons stay at the **top right**, because the FB safe zone is top-left; the clock, digits, fish flight geometry (computed from rects) and the victory sun rays. |
 | Swipe | No change (the board is LTR). |
 
-### 6.6 Fonts
+### 6.6 Fonts (A: typography is part of the visual identity)
 
 | Script | Strategy | Bytes |
 |---|---|---|
 | Latin (en, es, pt, fr, de, it, id) | Fredoka 600 latin (as today) | 16.5 KB, first load |
-| Latin extended (tr, pl) | Add `fredoka-latin-ext-600-normal.woff2` from the same OFL package, as a second `@font-face` with its `unicode-range`. The browser fetches it only when such glyphs appear. | 2.7 KB, lazy |
-| Cyrillic, Vietnamese, Thai, Devanagari, Arabic, CJK | System fonts. `src/styles/i18n.css` sets `:lang(ru)`, `:lang(vi)` … `{ --font-display: <stack>; --display-weight: 700 }`. Stacks: ja `'Hiragino Maru Gothic ProN','Hiragino Sans','Noto Sans JP',system-ui`; ko `'Apple SD Gothic Neo','Noto Sans KR',system-ui`; zh `'PingFang SC','Noto Sans SC','Microsoft YaHei',system-ui`; th `'Thonburi','Noto Sans Thai',system-ui`; hi `'Kohinoor Devanagari','Noto Sans Devanagari',system-ui`; ar `'Geeza Pro','Noto Sans Arabic','Segoe UI',system-ui`; ru and vi `system-ui,'Segoe UI',Roboto`. | 0 |
+| Latin extended (tr, pl) | Add `fredoka-latin-ext-600-normal.woff2` from the same OFL package, as a second `@font-face` in `base.css` with its `unicode-range`. The browser fetches it only when such glyphs appear. | 2.7 KB, lazy |
+| Cyrillic, Vietnamese, Thai, Devanagari, Arabic, CJK | System fonts. `src/styles/tokens.css` sets `:lang(ru)`, `:lang(vi)` … `{ --font-display: <stack>; --display-weight: 700 }`. Stacks: ja `'Hiragino Maru Gothic ProN','Hiragino Sans','Noto Sans JP',system-ui`; ko `'Apple SD Gothic Neo','Noto Sans KR',system-ui`; zh `'PingFang SC','Noto Sans SC','Microsoft YaHei',system-ui`; th `'Thonburi','Noto Sans Thai',system-ui`; hi `'Kohinoor Devanagari','Noto Sans Devanagari',system-ui`; ar `'Geeza Pro','Noto Sans Arabic','Segoe UI',system-ui`; ru and vi `system-ui,'Segoe UI',Roboto`. | 0 |
 | Digits in those locales | The `.num` class (level numbers, fish, points, timer) keeps Fredoka, which has Latin digits | — |
 
 `OFL.txt` already ships; add the latin-ext file to the provenance row.
@@ -989,27 +1039,30 @@ Plural categories come from `Intl.PluralRules`; the test (§6.9) derives the req
 |---|---|
 | 1. Source | `src/i18n/en.ts` (the aggregator of `en/*.ts`) plus **new** `src/i18n/meta.ts`: per key a description, max length (chips ≤ 18 chars, buttons ≤ 22, titles ≤ 28 where the layout needs it) and placeholder notes. |
 | 2. Draft | AI draft (Claude) per locale into `src/i18n/locales/<id>.ts`. The prompt carries only our English, `meta.ts` and the glossary (`docs/i18n/glossary.md`: cat, kitty, fish, hint, colour names, rule wording). **The prompt must not mention the original game or its strings, and translators must not look at the original's localized UI** (06 §2 step 6). Prompts and outputs are logged in provenance. |
-| 3. Flag | **new** `src/i18n/locales/status.json`: `{ "<id>": { "status": "machine" \| "reviewed", "reviewer": "", "date": "" } }` |
-| 4. Native review | One paid native reviewer per locale checks the in-game screenshots (`tests/e2e/i18n.spec.ts` output) and the catalogue, then signs off with `reviewed`. |
-| 5. Ship rule | `cfg.i18n.shipUnreviewed` is `true` in Phase 2b test builds. Release builds include only `reviewed` locales; `scripts/i18n-check.ts --release` fails otherwise. |
+| 3. Release list `[DECISION: default, user may change]` | `cfg.i18n.releaseLocales` lists the locales approved for release; the default is `['en']`. The AI drafts of all 16 other locales are written now and ship in every non-release build. |
+| 4. Builds | **Release builds** (`vite build --mode release`, used for the FB production zip and the public web deploy) bundle only the locales in `i18n.releaseLocales`: the locale loader map is built from that list, so the other catalogues are not in the bundle at all. **Dev, e2e and web preview builds** bundle all 17 (`i18n.locales`). In both, locale resolution (§6.3) and the Settings Language row use only the locales the build contains, and anything else falls back to `en`. |
+| 5. Approval | A locale joins `i18n.releaseLocales` when the user approves it. The recommended route is a native reviewer per locale who checks the in-game screenshots (`tests/e2e/i18n.spec.ts` output) and the catalogue. Each approval is a line in **new** `docs/i18n/review-log.md` (locale, approver, date, catalogue commit). Approval does not block Phase 2b. |
+| 6. Release check | `scripts/i18n-check.ts --release`: every locale in `releaseLocales` is in `locales`, passes the catalogue checks (§6.9) and has a review-log line; `en` is always included; the release build output contains no other locale chunk. |
 
 ### 6.8 Code areas (E unless noted)
 
 - `src/i18n/index.ts`: async `setLocale`; `tn` via `Intl.PluralRules`; `formatNumber`; bidi isolation.
 - **new** `src/i18n/locale.ts`, `format.ts`, `plural.ts`, `meta.ts`.
 - `src/i18n/en.ts`: aggregator of existing keys plus `en/*.ts` (§12).
-- **new** `src/i18n/locales/*.ts`, one lazy chunk each via `import.meta.glob`.
-- **new** `src/styles/i18n.css`; `src/assets/fonts/display-latin-ext.woff2`.
-- **new** `scripts/i18n-check.ts`; `docs/i18n/glossary.md`.
+- **new** `src/i18n/locales/*.ts`, one lazy chunk each, loaded through the build's locale loader map (§6.7 step 4; the lead wires the map in `vite.config.ts` at F0).
+- **new** `src/styles/i18n.css` (the RTL overrides only).
+- **new** `scripts/i18n-check.ts` (with `--release`); `docs/i18n/glossary.md`, `docs/i18n/review-log.md`.
+- A: `src/assets/fonts/display-latin-ext.woff2`, its `@font-face` in `base.css`, the per-script stacks in `tokens.css` (§6.6).
 - C: `boot.ts` (prefetch and resolve), `shell.ts` (the Language row).
-- B: the Settings "Language" row (a list of endonyms, from `locale.name.*`).
+- B: the Settings "Language" row (a list of endonyms, from `locale.name.*`, for the locales in the build).
 
 ### 6.9 Tests
 
 | Test | What |
 |---|---|
 | `tests/unit/i18n/catalogs.spec.ts` (new) | For every locale: every English key present; non-empty; **placeholder set equal to English** for each key (no missing, extra or renamed `{name}`); every plural base has each category that `Intl.PluralRules(locale).select(n)` returns for n = 0…200 and 1 000; no key that `meta.ts` marks translatable is identical to English (allowlist: `app.name`, `boot.progress`, numbers); max lengths as warnings. |
-| `tests/unit/i18n/locale.spec.ts` | The resolution table (es_LA → es, pt_PT → pt-BR, zh_TW → zh-Hans, ar_AR → ar, en_UD → en, xx_YY → en); override; prefetch mismatch path. |
+| `tests/unit/i18n/locale.spec.ts` | The resolution table (es_LA → es, pt_PT → pt-BR, zh_TW → zh-Hans, ar_AR → ar, en_UD → en, xx_YY → en); override; prefetch mismatch path; in a build with only `['en','es']`, `fr_FR` resolves to `en`, and a saved override `de` resolves as `'auto'` while staying in the save. |
+| `scripts/i18n-check.ts --release` (run by `npm run build:release`) | The release rules of §6.7 step 6. |
 | `tests/unit/i18n/format.spec.ts` | Plural selection in ar, ru and pl; Latin digits in ar; date output per locale (snapshot); bidi isolation only in RTL. |
 | `tests/unit/sanity.spec.ts` | Runs over **every** locale catalogue for the known original phrases (06 §3), plus "Meow Cup", "Long Live Meow", "Moonlit Meows" and "golden fish". |
 | `tests/e2e/i18n.spec.ts` (new) | At 320×568 and 390×844 for de, ru, ar, th, ja and a pseudo-locale `xx-long` (+40 % length, accents): no horizontal overflow; chips and buttons do not clip; `ar` has `dir=rtl` with the board LTR and the top-bar actions on the right. Screenshots go to reviewers. |
@@ -1024,18 +1077,18 @@ Same catalogues; only the locale source differs (§6.3).
 
 | Item | Default (looks like the original) | Kept extra |
 |---|---|---|
-| Colour patterns | **off** | Settings toggle; glyphs ≥ 3:1 on every tile in both skins |
-| Region gaps (Classic) | **off** (even gutters) | "Wider gaps between colours" toggle |
-| Mark style (Classic) | white X with a tinted edge (≥ 3:1 through the edge) | "Dark crosses" toggle |
+| Colour patterns | **off** | Settings toggle; glyphs ≥ 3:1 on every tile |
+| Gutters | even, like the original | none: the region-aware gaps are removed (§1.5) |
+| Mark style | white X, like the original, with a tinted edge (≥ 3:1 through the edge) | none: the edge already meets WCAG 1.4.11, and the draft's "Dark crosses" option is dropped (§1.13) |
 | Reduce motion | System | System / On / Off; every new motion has a reduced variant (§2.7, §2.9) |
 | Sound, Vibration | on | toggles |
 | Screen reader | — | Announcements: fish ("You caught 3 fish. You have 128."), rank, event progress, milestone; new overlays are `role=dialog` with labels; the fish pill has `aria-label` "128 fish"; the event card is a button labelled with its status line. |
 | Keyboard | — | Ranking: Enter, Space or Esc continue; victory: Enter on the primary; shop: arrows inside the list; event screen: tab order header → play → top list → home. Focus is never lost through screen transitions (focus moves at the incoming start). |
-| Focus ring | — | `--focus` per skin (Classic `#B9520A`, ≥ 4.5 on page) |
-| Contrast | — | `palette-check` covers both skins, event themes and the new tokens (§1.12) |
+| Focus ring | — | `--focus` (`#B9520A`, ≥ 4.5 on page) |
+| Contrast | — | `palette-check` covers the token set, the event themes and the new tokens (§1.12) |
 | Text size | — | 200 % zoom without overlap holds for the new screens (layout e2e at 2× text) |
 
-`[DECISION]` The WCAG 1.4.1 position in Classic: colour-only regions by default (like the original), with two built-in, one-tap alternatives (patterns, region gaps). How to play gets one line pointing to them: `howto.a11y`, Appendix A.
+`[DECISION]` The WCAG 1.4.1 position: colour-only regions by default (like the original), with one built-in, one-tap alternative, colour patterns. How to play gets one line pointing to it: `howto.a11y`, Appendix A.
 
 Tests: `tests/unit/shell/review-fixes.spec.ts` (defaults); palette-check; `tests/e2e/layout.spec.ts` (keyboard pass through the win flow and the shop); a manual screen-reader pass (VoiceOver and TalkBack) at Phase 4.
 
@@ -1062,9 +1115,11 @@ The Play listing shows "In-app purchases" and iOS sells Premium and Premium Plus
 | Non-consumable products | No product-type flag was found. **Not relied on** (§8.4: No Ads is consumed and kept as a save entitlement). |
 | `signedRequest` verification | Needs a server, which we do not have. **Not verified** (accepted risk, §8.7). |
 
-### 8.3 Catalogue `[DECISION]` (our ids and names; prices are proposals set in the dashboard)
+### 8.3 Catalogue `[DECISION]` (our ids and names; prices are set in the dashboard)
 
-| productID | Type | Our name (en) | Grants | Proposed price (USD) |
+The proposed prices are the default `[DECISION: default, user may change]`. They live in the FB dashboard, not in code: the game always shows the catalogue's localized `price` string.
+
+| productID | Type | Our name (en) | Grants | Price (USD, default) |
 |---|---|---|---|---|
 | `remove_ads` | entitlement: consumed at once, then kept in the save as `purchases.noAds` (cloud-saved, so it follows the FB account) | No Ads | interstitials and banners off; rewarded ads stay optional | 3.99 |
 | `hints_15` | consumable | Bulb Bundle | +15 hints | 1.99 |
@@ -1149,7 +1204,7 @@ export type ModeId = 'tutorial' | 'level' | 'daily' | 'event';
 export interface InProgressV2 extends Omit<InProgressV1, 'mode'> { mode: 'level' | 'daily' | 'event' }
 export interface SaveDataV2 extends Omit<SaveDataV1, 'v' | 'settings' | 'inProgress'> {
   v: 2;
-  settings: Settings & { skin: SkinId; locale: 'auto' | LocaleId; regionGaps: boolean; darkMarks: boolean };
+  settings: Settings & { locale: 'auto' | LocaleId };             // no look settings: one theme (§1)
   inProgress: { level: InProgressV2 | null; daily: InProgressV2 | null; event: InProgressV2 | null }; // event: mode 'event', id `E<eventId>/<i>`, i 0-based (the UI shows i + 1)
   wallet: { fish: number; earned: number };                       // earned = lifetime, for stats
   points: { total: number };
@@ -1164,8 +1219,7 @@ export interface SaveDataV2 extends Omit<SaveDataV1, 'v' | 'settings' | 'inProgr
 
 | Field | v1 → v2 value |
 |---|---|
-| `settings.skin` | `cfg.skins.default` (`'classic'`) `[DECISION]`: Phase 2 never shipped publicly, so nobody "had" Ginger |
-| `settings.locale`, `regionGaps`, `darkMarks` | `'auto'`, `false`, `false` |
+| `settings.locale` | `'auto'` |
 | `inProgress.level`, `inProgress.daily` | unchanged (an `InProgressV1` is a valid `InProgressV2`) |
 | `inProgress.event` | `null` |
 | `wallet` | `{ fish: 0, earned: 0 }` (no retro grant `[DECISION]`) |
@@ -1181,7 +1235,7 @@ Validation (`validateV2`) extends `validateV1` field by field, and an invalid fi
 - event ids match `/^[a-z0-9-]{3,40}$/` and `solved` ≤ 1 000;
 - `groups`: at most 10 entries (oldest `endsAt` dropped); `wins` and `total` non-negative integers;
 - ledger entries are strings matching `/^[a-z0-9_]{1,40}\|.{1,200}$/`, deduplicated and capped at 50 (newest kept);
-- `skin` and `locale` belong to their enums;
+- `locale` is `'auto'` or a `LocaleId`; a saved locale that the running build does not contain resolves like `'auto'` (§6.7) and is kept, so it applies again in a build that has it;
 - `inProgress.event` follows the slot rules of 04 §7.2, with mode `'event'`.
 
 Storage keys stay `mewdoku.save.v1` (and `:<playerId>`) and the cloud key stays `save` `[DECISION]`: the key is a name, and renaming it would orphan saves. Downgrade risk is nil, because no v1 build has been public. **If one ships before 2b, add a guard**: a v1 reader must keep unknown top-level fields.
@@ -1225,33 +1279,38 @@ Changed values (existing keys; allowed by CONTRACTS §7, never renamed or remove
 | `fx.boardEntryStaggerMs` | 8 (per row) | 18 (per diagonal, upper bound). The meaning changes; F0 rewrites its JSDoc. |
 | `fx.winOverlayDelayMs` | 800 | 4500 (first post-win overlay) |
 | `fx.winButtonDelayMs` | 1000 | 600 (victory button) |
-| `ads.interstitial.cooldownSec` | 120/100/90 | 90/75/60 |
 | `ads.interstitial.triggers` | 3 | + `event_next` (its element type widens; a lead-approved F0 change) |
 | `ads.banner.enabled` | false | true (FBIG still needs the capability and the placement id) |
+| `layout.boardPad` | 12 | 10 (card padding, §1.5) |
+| `layout.boardRadius` | 16 | 18 |
+| `layout.cellRadiusFraction` | 0.18 | 0.2 |
+| `layout.catScale` | 0.82 | 0.84 |
+| `layout.markScale` | 0.52 | 0.54 |
+| `layout.markStrokeFraction` | 0.1 | 0.12 |
+| `layout.markOpacity` | 0.7 | 1 (the white X) |
 
-The old `layout.*` keys that the skins now cover (`boardPad`, `boardRadius`, `cellRadiusFraction`, `insetSamePx`, `insetDiffPx`, `catScale`, `markScale`, `markStrokeFraction`, `markOpacity`) stay as they are, because keys are never removed. Code reads board geometry only through `skinGeometry(skin, settings)`. A unit test asserts that `skinLayout.ginger` equals those `layout.*` values.
+`ads.interstitial.cooldownSec` keeps its Phase 2 value, 120/100/90 (§3.7).
+
+The look's geometry is the one `layout.*` group; there is no per-skin geometry. `layout.insetSamePx` and `layout.insetDiffPx` are **no longer read**, because the region-aware insets are deleted (§1.8). Keys are never removed (CONTRACTS §7), so F0 marks both `@deprecated` in their JSDoc and leaves their values.
 
 New keys:
 
 | Group | Keys = values |
 |---|---|
-| `skins` | `default: 'classic'`, `available: ['classic','ginger']` |
-| `skinLayout.classic` | `insetMode: 'even'`, `insetPx: 2`, `insetSmallPx: 1.5`, `insetSmallBelowSlot: 30`, `insetSamePx: 1.5`, `insetDiffPx: 3.5` (used when `regionGaps` is on), `cardPad: 10`, `cardRadius: 18`, `cellRadiusFraction: 0.2`, `markScale: 0.54`, `markStrokeFraction: 0.12`, `markOpacity: 1`, `markEdgeFraction: 0.04`, `markEdgeMix: 0.7`, `catScale: 0.84` |
-| `skinLayout.ginger` | `insetMode: 'region'`, `insetSamePx: 1.5`, `insetDiffPx: 3.5`, `cardPad: 12`, `cardRadius: 16`, `cellRadiusFraction: 0.18`, `markScale: 0.52`, `markStrokeFraction: 0.1`, `markOpacity: 0.7`, `catScale: 0.82` (today's values) |
+| `layout` | `insetPx: 2`, `insetSmallPx: 1.5`, `insetSmallBelowSlot: 30` (even gutters, §1.5), `markEdgeFraction: 0.04`, `markEdgeMix: 0.7` (the X edge) |
 | `fx` | `boardEntryCardMs: 250`, `boardEntryRisePx: 24`, `boardEntryWaveStartMs: 80`, `boardEntryTileMs: 220`, `boardEntryWaveBudgetMs: 400`, `screenOutMs: 160`, `screenInMs: 240`, `screenInDelayMs: 80`, `screenSlidePx: 16`, `screenReducedMs: 120`, `heartBreakMs: 700`, `catBreatheMs: 2800`, `catBreatheScale: 0.02`, `earFlickMinMs: 8000`, `earFlickMaxMs: 14000`, `earFlickMs: 160`, `mascotHeadTiltMinMs: 6000`, `mascotHeadTiltMaxMs: 10000`, `victoryRaysTurnMs: 20000` |
 | `fx.win` | `glowInMs: 300`, `glowSettleMs: 600`, `glowStaggerMs: 40`, `glowSettleOpacity: 0.7`, `glowScale: 1.3`, `fishPillInAtMs: 1000`, `fishPillFadeMs: 200`, `fishAtMs: 1200`, `fishStaggerMs: 150`, `fishPopMs: 220`, `fishHoldMs: 250`, `fishFlightMs: 800`, `fishArcLift: 0.35`, `fishArcSpread: 0.1`, `fishEndScale: 0.6`, `fishSizeFraction: 0.5`, `fishMinPx: 22`, `fishMaxPx: 36`, `fishTrailDots: 5`, `fishTrailMs: 300`, `counterBumpMs: 360`, `plusLabelMs: 700`, `plusLabelRisePx: 24`, `bonusLabelAtMs: 2900`, `scrimAtMs: 4200`, `scrimFadeMs: 300`, `tutorialVictoryAtMs: 3300`, `replayVictoryAtMs: 1200`, `reduced: { rankingAtMs: 1200, tapMinMs: 600 }` |
 | `fish` | `perWin: 3`, `hardBonus: 2`, `dailyBonus: 2`, `tutorial: 3`, `groupParticipation: 10` (rank mode, non-winners), `max: 999999` |
-| `shop` | `hintFish: 15`, `kittyFish: 30` |
+| `shop` | `hintFish: 15`, `kittyFish: 30` (`[DECISION: default, user may change]`) |
 | `points` | `perSize: 5`, `hardMultiplier: 2`, `flawless: 10`, `unaided: 10`, `daily: 15`, `event: 5`, `max: 2000000000` |
-| `ads.banner` | `fromCompletedLevels: 10`, `screens: ['home','victory','event']`, `position: 'bottom'`, `reservePx: 58`, `minReloadSec: 60`, `buttonClearancePx: 16` |
+| `ads.banner` | `fromCompletedLevels: 10`, `screens: ['home','victory','event']` (both `[DECISION: default, user may change]`), `position: 'bottom'`, `reservePx: 58`, `minReloadSec: 60`, `buttonClearancePx: 16` |
 | `ads.rewarded` | `placements: ['hint','kitty','revive','group_double']` |
 | `audio` | `fishPlinkStepSemitones: 2` |
 | `events` | `teaseHours: 72`, `cardEndsSoonHours: 48` |
 | `rank` | `fetchTimeoutMs: 3000`, `topCount: 10`, `fetchCount: 50`, `panelPopMs: 260`, `panelOutMs: 200`, `panelTapMinMs: 1200`, `tapPulseMs: 1400`, `submitMinIntervalMs: 10000`, `minSolveMs: 3000`, `maxSolveMs: 86400000`, `dailyEpoch: '2026-01-01'`, `boards: { points: 'paw_points', daily: 'daily_fastest', eventPrefix: 'event_' }`, `overlayPlacement: 'fullscreen'`, `showPanelWithoutProvider: true` |
 | `groups` | `durationH: 72`, `rewardMode: 'participation'`, `minWinsForReward: 3`, `rewardKitties: 2`, `rewardKittiesWithAd: 4`, `maxShown: 8`, `keep: 10` |
 | `iap` | `readyTimeoutMs: 5000`, `catalogCacheMs: 600000`, `tokensKept: 50`, `grantBeforeConsume: true`, `removeAdsMode: 'consume'`, `products: [{id:'remove_ads',noAds:true},{id:'hints_15',hints:15},{id:'kitties_8',kitties:8},{id:'fish_250',fish:250},{id:'fish_900',fish:900}]` |
-| `i18n` | `locales: ['en','es','pt-BR','fr','de','it','id','tr','pl','ru','vi','th','ja','ko','zh-Hans','hi','ar']`, `fallback: 'en'`, `rtl: ['ar']`, `localeTimeoutMs: 1200`, `shipUnreviewed: true` |
-| `boot` | `skinTimeoutMs: 1500` |
+| `i18n` | `locales: ['en','es','pt-BR','fr','de','it','id','tr','pl','ru','vi','th','ja','ko','zh-Hans','hi','ar']`, `fallback: 'en'`, `rtl: ['ar']`, `localeTimeoutMs: 1200`, `releaseLocales: ['en']` (`[DECISION: default, user may change]`; the locales a release build ships, §6.7) |
 | `haptics` | `fish: 8` |
 
 New env (`src/env.d.ts`, D): `VITE_FB_PLACEMENT_BANNER`, `VITE_FB_LEADERBOARDS` (JSON map `BoardKey` → dashboard name or id). Empty means that feature is off, as for the existing placement ids.
@@ -1266,25 +1325,24 @@ Baseline is the Phase 2 final (STATUS §4, FBIG build; raw bytes, 1 KB = 1 000 B
 
 | Item | Now (FBIG) | Δ estimate | Projected | Current budget | **Proposed budget** |
 |---|---|---|---|---|---|
-| Main JS | 173.3 | Classic art +6.5; Ginger art out −6; fish and icons +0.8; motion (entry, transitions, idle, heart) +2.5; save v2, economy, scoring, event resolution, win-flow +8; events.json +2; FB banner and capability glue +1.5; i18n runtime +2.5; English strings +8 | **≈ 199** (web ≈ 190) | 190 | **210** |
-| CSS | 37.8 | skins +3; new screens and overlays +6; events +2; i18n/RTL +1.5 | **≈ 50** | 40 | **54** |
+| Main JS | 173.3 | Tux art replaces the ginger art in place (net +0.5); fish and icons +0.8; motion (entry, transitions, idle, heart) +2.5; save v2, economy, scoring, event resolution, win-flow +8; events.json +2; FB banner and capability glue +1.5; i18n runtime +2.5; English strings +8 | **≈ 199** (web ≈ 190) | 190 | **210** |
+| CSS | 37.8 | token values replaced in place, X edge, `art.css` +1.5; new screens and overlays +6; events +2; i18n/RTL +1.5 | **≈ 49** | 40 | **53** |
 | Font (first load) | 16.5 | 0 (latin-ext is lazy) | 16.5 | 25 | 25 |
 | index.html | 0.8 | 0 | 0.8 | 4 | 4 |
-| **First load, English** | 228.3 | | **≈ 267** | 250 | **280** |
-| **First load incl. one non-English locale chunk** | — | + ≤ 24 | **≈ 291** | — | **305** |
-| Lazy JS (core: overlays, hint engine, sfx, RPC, generator, win flow, ranking, victory, shop UI) | 45.4 | +11 | ≈ 57 | 48 | **62** |
-| Lazy JS (optional: `skin-ginger`, `events` screen + art, `fb-social` = ranking + overlay views + groups + payments) | 0 | 9 + 7 + 9 | ≈ 25 | — | **35** |
+| **First load, English** | 228.3 | | **≈ 266** | 250 | **280** |
+| **First load incl. one non-English locale chunk** | — | + ≤ 24 | **≈ 290** | — | **305** |
+| Lazy JS (core: overlays incl. the Tux poses, hint engine, sfx, RPC, generator, win flow, ranking, victory, shop UI) | 45.4 | +11 | ≈ 57 | 48 | **62** |
+| Lazy JS (optional: `events` screen + art, `fb-social` = ranking + overlay views + groups + payments) | 0 | 7 + 9 | ≈ 16 | — | **25** |
 | Locale chunk (each of 16) | — | 14–24 | — | — | **24 per file** |
 | Worker | 17.6 | 0 | 17.6 | 25 | 25 |
 | Event packs (3 × 21 records) | — | 3 × ~3.5 | lazy | — | listed |
-| FB zip | 216.8 KB, 51 files | +16 locales, 3 event packs, about 6 chunks, 1 font | ≈ 600 KB, ≈ 77 files | 500 KB, 60 files | **750 KB, 100 files** (platform cap 500 files) |
+| FB zip (dev or preview build, all 17 locales) | 216.8 KB, 51 files | +16 locales, 3 event packs, about 5 chunks, 1 font | ≈ 600 KB, ≈ 76 files | 500 KB, 60 files | **750 KB, 100 files** (platform cap 500 files). A release zip carries only `i18n.releaseLocales` and is smaller. |
 
 Lazy-loading rules:
 
-- The Ginger art loads only when that skin is selected.
 - The event screen and art load when an event is active or teased (prefetched after Home shows).
 - `fb-social` loads after `start()`, without blocking the first route.
-- Only the active locale chunk ever loads.
+- Only the active locale chunk ever loads, and a release build contains only the release locales (§6.7).
 - Win-flow UI and the shop are in the core overlay chunk, preloaded after the first screen as today.
 
 Time to start on FB stays well under 5 s: the extra main JS is about 26 KB raw, and the locale chunk is prefetched during loading (§6.3).
@@ -1300,64 +1358,77 @@ Time to start on FB stays well under 5 s: the extra main JS is about 26 KB raw, 
 | Step | Who | Duration | Output |
 |---|---|---|---|
 | **F0 contracts** | lead | 1–1.5 days | See the F0 list below. |
-| **A–E in parallel** | 5 workstreams | 6–10 days | §12.2 |
-| M1 copy freeze | all | day 4 | English strings final, so E can translate |
-| M2 feature-complete | all | day 8–10 | behind flags; unit tests green |
-| **Integration** | lead | 3–4 days | wiring; budgets; e2e on the Playwright projects plus the new specs; screenshots; docs (Appendix B); provenance merge; STATUS-2b |
-| Native review | external | 2–3 weeks | locale sign-off (§6.7) |
+| **A–E in parallel** | 5 workstreams | 6–9 days | §12.2 |
+| M1 copy freeze | all | day 4 | English strings final, so E can produce the AI drafts |
+| M2 feature-complete | all | day 8–9 | behind flags; unit tests green |
+| **Integration** | lead | 3–4 days | wiring; budgets; e2e on the Playwright projects plus the new specs; a release-mode build (§6.7); screenshots; docs (Appendix B); provenance merge; STATUS-2b |
+| Locale approval | the user (a native reviewer per locale is recommended) | any time; does not block 2b | a locale joins `i18n.releaseLocales` (§6.7) |
 | Phase 4 verification | lead + D | — | §14 items before the related flags go on in production |
 
 **F0 list** (the lead; nothing in A–E starts before it lands):
 
-1. **Config:** every §10 key, with the JSDoc that CONTRACTS §7 requires.
+1. **Config:** every §10 key and changed value, with the JSDoc that CONTRACTS §7 requires; `@deprecated` on `layout.insetSamePx` and `layout.insetDiffPx`.
 2. **Types** (the type widenings are lead-approved contract changes):
-   - `game/types.ts`: `SaveDataV2`, `SaveData`, `InProgressV2`, `ModeId` + `'event'`, `SkinId`, `LocaleId`, `EventId`.
+   - `game/types.ts`: `SaveDataV2`, `SaveData`, `InProgressV2`, `ModeId` + `'event'`, `LocaleId`, `EventId`. (No skin type: one theme.)
    - `platform/types.ts`: `BoardKey`, `RankingProvider`, `RankingCaps`, `GroupProvider`, `PaymentsProvider`, optional `PlatformAds.banner?`, `InterstitialPlacement` + `'event_next'`, `RewardedPlacement` + `'group_double'`, `Capabilities` + `overlayViews`, `groups` (the existing `leaderboards` and `payments` flags are reused), `PlatformAdapter.ranking?`/`groups?`/`payments?`, `@deprecated` on `leaderboards?`, and `PlatformStorage.save(data: SaveData, …)`.
-   - `app/store.ts`: `ScreenId` + `'event'`; `OverlayId` + `'ranking' | 'victory' | 'shop' | 'rank_hub' | 'group_result'`; `UiState` + `skin`, `locale`, `dir`, `bannerReserved`; `AppState.save: SaveData`.
-   - `app/events.ts`: bus events `skin:changed`, `locale:changed`, `wallet`, `rank:result`, and the analytics rows of §4.6, §5.8 and §8.4.
+   - `app/store.ts`: `ScreenId` + `'event'`; `OverlayId` + `'ranking' | 'victory' | 'shop' | 'rank_hub' | 'group_result'`; `UiState` + `locale`, `dir`, `bannerReserved`; `AppState.save: SaveData`.
+   - `app/events.ts`: bus events `locale:changed`, `wallet`, `rank:result`, and the analytics rows of §4.6, §5.8 and §8.4.
    - `i18n/index.ts`: `setLocale(id): Promise<string>` (was synchronous); boot is the only caller.
 3. **Flags** with their defaults (§10).
-4. **Stubs:** view-model interfaces and stubs for every new module (throwing `not implemented`), including `RewardedPromptProps.swap?: { price: number; balance: number; onSwap(): void }`.
-5. **Placeholder art** in `sprite.ts`, behind every new symbol id: `icon-fish` (an ellipse plus a triangle), `cat-ear-flick`, the new icons, and the Classic cat moods (a circle with two ears). A replaces them; B animates them from day 1.
-6. **Strings:** split `en.ts` into `src/i18n/en/*.ts` per owner, wired into the aggregator and seeded with Appendix A.
-7. **Test splits:** every existing test file that imports modules of two workstreams is split by owner:
+4. **Stubs:** view-model interfaces and stubs for every new module (throwing `not implemented`), including `RewardedPromptProps.swap?: { price: number; balance: number; onSwap(): void }` and `eventArt(def, kind)`.
+5. **Placeholder art** in `sprite.ts`, behind every new symbol id: `icon-fish` (an ellipse plus a triangle), `cat-ear-flick`, the new icons and the accessories (a small circle). The cat ids and poses keep today's art as the interim until A replaces it in place. B animates from day 1.
+6. **Board insets:** add `evenInsets(n, slotPx)` to `layout.ts` (implemented: it is a few lines) and switch B's `regionInsets` call in `board-view.ts` to it, so A can delete the region-aware code without touching B's file.
+7. **Strings:** split `en.ts` into `src/i18n/en/*.ts` per owner, wired into the aggregator and seeded with Appendix A; change the English values of the four existing cat-description keys (Appendix A).
+8. **Test splits:** every existing test file that imports modules of two workstreams is split by owner:
    - `tests/unit/ui/hud.spec.ts` → `hud.spec.ts` (A) + `pills.spec.ts` (B);
    - `art-a11y-fx.spec.ts` → `art-a11y-fx.spec.ts` (A: art, sprite, palette) + `fx-a11y.spec.ts` (B: fx, a11y);
    - `ui/review-fixes.spec.ts` → stays with B, and its `computeLayout`/`readViewport` cases move to `layout.spec.ts` (A).
-8. **Tests:** the `tests/unit/sanity.spec.ts` banned list (§6.9).
-9. **Build config:**
-   - `vite.config.ts`: the lazy chunks `skin-ginger`, `events`, `fb-social` and the locale chunks;
-   - `playwright.config.ts`: `visual.spec.ts` at 320, 390 and 1280; `i18n.spec.ts` at 320 and 390; `winflow` and `events` in `web-390`;
-   - `package.json`: scripts `events:gen` and `i18n:check`, and `verify` gains `i18n:check`;
-   - `index.html`: `<html data-skin="classic">`, so the first paint has the default skin.
-10. **Docs:** **new** `docs/phase2b/CONTRACTS.md`.
+9. **Tests:** the `tests/unit/sanity.spec.ts` banned list (§6.9).
+10. **Build config:**
+    - `vite.config.ts`: the lazy chunks `events`, `fb-social` and the locale chunks; the locale loader map built from `i18n.locales`, or from `i18n.releaseLocales` in `--mode release` (§6.7);
+    - `playwright.config.ts`: `visual.spec.ts` at 320, 390 and 1280; `i18n.spec.ts` at 320 and 390; `winflow` and `events` in `web-390`;
+    - `package.json`: scripts `events:gen`, `i18n:check` and `build:release` (the release-mode builds, then `i18n:check --release`), and `verify` gains `i18n:check`;
+    - `src/main.ts`: import the new, empty stylesheets `src/styles/art.css` (A), `screens.css` (B) and `i18n.css` (E); each owner fills its own.
+11. **Docs:** **new** `docs/phase2b/CONTRACTS.md`.
 
 ### 12.2 Ownership (disjoint; every new file starts with `// Owner: <ws>`)
 
+**Rebalance after the single-theme decision.** The skin system was a large part of A's plumbing and of B's Settings work; it is gone. A becomes **visual identity + art** for the one theme and takes over the visual work that sat with B and E, so B, the largest workstream, gets lighter:
+
+| Work | Was | Now | Why |
+|---|---|---|---|
+| Skin system: `applySkin`, `skins.css`, the lazy ginger chunk, skin tests; Settings rows "Cat style", "Wider gaps", "Dark crosses" | A, B | deleted | one theme (§1) |
+| Replacing the ginger art and tokens in place, and the retired-look guard (§1.8, §1.12) | — | A | new |
+| Fonts: the latin-ext face and the per-script display stacks (§6.6) | E | A | typography is visual identity; E keeps RTL, catalogues and the release-locale rules |
+| Home mascot idle loop (§2.9) | B | A | it moves the pose's own groups |
+| Event art for the Home card and the event-screen header (`eventArt`) | B | A | art; B places it |
+| The `.cell__glow` look (gradient, size) | B | A (`board.css`) | A owns the cell and its stylesheet; B keeps the animation |
+| Visual parity findings turned into token values (§1.14) | lead | A | the lead still owns config changes |
+
 | WS | Scope | Owns (create or modify) |
 |---|---|---|
-| **A: visual skin and art** | §1, §1.7, §4 event art | `src/styles/tokens.css`, `src/styles/skins.css` (new), `src/styles/base.css`, `src/styles/board.css`, `src/styles/hud.css`; `src/ui/art/**` (incl. new `skins.ts`, `tux-parts.ts`, `tux-poses.ts`, `ginger/**`, `event-art.ts`); `src/ui/board/layout.ts`, `src/ui/board/board-cells.ts`; `src/ui/hud/top-bar.ts`, `tool-bar.ts`, `rule-chips.ts`; `scripts/palette-check.ts`; `src/i18n/en/skin.ts`; `tests/unit/ui/{skins,layout,art-a11y-fx,css-rules,hud,palette-check}.spec.ts`; `tests/e2e/visual.spec.ts`; `docs/phase2b/provenance-A.md` |
-| **B: animation, win-flow UI, new screens** | §2 UI, §2.9, §4.4–4.5 UI, §5 UI, §8.5, Settings rows | `src/styles/fx.css`, `src/styles/overlays.css`, `src/styles/screens.css` (new); `src/ui/fx/**` (new `fish-flight.ts`, `glow.ts`, `transitions.ts`); `src/ui/a11y/**`; `src/ui/board/board-view.ts`, `board-fx.ts`, `board-highlight.ts`, `board-types.ts`, `gestures.ts`, `keyboard.ts`; `src/ui/hud/pills.ts`; `src/ui/overlays/**` (new `ranking-panel.ts`, `victory-screen.ts`, `shop-sheet.ts`, `rank-hub.ts`, `group-result.ts`; `settings-modal.ts`; `rewarded-prompt.ts` swap button); `src/ui/screens/**` (new `event-screen.ts`); `src/audio/**`; `src/i18n/en/ui-2b.ts` (incl. the shop product names); `tests/unit/shell/**`; `tests/unit/ui/{fx-fish,fx-a11y,board-entry,board-view,pills,gestures,review-fixes}.spec.ts`; `docs/phase2b/provenance-B.md` |
+| **A: visual identity + art** | §1 (tokens, Tux, board look, removal of the ginger look), §1.7, §1.14 token changes, §2.9 Home mascot loop, §4 event art, §6.6 fonts | `src/styles/tokens.css`, `src/styles/base.css`, `src/styles/board.css`, `src/styles/hud.css`, `src/styles/art.css` (new); `src/ui/art/**` (incl. new `event-art.ts`; Tux replaces the ginger art in `cat-parts.ts`, `mascot.ts`, `illustrations.ts`, `palette.ts`, `sprite.ts`); `src/ui/board/layout.ts`, `src/ui/board/board-cells.ts`; `src/ui/hud/top-bar.ts`, `tool-bar.ts`, `rule-chips.ts`; `src/assets/fonts/**`; `scripts/palette-check.ts`; `tests/unit/ui/{layout,art-a11y-fx,css-rules,hud,palette-check}.spec.ts`; `tests/e2e/visual.spec.ts`; `docs/phase2b/provenance-A.md` (Tux, fish, icons, event art, the latin-ext font; the ginger rows marked retired) |
+| **B: animation, win-flow UI, new screens** | §2 UI, §2.9 (board cats, heart, transitions, entry), §4.4–4.5 UI, §5 UI, §8.5, the Settings Language / Shop / Remove ads rows | `src/styles/fx.css`, `src/styles/overlays.css`, `src/styles/screens.css` (new); `src/ui/fx/**` (new `fish-flight.ts`, `glow.ts`, `transitions.ts`); `src/ui/a11y/**`; `src/ui/board/board-view.ts`, `board-fx.ts`, `board-highlight.ts`, `board-types.ts`, `gestures.ts`, `keyboard.ts`; `src/ui/hud/pills.ts`; `src/ui/overlays/**` (new `ranking-panel.ts`, `victory-screen.ts`, `shop-sheet.ts`, `rank-hub.ts`, `group-result.ts`; `settings-modal.ts`; `rewarded-prompt.ts` swap button); `src/ui/screens/**` (new `event-screen.ts`); `src/audio/**`; `src/i18n/en/ui-2b.ts` (incl. the shop product names); `tests/unit/shell/**`; `tests/unit/ui/{fx-fish,fx-a11y,board-entry,board-view,pills,gestures,review-fixes}.spec.ts`; `docs/phase2b/provenance-B.md` |
 | **C: logic, save v2, app orchestration** | §2.8, §2.10, §3 gates, §4 logic and data, §5 logic, §8 grant logic, §9 | `src/game/**` (new `events.ts`, `scoring.ts`, `purchases.ts`); `src/app/**` except `config.ts` (frozen after F0; changes go through the lead), incl. new `win-flow.ts`, `banner-flow.ts`, `event-flow.ts`, `ranking-flow.ts`, `group-flow.ts`, `shop-flow.ts`, plus `router.ts`, `overlay-chunk.ts`, `boot.ts`, `shell.ts`, `helper-flows.ts`, `session*.ts`, `views.ts`, `store.ts`, `events.ts`, `flags.ts`; `src/main.ts`; `index.html` (after F0); `src/workers/**`; `src/data/events/**`; `scripts/gen-events.ts`, `scripts/verify-levels.ts`; `src/i18n/en/events.ts`; `tests/unit/game/**`, `tests/unit/app/**`, `tests/unit/layering.spec.ts`, `tests/property/events.spec.ts`; `tests/e2e/{smoke,layout,winflow,events}.spec.ts` |
-| **D: platform** | §3 SDK, §5 FB, §8 SDK, budgets | `src/platform/**` (new `fb/fb-banner.ts`, `fb-ranking.ts`, `fb-overlay-views.ts`, `fb/views/*.ts`, `fb-groups.ts`, `fb-payments.ts`; `web/mock-ads.ts` banner); `src/env.d.ts`; `platform-assets/**`; `tests/fixtures/fbinstant-stub.js`; `tests/unit/platform/**`; `tests/e2e/fbig.spec.ts`; `scripts/size-check.ts`, `scripts/zip-fbig.ts`; `docs/phase2b/fb-dashboard.md` (leaderboards with sort order, banner placement, products to create, the `VITE_FB_*` values) |
-| **E: localization** | §6 | `src/i18n/index.ts`, `src/i18n/en.ts` (aggregator and existing keys), new `locale.ts`, `format.ts`, `plural.ts`, `meta.ts`, `locales/**`; `src/styles/i18n.css` (new); `src/assets/fonts/**`; `scripts/i18n-check.ts`; `tests/unit/i18n/**`; `tests/e2e/i18n.spec.ts`; `docs/i18n/**`; `docs/phase2b/provenance-E.md` |
+| **D: platform** | §3 SDK, §5 FB, §8 SDK, budgets | `src/platform/**` (new `fb/fb-banner.ts`, `fb-ranking.ts`, `fb-overlay-views.ts`, `fb/views/*.ts`, `fb-groups.ts`, `fb-payments.ts`; `web/mock-ads.ts` banner); `src/env.d.ts`; `platform-assets/**`; `tests/fixtures/fbinstant-stub.js`; `tests/unit/platform/**`; `tests/e2e/fbig.spec.ts`; `scripts/size-check.ts`, `scripts/zip-fbig.ts` (the production zip comes from the release-mode build, §6.7); `docs/phase2b/fb-dashboard.md` (leaderboards with sort order, banner placement, products to create, the `VITE_FB_*` values) |
+| **E: localization** | §6 except fonts (§6.6, A) | `src/i18n/index.ts`, `src/i18n/en.ts` (aggregator and existing keys), new `locale.ts`, `format.ts`, `plural.ts`, `meta.ts`, `locales/**` (the 16 AI drafts); `src/styles/i18n.css` (RTL overrides); `scripts/i18n-check.ts` (incl. `--release`); `tests/unit/i18n/**`; `tests/e2e/i18n.spec.ts`; `docs/i18n/**` (glossary, review log); `docs/phase2b/provenance-E.md` (translation prompts and outputs) |
 
 Read-only for everyone in 2b: `src/engine/**`, `src/ui/dom.ts`, `tests/golden/**`, the level and daily packs. Shared after F0: none. `tests/unit/sanity.spec.ts`, `vite.config.ts`, `playwright.config.ts`, `vitest.config.ts` and `package.json` are the lead's. `docs/provenance.md`, 02, 04, 05, 06 and CONTRACTS are updated by the lead at integration, from the `provenance-*.md` drafts. A file that is not listed belongs to the lead; ask before touching it.
 
-RTL edits: A and B use logical properties in their own stylesheets; E owns only `i18n.css`.
+RTL edits: A and B use logical properties in their own stylesheets; E owns only `i18n.css`. Typography: A owns every `--font-display` value, including the per-script stacks.
 
 ### 12.3 Cross-workstream contracts (signatures fixed in F0)
 
 | Producer → consumer | Contract |
 |---|---|
-| A → B | `icon('icon-fish')`; `illustration(kind)` (skin-aware); `applySkin`; `xEdgeColor`; `skinGeometry`; `regionInsets(n, regions, opts?)`; `buildCell(…)` with the X underlay and the inert `.cell__glow` and `.cell__ear` nodes (§1.10); `createTopBar(props, cb, { lead?: HTMLElement })` (a slot after the FB safe zone; B puts the Home fish pill there); the `.screen[data-banner]` reserve rule and `--banner-reserve` |
+| A → B | `icon('icon-fish')`; `illustration(kind)` and `mascotIllustration(kind)` (signatures unchanged; Tux art; the Home mascot animates itself, §2.9); `eventArt(def, 'card' \| 'header')`; `xEdgeColor`; `evenInsets(n, slotPx)`; `buildCell(…)` with the X underlay and the inert `.cell__glow` and `.cell__ear` nodes, already styled (§1.10); `createTopBar(props, cb, { lead?: HTMLElement })` (a slot after the FB safe zone; B puts the Home fish pill there); the `.screen[data-banner]` reserve rule and `--banner-reserve` |
 | B → B (shared component) | `createFishPill(props): View` in `src/ui/hud/pills.ts`, used by Home, the game pills row and the victory screen |
 | B → C | `flyFish`, `playGlow`, `playScreenTransition`, `BoardView.playEntry(): number` (returns `entryEndMs`), `GameScreen.fishRect()`, `GameScreen.showFishPill(count)`, `RankingPanelProps`, `VictoryProps`, `ShopProps`, `EventScreenView`, `GroupResultProps`, `HomeView.event`, `HomeView.fish`, `bannerReserved` on the Home, victory and event views, `RewardedPromptProps.swap` |
 | C → B | view selectors (`selectHomeView`, `selectEventView`, `selectVictoryView`, `selectRankingView`) |
 | D → C | `platform.ads.banner?`, `platform.ranking?`, `platform.groups?`, `platform.payments?`, capabilities |
-| E → all | `t`, `tn`, `formatNumber`, `formatShortDate`, `setLocale(): Promise<string>`, `getDir()`, `onLocaleChanged(cb)` |
+| E → all | `t`, `tn`, `formatNumber`, `formatShortDate`, `setLocale(): Promise<string>`, `getDir()`, `onLocaleChanged(cb)`, `buildLocales(): readonly LocaleId[]` (the locales this build contains, for the Language row) |
 
-Placeholder rule: until A's final art lands, B uses the F0 placeholder shapes behind the same symbol ids.
+Placeholder rule: until A's final art lands, B uses the F0 placeholder shapes, and today's cat art, behind the same symbol ids and exports.
 
 ---
 
@@ -1365,16 +1436,17 @@ Placeholder rule: until A's final art lands, B uses the F0 placeholder shapes be
 
 **Gates:**
 
-- [ ] **G-LEGAL (release only):** IP-lawyer review of the Classic skin plus the final public name; 06 §3/§7 updated (§0.3).
-- [ ] **G-NAME (release only):** the public name is chosen and cleared; `app.name` updated.
+- [ ] **G-LEGAL (release only):** IP-lawyer review of the Classic look plus the final public name; 06 §3/§7 updated (§0.3).
+- [ ] **G-NAME (release only)** `[DECISION: default, user may change]`: the public name is chosen and cleared; `app.name` updated. Until then the build runs under the code name; this gate blocks the public release only.
 - [ ] **G-CLEAN:** every new asset has a provenance row; no source from 06 §4 was opened; the sanity test passes in all 17 locales.
 
-**1 Classic skin**
+**1 The look (one theme)**
 
-- [ ] Classic is the default.
-- [ ] Ginger can be selected in Settings and switches at runtime with no reload, mid-level included.
+- [ ] Classic is the only look: no skin type, skin setting, `data-skin` or skin chunk exists.
+- [ ] The ginger art, the teal tokens, the ink X and the region-aware insets are gone from `src/` (the retired-look guard, §1.12).
 - [ ] Even gutters; white X with edge; dark Tux cat in 4 moods plus 6 poses and idle loops.
-- [ ] `palette-check` passes for both skins and the 3 event themes.
+- [ ] `palette-check` passes for the token set and the 3 event themes.
+- [ ] The paw booster is still called "Kitty" everywhere in the UI.
 
 **2 Win flow**
 
@@ -1386,8 +1458,8 @@ Placeholder rule: until A's final art lands, B uses the F0 placeholder shapes be
 
 **3 Ads**
 
-- [ ] FBIG: interstitial gate at 90/75/60 s after 10 completed levels.
-- [ ] Banners from 10 completed levels on Home, victory and event screens only, never during play, with the 58 px reserve and the 60 s reload window; off unless both banner APIs exist.
+- [ ] FBIG: interstitial gate at 120/100/90 s (the original's reported values, unchanged from Phase 2) after 10 completed levels.
+- [ ] Banners (`[DECISION: default, user may change]`) from 10 completed levels on Home, victory and event screens only, never during play, with the 58 px reserve and the 60 s reload window; off unless both banner APIs exist.
 - [ ] Web production: no ad code paths. Rewarded flows unchanged, plus `group_double`.
 
 **4 Events**
@@ -1408,13 +1480,13 @@ Placeholder rule: until A's final art lands, B uses the F0 placeholder shapes be
 - [ ] 17 locales.
 - [ ] Resolution from `getLocale()` / `navigator.languages`, plus the override.
 - [ ] Plurals through `Intl.PluralRules`; Latin digits; Arabic RTL with an LTR board.
-- [ ] The catalogue test passes.
-- [ ] Release builds ship only reviewed locales.
+- [ ] The catalogue test passes; AI drafts exist for all 16 non-English locales.
+- [ ] Release builds ship only the locales in `i18n.releaseLocales` (default `en`); dev and web preview builds show all 17; `i18n:check --release` passes.
 
 **7 Accessibility**
 
-- [ ] The defaults match the original (patterns off, gaps off, white X).
-- [ ] Every extra still works in both skins; the new screens are keyboard and screen-reader complete.
+- [ ] The defaults match the original (patterns off, even gutters, white X).
+- [ ] Every extra still works; the new screens are keyboard and screen-reader complete.
 
 **8 Purchases**
 
@@ -1443,7 +1515,7 @@ Placeholder rule: until A's final art lands, B uses the F0 placeholder shapes be
 | G3 | Overlay views: positioning inside a rect, tap forwarding, closing, binding syntax for rows passed as `data` with session ids | `rank.overlayPlacement: 'rect'` |
 | G4 | Banners in 8.0: the position argument's values; `hideBannerAdAsync`; the 50 dp height on Android and iOS; overlay versus resize of the webview; the 45 s load limit; Meta's no-banner-in-gameplay guidance and placement rules near buttons; Monetization Manager banner placement | banner reserve and screens |
 | G5 | Payments: the consume-then-grant versus grant-then-consume wording; whether unconsumed purchases break `getPurchasesAsync`; non-consumable support; subscriptions; refund visibility; acceptance of a "remove ads" product | `iap.grantBeforeConsume`, `iap.removeAdsMode` |
-| G6 | Interstitial frequency policy versus our 90/75/60 s cooldowns | §3 |
+| G6 | Interstitial frequency policy versus the 120/100/90 s cooldowns | §3 |
 | G7 | The FB locale code list (`es_LA`, `ar_AR`, …) | §6.3 table |
 | G8 | Event and theme names cleared against store listings | §4.3 |
 
@@ -1453,18 +1525,24 @@ Until an item is verified, its feature runs in the fallback state the spec gives
 
 ## Appendix A. New English strings (seed for F0; owners may refine until M1)
 
-All copy is ours. Plurals use `.one` / `.other`.
+All copy is ours. Plurals use `.one` / `.other`. The paw booster stays "kitty" / "kitties" (§0.5).
+
+**Changed English values of existing keys** (F0; keys and placeholders unchanged, CONTRACTS §7). They described the ginger cat, which is removed:
+
+| Key | Was | Now |
+|---|---|---|
+| `a11y.mascot` | A ginger cat | A black-and-white cat |
+| `a11y.illustration.boot` | A ginger cat having a nap | A black-and-white cat having a nap |
+| `a11y.illustration.win` | A ginger cat in a party hat | A black-and-white cat leaping with a fish |
+| `a11y.illustration.fail` | A ginger cat with a little bandage | A black-and-white cat hiding its eyes |
+
+**New keys:**
 
 | Key | English |
 |---|---|
-| `settings.skin` / `.classic` / `.ginger` | Cat style / Classic / Ginger |
-| `settings.regionGaps`, `.note` | Wider gaps between colours / Makes colour borders easier to see. |
-| `settings.darkMarks`, `.note` | Dark crosses / Draws crossed-out tiles in dark ink. |
 | `settings.language`, `settings.language.auto` | Language / Automatic |
 | `settings.shop`, `settings.removeAds` | Shop / Remove ads |
-| `howto.a11y` | Colours hard to tell apart? Turn on colour patterns or wider gaps in Settings. |
-| `a11y.mascot.classic` | A black-and-white cat |
-| `a11y.illustration.boot.classic` / `.win.classic` / `.fail.classic` | A black-and-white cat having a nap / A black-and-white cat leaping with a fish / A black-and-white cat hiding its eyes |
+| `howto.a11y` | Colours hard to tell apart? Turn on colour patterns in Settings. |
 | `fish.count.one` / `.other` | {count} fish / {count} fish |
 | `fish.plus` | +{count} |
 | `a11y.fishEarned.one` / `.other` | You caught {count} fish. You have {total}. / You caught {count} fish. You have {total}. |
@@ -1522,13 +1600,13 @@ All copy is ours. Plurals use `.one` / `.other`.
 
 | Doc | Change |
 |---|---|
-| 02 | §3 changed tunables; §5 wireframes (Home fish pill and event card, pills row, ranking, victory, shop); §10 win flow; §13 ads (banners, cadence, remove ads); §14 settings rows; §17 skins and tokens; §18 Classic defaults; §20 analytics events; §21 locales; §22 hooks used |
+| 02 | §3 changed tunables; §5 wireframes (Home fish pill and event card, pills row, ranking, victory, shop); §10 win flow; §13 ads (banners, remove ads; the cadence is unchanged); §14 settings rows (Language, Shop, Remove ads); §17 the one token set and the Tux cat, replacing the ginger cat and the teal tokens; §18 even gutters and the white X replace the region-aware gaps and the ink X; §20 analytics events; §21 locales and the release-locale list; §22 hooks used |
 | 04 | §3 tree; §4.3 `SaveDataV2`; §4.4 platform interfaces; §7.3 merge additions; §9 budgets |
 | 05 | §1 and §6: banners in use on non-gameplay screens, with the 2026-10-08 search facts (load shows, 50 dp, 45 s limit, no banners in gameplay); §8: both leaderboard APIs and the probe, overlay views, tournaments without a standings API; §9: payments in use, `onReady` semantics, the consume-order question; §5.4 and §13: the first-load (≤ 280 KB) and zip (≤ 100 files) ceilings of §11 replace 220 KB and 60 files; §14: add the G1–G5 rows |
-| 06 | §3 trade-dress row and §7 checklist: "reversed by user decision 2026-10-08 (phase2b §0.3)"; §5 asset plan: Tux cat, fish, event art |
-| differences-vs-original | re-run the comparison after 2b; mark items 1–8 closed or partly closed |
+| 06 | §3 trade-dress and cat-character rows and §7 checklist: "reversed by user decision 2026-10-08 (phase2b §0.3)"; §5 asset plan: the Tux cat replaces the ginger cat; fish, event art |
+| differences-vs-original | §4 "Cat character" and "Trade dress" rows: reversed by user decision 2026-10-08 (phase2b §0.3); re-run the comparison after 2b; mark items 1–8 closed or partly closed |
 | CONTRACTS | link `docs/phase2b/CONTRACTS.md` |
-| provenance | merge `provenance-A/B/E.md`; latin-ext font file; translation prompts and outputs |
+| provenance | merge `provenance-A/B/E.md`; mark the ginger-art rows "retired in 2b"; latin-ext font file; translation prompts and outputs |
 | STATUS | a new `docs/phase2b/STATUS.md` with verification and budgets |
 
 ---
@@ -1547,7 +1625,7 @@ Three lenses were applied to the first draft. The table lists every change that 
 | Implementer | The wallet and stock merge "newest wins" could lose a paid fish pack on a second device. | The ledger stores product ids, and the merge re-applies paid grants once (§9.1, §9.3) |
 | Implementer | `inProgress.event` used `InProgressV1`, whose `mode` cannot be `'event'`; `groups` could not tell who played. | `InProgressV2`, `ModeId` + `'event'`; `groups[id].wins` (§9.1) |
 | Implementer | Unowned files (`board-highlight.ts`, `ui/a11y/**`, `index.html`, build configs), test files that mix two owners, placeholder art in an A-owned file that B needs, and DOM nodes that B animates in A's cells. | F0 list; ownership table; test splits; `.cell__glow` and `.cell__ear` in the A → B contract (§12) |
-| Implementer | Signature changes presented as additive: `setLocale` becomes async, the `regionInsets` mode, the `mountSprite` skin, `AdKind` + `'banner'`, the placement unions. | Optional parameters where possible; the remaining changes are listed as lead-approved F0 changes; the banner is an optional `PlatformAds.banner?` (§1.10, §3.5, §12.1) |
+| Implementer | Signature changes presented as additive: `setLocale` becomes async, `AdKind` + `'banner'`, the placement unions. (The draft's skin parameters are gone with the skin system, Appendix D.) | Optional parameters where possible; the remaining changes are listed as lead-approved F0 changes; the banner is an optional `PlatformAds.banner?` (§3.5, §12.1) |
 | Implementer | Numbers that were only in prose (fish size, trail, arc spread, label rise, bonus timing, panel pop and pulse), and a "no colour literal" rule that 46 existing literals would break. | All in `GameConfig` (§10); a CSS-only constants convention (§0.4); an allowlist for the colour rule and a cleanup assigned to A and B (§1.10, §1.12) |
 | Implementer | The win flow did not say when rewards are saved, or what happens on Home, on teardown or on a hidden page mid-flow. | Rewards are saved at `WON`; Home and Gear are disabled; interruption rules; tests (§2.2, §2.13) |
 | Parity | A fish pill during play added a third HUD pill that the original's in-level HUD does not have. | The pill appears only during the win flow (§2.2, §2.5, §2.10) |
@@ -1558,3 +1636,15 @@ Checked and unchanged:
 - Every contrast number in §1.4, §1.5 and §1.12 was recomputed with `scripts/palette-check.ts` and matches.
 - Nothing in the spec requires the original's art, Spine files, audio, text, event names or level layouts. The cat is drawn from a written brief, with its own signature marks and poses; the event names and themes are ours.
 - "Steal animations" stays limited to timing, staging and feel described in words (§0.2). There is nothing to extract that the research does not already describe as wait times.
+
+---
+
+## Appendix D. Revision log: user decisions (2026-10-08)
+
+| Decision | What changed (sections) |
+|---|---|
+| **One theme only.** Classic is *the* look; the ginger skin is removed, not kept | Skin system, runtime switching, `SkinId`, `skins.css`, the lazy ginger chunk, `boot.skinTimeoutMs`, `skins.*` and `skinLayout.*` config, the save's `skin` / `regionGaps` / `darkMarks` settings and the Settings look rows are deleted. Tux, the one token set and the board geometry replace today's art, tokens and `layout.*` values in place; a guard test proves nothing ginger remains (§1, §7, §9, §10, §11, §13). R2 (switch back to Ginger) is withdrawn; the risk paragraph stays (§0.3). |
+| **Defaults for the open decisions** | Banners, fish exchange rates, IAP prices, translations (AI drafts now; `i18n.releaseLocales` decides what release builds ship, while dev and web previews show all 17) and the pending public name (gates release, not the build) are marked `[DECISION: default, user may change]` and collected in §0.8. `i18n.shipUnreviewed` and `status.json` are replaced by `i18n.releaseLocales` and `docs/i18n/review-log.md` (§6.7, §10). |
+| **Parity first** | Taste-driven deviations reverted to the original: the interstitial cooldown is back to 120/100/90 s; the "Wider gaps" and "Dark crosses" options are dropped (even gutters and a white X only). The remaining differences and their reasons (platform, legality, unknown, plus the X edge for the accessibility minimum) are listed in §0.7. The clean-room rules stay (R1, R3–R7: our own assets only, no sampled values); only R2, the switch back to Ginger, is withdrawn. |
+| **Paw booster name** | Stays "Kitty", as in the current build (§0.5, Appendix A). |
+| **Workstreams rebalanced** | A becomes "visual identity + art" and takes fonts (from E), the Home mascot loop, the event art component and the glow look (from B) and the visual parity token changes (from the lead); F0 adds `evenInsets` and the release-locale build mode; the parallel phase is 6–9 days (§12). |

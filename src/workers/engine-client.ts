@@ -1,4 +1,4 @@
-// Owner: app
+// Owner: C (Phase 2b; was app)
 // Main-thread face of the engine (03 §6, 04 §5.5): async getHint() (main thread while within
 // hint.mainThreadBudgetMs, otherwise the worker) and generate() in a lazily created module worker:
 //   new Worker(new URL('./engine.worker.ts', import.meta.url), { type: 'module' })

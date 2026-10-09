@@ -1,4 +1,4 @@
-// Owner: app
+// Owner: C (Phase 2b; was app)
 // Level-session orchestrator (04 §3, §5.2, §5.7): reducer + effects (audio, haptics, announcer,
 // saves, analytics, FX routing), START / KITTY_DONE timers, 1 s TICK while visible, hint free-reopen
 // cache, helper and ad flows, tutorial filter/advance, win/lose bookkeeping and overlays.
@@ -19,7 +19,7 @@ import { cfg } from './config';
 import type { AnalyticsEvent } from './events';
 import { createHelperFlows } from './helper-flows';
 import { feedbackFor, failEvent, levelParam, mistakeEvent, startEvents, winBookkeeping } from './session-effects';
-import { createFeedbackPlayer, createSessionTimers, defaultColors, defaultPraise, overlayProps, withoutSlot, withSlot } from './session-parts';
+import { createFeedbackPlayer, createSessionTimers, defaultColors, defaultPraise, overlayProps, withoutSlot, withSlot, type SaveSlot } from './session-parts';
 import { createTransitions } from './session-transitions';
 import { shallowEqual, type AppState, type OverlayId, type SessionMeta, type SessionRequest } from './store';
 import { asTutorialStep, boardLocked, selectGameView, type ViewContext } from './views';
@@ -43,7 +43,7 @@ export function createSession(deps: SessionDeps): Session {
     });
   const setLock = (inputLocked: boolean): void =>
     store.update((s) => (s.ui.inputLocked === inputLocked ? s : { ...s, ui: { ...s.ui, inputLocked } }));
-  const slotFor = (m: SessionMeta): 'level' | 'daily' | null => (m.substitute ? null : getMode(m.mode).saveSlot);
+  const slotFor = (m: SessionMeta): SaveSlot | null => (m.substitute ? null : getMode(m.mode).saveSlot);
   const viewCtx = (): ViewContext => ({ now: clock.now(), capabilities: caps(), platformId: platform.id });
 
   let gen = 0;

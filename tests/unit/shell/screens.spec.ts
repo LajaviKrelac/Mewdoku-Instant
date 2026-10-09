@@ -1,4 +1,4 @@
-// Owner: ui-shell. S0 boot, S1 home (daily card states, level button) and S2 game composition.
+// Owner: B (Phase 2b; was ui-shell). S0 boot, S1 home (daily card states, level button) and S2 game composition.
 // ui-board's HUD and board are replaced by recording fakes: this checks the wiring, not their DOM.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -116,9 +116,20 @@ describe('S1 home', () => {
     showTrophy: false,
     fbSafeZone: false,
     extraCards: [],
+    fish: 128,
+    event: null,
+    bannerReserved: false,
     ...over,
   });
-  const callbacks = (): HomeCallbacks => ({ onPlay: vi.fn(), onDaily: vi.fn(), onSettings: vi.fn(), onTrophy: vi.fn(), onCard: vi.fn() });
+  const callbacks = (): HomeCallbacks => ({
+    onPlay: vi.fn(),
+    onDaily: vi.fn(),
+    onSettings: vi.fn(),
+    onTrophy: vi.fn(),
+    onCard: vi.fn(),
+    onShop: vi.fn(),
+    onEvent: vi.fn(),
+  });
 
   it('level button: plain, hard badge, continue', () => {
     const home = createHomeScreen(view(), callbacks());
@@ -202,6 +213,7 @@ describe('S2 game', () => {
     chipHighlight: null,
     fbSafeZone: false,
     reducedMotion: false,
+    event: null,
     ...over,
   });
   const callbacks = (): GameScreenCallbacks => ({

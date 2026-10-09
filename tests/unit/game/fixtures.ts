@@ -1,4 +1,4 @@
-// Owner: game. Hand-made puzzles and helpers for the game rule tests (no generator, no codec).
+// Owner: C (Phase 2b; was game). Hand-made puzzles and helpers for the game rule tests (no generator, no codec).
 import type { HintStep, LevelRecord, Puzzle, PuzzleId } from '../../../src/engine/types';
 import { newGame } from '../../../src/game/factory';
 import { reduce } from '../../../src/game/reducer';

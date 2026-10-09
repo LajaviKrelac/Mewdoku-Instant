@@ -1,4 +1,4 @@
-// Owner: game
+// Owner: C (Phase 2b; was game)
 // Puzzle source (04 §3, §8): bundled pack-000, fetched packs 1–9, daily months, worker generation for
 // endless levels, missing daily months and substitute boards. All I/O is injected, so this module stays
 // free of fetch/Worker/timers and is unit-testable. Vite asset wiring lives in level-assets.ts.

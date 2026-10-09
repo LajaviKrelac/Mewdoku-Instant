@@ -355,7 +355,21 @@ describe('router: lazy overlay chunk (04 §9)', () => {
   it('the real chunk provides every overlay, the coach included (lead decision: 04 §9 budget)', async () => {
     const { loadOverlayChunk } = await import('../../../src/app/router');
     const f = await loadOverlayChunk();
-    expect(Object.keys(f).sort()).toEqual(['coach', 'daily_result', 'fail', 'hint', 'how_to_play', 'rewarded', 'settings', 'win']);
+    expect(Object.keys(f).sort()).toEqual([
+      'coach',
+      'daily_result',
+      'fail',
+      'group_result', // phase2b §2.11: the 2b overlays live in the same lazy chunk
+      'hint',
+      'how_to_play',
+      'rank_hub',
+      'ranking',
+      'rewarded',
+      'settings',
+      'shop',
+      'victory',
+      'win',
+    ]);
   });
 
   it('the coach is queued until the chunk lands, non-modal all along, then opened with the latest props', async () => {

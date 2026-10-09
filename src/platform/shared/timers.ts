@@ -1,4 +1,4 @@
-// Owner: platform
+// Owner: D (Phase 2b; was platform)
 // Default PlatformTimers for the adapters (04 §6). platform/ may not import app/clock.ts (04 §2), so
 // this is a tiny local equivalent; the app or tests pass their own Clock (it satisfies the type).
 import type { PlatformTimers } from '../types';

@@ -1,4 +1,4 @@
-// Owner: ui-shell
+// Owner: B (Phase 2b; was ui-shell)
 // O4 fail overlay (02 §5 O4, §10.2): Continue (+1 heart) when offered, Retry level, Home.
 // Every button is gated until buttonDelayMs has passed and while `busy` (waiting for an ad).
 // Esc and scrim taps are ignored: Home here discards the attempt, so it must be a deliberate tap.

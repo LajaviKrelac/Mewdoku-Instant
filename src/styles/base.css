@@ -1,4 +1,4 @@
-/* Owner: ui-board
+/* Owner: A (Phase 2b; was ui-board)
    Reset, font-face (our one OFL display font, 02 §17.6), body, buttons, icons, focus, helpers.
    Shared vocabulary (used by ui-board and ui-shell DOM):
      .btn  --primary | --secondary | --ghost | --icon | --block | --lg ; .btn__icon .btn__label .btn__badge .btn__chev

@@ -1,4 +1,4 @@
-// Owner: game. 02 §6.2 cell-state × gesture table, 02 §8 mistake model, region done, win/lose, move log.
+// Owner: C (Phase 2b; was game). 02 §6.2 cell-state × gesture table, 02 §8 mistake model, region done, win/lose, move log.
 import { describe, expect, it } from 'vitest';
 import { newGame } from '../../../src/game/factory';
 import { reduce } from '../../../src/game/reducer';

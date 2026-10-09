@@ -1,4 +1,4 @@
-// Owner: game. Level → pack/record, hard levels, endless/substitute/daily specs, daily unlock and dates (02 §11–12).
+// Owner: C (Phase 2b; was game). Level → pack/record, hard levels, endless/substitute/daily specs, daily unlock and dates (02 §11–12).
 import { describe, expect, it } from 'vitest';
 import { mergeConfig } from '../../../src/app/config';
 import type { DailyPack, LevelPack } from '../../../src/engine/types';
@@ -28,7 +28,7 @@ import {
   weekdayOf,
 } from '../../../src/game/progression';
 import { defaults } from '../../../src/game/save';
-import type { InProgressV1, SaveDataV1 } from '../../../src/game/types';
+import type { InProgressV2, SaveData } from '../../../src/game/types';
 import { rec5 } from './fixtures';
 
 describe('hard levels and ids', () => {
@@ -139,7 +139,7 @@ describe('generated boards (02 §11.4, §12)', () => {
 });
 
 describe('daily unlock and dates (02 §12)', () => {
-  const at = (level: number): Pick<SaveDataV1, 'progress'> => ({ progress: { level, completed: level - 1, best: {} } });
+  const at = (level: number): Pick<SaveData, 'progress'> => ({ progress: { level, completed: level - 1, best: {} } });
 
   it('unlocked iff progress.level > 20', () => {
     expect(isDailyUnlocked(at(20))).toBe(false);
@@ -180,13 +180,13 @@ describe('daily unlock and dates (02 §12)', () => {
     const today = '2026-10-06';
     const base = defaults(0);
     expect(dailyCardState(base, today)).toBe('locked');
-    const open: SaveDataV1 = { ...base, progress: { ...base.progress, level: 21 } };
+    const open: SaveData = { ...base, progress: { ...base.progress, level: 21 } };
     expect(dailyCardState(open, today)).toBe('not_played');
-    const slot = (id: InProgressV1['id']): InProgressV1 => ({
+    const slot = (id: InProgressV2['id']): InProgressV2 => ({
       id, mode: 'daily', cells: '0'.repeat(64), hearts: 3, revivesUsed: 0, mistakes: 0, hintsUsed: 0, kittiesUsed: 0, elapsedMs: 0, savedAt: 0,
     });
-    expect(dailyCardState({ ...open, inProgress: { level: null, daily: slot('D2026-10-06') } }, today)).toBe('in_progress');
-    expect(dailyCardState({ ...open, inProgress: { level: null, daily: slot('D2026-10-05') } }, today)).toBe('not_played');
+    expect(dailyCardState({ ...open, inProgress: { level: null, daily: slot('D2026-10-06'), event: null } }, today)).toBe('in_progress');
+    expect(dailyCardState({ ...open, inProgress: { level: null, daily: slot('D2026-10-05'), event: null } }, today)).toBe('not_played');
     expect(dailyCardState({ ...open, daily: { [today]: [252_000, 1, 0, 0] } }, today)).toBe('solved');
   });
 });

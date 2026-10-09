@@ -1,4 +1,4 @@
-// Owner: ui-board
+// Owner: B (Phase 2b; was ui-board)
 // Pointer gesture recogniser on the board (02 §6.1, 04 §5.4): tap, double-tap (same cell, ≤
 // input.doubleTapMs between pointerups), drag-paint with mode chosen by the start cell, cell lock
 // after a double-tap (input.cellLockAfterCatMs), primary pointer only, right-click suppressed.

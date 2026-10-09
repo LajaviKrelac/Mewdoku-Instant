@@ -1,5 +1,7 @@
-// Owner: game. Save schema v1 (04 §4.3, §7): defaults, migrate (garbage, partial, wrong types), merge table
-// (§7.3), in-progress validation (§7.2), cells codec, size bound.
+// Owner: C. Save schema v2 (phase2b §9; v1 = 04 §4.3, §7): defaults, migrate (garbage, partial, wrong
+// types, v1 → v2), merge table (§7.3 + phase2b §9.3), in-progress validation (§7.2), cells codec, size bound.
+// F0 (phase2b): the fixtures became v2 documents; the v1 → v2 and v2-field cases below cover the F0
+// baseline in save-v2.ts. C extends them to the full §9.4 list.
 import { describe, expect, it } from 'vitest';
 import { mergeConfig } from '../../../src/app/config';
 import { toInProgress } from '../../../src/game/factory';
@@ -13,16 +15,16 @@ import {
   migrateReport,
   validateInProgress,
 } from '../../../src/game/save';
-import type { InProgressV1, SaveDataV1 } from '../../../src/game/types';
+import type { InProgressV2, SaveData, SaveDataV1 } from '../../../src/game/types';
 import { dbl, lostState, makePuzzle, P5, P5G, playing, R5, run, S5, SOL5, tap, wonState, WRONG5 } from './fixtures';
 
 const NOW = 1_790_000_000_000;
 
-/** A fully populated, valid save. */
-function full(): SaveDataV1 {
+/** A fully populated, valid v2 save. */
+function full(): SaveData {
   const level = toInProgress(run(playing(P5), [tap(1), dbl(WRONG5[1] as number)]).state, NOW - 5);
   return {
-    v: 1,
+    v: 2,
     updatedAt: NOW - 10,
     firstSeenAt: NOW - 86_400_000 * 9,
     sessions: 12,
@@ -30,17 +32,30 @@ function full(): SaveDataV1 {
     progress: { level: 2, completed: 1, best: { 1: [61_000, 0] } },
     stock: { hints: 2, kitties: 7 },
     daily: { '2026-10-05': [252_000, 1, 0, 0] },
-    settings: { sound: false, haptics: true, patterns: true, reduceMotion: 'on' },
+    settings: { sound: false, haptics: true, patterns: true, reduceMotion: 'on', locale: 'de' },
     ads: { lastAdAt: NOW - 200_000, lastFallbackGrantAt: NOW - 700_000 },
-    inProgress: { level, daily: null },
+    inProgress: { level, daily: null, event: null },
     ext: { coins: 3, nested: { a: [1, 2] } },
+    wallet: { fish: 42, earned: 90 },
+    points: { total: 375 },
+    events: { 'lantern-walk-2026': { solved: 3, ms: 400_000, lastAt: NOW - 50 } },
+    groups: { 'tour-1': { endsAt: NOW + 3_600_000, total: 120, wins: 2, claimed: 0 } },
+    purchases: { noAds: false, tokens: ['fish_250|tok-1'] },
+    rank: { pending: { paw_points: 375 }, lastSubmitAt: NOW - 20_000 },
   };
 }
 
+/** The same player as a stored v1 document (Phase 2 shape). */
+function fullV1(): SaveDataV1 {
+  const { v: _v, settings, inProgress, wallet: _w, points: _p, events: _e, groups: _g, purchases: _pu, rank: _r, ...rest } = full();
+  const { locale: _l, ...v1Settings } = settings;
+  return { ...rest, v: 1, settings: v1Settings, inProgress: { level: inProgress.level as SaveDataV1['inProgress']['level'], daily: null } };
+}
+
 describe('defaults (04 §4.3)', () => {
-  it('matches the spec exactly', () => {
+  it('matches the spec exactly (04 §4.3 + phase2b §9.2 v2 fields)', () => {
     expect(defaults(NOW)).toEqual({
-      v: 1,
+      v: 2,
       updatedAt: NOW,
       firstSeenAt: NOW,
       sessions: 0,
@@ -48,10 +63,16 @@ describe('defaults (04 §4.3)', () => {
       progress: { level: 1, completed: 0, best: {} },
       stock: { hints: 5, kitties: 3 },
       daily: {},
-      settings: { sound: true, haptics: true, patterns: false, reduceMotion: 'system' },
+      settings: { sound: true, haptics: true, patterns: false, reduceMotion: 'system', locale: 'auto' },
       ads: { lastAdAt: 0, lastFallbackGrantAt: 0 },
-      inProgress: { level: null, daily: null },
+      inProgress: { level: null, daily: null, event: null },
       ext: {},
+      wallet: { fish: 0, earned: 0 },
+      points: { total: 0 },
+      events: {},
+      groups: {},
+      purchases: { noAds: false, tokens: [] },
+      rank: { pending: {}, lastSubmitAt: 0 },
     });
   });
 
@@ -100,8 +121,8 @@ describe('migrate: valid and partial data', () => {
   });
 
   it('a settings group with one bad field keeps the good ones', () => {
-    const r = migrateReport({ ...full(), settings: { sound: false, haptics: 'yes', patterns: true, reduceMotion: 'fast' } }, NOW);
-    expect(r.save.settings).toEqual({ sound: false, haptics: true, patterns: true, reduceMotion: 'system' });
+    const r = migrateReport({ ...full(), settings: { sound: false, haptics: 'yes', patterns: true, reduceMotion: 'fast', locale: 'de' } }, NOW);
+    expect(r.save.settings).toEqual({ sound: false, haptics: true, patterns: true, reduceMotion: 'system', locale: 'de' });
     expect(r.repairedFields).toEqual(['settings.haptics', 'settings.reduceMotion']);
     expect(r.save.stock).toEqual({ hints: 2, kitties: 7 });
   });
@@ -114,7 +135,7 @@ describe('migrate: valid and partial data', () => {
 });
 
 describe('migrate: wrong types are replaced field by field', () => {
-  const ROWS: { path: string; patch: (d: Record<string, unknown>) => void; check: (s: SaveDataV1) => unknown; want: unknown }[] = [
+  const ROWS: { path: string; patch: (d: Record<string, unknown>) => void; check: (s: SaveData) => unknown; want: unknown }[] = [
     { path: 'updatedAt', patch: (d) => (d.updatedAt = 'yesterday'), check: (s) => s.updatedAt, want: NOW },
     { path: 'firstSeenAt', patch: (d) => (d.firstSeenAt = -1), check: (s) => s.firstSeenAt, want: NOW },
     { path: 'sessions', patch: (d) => (d.sessions = 2.5), check: (s) => s.sessions, want: 0 },
@@ -130,7 +151,7 @@ describe('migrate: wrong types are replaced field by field', () => {
     { path: 'inProgress.level', patch: (d) => ((d.inProgress as Record<string, unknown>).level = { id: 'L2', mode: 'level', cells: 'abc' }), check: (s) => s.inProgress.level, want: null },
     { path: 'inProgress.daily', patch: (d) => ((d.inProgress as Record<string, unknown>).daily = { ...full().inProgress.level, mode: 'level' }), check: (s) => s.inProgress.daily, want: null },
     { path: 'ext', patch: (d) => (d.ext = 'none'), check: (s) => s.ext, want: {} },
-    { path: 'v', patch: (d) => (d.v = '1'), check: (s) => s.v, want: 1 },
+    { path: 'v', patch: (d) => (d.v = '1'), check: (s) => s.v, want: 2 },
   ];
 
   it.each(ROWS)('$path', ({ path, patch, check, want }) => {
@@ -146,9 +167,9 @@ describe('migrate: wrong types are replaced field by field', () => {
   });
 
   it('a valid in-progress slot is copied without unknown fields', () => {
-    const raw = JSON.parse(JSON.stringify(full())) as SaveDataV1;
-    const slot = { ...(raw.inProgress.level as InProgressV1), extra: 'x' };
-    const s = migrate({ ...raw, inProgress: { level: slot, daily: null } }, NOW);
+    const raw = JSON.parse(JSON.stringify(full())) as SaveData;
+    const slot = { ...(raw.inProgress.level as InProgressV2), extra: 'x' };
+    const s = migrate({ ...raw, inProgress: { level: slot, daily: null, event: null } }, NOW);
     expect(s.inProgress.level).toEqual(full().inProgress.level);
   });
 
@@ -163,8 +184,8 @@ describe('migrate: wrong types are replaced field by field', () => {
 });
 
 describe('merge (04 §7.3)', () => {
-  const local = (): SaveDataV1 => full();
-  const cloud = (): SaveDataV1 => ({
+  const local = (): SaveData => full();
+  const cloud = (): SaveData => ({
     ...full(),
     updatedAt: NOW, // newer
     firstSeenAt: NOW - 86_400_000 * 30,
@@ -173,9 +194,9 @@ describe('merge (04 §7.3)', () => {
     progress: { level: 2, completed: 1, best: { 1: [70_000, 2], 9: [5, 0] } },
     stock: { hints: 9, kitties: 0 },
     daily: { '2026-10-05': [200_000, 3, 1, 1], '2026-10-04': [1000, 0, 0, 0] },
-    settings: { sound: true, haptics: false, patterns: false, reduceMotion: 'off' },
+    settings: { sound: true, haptics: false, patterns: false, reduceMotion: 'off', locale: 'auto' },
     ads: { lastAdAt: 1, lastFallbackGrantAt: 2 },
-    inProgress: { level: null, daily: null },
+    inProgress: { level: null, daily: null, event: null },
     ext: { cloud: true },
   });
 
@@ -193,7 +214,7 @@ describe('merge (04 §7.3)', () => {
     expect(m.stock).toEqual({ hints: 9, kitties: 0 });
     expect(m.settings).toEqual(cloud().settings);
     expect(m.ads).toEqual({ lastAdAt: 1, lastFallbackGrantAt: 2 });
-    expect(m.inProgress).toEqual({ level: null, daily: null });
+    expect(m.inProgress).toEqual({ level: null, daily: null, event: null });
     expect(m.ext).toEqual({ cloud: true });
   });
 
@@ -211,11 +232,11 @@ describe('merge (04 §7.3)', () => {
 
   it('after merging, a level slot for an already-won level and a daily slot with a record are cleared', () => {
     const d = toInProgress(run(playing(makePuzzle('D2026-10-05', R5, S5), 'daily'), [tap(1)]).state, NOW);
-    const l = { ...local(), updatedAt: NOW + 1, inProgress: { level: local().inProgress.level, daily: d } };
+    const l = { ...local(), updatedAt: NOW + 1, inProgress: { level: local().inProgress.level, daily: d, event: null } };
     const c = { ...cloud(), progress: { level: 3, completed: 2, best: {} } };
     const m = merge(l, c);
     expect(m.progress.level).toBe(3);
-    expect(m.inProgress).toEqual({ level: null, daily: null }); // L2 won elsewhere; 2026-10-05 already solved
+    expect(m.inProgress).toEqual({ level: null, daily: null, event: null }); // L2 won elsewhere; 2026-10-05 already solved
   });
 
   it('clearStaleSlots keeps current slots and returns the same object when nothing is stale', () => {
@@ -235,7 +256,7 @@ describe('merge (04 §7.3)', () => {
 
 describe('validateInProgress (04 §7.2)', () => {
   const expectL2 = { mode: 'level' as const, id: 'L2' as const };
-  const base = (): InProgressV1 => toInProgress(run(playing(), [tap(1), dbl(SOL5[0] as number), dbl(WRONG5[1] as number)]).state, NOW);
+  const base = (): InProgressV2 => toInProgress(run(playing(), [tap(1), dbl(SOL5[0] as number), dbl(WRONG5[1] as number)]).state, NOW);
 
   it('accepts real slots: playing, lost, won, revived, with givens', () => {
     expect(validateInProgress(base(), P5, expectL2)).toEqual({ ok: true });
@@ -247,7 +268,7 @@ describe('validateInProgress (04 §7.2)', () => {
     expect(validateInProgress(g, P5G, { mode: 'level', id: 'L3' })).toEqual({ ok: true });
   });
 
-  const ROWS: { reason: string; slot: () => InProgressV1; puzzle?: typeof P5; expect?: { mode: 'level' | 'daily'; id: 'L2' | 'L3' | `D${string}` } }[] = [
+  const ROWS: { reason: string; slot: () => InProgressV2; puzzle?: typeof P5; expect?: { mode: 'level' | 'daily'; id: 'L2' | 'L3' | `D${string}` } }[] = [
     { reason: 'mode', slot: () => ({ ...base(), mode: 'daily' }) },
     { reason: 'id', slot: () => ({ ...base(), id: 'L3' }) },
     { reason: 'id', slot: base, expect: { mode: 'level', id: 'L3' } },
@@ -299,23 +320,98 @@ describe('cells codec', () => {
 describe('size bound (04 §4.3)', () => {
   it('1 000 levels, a year of dailies and two 12×12 boards stay under 40 KB (FB limit 1 MB)', () => {
     const s = defaults(NOW);
-    const best: SaveDataV1['progress']['best'] = {};
+    const best: SaveData['progress']['best'] = {};
     for (let l = 1; l <= 1000; l++) best[l] = [3_599_999, 12];
-    const daily: SaveDataV1['daily'] = {};
+    const daily: SaveData['daily'] = {};
     for (let d = 0; d < 365; d++) daily[new Date(Date.UTC(2026, 0, 1 + d)).toISOString().slice(0, 10)] = [3_599_999, 9, 9, 9];
-    const slot = (id: InProgressV1['id'], mode: 'level' | 'daily'): InProgressV1 => ({
+    const slot = (id: InProgressV2['id'], mode: 'level' | 'daily'): InProgressV2 => ({
       id, mode, cells: '1'.repeat(144), hearts: 1, revivesUsed: 1, mistakes: 3, hintsUsed: 25, kittiesUsed: 12, elapsedMs: 3_599_999, savedAt: NOW,
     });
-    const big: SaveDataV1 = {
+    const big: SaveData = {
       ...s,
       sessions: 9999,
       tutorialDone: true,
       progress: { level: 1001, completed: 1000, best },
       daily,
-      inProgress: { level: slot('L1001', 'level'), daily: slot('D2026-12-31', 'daily') },
+      inProgress: { level: slot('L1001', 'level'), daily: slot('D2026-12-31', 'daily'), event: null },
     };
     const bytes = new TextEncoder().encode(JSON.stringify(big)).length;
     expect(bytes).toBeLessThan(40 * 1024);
     expect(migrate(JSON.parse(JSON.stringify(big)) as unknown, NOW)).toEqual(big);
+  });
+});
+
+describe('save v2 (phase2b §9.2, §9.3): the F0 baseline', () => {
+  it('a v1 document migrates to v2 with the §9.2 defaults; its level and daily slots are kept', () => {
+    const r = migrateReport(JSON.parse(JSON.stringify(fullV1())) as unknown, NOW);
+    expect(r.outcome).toBe('ok');
+    expect(r.save).toEqual({
+      ...full(),
+      settings: { ...full().settings, locale: 'auto' },
+      wallet: { fish: 0, earned: 0 },
+      points: { total: 0 },
+      events: {},
+      groups: {},
+      purchases: { noAds: false, tokens: [] },
+      rank: { pending: {}, lastSubmitAt: 0 },
+    });
+  });
+
+  const V2_ROWS: { path: string; patch: (d: Record<string, unknown>) => void; check: (s: SaveData) => unknown; want: unknown }[] = [
+    { path: 'wallet.fish', patch: (d) => (d.wallet = { fish: -1, earned: 3 }), check: (s) => s.wallet, want: { fish: 0, earned: 3 } },
+    { path: 'wallet', patch: (d) => (d.wallet = 7), check: (s) => s.wallet, want: { fish: 0, earned: 0 } },
+    { path: 'points.total', patch: (d) => (d.points = { total: 2.5 }), check: (s) => s.points, want: { total: 0 } },
+    {
+      path: 'events',
+      patch: (d) => (d.events = { 'Bad Id': { solved: 1, ms: 1, lastAt: 1 }, 'ok-id': { solved: 2, ms: 9, lastAt: 1 } }),
+      check: (s) => s.events,
+      want: { 'ok-id': { solved: 2, ms: 9, lastAt: 1 } },
+    },
+    {
+      path: 'purchases.tokens',
+      patch: (d) => (d.purchases = { noAds: true, tokens: ['fish_250|a', 'fish_250|a', 'nope', 7] }),
+      check: (s) => s.purchases,
+      want: { noAds: true, tokens: ['fish_250|a'] },
+    },
+    {
+      path: 'rank.pending',
+      patch: (d) => (d.rank = { pending: { paw_points: 5, bogus: 1 }, lastSubmitAt: 3 }),
+      check: (s) => s.rank,
+      want: { pending: { paw_points: 5 }, lastSubmitAt: 3 },
+    },
+    { path: 'settings.locale', patch: (d) => ((d.settings as Record<string, unknown>).locale = 'xx'), check: (s) => s.settings.locale, want: 'auto' },
+  ];
+
+  it.each(V2_ROWS)('garbage in $path → its default', ({ path, patch, check, want }) => {
+    const raw = JSON.parse(JSON.stringify(full())) as Record<string, unknown>;
+    patch(raw);
+    const r = migrateReport(raw, NOW);
+    expect(check(r.save)).toEqual(want);
+    expect(r.repairedFields).toContain(path);
+  });
+
+  it('merge: points max, events by more solved, noAds OR, ledger union, wallet from the newer document', () => {
+    const a: SaveData = { ...full(), updatedAt: NOW - 10, points: { total: 900 }, purchases: { noAds: true, tokens: ['fish_900|old'] } };
+    const b: SaveData = {
+      ...full(),
+      updatedAt: NOW,
+      wallet: { fish: 5, earned: 5 },
+      points: { total: 10 },
+      events: { 'lantern-walk-2026': { solved: 4, ms: 900_000, lastAt: NOW } },
+      purchases: { noAds: false, tokens: ['hints_15|new'] },
+    };
+    const m = merge(a, b);
+    expect(m.wallet).toEqual({ fish: 5, earned: 5 });
+    expect(m.points.total).toBe(900);
+    expect(m.events['lantern-walk-2026']).toEqual({ solved: 4, ms: 900_000, lastAt: NOW });
+    expect(m.purchases).toEqual({ noAds: true, tokens: ['fish_900|old', 'hints_15|new'] });
+  });
+
+  it('an event slot below its event\'s solved count is cleared after a merge', () => {
+    const slot = { ...(full().inProgress.level as InProgressV2), id: 'Elantern-walk-2026/2' as const, mode: 'event' as const };
+    const s: SaveData = { ...full(), inProgress: { level: null, daily: null, event: slot } };
+    expect(clearStaleSlots(s).inProgress.event).toBeNull(); // 3 solved, slot index 2
+    const ahead: SaveData = { ...s, inProgress: { ...s.inProgress, event: { ...slot, id: 'Elantern-walk-2026/3' } } };
+    expect(clearStaleSlots(ahead)).toBe(ahead);
   });
 });

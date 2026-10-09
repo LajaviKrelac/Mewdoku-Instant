@@ -1,4 +1,4 @@
-// Owner: ui-board. Board view: build once, diff-only updates, region fade, highlights, moods, keyboard (04 §5.3).
+// Owner: B (Phase 2b; was ui-board). Board view: build once, diff-only updates, region fade, highlights, moods, keyboard (04 §5.3).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cfg } from '../../../src/app/config';
 import type { HintStep } from '../../../src/engine/types';
@@ -47,9 +47,13 @@ describe('createBoardView', () => {
     expect(cell(1).getAttribute('aria-label')).toBe('Row 1, column 2, Lavender, empty');
     expect(cell(0).dataset.s).toBe('e');
     expect(cell(0).style.getPropertyValue('--c')).toBe('var(--r4)');
-    // region-aware insets: cell 0 (A) faces B on the right, A below
-    expect(cell(0).style.getPropertyValue('--ir')).toBe('3.5px');
+    // phase2b §1.5 even gutters (no region dependence): 1.5 px below a 30 px slot, 2 px from 30 px.
+    expect(cell(0).style.getPropertyValue('--ir')).toBe('1.5px');
     expect(cell(0).style.getPropertyValue('--ib')).toBe('1.5px');
+    board.setSlot(36);
+    for (const k of ['--it', '--ir', '--ib', '--il']) expect(cell(5).style.getPropertyValue(k)).toBe('2px');
+    board.setSlot(24);
+    expect(cell(5).style.getPropertyValue('--il')).toBe('1.5px');
     // roving tabindex: only the first cell is tabbable
     expect(Array.from(buttons).filter((b) => b.getAttribute('tabindex') === '0')).toHaveLength(1);
   });

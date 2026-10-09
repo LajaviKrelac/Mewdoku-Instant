@@ -1,4 +1,4 @@
-// Owner: game
+// Owner: C (Phase 2b)
 // GameMode registry (02 §22 Phase 3 hook): rules flags, save slot, helper charging, win flow.
 import { cfg, type GameConfig } from '../app/config';
 import type { Puzzle } from '../engine/types';
@@ -8,22 +8,25 @@ import type { ModeId, RuleFlags } from './types';
 export interface GameMode {
   readonly id: ModeId;
   readonly rules: RuleFlags;
-  /** Which InProgress slot holds the board; null = never saved (tutorial). */
-  readonly saveSlot: 'level' | 'daily' | null;
+  /** Which InProgress slot holds the board; null = never saved (tutorial). phase2b §4.4 adds 'event'. */
+  readonly saveSlot: 'level' | 'daily' | 'event' | null;
   /** false in the tutorial: hints are free and not charged (02 §9.3). */
   readonly chargesHelpers: boolean;
   /** Paw usable in this mode (false in the tutorial). */
   readonly kittyAllowed: boolean;
-  /** O3 for levels and the tutorial, O7 for dailies (02 §10.1). */
-  readonly winFlow: 'level' | 'daily' | 'tutorial';
-  /** Interstitial trigger after the win flow's button, or null (tutorial: no gate). */
-  readonly winGate: 'next_level' | 'daily_done' | null;
+  /** O3 for levels and the tutorial, O7 for dailies (02 §10.1). phase2b §2.6 adds 'event' (victory, event variant). */
+  readonly winFlow: 'level' | 'daily' | 'tutorial' | 'event';
+  /** Interstitial trigger after the win flow's button, or null (tutorial: no gate). phase2b §3.2 adds 'event_next'. */
+  readonly winGate: 'next_level' | 'daily_done' | 'event_next' | null;
   /** Fixed palette indices per region label (tutorial, 02 §11.5); null → engine/colors assignColors(). */
   readonly fixedColors: readonly number[] | null;
   /** `mode` param for analytics (02 §20). */
   readonly analyticsMode: string;
-  /** HUD title (02 §5 S2): 'level' → "Level L" (the tutorial is "Level 1"), 'daily' → "Daily · date". */
-  readonly hudTitle: 'level' | 'daily';
+  /**
+   * HUD title (02 §5 S2): 'level' → "Level L" (the tutorial is "Level 1"), 'daily' → "Daily · date",
+   * 'event' → "Lantern Walk · 13" (phase2b §4.4, event.title.game).
+   */
+  readonly hudTitle: 'level' | 'daily' | 'event';
   /** Top-bar Home button (02 §4.2: none during the tutorial; Gear is always there). */
   readonly homeButton: boolean;
 }
@@ -80,10 +83,27 @@ function buildModes(c: GameConfig): Readonly<Record<ModeId, GameMode>> {
     hudTitle: 'daily',
     homeButton: true,
   };
+  // phase2b §4.4: level rules (an event may lower hearts through EventDef.rules, applied by C's
+  // event-flow), its own save slot, the event board's win flow and the `event_next` interstitial.
+  // F0 registers the mode; C implements the flow (app/event-flow.ts).
+  const event: GameMode = {
+    id: 'event',
+    rules: rulesFor('event', c),
+    saveSlot: 'event',
+    chargesHelpers: true,
+    kittyAllowed: true,
+    winFlow: 'event',
+    winGate: 'event_next',
+    fixedColors: null,
+    analyticsMode: 'event',
+    hudTitle: 'event',
+    homeButton: true,
+  };
   return Object.freeze({
     tutorial: Object.freeze(tutorial),
     level: Object.freeze(level),
     daily: Object.freeze(daily),
+    event: Object.freeze(event),
   });
 }
 

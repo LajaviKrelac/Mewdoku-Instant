@@ -1,4 +1,4 @@
-// Owner: platform
+// Owner: D (Phase 2b; was platform)
 // The FBInstant test double itself (tests/fixtures/fbinstant-stub.js): global install, ?fbstub=
 // presets, player data persisted across reloads, flush semantics, call recording.
 import { readFileSync } from 'node:fs';

@@ -1,4 +1,4 @@
-// Owner: ui-board
+// Owner: B (Phase 2b; was ui-board)
 // Transient board effects (02 §17.5): class-triggered CSS keyframes with timed cleanup, the kitty
 // sparkle burst and the staggered entry. Keyframes live in styles/fx.css.
 import { cfg } from '../../app/config';

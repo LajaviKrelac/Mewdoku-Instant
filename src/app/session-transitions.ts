@@ -1,15 +1,15 @@
-// Owner: app
+// Owner: C (Phase 2b; was app)
 // Transitions out of a finished or failed attempt (02 §4.2, §10, §13; 04 §5.7): O4 Continue / Retry,
 // O3 Next, O7 Done, Home (save or discard) and "I know how to play". Interstitials go through the
 // pacing gate first, and the transition always goes ahead whatever the ad did.
 import { canRevive } from '../game/reducer';
 import { applyTutorialDone } from '../game/stats';
-import type { Action, GameState, SaveDataV1 } from '../game/types';
+import type { Action, GameState, SaveData } from '../game/types';
 import type { AnalyticsEvent } from './events';
 import type { HelperFlows } from './helper-flows';
 import type { SaveScheduler } from './saves';
 import type { GameCommands } from './session-types';
-import { withoutSlot } from './session-parts';
+import { withoutSlot, type SaveSlot } from './session-parts';
 import type { SessionMeta, SessionRequest } from './store';
 import type { FailOverlayProps } from '../ui/overlays/fail-overlay';
 
@@ -18,8 +18,8 @@ export interface TransitionHost {
   readonly helpers: HelperFlows;
   game(): GameState | null;
   meta(): SessionMeta | null;
-  save(): SaveDataV1;
-  updateSave(fn: (s: SaveDataV1) => SaveDataV1): void;
+  save(): SaveData;
+  updateSave(fn: (s: SaveData) => SaveData): void;
   busy(): boolean;
   runBusy(fn: (alive: () => boolean) => Promise<void>): Promise<void>;
   /** Increments on every start/teardown; a changed value means "this flow is stale". */
@@ -34,7 +34,7 @@ export interface TransitionHost {
   /** Board into its slot + saves.now(). */
   saveNow(): void;
   goHome(): void;
-  slotFor(m: SessionMeta): 'level' | 'daily' | null;
+  slotFor(m: SessionMeta): SaveSlot | null;
   updateFail(patch: Partial<FailOverlayProps>): void;
   /** O4 is open (or queued for its chunk): only then does Home discard the attempt. */
   failOpen(): boolean;

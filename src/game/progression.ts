@@ -1,4 +1,4 @@
-// Owner: game
+// Owner: C (Phase 2b; was game)
 // Level numbers → packs and puzzle ids, hard levels, endless/substitute/daily GenSpecs, daily unlock,
 // local date keys (02 §11, §12; 03 §8–9). PURE: the current time is always passed in.
 import { cfg, type GameConfig } from '../app/config';
@@ -20,7 +20,7 @@ import {
   type RampRow,
 } from './ramp';
 import { DATE_KEY_RE } from './save-fields';
-import type { SaveDataV1 } from './types';
+import type { SaveData } from './types';
 
 /** Level L is Hard iff L ≥ 30 && L % 10 === 0 (delegates to ramp.isHardLevel). */
 export function isHard(level: number, c: GameConfig = cfg): boolean {
@@ -161,7 +161,7 @@ export function dailySpec(dateKey: string, c: GameConfig = cfg): GenSpec {
 }
 
 /** Unlocked iff save.progress.level > daily.unlockAfterLevel (02 §12). */
-export function isDailyUnlocked(save: Pick<SaveDataV1, 'progress'>, c: GameConfig = cfg): boolean {
+export function isDailyUnlocked(save: Pick<SaveData, 'progress'>, c: GameConfig = cfg): boolean {
   return save.progress.level > c.daily.unlockAfterLevel;
 }
 
@@ -197,7 +197,7 @@ export function localMidnightAfter(dateKey: string): number | null {
 export type DailyCardState = 'locked' | 'not_played' | 'in_progress' | 'solved';
 
 /** Home daily card state for today (02 §12 "Home card states"). */
-export function dailyCardState(save: SaveDataV1, today: string, c: GameConfig = cfg): DailyCardState {
+export function dailyCardState(save: SaveData, today: string, c: GameConfig = cfg): DailyCardState {
   if (!isDailyUnlocked(save, c)) return 'locked';
   if (save.daily[today] !== undefined) return 'solved';
   if (save.inProgress.daily?.id === dailyPuzzleId(today)) return 'in_progress';

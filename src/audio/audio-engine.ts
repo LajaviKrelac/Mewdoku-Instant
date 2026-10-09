@@ -1,4 +1,4 @@
-// Owner: ui-shell
+// Owner: B (Phase 2b; was ui-shell)
 // AudioContext lifecycle (02 §16, 04 §5.6): created on the first pointerdown, one master GainNode at
 // audio.masterDb, muted for any active reason, suspended while hidden/paused.
 // The engine listens for the first user gesture itself (pointerdown, keydown, touchend in the capture

@@ -1,4 +1,4 @@
-// Owner: platform
+// Owner: D (Phase 2b; was platform)
 // fb-analytics: logEvent name/param sanitising to the 05 §10 limits.
 import { describe, expect, it } from 'vitest';
 import { createFakeClock } from '../../../src/app/clock';

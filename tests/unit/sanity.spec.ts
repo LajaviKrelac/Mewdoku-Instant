@@ -1,4 +1,6 @@
-// Owner: foundation. Smoke tests for the shared modules (i18n, config, ramp, clock, store, events).
+// Owner: lead. Smoke tests for the shared modules (i18n, config, ramp, clock, store, events), the
+// clean-room phrase guard over EVERY locale catalogue (phase2b §6.9, G-CLEAN) and the per-owner
+// English catalogue split (phase2b §12.1 F0 item 7).
 import { describe, expect, it } from 'vitest';
 import { cfg, dragStartPx, mergeConfig } from '../../src/app/config';
 import { createFakeClock, delay } from '../../src/app/clock';
@@ -6,7 +8,34 @@ import { createEventBus } from '../../src/app/events';
 import { createStore } from '../../src/app/store';
 import { breatherBand, breatherPool, dailySlotFor, isHardLevel, pickWeighted, rampRowFor, RAMP } from '../../src/game/ramp';
 import { colorName, formatClock, formatDuration, formatShortDate, interpolate, joinList, setLocale, t, tn } from '../../src/i18n';
-import { COLOR_KEYS, en } from '../../src/i18n/en';
+import { COLOR_KEYS, en, EN_PARTS } from '../../src/i18n/en';
+
+/**
+ * Known phrases of the original game (06 §3) and its event names (phase2b §0.2), plus "golden fish"
+ * (our copy says "fish", differences §4). Lowercase; matched case-insensitively in every catalogue.
+ */
+const BANNED_PHRASES = [
+  'exclusive territory',
+  'aloof',
+  'guess right',
+  'guess wrong',
+  'non-intrusive',
+  'test your iq',
+  'find the cats',
+  'endless levels',
+  "guessing won't",
+  'zero interruptions',
+  'one per color',
+  'no touching',
+  'meowdoku',
+  'meow cup',
+  'long live meow',
+  'moonlit meows',
+  'golden fish',
+] as const;
+
+/** Every translated catalogue that exists (src/i18n/locales/<id>.ts, E), keyed by file. */
+const LOCALE_MODULES = import.meta.glob<{ catalog?: Record<string, string> }>('../../src/i18n/locales/*.ts', { eager: true });
 
 describe('i18n', () => {
   it('interpolates {params}', () => {
@@ -22,7 +51,7 @@ describe('i18n', () => {
     expect(t('app.name', { x: 1 })).toBe('Mewdoku');
   });
 
-  it('formats lists, plurals, colours, dates and times', () => {
+  it('formats lists, plurals, colours, dates and times', async () => {
     expect(joinList(['Lavender'])).toBe('Lavender');
     expect(joinList(['Lavender', 'Mint'])).toBe('Lavender and Mint');
     expect(joinList(['2', '4', '5'])).toBe('2, 4 and 5');
@@ -32,30 +61,48 @@ describe('i18n', () => {
     expect(formatShortDate('2026-10-06')).toBe('Tue 6 Oct');
     expect(formatClock(252_000)).toBe('4:12');
     expect(formatDuration((7 * 60 + 48) * 60_000 + 5_000)).toBe('7 h 48 min');
-    expect(setLocale('en_US')).toBe('en');
-    expect(setLocale('xx_XX')).toBe('en');
+    // phase2b §6.3 / F0: setLocale is async (it will load the locale's chunk).
+    await expect(setLocale('en_US')).resolves.toBe('en');
+    await expect(setLocale('xx_XX')).resolves.toBe('en');
   });
 
   it('has 12 colour names and stays clear of the original phrasing (06 §3)', () => {
     expect(COLOR_KEYS).toHaveLength(12);
     const all = Object.values(en).join('\n').toLowerCase();
-    for (const banned of [
-      'exclusive territory',
-      'aloof',
-      'guess right',
-      'guess wrong',
-      'non-intrusive',
-      'test your iq',
-      'find the cats',
-      'endless levels',
-      "guessing won't",
-      'zero interruptions',
-      'one per color',
-      'no touching',
-      'meowdoku',
-    ]) {
-      expect(all, banned).not.toContain(banned);
+    for (const banned of BANNED_PHRASES) expect(all, banned).not.toContain(banned);
+  });
+
+  it('every locale catalogue stays clear of the original phrasing too (phase2b §6.9, G-CLEAN)', () => {
+    const catalogues: [string, Record<string, string>][] = [['en', en]];
+    for (const [file, mod] of Object.entries(LOCALE_MODULES)) catalogues.push([file, mod.catalog ?? {}]);
+    for (const [name, catalog] of catalogues) {
+      const all = Object.values(catalog).join('\n').toLowerCase();
+      for (const banned of BANNED_PHRASES) expect(all, `${name}: ${banned}`).not.toContain(banned);
     }
+  });
+
+  it('the English catalogue is split by owner with no key in two files (phase2b §12.1 F0 item 7)', () => {
+    const seen = new Map<string, string>();
+    const clashes: string[] = [];
+    for (const [part, strings] of Object.entries(EN_PARTS)) {
+      for (const key of Object.keys(strings)) {
+        const other = seen.get(key);
+        if (other) clashes.push(`${key}: ${other} and ${part}`);
+        else seen.set(key, part);
+      }
+    }
+    expect(clashes).toEqual([]);
+    expect([...seen.keys()].sort()).toEqual(Object.keys(en).sort());
+  });
+
+  it('phase2b Appendix A: the cat descriptions describe Tux; the paw booster is still "kitty"', () => {
+    for (const k of ['a11y.mascot', 'a11y.illustration.boot', 'a11y.illustration.win', 'a11y.illustration.fail'] as const) {
+      expect(en[k]).toMatch(/^A black-and-white cat/);
+      expect(en[k].toLowerCase()).not.toContain('ginger');
+    }
+    expect(en['game.tool.kitty']).toBe('Kitty');
+    expect(tn('event.reward.kitties', 2)).toBe('2 kitties');
+    expect(t('rewarded.swap', { count: 15 })).toBe('Swap 15 fish');
   });
 });
 

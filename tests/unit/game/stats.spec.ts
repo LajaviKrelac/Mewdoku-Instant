@@ -1,9 +1,9 @@
-// Owner: game. Win bookkeeping (02 §10.1): level, tutorial and daily records.
+// Owner: C (Phase 2b; was game). Win bookkeeping (02 §10.1): level, tutorial and daily records.
 import { describe, expect, it } from 'vitest';
 import { toInProgress } from '../../../src/game/factory';
 import { defaults } from '../../../src/game/save';
 import { applyDailyWin, applyLevelWin, applyTutorialDone, dailyRecord, levelBest } from '../../../src/game/stats';
-import type { GameState, SaveDataV1 } from '../../../src/game/types';
+import type { GameState, SaveData } from '../../../src/game/types';
 import { dbl, makePuzzle, playing, R5, run, S5, SOL5, tap, WRONG5 } from './fixtures';
 
 /** A won P5 attempt with one mistake, two hints and a kitty, after 252 345.6 ms. */
@@ -23,10 +23,10 @@ function won(): GameState {
   return s;
 }
 
-function at(level: number): SaveDataV1 {
+function at(level: number): SaveData {
   const d = defaults(0);
   const slot = toInProgress(run(playing(), [tap(1)]).state, 1);
-  return { ...d, tutorialDone: level > 1, progress: { level, completed: level - 1, best: {} }, inProgress: { level: slot, daily: slot } };
+  return { ...d, tutorialDone: level > 1, progress: { level, completed: level - 1, best: {} }, inProgress: { level: slot, daily: slot, event: null } };
 }
 
 describe('level win', () => {

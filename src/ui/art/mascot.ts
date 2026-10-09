@@ -1,4 +1,4 @@
-// Owner: ui-board
+// Owner: A (Phase 2b; was ui-board)
 // The ginger loaf cat's full-body poses that the FIRST screen needs (02 §17.3): the home mascot
 // (idle, blinking) and the boot splash (sleeping). The shared body parts live here too; the other
 // poses (win, fail, daily, tutorial) are in illustrations.ts, which only the lazy overlays use

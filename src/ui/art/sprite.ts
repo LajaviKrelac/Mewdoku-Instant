@@ -1,10 +1,19 @@
-// Owner: ui-board
+// Owner: A (Phase 2b)
 // One hidden inline SVG sprite of <symbol>s (04 §5.3): cat moods, X, wrong-X, 12 pattern glyphs and
 // our icon set (02 §17.6). All drawn by us: the cat on a 100-unit grid, icons on a 24 px grid.
+// Phase 2b F0 (phase2b §0.2, §12.1 item 5): every NEW symbol id has a placeholder shape of our own
+// (PLACEHOLDERS below) so B can animate from day 1; A replaces each in place with the final art (§1.6,
+// §1.7, §4.4). The cat ids keep today's art as the interim until A draws Tux behind them.
 import { CAT, catBlink, catHead } from './cat-parts';
 import { TOKENS } from './palette';
 
 export type CatSymbol = 'cat-idle' | 'cat-happy' | 'cat-sad' | 'cat-surprised';
+/** Phase 2b symbols (phase2b §1.7, §2.9, §4.4). */
+export type FishSymbol = 'icon-fish';
+/** The board cats' ear-flick overlay (phase2b §2.9), shown only on `.cell.is-flick`. */
+export type CatOverlaySymbol = 'cat-ear-flick';
+/** Event accessories layered on the head and pose (phase2b §4.4). */
+export type AccessorySymbol = 'acc-lantern' | 'acc-scarf' | 'acc-yarn';
 export type IconSymbol =
   | 'icon-house'
   | 'icon-gear'
@@ -20,12 +29,19 @@ export type IconSymbol =
   | 'icon-chevron'
   | 'icon-rule-colours'
   | 'icon-rule-lines'
-  | 'icon-rule-space';
+  | 'icon-rule-space'
+  // phase2b §1.7 (F0 placeholders; A draws them in the same 24-grid LINE style)
+  | 'icon-fish'
+  | 'icon-plus'
+  | 'icon-shop'
+  | 'icon-globe'
+  | 'icon-crown'
+  | 'icon-users';
 export type GlyphIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
 /** Pattern glyphs by palette index: dot, ring, triangle, square, diamond, star, plus, bar, chevron, heart, drop, moon (02 §18). */
 export type GlyphSymbol = `glyph-${GlyphIndex}`;
 /** `cat-blink` is the eyelid overlay the board stacks on idle cats (02 §17.3 blink). */
-export type SymbolId = CatSymbol | IconSymbol | GlyphSymbol | 'mark-x' | 'wrong-x' | 'cat-blink';
+export type SymbolId = CatSymbol | IconSymbol | GlyphSymbol | 'mark-x' | 'wrong-x' | 'cat-blink' | CatOverlaySymbol | AccessorySymbol;
 
 /** id of the sprite's <svg> element. */
 export const SPRITE_ID = 'mewdoku-sprite';
@@ -157,6 +173,30 @@ function iconSymbols(): string {
   ].join('');
 }
 
+/**
+ * F0 placeholder art (phase2b §0.2): plain shapes of our own, never final. A fish is an ellipse plus a
+ * triangle, an accessory a small circle, the ear flick a single rotated triangle, the new icons simple
+ * line marks. Replaced in place by A (same ids, same grids); the retired-look guard does not apply to
+ * them because they use only currentColor and tokens.
+ */
+const PLACEHOLDERS: readonly string[] = [
+  icon24(
+    'icon-fish',
+    `<ellipse cx="10.5" cy="12" rx="7" ry="4.6" style="fill:var(--fish,#FFB81F)" stroke="currentColor" stroke-width="1.4"/>` +
+      `<path d="M17 12 22 8.2V15.8Z" style="fill:var(--fish-deep,#C98200)" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>` +
+      `<circle cx="7.4" cy="11" r=".9" fill="currentColor"/>`,
+  ),
+  icon24('icon-plus', `<path d="M12 5.4v13.2M5.4 12h13.2" ${LINE} stroke-width="2.6"/>`),
+  icon24('icon-shop', `<path d="M4.4 9.6h15.2l-1.6 9.4a1.6 1.6 0 0 1-1.6 1.4H7.6A1.6 1.6 0 0 1 6 19L4.4 9.6ZM8.4 9.6 10.6 4.4M15.6 9.6 13.4 4.4" ${LINE} ${SOFT_FILL}/>`),
+  icon24('icon-globe', `<circle cx="12" cy="12" r="8.4" ${LINE} ${SOFT_FILL}/><path d="M3.6 12h16.8M12 3.6c2.4 2.4 3.4 5.2 3.4 8.4s-1 6-3.4 8.4c-2.4-2.4-3.4-5.2-3.4-8.4s1-6 3.4-8.4Z" ${LINE}/>`),
+  icon24('icon-crown', `<path d="M4 17.6 3.2 7.8l5 3.8L12 5l3.8 6.6 5-3.8-.8 9.8Z" ${LINE} ${SOFT_FILL}/>`),
+  icon24('icon-users', `<circle cx="9" cy="8.6" r="3.2" ${LINE}/><path d="M3.4 19.4a5.6 5.6 0 0 1 11.2 0M15.8 6a3 3 0 0 1 0 5.8M17.6 14.2a5 5 0 0 1 3 5.2" ${LINE}/>`),
+  sym('cat-ear-flick', '0 0 100 100', `<path d="M22 40 26 12 46 30Z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>`),
+  sym('acc-lantern', '0 0 100 100', `<circle cx="78" cy="22" r="9" fill="currentColor"/>`),
+  sym('acc-scarf', '0 0 100 100', `<circle cx="50" cy="88" r="9" fill="currentColor"/>`),
+  sym('acc-yarn', '0 0 100 100', `<circle cx="80" cy="80" r="9" fill="currentColor"/>`),
+];
+
 /** Clip paths that split icon-heart along a zig-zag crack (hud/pills heart crack, 02 §17.5). */
 const DEFS =
   '<clipPath id="clip-heart-l"><path d="M0 0H12.6L10.8 7.6 13.4 11.4 10.6 15.2 12.4 24H0Z"/></clipPath>' +
@@ -171,7 +211,8 @@ export function spriteMarkup(): string {
     catSymbols() +
     markSymbols() +
     GLYPHS.map((g, i) => sym(`glyph-${i}`, '0 0 24 24', `<g fill="currentColor" transform="${GLYPH_FILL}">${g}</g>`)).join('') +
-    iconSymbols();
+    iconSymbols() +
+    PLACEHOLDERS.join('');
   return cached;
 }
 

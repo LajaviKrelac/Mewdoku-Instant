@@ -1,4 +1,4 @@
-// Owner: platform
+// Owner: D (Phase 2b; was platform)
 // dist/fbig → dist-zip/<name>-fbig-<version>-<gitsha>.zip with index.html at the root (04 §10, 05 §5):
 // refuses source maps and .gz/.br files, > 500 files or > 1 MB; prints a size table. Uses fflate.
 //

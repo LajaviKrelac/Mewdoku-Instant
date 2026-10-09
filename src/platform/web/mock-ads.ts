@@ -1,4 +1,4 @@
-// Owner: platform
+// Owner: D (Phase 2b; was platform)
 // Dev/e2e mock ads (04 §6.2): ?ads=ok|nofill|unsupported|close, a placeholder overlay for
 // cfg.ads.mock.durationMs. Never bundled in production web or fbig builds.
 import { cfg } from '../../app/config';

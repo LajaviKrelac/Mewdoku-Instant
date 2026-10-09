@@ -1,4 +1,4 @@
-// Owner: engine
+// Owner: read-only (Phase 2b; was engine)
 // 03 §3 / §11.1 solver: Solver B (countSolutions) against brute force on 2 000 random maps
 // (N = 4–8, exact counts) and against Solver A on 1 000 maps (N = 5–12); known fixtures.
 import { describe, expect, it } from 'vitest';

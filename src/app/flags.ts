@@ -1,13 +1,29 @@
-// Owner: app
-// Feature flags (02 §22 Phase 3 hook): ship hidden features dark. All off in Phase 2.
+// Owner: C (Phase 2b; F0 added the 2b flags)
+// Feature flags (02 §22 Phase 3 hook): ship hidden features dark. The Phase 2 flags stay off.
+// Phase 2b (phase2b §10): events, banners, shop and rankings are on (each still capability-gated);
+// groupChallenges stays OFF until §14 G2 is verified. `?flags=` overrides still work.
 
-export type FlagId = 'autoX' | 'undo' | 'forgivingMistakes' | 'darkTheme';
+export type FlagId =
+  | 'autoX'
+  | 'undo'
+  | 'forgivingMistakes'
+  | 'darkTheme'
+  | 'events'
+  | 'banners'
+  | 'shop'
+  | 'rankings'
+  | 'groupChallenges';
 
 export const DEFAULT_FLAGS: Readonly<Record<FlagId, boolean>> = Object.freeze({
   autoX: false,
   undo: false,
   forgivingMistakes: false,
   darkTheme: false,
+  events: true,
+  banners: true,
+  shop: true,
+  rankings: true,
+  groupChallenges: false,
 });
 
 const FLAG_IDS = Object.keys(DEFAULT_FLAGS) as FlagId[];

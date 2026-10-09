@@ -1,7 +1,7 @@
-// Owner: game
-// Win bookkeeping and records (02 §10.1). PURE: returns new SaveDataV1 objects (never mutates).
+// Owner: C (Phase 2b; was game)
+// Win bookkeeping and records (02 §10.1). PURE: returns new SaveData objects (never mutates).
 // updatedAt is left to the save scheduler, which stamps every write (04 §7.1).
-import type { DailyRecord, GameState, LevelBest, SaveDataV1 } from './types';
+import type { DailyRecord, GameState, LevelBest, SaveData } from './types';
 
 /**
  * Level L won (02 §10.1): progress.level = L + 1, completed += 1, best[L] = [ms, mistakes],
@@ -10,7 +10,7 @@ import type { DailyRecord, GameState, LevelBest, SaveDataV1 } from './types';
  * keeps the faster record (as merge does, 04 §7.3). progress.level never goes backwards; times are
  * whole ms.
  */
-export function applyLevelWin(save: SaveDataV1, level: number, state: GameState): SaveDataV1 {
+export function applyLevelWin(save: SaveData, level: number, state: GameState): SaveData {
   const record: LevelBest = [Math.round(state.elapsedMs), state.mistakes];
   const counted = level < save.progress.level;
   const prev = save.progress.best[level];
@@ -30,7 +30,7 @@ export function applyLevelWin(save: SaveDataV1, level: number, state: GameState)
  * progress.level ≥ 2, completed ≥ 1. No stats record. The tutorial replay saves nothing (the caller
  * does not call this).
  */
-export function applyTutorialDone(save: SaveDataV1): SaveDataV1 {
+export function applyTutorialDone(save: SaveData): SaveData {
   return {
     ...save,
     tutorialDone: true,
@@ -47,7 +47,7 @@ export function applyTutorialDone(save: SaveDataV1): SaveDataV1 {
  * Dailies do not count toward progress.completed (02 §13.2). A second win for the same date keeps the
  * faster record.
  */
-export function applyDailyWin(save: SaveDataV1, dateKey: string, state: GameState): SaveDataV1 {
+export function applyDailyWin(save: SaveData, dateKey: string, state: GameState): SaveData {
   const record: DailyRecord = [Math.round(state.elapsedMs), state.mistakes, state.hintsUsed, state.kittiesUsed];
   return {
     ...save,
@@ -61,10 +61,10 @@ function better<T extends readonly number[]>(prev: T | undefined, next: T): T {
   return prev !== undefined && (prev[0] ?? Infinity) <= (next[0] ?? Infinity) ? prev : next;
 }
 
-export function levelBest(save: SaveDataV1, level: number): LevelBest | null {
+export function levelBest(save: SaveData, level: number): LevelBest | null {
   return save.progress.best[level] ?? null;
 }
 
-export function dailyRecord(save: SaveDataV1, dateKey: string): DailyRecord | null {
+export function dailyRecord(save: SaveData, dateKey: string): DailyRecord | null {
   return save.daily[dateKey] ?? null;
 }

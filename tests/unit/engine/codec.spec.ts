@@ -1,4 +1,4 @@
-// Owner: engine
+// Owner: read-only (Phase 2b; was engine)
 // 03 §9 / §11.1 codec and validate: round trip on 10 000 generated records, structural validation
 // (03 §9.4) rejects malformed records, connectivity detection on hand-crafted disconnected maps.
 import { describe, expect, it } from 'vitest';

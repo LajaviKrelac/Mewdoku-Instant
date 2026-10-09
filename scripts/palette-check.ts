@@ -1,4 +1,4 @@
-// Owner: ui-board
+// Owner: A (Phase 2b; was ui-board)
 // Palette validation (02 §17.2, §18): pairwise CIEDE2000 ≥ 10, simulated deuteranopia/protanopia/
 // tritanopia ΔE report, --ink X glyph, cat outline, wrong-X and colour-pattern glyphs ≥ 3:1 against
 // every tile (normal and faded), UI text pairs ≥ 4.5:1 (WCAG 1.4.3) and UI glyphs ≥ 3:1, and

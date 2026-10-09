@@ -1,4 +1,4 @@
-// Owner: platform
+// Owner: D (Phase 2b; was platform)
 // FBInstant.logEvent with name/param sanitising to the 05 §10 limits (cfg.analytics). The SDK's
 // parameters are string-valued ([dt-types]: `{ [key: string]: string }`), so numbers are sent as
 // their decimal text (PLAT-7); the app-facing contract (04 §4.4) still takes string | number.

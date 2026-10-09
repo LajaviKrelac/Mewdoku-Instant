@@ -1,4 +1,4 @@
-// Owner: app. The 1 s TICK (02 §7.2, 04 §5.2): runs while visible and playing / hint / kitty; stops
+// Owner: C (Phase 2b; was app). The 1 s TICK (02 §7.2, 04 §5.2): runs while visible and playing / hint / kitty; stops
 // (with a final partial TICK) when hidden, on FB onPause, while O5/O6 is open and while an ad shows.
 import { describe, expect, it } from 'vitest';
 import { createHarness, SOL5, startLevel, WRONG5, type Harness } from './harness';

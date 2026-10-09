@@ -1,4 +1,4 @@
-// Owner: game
+// Owner: C (Phase 2b; was game)
 // Vite asset wiring for the level data (04 §3): pack-000 is a normal JSON import (bundled, no fetch);
 // packs 001–009 and the daily months are `?url` assets, emitted as hashed same-origin files and
 // fetched on demand. The fetch itself is injected by the app (game/ stays free of I/O globals).

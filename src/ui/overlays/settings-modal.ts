@@ -1,4 +1,4 @@
-// Owner: ui-shell
+// Owner: B (Phase 2b)
 // O5 settings (02 §5 O5, §14) with the "About & credits" sub-view (version, font licence, privacy link).
 // Toggles call onChange(patch) at once; the app saves and re-renders through update(). Esc in the
 // About view returns to the list; otherwise Esc, × and scrim taps call onClose.
@@ -7,7 +7,7 @@
 //          .settings__view .overlay__head .settings__list .settings-row(--link) .settings-row__label
 //          .settings-row__note .switch(.switch__track .switch__knob .switch__state)
 //          .segmented .segmented__opt .about__name .about__text .about__code .about__link
-import type { ReduceMotionSetting, Settings } from '../../game/types';
+import type { LocaleId, ReduceMotionSetting, Settings } from '../../game/types';
 import { t } from '../../i18n';
 import { icon } from '../art/sprite';
 import { h, setText, type OverlayView } from '../dom';
@@ -29,6 +29,13 @@ export interface SettingsProps {
   onChange(patch: Partial<Settings>): void;
   onHowToPlay(): void;
   onClose(): void;
+  // ── phase2b rows (F0: typed and optional; B renders them, C passes them) ──
+  /** Language row (§6.8): the saved override ('auto' = Automatic) and the locales this build contains (i18n buildLocales()). */
+  readonly language?: { readonly current: 'auto' | LocaleId; readonly locales: readonly LocaleId[]; onPick(id: 'auto' | LocaleId): void };
+  /** Shop row (§8.5). */
+  onShop?(): void;
+  /** Remove ads row: FB, payments ready, No Ads not owned (§8.5). Absent = row hidden. */
+  onRemoveAds?(): void;
 }
 
 type SwitchKey = 'sound' | 'haptics' | 'patterns';

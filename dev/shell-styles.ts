@@ -1,4 +1,4 @@
-// Owner: ui-shell. PROPOSED CSS for the ui-shell DOM (screens S0–S2, overlays O1–O10).
+// Owner: B (Phase 2b; was ui-shell). PROPOSED CSS for the ui-shell DOM (screens S0–S2, overlays O1–O10).
 // All CSS files belong to ui-board (CONTRACTS §1). ui-board adopted every rule below into
 // src/styles/overlays.css and hud.css (2026-10-07), so the harness no longer injects this by
 // default; load it with /dev/shell-harness.html?css=proposed&view=… to try further changes here

@@ -1,4 +1,4 @@
-// Owner: ui-board
+// Owner: A (Phase 2b; was ui-board)
 // Bulb and Paw tool buttons with count badges (02 §5 S2, §9).
 // Classes: .tool-bar > .tool.tool--bulb|paw[data-empty][data-free] > .tool__icon .tool__badge
 import { t } from '../../i18n';

@@ -1,4 +1,4 @@
-// Owner: content (added by the integration lead for the 02 §23 acceptance item "the hint explains and
+// Owner: read-only (Phase 2b; was content) (added by the integration lead for the 02 §23 acceptance item "the hint explains and
 // applies a valid next step on every shipped level and never reveals a wrong deduction").
 // For every shipped record (1 000 levels and every daily month) the hint engine is run from the
 // starting board (givens only) and its step is applied (02 §9.1 Apply) until the board is solved.

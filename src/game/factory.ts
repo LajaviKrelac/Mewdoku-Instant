@@ -1,9 +1,9 @@
-// Owner: game
+// Owner: C (Phase 2b; was game)
 // Game construction and in-progress conversion (04 §3, §7.2). PURE.
 import type { Puzzle } from '../engine/types';
 import { rulesFor } from './modes';
 import { decodeCells, encodeCells, validateSlot } from './save-fields';
-import { CellState, type GameState, type InProgressV1, type ModeId, type RuleFlags } from './types';
+import { CellState, type GameState, type InProgressV2, type ModeId, type RuleFlags } from './types';
 
 /** Fresh attempt: givens only, full hearts, counters 0, empty move log, status 'ready' (04 §4.2 RETRY). */
 export function newGame(puzzle: Puzzle, mode: ModeId, rules: RuleFlags = rulesFor(mode)): GameState {
@@ -41,9 +41,9 @@ export function newGame(puzzle: Puzzle, mode: ModeId, rules: RuleFlags = rulesFo
  * when hearts === 0 (step 5), else 'ready' (step 6). The move log is not persisted, so it starts
  * empty; hint and kitty overlays are never restored (anything charged stays charged).
  */
-export function restoreGame(puzzle: Puzzle, slot: InProgressV1, rules?: RuleFlags): GameState {
-  const daily = typeof slot === 'object' && slot !== null && slot.mode === 'daily';
-  const flags = rules ?? rulesFor(daily ? 'daily' : 'level');
+export function restoreGame(puzzle: Puzzle, slot: InProgressV2, rules?: RuleFlags): GameState {
+  const slotMode = typeof slot === 'object' && slot !== null ? slot.mode : 'level';
+  const flags = rules ?? rulesFor(slotMode === 'daily' || slotMode === 'event' ? slotMode : 'level');
   const check = checkSlot(puzzle, slot, flags);
   if (!check.ok) throw new RangeError(`restoreGame(${puzzle.id}): invalid slot (${check.reason})`);
   const mode: ModeId = slot.mode;
@@ -73,15 +73,16 @@ export function restoreGame(puzzle: Puzzle, slot: InProgressV1, rules?: RuleFlag
  * validateInProgress for restoreGame. The expected mode follows the puzzle id (L… → level, D… →
  * daily; T1 is never saved), so a slot cannot restore a board in the wrong mode.
  */
-function checkSlot(puzzle: Puzzle, slot: InProgressV1, rules: RuleFlags): { ok: true } | { ok: false; reason: string } {
+function checkSlot(puzzle: Puzzle, slot: InProgressV2, rules: RuleFlags): { ok: true } | { ok: false; reason: string } {
   if (typeof slot !== 'object' || slot === null) return { ok: false, reason: 'shape' };
-  const mode = puzzle.id[0] === 'L' ? 'level' : puzzle.id[0] === 'D' ? 'daily' : null;
+  const p = puzzle.id[0];
+  const mode = p === 'L' ? 'level' : p === 'D' ? 'daily' : p === 'E' ? 'event' : null;
   if (mode === null) return { ok: false, reason: 'id' };
   return validateSlot(slot, puzzle, { mode, id: puzzle.id }, rules);
 }
 
 /** Snapshot for the save slot (level/daily modes only; the tutorial is never saved). Throws for the tutorial. */
-export function toInProgress(state: GameState, savedAt: number): InProgressV1 {
+export function toInProgress(state: GameState, savedAt: number): InProgressV2 {
   if (state.mode === 'tutorial') throw new Error('toInProgress: the tutorial is never saved');
   return {
     id: state.puzzle.id,

@@ -1,4 +1,4 @@
-// Owner: ui-shell
+// Owner: B (Phase 2b)
 // Synthesised sound recipes (02 §16): oscillators + envelopes + filtered noise, no audio files.
 // Every sound is our own design: a list of tone and noise "voices" scheduled from ctx.currentTime.
 // Voice peaks stay ≤ 0.55 so overlapping sounds do not clip after the -12 dBFS master gain.
@@ -16,9 +16,13 @@ export type SfxId =
   | 'hint_open' // soft bell
   | 'hint_apply' // whoosh
   | 'kitty' // sparkle + pop
-  | 'ui'; // click
+  | 'ui' // click
+  | 'fish_pop' // phase2b §2.2: soft "bloop" as a fish pops at its cat [F0 placeholder recipe; B designs it]
+  | 'fish_plink'; // phase2b §2.2: arrival "plink", +audio.fishPlinkStepSemitones per fish (opts.index) [F0 placeholder]
 
-export const SFX_IDS: readonly SfxId[] = ['mark', 'unmark', 'cat', 'region', 'mistake', 'heart_last', 'win', 'hint_open', 'hint_apply', 'kitty', 'ui'];
+export const SFX_IDS: readonly SfxId[] = [
+  'mark', 'unmark', 'cat', 'region', 'mistake', 'heart_last', 'win', 'hint_open', 'hint_apply', 'kitty', 'ui', 'fish_pop', 'fish_plink',
+];
 
 export interface Sfx {
   /** No-op while muted or before unlock. `index`: region chime step (0-based count of done regions). */
@@ -148,6 +152,11 @@ export function recipe(id: SfxId, opts: { index?: number } = {}, rand: () => num
       return [...sparkleVoices(0, [2637, 3322, 3951], 0.05), tone('sine', 300, 0.13, 0.09, 0.4, { f1: 820, attack: 0.003 })];
     case 'ui':
       return [tone('square', 1100, 0, 0.018, 0.07, { lowpass: 3000, attack: 0.001 }), noise('highpass', 2000, 0, 0.012, 0.04)];
+    // F0 placeholders (our own simple synth voices) so the win flow can call them; B replaces them.
+    case 'fish_pop':
+      return [tone('sine', 420, 0, 0.09, 0.3, { f1: 760, attack: 0.004 })];
+    case 'fish_plink':
+      return [tone('sine', semis(1568, Math.max(0, opts.index ?? 0) * cfg.audio.fishPlinkStepSemitones), 0, 0.16, 0.2, { attack: 0.002 })];
   }
 }
 

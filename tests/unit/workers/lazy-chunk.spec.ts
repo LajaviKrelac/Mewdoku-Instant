@@ -1,4 +1,4 @@
-// Owner: app. Lazy chunk loading that survives a failed download (RP-2, 04 §8): Chromium caches a
+// Owner: C (Phase 2b; was app). Lazy chunk loading that survives a failed download (RP-2, 04 §8): Chromium caches a
 // failed import() of a URL, so the retry must use a cache-busting URL taken from the error; every
 // attempt has a deadline; the result is the first successful attempt.
 import { afterEach, describe, expect, it, vi } from 'vitest';

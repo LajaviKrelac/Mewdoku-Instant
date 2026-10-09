@@ -1,4 +1,4 @@
-// Owner: ui-shell. O8 coach (non-modal), O9 toast layer, O10 rotate notice.
+// Owner: B (Phase 2b; was ui-shell). O8 coach (non-modal), O9 toast layer, O10 rotate notice.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cfg } from '../../../src/app/config';
 import { coachText, createCoach, LIVE_SETTLE_MS, placeCard, roundSpot, type CoachProps } from '../../../src/ui/overlays/coach';

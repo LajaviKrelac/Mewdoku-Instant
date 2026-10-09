@@ -1,4 +1,4 @@
-// Owner: platform
+// Owner: D (Phase 2b; was platform)
 // Bundle budget (04 §9) on dist/<mode>, RAW bytes (FB hosting may not compress, 05 §5.3; 1 KB = 1000
 // bytes, as Vite prints them). Exit 1 when over.
 //   First load (what index.html pulls in before the first screen): main JS (entry + modulepreload

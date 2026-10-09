@@ -1,4 +1,4 @@
-// Owner: engine
+// Owner: read-only (Phase 2b; was engine)
 // Production solver "Solver B": unit-MRV on bitboards, stops at `limit` solutions (03 §3.1). PURE.
 // Written as plain functions over one state object (no per-node closures): 3–4× faster in V8.
 import { fullMask } from './bits';

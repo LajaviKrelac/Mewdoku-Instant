@@ -1,4 +1,4 @@
-// Owner: ui-board
+// Owner: A (Phase 2b; was ui-board)
 // Our ginger "loaf" cat (02 §17.3, 06 §5), drawn by hand on a 100-unit grid: a wide, soft loaf head,
 // rounded ears, tabby stripes, cream muzzle, oval eyes, tiny pink nose, three whiskers per side.
 // Shared by the sprite symbols (art/sprite.ts) and the larger poses (art/illustrations.ts).

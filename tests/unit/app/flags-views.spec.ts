@@ -1,4 +1,4 @@
-// Owner: app. Feature flags (02 §22) and the AppState → view-model selectors.
+// Owner: C (Phase 2b; was app). Feature flags (02 §22) and the AppState → view-model selectors.
 import { afterEach, describe, expect, it } from 'vitest';
 import { DEFAULT_FLAGS, isFlagOn, parseFlagParam, setFlagOverrides } from '../../../src/app/flags';
 import { initialAppState, type AppState } from '../../../src/app/store';
@@ -18,14 +18,30 @@ const caps: Capabilities = {
   share: false,
   payments: false,
   haptics: true,
+  overlayViews: false,
+  groups: false,
 };
 const ctx: ViewContext = { now: NOW, capabilities: caps, platformId: 'web' };
 
 describe('flags', () => {
   afterEach(() => setFlagOverrides({}));
 
-  it('are all off by default', () => {
-    for (const id of Object.keys(DEFAULT_FLAGS) as (keyof typeof DEFAULT_FLAGS)[]) expect(isFlagOn(id)).toBe(false);
+  it('defaults: the Phase 2 flags off; phase2b §10 events, banners, shop, rankings on and groupChallenges off', () => {
+    expect(DEFAULT_FLAGS).toEqual({
+      autoX: false,
+      undo: false,
+      forgivingMistakes: false,
+      darkTheme: false,
+      events: true,
+      banners: true,
+      shop: true,
+      rankings: true,
+      groupChallenges: false,
+    });
+    for (const id of Object.keys(DEFAULT_FLAGS) as (keyof typeof DEFAULT_FLAGS)[]) expect(isFlagOn(id)).toBe(DEFAULT_FLAGS[id]);
+    setFlagOverrides(parseFlagParam('?flags=-events,groupChallenges'));
+    expect(isFlagOn('events')).toBe(false);
+    expect(isFlagOn('groupChallenges')).toBe(true);
   });
 
   it('parse ?flags= (unknown names ignored, "-" turns off)', () => {
@@ -46,7 +62,7 @@ describe('selectHomeView', () => {
     expect(v.daily).toMatchObject({ state: 'not_played', dateKey: TODAY, n: 9, solvedMs: null, unlockLevel: 20 });
     const withSlot = {
       ...save,
-      inProgress: { level: { id: 'L30' as const, mode: 'level' as const, cells: '', hearts: 3, revivesUsed: 0, mistakes: 0, hintsUsed: 0, kittiesUsed: 0, elapsedMs: 0, savedAt: 0 }, daily: null },
+      inProgress: { level: { id: 'L30' as const, mode: 'level' as const, cells: '', hearts: 3, revivesUsed: 0, mistakes: 0, hintsUsed: 0, kittiesUsed: 0, elapsedMs: 0, savedAt: 0 }, daily: null, event: null },
       daily: { [TODAY]: [252_000, 1, 0, 0] as [number, number, number, number] },
     };
     v = selectHomeView(initialAppState(withSlot), { ...ctx, platformId: 'fbig' });

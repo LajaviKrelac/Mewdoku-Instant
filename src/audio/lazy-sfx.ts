@@ -1,4 +1,4 @@
-// Owner: ui-shell
+// Owner: B (Phase 2b; was ui-shell)
 // The sound recipes (sfx.ts) as a lazy chunk (04 §9 first-load budget). No sound can play before
 // the first pointerdown unlocks the AudioContext (02 §16), so the recipes are fetched right after
 // the first screen (boot step 8) and nothing audible is lost; a play() before they land is dropped.

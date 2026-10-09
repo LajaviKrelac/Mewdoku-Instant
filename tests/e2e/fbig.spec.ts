@@ -1,4 +1,4 @@
-// Owner: platform
+// Owner: D (Phase 2b; was platform)
 // FBIG build against tests/fixtures/fbinstant-stub.js (04 §11, 05 §4–§7). The SDK URL is routed to
 // the stub; each test configures it through window.__FB_STUB_CONFIG__ before the page loads, and
 // seeds the player's save as the stub's cloud copy (so the boot merge is exercised too).
@@ -12,7 +12,7 @@ import { expect, test, type Page } from '@playwright/test';
 import type { E2EHooks } from '../../src/app/boot';
 import type { AppState } from '../../src/app/store';
 import { defaults } from '../../src/game/save';
-import type { SaveDataV1 } from '../../src/game/types';
+import type { SaveData } from '../../src/game/types';
 
 const STUB_PATH = resolve(dirname(fileURLToPath(import.meta.url)), '../fixtures/fbinstant-stub.js');
 const STUB_SRC = readFileSync(STUB_PATH, 'utf8');
@@ -45,7 +45,7 @@ const sel = {
 };
 
 /** A save past the tutorial, at `level`, with `completed` levels; tweak with `patch`. */
-function seededSave(level: number, completed: number, patch: (s: SaveDataV1) => SaveDataV1 = (s) => s): SaveDataV1 {
+function seededSave(level: number, completed: number, patch: (s: SaveData) => SaveData = (s) => s): SaveData {
   const now = Date.now();
   const base = defaults(now - 30 * 86_400_000); // tenure 30 days → 90 s cooldown
   return patch({
@@ -154,7 +154,7 @@ test.describe('FBIG storage', () => {
 
 test.describe('FBIG save robustness', () => {
   /** The returning player's cloud copy: level 40, 9 hints and kitties, sound off, an hour old. */
-  const cloudCopy = (): SaveDataV1 =>
+  const cloudCopy = (): SaveData =>
     seededSave(40, 39, (s) => ({
       ...s,
       updatedAt: Date.now() - 3_600_000,

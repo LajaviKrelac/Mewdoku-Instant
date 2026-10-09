@@ -1,4 +1,4 @@
-// Owner: ui-shell. 02 §16 audio: unlock on the first gesture, -12 dBFS master, mute reasons,
+// Owner: B (Phase 2b; was ui-shell). 02 §16 audio: unlock on the first gesture, -12 dBFS master, mute reasons,
 // suspend while hidden/paused, and a synthesised recipe for every sound.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { cfg } from '../../../src/app/config';

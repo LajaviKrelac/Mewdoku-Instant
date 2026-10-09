@@ -1,4 +1,4 @@
-// Owner: engine
+// Owner: read-only (Phase 2b; was engine)
 // 03 §4 / §8.3 / §11.1 generator: king permutations, region growth, uniqueness repair and
 // generate(spec): unique output, planted = solver solution, connected n regions, filters respected,
 // byte-identical per seed, sizePool first draw (02 §11.4).

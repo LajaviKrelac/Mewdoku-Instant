@@ -1,4 +1,4 @@
-// Owner: app
+// Owner: C (Phase 2b)
 // Screen switching, overlay stack, focus restore, Esc handling (04 §3, §5.3). Overlays are created
 // lazily from the ui/overlays factories, appended to an overlay host once, and toggled.
 // Focus: only the top-most MODAL overlay holds a focus trap; everything below it is inert. When it
@@ -16,6 +16,11 @@ import { focusableElements, setInert, trapFocus } from '../ui/a11y/focus-trap';
 import type { CoachProps } from '../ui/overlays/coach';
 import type { DailyResultProps } from '../ui/overlays/daily-result';
 import type { FailOverlayProps } from '../ui/overlays/fail-overlay';
+import type { GroupResultProps } from '../ui/overlays/group-result';
+import type { RankHubProps } from '../ui/overlays/rank-hub';
+import type { RankingPanelProps } from '../ui/overlays/ranking-panel';
+import type { ShopProps } from '../ui/overlays/shop-sheet';
+import type { VictoryProps } from '../ui/overlays/victory-screen';
 import type { HintCardProps } from '../ui/overlays/hint-card';
 import type { HowToPlayProps } from '../ui/overlays/how-to-play';
 import type { RewardedPromptProps } from '../ui/overlays/rewarded-prompt';
@@ -40,6 +45,12 @@ export interface OverlayPropsMap {
   how_to_play: HowToPlayProps;
   daily_result: DailyResultProps;
   coach: CoachProps;
+  // phase2b (B's props, all in the lazy overlay chunk)
+  ranking: RankingPanelProps;
+  victory: VictoryProps;
+  shop: ShopProps;
+  rank_hub: RankHubProps;
+  group_result: GroupResultProps;
 }
 
 export interface Router {
@@ -114,6 +125,11 @@ export async function loadOverlayChunk(): Promise<Partial<OverlayFactories>> {
     settings: m.createSettingsModal,
     how_to_play: m.createHowToPlay,
     daily_result: m.createDailyResult,
+    ranking: m.createRankingPanel,
+    victory: m.createVictoryScreen,
+    shop: m.createShopSheet,
+    rank_hub: m.createRankHub,
+    group_result: m.createGroupResult,
   };
 }
 

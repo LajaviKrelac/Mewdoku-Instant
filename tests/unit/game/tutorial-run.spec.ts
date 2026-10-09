@@ -1,4 +1,4 @@
-// Owner: game. The tutorial script played end to end through the mini session (02 §11.5, 04 §4.2).
+// Owner: C (Phase 2b; was game). The tutorial script played end to end through the mini session (02 §11.5, 04 §4.2).
 import { describe, expect, it } from 'vitest';
 import { reduce } from '../../../src/game/reducer';
 import { CellState, type Action } from '../../../src/game/types';

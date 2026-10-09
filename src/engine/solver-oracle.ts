@@ -1,4 +1,4 @@
-// Owner: engine
+// Owner: read-only (Phase 2b; was engine)
 // Test oracles (03 §3.2). NEVER imported by the app bundle (enforced by tests/unit/layering.spec.ts).
 // Deliberately shares no code with solver.ts so the cross-checks are independent.
 import type { SolveResult } from './types';

@@ -1,4 +1,4 @@
-// Owner: engine
+// Owner: read-only (Phase 2b; was engine)
 // Naive reference implementation of the 03 §5.2 techniques, written straight from the text with
 // arrays and sets (no bitboards, no shared code with src/engine/techniques.ts or pigeonhole.ts).
 // The tests compare the optimised engine against it, step for step. Not a spec file.

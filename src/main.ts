@@ -1,4 +1,4 @@
-// Owner: app
+// Owner: C (Phase 2b; was app)
 // Entry (04 §3, §8): window.onerror / unhandledrejection → js_error analytics + a non-blocking toast
 // (the game keeps running), create the platform from '@platform', run boot(). boot() mounts the SVG
 // sprite right after platform.init() (04 §5.1).
@@ -10,6 +10,10 @@ import './styles/board.css';
 import './styles/hud.css';
 import './styles/overlays.css';
 import './styles/fx.css';
+// phase2b F0: new stylesheets, each filled by its owner (A art.css, B screens.css, E i18n.css).
+import './styles/art.css';
+import './styles/screens.css';
+import './styles/i18n.css';
 import { createPlatform } from '@platform';
 import { boot, showBootFailure, type AppHandle } from './app/boot';
 import { t } from './i18n';

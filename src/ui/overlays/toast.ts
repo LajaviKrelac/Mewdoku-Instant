@@ -1,4 +1,4 @@
-// Owner: ui-shell
+// Owner: B (Phase 2b; was ui-shell)
 // O9 toast layer (02 §4.1): short non-blocking messages ("No videos right now — try again soon.").
 // The layer is a polite live region, so screen readers read each toast once.
 // - A live region inserted together with its text is often not announced (A11Y-11). The router

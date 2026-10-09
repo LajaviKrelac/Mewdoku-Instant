@@ -1,4 +1,4 @@
-// Owner: platform
+// Owner: D (Phase 2b; was platform)
 // shared/haptics: navigator.vibrate feature detection, error swallowing, platform preference.
 import { describe, expect, it } from 'vitest';
 import { canVibrate, createHaptics, createVibrateHaptics } from '../../../src/platform/shared/haptics';

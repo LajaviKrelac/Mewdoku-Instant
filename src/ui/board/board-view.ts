@@ -1,4 +1,4 @@
-// Owner: ui-board
+// Owner: B (Phase 2b)
 // The board card (04 §5.3): a role="grid" of <button class="cell"> built once per puzzle; per-cell
 // --c / --it --ir --ib --il / --pat variables; state in data-s (e|m|c|w|g); data-done for faded
 // regions; diff-only updates. Owns gestures + keyboard wiring and the board's transient FX.
@@ -13,7 +13,7 @@ import { attachGestures } from './gestures';
 import { attachKeyboard, type KeyboardHandle } from './keyboard';
 import { applyHighlight } from './board-highlight';
 import type { BoardHighlight, BoardInput, BoardModel, BoardView, BoardViewOptions, CatMood } from './board-types';
-import { regionInsets } from './layout';
+import { evenInsets, type CellInsets } from './layout';
 
 export type { BoardHighlight, BoardInput, BoardModel, BoardView, BoardViewOptions, CatMood } from './board-types';
 
@@ -141,7 +141,8 @@ export function createBoardView(model: BoardModel, input: BoardInput, opts: Boar
     el.setAttribute('aria-label', t('a11y.board', { n }));
     el.setAttribute('aria-rowcount', String(n));
     el.setAttribute('aria-colcount', String(n));
-    const insets = regionInsets(n, m.regions);
+    // phase2b §1.5 even gutters (F0 switched from the region-aware insets); setSlot re-applies them.
+    const insets = evenInsets(n, slotPx);
     cells = [];
     rows = [];
     regionCells = Array.from({ length: n }, () => []);
@@ -294,7 +295,18 @@ export function createBoardView(model: BoardModel, input: BoardInput, opts: Boar
     },
     setSlot(px) {
       if (px === slotPx && el.style.getPropertyValue('--slot') !== '') return;
+      const before = evenInsets(1, slotPx)[0];
       slotPx = px;
+      const after = evenInsets(1, slotPx)[0] as CellInsets;
+      // The inset size depends on the slot (phase2b §1.5): crossing layout.insetSmallBelowSlot
+      // re-applies it to every cell.
+      if (before?.top !== after.top) {
+        for (const refs of cells) {
+          for (const [k, v] of [['--it', after.top], ['--ir', after.right], ['--ib', after.bottom], ['--il', after.left]] as const) {
+            refs.el.style.setProperty(k, `${v}px`);
+          }
+        }
+      }
       el.style.setProperty('--slot', `${px}px`);
       el.style.setProperty('--pat-k', patternScaleFor(px).toFixed(3));
     },
@@ -325,6 +337,8 @@ export function createBoardView(model: BoardModel, input: BoardInput, opts: Boar
       el.style.setProperty('--entry-ms', `${durationMs}ms`);
       el.style.setProperty('--entry-stagger', `${staggerMs}ms`);
       flashClass(el, 'fx-entry', cfg.fx.boardEntryMs + 80, timers);
+      // TODO(B, phase2b §2.9): the new entry and entryEndMs(n); until then START waits the cap.
+      return reduced() ? Math.min(cfg.fx.reducedMotionFadeMs, cfg.fx.boardEntryMs) : cfg.fx.boardEntryMs;
     },
     focusCell(i) {
       keyboard?.focus(i, true);

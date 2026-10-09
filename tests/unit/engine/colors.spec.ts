@@ -1,4 +1,4 @@
-// Owner: engine
+// Owner: read-only (Phase 2b; was engine)
 // 03 §8.5 / §11.1 colour assignment: distinct colours, deterministic per puzzle id, greedy
 // max-min ΔE with rotated tie-breaks, adjacent regions ≥ ΔE 10 with the shipped palette matrix.
 import { describe, expect, it } from 'vitest';

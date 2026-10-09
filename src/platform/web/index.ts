@@ -1,4 +1,4 @@
-// Owner: platform
+// Owner: D (Phase 2b; was platform)
 // Web adapter (04 §6.2): local storage, mock ads in dev/e2e (unsupported in production → free
 // fallback), no-op analytics, navigator.vibrate haptics.
 // Two tabs share one save (RP-5): a write by another tab arrives as a 'storage' event and is handed
@@ -77,6 +77,8 @@ function buildWebPlatform(opts: WebPlatformOptions, makeMock: MockFactory | null
     share: false,
     payments: false,
     haptics: canVibrate(nav),
+    overlayViews: false, // phase2b: the web has no FB overlay views, tournaments or payments
+    groups: false,
   });
 
   return {

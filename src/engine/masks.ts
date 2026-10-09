@@ -1,4 +1,4 @@
-// Owner: engine
+// Owner: read-only (Phase 2b; was engine)
 // Bitboard views of a knowledge state (03 §2, §5.1), shared by techniques.ts. Internal to engine/.
 // A cell set is stored as one column mask per row, so unit and attack tests are a few AND/ORs. PURE.
 import { fullMask, popcount } from './bits';

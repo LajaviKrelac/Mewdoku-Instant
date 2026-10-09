@@ -1,4 +1,4 @@
-// Owner: ui-shell
+// Owner: B (Phase 2b; was ui-shell)
 // O10 rotate notice (02 §19): shown on a landscape PHONE whose height is < layout.rotateMaxHeight.
 // A phone is a coarse (touch) primary pointer on a screen whose short side is < 600 px. Desktop
 // windows (a 150-200 % zoomed browser, a squat window) never get it: they keep the portrait column

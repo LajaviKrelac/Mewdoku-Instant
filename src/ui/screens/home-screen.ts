@@ -1,10 +1,14 @@
-// Owner: ui-shell
+// Owner: B (Phase 2b)
 // S1 Home (02 §5): top bar (Trophy*, Gear), wordmark + mascot, primary level button, daily card,
 // stock readout. Phase 3 hook: extra cards array (02 §22).
+// Phase 2b (B): the fish pill in the top bar's lead slot (§2.5), the event card above the Level
+// button (§4.4: rendered in the extra-cards area as its event variant), data-banner (§3.2).
+// F0 added the view fields and callbacks below; the screen does not render them yet.
 //
 // Classes: .screen.screen--home > .home__body > .home__hero(.home__wordmark .home__tagline .home__mascot)
 //          .home__actions(.home__play .badge.badge--hard .daily-card[data-state] .home__cards .home-card)
 //          .home__stock(.stock__item)
+import type { EventDef } from '../../game/events';
 import type { DailyCardState } from '../../game/progression';
 import { formatClock, formatShortDate, t } from '../../i18n';
 import { mascotIllustration } from '../art/mascot';
@@ -23,6 +27,27 @@ export interface DailyCardView {
   readonly solvedMs: number | null;
   /** daily.unlockAfterLevel, for "Unlocks after level 20". */
   readonly unlockLevel: number;
+}
+
+/**
+ * The Home event card (phase2b §4.4): 72 px, A's eventArt(def, 'card') behind it, the title and a
+ * status line: active "Ends in 3 d 4 h · 7 / 21 solved" (+ "Ends soon!" in the last
+ * events.cardEndsSoonHours), teaser "Starts in 2 d" (not tappable), locked "Opens after level 10",
+ * done "All solved!". A 4 px --accent progress bar. A button labelled with its status line.
+ */
+export interface HomeEventCardView {
+  readonly def: EventDef;
+  readonly state: 'active' | 'teaser' | 'locked' | 'done';
+  /** Device clock now, and the event's start and end (epoch ms). */
+  readonly now: number;
+  readonly startsAt: number;
+  readonly endsAt: number;
+  readonly solved: number;
+  readonly total: number;
+  /** def.unlockAfterLevel, for "Opens after level 10". */
+  readonly unlockLevel: number;
+  /** In the last events.cardEndsSoonHours. */
+  readonly endsSoon: boolean;
 }
 
 /** Phase 3 entry points (events, calendar…). Empty in Phase 2. */
@@ -45,6 +70,12 @@ export interface HomeView {
   readonly showTrophy: boolean;
   readonly fbSafeZone: boolean;
   readonly extraCards: readonly HomeCardView[];
+  /** Wallet fish for the Home fish pill (phase2b §2.5). */
+  readonly fish: number;
+  /** The event card, or null when no event is active or teased (phase2b §4.4). */
+  readonly event: HomeEventCardView | null;
+  /** phase2b §3.2: the banner band is reserved (root data-banner). */
+  readonly bannerReserved: boolean;
 }
 
 export interface HomeCallbacks {
@@ -54,6 +85,10 @@ export interface HomeCallbacks {
   onSettings(): void;
   onTrophy(): void;
   onCard(id: string): void;
+  /** Fish pill "+" (phase2b §2.5, §8.5). */
+  onShop(): void;
+  /** Event card tap (active, locked or done; a teaser is not tappable), phase2b §4.4. */
+  onEvent(): void;
 }
 
 /** The daily card's status line ("Not played yet", "Solved 4:12", "Unlocks after level 20"). */

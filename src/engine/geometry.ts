@@ -1,4 +1,4 @@
-// Owner: engine
+// Owner: read-only (Phase 2b; was engine)
 // Index helpers, neighbours, unit ids and per-puzzle attack tables (03 §2). PURE.
 import type { CellIndex, Puzzle, PuzzleTables, Unit, UnitKind } from './types';
 

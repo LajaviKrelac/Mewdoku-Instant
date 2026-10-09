@@ -1,6 +1,9 @@
-// Owner: ui-board
+// Owner: A (Phase 2b)
 // Region colours, glyphs and UI tokens (02 §17.2, §18). Mirrors styles/tokens.css (--r0…--r11 etc.).
 // Colour NAMES live in i18n (colorName(i)). scripts/palette-check.ts validates these values.
+// Phase 2b (A): TOKENS and CAT_COLORS take the Classic values of phase2b §1.4 / §1.6 in place;
+// xEdgeColor() (F0) gives the white X's tinted edge per palette index (§1.5).
+import { cfg, type GameConfig } from '../../app/config';
 import { assignColors } from '../../engine/colors';
 import type { DeltaMatrix, Puzzle } from '../../engine/types';
 
@@ -103,4 +106,13 @@ export function mixHex(hex: string, toward: string, t: number): string {
   const b = hexToRgb(toward);
   const out = a.map((v, i) => Math.round(v + ((b[i] as number) - v) * t));
   return `#${out.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/**
+ * The X edge colour of a tile (phase2b §1.5): mixHex(tile, --ink, layout.markEdgeMix). board-cells
+ * sets it as --xe on each cell; palette-check verifies edge vs tile ≥ 3 and white vs edge ≥ 3.
+ * Follows TOKENS.ink, so A's new ink value (§1.4) carries through.
+ */
+export function xEdgeColor(paletteIndex: number, c: GameConfig = cfg): string {
+  return mixHex(PALETTE[paletteIndex] ?? (PALETTE[0] as string), TOKENS.ink, c.layout.markEdgeMix);
 }

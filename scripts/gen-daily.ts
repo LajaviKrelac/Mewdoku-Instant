@@ -1,4 +1,4 @@
-// Owner: content
+// Owner: read-only (Phase 2b; was content)
 // Generates src/data/daily/YYYY-MM.json for a month range (03 §8.6): weekday size/band (02 §12),
 // seed SEEDS.daily(date), dedup shared with the level packs. Usage: --from 2026-10 --to 2028-12.
 // Options: --workers 2, --out src/data, --no-cache. Resumable like gen-levels (JSONL cache).

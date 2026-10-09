@@ -1,4 +1,4 @@
-// Owner: game. Hint/kitty ledger and free-fallback cooldown (02 §9, §13.3); interstitial gate (02 §13.2)
+// Owner: C (Phase 2b; was game). Hint/kitty ledger and free-fallback cooldown (02 §9, §13.3); interstitial gate (02 §13.2)
 // as a truth table driven by the fake clock.
 import { describe, expect, it } from 'vitest';
 import { createFakeClock } from '../../../src/app/clock';
@@ -22,7 +22,7 @@ import {
   spend,
 } from '../../../src/game/economy';
 import { defaults } from '../../../src/game/save';
-import type { SaveDataV1 } from '../../../src/game/types';
+import type { SaveData } from '../../../src/game/types';
 
 const T0 = Date.UTC(2026, 9, 6, 9, 0, 0);
 const SEC = 1000;
@@ -43,7 +43,7 @@ describe('economy ledger', () => {
   });
 
   it('spending below zero or a bad amount throws', () => {
-    const empty: SaveDataV1 = { ...defaults(T0), stock: { hints: 0, kitties: 1 } };
+    const empty: SaveData = { ...defaults(T0), stock: { hints: 0, kitties: 1 } };
     expect(() => spend(empty, 'hints')).toThrow(RangeError);
     expect(() => spend(empty, 'kitties', 2)).toThrow(RangeError);
     expect(() => spend(empty, 'kitties', -1)).toThrow(RangeError);
@@ -146,7 +146,7 @@ describe('interstitial gate truth table (fake clock)', () => {
     clock.advance(Math.round(row.sessionSec * 1000));
     const now = clock.now();
     const base = defaults(firstSeen);
-    const save: SaveDataV1 = {
+    const save: SaveData = {
       ...base,
       progress: { ...base.progress, completed: row.completed, level: row.completed + 1 },
       ads: { ...base.ads, lastAdAt: row.sinceAdSec === null ? 0 : now - Math.round(row.sinceAdSec * 1000) },
@@ -160,7 +160,7 @@ describe('interstitial gate truth table (fake clock)', () => {
   it('a completed rewarded ad resets the interstitial clock (resetsInterstitialClock)', () => {
     const clock = createFakeClock(T0);
     const sessionStartedAt = clock.now();
-    let save: SaveDataV1 = { ...defaults(T0), progress: { level: 31, completed: 30, best: {} } };
+    let save: SaveData = { ...defaults(T0), progress: { level: 31, completed: 30, best: {} } };
     clock.advance(10 * 60 * SEC);
     const gate = (): GateDecision => interstitialGate({ trigger: 'next_level', now: clock.now(), sessionStartedAt, save, interstitialSupported: true });
     expect(gate()).toBe('ok');
@@ -176,7 +176,7 @@ describe('interstitial gate truth table (fake clock)', () => {
 
   it('dailies do not count: only progress.completed is read', () => {
     const base = defaults(T0);
-    const save: SaveDataV1 = { ...base, progress: { ...base.progress, completed: 5 }, daily: { '2026-10-01': [1, 0, 0, 0], '2026-10-02': [1, 0, 0, 0], '2026-10-03': [1, 0, 0, 0], '2026-10-04': [1, 0, 0, 0], '2026-10-05': [1, 0, 0, 0] } };
+    const save: SaveData = { ...base, progress: { ...base.progress, completed: 5 }, daily: { '2026-10-01': [1, 0, 0, 0], '2026-10-02': [1, 0, 0, 0], '2026-10-03': [1, 0, 0, 0], '2026-10-04': [1, 0, 0, 0], '2026-10-05': [1, 0, 0, 0] } };
     expect(interstitialGate({ trigger: 'daily_done', now: T0 + DAY, sessionStartedAt: T0, save, interstitialSupported: true })).toBe('min_levels');
   });
 });

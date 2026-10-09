@@ -1,4 +1,4 @@
-// Owner: platform
+// Owner: D (Phase 2b; was platform)
 // Build tooling: size-check budgets (04 §9), zip-fbig rules (04 §10, 05 §5), upload-fbig request
 // shape (05 §12) against a fake fetch (it never touches the network).
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';

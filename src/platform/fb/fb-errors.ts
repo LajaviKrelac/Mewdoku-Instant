@@ -1,4 +1,4 @@
-// Owner: platform
+// Owner: D (Phase 2b; was platform)
 // Reading FB SDK rejections (05 §6.2, §7): they are { code, message } objects, but be defensive.
 
 /** The `code` of an SDK error, or null when the value carries none. */

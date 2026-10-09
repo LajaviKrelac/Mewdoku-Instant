@@ -1,4 +1,4 @@
-// Owner: ui-shell
+// Owner: B (Phase 2b; was ui-shell)
 // O1 hint card (02 §5, §9.1): bottom sheet with the explanation, [Apply] and [×]. The board's dimming
 // and focus outline come from GameView.highlight. Renders the 02 §9.1 templates via i18n.
 // The root holds a CLEAR full-screen scrim, so the dimmed board stays visible while a tap on it

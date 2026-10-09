@@ -1,4 +1,4 @@
-// Owner: ui-shell. O2 rewarded prompt variants (02 §13.3) and O5 settings callbacks (02 §14).
+// Owner: B (Phase 2b; was ui-shell). O2 rewarded prompt variants (02 §13.3) and O5 settings callbacks (02 §14).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Settings } from '../../../src/game/types';
 import { countdownText, createRewardedPrompt, type RewardedPromptProps } from '../../../src/ui/overlays/rewarded-prompt';

@@ -1,4 +1,4 @@
-// Owner: ui-shell
+// Owner: B (Phase 2b; was ui-shell)
 // Loading indicator (lead decision, Phase 2 integration): shown by the router when opening a level
 // or a daily takes longer than cfg.loading.indicatorDelayMs (a pack fetch, or a board generated on
 // the device). Three of our paw prints step in turn above "Getting the board ready…" (static under

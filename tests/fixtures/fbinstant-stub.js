@@ -1,4 +1,4 @@
-// Owner: platform
+// Owner: D (Phase 2b; was platform)
 // Fake FBInstant 8.0 (our own test double, written from the API subset in docs/phase1/05 and
 // src/platform/fb/fbinstant.d.ts). Two uses:
 //   1. Playwright fbig e2e: served in place of https://connect.facebook.net/en_US/fbinstant.8.0.js

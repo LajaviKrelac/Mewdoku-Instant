@@ -1,4 +1,4 @@
-// Owner: platform
+// Owner: D (Phase 2b; was platform)
 // fb-ads (05 §6, 04 §6.3): readiness timeout vs long show, error mapping, reload after every show or
 // failure with a bounded backoff, empty placement → unsupported; 'unsupported' latches the kind off,
 // preload respects the backoff, a load that never settles is capped.

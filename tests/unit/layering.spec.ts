@@ -1,4 +1,4 @@
-// Owner: app. Import-direction rules (04 §2, CONTRACTS §2), enforced by scanning import specifiers:
+// Owner: C. Import-direction rules (04 §2, CONTRACTS §2, phase2b CONTRACTS §3), enforced by scanning import specifiers:
 // static imports / re-exports, side-effect imports, dynamic import(), new URL(…, import.meta.url)
 // and import.meta.glob patterns. Also checks that engine/ and game/ stay pure (no DOM, timers,
 // randomness or I/O globals) and that nothing in the app bundle imports engine/solver-oracle.ts.
@@ -136,9 +136,14 @@ function layerOf(repoPath: string): Layer | null {
 const ORACLE = 'src/engine/solver-oracle.ts';
 
 /** null = allowed, otherwise the reason. */
+/** Build-generated modules (phase2b F0, lead): only i18n/ may import the locale loader map. */
+const VIRTUAL_MODULES: Readonly<Record<string, Layer>> = { 'virtual:mewdoku-locales': 'i18n' };
+
 function checkSrcEdge(e: Edge): string | null {
   const from = layerOf(e.from) as Layer;
   if (e.target === null) {
+    const owner = VIRTUAL_MODULES[e.spec];
+    if (owner !== undefined) return from === owner ? null : `${e.spec} is imported only by ${owner}/`;
     return e.typeOnly ? null : 'no runtime dependencies in src/ (bare or node: import)';
   }
   if (e.target === ORACLE) return 'engine/solver-oracle.ts is for tests only';
@@ -151,11 +156,14 @@ function checkSrcEdge(e: Edge): string | null {
     case 'env':
       return 'leaf module: imports nothing';
     case 'i18n':
-      return to === 'i18n' ? null : 'i18n/ imports only i18n/';
+      // phase2b F0 (lead): i18n may read app/config.ts (locale lists, rtl, timeouts); still a leaf otherwise.
+      return ['i18n', 'config'].includes(to) ? null : 'i18n/ imports only i18n/ and app/config.ts';
     case 'engine':
       return to === 'engine' ? null : 'engine/ imports only engine/';
     case 'game':
-      return ['engine', 'game', 'config', 'data'].includes(to) ? null : 'game/ imports only engine/, game/, app/config.ts, data/';
+      if (['engine', 'game', 'config', 'data'].includes(to)) return null;
+      // phase2b F0 (lead): EventDef.nameKey is an I18nKey, so game/ may import i18n TYPES (no values).
+      return to === 'i18n' && e.typeOnly ? null : 'game/ imports only engine/, game/, app/config.ts, data/ (and i18n types)';
     case 'platform':
       if (['platform', 'config', 'i18n'].includes(to)) return null;
       return isGameTypes && e.typeOnly ? null : 'platform/ imports platform/, app/config.ts, i18n/ and game/types.ts (types only)';
@@ -181,9 +189,12 @@ function checkScriptEdge(e: Edge): string | null {
     e.target.startsWith('src/engine/') ||
     e.target.startsWith('src/game/') ||
     e.target === 'src/app/config.ts' ||
-    e.target === 'src/ui/art/palette.ts';
+    e.target === 'src/ui/art/palette.ts' ||
+    // phase2b F0 (lead): i18n-check reads the catalogues; palette-check and verify-levels read the event data.
+    e.target.startsWith('src/i18n/') ||
+    e.target.startsWith('src/data/');
   if (e.target === ORACLE) return null; // verify-levels may cross-check with the oracle
-  return ok ? null : 'scripts import src/engine, src/game, src/app/config.ts, src/ui/art/palette.ts';
+  return ok ? null : 'scripts import src/engine, src/game, src/i18n, src/data, src/app/config.ts, src/ui/art/palette.ts';
 }
 
 const srcFiles = walk(SRC);
@@ -256,6 +267,13 @@ describe('layering (04 §2)', () => {
     expect(checkSrcEdge(edge('src/app/session.ts', ORACLE))).not.toBeNull();
     expect(checkSrcEdge(edge('src/app/boot.ts', '@platform'))).not.toBeNull();
     expect(checkSrcEdge(edge('src/app/config.ts', 'src/i18n/index.ts'))).not.toBeNull();
+    // phase2b F0 widenings (lead): game → i18n types only; i18n → app/config.ts; the locale loader map.
+    expect(checkSrcEdge(edge('src/game/events.ts', 'src/i18n/index.ts', true))).toBeNull();
+    expect(checkSrcEdge(edge('src/game/events.ts', 'src/i18n/index.ts'))).not.toBeNull();
+    expect(checkSrcEdge(edge('src/i18n/index.ts', 'src/app/config.ts'))).toBeNull();
+    expect(checkSrcEdge(edge('src/i18n/index.ts', 'src/app/store.ts'))).not.toBeNull();
+    expect(checkSrcEdge({ from: 'src/i18n/build-locales.ts', spec: 'virtual:mewdoku-locales', target: null, typeOnly: false })).toBeNull();
+    expect(checkSrcEdge({ from: 'src/app/boot.ts', spec: 'virtual:mewdoku-locales', target: null, typeOnly: false })).not.toBeNull();
     expect(checkSrcEdge(edge('src/app/boot.ts', null))).not.toBeNull();
     expect(stripSource("const a = '/*'; // x\nconst b = 1; /* y */", true)).toBe("const a = '  '; \nconst b = 1; ");
   });

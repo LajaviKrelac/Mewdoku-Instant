@@ -1,4 +1,4 @@
-// Owner: app
+// Owner: C (Phase 2b; was app)
 // Interstitial and rewarded flows (02 §13, 04 §5.7): input lock + mute (+ timer pause) from the
 // request until the ad settles; readiness timeout lives in the adapter; ads.showWatchdogMs safety
 // net here; ad_* analytics with the result; preload a new instance afterwards. Never throws.

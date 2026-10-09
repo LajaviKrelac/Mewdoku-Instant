@@ -1,4 +1,4 @@
-// Owner: ui-shell. A minimal recording WebAudio fake for the audio tests (jsdom has no AudioContext).
+// Owner: B (Phase 2b; was ui-shell). A minimal recording WebAudio fake for the audio tests (jsdom has no AudioContext).
 
 export class FakeParam {
   value: number;

@@ -1,4 +1,4 @@
-// Owner: app
+// Owner: C (Phase 2b; was app)
 // ~30-line promise RPC over postMessage (04 §5.5). Structured-clone payloads (typed arrays are fine).
 
 export interface MessagePortLike {

@@ -1,4 +1,4 @@
-// Owner: ui-shell
+// Owner: B (Phase 2b)
 // O2 rewarded-ad prompt (02 §5 O2, §13.3). Revive does not use it (the O4 button is the prompt).
 // The variant is chosen by the app when the dialog opens; the countdown variant ticks live.
 //
@@ -25,6 +25,12 @@ export interface RewardedPromptProps {
   onAccept(): void;
   /** Not now / OK / Esc. */
   onDecline(): void;
+  /**
+   * phase2b §2.8: the "Swap {price} fish" button (rewarded.swap), shown whenever balance ≥ price,
+   * between Watch video and Not now. Absent = no swap (the app omits it below the price).
+   * [F0: typed; B renders it]
+   */
+  readonly swap?: { readonly price: number; readonly balance: number; onSwap(): void };
 }
 
 /** Countdown refresh period; finer than 1 s so the display never skips a second. */

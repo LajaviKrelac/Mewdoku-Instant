@@ -1,4 +1,4 @@
-// Owner: foundation (engine workstream: additive only).
+// Owner: read-only (Phase 2b; was foundation).
 // Engine types (04 §4.1, 03). PURE: no DOM, no clocks, no platform.
 
 /** Cell index `r * n + c` (03 §2). */
@@ -6,8 +6,12 @@ export type CellIndex = number;
 export type Grade = 1 | 2 | 3 | 4 | 5;
 /** Inclusive grade band, e.g. [3, 4] = G3–G4 (02 §11.2). */
 export type GradeBand = readonly [lo: Grade, hi: Grade];
-/** T1 (tutorial), L37 (level 37), D2026-10-06 (daily). */
-export type PuzzleId = `T${number}` | `L${number}` | `D${string}`;
+/**
+ * T1 (tutorial), L37 (level 37), D2026-10-06 (daily), and since Phase 2b E<eventId>/<i> (event
+ * puzzle i, 0-based, of a limited-time event: phase2b §4.4, §9.1). The E form is the one additive
+ * engine change of 2b (lead, F0); engine/ is otherwise read-only in 2b.
+ */
+export type PuzzleId = `T${number}` | `L${number}` | `D${string}` | `E${string}`;
 
 /**
  * Board cell states, shared by the hint engine (03 §6) and the game reducer (04 §4.2).

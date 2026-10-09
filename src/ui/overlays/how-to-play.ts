@@ -1,4 +1,4 @@
-// Owner: ui-shell
+// Owner: B (Phase 2b; was ui-shell)
 // O6 how to play (02 §4.2, §14): three illustrated rules, controls, plus "I know how to play"
 // (only while the first-run tutorial runs) or "Replay tutorial" (after it is done).
 // The three rule pictures are small SVG boards drawn here (our own art, 06 §5).

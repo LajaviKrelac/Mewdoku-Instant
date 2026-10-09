@@ -1,4 +1,4 @@
-// Owner: game. Tutorial board, colours, step definitions, input filter and advance (02 §11.5).
+// Owner: C (Phase 2b; was game). Tutorial board, colours, step definitions, input filter and advance (02 §11.5).
 import { describe, expect, it } from 'vitest';
 import pack000 from '../../../src/data/levels/pack-000.json';
 import { checkRecord, recordToPuzzle } from '../../../src/engine/codec';

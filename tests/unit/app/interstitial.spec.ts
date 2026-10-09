@@ -1,11 +1,11 @@
-// Owner: app. Interstitial gating at the three transitions (02 §13.2, 04 §5.7 onNext): the gate is
+// Owner: C (Phase 2b; was app). Interstitial gating at the three transitions (02 §13.2, 04 §5.7 onNext): the gate is
 // checked first, the ad only when it passes, and the transition always goes ahead.
 import { describe, expect, it } from 'vitest';
-import type { SaveDataV1 } from '../../../src/game/types';
+import type { SaveData } from '../../../src/game/types';
 import { createHarness, loseGame, NOW, slice, startLevel, winGame, type Harness } from './harness';
 
 /** 10+ completed levels, first seen long ago, no recent ad: the gate passes once the grace is over. */
-const veteran = (s: SaveDataV1): SaveDataV1 => ({
+const veteran = (s: SaveData): SaveData => ({
   ...s,
   progress: { level: 15, completed: 14, best: {} },
   ads: { lastAdAt: 0, lastFallbackGrantAt: 0 },

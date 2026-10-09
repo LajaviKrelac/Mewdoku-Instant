@@ -1,4 +1,4 @@
-// Owner: foundation. DOM helpers (04 §3) and the component contracts every ui/ module implements.
+// Owner: read-only (Phase 2b; was foundation). DOM helpers (04 §3) and the component contracts every ui/ module implements.
 // No framework: components are plain functions returning a handle (View / OverlayView).
 
 // ─────────────────────────────── Component contracts ───────────────────────────────

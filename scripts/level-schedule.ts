@@ -1,4 +1,4 @@
-// Owner: content
+// Owner: read-only (Phase 2b; was content)
 // src/game/ramp.ts → one slot per level 2…shipped (02 §11.2 four-step algorithm, 03 §8.2), RNG
 // seeded with SEEDS.schedule. `tsx scripts/level-schedule.ts` prints the schedule summary.
 import { pathToFileURL } from 'node:url';

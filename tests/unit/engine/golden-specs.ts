@@ -1,4 +1,4 @@
-// Owner: engine
+// Owner: read-only (Phase 2b; was engine)
 // The 20 fixed generator specs behind tests/golden/gen-v1.json (03 §11.3): N = 5–12, ramp-like
 // bands, a daily slot, endless (sizePool) and substitute boards. Shared with the cross-engine
 // Playwright check, which replays the first five in Chromium.

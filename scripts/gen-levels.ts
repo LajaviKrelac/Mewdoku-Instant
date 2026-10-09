@@ -1,4 +1,4 @@
-// Owner: content
+// Owner: read-only (Phase 2b; was content)
 // Generates src/data/levels/pack-000…009.json + manifest.json (03 §8.3): per-slot generation with
 // SEEDS.level(L), shape filters, grade band, dedup across all packs; then the per-row effort sort
 // with SEEDS.sort noise and the no-three-in-a-row repair. Parallelisable with worker_threads.

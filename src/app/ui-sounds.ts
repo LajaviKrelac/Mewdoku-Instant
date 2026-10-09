@@ -1,4 +1,4 @@
-// Owner: app
+// Owner: C (Phase 2b; was app)
 // 02 §16 "UI button → click, vibration 4 ms" (lead decision, Phase 2 integration): ONE delegated
 // click listener on the app root. Every enabled <button> under it plays the 'ui' sound and the
 // cfg.haptics.ui pulse, except the board's cells, whose taps have their own sounds (mark, cat, …).

@@ -1,4 +1,4 @@
-// Owner: ui-board. Gesture recogniser with synthetic pointer streams (02 §6.1, 04 §11), and the
+// Owner: B (Phase 2b; was ui-board). Gesture recogniser with synthetic pointer streams (02 §6.1, 04 §11), and the
 // keyboard's Enter cell lock (02 §6.2, §6.3).
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { cfg } from '../../../src/app/config';

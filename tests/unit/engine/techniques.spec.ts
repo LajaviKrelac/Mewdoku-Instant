@@ -1,4 +1,4 @@
-// Owner: engine
+// Owner: read-only (Phase 2b; was engine)
 // 03 §5.2 / §11.1 techniques: one hand-checked fixture per technique (lower levels make no
 // progress), and the optimised finders against the naive reference (reference.ts) on thousands of
 // states, which pins the exact definitions, scan orders and the L4 bound k ≤ ⌊m/2⌋.

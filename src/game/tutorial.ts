@@ -1,4 +1,4 @@
-// Owner: game
+// Owner: C (Phase 2b; was game)
 // The tutorial board, fixed colours and the six-step script (02 §11.5, 04 §4.2 "Tutorial input filter").
 import type { CellIndex, LevelRecord, Puzzle } from '../engine/types';
 import { CellState, type Action, type GameState } from './types';

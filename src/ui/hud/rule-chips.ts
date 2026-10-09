@@ -1,4 +1,4 @@
-// Owner: ui-board
+// Owner: A (Phase 2b; was ui-board)
 // The three rule chips (icon + short text; icons only in compact mode). Wording: i18n game.chip.*.
 // Classes: .rule-chips[data-compact] > .chip.chip--colours|lines|space[data-hl] > .icon .chip__text
 import { t } from '../../i18n';

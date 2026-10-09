@@ -1,4 +1,4 @@
-// Owner: engine
+// Owner: read-only (Phase 2b; was engine)
 // Shared helpers for the engine unit tests (03 §11.1): deterministic puzzle sets, random region
 // maps and a test-size knob. Not a spec file.
 import { canonicalLabels, decodeRegions, decodeSolution } from '../../../src/engine/codec';

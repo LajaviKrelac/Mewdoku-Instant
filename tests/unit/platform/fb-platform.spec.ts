@@ -1,11 +1,11 @@
-// Owner: platform
+// Owner: D (Phase 2b; was platform)
 // FB adapter lifecycle and capabilities (05 §4, 04 §6.3): initializeAsync is the first SDK call,
 // progress reaches 100 before startGameAsync, locale read after start, capabilities from
 // getSupportedAPIs + placement IDs, onPause, haptics, player ID.
 import { describe, expect, it } from 'vitest';
 import { createFakeClock } from '../../../src/app/clock';
 import { createFbPlatform } from '../../../src/platform/fb';
-import type { SaveDataV1 } from '../../../src/game/types';
+import type { SaveData } from '../../../src/game/types';
 import { createStub, MemoryStorage, type StubConfig } from './helpers';
 
 const PLACEMENTS = { interstitial: 'int-1', rewarded: 'rew-1' };
@@ -144,6 +144,8 @@ describe('createFbPlatform: capabilities', () => {
       share: false,
       payments: false,
       haptics: true,
+      overlayViews: false, // phase2b §5.4 / §5.6: D derives these from the probe
+      groups: false,
     });
   });
 
@@ -188,7 +190,7 @@ describe('createFbPlatform: storage and analytics wiring', () => {
     await platform.init();
     const raw = await platform.storage.load();
     expect(raw.cloud).toEqual({ v: 1, sessions: 3 });
-    await platform.storage.save({ v: 1, sessions: 4 } as unknown as SaveDataV1, { cloud: 'flush' });
+    await platform.storage.save({ v: 1, sessions: 4 } as unknown as SaveData, { cloud: 'flush' });
     expect(storage.getItem('mewdoku.save.v1:p-7')).toBe(JSON.stringify({ v: 1, sessions: 4 }));
     expect(storage.getItem('mewdoku.save.v1')).toBeNull(); // the unscoped key is not this player's mirror
     expect(control.count('player.flushDataAsync')).toBe(1);
@@ -205,10 +207,10 @@ describe('createFbPlatform: storage and analytics wiring', () => {
       return { platform, control, raw: await platform.storage.load() };
     };
     const a = await session('player-A', { save: { v: 1, sessions: 40 } });
-    await a.platform.storage.save({ v: 1, sessions: 41 } as unknown as SaveDataV1, { cloud: 'now' });
+    await a.platform.storage.save({ v: 1, sessions: 41 } as unknown as SaveData, { cloud: 'now' });
     const b = await session('player-B', null);
     expect(b.raw).toEqual({ local: null, cloud: null, corrupt: false }); // a new player: nothing of A's
-    await b.platform.storage.save({ v: 1, sessions: 1 } as unknown as SaveDataV1, { cloud: 'now' });
+    await b.platform.storage.save({ v: 1, sessions: 1 } as unknown as SaveData, { cloud: 'now' });
     expect(b.control.playerData()).toEqual({ save: { v: 1, sessions: 1 } });
     const again = await session('player-A', { save: { v: 1, sessions: 41 } });
     expect(again.raw.local).toEqual({ v: 1, sessions: 41 }); // A's own mirror survived B's session

@@ -1,11 +1,11 @@
-// Owner: platform
+// Owner: D (Phase 2b; was platform)
 // fb-storage (05 §7, 04 §7.1): cloud + mirror on load, mirror written at once, debounced
 // setDataAsync, flush only for 'flush', retry/backoff, coalescing, no cloud writes after a failed read
 // until the late cloud copy was merged, the unmerged-mirror marker, per-player mirrors.
 import { describe, expect, it } from 'vitest';
 import { createFakeClock } from '../../../src/app/clock';
 import { cfg } from '../../../src/app/config';
-import type { SaveDataV1 } from '../../../src/game/types';
+import type { SaveData } from '../../../src/game/types';
 import { createFbStorage } from '../../../src/platform/fb/fb-storage';
 import type { ExternalSave } from '../../../src/platform/types';
 import { createLocalFlag, createLocalStore } from '../../../src/platform/web/local-storage';
@@ -14,8 +14,8 @@ import { createStub, drain, MemoryStorage, track, type StubConfig } from './help
 const KEY = cfg.save.storageKey;
 
 /** Only the fields the adapter cares about (it never inspects the document). */
-function doc(n: number): SaveDataV1 {
-  return { v: 1, updatedAt: n, sessions: n } as unknown as SaveDataV1;
+function doc(n: number): SaveData {
+  return { v: 1, updatedAt: n, sessions: n } as unknown as SaveData;
 }
 
 function setup(config: StubConfig = {}, opts: { cloudEnabled?: () => boolean; storage?: MemoryStorage } = {}) {
@@ -31,7 +31,7 @@ function setup(config: StubConfig = {}, opts: { cloudEnabled?: () => boolean; st
     ...(opts.cloudEnabled ? { cloudEnabled: opts.cloudEnabled } : {}),
   });
   const sent = (): number[] =>
-    control.find('player.setDataAsync').map((c) => ((c.args[0] as { save: SaveDataV1 }).save as unknown as { sessions: number }).sessions);
+    control.find('player.setDataAsync').map((c) => ((c.args[0] as { save: SaveData }).save as unknown as { sessions: number }).sessions);
   return { clock, control, storage, store, logs, sent };
 }
 
@@ -255,7 +255,7 @@ function wired(
   });
   const seen: ExternalSave[] = [];
   const sent = (): number[] =>
-    control.find('player.setDataAsync').map((c) => ((c.args[0] as { save: SaveDataV1 }).save as unknown as { sessions: number }).sessions);
+    control.find('player.setDataAsync').map((c) => ((c.args[0] as { save: SaveData }).save as unknown as { sessions: number }).sessions);
   return { clock, control, store, storage, seen, sent, listen: () => store.onExternalSave?.((c) => seen.push(c)) };
 }
 

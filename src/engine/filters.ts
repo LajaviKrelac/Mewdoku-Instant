@@ -1,4 +1,4 @@
-// Owner: engine
+// Owner: read-only (Phase 2b; was engine)
 // Shape filters and the 8-symmetry canonical key for duplicate detection (03 §4.5, §8.4). PURE.
 import { REGION_ALPHABET } from './codec';
 

@@ -1,4 +1,4 @@
-// Owner: ui-shell
+// Owner: B (Phase 2b; was ui-shell)
 // S0 web splash (02 §5): wordmark, sleeping cat, progress bar. FBIG uses Facebook's own loader.
 //
 // Classes: .screen.screen--boot > .boot__wordmark .boot__art .boot__progress(.boot__bar .boot__fill)

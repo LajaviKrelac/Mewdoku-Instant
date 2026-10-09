@@ -1,4 +1,4 @@
-// Owner: ui-shell
+// Owner: B (Phase 2b; was ui-shell)
 // O8 tutorial coach (02 §5 O8, §11.5): dims everything except the focus, pulsing outline, animated
 // hand, text card (+ "Got it" in step 2). NON-modal: the board stays interactive under it.
 // The root ignores pointer events (only the card takes them); the dimmer is an SVG mask with one

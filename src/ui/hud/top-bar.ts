@@ -1,7 +1,9 @@
-// Owner: ui-board
+// Owner: A (Phase 2b)
 // Top bar (02 §5): title + Hard badge, Home and Gear (and Trophy on Home if leaderboards exist) at
 // the top RIGHT; the top-left 64×64 px stays empty in the FBIG build (FB safe zone, 02 §19).
-// Classes: .top-bar[data-fb-safe] > .top-bar__lead .top-bar__title(.top-bar__text .badge--hard)
+// Phase 2b (F0, phase2b §2.5, §12.3): an optional `lead` slot right after the safe zone (at the
+// inline start on web) where B puts the Home fish pill. A styles it (hud.css).
+// Classes: .top-bar[data-fb-safe] > .top-bar__lead .top-bar__slot? .top-bar__title(.top-bar__text .badge--hard)
 //          .top-bar__actions > .btn.btn--icon.top-bar__btn--trophy|home|settings
 import { t } from '../../i18n';
 import { icon, type IconSymbol } from '../art/sprite';
@@ -33,7 +35,13 @@ function iconButton(name: string, sym: IconSymbol, label: string, onPress: () =>
   return b;
 }
 
-export function createTopBar(props: TopBarProps, cb: TopBarCallbacks): View<TopBarProps> {
+/** Optional content slots (phase2b §12.3 A → B). */
+export interface TopBarSlots {
+  /** Placed after the FB safe zone (the Home fish pill). The caller owns and destroys it. */
+  readonly lead?: HTMLElement;
+}
+
+export function createTopBar(props: TopBarProps, cb: TopBarCallbacks, slots?: TopBarSlots): View<TopBarProps> {
   const el = document.createElement('header');
   el.className = 'top-bar';
   const lead = document.createElement('div');
@@ -54,6 +62,12 @@ export function createTopBar(props: TopBarProps, cb: TopBarCallbacks): View<TopB
   const gear = iconButton('settings', 'icon-gear', t('common.settings'), () => cb.onSettings());
   actions.append(trophy, home, gear);
   el.append(lead, title, actions);
+  if (slots?.lead) {
+    const slot = document.createElement('div');
+    slot.className = 'top-bar__slot';
+    slot.appendChild(slots.lead);
+    el.insertBefore(slot, title);
+  }
 
   let cur: TopBarProps | null = null;
   const render = (p: TopBarProps): void => {

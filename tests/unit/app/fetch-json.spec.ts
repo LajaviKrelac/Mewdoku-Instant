@@ -1,4 +1,4 @@
-// Owner: app. Pack / daily-month fetch with a per-request timeout (RP-1, 04 §8): a request that never
+// Owner: C (Phase 2b; was app). Pack / daily-month fetch with a per-request timeout (RP-1, 04 §8): a request that never
 // answers is aborted and rejects, so the levels repo's retry → substitute path runs.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cfg } from '../../../src/app/config';

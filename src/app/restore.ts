@@ -1,4 +1,4 @@
-// Owner: app
+// Owner: C (Phase 2b; was app)
 // Launch-time save handling (04 §5.1, §7.2–7.3; 02 §15 "Restoring on launch"): migrate the local and
 // cloud copies, merge them, and apply restore steps 1–3 (stale daily, failed validation). Steps 4–5
 // (full board → win flow, 0 hearts → O4) take effect when the board is opened (session.start).
@@ -6,13 +6,13 @@ import type { Puzzle } from '../engine/types';
 import type { LevelsRepo } from '../game/levels-repo';
 import { dateKeyOf, isEndless } from '../game/progression';
 import { clearStaleSlots, merge, migrateReport, validateInProgress } from '../game/save';
-import type { InProgressV1, SaveDataV1 } from '../game/types';
+import type { InProgressV2, SaveData } from '../game/types';
 import type { ExternalSave, RawSave } from '../platform/types';
 import { cfg, type GameConfig } from './config';
 import { withSlot } from './session-parts';
 
 export interface LoadedSave {
-  readonly save: SaveDataV1;
+  readonly save: SaveData;
   /** `where` values for the save_corrupt analytics event (02 §20). */
   readonly corrupt: readonly string[];
 }
@@ -23,8 +23,8 @@ export interface LoadedSave {
  * stale-slot clean-up are unchanged. Used when `other` was written by a session that never merged
  * `preferred` (PLAT-1): its fresher updatedAt says nothing about which copy the player last used.
  */
-export function mergePreferring(preferred: SaveDataV1, other: SaveDataV1): SaveDataV1 {
-  const older: SaveDataV1 = { ...other, updatedAt: Math.min(other.updatedAt, preferred.updatedAt - 1) };
+export function mergePreferring(preferred: SaveData, other: SaveData): SaveData {
+  const older: SaveData = { ...other, updatedAt: Math.min(other.updatedAt, preferred.updatedAt - 1) };
   const merged = merge(older, preferred);
   return { ...merged, updatedAt: Math.max(other.updatedAt, preferred.updatedAt) };
 }
@@ -57,14 +57,14 @@ export function loadSave(raw: RawSave, now: number, c: GameConfig = cfg): Loaded
  * finished late (it wins the newest-wins fields, PLAT-1) or another tab's write (plain merge, RP-5).
  * An empty or unreadable copy changes nothing (the live save is returned as is).
  */
-export function mergeArrived(live: SaveDataV1, copy: ExternalSave, now: number, c: GameConfig = cfg): SaveDataV1 {
+export function mergeArrived(live: SaveData, copy: ExternalSave, now: number, c: GameConfig = cfg): SaveData {
   const r = migrateReport(copy.value, now, c);
   if (r.outcome === 'empty' || r.outcome === 'reset') return live;
   return copy.source === 'cloud' ? mergePreferring(r.save, live) : merge(live, r.save);
 }
 
 export interface RestoreResult {
-  readonly save: SaveDataV1;
+  readonly save: SaveData;
   /** Slots cleared by 02 §15 steps 2–3, for analytics/logging. */
   readonly cleared: readonly ('level' | 'daily')[];
 }
@@ -74,7 +74,7 @@ export interface RestoreContext {
   readonly today: string;
   readonly levels: LevelsRepo;
   /** Replaces the puzzle-based check (tests, or a caller that already holds the puzzles). */
-  validate?(slot: InProgressV1): boolean;
+  validate?(slot: InProgressV2): boolean;
   readonly config?: GameConfig;
 }
 
@@ -88,7 +88,7 @@ function levelOfId(id: string): number | null {
  * or the daily record. null when it would need on-device generation (endless levels) or a
  * substitute board: then the session validates the slot when the board is opened.
  */
-async function puzzleForSlot(slot: InProgressV1, kind: 'level' | 'daily', ctx: RestoreContext): Promise<Puzzle | null> {
+async function puzzleForSlot(slot: InProgressV2, kind: 'level' | 'daily', ctx: RestoreContext): Promise<Puzzle | null> {
   const c = ctx.config ?? cfg;
   if (kind === 'level') {
     const level = levelOfId(slot.id);
@@ -103,7 +103,7 @@ async function puzzleForSlot(slot: InProgressV1, kind: 'level' | 'daily', ctx: R
 }
 
 /** 02 §15 restore steps 1–3 (stale daily, failed validation). Does not navigate (04 §5.1). */
-export async function applyRestoreRules(save: SaveDataV1, ctx: RestoreContext): Promise<RestoreResult> {
+export async function applyRestoreRules(save: SaveData, ctx: RestoreContext): Promise<RestoreResult> {
   const c = ctx.config ?? cfg;
   const cleared: ('level' | 'daily')[] = [];
   let out = save;

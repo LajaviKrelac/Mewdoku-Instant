@@ -1,4 +1,4 @@
-// Owner: app
+// Owner: C (Phase 2b; was app)
 // Building blocks of the session (04 §5.2): the TICK timer with its stack of pause reasons, one-shot
 // board timers, the feedback player (sfx, haptics, announcer; never throws), and the overlay props
 // builders for O3 / O4 / O7 / O8.
@@ -6,7 +6,7 @@ import type { MuteReason } from '../audio/audio-engine';
 import type { HintStep, Puzzle } from '../engine/types';
 import { localMidnightAfter, msUntilLocalMidnight } from '../game/progression';
 import { tutorialStep, type TutorialStepIndex } from '../game/tutorial';
-import type { GameState, InProgressV1, SaveDataV1 } from '../game/types';
+import type { GameState, InProgressV2, SaveData } from '../game/types';
 import { PRAISE_COUNT, t } from '../i18n';
 import { PALETTE_SIZE, regionColorsFor } from '../ui/art/palette';
 import type { CoachProps } from '../ui/overlays/coach';
@@ -153,13 +153,16 @@ export function createFeedbackPlayer(
 
 // ─────────────────────────────── small helpers ───────────────────────────────
 
+/** An in-progress slot of the save (phase2b §9.1 adds 'event'). */
+export type SaveSlot = keyof SaveData['inProgress'];
+
 /**
  * The save with `slot` set to `value`. A level board is only ever written to the level slot when it
  * is the current level's (`L{progress.level}`): after a late cloud merge moved progress on, the
  * session still playing the older level must not overwrite the newer level's board (PLAT-1). The
  * save is then returned unchanged. Clearing (null) is always allowed; see withoutSlot.
  */
-export function withSlot(save: SaveDataV1, slot: 'level' | 'daily', value: InProgressV1 | null): SaveDataV1 {
+export function withSlot(save: SaveData, slot: SaveSlot, value: InProgressV2 | null): SaveData {
   if (save.inProgress[slot] === value) return save;
   if (slot === 'level' && value !== null && value.id !== `L${save.progress.level}`) return save;
   return { ...save, inProgress: { ...save.inProgress, [slot]: value } };
@@ -169,7 +172,7 @@ export function withSlot(save: SaveDataV1, slot: 'level' | 'daily', value: InPro
  * Clears `slot` for the session playing `puzzleId`, except a level slot that holds another level's
  * board for the current level (a late cloud merge, PLAT-1): that board is not this session's to drop.
  */
-export function withoutSlot(save: SaveDataV1, slot: 'level' | 'daily', puzzleId: string): SaveDataV1 {
+export function withoutSlot(save: SaveData, slot: SaveSlot, puzzleId: string): SaveData {
   const cur = save.inProgress[slot];
   if (cur === null) return save;
   if (slot === 'level' && cur.id !== puzzleId && cur.id === `L${save.progress.level}`) return save;

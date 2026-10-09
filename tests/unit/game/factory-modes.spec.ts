@@ -1,15 +1,15 @@
-// Owner: game. newGame / restoreGame / toInProgress (04 §4.2, §7.2; 02 §15 restore steps 3–6) and the mode registry.
+// Owner: C (Phase 2b; was game). newGame / restoreGame / toInProgress (04 §4.2, §7.2; 02 §15 restore steps 3–6) and the mode registry.
 import { describe, expect, it } from 'vitest';
 import { cfg, mergeConfig } from '../../../src/app/config';
 import { countCats, newGame, regionsDoneMask, restoreGame, toInProgress } from '../../../src/game/factory';
 import { fixedColorsFor, getMode, MODES, rulesFor } from '../../../src/game/modes';
 import { reduce } from '../../../src/game/reducer';
 import { encodeCells } from '../../../src/game/save';
-import { CellState, type InProgressV1, type ModeId } from '../../../src/game/types';
+import { CellState, type InProgressV2, type ModeId } from '../../../src/game/types';
 import { cell, dbl, lostState, makePuzzle, P5, P5G, playing, R5, run, S5, SOL5, tap, wonState, WRONG5 } from './fixtures';
 
 /** A valid level slot for P5 built from a real game state. */
-function slotOf(actions: Parameters<typeof run>[1], savedAt = 123): InProgressV1 {
+function slotOf(actions: Parameters<typeof run>[1], savedAt = 123): InProgressV2 {
   return toInProgress(run(playing(), actions).state, savedAt);
 }
 
@@ -100,7 +100,7 @@ describe('toInProgress / restoreGame', () => {
     expect(g.rules).toEqual(rulesFor('daily'));
   });
 
-  const INVALID: { name: string; slot: () => InProgressV1 }[] = [
+  const INVALID: { name: string; slot: () => InProgressV2 }[] = [
     { name: 'id of another puzzle', slot: () => ({ ...slotOf([]), id: 'L3' }) },
     { name: 'wrong mode', slot: () => ({ ...slotOf([]), mode: 'daily' }) },
     { name: 'short cells', slot: () => ({ ...slotOf([]), cells: '0'.repeat(24) }) },
@@ -121,7 +121,7 @@ describe('toInProgress / restoreGame', () => {
     expect(slot.hearts).toBe(3);
     expect(restoreGame(P5, slot, rules)).toMatchObject({ hearts: 3, mistakes: 1, rules });
     expect(() => restoreGame(P5, slot)).toThrow(/hearts/);
-    expect(() => restoreGame(P5, null as unknown as InProgressV1)).toThrow(RangeError);
+    expect(() => restoreGame(P5, null as unknown as InProgressV2)).toThrow(RangeError);
     expect(() => restoreGame(makePuzzle('T1', R5, S5), slotOf([]))).toThrow(RangeError);
   });
 

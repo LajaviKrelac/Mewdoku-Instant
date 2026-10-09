@@ -1,4 +1,4 @@
-// Owner: app
+// Owner: C (Phase 2b; was app)
 // Public shape of the level session (04 §3, §5.2): the commands screens and overlays call, the
 // Session handle, and its dependencies. Implemented by session.ts.
 import type { CellIndex, Puzzle } from '../engine/types';

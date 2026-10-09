@@ -1,4 +1,4 @@
-// Owner: platform
+// Owner: D (Phase 2b; was platform)
 // Safe localStorage JSON I/O (04 §6.2, §7.2): try/catch everywhere, in-memory fallback on failure,
 // unparseable data backed up under save.corruptKeyPrefix + timestamp (keeping the last corruptKeep).
 import { cfg, type GameConfig } from '../../app/config';

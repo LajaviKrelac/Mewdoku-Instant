@@ -1,15 +1,15 @@
-// Owner: app
+// Owner: C (Phase 2b; was app)
 // Web build happy and sad paths (04 §11 cases 1–12) against dist/e2e (window.__mewdoku hooks on).
 // Saves are seeded through the hooks and applied with a reload; the mock ads are steered by ?ads=.
 import { expect, test, type Page } from '@playwright/test';
 import type { E2EHooks } from '../../src/app/boot';
 import { defaults } from '../../src/game/save';
-import type { InProgressV1, SaveDataV1 } from '../../src/game/types';
+import type { InProgressV2, SaveData } from '../../src/game/types';
 
 type TestWindow = Window & { __mewdoku?: E2EHooks };
 
 const NOW = Date.now();
-const returning = (patch: Partial<SaveDataV1> = {}): SaveDataV1 => ({
+const returning = (patch: Partial<SaveData> = {}): SaveData => ({
   ...defaults(NOW - 3 * 86_400_000),
   tutorialDone: true,
   sessions: 3,
@@ -34,7 +34,7 @@ async function ready(page: Page, screen?: 'home' | 'game'): Promise<void> {
   );
 }
 
-async function open(page: Page, query = '', save?: SaveDataV1): Promise<void> {
+async function open(page: Page, query = '', save?: SaveData): Promise<void> {
   await page.goto(`/${query}`);
   await ready(page);
   if (save) {
@@ -210,7 +210,7 @@ test('10 · ads unsupported: a free hint at 0, then the countdown', async ({ pag
 });
 
 test('11 · a level and a daily in progress are both restored', async ({ page }) => {
-  const slot = (id: InProgressV1['id'], mode: 'level' | 'daily', n: number): InProgressV1 => ({
+  const slot = (id: InProgressV2['id'], mode: 'level' | 'daily', n: number): InProgressV2 => ({
     id,
     mode,
     cells: `1${'0'.repeat(n * n - 1)}`,
@@ -232,7 +232,7 @@ test('11 · a level and a daily in progress are both restored', async ({ page })
   const dn = (await game(page))?.n ?? 0;
   const seeded = returning({
     progress: { level: 25, completed: 24, best: {} },
-    inProgress: { level: slot('L25', 'level', ln), daily: slot(`D${today()}`, 'daily', dn) },
+    inProgress: { level: slot('L25', 'level', ln), daily: slot(`D${today()}`, 'daily', dn), event: null },
   });
   await open(page, '', seeded);
   await playLevel(page);

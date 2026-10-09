@@ -1,4 +1,4 @@
-// Owner: platform
+// Owner: D (Phase 2b; was platform)
 // FB player data (05 §7, 04 §7.1/§7.3): getDataAsync(['save']) + local mirror on load; every write
 // mirrored locally at once; setDataAsync debounced cfg.save.cloudDebounceMs; flushDataAsync only for
 // 'flush'; NETWORK_FAILURE retried with backoff; PENDING_REQUEST coalesced.
@@ -28,7 +28,7 @@
 //   we cannot tell whose it is; dropping it is the safe choice (the cloud copy holds the player's data,
 //   and no build with an unscoped FB mirror was ever released).
 import { cfg, type GameConfig } from '../../app/config';
-import type { SaveDataV1 } from '../../game/types';
+import type { SaveData } from '../../game/types';
 import { sleep, within } from '../shared/timers';
 import type { ExternalSave, PlatformStorage, PlatformTimers, RawSave } from '../types';
 import type { LocalFlag, LocalStore } from '../web/local-storage';
@@ -96,7 +96,7 @@ export function createFbStorage(sdk: FBInstantSDK, deps: FbStorageDeps): Platfor
   let markerOn = false;
   /** true once this session's save merged the cloud copy (cloud writes are allowed only then). */
   let cloudReadOk = false;
-  let pending: SaveDataV1 | null = null;
+  let pending: SaveData | null = null;
   let wantFlush = false;
   let debounce: number | null = null;
   let pump: Promise<void> | null = null;
@@ -155,7 +155,7 @@ export function createFbStorage(sdk: FBInstantSDK, deps: FbStorageDeps): Platfor
     try {
       for (;;) {
         if (pending) {
-          let doc: SaveDataV1 = pending;
+          let doc: SaveData = pending;
           pending = null;
           const r = await attempt(
             'setDataAsync',

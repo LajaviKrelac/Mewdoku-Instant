@@ -1,4 +1,4 @@
-// Owner: app
+// Owner: C (Phase 2b; was app)
 // Engine worker (04 §5.5): generate(spec) for endless levels, missing daily months and substitute
 // boards; getHint() when the main-thread budget is exceeded (03 §6). Created lazily, never at boot.
 // getHint() and pickKittyCell() also answer when the main thread cannot load its hint chunk (04 §8).

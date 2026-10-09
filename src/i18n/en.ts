@@ -1,9 +1,20 @@
-// Owner: foundation (ADDITIVE-SHARED: append new keys only; never rename or remove a key).
+// Owner: E (the aggregator and the Phase 2 keys below; never rename or remove a key).
 // Every user-facing string (02 §21). All copy is our own (06 §3): never paste or paraphrase the
 // original's store text, tutorial lines, hint sentences, praise words or rule-chip wording.
 // Placeholders are {name}; t() type-checks them. Plurals use the `.one` / `.other` suffix pair.
+//
+// Phase 2b (phase2b §6.7, §12.1 F0 item 7): new keys live in per-owner files under ./en/ and are
+// spread into `en` below, so the workstreams never edit the same file:
+//   en/art.ts (A) · en/ui-2b.ts (B) · en/events.ts (C) · en/platform.ts (D) · en/i18n.ts (E).
+// A key must exist in exactly one file (tests/unit/sanity.spec.ts checks it).
+import { enArt } from './en/art';
+import { enEvents } from './en/events';
+import { enI18n } from './en/i18n';
+import { enPlatform } from './en/platform';
+import { enUi2b } from './en/ui-2b';
 
-export const en = {
+/** The Phase 2 catalogue (02 §21), E-owned. Values may change; keys and placeholders never do. */
+export const enCore = {
   // ── App and boot (S0) ──────────────────────────────────────────────────────
   'app.name': 'Mewdoku',
   'app.tagline': 'A calm cat logic puzzle',
@@ -227,10 +238,11 @@ export const en = {
   'a11y.kitty': 'The kitty found a cat. {placed} of {n}.',
   'a11y.hint': 'Hint: {text}',
   'a11y.hintApplied': 'Hint applied.',
-  'a11y.mascot': 'A ginger cat',
-  'a11y.illustration.boot': 'A ginger cat having a nap',
-  'a11y.illustration.win': 'A ginger cat in a party hat',
-  'a11y.illustration.fail': 'A ginger cat with a little bandage',
+  // phase2b Appendix A: the ginger cat is retired; these four describe Tux (values changed at F0).
+  'a11y.mascot': 'A black-and-white cat',
+  'a11y.illustration.boot': 'A black-and-white cat having a nap',
+  'a11y.illustration.win': 'A black-and-white cat leaping with a fish',
+  'a11y.illustration.fail': 'A black-and-white cat hiding its eyes',
 
   // ── Dates and durations ────────────────────────────────────────────────────
   'date.short': '{weekday} {day} {month}',
@@ -281,6 +293,12 @@ export const en = {
   'about.code': 'Includes a loader helper from Vite, © 2019-present VoidZero Inc. and Vite contributors, MIT License.',
   'about.codeLicence': 'MIT licence',
 } as const;
+
+/** The English catalogue: the Phase 2 keys plus every owner's Phase 2b file. */
+export const en = { ...enCore, ...enArt, ...enUi2b, ...enEvents, ...enPlatform, ...enI18n } as const;
+
+/** The per-owner parts of `en`, for the disjointness check (sanity.spec.ts). */
+export const EN_PARTS = { enCore, enArt, enUi2b, enEvents, enPlatform, enI18n } as const;
 
 export type En = typeof en;
 export type I18nKey = keyof En;

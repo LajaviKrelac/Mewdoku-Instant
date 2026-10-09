@@ -1,4 +1,4 @@
-// Owner: game. Hint open/apply/close (02 §9.1 step 4) and kitty (02 §9.2) in the reducer (04 §4.2).
+// Owner: C (Phase 2b; was game). Hint open/apply/close (02 §9.1 step 4) and kitty (02 §9.2) in the reducer (04 §4.2).
 import { describe, expect, it } from 'vitest';
 import { reduce } from '../../../src/game/reducer';
 import { CellState, type GameState, type Move } from '../../../src/game/types';

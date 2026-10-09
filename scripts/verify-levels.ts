@@ -1,4 +1,4 @@
-// Owner: content
+// Owner: C (Phase 2b; was content)
 // CI re-verification of every shipped record (03 §11.2): structure, uniqueness, grade reproducible
 // and tight, band, shape filters, no duplicates, contiguous numbering, hard/breather schedule,
 // manifest SHA-256. Exit code 1 on any failure. Also home of the pack file format (03 §9.2) and the

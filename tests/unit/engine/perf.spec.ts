@@ -1,4 +1,4 @@
-// Owner: engine
+// Owner: read-only (Phase 2b; was engine)
 // Performance smoke (03 §10) for N = 5–12 with generous bounds: catches order-of-magnitude
 // regressions (e.g. an exponential solver) without flaking on a busy CI machine. The real numbers
 // are benchmarked outside the test run and reported in docs (03 §11.4).

@@ -1,4 +1,4 @@
-// Owner: ui-board
+// Owner: A (Phase 2b; was ui-board)
 // Larger poses of our ginger loaf cat (02 §17.3): home mascot (idle), boot (sleeping), win (party
 // hat), fail (small bandage), daily (happy), tutorial. Never a trumpet cat or a crying cat (06 §3).
 // Drawn on a 200-unit grid around the same head as the board symbols (art/cat-parts.ts).

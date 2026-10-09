@@ -1,10 +1,10 @@
-// Owner: app
+// Owner: C (Phase 2b; was app)
 // Home and the shared modals (02 §4–5, §12, §14): S1 Home with its callbacks, O5 Settings (applied at
 // once, saved with 'touch'), O6 How to play (skip / replay tutorial), O7 reopened from a solved daily
 // card, and the stale-daily rule applied whenever Home is shown.
 import type { AudioEngine } from '../audio/audio-engine';
 import { dailyCardState, dateKeyOf, localDateKey, localMidnightAfter, msUntilLocalMidnight } from '../game/progression';
-import type { SaveDataV1, Settings } from '../game/types';
+import type { SaveData, Settings } from '../game/types';
 import type { PlatformAdapter } from '../platform/types';
 import oflUrl from '../assets/fonts/OFL.txt?url';
 import { t } from '../i18n';
@@ -49,7 +49,7 @@ export interface Shell {
 }
 
 /** 02 §12: a daily slot for a date before today is cleared (Home shown, or at launch). */
-export function clearStaleDaily(save: SaveDataV1, today: string): SaveDataV1 {
+export function clearStaleDaily(save: SaveData, today: string): SaveData {
   const slot = save.inProgress.daily;
   if (!slot) return save;
   const date = dateKeyOf(slot.id);
@@ -59,8 +59,8 @@ export function clearStaleDaily(save: SaveDataV1, today: string): SaveDataV1 {
 export function createShell(deps: ShellDeps): Shell {
   const c = deps.config ?? cfg;
   const { store, router, clock, saves } = deps;
-  const save = (): SaveDataV1 => store.get().save;
-  const updateSave = (fn: (s: SaveDataV1) => SaveDataV1): void =>
+  const save = (): SaveData => store.get().save;
+  const updateSave = (fn: (s: SaveData) => SaveData): void =>
     store.update((s) => {
       const next = fn(s.save);
       return next === s.save ? s : { ...s, save: next };
@@ -137,6 +137,8 @@ export function createShell(deps: ShellDeps): Shell {
         onSettings: () => shell.openSettings(),
         onTrophy: () => undefined, // Phase 4 (leaderboards); hidden while unsupported
         onCard: () => undefined, // Phase 3 hook
+        onShop: () => undefined, // TODO(C, phase2b §8.5): open the shop (shop-flow)
+        onEvent: () => undefined, // TODO(C, phase2b §4.4): the event screen (event-flow, router.showEvent)
       });
       const view = home;
       unbindHome = store.select(

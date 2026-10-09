@@ -1,4 +1,4 @@
-// Owner: app
+// Owner: C (Phase 2b; was app)
 // visibilitychange + platform.onPause → pause the timer, mute, save now (02 §7.2, §15; 05 §4).
 // FB onPause has no resume callback: the return is detected via visibilitychange / focus / pageshow,
 // or the next pointerdown (the player is clearly back when they touch the game).

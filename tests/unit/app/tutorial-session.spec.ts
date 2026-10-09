@@ -1,4 +1,4 @@
-// Owner: app. The tutorial through the session (02 §11.5, 04 §4.2): the input filter runs before
+// Owner: C (Phase 2b; was app). The tutorial through the session (02 §11.5, 04 §4.2): the input filter runs before
 // reduce, scripted marks bypass it, the bulb is free at step 5, the first-run win is one critical
 // save and leads to Level 2 without an interstitial; a replay saves nothing and returns Home.
 import { describe, expect, it } from 'vitest';

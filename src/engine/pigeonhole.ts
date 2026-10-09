@@ -1,4 +1,4 @@
-// Owner: engine
+// Owner: read-only (Phase 2b; was engine)
 // L4 pigeonhole (03 §5.2): k open A-units whose candidates lie in exactly k B-units T clear the rest
 // of T. Scan order: k = 2…⌊m/2⌋, then the six kind pairs, then k-subsets of open A-units in
 // lexicographic unit-id order. Internal to engine/ (techniques.ts re-exports the public finder). PURE.

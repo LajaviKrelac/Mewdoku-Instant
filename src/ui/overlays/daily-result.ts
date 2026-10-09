@@ -1,4 +1,4 @@
-// Owner: ui-shell
+// Owner: B (Phase 2b; was ui-shell)
 // O7 daily result (02 §5 O7, §12): date, happy cat, solve time, mistakes and hints, next puzzle countdown.
 // The countdown refreshes while open; once the next puzzle is due it reads 'daily.ready' instead. Esc acts as Done; scrim taps are ignored (Done may show an ad).
 //

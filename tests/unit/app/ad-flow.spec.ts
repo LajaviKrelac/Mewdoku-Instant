@@ -1,4 +1,4 @@
-// Owner: app. Ad flow (02 §13.2–13.3, 05 §6.2): lock + mute + pause from request to settle, the
+// Owner: C (Phase 2b; was app). Ad flow (02 §13.2–13.3, 05 §6.2): lock + mute + pause from request to settle, the
 // watchdog safety net (never a timeout on a shown ad), ad_* analytics, preload afterwards.
 import { describe, expect, it } from 'vitest';
 import { createAdFlow } from '../../../src/app/ad-flow';

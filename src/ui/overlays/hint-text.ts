@@ -1,4 +1,4 @@
-// Owner: ui-shell
+// Owner: B (Phase 2b; was ui-shell)
 // 02 §9.1 hint explanation templates and unit names, rendered with i18n. Split from hint-card.ts so
 // the session's live announcements (02 §18) can use them while the O1 card itself stays in the lazy
 // overlay chunk (04 §9 budget). hint-card.ts re-exports everything here.

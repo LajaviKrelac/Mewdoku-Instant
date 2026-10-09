@@ -1,4 +1,4 @@
-// Owner: ui-shell. Loading indicator (lead decision): three paw prints + "Getting the board ready…",
+// Owner: B (Phase 2b; was ui-shell). Loading indicator (lead decision): three paw prints + "Getting the board ready…",
 // written into a polite status region when shown (announced once), cleared when hidden.
 import { describe, expect, it } from 'vitest';
 import { createLoadingIndicator } from '../../../src/ui/overlays/loading-indicator';

@@ -1,4 +1,4 @@
-// Owner: engine
+// Owner: read-only (Phase 2b; was engine)
 // 03 §5 / §11.1 grader: soundness on 2 000 generated puzzles (every elimination is a non-solution
 // cell, every placement a solution cell, at every step), the result solves to the planted
 // solution, grade/effort bookkeeping (03 §5.4), maxLevel tightness (03 §11.2 item 5).

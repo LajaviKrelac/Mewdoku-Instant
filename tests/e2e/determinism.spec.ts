@@ -1,4 +1,4 @@
-// Owner: engine
+// Owner: read-only (Phase 2b; was engine)
 // 03 §11.3 cross-engine determinism: the generator, as BUILT for the browser (dist/e2e, minified),
 // regenerates every golden spec of tests/unit/engine/golden-specs.ts byte-identically to the Node
 // golden file tests/golden/gen-v1.json, both through the module worker (the production path for

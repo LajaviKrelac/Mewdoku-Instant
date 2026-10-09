@@ -1,4 +1,4 @@
-// Owner: platform
+// Owner: D (Phase 2b; was platform)
 // web/local-storage (04 §6.2, §7.2): JSON round trip, memory fallback with a one-time warning hook,
 // corrupt-copy backup keeping the last cfg.save.corruptKeep.
 import { describe, expect, it } from 'vitest';

@@ -1,4 +1,4 @@
-// Owner: engine
+// Owner: read-only (Phase 2b; was engine)
 // Seeded PRNG (03 §7): cyrb128 string hash → sfc32, first 15 outputs discarded, int(n) by rejection
 // sampling. Integer arithmetic only; no Math.random anywhere in generator paths. PURE.
 import type { Rng } from './types';

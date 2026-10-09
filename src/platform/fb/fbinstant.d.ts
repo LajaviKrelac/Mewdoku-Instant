@@ -1,4 +1,4 @@
-// Owner: platform
+// Owner: D (Phase 2b; was platform)
 // Our own minimal ambient types for the FBInstant 8.0 subset we call (05 §2, §4–§10). Extend as needed.
 // Written from the API surface listed in 05; no third-party typings are copied (06).
 

@@ -1,4 +1,4 @@
-// Owner: ui-board
+// Owner: B (Phase 2b; was ui-board)
 // Hint (O1) and coach (O8) highlight attributes on the board (02 §5, §9.1): focus cells get data-f,
 // effect cells a ghost X (or a ghost clear for a mistaken mark), the forced cat a ghost cat.
 import { ensureCat, setCatMood, type CellRefs } from './board-cells';

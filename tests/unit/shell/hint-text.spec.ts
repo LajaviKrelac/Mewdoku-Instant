@@ -1,4 +1,4 @@
-// Owner: ui-shell. 02 §9.1 hint templates: every step kind, unit names, lists, patterns.
+// Owner: B (Phase 2b; was ui-shell). 02 §9.1 hint templates: every step kind, unit names, lists, patterns.
 import { describe, expect, it } from 'vitest';
 import type { HintKind, HintStep, Unit } from '../../../src/engine/types';
 import { hintText, unitListName, unitName, type HintTextContext } from '../../../src/ui/overlays/hint-card';

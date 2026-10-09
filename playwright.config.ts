@@ -1,4 +1,9 @@
-// Owner: foundation. E2E config (04 §11). Browsers are preinstalled: never run "playwright install".
+// Owner: lead. E2E config (04 §11; phase2b §12.1 F0 item 10). Browsers are preinstalled: never run
+// "playwright install".
+// Phase 2b specs (written by their owners; a pattern for a spec that does not exist yet matches nothing):
+//   visual.spec.ts (A)  → web-320, web-390, web-1280 (screenshots to docs/phase2b/screenshots/)
+//   i18n.spec.ts (E)    → web-320, web-390
+//   winflow.spec.ts, events.spec.ts (C) → web-390
 import { defineConfig } from '@playwright/test';
 
 process.env.PLAYWRIGHT_BROWSERS_PATH ??= '/opt/pw-browsers';
@@ -20,15 +25,15 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   projects: [
-    // Main web suite (smoke etc.) on a 390×844 phone.
+    // Main web suite (smoke, winflow, events, layout, visual, i18n …) on a 390×844 phone.
     { name: 'web-390', testIgnore: /fbig\.spec\.ts/, use: { ...phone } },
-    // Layout checks also run at the small phone and desktop sizes.
+    // Layout, visual and i18n checks also run at the small phone; layout and visual at desktop size.
     {
       name: 'web-320',
-      testMatch: /layout\.spec\.ts/,
+      testMatch: /(layout|visual|i18n)\.spec\.ts/,
       use: { ...phone, viewport: { width: 320, height: 568 } },
     },
-    { name: 'web-1280', testMatch: /layout\.spec\.ts/, use: { viewport: { width: 1280, height: 800 } } },
+    { name: 'web-1280', testMatch: /(layout|visual)\.spec\.ts/, use: { viewport: { width: 1280, height: 800 } } },
     // FBIG build against tests/fixtures/fbinstant-stub.js (served with page.route).
     {
       name: 'fbig-390',
@@ -52,6 +57,15 @@ export default defineConfig({
         MEWDOKU_E2E: '1',
         VITE_FB_PLACEMENT_INTERSTITIAL: 'e2e-interstitial',
         VITE_FB_PLACEMENT_REWARDED: 'e2e-rewarded',
+        // phase2b (D's fbig.spec.ts): test banner placement and leaderboard ids for the stub.
+        VITE_FB_PLACEMENT_BANNER: 'e2e-banner',
+        VITE_FB_LEADERBOARDS: JSON.stringify({
+          paw_points: 'e2e_paw_points',
+          daily_fastest: 'e2e_daily_fastest',
+          event_lantern_walk_2026: 'e2e_event_lantern_walk_2026',
+          event_snow_paws_2026: 'e2e_event_snow_paws_2026',
+          event_yarn_hearts_2027: 'e2e_event_yarn_hearts_2027',
+        }),
       },
     },
   ],

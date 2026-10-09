@@ -1,4 +1,4 @@
-// Owner: foundation (read-only for game/content). Shared by scripts/ and the runtime.
+// Owner: C (Phase 2b; was foundation). Shared by scripts/ and the runtime.
 // The 02 §11.2 size/difficulty ramp, the 02 §12 weekday table, seed strings (03 §7) and the
 // GenSpec builder that applies the shape-filter rules (03 §4.5). PURE.
 import { cfg, type GameConfig } from '../app/config';

@@ -1,4 +1,4 @@
-// Owner: ui-board
+// Owner: B (Phase 2b; was ui-board)
 // Dev harness (not shipped): renders the board, HUD and art in isolation. Run
 // `npx vite --port 5174 --strictPort` and open /dev/board-harness.html?scene=…
 //   scene=game&n=5|9|12[&patterns=1][&hint=1][&coach=1][&hard=1][&fb=1][&mood=sad|happy][&rm=1]

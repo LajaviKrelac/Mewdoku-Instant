@@ -1,5 +1,6 @@
-// Owner: game
-// Save schema v1: defaults, migration/validation, merge, cell encoding, slot validation (04 §4.3, §7).
+// Owner: C (Phase 2b)
+// Save schema v2 (phase2b §9; v1 = 04 §4.3): defaults, migration/validation, merge, cell encoding,
+// slot validation (04 §7). The v2 field rules live in save-v2.ts (F0 baseline; C completes §9.3).
 import { cfg, type GameConfig } from '../app/config';
 import {
   copySlot,
@@ -11,19 +12,20 @@ import {
   readBest,
   readDaily,
 } from './save-fields';
-import type { DailyRecord, InProgressV1, LevelBest, ReduceMotionSetting, SaveDataV1, Settings } from './types';
+import { isLocaleSetting, mergeV2Fields, migrate_1_to_2, parseEventSlotId, readV2Fields, v2Defaults } from './save-v2';
+import type { DailyRecord, InProgressV2, LevelBest, ReduceMotionSetting, SaveData, SettingsV2 } from './types';
 
-export type { InProgressV1, SaveDataV1 } from './types';
+export type { InProgressV1, InProgressV2, SaveData, SaveDataV1, SaveDataV2 } from './types';
 export { decodeCells, encodeCells, validateInProgress, validateSlot, slotLimitsOf, isInProgressShape } from './save-fields';
 export type { SlotCheck, SlotLimits } from './save-fields';
 
-/** Current schema version. */
-export const SAVE_VERSION = 1;
+/** Current schema version (phase2b §9). Storage keys stay `mewdoku.save.v1` / cloud `save` [DECISION]. */
+export const SAVE_VERSION = 2;
 
-/** 04 §4.3 defaults (stock from cfg; firstSeenAt = updatedAt = now). */
-export function defaults(now: number, c: GameConfig = cfg): SaveDataV1 {
+/** 04 §4.3 defaults (stock from cfg; firstSeenAt = updatedAt = now) plus the phase2b §9.2 v2 fields. */
+export function defaults(now: number, c: GameConfig = cfg): SaveData {
   return {
-    v: 1,
+    v: 2,
     updatedAt: now,
     firstSeenAt: now,
     sessions: 0,
@@ -33,30 +35,30 @@ export function defaults(now: number, c: GameConfig = cfg): SaveDataV1 {
     daily: {},
     settings: defaultSettings(),
     ads: { lastAdAt: 0, lastFallbackGrantAt: 0 },
-    inProgress: { level: null, daily: null },
+    inProgress: { level: null, daily: null, event: null },
     ext: {},
+    ...v2Defaults(),
   };
 }
 
-function defaultSettings(): Settings {
-  return { sound: true, haptics: true, patterns: false, reduceMotion: 'system' };
+function defaultSettings(): SettingsV2 {
+  return { sound: true, haptics: true, patterns: false, reduceMotion: 'system', locale: 'auto' };
 }
 
 export interface MigrateReport {
-  readonly save: SaveDataV1;
+  readonly save: SaveData;
   /** 'empty' = null/undefined input; 'reset' = not an object at all; 'repaired' = some fields replaced. */
   readonly outcome: 'ok' | 'empty' | 'reset' | 'repaired';
   readonly repairedFields: readonly string[];
 }
 
-/**
- * vN → vN+1 steps, run in order up to SAVE_VERSION before validation. v1 is the first schema, so
- * the chain is empty in Phase 2; a v2 adds `1: migrate_1_to_2`.
- */
-const MIGRATIONS: Readonly<Record<number, (d: Record<string, unknown>) => Record<string, unknown>>> = {};
+/** vN → vN+1 steps, run in order up to SAVE_VERSION before validation (phase2b §9.2). */
+const MIGRATIONS: Readonly<Record<number, (d: Record<string, unknown>) => Record<string, unknown>>> = {
+  1: migrate_1_to_2,
+};
 
-/** vN → v1 chain, then field-by-field validation; invalid fields get defaults; garbage → defaults(now). */
-export function migrate(raw: unknown, now: number, c: GameConfig = cfg): SaveDataV1 {
+/** vN → v2 chain, then field-by-field validation; invalid fields get defaults; garbage → defaults(now). */
+export function migrate(raw: unknown, now: number, c: GameConfig = cfg): SaveData {
   return migrateReport(raw, now, c).save;
 }
 
@@ -79,12 +81,12 @@ export function migrateReport(raw: unknown, now: number, c: GameConfig = cfg): M
     doc = (MIGRATIONS[doc.v] as (d: Record<string, unknown>) => Record<string, unknown>)(doc);
   }
   if (doc.v !== SAVE_VERSION) repaired.push('v');
-  const save = validateV1(doc, now, c, repaired);
+  const save = validateV2(doc, now, c, repaired);
   return { save, outcome: repaired.length > 0 ? 'repaired' : 'ok', repairedFields: repaired };
 }
 
-/** Field-by-field validation of a v1 candidate. Never throws; every invalid field gets its default. */
-function validateV1(d: Record<string, unknown>, now: number, c: GameConfig, rep: string[]): SaveDataV1 {
+/** Field-by-field validation of a v2 candidate (validateV1 + phase2b §9.2). Never throws; every invalid field gets its default. */
+function validateV2(d: Record<string, unknown>, now: number, c: GameConfig, rep: string[]): SaveData {
   const def = defaults(now, c);
   const field = <T>(value: unknown, ok: (v: unknown) => v is T, fallback: T, path: string): T => {
     if (ok(value)) return value;
@@ -121,12 +123,14 @@ function validateV1(d: Record<string, unknown>, now: number, c: GameConfig, rep:
 
   const se = group('settings');
   const ds = defaultSettings();
-  const settings: Settings = se
+  const settings: SettingsV2 = se
     ? {
         sound: field(se.sound, isBool, ds.sound, 'settings.sound'),
         haptics: field(se.haptics, isBool, ds.haptics, 'settings.haptics'),
         patterns: field(se.patterns, isBool, ds.patterns, 'settings.patterns'),
         reduceMotion: field(se.reduceMotion, isReduceMotion, ds.reduceMotion, 'settings.reduceMotion'),
+        // A locale this build does not bundle is kept and resolves like 'auto' (phase2b §6.7, §9.2).
+        locale: field(se.locale, (x): x is SettingsV2['locale'] => isLocaleSetting(x, c), ds.locale, 'settings.locale'),
       }
     : ds;
 
@@ -137,7 +141,7 @@ function validateV1(d: Record<string, unknown>, now: number, c: GameConfig, rep:
   };
 
   const ip = group('inProgress');
-  const slot = (mode: 'level' | 'daily'): InProgressV1 | null => {
+  const slot = (mode: InProgressV2['mode']): InProgressV2 | null => {
     const v = ip ? ip[mode] : null;
     if (v === null || v === undefined) return null;
     if (isInProgressShape(v, mode)) return copySlot(v);
@@ -153,7 +157,7 @@ function validateV1(d: Record<string, unknown>, now: number, c: GameConfig, rep:
   }
 
   return {
-    v: 1,
+    v: 2,
     updatedAt: field(d.updatedAt, isTime, now, 'updatedAt'),
     firstSeenAt: field(d.firstSeenAt, isTime, now, 'firstSeenAt'),
     sessions: field(d.sessions, isNonNegInt, 0, 'sessions'),
@@ -163,8 +167,9 @@ function validateV1(d: Record<string, unknown>, now: number, c: GameConfig, rep:
     daily: daily.value,
     settings,
     ads,
-    inProgress: { level: slot('level'), daily: slot('daily') },
+    inProgress: { level: slot('level'), daily: slot('daily'), event: slot('event') },
     ext: isRecord(d.ext) ? { ...d.ext } : (rep.push('ext'), {}),
+    ...readV2Fields(d, c, rep),
   };
 }
 
@@ -178,11 +183,11 @@ function isReduceMotion(x: unknown): x is ReduceMotionSetting {
 
 // ─────────────────────────────── merge (04 §7.3) ───────────────────────────────
 
-/** Local mirror vs cloud (04 §7.3 merge table), then clears stale in-progress slots. */
-export function merge(local: SaveDataV1, cloud: SaveDataV1): SaveDataV1 {
+/** Local mirror vs cloud (04 §7.3 + phase2b §9.3 merge tables), then clears stale in-progress slots. */
+export function merge(local: SaveData, cloud: SaveData, c: GameConfig = cfg): SaveData {
   const newer = cloud.updatedAt > local.updatedAt ? cloud : local;
-  const merged: SaveDataV1 = {
-    v: 1,
+  const merged: SaveData = {
+    v: 2,
     updatedAt: Math.max(local.updatedAt, cloud.updatedAt),
     firstSeenAt: Math.min(local.firstSeenAt, cloud.firstSeenAt),
     sessions: Math.max(local.sessions, cloud.sessions),
@@ -196,8 +201,9 @@ export function merge(local: SaveDataV1, cloud: SaveDataV1): SaveDataV1 {
     daily: unionByMs<DailyRecord>(local.daily, cloud.daily),
     settings: { ...newer.settings },
     ads: { ...newer.ads },
-    inProgress: { level: newer.inProgress.level, daily: newer.inProgress.daily },
+    inProgress: { level: newer.inProgress.level, daily: newer.inProgress.daily, event: newer.inProgress.event },
     ext: { ...newer.ext },
+    ...mergeV2Fields(local, cloud, newer, c),
   };
   return clearStaleSlots(merged);
 }
@@ -214,15 +220,19 @@ function unionByMs<T extends readonly number[]>(a: Record<string, T>, b: Record<
 
 /**
  * 04 §7.3 "After merging": a level slot whose id is not L{progress.level} was already won elsewhere;
- * a daily slot whose date already has a record was solved elsewhere. Both are cleared.
+ * a daily slot whose date already has a record was solved elsewhere. Both are cleared. phase2b §9.3:
+ * an event slot whose index is below events[id].solved was solved elsewhere. TODO(C, §9.3): also
+ * clear an event slot whose event has ended (needs the event defs; event-flow does it at launch).
  */
-export function clearStaleSlots(save: SaveDataV1): SaveDataV1 {
-  const { level, daily } = save.inProgress;
+export function clearStaleSlots(save: SaveData): SaveData {
+  const { level, daily, event } = save.inProgress;
   const staleLevel = level !== null && level.id !== `L${save.progress.level}`;
   const staleDaily = daily !== null && save.daily[daily.id.slice(1)] !== undefined;
-  if (!staleLevel && !staleDaily) return save;
+  const ev = event !== null ? parseEventSlotId(event.id) : null;
+  const staleEvent = event !== null && (ev === null || ev.index < (save.events[ev.eventId]?.solved ?? 0));
+  if (!staleLevel && !staleDaily && !staleEvent) return save;
   return {
     ...save,
-    inProgress: { level: staleLevel ? null : level, daily: staleDaily ? null : daily },
+    inProgress: { level: staleLevel ? null : level, daily: staleDaily ? null : daily, event: staleEvent ? null : event },
   };
 }

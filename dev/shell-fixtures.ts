@@ -1,4 +1,4 @@
-// Owner: ui-shell. Sample data for the dev harness: a mid-game level board, the tutorial board at
+// Owner: B (Phase 2b; was ui-shell). Sample data for the dev harness: a mid-game level board, the tutorial board at
 // each coach step, and the view models the app would build (02 §5 wireframes).
 import packJson from '../src/data/levels/pack-000.json';
 import { recordToPuzzle } from '../src/engine/codec';
@@ -106,6 +106,7 @@ export function gameView(b: Board, over: Partial<GameView> = {}): GameView {
     chipHighlight: null,
     fbSafeZone: false,
     reducedMotion: false,
+    event: null,
     ...over,
   };
 }
@@ -160,6 +161,9 @@ export function homeView(over: Partial<HomeView> = {}): HomeView {
     showTrophy: false,
     fbSafeZone: false,
     extraCards: [],
+    fish: 128,
+    event: null,
+    bannerReserved: false,
     ...over,
   };
 }

@@ -1,4 +1,4 @@
-// Owner: app. SaveScheduler modes (04 §7.1, 02 §15) and when the session uses each one.
+// Owner: C (Phase 2b; was app). SaveScheduler modes (04 §7.1, 02 §15) and when the session uses each one.
 import { describe, expect, it } from 'vitest';
 import { createFakeClock } from '../../../src/app/clock';
 import { cfg } from '../../../src/app/config';
@@ -154,7 +154,7 @@ describe('session save modes', () => {
     await h.settle(h.config.fx.boardEntryMs);
     h.session.onCellDoubleTap(1); // step 1: the Lavender tile
     await h.settle(h.config.save.localDebounceMs);
-    expect(h.save().inProgress).toEqual({ level: null, daily: null });
+    expect(h.save().inProgress).toEqual({ level: null, daily: null, event: null });
     expect(h.platform.writes).toHaveLength(0);
     expect(SOL5).toHaveLength(5);
   });

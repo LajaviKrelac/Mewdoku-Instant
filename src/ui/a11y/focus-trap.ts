@@ -1,4 +1,4 @@
-// Owner: ui-board
+// Owner: B (Phase 2b; was ui-board)
 // Modal focus management (04 §5.3): trap Tab inside a modal, `inert` on the background, focus restore.
 
 const TABBABLE = [

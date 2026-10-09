@@ -1,4 +1,4 @@
-// Owner: platform
+// Owner: D (Phase 2b; was platform)
 // One preloaded interstitial and one rewarded instance (05 §6, 04 §6.3): readiness timeout
 // cfg.ads.readyTimeoutMs on the show request, NO timeout on showAsync, FB error codes → AdResult,
 // a new instance after every show or failure. Empty placement ID → that kind is unsupported.

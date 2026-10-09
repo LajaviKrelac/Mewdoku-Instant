@@ -1,4 +1,4 @@
-// Owner: content
+// Owner: read-only (Phase 2b; was content)
 // The content pipeline itself (03 §8.2–8.3, 02 §11.2): schedule rules, effort sort + repair, month
 // ranges, and that scripts/verify-levels.ts catches tampered content (so a green verify means
 // something). Runs in the `property` project next to levels.spec.ts.

@@ -1,8 +1,9 @@
-// Owner: foundation (app may extend). Tiny observable store (04 §5.2) and the AppState shape.
+// Owner: C (Phase 2b; F0 added the 2b screen, overlay and UiState members). Tiny observable store (04 §5.2) and the AppState shape.
 // Views subscribe with selectors and re-render only when their slice changes (reference equality
 // by default, since all state is immutable).
 import type { PuzzleId } from '../engine/types';
-import type { GameState, ModeId, SaveDataV1 } from '../game/types';
+import type { LocaleId } from './config';
+import type { GameState, ModeId, SaveData } from '../game/types';
 
 export type Listener<S> = (state: S, prev: S) => void;
 export type Equality<T> = (a: T, b: T) => boolean;
@@ -87,9 +88,28 @@ export function shallowEqual<T>(a: T, b: T): boolean {
 
 // ─────────────────────────────── AppState (04 §5.2) ───────────────────────────────
 
-export type ScreenId = 'boot' | 'home' | 'game';
-/** Stack overlays managed by the router. Toast (O9) and rotate notice (O10) are separate layers. */
-export type OverlayId = 'hint' | 'rewarded' | 'win' | 'fail' | 'settings' | 'how_to_play' | 'daily_result' | 'coach';
+/** phase2b §4.4 adds the event screen (lazy `events` chunk). */
+export type ScreenId = 'boot' | 'home' | 'game' | 'event';
+/**
+ * Stack overlays managed by the router. Toast (O9) and rotate notice (O10) are separate layers.
+ * phase2b adds `ranking` (§2.4), `victory` (§2.5; replaces O3 `win` and O7 `daily_result`, which stay
+ * for one release, unopened), `shop` (§8.5), `rank_hub` (§5.5) and `group_result` (§5.6), all from
+ * the lazy overlay chunk.
+ */
+export type OverlayId =
+  | 'hint'
+  | 'rewarded'
+  | 'win'
+  | 'fail'
+  | 'settings'
+  | 'how_to_play'
+  | 'daily_result'
+  | 'coach'
+  | 'ranking'
+  | 'victory'
+  | 'shop'
+  | 'rank_hub'
+  | 'group_result';
 
 /** What the player asked to play. */
 export type SessionRequest =
@@ -124,25 +144,43 @@ export interface UiState {
   /** Resolved from settings.reduceMotion + prefers-reduced-motion. */
   readonly reducedMotion: boolean;
   readonly storage: 'ok' | 'memory';
+  /** The active catalogue's locale (phase2b §6.3); 'en' until boot resolves it. */
+  readonly locale: LocaleId;
+  /** <html dir> for the active locale (phase2b §6.5). */
+  readonly dir: 'ltr' | 'rtl';
+  /**
+   * The current screen reserves the banner band (phase2b §3.2): set by banner-flow when a load is
+   * attempted on Home, victory or event, and kept until that screen unmounts. Views pass it on.
+   */
+  readonly bannerReserved: boolean;
 }
 
 export interface AppState {
   readonly screen: ScreenId;
   /** Overlay stack, top last. */
   readonly overlays: readonly OverlayId[];
-  readonly save: SaveDataV1;
+  readonly save: SaveData;
   readonly game: GameState | null;
   readonly session: SessionMeta | null;
   readonly ui: UiState;
 }
 
-export function initialAppState(save: SaveDataV1): AppState {
+export function initialAppState(save: SaveData): AppState {
   return {
     screen: 'boot',
     overlays: [],
     save,
     game: null,
     session: null,
-    ui: { inputLocked: true, adShowing: false, paused: false, reducedMotion: false, storage: 'ok' },
+    ui: {
+      inputLocked: true,
+      adShowing: false,
+      paused: false,
+      reducedMotion: false,
+      storage: 'ok',
+      locale: 'en',
+      dir: 'ltr',
+      bannerReserved: false,
+    },
   };
 }

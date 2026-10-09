@@ -1,5 +1,7 @@
-// Owner: ui-board
-// Cat counter and hearts pills (02 §5 S2), heart crack on MISTAKE (02 §17.5).
+// Owner: B (Phase 2b)
+// Cat counter and hearts pills (02 §5 S2), heart crack on MISTAKE (02 §17.5; phase2b §2.9 replaces it
+// with the 700 ms heart break), and the fish pill (phase2b §2.2, §2.5): a shared component on Home,
+// in the game's pills row during the win flow only, and on the victory screen.
 // Classes: .pills[data-compact] > .pill.pill--cats(.pill__icon .pill__count) .pill.pill--hearts > .heart[data-full]
 import { cfg } from '../../app/config';
 import type { GameEvent } from '../../game/types';
@@ -18,6 +20,40 @@ export interface PillsProps {
 export interface PillsView extends View<PillsProps> {
   /** MISTAKE → crack the heart that was lost; REVIVED → refill animation. */
   playEvent(ev: GameEvent): void;
+  /**
+   * Win flow only (phase2b §2.2 t = 1 000): fades the fish pill in, centred between the cat counter
+   * and the hearts (no "+"), showing `count`. A later call with a higher count is an arrival: the
+   * number rolls up and the icon bumps (fx.win.counterBumpMs). Hidden during play.
+   */
+  showFish(count: number): void;
+  /** Client rect of the fish pill's icon (the flight target), or null while it is hidden. */
+  fishRect(): DOMRect | null;
+  /** The "+3" / "+2" label that rises fx.win.plusLabelRisePx from the pill and fades (fx.win.plusLabelMs). */
+  fishLabel(text: string): void;
+}
+
+// ─────────────────────────────── fish pill (phase2b §2.5) ───────────────────────────────
+
+export interface FishPillProps {
+  /** Wallet fish (formatted with i18n formatNumber); aria-label "128 fish" (tn('fish.count')). */
+  readonly count: number;
+  /** The "+" button that opens the shop (Home, victory); null = no "+" (in game). */
+  readonly onPlus: (() => void) | null;
+}
+
+export interface FishPillView extends View<FishPillProps> {
+  /** Client rect of the pill's fish icon. */
+  iconRect(): DOMRect | null;
+}
+
+/**
+ * The white fish pill: icon-fish, the count and an optional "+" (phase2b §2.5). B → B shared
+ * component, used by home-screen (in the top bar's lead slot, A's createTopBar `lead`), the game
+ * pills row and the victory screen.
+ */
+export function createFishPill(props: FishPillProps): FishPillView {
+  void props;
+  throw new Error('not implemented: createFishPill (B, phase2b §2.5)');
 }
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -121,6 +157,17 @@ export function createPills(props: PillsProps): PillsView {
         const slot = full[full.length - 1];
         if (slot) restart(slot, 'heart--pop', 520, timers);
       }
+    },
+    showFish(n) {
+      void n;
+      throw new Error('not implemented: PillsView.showFish (B, phase2b §2.2)');
+    },
+    fishRect() {
+      throw new Error('not implemented: PillsView.fishRect (B, phase2b §2.3)');
+    },
+    fishLabel(text) {
+      void text;
+      throw new Error('not implemented: PillsView.fishLabel (B, phase2b §2.2)');
     },
     destroy() {
       for (const id of timers) clearTimeout(id);

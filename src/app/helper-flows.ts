@@ -1,4 +1,4 @@
-// Owner: app
+// Owner: C (Phase 2b; was app)
 // Helper and ad flows of the session, exactly in the 04 §5.7 order (02 §9, §10.2, §13):
 //   stock check → O2 → rewarded ad or free fallback → (+1 stock, saves.now) → engine → debit +
 //   saves.now → dispatch. Interstitials: pacing gate → ad → lastAdAt; the transition always goes on.
@@ -11,7 +11,7 @@ import { getMode } from '../game/modes';
 import { canRevive } from '../game/reducer';
 import { encodeCells } from '../game/save';
 import { tutorialAllowsTool } from '../game/tutorial';
-import type { Action, GameState, SaveDataV1 } from '../game/types';
+import type { Action, GameState, SaveData } from '../game/types';
 import type { HintStep, PuzzleId } from '../engine/types';
 import type { Capabilities, RewardedPlacement } from '../platform/types';
 import type { EngineClient } from '../workers/engine-client';
@@ -24,6 +24,9 @@ import type { Router } from './router';
 import type { SaveScheduler } from './saves';
 import { levelParam } from './session-effects';
 import type { SessionMeta } from './store';
+
+/** The rewarded placements the helper flows serve (02 §13.3). */
+export type HelperPlacement = Exclude<RewardedPlacement, 'group_double'>;
 import { asTutorialStep } from './views';
 
 /** What the helper flows need from the session. */
@@ -39,8 +42,8 @@ export interface HelperHost {
   capabilities(): Capabilities;
   game(): GameState | null;
   meta(): SessionMeta | null;
-  save(): SaveDataV1;
-  updateSave(fn: (s: SaveDataV1) => SaveDataV1): void;
+  save(): SaveData;
+  updateSave(fn: (s: SaveData) => SaveData): void;
   dispatch(a: Action): void;
   /** Runs a flow with the board locked; `alive()` turns false when the session restarts or ends. */
   runBusy(fn: (alive: () => boolean) => Promise<void>): Promise<void>;
@@ -57,7 +60,8 @@ export interface HelperFlows {
   onBulb(): Promise<void>;
   onPaw(): Promise<void>;
   /** 'hint' and 'kitty' ask through O2 first; for 'revive' the O4 button is the prompt. */
-  rewardedOrFallback(p: RewardedPlacement): Promise<boolean>;
+  /** hint, kitty and revive (02 §13.3). group_double has its own flow (group-flow.ts, phase2b §5.6). */
+  rewardedOrFallback(p: HelperPlacement): Promise<boolean>;
   /** O4 Continue offer (02 §10.2): 'video', 'free' or hidden. */
   continueOffer(): 'video' | 'free' | null;
   /** Pacing gate, then the interstitial when allowed. Never throws; the caller continues afterwards. */
@@ -126,7 +130,7 @@ export function createHelperFlows(host: HelperHost): HelperFlows {
     return true;
   }
 
-  async function rewardedOrFallback(p: RewardedPlacement): Promise<boolean> {
+  async function rewardedOrFallback(p: HelperPlacement): Promise<boolean> {
     const asks = p !== 'revive';
     if (asks && !(await cardsReady(() => true, t(p === 'hint' ? 'hint.unavailable' : 'kitty.unavailable')))) return false;
     if (rewardedAvailable()) {

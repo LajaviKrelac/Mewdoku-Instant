@@ -1,4 +1,4 @@
-// Owner: engine
+// Owner: read-only (Phase 2b; was engine)
 // LevelRecord ⇄ Puzzle, canonical labels, base-36 solutions, structural validation (03 §9). PURE.
 import type { DailyPack, Grade, LevelPack, LevelRecord, Puzzle, PuzzleId, RecordCheck } from './types';
 

@@ -1,4 +1,4 @@
-// Owner: game. Levels repository (04 §3, §8; 02 §11.4, §12): bundled pack, lazy packs with retries,
+// Owner: C (Phase 2b; was game). Levels repository (04 §3, §8; 02 §11.4, §12): bundled pack, lazy packs with retries,
 // substitute boards, endless and daily generation through an injected generator, plus the Vite asset wiring.
 import { readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

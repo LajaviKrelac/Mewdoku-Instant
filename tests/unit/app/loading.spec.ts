@@ -1,4 +1,4 @@
-// Owner: app. Loading indicator (lead decision, Phase 2 integration): opening a level or daily that
+// Owner: C (Phase 2b; was app). Loading indicator (lead decision, Phase 2 integration): opening a level or daily that
 // takes longer than cfg.loading.indicatorDelayMs (pack fetch, on-device generation) shows it until
 // the board is ready; a fast load never shows it; a superseded or failed load hides it. A load that
 // never settles ends on Home with a toast after cfg.loading.failSafeMs (RP-1, 04 §8).

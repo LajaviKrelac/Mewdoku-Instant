@@ -1,4 +1,4 @@
-// Owner: content
+// Owner: read-only (Phase 2b; was content)
 // Generation task runner shared by gen-levels.ts and gen-daily.ts (03 §8.3): a worker_threads pool
 // (one task = specs tried in order, the first accepted puzzle wins) and a resumable JSONL cache
 // (node_modules/.cache/mewdoku-content/), so an interrupted run resumes where it stopped. Moved out of

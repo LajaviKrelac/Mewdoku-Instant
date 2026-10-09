@@ -1,81 +1,16 @@
-// Owner: ui-board. Phase 2 review fixes on the board side: pinch-zoom never shrinks the board (A11Y-2),
-// large text grows the rule-chip row (A11Y-6), no forced style recalcs from the viewport probe, the FX
-// class restarts or the focus trap (RP-3), and readable colour-pattern glyphs on small slots (A11Y-5).
+// Owner: B. Phase 2 review fixes on B's side: no forced style recalcs from the FX class restarts or the
+// focus trap (RP-3), and readable colour-pattern glyphs on small slots (A11Y-5).
+// phase2b F0 split: the readViewport and computeLayout cases (A11Y-2, A11Y-6, RP-3) moved to layout.spec.ts (A).
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cfg } from '../../../src/app/config';
 import { focusableElements } from '../../../src/ui/a11y/focus-trap';
 import { createFxTimers, flashClass } from '../../../src/ui/board/board-fx';
 import { patternScaleFor } from '../../../src/ui/board/board-view';
-import { computeLayout, readViewport } from '../../../src/ui/board/layout';
 
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
   document.body.textContent = '';
-});
-
-/** A window whose visualViewport and size the test controls; getComputedStyle is spied. */
-function fakeWindow(size: { w: number; h: number; dpr?: number }, vv: { width: number; height: number; scale: number } | null) {
-  const gcs = vi.fn(() => ({ paddingTop: '20px', paddingRight: '0px', paddingBottom: '34px', paddingLeft: '0px', fontSize: '32px' }));
-  const win = {
-    document,
-    get innerWidth() {
-      return size.w;
-    },
-    get innerHeight() {
-      return size.h;
-    },
-    get devicePixelRatio() {
-      return size.dpr ?? 1;
-    },
-    visualViewport: vv,
-    getComputedStyle: gcs,
-  } as unknown as Window;
-  return { win, gcs };
-}
-
-describe('readViewport (A11Y-2, A11Y-6, RP-3)', () => {
-  it('measures the visual viewport at page scale 1, so pinch-zoom does not shrink the board', () => {
-    const vv = { width: 390, height: 844, scale: 1 };
-    const { win } = fakeWindow({ w: 390, h: 844 }, vv);
-    expect(readViewport(win, true)).toMatchObject({ vw: 390, vh: 844 });
-    // A 2× pinch: the visual viewport becomes 195 × 422 at scale 2.
-    Object.assign(vv, { width: 195, height: 422, scale: 2 });
-    expect(readViewport(win)).toMatchObject({ vw: 390, vh: 844 });
-    // The on-screen keyboard shrinks the visual viewport at scale 1: followed.
-    Object.assign(vv, { width: 390, height: 500, scale: 1 });
-    expect(readViewport(win).vh).toBe(500);
-  });
-
-  it('reads the safe-area / rem probe once per window size, not on every relayout', () => {
-    const size = { w: 390, h: 844 };
-    const { win, gcs } = fakeWindow(size, null);
-    const first = readViewport(win, true);
-    expect(first).toMatchObject({ safeTop: 20, safeBottom: 34, remPx: 32 });
-    readViewport(win);
-    readViewport(win);
-    expect(gcs).toHaveBeenCalledTimes(1);
-    size.w = 844; // rotation
-    size.h = 390;
-    readViewport(win);
-    expect(gcs).toHaveBeenCalledTimes(2);
-  });
-});
-
-describe('computeLayout with large text (A11Y-6)', () => {
-  it('grows the rule-chip row with the text scale (room for a third line, at most 2.4×), leaving compact mode alone', () => {
-    const base = { vw: 390, vh: 844, safeTop: 0, safeBottom: 0, n: 8 };
-    expect(computeLayout(base).chips).toBe(cfg.layout.chips);
-    expect(computeLayout({ ...base, textScale: 1 }).chips).toBe(cfg.layout.chips);
-    expect(computeLayout({ ...base, textScale: 2 }).chips).toBe(Math.round(cfg.layout.chips * 2.3));
-    expect(computeLayout({ ...base, textScale: 3 }).chips).toBe(Math.round(cfg.layout.chips * 2.4));
-    expect(computeLayout({ ...base, textScale: 0.5 }).chips).toBe(cfg.layout.chips);
-    // 200 % text on the reference phone: the board keeps its full width.
-    expect(computeLayout({ ...base, textScale: 2 }).board).toBe(computeLayout(base).board);
-    const compact = computeLayout({ ...base, vh: 568, textScale: 2 });
-    expect(compact.compact).toBe(true);
-    expect(compact.chips).toBe(cfg.layout.compactChips); // icons only: no taller row
-  });
 });
 
 describe('flashClass never forces a reflow (RP-3)', () => {

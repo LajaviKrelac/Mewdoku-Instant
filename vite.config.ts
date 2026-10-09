@@ -1,15 +1,28 @@
-// Owner: foundation. Build modes and platform selection (04 §6.1, §10).
+// Owner: lead. Build modes and platform selection (04 §6.1, §10; phase2b §6.7, §11, §12.1 F0 item 10).
 //
 // Modes:
 //   (default) / production / development  → web build, dist/web, mock ads in dev
 //   fbig                                  → Facebook Instant Games build, dist/fbig (+ fbapp-config.json)
 //   e2e                                   → web build with test hooks (__E2E__), dist/e2e
+//   release                               → web RELEASE build, dist/release-web (public web deploy)
+//   release-fbig                          → FBIG RELEASE build, dist/release-fbig (the FB production zip)
 // MEWDOKU_E2E=1 also turns the test hooks on in any mode (used by the fbig e2e build).
+// Release builds bundle only cfg.i18n.releaseLocales; every other mode bundles all of cfg.i18n.locales
+// that have a catalogue (scripts/locale-loaders.ts, the `virtual:mewdoku-locales` module).
+//
+// Lazy chunks (phase2b §11) keep stable names for scripts/size-check.ts:
+//   assets/overlay-chunk-*.js   core overlays (O1–O8 + ranking, victory, shop, rank hub, group result)
+//   assets/events-*.js          src/app/events-chunk.ts: the event screen + event art (C/B/A)
+//   assets/fb-social-*.js       src/platform/fb/fb-social.ts: ranking, overlay views, groups, payments (D)
+//   assets/locale-<id>-*.js     one per bundled non-English catalogue (E)
+// Each is reached through ONE dynamic import of its barrel module; nothing in the main bundle may
+// import those modules statically (that would pull them into the first load).
 import { copyFileSync, existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin } from 'vite';
 import basicSsl from '@vitejs/plugin-basic-ssl';
+import { chunkFileName, isReleaseMode, localeLoaderPlugin } from './scripts/locale-loaders.ts';
 
 /** Pinned FB SDK (05 §2). */
 export const FB_SDK_URL = 'https://connect.facebook.net/en_US/fbinstant.8.0.js';
@@ -38,11 +51,12 @@ function platformHtml(fb: boolean): Plugin {
 }
 
 export default defineConfig(({ mode, command, isPreview }) => {
-  const fb = mode === 'fbig';
+  const release = isReleaseMode(mode);
+  const fb = mode === 'fbig' || mode === 'release-fbig';
   const e2e = mode === 'e2e' || process.env.MEWDOKU_E2E === '1';
   const platformEntry = fb ? './src/platform/fb/index.ts' : './src/platform/web/index.ts';
-  const outDir = fb ? 'dist/fbig' : mode === 'e2e' ? 'dist/e2e' : 'dist/web';
-  const plugins: Plugin[] = [platformHtml(fb)];
+  const outDir = release ? (fb ? 'dist/release-fbig' : 'dist/release-web') : fb ? 'dist/fbig' : mode === 'e2e' ? 'dist/e2e' : 'dist/web';
+  const plugins: Plugin[] = [platformHtml(fb), localeLoaderPlugin(mode, rootDir)];
   // HTTPS for the FB embed player (05 §11), dev server only (preview stays HTTP for Playwright).
   if (fb && command === 'serve' && !isPreview) plugins.push(basicSsl());
 
@@ -65,6 +79,9 @@ export default defineConfig(({ mode, command, isPreview }) => {
       assetsInlineLimit: 0, // keep packs and the font as files
       cssCodeSplit: false,
       modulePreload: { polyfill: false },
+      rolldownOptions: {
+        output: { chunkFileNames: (chunk) => chunkFileName(chunk.facadeModuleId) },
+      },
     },
     preview: { host: '127.0.0.1' },
     plugins,

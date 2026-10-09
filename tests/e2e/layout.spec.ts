@@ -1,4 +1,4 @@
-// Owner: app (layout checks); ui (the coach, short-window and keyboard cases, Phase 2 review fixes)
+// Owner: C (Phase 2b; was app)
 // Layout at 320×568, 390×844 and 1280×800 (02 §19, 04 §11): no horizontal overflow, the board fully
 // visible, and nothing interactive in the top-left FB safe zone (checked in every build; the zone
 // only matters in fbig, but our layout keeps it clear everywhere). Also: the tutorial coach card
@@ -12,7 +12,7 @@ import { expect, test, type Page } from '@playwright/test';
 import type { E2EHooks } from '../../src/app/boot';
 import type { LevelPack } from '../../src/engine/types';
 import { defaults } from '../../src/game/save';
-import type { SaveDataV1 } from '../../src/game/types';
+import type { SaveData } from '../../src/game/types';
 
 type TestWindow = Window & { __mewdoku?: E2EHooks };
 
@@ -20,7 +20,7 @@ const SAFE_ZONE = 64;
 const LEVELS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../../src/data/levels');
 const PACK_000 = resolve(LEVELS_DIR, 'pack-000.json');
 
-async function boot(page: Page, save?: SaveDataV1): Promise<void> {
+async function boot(page: Page, save?: SaveData): Promise<void> {
   await page.goto('/');
   await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen !== 'boot');
   if (save) {

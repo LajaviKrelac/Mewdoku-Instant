@@ -1,4 +1,4 @@
-// Owner: app
+// Owner: C (Phase 2b; was app)
 // JSON fetch for the level packs and daily months (04 §8) with a per-request timeout: a request that
 // has not finished after levels.fetchTimeoutMs is aborted and rejects, so the levels repo's retry →
 // substitute (or generated daily) path runs instead of waiting forever. Boot passes it to

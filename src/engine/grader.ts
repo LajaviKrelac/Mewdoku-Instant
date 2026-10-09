@@ -1,4 +1,4 @@
-// Owner: engine
+// Owner: read-only (Phase 2b; was engine)
 // Grader loop and trace (03 §5.2–5.4): L1..L5 in order, restart from L1 after any progress. PURE.
 import { buildTables } from './geometry';
 import { viewContradiction, type View } from './masks';

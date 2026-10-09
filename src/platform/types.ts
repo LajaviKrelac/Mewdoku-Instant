@@ -1,6 +1,8 @@
-// Owner: foundation (platform workstream: additive only).
-// Platform adapter contract (04 §4.4, §6). Depends only on game/ types.
-import type { SaveDataV1 } from '../game/types';
+// Owner: D (Phase 2b; F0 fixed the 2b contract: additive only, ask the lead to change a shape).
+// Platform adapter contract (04 §4.4, §6; phase2b §3.5, §5.4, §5.6, §8.4). Depends only on game/ types.
+import type { BoardKey, ProductId, SaveData } from '../game/types';
+
+export type { BoardKey, ProductId } from '../game/types';
 
 export type PlatformId = 'web' | 'fbig';
 
@@ -9,16 +11,25 @@ export interface Capabilities {
   rewarded: boolean;
   banner: boolean;
   cloudSave: boolean;
+  /** = ranking.caps().global (phase2b §5.4); drives the Home trophy (views.ts showTrophy). */
   leaderboards: boolean;
   share: boolean;
+  /** FB: getPlatform() !== 'IOS' and payments.purchaseAsync supported (phase2b §8.4). The Buy section also needs payments.ready(). */
   payments: boolean;
+  /** FB overlay views exist (overlayViews.createOverlayViewWithXMLString), phase2b §5.4. */
+  overlayViews: boolean;
+  /** FB tournaments usable for group challenges (phase2b §5.6); still behind flag groupChallenges. */
+  groups: boolean;
   /** Platform haptics OR navigator.vibrate. false → Settings hides "Vibration" (02 §14). */
   haptics: boolean;
 }
 
+/** A banner has no preload, so it is not an AdKind (phase2b §3.5): see PlatformAds.banner. */
 export type AdKind = 'interstitial' | 'rewarded';
-export type InterstitialPlacement = 'next_level' | 'retry' | 'daily_done';
-export type RewardedPlacement = 'hint' | 'kitty' | 'revive';
+/** phase2b §3.2 adds `event_next` (lead-approved F0 widening). */
+export type InterstitialPlacement = 'next_level' | 'retry' | 'daily_done' | 'event_next';
+/** phase2b §5.6 adds `group_double` (lead-approved F0 widening). */
+export type RewardedPlacement = 'hint' | 'kitty' | 'revive' | 'group_double';
 export type AdPlacement = InterstitialPlacement | RewardedPlacement;
 export type AdFailReason = 'unsupported' | 'no_fill' | 'not_ready' | 'skipped' | 'rate_limited' | 'timeout' | 'error';
 export type AdResult =
@@ -68,7 +79,7 @@ export interface PlatformStorage {
    * 'now' = setDataAsync at once (cancels the debounce); 'flush' = setDataAsync then flushDataAsync
    * (04 §7.1). Web: cloud is ignored. Never rejects: errors are retried or logged inside.
    */
-  save(data: SaveDataV1, opts: { cloud: 'debounced' | 'now' | 'flush' }): Promise<void>;
+  save(data: SaveData, opts: { cloud: 'debounced' | 'now' | 'flush' }): Promise<void>;
   status(): StorageStatus;
   /**
    * [Platform addition] One-time warning hook (04 §6.2): `cb` runs once, the first time the local
@@ -92,6 +103,116 @@ export interface PlatformAds {
   showInterstitial(p: InterstitialPlacement): Promise<AdResult>;
   /** ok only when watched to completion. Never rejects. */
   showRewarded(p: RewardedPlacement): Promise<AdResult>;
+  /**
+   * FB banner (phase2b §3.2, §3.5). Present only when the adapter can both show AND hide a banner
+   * (loadBannerAdAsync + hideBannerAdAsync supported, VITE_FB_PLACEMENT_BANNER set); capabilities().banner
+   * mirrors it. `show` loads and shows in one call (Meta's API); a call inside Meta's 45 s window answers
+   * { ok: false, reason: 'rate_limited' }. `unsupported` latches the banner off for the session. Never rejects.
+   * The app (banner-flow.ts) owns where and when: never on the game screen.
+   */
+  banner?: {
+    show(position: 'bottom'): Promise<AdResult>;
+    hide(): Promise<void>;
+  };
+}
+
+// ─────────────────────────── Rankings (phase2b §5.4) ───────────────────────────
+
+/** A leaderboard row as game code sees it: never a name or photo (those live only in overlay views, §5.7). */
+export interface RankEntry {
+  readonly rank: number;
+  readonly score: number;
+  /** false whenever the API cannot tell (NEZP entries carry session ids only). */
+  readonly isMe: boolean;
+}
+
+export interface RankingCaps {
+  /** Which leaderboard API the probe found (§5.4: classic, then NEZP, else none). */
+  readonly api: 'classic' | 'nezp' | 'none';
+  /** Top entries readable. */
+  readonly global: boolean;
+  /** My own rank readable (classic getPlayerEntryAsync); false on NEZP. */
+  readonly myRank: boolean;
+  /** Overlay views exist. */
+  readonly overlay: boolean;
+  /** = cfg.rank.overlayPlacement === 'rect' && overlay (§14 G3). */
+  readonly overlayInRect: boolean;
+}
+
+/** What the overlay list shows. [F0 addition: formatScore, rows are formatted by the app, see CONTRACTS-2b §4.4] */
+export interface RankListView {
+  /** Already localised by the caller. */
+  readonly title: string;
+  readonly scoreFormat: 'points' | 'time' | 'event';
+  readonly highlightMe: boolean;
+  /** Rows to fetch and show (≤ rank.topCount). */
+  readonly count: number;
+  /**
+   * Turns a raw board score into its display text ("1 240", "3:08", "13 of 21"). Supplied by the app
+   * (game/scoring.ts decode + i18n formatting): platform/ may not import game/ values (CONTRACTS §2).
+   */
+  readonly formatScore: (score: number) => string;
+}
+
+export interface RankingProvider {
+  caps(): RankingCaps;
+  /** 'unsupported' also when the board has no platform id (VITE_FB_LEADERBOARDS). 'not_improved' is not an error. Never rejects. */
+  submit(board: BoardKey, score: number): Promise<'ok' | 'not_improved' | 'unsupported' | 'error'>;
+  /** null unless caps().myRank, and on error or timeout (rank.fetchTimeoutMs). Never rejects. */
+  mine(board: BoardKey): Promise<RankEntry | null>;
+  /** [] when unsupported, on error or timeout. Never fabricated: only rows the API returned. Never rejects. */
+  top(board: BoardKey, n: number): Promise<readonly RankEntry[]>;
+  /**
+   * Overlay view with names and photos. With `rect` it is placed inside it (only when
+   * caps().overlayInRect); without, FB presents it its own way. null when unsupported or on error.
+   */
+  showList(board: BoardKey, view: RankListView, rect?: DOMRect): Promise<{ close(): void } | null>;
+}
+
+// ─────────────────────────── Group challenges (phase2b §5.6) ───────────────────────────
+
+export interface GroupProvider {
+  /** tournament.createAsync (FB's dialog); null when the player cancels, is already in one, or on error. */
+  create(endTimeMs: number, title: string): Promise<{ id: string } | null>;
+  /** The tournament of the current context (getTournamentAsync), or null. */
+  current(): Promise<{ id: string; endTimeMs: number } | null>;
+  /** tournament.postScoreAsync(score); false on any error (not retried). */
+  post(score: number): Promise<boolean>;
+  /** Absent unless §14 G2 finds a standings API. */
+  standings?(id: string): Promise<{ myRank: number; count: number; tiedFirst: boolean } | null>;
+}
+
+// ─────────────────────────── Payments (phase2b §8.2, §8.4) ───────────────────────────
+
+/** A catalogue row: only what we show. Titles and descriptions come from our i18n (shop.product.<id>.*). */
+export interface Product {
+  readonly id: ProductId;
+  /** Localised price string from the catalogue, shown as is. */
+  readonly price: string;
+  readonly currency: string;
+}
+
+/** An FB purchase (§8.2 fields we use). No price or payment ids go to analytics. */
+export interface Purchase {
+  readonly productId: ProductId;
+  readonly purchaseToken: string;
+  readonly paymentId: string;
+  readonly purchaseTime: number;
+  readonly developerPayload?: string;
+}
+
+export type PurchaseFailReason = 'cancelled' | 'not_ready' | 'unsupported' | 'error';
+
+export interface PaymentsProvider {
+  /** onReady fired. */
+  ready(): boolean;
+  /** cb at once if already ready; never called on iOS / Messenger.com (payments unsupported). */
+  onReady(cb: () => void): void;
+  catalog(): Promise<readonly Product[]>;
+  purchase(id: ProductId, payload: string): Promise<{ ok: true; p: Purchase } | { ok: false; reason: PurchaseFailReason }>;
+  /** Unconsumed purchases; null on failure (the boot restore then changes nothing). */
+  purchases(): Promise<readonly Purchase[] | null>;
+  consume(token: string): Promise<boolean>;
 }
 
 export type AnalyticsParams = Record<string, string | number>;
@@ -109,11 +230,21 @@ export interface PlatformAdapter {
   ads: PlatformAds;
   analytics: { log(name: string, params?: AnalyticsParams): void };
   haptics: { pulse(pattern: number | readonly number[]): void };
+  /**
+   * @deprecated Phase 1 placeholder, never implemented. Phase 2b uses `ranking` (phase2b §5.4).
+   * Kept because types are additive only.
+   */
   leaderboards?: {
     // Phase 4, optional capability
     submit(board: string, score: number, extra?: string): Promise<void>;
     show?(board: string): Promise<void>; // FB overlay view (05 §8)
   };
+  /** FB leaderboards + overlay views (phase2b §5.4). Undefined on web: the panel shows personal records. */
+  ranking?: RankingProvider;
+  /** FB tournaments (phase2b §5.6). Undefined on web. */
+  groups?: GroupProvider;
+  /** FB payments (phase2b §8.4). Undefined on web: no payments code is bundled there. */
+  payments?: PaymentsProvider;
 }
 
 /** Both adapters export `createPlatform(): PlatformAdapter` from their index.ts (imported via '@platform'). */

@@ -1,4 +1,4 @@
-// Owner: ui-board
+// Owner: B (Phase 2b; was ui-board)
 // Reduced-motion resolution: system preference + the Settings value (02 §14, §17.5, §18).
 import type { ReduceMotionSetting } from '../../game/types';
 

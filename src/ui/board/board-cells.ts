@@ -1,7 +1,11 @@
-// Owner: ui-board
+// Owner: A (Phase 2b)
 // Cell DOM for the board (04 §5.3, 02 §17.4, §18): one <button class="cell"> per cell holding a
-// coloured tile (inset per region-aware gaps) and one inline SVG with the X strokes, plus the cat,
-// blink lid and pattern glyph <use>s created on demand. State lives in data-s (e|m|c|w|g).
+// coloured tile (inset per the even gutters, phase2b §1.5) and one inline SVG with the X strokes, plus
+// the cat, blink lid and pattern glyph <use>s created on demand. State lives in data-s (e|m|c|w|g).
+// Phase 2b F0 (phase2b §1.10, §12.3 A → B): two inert nodes B animates — `span.cell__glow` behind
+// the cat (every cell; the solved-board glow) and `use.cell__ear` (href #cat-ear-flick) in the cat
+// group (every cat cell; shown only on .cell.is-flick). A adds the X edge underlay (.cell__xe, --xe)
+// and styles both nodes.
 import { cfg } from '../../app/config';
 import type { CellIndex } from '../../engine/types';
 import { CellState } from '../../game/types';
@@ -96,7 +100,11 @@ export function buildCell(cell: CellIndex, paletteIndex: number, insets: CellIns
     p.setAttribute('d', d);
     svg.appendChild(p);
   }
-  el.append(tile, svg);
+  // phase2b §2.2 glow node (inert until B animates it; A styles it in board.css).
+  const glow = doc.createElement('span');
+  glow.className = 'cell__glow';
+  glow.setAttribute('aria-hidden', 'true');
+  el.append(tile, glow, svg);
   return { el, tile, svg, cat: null, pattern: null };
 }
 
@@ -120,7 +128,9 @@ export function ensureCat(refs: CellRefs, mood: CatMood): SVGUseElement {
   g.setAttribute('class', 'cell__catg');
   const cat = makeUse('cell__cat', `#cat-${mood}`, [off, off, size]);
   const blink = makeUse('cell__blink', '#cat-blink', [off, off, size]);
-  g.append(cat, blink);
+  // phase2b §2.9 ear flick overlay: hidden unless the cell has .is-flick (B toggles it).
+  const ear = makeUse('cell__ear', '#cat-ear-flick', [off, off, size]);
+  g.append(cat, blink, ear);
   refs.svg.appendChild(g);
   refs.cat = cat;
   return cat;

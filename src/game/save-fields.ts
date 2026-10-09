@@ -1,9 +1,9 @@
-// Owner: game
+// Owner: C (Phase 2b)
 // Save-schema building blocks (04 §4.3, §7.2): value guards, record/slot shape checks, the cells codec
 // and the in-progress validation against a puzzle. PURE. Re-exported through save.ts.
 import { cfg, type GameConfig } from '../app/config';
 import type { Puzzle, PuzzleId } from '../engine/types';
-import { CellState, type DailyRecord, type InProgressV1, type LevelBest } from './types';
+import { CellState, type DailyRecord, type InProgressV2, type LevelBest } from './types';
 
 // ─────────────────────────────── guards ───────────────────────────────
 
@@ -27,6 +27,10 @@ export function isTime(x: unknown): x is number {
 export const DATE_KEY_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 const LEVEL_ID_RE = /^L[1-9]\d*$/;
 const DAILY_ID_RE = /^D\d{4}-\d{2}-\d{2}$/;
+/** Event slot id E<eventId>/<i> (phase2b §4.4, §9.1); the event id follows EVENT_ID_RE. */
+const EVENT_SLOT_ID_RE = /^E[a-z0-9-]{3,40}\/(0|[1-9]\d{0,3})$/;
+/** Event ids (phase2b §4.2). */
+export const EVENT_ID_RE = /^[a-z0-9-]{3,40}$/;
 const LEVEL_KEY_RE = /^[1-9]\d*$/;
 
 export function isLevelBest(x: unknown): x is LevelBest {
@@ -63,9 +67,9 @@ function readMap<T>(
 }
 
 /** Structural check of a stored slot (types and id format only; the puzzle check is validateInProgress). */
-export function isInProgressShape(x: unknown, mode: 'level' | 'daily'): x is InProgressV1 {
+export function isInProgressShape(x: unknown, mode: InProgressV2['mode']): x is InProgressV2 {
   if (!isRecord(x) || x.mode !== mode || typeof x.id !== 'string') return false;
-  if (!(mode === 'level' ? LEVEL_ID_RE : DAILY_ID_RE).test(x.id)) return false;
+  if (!(mode === 'level' ? LEVEL_ID_RE : mode === 'daily' ? DAILY_ID_RE : EVENT_SLOT_ID_RE).test(x.id)) return false;
   if (typeof x.cells !== 'string' || !/^[0-4]+$/.test(x.cells)) return false;
   const n = Math.round(Math.sqrt(x.cells.length));
   if (n * n !== x.cells.length || n < 4 || n > 12) return false;
@@ -81,7 +85,7 @@ export function isInProgressShape(x: unknown, mode: 'level' | 'daily'): x is InP
 }
 
 /** A copy of a valid slot without unknown fields. */
-export function copySlot(s: InProgressV1): InProgressV1 {
+export function copySlot(s: InProgressV2): InProgressV2 {
   return {
     id: s.id,
     mode: s.mode,
@@ -142,9 +146,9 @@ export function slotLimitsOf(c: GameConfig = cfg): SlotLimits {
 
 /** 04 §7.2 checks: mode/id, length/chars, Cat/Wrong/Given placement, Wrong count, hearts invariant. */
 export function validateInProgress(
-  slot: InProgressV1,
+  slot: InProgressV2,
   puzzle: Puzzle,
-  expect: { mode: 'level' | 'daily'; id: PuzzleId },
+  expect: { mode: InProgressV2['mode']; id: PuzzleId },
   c: GameConfig = cfg,
 ): SlotCheck {
   return validateSlot(slot, puzzle, expect, slotLimitsOf(c));
@@ -152,9 +156,9 @@ export function validateInProgress(
 
 /** validateInProgress with explicit limits (restoreGame passes the RuleFlags it will play with). */
 export function validateSlot(
-  slot: InProgressV1,
+  slot: InProgressV2,
   puzzle: Puzzle,
-  expect: { mode: 'level' | 'daily'; id: PuzzleId },
+  expect: { mode: InProgressV2['mode']; id: PuzzleId },
   lim: SlotLimits,
 ): SlotCheck {
   if (!isRecord(slot)) return fail('shape');

@@ -1,4 +1,4 @@
-// Owner: ui-board. scripts/palette-check.ts: CIEDE2000, CVD simulation, contrast, and the shipped palette passes.
+// Owner: A (Phase 2b; was ui-board). scripts/palette-check.ts: CIEDE2000, CVD simulation, contrast, and the shipped palette passes.
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';

@@ -1,4 +1,4 @@
-// Owner: ui-board
+// Owner: B (Phase 2b; was ui-board)
 // Keyboard play (02 §6.3, §18): roving tabindex on the cell buttons, arrows move, Space = tap,
 // Enter = double-tap, H = hint, K = kitty. Esc is handled globally by the router.
 // Like a pointer double-tap, Enter locks its cell for input.cellLockAfterCatMs (02 §6.2): a quick

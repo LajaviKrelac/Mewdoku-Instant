@@ -1,4 +1,4 @@
-// Owner: ui-shell
+// Owner: B (Phase 2b; was ui-shell)
 // O3 win overlay (02 §5 O3, §10.1): praise word, celebrating cat, confetti, Next enabled after
 // buttonDelayMs, Home always enabled. Phase 3 hook: an empty reward slot element (02 §22).
 // Esc and scrim taps are ignored: the player picks Next or Home.

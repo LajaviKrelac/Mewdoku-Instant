@@ -1,4 +1,4 @@
-// Owner: app
+// Owner: C (Phase 2b; was app)
 // Lazy chunk import that survives a failed download (04 §8, §9). Chromium keeps a failed dynamic
 // import() in its module map: importing the same URL again rejects at once, with no new request, so
 // "a later call retries" never recovers. After a failure the chunk is therefore imported again from

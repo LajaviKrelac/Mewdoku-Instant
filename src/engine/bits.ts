@@ -1,4 +1,4 @@
-// Owner: engine
+// Owner: read-only (Phase 2b; was engine)
 // Bit helpers for ≤ 32-bit row/column/region masks (03 §2). PURE.
 
 /** Population count of a 32-bit value (branch-free SWAR, 03 §2). */

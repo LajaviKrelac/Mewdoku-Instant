@@ -1,4 +1,4 @@
-// Owner: game
+// Owner: C (Phase 2b; was game)
 // Pure reducer (02 §6.2, §7.3, §8; status × action matrix in 04 §4.2).
 // An action not allowed in the current status returns { state: s, events: [] }.
 import { newGame } from './factory';

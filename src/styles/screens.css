@@ -1,0 +1,5 @@
+/* Owner: B (phase2b §2.4, §2.5, §4.4, §5.5, §8.5)
+   The new screens and overlays: ranking panel, victory screen, shop sheet, rankings hub, group
+   result, event screen, the fish pill and the Home event card. Tokens only (no colour literals outside
+   tokens.css, tests/unit/ui/css-rules.spec.ts); logical properties for the inline start/end (RTL,
+   phase2b §6.5). Empty at F0. */

@@ -1,4 +1,4 @@
-// Owner: engine
+// Owner: read-only (Phase 2b; was engine)
 // 03 §11.1 bits: popcount and bit iteration against naive versions over random 32-bit values.
 import { describe, expect, it } from 'vitest';
 import { bitIndices, forEachBit, fullMask, lowestBitIndex, popcount } from '../../../src/engine/bits';

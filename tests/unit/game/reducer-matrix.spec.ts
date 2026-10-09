@@ -1,4 +1,4 @@
-// Owner: game. 04 §4.2 status × action matrix, REVIVE / RETRY, TICK, terminal states, invariants (02 §8).
+// Owner: C (Phase 2b; was game). 04 §4.2 status × action matrix, REVIVE / RETRY, TICK, terminal states, invariants (02 §8).
 import { describe, expect, it } from 'vitest';
 import { newGame } from '../../../src/game/factory';
 import { ALLOWED_STATUSES, canRevive, isActionAllowed, reduce } from '../../../src/game/reducer';

@@ -1,15 +1,15 @@
-// Owner: app. Session resilience fixes from the Phase 2 review (04 §8 "the player never sees a dead
+// Owner: C (Phase 2b; was app). Session resilience fixes from the Phase 2 review (04 §8 "the player never sees a dead
 // end"): the top-bar Home before O4 shows saves the lost board (logic-1); a card whose lazy chunk
 // cannot be loaded is never charged for and never leaves the game stuck (logic-2 / RP-2); a TICK
 // during the kitty's engine call does not drop the kitty (logic-3); O7 after a daily solved past
 // midnight does not count down a whole new day (logic-5 / SPEC-03).
 import { describe, expect, it } from 'vitest';
 import { localDateKey, localMidnightAfter, msUntilLocalMidnight } from '../../../src/game/progression';
-import type { SaveDataV1 } from '../../../src/game/types';
+import type { SaveData } from '../../../src/game/types';
 import { t } from '../../../src/i18n';
 import { createHarness, slice, SOL5, startLevel, WRONG5, type Harness } from './harness';
 
-function withStock(hints: number, kitties: number): (s: SaveDataV1) => SaveDataV1 {
+function withStock(hints: number, kitties: number): (s: SaveData) => SaveData {
   return (s) => ({ ...s, stock: { hints, kitties } });
 }
 
@@ -206,7 +206,7 @@ describe('logic-5 / SPEC-03: O7 for a daily solved after midnight', () => {
 describe('PLAT-1 edge: a late cloud merge moves progress on while an older level is open', () => {
   /** The FB cloud copy lands mid-level: progress is now level 9, with level 9's board in the slot. */
   function lateCloudMerge(h: Harness): void {
-    const l9 = { ...(h.save().inProgress.level as NonNullable<SaveDataV1['inProgress']['level']>), id: 'L9' as const, cells: 'cloud-board', savedAt: 1 };
+    const l9 = { ...(h.save().inProgress.level as NonNullable<SaveData['inProgress']['level']>), id: 'L9' as const, cells: 'cloud-board', savedAt: 1 };
     h.store.update((app) => ({
       ...app,
       save: { ...app.save, progress: { level: 9, completed: 8, best: {} }, inProgress: { ...app.save.inProgress, level: l9 } },

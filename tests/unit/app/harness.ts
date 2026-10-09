@@ -1,4 +1,4 @@
-// Owner: app. Fakes for the app-layer tests: platform, router, audio, levels; a session builder
+// Owner: C (Phase 2b; was app). Fakes for the app-layer tests: platform, router, audio, levels; a session builder
 // whose fakes all write into ONE ordered log, so flow-ordering tests read like the 04 §5.7 pseudocode.
 import { createAdFlow } from '../../../src/app/ad-flow';
 import { createFakeClock, type FakeClock } from '../../../src/app/clock';
@@ -12,7 +12,7 @@ import type { HintStep, Puzzle, PuzzleId } from '../../../src/engine/types';
 import type { LevelsRepo, LoadedPuzzle } from '../../../src/game/levels-repo';
 import { defaults } from '../../../src/game/save';
 import { tutorialPuzzle } from '../../../src/game/tutorial';
-import type { SaveDataV1 } from '../../../src/game/types';
+import type { SaveData } from '../../../src/game/types';
 import type { AdResult, Capabilities, PlatformAdapter, RawSave } from '../../../src/platform/types';
 import type { GameScreen, GameView } from '../../../src/ui/screens/game-screen';
 import type { HomeView } from '../../../src/ui/screens/home-screen';
@@ -61,7 +61,7 @@ export interface FakePlatform extends PlatformAdapter {
   /** Results returned by the next shows (FIFO); default { ok: true }. A function result can delay. */
   readonly interstitialResults: (AdResult | (() => Promise<AdResult>))[];
   readonly rewardedResults: (AdResult | (() => Promise<AdResult>))[];
-  readonly writes: { data: SaveDataV1; cloud: 'debounced' | 'now' | 'flush' }[];
+  readonly writes: { data: SaveData; cloud: 'debounced' | 'now' | 'flush' }[];
   readonly events: AnalyticsEvent[];
   readonly pulses: (number | readonly number[])[];
   pauseCb: (() => void) | null;
@@ -84,6 +84,8 @@ export function createFakePlatform(log: Log, caps: Partial<Capabilities> = {}): 
       share: false,
       payments: false,
       haptics: true,
+      overlayViews: false,
+      groups: false,
       ...caps,
     },
     interstitialResults: [],
@@ -186,11 +188,16 @@ export function createFakeRouter(bus: AppBus, log: Log): FakeRouter {
         update: (v) => void (g.last = v),
         destroy: () => undefined,
         playEvent: (ev) => void g.played.push(ev.type),
-        playEntry: () => void g.entries++,
+        playEntry: () => (g.entries++, cfg.fx.boardEntryMs),
         cellRect: () => null,
         toolRect: () => null,
         boardRect: () => null,
         focusBoard: () => undefined,
+        // phase2b win-flow hooks (B's GameScreen; unused by the Phase 2 session)
+        fishRect: () => null,
+        showFishPill: () => undefined,
+        fishLabel: () => undefined,
+        glow: () => ({ done: Promise.resolve(), cancel: () => undefined, finish: () => undefined }),
       };
       r.game = g;
       bus.emit('screen', { screen: 'game' });
@@ -296,7 +303,7 @@ export function createFakeAudio(log: Log) {
 // ─────────────────────────────── harness ───────────────────────────────
 
 export interface HarnessOptions {
-  readonly save?: (s: SaveDataV1) => SaveDataV1;
+  readonly save?: (s: SaveData) => SaveData;
   readonly caps?: Partial<Capabilities>;
   readonly config?: DeepPartial<GameConfig>;
   readonly levels?: Partial<LevelsRepo>;
@@ -320,7 +327,7 @@ export interface Harness {
   readonly muted: Set<string>;
   readonly config: GameConfig;
   homeCalls: number;
-  save(): SaveDataV1;
+  save(): SaveData;
   game(): NonNullable<AppState['game']>;
   /** Lets promise chains settle and fires due timers. */
   settle(ms?: number): Promise<void>;
@@ -331,7 +338,7 @@ export function createHarness(opts: HarnessOptions = {}): Harness {
   const clock = createFakeClock(NOW);
   const bus = createEventBus<AppEventMap>();
   const config = opts.config ? mergeConfig(opts.config) : cfg;
-  const base: SaveDataV1 = { ...defaults(NOW - 30 * 86_400_000), tutorialDone: true, progress: { level: 5, completed: 4, best: {} } };
+  const base: SaveData = { ...defaults(NOW - 30 * 86_400_000), tutorialDone: true, progress: { level: 5, completed: 4, best: {} } };
   const store = createStore<AppState>(initialAppState(opts.save ? opts.save(base) : base));
   const platform = createFakePlatform(log, opts.caps);
   const router = createFakeRouter(bus, log);

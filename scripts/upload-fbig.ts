@@ -1,4 +1,4 @@
-// Owner: platform
+// Owner: D (Phase 2b; was platform)
 // Phase 4: Graph API upload (05 §12): app token from FB_APP_ID / FB_APP_SECRET (env only), then
 // POST graph-video.facebook.com/{app_id}/assets with type=BUNDLE.
 //

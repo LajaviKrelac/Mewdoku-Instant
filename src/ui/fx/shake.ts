@@ -1,4 +1,4 @@
-// Owner: ui-board
+// Owner: B (Phase 2b; was ui-board)
 // WAAPI board shake: ±cfg.fx.shakePx, 3 decaying cycles, cfg.fx.wrongShakeMs (02 §17.5).
 import { cfg } from '../../app/config';
 

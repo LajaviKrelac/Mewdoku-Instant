@@ -1,4 +1,4 @@
-// Owner: platform
+// Owner: D (Phase 2b; was platform)
 // FBInstant adapter (04 §6.3, 05 §4): initializeAsync first, capabilities from getSupportedAPIs()
 // (ads only with non-empty VITE_FB_PLACEMENT_* IDs), locale read after startGameAsync.
 //
@@ -144,6 +144,9 @@ export function createFbPlatform(opts: FbPlatformOptions = {}): PlatformAdapter 
     share: false,
     payments: false,
     haptics: has(FB_API.haptics) || canVibrate(nav),
+    // phase2b §5.4, §5.6: D sets these from the probe (overlayViews.*, tournament.*). Off until then.
+    overlayViews: false,
+    groups: false,
   });
 
   const playerId = (): string | null => {

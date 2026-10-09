@@ -1,4 +1,4 @@
-// Owner: engine
+// Owner: read-only (Phase 2b; was engine)
 // 03 §7 / §11.1 rng: cyrb128 + sfc32 golden outputs, warm-up, int(n) by rejection sampling
 // (unbiased, χ² over 10⁶ draws), shuffle is a permutation, determinism.
 import { describe, expect, it } from 'vitest';
