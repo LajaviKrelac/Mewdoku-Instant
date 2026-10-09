@@ -1,31 +1,41 @@
-// Owner: A (phase2b §1.12)
+// Owner: A (phase2b §1.12); G2 (Phase 2c: the lives are fish, the period pill and counter, the 2c victory)
 // Visual review screenshots of the Classic look at 320, 390 and 1280 (the web-320, web-390 and
-// web-1280 projects): Home, mid-game, ranking, victory, fail, settings, shop and event. They are
-// stored under docs/phase2b/screenshots/ (VISUAL_OUT overrides the folder) and reviewed by a person,
-// never diffed in CI. Each test also asserts the few things a screenshot cannot show on its own: the
-// screen is really there and the Classic tokens are live.
+// web-1280 projects): Home, mid-game, the fish loss, the win flight, ranking, victory, fail, settings
+// and event. Phase 2c (fish-lives-spec §9 "screenshots re-captured"): they are stored under
+// docs/phase2c/screenshots/ as G2-visual-<screen>-<width>.png (VISUAL_OUT overrides the folder) and
+// reviewed by a person, never diffed in CI. Each test also asserts the few things a screenshot cannot
+// show on its own: the screen is really there, the Classic tokens are live, and the 2c parts (three
+// fish for lives, the period pill, the kept-fish row) are on screen. The shop is FB-only in 2c (§5.2):
+// fbig.spec.ts covers it.
 import { mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
 import type { E2EHooks } from '../../src/app/boot';
 import { defaults } from '../../src/game/save';
+import { periodKeyAt } from '../../src/game/scoring';
 import type { SaveData } from '../../src/game/types';
 
 type TestWindow = Window & { __mewdoku?: E2EHooks };
 
-const OUT = process.env.VISUAL_OUT ?? resolve(dirname(fileURLToPath(import.meta.url)), '../../docs/phase2b/screenshots');
+const OUT = process.env.VISUAL_OUT ?? resolve(dirname(fileURLToPath(import.meta.url)), '../../docs/phase2c/screenshots');
 mkdirSync(OUT, { recursive: true });
 
 const NOW = Date.now();
-const returning = (patch: Partial<SaveData> = {}): SaveData => ({
-  ...defaults(NOW - 3 * 86_400_000),
-  tutorialDone: true,
-  sessions: 4,
-  progress: { level: 12, completed: 11, best: {} },
-  wallet: { fish: 128, earned: 128 },
-  ...patch,
-});
+/** A returning player: level 12, 39 fish this week (this UTC week's key), a perfect streak of 3. */
+const returning = (patch: Partial<SaveData> = {}): SaveData => {
+  const base = defaults(NOW - 3 * 86_400_000);
+  const key = periodKeyAt(NOW);
+  return {
+    ...base,
+    tutorialDone: true,
+    sessions: 4,
+    progress: { level: 12, completed: 11, best: {} },
+    streak: { current: 3, best: 9 },
+    period: { key, total: 39, bestKey: key, bestTotal: 39 },
+    ...patch,
+  };
+};
 
 async function ready(page: Page, screen?: string): Promise<void> {
   await page.waitForFunction(
@@ -48,7 +58,7 @@ async function open(page: Page, save: SaveData): Promise<void> {
 
 async function shot(page: Page, name: string): Promise<void> {
   const width = page.viewportSize()?.width ?? 0;
-  await page.screenshot({ path: join(OUT, `A-visual-${name}-${width}.png`) });
+  await page.screenshot({ path: join(OUT, `G2-visual-${name}-${width}.png`) });
 }
 
 const solution = (page: Page) => page.evaluate(() => (window as TestWindow).__mewdoku?.solution() ?? []);
@@ -71,7 +81,7 @@ async function solve(page: Page): Promise<void> {
   for (let r = 0; r < sol.length; r++) await placeCat(page, r * sol.length + (sol[r] as number));
 }
 
-test.describe('Classic look, visual review (phase2b §1.12)', () => {
+test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
   test('home', async ({ page }) => {
     await open(page, returning());
     await expect(page.locator('.home__mascot svg.illus--home')).toBeVisible();
@@ -81,6 +91,12 @@ test.describe('Classic look, visual review (phase2b §1.12)', () => {
       return { page: cs.getPropertyValue('--page').trim(), accent: cs.getPropertyValue('--accent').trim() };
     });
     expect(vars).toEqual({ page: '#faf6f0', accent: '#e57010' });
+    // Phase 2c §2.8: the period pill (this week's fish), not a fish pill with a shop "+".
+    const pill = page.locator('.screen--home .top-bar .period-pill');
+    await expect(pill).toBeVisible();
+    await expect(pill).toHaveAttribute('aria-label', '39 fish this week');
+    await expect(pill.locator('.period-pill__n')).toHaveText('39');
+    await expect(page.locator('.fish-pill, .fish-pill__plus')).toHaveCount(0);
     await shot(page, 'home');
   });
 
@@ -97,30 +113,68 @@ test.describe('Classic look, visual review (phase2b §1.12)', () => {
     const x = page.locator('.cell[data-s="m"]').first();
     await expect(x.locator('.cell__xe')).toHaveCount(2);
     expect(await x.evaluate((el) => getComputedStyle(el.querySelector('.cell__x') as Element).stroke)).toBe('rgb(255, 255, 255)');
+    // Phase 2c §1.1: three fish where the hearts were.
+    await expect(page.locator('.pill--lives .life[data-full]')).toHaveCount(3);
+    await expect(page.locator('.pill--lives')).toHaveAttribute('aria-label', '3 of 3 fish left');
+    await expect(page.locator('.pill--hearts, .heart')).toHaveCount(0);
     await page.waitForTimeout(400);
     await shot(page, 'game');
+  });
+
+  test('a mistake: the fish loss mid-animation, then two fish left', async ({ page }) => {
+    await open(page, returning());
+    const sol = await startLevel(page);
+    const n = sol.length;
+    await cell(page, ((sol[0] as number) + 1) % n).dblclick();
+    // §1.3: the falling fish and the droplets are in the last slot while the loss plays (700 ms).
+    await expect(page.locator('.life.life--lose .life__lost')).toHaveCount(1);
+    await page.waitForTimeout(260);
+    await shot(page, 'mistake-mid-loss');
+    await page.waitForTimeout(900);
+    await expect(page.locator('.pill--lives .life[data-full]')).toHaveCount(2);
+    await expect(page.locator('.pill--lives')).toHaveAttribute('aria-label', '2 of 3 fish left');
+    await expect(page.locator('.life__lost')).toHaveCount(0);
+    await shot(page, 'mistake-after');
   });
 
   test('fail', async ({ page }) => {
     await open(page, returning());
     const sol = await startLevel(page);
     const n = sol.length;
-    // one wrong cat in each of three rows: three hearts lost
+    // one wrong cat in each of three rows: three fish lost
     for (const r of [0, 2, 4]) await placeCat(page, r * n + (((sol[r] as number) + 1) % n));
     await expect(page.locator('.overlay[data-overlay="fail"]')).toBeVisible({ timeout: 6000 });
+    await expect(page.locator('.overlay[data-overlay="fail"] .overlay__title')).toHaveText('Out of fish');
+    await expect(page.locator('.fail__continue .btn__badge .btn__badge-icon use')).toHaveAttribute('href', '#icon-fish');
     await page.waitForTimeout(900);
     await shot(page, 'fail');
   });
 
-  test('ranking and victory', async ({ page }) => {
+  test('the win flight, the ranking panel and the victory', async ({ page }) => {
     await open(page, returning());
     await solve(page);
+    // §2.2: the period counter shows this week's total before the win, the kept fish fly to it.
+    const counter = page.locator('.pills .period-pill[data-in-game]');
+    await expect(counter).toBeVisible({ timeout: 4000 });
+    await expect(page.locator('.fx-layer .fx-fish').first()).toBeAttached({ timeout: 4000 });
+    await page.waitForTimeout(450);
+    await shot(page, 'win-flight');
+    await expect(counter).toHaveAttribute('aria-label', '42 fish this week', { timeout: 4000 });
+    await expect(page.locator('.pill--lives .life[data-full]')).toHaveCount(0);
     await expect(page.locator('.overlay[data-overlay="ranking"]')).toBeVisible({ timeout: 8000 });
+    await expect(page.locator('.ranking__title')).toHaveText('Weekly ranking');
+    await expect(page.locator('.ranking__sub')).toHaveText('+3 fish · This week: 42');
     await page.waitForTimeout(700);
     await shot(page, 'ranking');
     await page.waitForTimeout(1300); // the tap gate
     await page.mouse.click(10, (page.viewportSize()?.height ?? 600) - 10);
     await expect(page.locator('.overlay[data-overlay="victory"]')).toBeVisible({ timeout: 4000 });
+    // §2.7: the kept fish, "+3", "This week: 42", the level points and "Perfect ×4"; no fish pill.
+    await expect(page.locator('.victory__kept')).toHaveAttribute('data-count', '3');
+    await expect(page.locator('.victory__period')).toHaveText('This week: 42');
+    await expect(page.locator('.victory__points')).toHaveText(/^\+\d+ points$/);
+    await expect(page.locator('.victory__streak')).toHaveText('Perfect ×4');
+    await expect(page.locator('.victory__top, .fish-pill')).toHaveCount(0);
     await page.waitForTimeout(900);
     await shot(page, 'victory');
   });
@@ -129,16 +183,21 @@ test.describe('Classic look, visual review (phase2b §1.12)', () => {
     await open(page, returning());
     await page.locator('.top-bar__btn--settings').click();
     await expect(page.locator('.overlay[data-overlay="settings"]')).toBeVisible();
+    // §5.2: the web build has no payments, so Settings has no Shop row.
+    await expect(page.locator('.overlay[data-overlay="settings"] .settings__shop-link')).toBeHidden();
     await page.waitForTimeout(400);
     await shot(page, 'settings');
   });
 
-  test('shop', async ({ page }) => {
+  test('how to play: the lives are fish, then the weekly points note', async ({ page }) => {
     await open(page, returning());
-    await page.locator('.fish-pill__plus').first().click();
-    await expect(page.locator('.overlay[data-overlay="shop"]')).toBeVisible();
-    await page.waitForTimeout(400);
-    await shot(page, 'shop');
+    await page.locator('.top-bar__btn--settings').click();
+    await page.locator('.overlay[data-overlay="settings"] .settings__howto-link').click();
+    await expect(page.locator('.overlay[data-overlay="how_to_play"] .howto__lives use')).toHaveAttribute('href', '#icon-fish');
+    await expect(page.locator('.overlay[data-overlay="how_to_play"] .howto__points')).toContainText('every Monday at 00:00 UTC');
+    await page.locator('.overlay[data-overlay="how_to_play"] .howto__points').scrollIntoViewIfNeeded();
+    await page.waitForTimeout(300);
+    await shot(page, 'howto');
   });
 
   test('event', async ({ page }) => {
@@ -150,6 +209,7 @@ test.describe('Classic look, visual review (phase2b §1.12)', () => {
     await page.locator('.event-card').click();
     await ready(page, 'event');
     await expect(page.locator('[data-event-theme="lantern-walk-2026"]').first()).toBeVisible();
+    await expect(page.locator('.event__node-icon use[href="#icon-fish"]')).toHaveCount(0);
     await page.waitForTimeout(500);
     await shot(page, 'event');
   });
@@ -160,7 +220,8 @@ test.describe('Classic look, visual review (phase2b §1.12)', () => {
 // "Level N" and "Puzzle N" and its Home, and the event screen's Play, Top list and Home sit at least
 // ads.banner.buttonClearancePx (16) above the mock banner at 320 × 568 (web-320) and 360 × 640 and
 // 375 × 667 (web-390). Home with the event card and the banner never overlaps itself (UX-2,
-// I18N-LAYOUT-2). The victory rays never paint over the fish pill (UX-13).
+// I18N-LAYOUT-2). The victory rays never paint over the reward rows (UX-13; Phase 2c: the kept-fish
+// row replaced the fish pill).
 
 const IN_EVENT = new Date('2026-11-16T12:00:00Z').getTime(); // Lantern Walk: 2026-11-13 → 2026-11-27
 const CLEARANCE = 16;
@@ -291,7 +352,7 @@ test.describe('short phones with the banner band (review UX-1, UX-2, I18N-LAYOUT
     }
   });
 
-  test('the victory rays never paint over the fish pill (UX-13)', async ({ page }, info) => {
+  test('the victory rays never paint over the kept-fish row (UX-13)', async ({ page }, info) => {
     test.skip(info.project.name !== 'web-390', 'one size is enough');
     await page.setViewportSize({ width: 360, height: 640 });
     await open(page, returning());
@@ -306,7 +367,7 @@ test.describe('short phones with the banner band (review UX-1, UX-2, I18N-LAYOUT
       content:
         '.victory__rays{pointer-events:auto!important;background:#f00!important;-webkit-mask-image:none!important;mask-image:none!important;width:3000px!important;height:3000px!important;margin:-1500px 0 0 -1500px!important}',
     });
-    expect(await onTop(page, '.victory__top .fish-pill__count')).toBe(true);
-    expect(await onTop(page, '.victory__top .fish-pill__plus')).toBe(true);
+    expect(await onTop(page, '.victory__kept .victory__period')).toBe(true);
+    expect(await onTop(page, '.victory__score .victory__points')).toBe(true);
   });
 });

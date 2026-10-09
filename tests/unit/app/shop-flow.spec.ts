@@ -1,7 +1,11 @@
-// Owner: C. The shop (phase2b §2.8, §8.4–§8.6, §8.8): the record → grant → critical save → consume
+// Owner: C (Phase 2b). Phase 2c (G1, docs/phase2c/fish-lives-spec.md §5.2, §5.3): no fish swaps, the
+// sheet sells iap.catalog only (even when a test app's dashboard still lists the fish packs), a retired
+// pack is never bought, and a boot restore of an unconsumed fish_250 grants 10 hints + 3 kitties once
+// and consumes it.
+// The shop (phase2b §8.4–§8.6, §8.8): the record → grant → critical save → consume
 // order; a crash between grant and consume followed by a boot restore consumes only (no second
 // grant); No Ads consumed and kept; purchases() null changes nothing; the Buy section waits for
-// onReady (late onReady shows it, iOS never); a cancel is silent; fish swaps; grantBeforeConsume false.
+// onReady (late onReady shows it, iOS never); a cancel is silent; grantBeforeConsume false.
 import { describe, expect, it } from 'vitest';
 import { createFakeClock } from '../../../src/app/clock';
 import { mergeConfig, type GameConfig } from '../../../src/app/config';
@@ -13,6 +17,7 @@ import type { PaymentsProvider, PlatformId, Product, Purchase, PurchaseFailReaso
 import type { ShopProps } from '../../../src/ui/overlays/shop-sheet';
 import { NOW } from './harness';
 
+/** What a test app's dashboard may still list: the three products on sale and the two retired fish packs. */
 const CATALOG: Product[] = [
   { id: 'remove_ads', price: '$3.99', currency: 'USD' },
   { id: 'hints_15', price: '$1.99', currency: 'USD' },
@@ -20,6 +25,8 @@ const CATALOG: Product[] = [
   { id: 'fish_250', price: '$1.99', currency: 'USD' },
   { id: 'fish_900', price: '$4.99', currency: 'USD' },
 ];
+/** The Buy section's rows (phase2c §5.3): iap.catalog only, in its order. */
+const ON_SALE = CATALOG.slice(0, 3).map((p) => ({ id: p.id, price: p.price, owned: false }));
 
 interface FakePayments extends PaymentsProvider {
   isReady: boolean;
@@ -73,7 +80,7 @@ function setup(opts: { platformId?: PlatformId; caps?: boolean; provider?: boole
     save: () => state,
     updateSave: (fn) => {
       state = fn(state);
-      log.push(`state:h${state.stock.hints}k${state.stock.kitties}f${state.wallet.fish}${state.purchases.noAds ? ':noads' : ''}`);
+      log.push(`state:h${state.stock.hints}k${state.stock.kitties}${state.purchases.noAds ? ':noads' : ''}`);
     },
     saves: { now: () => void log.push('save:now'), critical: () => void log.push('save:critical') },
     clock,
@@ -104,7 +111,7 @@ describe('purchase grant order (§8.4)', () => {
   it('record + grant, critical save, then consume; toast thanks; iap ok (no price, no payment id)', async () => {
     const s = setup();
     await s.flow.buy('hints_15');
-    expect(s.log).toEqual(['purchase:hints_15:P1', 'state:h15k0f0', 'save:critical', 'changed', 'consume:tok1']);
+    expect(s.log).toEqual(['purchase:hints_15:P1', 'state:h15k0', 'save:critical', 'changed', 'consume:tok1']);
     expect(s.save().purchases.tokens).toEqual(['hints_15|tok1']);
     expect(s.toasts).toEqual(['Thank you! Your items are in.']);
     expect(s.analytics).toEqual([{ name: 'iap', params: { product: 'hints_15', result: 'ok', platform: 'fbig' } }]);
@@ -120,9 +127,24 @@ describe('purchase grant order (§8.4)', () => {
 
   it('an unconsumed purchase never delivered (died before saving) is granted, saved, then consumed', async () => {
     const s = setup();
-    s.pay.unconsumed = [{ productId: 'fish_900', purchaseToken: 'tokY', paymentId: 'p', purchaseTime: 1 }];
+    s.pay.unconsumed = [{ productId: 'kitties_8', purchaseToken: 'tokY', paymentId: 'p', purchaseTime: 1 }];
     await s.flow.restore();
-    expect(s.log).toEqual(['purchases', 'state:h0k0f900', 'save:critical', 'changed', 'consume:tokY']);
+    expect(s.log).toEqual(['purchases', 'state:h0k8', 'save:critical', 'changed', 'consume:tokY']);
+  });
+
+  it('a boot restore of an unconsumed RETIRED fish_250 grants 10 hints + 3 kitties once, records it and consumes it (phase2c §5.3)', async () => {
+    const s = setup();
+    s.pay.unconsumed = [{ productId: 'fish_250', purchaseToken: 'tokF', paymentId: 'p', purchaseTime: 1 }];
+    await s.flow.restore();
+    expect(s.log).toEqual(['purchases', 'state:h10k3', 'save:critical', 'changed', 'consume:tokF']);
+    expect(s.save().purchases.tokens).toEqual(['fish_250|tokF']);
+    expect(s.save()).not.toHaveProperty('wallet');
+    expect(s.analytics).toEqual([{ name: 'iap', params: { product: 'fish_250', result: 'ok', platform: 'fbig' } }]);
+    // Still unconsumed at the next boot (the consume failed): consumed only, never granted twice.
+    s.log.length = 0;
+    await s.flow.restore();
+    expect(s.log).toEqual(['purchases', 'consume:tokF']);
+    expect(s.save().stock).toEqual({ hints: 10, kitties: 3 });
   });
 
   it('No Ads is consumed and noAds stays true after a boot whose purchases() is empty', async () => {
@@ -151,22 +173,30 @@ describe('purchase grant order (§8.4)', () => {
   it('a cancel is silent; other failures toast shop.error; nothing is granted', async () => {
     const s = setup();
     s.pay.next = { ok: false, reason: 'cancelled' };
-    await s.flow.buy('fish_250');
+    await s.flow.buy('hints_15');
     expect(s.toasts).toEqual([]);
     s.pay.next = { ok: false, reason: 'error' };
-    await s.flow.buy('fish_250');
+    await s.flow.buy('hints_15');
     expect(s.toasts).toEqual(["We couldn't finish that purchase. Please try again."]);
-    expect(s.save().wallet.fish).toBe(0);
+    expect(s.save().stock).toEqual({ hints: 0, kitties: 0 });
     expect(s.analytics.map((e) => e.params)).toEqual([
-      { product: 'fish_250', result: 'cancelled', platform: 'fbig' },
-      { product: 'fish_250', result: 'error', platform: 'fbig' },
+      { product: 'hints_15', result: 'cancelled', platform: 'fbig' },
+      { product: 'hints_15', result: 'error', platform: 'fbig' },
     ]);
+  });
+
+  it('a retired fish pack is never sold (phase2c §5.3): buy() makes no purchase call', async () => {
+    const s = setup();
+    await s.flow.buy('fish_250');
+    await s.flow.buy('fish_900');
+    expect(s.log).toEqual([]);
+    expect(s.analytics).toEqual([]);
   });
 
   it('grantBeforeConsume false: consume first, then grant and save', async () => {
     const s = setup({ config: mergeConfig({ iap: { grantBeforeConsume: false } }) });
     await s.flow.buy('kitties_8');
-    expect(s.log).toEqual(['purchase:kitties_8:P1', 'consume:tok1', 'state:h0k8f0', 'save:critical', 'changed']);
+    expect(s.log).toEqual(['purchase:kitties_8:P1', 'consume:tok1', 'state:h0k8', 'save:critical', 'changed']);
   });
 
   it("removeAdsMode 'keep': No Ads is never consumed", async () => {
@@ -191,10 +221,8 @@ describe('the Buy section (§8.5, §8.6)', () => {
     expect(s.props()?.buy).toEqual({ kind: 'unavailable' });
     s.pay.fire();
     await settle();
-    expect(s.props()?.buy).toEqual({
-      kind: 'ready',
-      products: CATALOG.map((p) => ({ id: p.id, price: p.price, owned: false })),
-    });
+    // phase2c §5.3: the catalogue only, even when the dashboard still lists the retired fish packs.
+    expect(s.props()?.buy).toEqual({ kind: 'ready', products: ON_SALE });
   });
 
   it('iOS / Messenger (capability off): never a Buy section', async () => {
@@ -235,7 +263,7 @@ describe('review fixes: catalogue failure (FB2B-3) and iOS (FB2B-5)', () => {
     s.props()?.onRetry();
     await settle();
     expect(calls).toBe(2); // a fresh request, not a cached empty list
-    expect(s.props()?.buy).toEqual({ kind: 'ready', products: CATALOG.map((p) => ({ id: p.id, price: p.price, owned: false })) });
+    expect(s.props()?.buy).toEqual({ kind: 'ready', products: ON_SALE });
   });
 
   it('closing and reopening after a failed catalogue asks again by itself (the failure is not cached for iap.catalogCacheMs)', async () => {
@@ -271,27 +299,18 @@ describe('review fixes: catalogue failure (FB2B-3) and iOS (FB2B-5)', () => {
   });
 });
 
-describe('fish swaps in the shop (§2.8, §8.5)', () => {
-  it('insufficient balance: nothing happens (toast); exact balance: swapped and saved at once', () => {
-    const s = setup({ save: { wallet: { fish: 14, earned: 14 } } });
-    expect(s.flow.swap('hint')).toBe(false);
-    expect(s.toasts).toEqual(['Not enough fish yet.']);
-    const t = setup({ save: { wallet: { fish: 15, earned: 15 } } });
-    expect(t.flow.swap('hint')).toBe(true);
-    expect(t.save().wallet.fish).toBe(0);
-    expect(t.save().stock.hints).toBe(1);
-    expect(t.log).toEqual(['state:h1k0f0', 'save:now', 'changed']);
-    const k = setup({ save: { wallet: { fish: 31, earned: 31 } } });
-    expect(k.flow.swap('kitty')).toBe(true);
-    expect(k.save().wallet.fish).toBe(1);
-    expect(k.save().stock.kitties).toBe(1);
+describe('no fish swaps (phase2c §5.2)', () => {
+  it('the sheet props are the Buy section only: no balance, no prices, no swap callback; the flow has no swap()', () => {
+    const s = setup();
+    s.flow.open();
+    const props = s.props() as unknown as Record<string, unknown>;
+    expect(Object.keys(props).sort()).toEqual(['busy', 'buy', 'onBuy', 'onClose', 'onRetry']);
+    expect('swap' in s.flow).toBe(false);
   });
 
-  it('the sheet shows the balance and the prices; swaps work on the web too', () => {
-    const s = setup({ platformId: 'web', provider: false, save: { wallet: { fish: 40, earned: 40 } } });
+  it('on the web the Buy section is hidden: there is nothing to sell, so there is no shop (§5.2)', () => {
+    const s = setup({ platformId: 'web', provider: false });
     s.flow.open();
-    expect(s.props()).toMatchObject({ fish: 40, hintPrice: 15, kittyPrice: 30, buy: { kind: 'hidden' }, busy: false });
-    s.props()?.onSwap('kitty');
-    expect(s.props()?.fish).toBe(10);
+    expect(s.props()?.buy).toEqual({ kind: 'hidden' });
   });
 });

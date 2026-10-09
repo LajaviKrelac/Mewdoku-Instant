@@ -260,8 +260,22 @@ function verifyEvents(
 ): void {
   const listPath = `${dataDir}/events/events.json`;
   if (!existsSync(listPath)) return;
-  const { defs, errors } = validateEventDefs(readJson(listPath));
+  const raw = readJson(listPath);
+  const { defs, errors } = validateEventDefs(raw);
   for (const e of errors) issues.push({ file: 'events/events.json', key: '-', message: e });
+  // phase2c §5.5: milestones grant hints and kitties only (fish are lives, never a reward). The schema
+  // check above already reports a `fish` reward as unknown; this names the rule for every milestone.
+  if (Array.isArray(raw)) {
+    for (const def of raw as { id?: unknown; track?: unknown }[]) {
+      if (!Array.isArray(def?.track)) continue;
+      for (const m of def.track as { at?: unknown; reward?: Record<string, unknown> }[]) {
+        const keys = m?.reward && typeof m.reward === 'object' ? Object.keys(m.reward) : [];
+        if (keys.some((k) => k !== 'hints' && k !== 'kitties')) {
+          issues.push({ file: 'events/events.json', key: `${String(def.id)} @${String(m?.at)}`, message: 'milestone rewards are hints and kitties only (phase2c §5.5)' });
+        }
+      }
+    }
+  }
   const named = new Set<string>(['events.json']);
   for (const def of defs) {
     const file = def.puzzles.file;

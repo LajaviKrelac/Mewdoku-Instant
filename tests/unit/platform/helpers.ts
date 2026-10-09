@@ -1,4 +1,4 @@
-// Owner: D (Phase 2b; was platform)
+// Owner: D (Phase 2b; was platform); G3 (Phase 2c: stub band seeding, unconsumed shorthand, periodIndex)
 // Test helpers: load tests/fixtures/fbinstant-stub.js into an isolated fake `window`, a Map-backed
 // Storage, and a microtask drain that works with the FakeClock.
 import { readFileSync } from 'node:fs';
@@ -21,6 +21,12 @@ export interface StubAdBehaviour {
   show?: string;
   showDelayMs?: number;
 }
+
+/** A seeded leaderboard row (phase2c: a band entry's score is index × span + total). */
+export type StubSeedEntry =
+  | { playerId: string; score: number }
+  | { playerId: string; band: number; total: number }
+  | { playerId: string; period: number; total: number };
 
 export interface StubConfig {
   supportedAPIs?: string[];
@@ -47,8 +53,11 @@ export interface StubConfig {
   leaderboards?: {
     api?: 'classic' | 'nezp' | 'both' | 'none';
     names?: string[] | null;
-    entries?: Record<string, { playerId: string; score: number }[]>;
+    /** Seeded rows: a score, or (phase2c) a period band: absolute `band` or `period` offset from the stub clock's current one. */
+    entries?: Record<string, StubSeedEntry[]>;
     errors?: { setScore?: (string | null)[]; getEntries?: (string | null)[]; getPlayerEntry?: (string | null)[] };
+    /** phase2c: the stub's band encoding (defaults: UTC weeks from 2026-01-05, span 100 000). */
+    periods?: { kind?: 'day' | 'week' | 'month'; epoch?: string; span?: number };
   };
   overlay?: { load?: 'ok' | 'error' | 'never'; loadDelayMs?: number };
   tournament?: { current?: { id: string; endTime: number; contextId?: string } | null; create?: string };
@@ -57,6 +66,7 @@ export interface StubConfig {
     readyDelayMs?: number;
     catalog?: Record<string, unknown>[];
     purchase?: string;
+    /** FB purchases; phase2c: `{ productID }` alone is filled in as an unconsumed charge. */
     unconsumed?: Record<string, unknown>[];
     errors?: { getCatalogAsync?: (string | null)[]; getPurchasesAsync?: (string | null)[]; consumePurchaseAsync?: (string | null)[] };
   };
@@ -88,8 +98,11 @@ export interface StubControl {
   // phase2b
   leaderboard(name: string): { playerId: string; score: number }[];
   overlayEvent(name: string): void;
-  purchases(): { productID: string; purchaseToken: string; isConsumed: boolean }[];
+  purchases(): { productID: string; purchaseToken: string; isConsumed: boolean; paymentActionType?: string; developerPayload?: string }[];
   setTournament(t: { id: string; endTime: number } | null): void;
+  // phase2c
+  /** The period index the stub uses for `period` seeding: the current one (by the stub clock) plus `offset`. */
+  periodIndex(offset?: number): number;
 }
 
 const STUB_PATH = resolve(dirname(fileURLToPath(import.meta.url)), '../../fixtures/fbinstant-stub.js');

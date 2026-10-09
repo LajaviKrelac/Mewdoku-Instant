@@ -1,4 +1,5 @@
-// Owner: D (Phase 2b; was platform)
+// Owner: D (Phase 2b; was platform); G3 (Phase 2c: three-product catalogue, unconsumed shorthand,
+// period-band seeding; docs/phase2c/fish-lives-spec.md §4.5, §5.3, §7.3 G3 item 5)
 // Fake FBInstant 8.0 (our own test double, written from the API subset in docs/phase1/05 and
 // src/platform/fb/fbinstant.d.ts). Two uses:
 //   1. Playwright fbig e2e: served in place of https://connect.facebook.net/en_US/fbinstant.8.0.js
@@ -30,7 +31,16 @@
 //                   and then success), on top of the fixed banner.hide.
 //   leaderboards    { api: 'classic' | 'nezp' | 'both', names: string[] | null (null = any name exists),
 //                     entries: { <boardName>: [{ playerId, score }] } (other players, seeded),
-//                     errors: { setScore: [], getEntries: [], getPlayerEntry: [] } }
+//                     errors: { setScore: [], getEntries: [], getPlayerEntry: [] },
+//                     periods: { kind: 'week' | 'day' | 'month', epoch: 'YYYY-MM-DD', span } }
+//                   Phase 2c: a seeded entry may give a period band instead of a score:
+//                     { playerId, band: <absolute period index>, total } or
+//                     { playerId, period: <offset from the stub clock's current period: 0, -1, +1 …>, total }
+//                   → score = index × span + total (the band encoding of fish-lives-spec §4.3). The
+//                   defaults mirror cfg (UTC weeks from 2026-01-05, span 100 000) but are the stub's
+//                   own copy: a test that changes cfg.period.kind passes periods too. Relative
+//                   periods are resolved when the board is first read (the stub clock at that time).
+//                   control.periodIndex(offset?) answers the index the stub would use.
 //                   classic: getLeaderboardAsync(name) → Leaderboard (keeps the higher score; entries
 //                   carry getRank/getScore/getPlayer().getID); NEZP: globalLeaderboards.* (entries carry
 //                   getScore/getPlayer().getSessionID, no rank; a non-improving score rejects
@@ -43,6 +53,11 @@
 //                     catalog: FB products, purchase: 'ok' | <ERROR_CODE>, unconsumed: FB purchases,
 //                     errors: { getCatalogAsync: [], getPurchasesAsync: [], consumePurchaseAsync: [] } }
 //                   Unconsumed purchases persist across reloads with the player data (persist: true).
+//                   Phase 2c: the default catalogue is the three products on sale (remove_ads, hints_15,
+//                   kitties_8); purchaseAsync rejects any id it does not list (INVALID_PARAM), so the
+//                   retired fish_250 / fish_900 can no longer be bought. An `unconsumed` entry needs only
+//                   a productID: { productID: 'fish_250' } is filled in as an unconsumed 'charge' with
+//                   token 'stub-unconsumed-<n>-<productID>' (an old fish pack bought before 2c).
 (function (root) {
   'use strict';
 
@@ -84,14 +99,18 @@
   ];
   ALL_APIS = ALL_APIS.concat(BANNER_APIS, CLASSIC_LB_APIS, OVERLAY_APIS, TOURNAMENT_APIS, PAYMENT_APIS);
 
-  /** Our five products (phase2b §8.3), as an FB catalogue would list them. */
+  /**
+   * Our three products on sale (phase2c §5.3, cfg.iap.catalog), as an FB catalogue would list them. The
+   * retired fish packs (fish_250, fish_900) are not sold: a test that needs a test app still listing
+   * them passes its own `payments.catalog`.
+   */
   var STUB_CATALOG = [
     { productID: 'remove_ads', title: 'stub', price: '$3.99', priceCurrencyCode: 'USD', priceAmount: 3.99 },
     { productID: 'hints_15', title: 'stub', price: '$1.99', priceCurrencyCode: 'USD', priceAmount: 1.99 },
     { productID: 'kitties_8', title: 'stub', price: '$1.99', priceCurrencyCode: 'USD', priceAmount: 1.99 },
-    { productID: 'fish_250', title: 'stub', price: '$1.99', priceCurrencyCode: 'USD', priceAmount: 1.99 },
-    { productID: 'fish_900', title: 'stub', price: '$4.99', priceCurrencyCode: 'USD', priceAmount: 4.99 },
   ];
+  /** Phase 2c: the band encoding's defaults (cfg.period.kind, cfg.rank.periodEpoch, PERIOD_SPAN). */
+  var STUB_PERIODS = { kind: 'week', epoch: '2026-01-05', span: 100000 };
 
   var DEFAULTS = {
     supportedAPIs: ALL_APIS,
@@ -112,7 +131,7 @@
       rewarded: { load: 'ok', loadDelayMs: 0, show: 'ok', showDelayMs: 300 },
     },
     banner: { load: 'ok', loadDelayMs: 0, hide: 'ok', rateLimitMs: 45000 },
-    leaderboards: { api: 'classic', names: null, entries: {}, errors: { setScore: [], getEntries: [], getPlayerEntry: [] } },
+    leaderboards: { api: 'classic', names: null, entries: {}, errors: { setScore: [], getEntries: [], getPlayerEntry: [] }, periods: STUB_PERIODS },
     overlay: { load: 'ok', loadDelayMs: 0 },
     tournament: { current: null, create: 'ok' },
     payments: {
@@ -149,6 +168,8 @@
     'payments-never-ready': { payments: { ready: false } },
     // iOS: not eligible for payments (05 §9); the API is not offered there.
     ios: { platform: 'IOS', removeAPIs: PAYMENT_APIS },
+    // phase2c §5.3: an old fish pack bought before 2c, still unconsumed (the boot restore compensates it).
+    'unconsumed-fish-250': { payments: { unconsumed: [{ productID: 'fish_250' }] } },
   };
 
   var STORE_KEY = '__fbStub.playerData';
@@ -439,13 +460,36 @@
       return Promise.resolve();
     }
 
+    // ── phase2c: period bands (fish-lives-spec §3.5, §4.3), the stub's own copy of the encoding ──
+    var DAY_MS = 86400000;
+    function epochParts() {
+      var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(cfg.leaderboards.periods.epoch));
+      if (!m) throw new Error('fb stub: bad leaderboards.periods.epoch');
+      return { y: +m[1], m: +m[2] - 1, d: +m[3], ms: Date.UTC(+m[1], +m[2] - 1, +m[3]) };
+    }
+    /** The UTC period index of `at` (ms): whole weeks / days / months from the epoch's period. */
+    function periodIndexAt(at) {
+      var p = cfg.leaderboards.periods;
+      var e = epochParts();
+      var t = new Date(at);
+      if (p.kind === 'month') return (t.getUTCFullYear() - e.y) * 12 + (t.getUTCMonth() - e.m);
+      var days = Math.floor((Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate()) - e.ms) / DAY_MS);
+      return p.kind === 'day' ? days : Math.floor(days / 7);
+    }
+    /** A seeded row's score: `score` as given, or a band: (band | current + period) × span + total. */
+    function seededScore(e) {
+      if (typeof e.score === 'number') return e.score;
+      var idx = typeof e.band === 'number' ? e.band : periodIndexAt(now()) + (typeof e.period === 'number' ? e.period : 0);
+      return idx * cfg.leaderboards.periods.span + (e.total || 0);
+    }
+
     // ── phase2b: leaderboards (classic and NEZP) ──
     var boards = {}; // name → [{ playerId, score, ts }]
     function boardRows(name) {
       if (!boards[name]) {
         var seeded = (cfg.leaderboards.entries && cfg.leaderboards.entries[name]) || [];
         boards[name] = seeded.map(function (e, i) {
-          return { playerId: String(e.playerId), score: e.score, ts: i };
+          return { playerId: String(e.playerId), score: seededScore(e), ts: i };
         });
       }
       return boards[name];
@@ -738,6 +782,21 @@
 
     // ── phase2b: payments ──
     var PAY_KEY = '__fbStub.purchases';
+    /**
+     * phase2c: a seeded unconsumed purchase needs only its productID; token, payment id, time, action
+     * type and isConsumed are filled in as an unconsumed charge made a day ago (developerPayload is
+     * optional in FB's answer and stays absent). Fields the test gives (even odd ones) are kept as given.
+     */
+    function seededPurchase(p, i) {
+      var out = copy(p) || {};
+      var id = String(out.productID);
+      if (!('purchaseToken' in out)) out.purchaseToken = 'stub-unconsumed-' + (i + 1) + '-' + id;
+      if (!('paymentID' in out)) out.paymentID = 'stub-unconsumed-payment-' + (i + 1);
+      if (!('purchaseTime' in out)) out.purchaseTime = String(Math.floor(now() / 1000) - 86400);
+      if (!('paymentActionType' in out)) out.paymentActionType = 'charge';
+      if (!('isConsumed' in out)) out.isConsumed = false;
+      return out;
+    }
     function readPurchases() {
       if (cfg.persist && root.sessionStorage) {
         try {
@@ -747,7 +806,7 @@
           /* fall through */
         }
       }
-      return copy(cfg.payments.unconsumed) || [];
+      return (cfg.payments.unconsumed || []).map(seededPurchase);
     }
     var purchasesList = readPurchases();
     var purchaseCount = 0;
@@ -974,6 +1033,10 @@
       /** Purchases so far (consumed ones included). */
       purchases: function () {
         return copy(purchasesList);
+      },
+      /** phase2c: the period index the stub uses for `period` seeding (offset from the current one, by its clock). */
+      periodIndex: function (offset) {
+        return periodIndexAt(now()) + (typeof offset === 'number' ? offset : 0);
       },
       /** Sets the player's current tournament context (null = none). */
       setTournament: function (t) {

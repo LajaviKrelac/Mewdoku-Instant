@@ -2,6 +2,8 @@
 
 Status: Phase 2b spec, ready to build after review · Date: 2026-10-08 · Owner: game design + tech lead · Branch `claude/mewdoku-instant`
 
+> **Superseded in part (2026-10-09).** Phase 2c ([fish-lives-spec](../phase2c/fish-lives-spec.md)) supersedes §0.5 (hearts), §0.8 (fish rates, fish packs), §2.1 (what fish are for), §2.2–§2.3 (fish steps and sources), §2.5 (fish pill, reward row), §2.6, §2.8, §2.9 (heart break), §2.14, §5.3 (points and boards), §5.5 (board by mode), §5.6 (group scoring and fish), §8.3 (catalogue), §9 (wallet) and §10 (fish, shop, points). The user, who plays the Play Store app, reported first-hand (2026-10-09) that **fish are the lives**, that the fish left at a win are **added to the leaderboard points ranked per period**, that **level points grow without mistakes**, and that our fish currency was an invention to remove. Each of those sections carries a one-line pointer; the rest of this spec still holds. Build status: [STATUS-2c](../phase2c/STATUS-2c.md).
+
 Review pass (2026-10-08): checked with three lenses (implementer, platform truth, originality) and fixed in place. Appendix C lists what changed and why.
 
 Revision (2026-10-08, user decisions): **one theme only** (the Classic look; the ginger skin and the skin system are removed); defaults for the open decisions; **parity first** (where the draft deviated from the original for taste, it now follows the original). Appendix D lists what changed.
@@ -78,6 +80,8 @@ The Classic look brings that combination back on purpose, as the game's only loo
 
 ### 0.5 What does not change
 
+> **Phase 2c:** §0.5 → 2c: the three lives are **fish**, not hearts (fish-lives-spec §1, §0.5 for the identifiers that keep the name `hearts`).
+
 Rules, the reducer and the mistake model; gestures; the engine; the 1 000 levels and the daily packs (except every second Sunday from 2026-10-18, now 12×12 G4 (review PAR-1); only those 58 days were regenerated); hearts, revive and the hint and kitty behaviour; the tutorial script; the save-merge principles; the clean-room process. The layering rules of CONTRACTS §2 still hold.
 
 The paw booster keeps its current user-facing name, **Kitty** (`game.tool.kitty`, plural "kitties"). All new copy (shop, rewards, events, groups) uses that name.
@@ -125,6 +129,8 @@ Reverted to the original's behaviour in this revision:
 | "Dark crosses" option (the old ink X) | white X only, like the original (§1.5) |
 
 ### 0.8 Open decisions and their defaults
+
+> **Phase 2c:** §0.8 → 2c: no fish rates and no fish packs; the defaults for the period, the points and the streak are fish-lives-spec §0.2.
 
 Each row is `[DECISION: default, user may change]`.
 
@@ -356,6 +362,8 @@ Checklist: page tone; board card or no card; gutter width relative to tile; tile
 
 ### 2.1 Target and original
 
+> **Phase 2c:** §2.1 → 2c: what the fish are for is now known (user, first-hand): the lives kept, added to the period's leaderboard points (fish-lives-spec §0.1, §2.1).
+
 | Step | Original | Conf. |
 |---|---|---|
 | Solved board | Cats glow | confirmed (iOS store art), presumed on Play |
@@ -368,6 +376,8 @@ Checklist: page tone; board card or no card; gutter width relative to tile; tile
 Our target: the same five beats, with our timings fitted to those wait times, our art and our copy. Fish become a persistent currency.
 
 ### 2.2 Timeline (level mode; t = 0 when the last cat lands, i.e. the `WON` event)
+
+> **Phase 2c:** §2.2 → 2c: the fish come from the lives pill, N = the fish kept, and the panel opens at 4 200 / 4 350 / 4 500 ms (fish-lives-spec §2.2).
 
 | t (ms) | What happens | Config |
 |---|---|---|
@@ -396,6 +406,8 @@ Interruptions:
 
 ### 2.3 Fish-flight geometry
 
+> **Phase 2c:** §2.3 → 2c: sources are the full life icons, the target is the period counter, size from the life icon, startScale 1 (fish-lives-spec §2.3).
+
 | Item | Rule |
 |---|---|
 | Source cats | The cats in rows `floor((n−1)/4)`, `floor((n−1)/2)` and `floor(3(n−1)/4)` (their solution cells); on the 4×4 tutorial: rows 0, 1, 2. The source point is the cell centre (`GameScreen.cellRect`). |
@@ -422,6 +434,8 @@ Interruptions:
 
 ### 2.5 Victory screen (new overlay `victory`; replaces O3, and O7 for dailies)
 
+> **Phase 2c:** §2.5 → 2c: no fish pill, no "+", no bonus chip; the kept-fish row, the level points and the "Perfect ×N" chip (fish-lives-spec §2.7).
+
 | Part | Spec |
 |---|---|
 | Layer | Full screen, opaque `--stage` (dark, like the fail card and the original's dark full-screen overlays of §1.2), light text, the orange "Level N" (review PAR-3: the light `--page` of the first draft contradicted §1.2). Behind the cat, 12 sun rays in the accent at 16 % (conic gradient) turn once every 20 s; static with reduced motion. |
@@ -433,6 +447,8 @@ Interruptions:
 | Banner | On FBIG, when a banner is shown (§3.2), the screen root gets `data-banner` and the column reserves `ads.banner.reservePx` at the bottom; the primary button sits at least 16 px above that band. |
 
 ### 2.6 Mode variants of the flow
+
+> **Phase 2c:** §2.6 → 2c: the variants are fish-lives-spec §2.5 (the period board after every scored win; the tutorial flies no fish).
 
 | Mode | Glow | Fish | Ranking panel | Victory |
 |---|---|---|---|---|
@@ -454,6 +470,8 @@ Interruptions:
 The audio and haptics are unchanged.
 
 ### 2.8 Fish economy `[DECISION]`
+
+> **Phase 2c:** §2.8 → 2c: **removed.** Fish are not a currency: no wallet, no earn table, no swaps (fish-lives-spec §5).
 
 The original's fish meaning is unknown (differences §6 #1). We pick the smallest sensible role: **fish are the soft currency that buys hints and kitties**. This matches the original's "in-game reward system" for refilling hints (01 §6.2, confirmed).
 
@@ -484,6 +502,8 @@ Rules:
   - On the web, a swap is the non-ad refill alongside the 10-minute free grant.
 
 ### 2.9 Motion gaps
+
+> **Phase 2c:** §2.9 → 2c: the heart break is replaced by our fish loss and the revive pop by a fish pop (fish-lives-spec §1.3, §1.4).
 
 **Board entry** (replaces the 250 ms entry; the original's board animates in, *likely*):
 
@@ -574,6 +594,8 @@ Two differences: the panel content (§2.4), and on FBIG a possible banner in its
 | `tests/e2e/winflow.spec.ts` (new) | Solve through the hook: fish pill +3 → panel visible within 4.4–4.8 s → tap → victory "Level 3" → next board, with input locked until entry ends; the same with `reducedMotion` (panel ≤ 1.4 s). |
 
 ### 2.14 Decisions
+
+> **Phase 2c:** §2.14 → 2c: the fish and points decisions are superseded by fish-lives-spec Appendix B (D1–D14).
 
 - `[DECISION]` Three fish per win, every time; bonuses add a number, not more fish.
 - `[DECISION]` Fish buy hints and kitties; revives are not for sale.
@@ -818,6 +840,8 @@ Every score we post is **higher-is-better** (§5.3), so each board must be confi
 
 ### 5.3 Scoring `[DECISION]`
 
+> **Phase 2c:** §5.3 → 2c: paw points are retired; level points with a perfect-streak bonus (fish-lives-spec §3.1–§3.2) and one period points board (§3.4–§4.5).
+
 Paw points per win (all multiples of 5, which matches the reported "multiples of 5"):
 
 | Part | Points |
@@ -895,6 +919,8 @@ Web: `ranking` is undefined. The panel shows personal records (§2.4).
 
 ### 5.5 Post-win, daily and event flow
 
+> **Phase 2c:** §5.5 → 2c: the post-win panel shows the period board in every scored mode; `daily_fastest` is off by default (fish-lives-spec §2.5, §4.1).
+
 | Step | Order |
 |---|---|
 | 1 | At `WON`: compute the points and update `save.points.total` in the same critical save as the win. |
@@ -905,6 +931,8 @@ Web: `ranking` is undefined. The panel shows personal records (§2.4).
 There is also a **Rankings hub** (Home trophy button, shown when `capabilities().leaderboards`): a sheet with tabs "Paw points", "Today", "Event" (while active) and "Groups" (when enabled). Each tab is a list panel with the same three FB modes as §2.4.
 
 ### 5.6 Group challenges (FB only; flag `groupChallenges`, **off until §14 G2 is verified**)
+
+> **Phase 2c:** §5.6 → 2c: a challenge ranks the fish kept; rank-mode non-winners get `groups.placeHints` hints instead of fish (fish-lives-spec §4.8).
 
 FB shows tournament standings to players in its own UI, but no API was found that hands them to game code (§5.2). The design therefore has two reward modes; `groups.rewardMode` picks one.
 
@@ -1120,6 +1148,8 @@ The Play listing shows "In-app purchases" and iOS sells Premium and Premium Plus
 
 ### 8.3 Catalogue `[DECISION]` (our ids and names; prices are set in the dashboard)
 
+> **Phase 2c:** §8.3 → 2c: three products on sale (`iap.catalog`); `fish_250` / `fish_900` are retired and compensated in hints and kitties (fish-lives-spec §5.3).
+
 The proposed prices are the default `[DECISION: default, user may change]`. They live in the FB dashboard, not in code: the game always shows the catalogue's localized `price` string.
 
 | productID | Type | Our name (en) | Grants | Price (USD, default) |
@@ -1197,6 +1227,8 @@ Entry points: the "+" on the fish pill (Home, victory), Settings → "Shop", and
 
 ## 9. Save schema v2 (C)
 
+> **Phase 2c:** §9 → 2c: save v3 drops the wallet and adds the streak and period records (fish-lives-spec §3.8).
+
 ### 9.1 Shape
 
 `SaveDataV2` = V1 plus the fields below. `SaveData` becomes an alias of the latest version. Three F0 contract changes follow: the `PlatformStorage.save()` parameter, `AppState.save` and the `stats.ts`/`economy.ts` signatures change from `SaveDataV1` to `SaveData`.
@@ -1273,6 +1305,8 @@ Size: at most about 4 KB extra (50 ledger entries × 50 B + events + groups), fa
 ---
 
 ## 10. Config additions and changes (`src/app/config.ts`; F0 adds them all)
+
+> **Phase 2c:** §10 → 2c: `fish.*`, `shop.*`, `iap.products` and the 2b points keys are `@deprecated` (not read); the 2c keys are fish-lives-spec §8.
 
 Changed values (existing keys; allowed by CONTRACTS §7, never renamed or removed):
 

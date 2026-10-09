@@ -45,10 +45,10 @@ describe('victory screen (PAR-3, UX-1, UX-13)', () => {
     expect(decls('overlay-chunk.css', '.victory__art > svg')).toMatch(/width:\s*var\(--v-hero\)/);
   });
 
-  it('paints the fish pill row above the turning rays', () => {
-    const top = decls('overlay-chunk.css', '.victory__top');
-    expect(top).toMatch(/position:\s*relative/);
-    expect(top).toMatch(/z-index:\s*1/);
+  it('paints the reward rows above the turning rays (Phase 2c: no fish pill on top; the kept-fish row is in the column)', () => {
+    expect(decls('overlay-chunk.css', '.victory__top')).toBe('');
+    expect(decls('overlay-chunk.css', '.victory__col')).toMatch(/z-index:\s*0/);
+    expect(decls('overlay-chunk.css', '.victory__rays')).toMatch(/z-index:\s*-1/);
   });
 });
 
@@ -75,9 +75,15 @@ describe('right to left and line breaking (UX-10, UX-8)', () => {
     expect(decls('i18n.css', ':root:lang(ja)')).toMatch(/word-break:\s*auto-phrase/);
   });
 
-  it('a shop item name wraps instead of running under its button; the swap button stacks on phones', () => {
+  it('a shop item name wraps instead of running under its button (Phase 2c: no swap button any more)', () => {
     expect(decls('overlay-chunk.css', '.shop__name')).toMatch(/overflow-wrap:\s*break-word/);
-    expect(decls('overlay-chunk.css', '.shop__swap.btn')).toMatch(/flex-direction:\s*column/);
+    expect(css('overlay-chunk.css')).not.toMatch(/\.shop__swap|\.shop__balance|\.rewarded__swap/);
+  });
+
+  it('a personal-records value stays on one line; its label wraps (Phase 2c integration: "41 Fische" at 320 px)', () => {
+    expect(decls('overlay-chunk.css', '.rank-records__value')).toMatch(/white-space:\s*nowrap/);
+    expect(decls('overlay-chunk.css', '.rank-records__value')).toMatch(/flex:\s*none/);
+    expect(decls('overlay-chunk.css', '.rank-records__label')).toMatch(/min-width:\s*0/);
   });
 
   it('the top-bar title shrinks its name, never its " · N" suffix (I18N-TEXT-2)', () => {
@@ -116,12 +122,12 @@ describe('sizes and text (A11Y-HUB-1, I18N-TEXT-1, UX-2, PAR-7)', () => {
 // ── lead, final integration: the CSS halves of UX-12, PERF-1/PERF-3 and UX-4 ──
 
 describe('final integration: label, input lock, scrim hand-off, panel fade', () => {
-  it('UX-12: the "+3" label is anchored above the pill, and its keyframes rise from there', () => {
-    const label = decls('screens.css', '.fish-pill__label');
+  it('UX-12: the "+3" label is anchored above the period counter, and its keyframes rise from there', () => {
+    const label = decls('screens.css', '.period-pill__label');
     expect(label).toMatch(/bottom:\s*100%/);
     expect(label).not.toMatch(/(^|;)\s*top:\s*0/);
-    expect(decls('screens.css', '.fish-pill__label[data-reduced]')).toMatch(/transform:\s*none/);
-    expect(css('fx.css')).toMatch(/@keyframes fish-label-rise\s*\{\s*0%\s*\{\s*opacity:\s*0;\s*transform:\s*translateY\(6px\) scale\(0\.6\);/);
+    expect(decls('screens.css', '.period-pill__label[data-reduced]')).toMatch(/transform:\s*none/);
+    expect(css('fx.css')).toMatch(/@keyframes period-label-rise\s*\{\s*0%\s*\{\s*opacity:\s*0;\s*transform:\s*translateY\(6px\) scale\(0\.6\);/);
   });
 
   it('PERF-1 / PERF-3: the input lock is one layer over the board, not a rule on every cell', () => {

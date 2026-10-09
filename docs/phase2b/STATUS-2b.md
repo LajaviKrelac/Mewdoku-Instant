@@ -1,5 +1,7 @@
 # Phase 2b status: "parity" (close the 8 headline differences)
 
+> **Superseded in part by Phase 2c (2026-10-09):** fish are the lives, kept fish feed a per-period leaderboard, level points carry a perfect-streak bonus, and the fish currency is gone. See [docs/phase2c/STATUS-2c.md](../phase2c/STATUS-2c.md).
+
 Status: **code complete, review fixes integrated**; pending only the release gates of §8 · Date: 2026-10-09 · Branch `claude/mewdoku-instant` · Spec: [parity-spec](parity-spec.md) · Contracts: [CONTRACTS](CONTRACTS.md) (§11 = the final APIs, §11.7 = the review fixes' API changes)
 
 Phase 2b closes, or narrows as far as platform rules and the clean-room line allow, the eight headline differences between our rebuild and the original that [differences-vs-original §1](../phase2/differences-vs-original.md) listed after Phase 2. It was built in five parallel workstreams (A visual identity and art, B animation and screens, C logic and app, D platform, E localization) on top of the lead's F0 contracts, then integrated by the lead. A six-lens code review then found 47 confirmed issues; three fixer groups (P platform and data, R app core and performance, U UI, accessibility and i18n) fixed most of them, and the lead's final integration finished every item they handed over (§11, §12). Every asset, sound and string is ours ([provenance §8](../provenance.md)); no source from 06 §4 was opened.

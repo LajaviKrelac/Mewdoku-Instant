@@ -33,6 +33,7 @@ import { icon, mountSprite, type SymbolId } from '../src/ui/art/sprite';
 import { createBoardView, type BoardModel, type CatMood } from '../src/ui/board/board-view';
 import { computeLayout, readViewport } from '../src/ui/board/layout';
 import { applyMotion } from '../src/ui/fx/motion';
+import { createPeriodPill } from '../src/ui/hud/pills';
 import { createRuleChips } from '../src/ui/hud/rule-chips';
 import { createToolBar } from '../src/ui/hud/tool-bar';
 import { createTopBar } from '../src/ui/hud/top-bar';
@@ -116,7 +117,7 @@ function galleryScene(): void {
   section(wrap, 'Wrong X', [tile(42, 2, ['wrong-x']), tile(42, 10, ['wrong-x'])], 'ax-tight');
   const icons: SymbolId[] = [
     'icon-fish', 'icon-plus', 'icon-shop', 'icon-globe', 'icon-crown', 'icon-users', 'icon-house', 'icon-gear', 'icon-bulb', 'icon-paw',
-    'icon-heart', 'icon-heart-empty', 'icon-trophy', 'icon-lock', 'icon-calendar', 'icon-play-video', 'icon-close', 'icon-chevron',
+    'icon-fish-empty', 'icon-trophy', 'icon-lock', 'icon-calendar', 'icon-play-video', 'icon-close', 'icon-chevron',
   ];
   for (const px of [32, 24, 16]) {
     section(wrap, `Icons at ${px} px`, icons.map((id) => {
@@ -255,8 +256,8 @@ function uiScene(): void {
     const b = el('span', 'badge badge--hard', 'Hard');
     return b;
   })()]);
-  const pill = el('span', 'ax-fishpill pill');
-  pill.append(icon('icon-fish', { class: 'pill__icon' }), el('span', 'pill__count', '128'));
+  // Phase 2c §2.8: Home's lead slot is the period pill (icon-trophy + this week's fish), not a button.
+  const pill = createPeriodPill({ total: 42, kind: 'week' }).el;
   const top = createTopBar({ title: null, hard: false, showHome: false, showSettings: true, showTrophy: true, fbSafeZone: q.get('fb') === '1' }, { onHome: () => undefined, onSettings: () => undefined, onTrophy: () => undefined }, { lead: pill });
   section(wrap, 'Top bar with the lead slot (Home)', [top.el], 'ax-col-full');
   section(wrap, 'Tools', [createToolBar({ hints: 5, kitties: 0, bulbEnabled: true, pawEnabled: true, hintsFree: false }, { onBulb: () => undefined, onPaw: () => undefined }).el]);
@@ -298,7 +299,6 @@ style.textContent = `
   .ax-gamecol { width: 100%; max-width: 480px; padding: 0 16px; display: flex; flex-direction: column; align-items: stretch; }
   .ax-gamecol > * + * { margin-top: 12px; }
   .ax-stage { display: flex; justify-content: center; }
-  .ax-fishpill { height: 40px; }
   .ax-title { color: var(--accent-title); font-size: 2.5rem; }
 `;
 document.head.appendChild(style);

@@ -1,10 +1,15 @@
-// Owner: B
-// The win flow's fish (phase2b §2.2 t = 1 200 … 2 550, §2.3): three of our fish pop at their source
-// cats, hold, then fly along a quadratic Bézier to the HUD fish pill, turning along the path,
+// Owner: B (Phase 2b); G2 (Phase 2c: the kept lives fly from the lives pill to the period counter)
+// The win flow's fish (phase2b §2.2 t = 1 200 … 2 550, §2.3): our fish pop at their sources, hold,
+// then fly along a quadratic Bézier to the HUD counter, turning along the path,
 // shrinking to fx.win.fishEndScale and leaving fishTrailDots sparkle dots. WAAPI on transform and
 // opacity only; the path is sampled at fx.win.fishPathSamples keyframes. Fish are
 // `<svg><use href="#icon-fish">` in the fixed `.fx-layer` (z-index 30: above the screen, below overlays).
 // C's win-flow schedules the call (t = fx.win.fishAtMs) and bumps the pill from onArrive.
+// Phase 2c (fish-lives-spec §2.3): the sources are the full life icons (GameScreen.lifeSlots(), N =
+// 1…maxHearts fish), the target the period counter's icon; the fish start at the life icon's size
+// (fishSizeFromRect) and at scale 1 (FlyFishOptions.startScale: they are already visible as lives, so
+// the pop is 1 → 1.15 → 1); the arc spread depends on N (0 for one fish, ±fishArcSpread / 2 for two,
+// −1 / 0 / +1 × fishArcSpread for three, evenly spaced for more).
 //
 // Timing (from the call, fish k = 0, 1, 2):
 //   pop     k × fishStaggerMs                      scale 0 → 1.15 → 1 over fishPopMs (onPop(k))
@@ -34,8 +39,13 @@ export interface FxHandle {
 }
 
 export interface FlyFishOptions {
-  /** Fish element size in CSS px: fishSizePx(slot). */
+  /** Fish element size in CSS px: fishSizeFromRect(lifeRect) (Phase 2c §2.3). */
   readonly sizePx: number;
+  /**
+   * Phase 2c §2.3: the scale the pop starts from (pop: startScale → 1.15 → 1). Default 0 (the 2b
+   * pop from nothing); 2c passes 1, since the fish is already visible as a life.
+   */
+  readonly startScale?: number;
   /** Reduced motion (§2.7): no flight; callbacks run at once in order. */
   readonly reduced: boolean;
   /** Fish `index` (0-based, in source order) reached the pill: C bumps the count and plays the plink. */
@@ -57,25 +67,24 @@ const MAX_TILT_DEG = 70;
 const FLIGHT_EASE: readonly [number, number, number, number] = [0.45, 0, 0.25, 1];
 
 /**
- * Source rows for the three fish (§2.3): floor((n−1)/4), floor((n−1)/2), floor(3(n−1)/4); on the
- * 4×4 tutorial this gives rows 0, 1, 2. The source cat is that row's solution cell.
+ * Spread factor of fish `index` among `count` fish (2c §2.3), in units of fishArcSpread:
+ * (index − (count − 1) / 2) / max(1, (count − 1) / 2). One fish: 0; two: ±½; three: −1, 0, +1 (2b);
+ * more: evenly spaced from −1 to +1. The 2b default count is 3.
  */
-export function fishSourceRows(n: number): readonly [number, number, number] {
-  const m = Math.max(0, Math.floor(n) - 1);
-  return [Math.floor(m / 4), Math.floor(m / 2), Math.floor((3 * m) / 4)];
-}
-
-/** Spread sign per fish index (§2.3: −10 %, 0, +10 %); indices past 2 reuse the outer values. */
-function spreadSign(index: number): number {
-  return Math.max(-1, Math.min(1, index - 1));
+export function fishSpread(index: number, count = 3): number {
+  const n = Math.max(1, Math.floor(count));
+  const mid = (n - 1) / 2;
+  const v = (index - mid) / Math.max(1, mid);
+  return Math.max(-1, Math.min(1, v));
 }
 
 /**
  * Bézier control point (§2.3): the midpoint of S→T lifted perpendicular, toward the top of the
- * screen, by fishArcLift × |ST| × (1 + spread), spread = −fishArcSpread, 0, +fishArcSpread for fish 0, 1, 2.
+ * screen, by fishArcLift × |ST| × (1 + fishSpread(index, count) × fishArcSpread): for three fish
+ * −fishArcSpread, 0, +fishArcSpread (2b), for two ±fishArcSpread / 2, for one 0 (2c).
  * A vertical S→T has no "up" side: it bows toward +x (screen right).
  */
-export function fishControlPoint(s: Point, t: Point, index: number, c: GameConfig = cfg): Point {
+export function fishControlPoint(s: Point, t: Point, index: number, c: GameConfig = cfg, count = 3): Point {
   const dx = t.x - s.x;
   const dy = t.y - s.y;
   const len = Math.hypot(dx, dy);
@@ -89,15 +98,18 @@ export function fishControlPoint(s: Point, t: Point, index: number, c: GameConfi
     py = -py;
   }
   const W = c.fx.win;
-  const lift = W.fishArcLift * len * (1 + spreadSign(index) * W.fishArcSpread);
+  const lift = W.fishArcLift * len * (1 + fishSpread(index, count) * W.fishArcSpread);
   return { x: mid.x + px * lift, y: mid.y + py * lift };
 }
 
-/** fishSizeFraction × slot, clamped to fishMinPx…fishMaxPx (§2.3). */
-export function fishSizePx(slotPx: number, c: GameConfig = cfg): number {
+/**
+ * Phase 2c §2.3: the flying fish's size from its source life icon, clamp(round(width), fishMinPx,
+ * fishMaxPx), so it lifts off at the size it had in the lives pill (28 px; compact 23 → fishMinPx).
+ */
+export function fishSizeFromRect(rect: Pick<DOMRect, 'width'> | null | undefined, c: GameConfig = cfg): number {
   const W = c.fx.win;
-  const raw = Number.isFinite(slotPx) ? Math.round(W.fishSizeFraction * slotPx) : W.fishMinPx;
-  return Math.min(W.fishMaxPx, Math.max(W.fishMinPx, raw));
+  const w = rect && Number.isFinite(rect.width) ? Math.round(rect.width) : W.fishMinPx;
+  return Math.min(W.fishMaxPx, Math.max(W.fishMinPx, w));
 }
 
 /** The one `.fx-layer` element under `root` (the app root), created on first use. */
@@ -183,9 +195,9 @@ export interface FlightKeyframe {
  * The flight keyframes for one fish (§2.3): `samples` evenly spaced in time, positions eased with
  * cubic-bezier(.45,0,.25,1), translate relative to S, tilt along the path, scale 1 → fishEndScale.
  */
-export function flightKeyframes(s: Point, t: Point, index: number, c: GameConfig = cfg): FlightKeyframe[] {
+export function flightKeyframes(s: Point, t: Point, index: number, c: GameConfig = cfg, count = 3): FlightKeyframe[] {
   const W = c.fx.win;
-  const ctrl = fishControlPoint(s, t, index, c);
+  const ctrl = fishControlPoint(s, t, index, c, count);
   const dir: 1 | -1 = t.x >= s.x ? 1 : -1;
   const samples = Math.max(2, Math.round(W.fishPathSamples));
   const frames: FlightKeyframe[] = [];
@@ -218,9 +230,10 @@ function animate(el: HTMLElement, frames: Keyframe[], opts: KeyframeAnimationOpt
 }
 
 /**
- * Flies one fish per `from` rect (source cat cells, in order) to the centre of `to` (the pill icon,
- * GameScreen.fishRect()). Fish k pops at k × fishStaggerMs after the call (fishPopMs), holds
- * fishHoldMs, then flies fishFlightMs with cubic-bezier(.45,0,.25,1).
+ * Flies one fish per `from` rect (2c: the full life icons in departure order, GameScreen.lifeSlots();
+ * 2b: source cat cells) to the centre of `to` (2c: GameScreen.periodRect()). Fish k pops at
+ * k × fishStaggerMs after the call (fishPopMs, from opts.startScale), holds fishHoldMs, then flies
+ * fishFlightMs with cubic-bezier(.45,0,.25,1). The arc spread depends on from.length (fishSpread).
  */
 export function flyFish(layer: HTMLElement, from: readonly DOMRect[], to: DOMRect, opts: FlyFishOptions, c: GameConfig = cfg): FxHandle {
   const W = c.fx.win;
@@ -240,6 +253,7 @@ export function flyFish(layer: HTMLElement, from: readonly DOMRect[], to: DOMRec
   const doc = layer.ownerDocument;
   const target = centre(to);
   const size = opts.sizePx;
+  const startScale = Number.isFinite(opts.startScale) ? Math.max(0, opts.startScale as number) : 0;
   const timers = new Set<ReturnType<typeof setTimeout>>();
   const nodes = new Set<HTMLElement>();
   const anims = new Set<Animation>();
@@ -299,12 +313,14 @@ export function flyFish(layer: HTMLElement, from: readonly DOMRect[], to: DOMRec
     fish.style.width = `${size}px`;
     fish.style.height = `${size}px`;
     fish.style.margin = `${-size / 2}px 0 0 ${-size / 2}px`;
+    // Without WAAPI the node shows at its start scale (the CSS default is scale(0), the 2b pop).
+    if (startScale > 0) fish.style.transform = `scale(${startScale})`;
     fish.appendChild(icon('icon-fish', { class: 'fx-fish__icon' }));
 
     later(popAt, () => {
       layer.appendChild(fish);
       nodes.add(fish);
-      play(fish, [{ transform: 'scale(0)' }, { transform: `scale(${POP_OVERSHOOT})`, offset: POP_PEAK_AT }, { transform: 'scale(1)' }], {
+      play(fish, [{ transform: `scale(${startScale})` }, { transform: `scale(${POP_OVERSHOOT})`, offset: POP_PEAK_AT }, { transform: 'scale(1)' }], {
         duration: W.fishPopMs,
         easing: 'ease-out',
         fill: 'both',
@@ -313,8 +329,8 @@ export function flyFish(layer: HTMLElement, from: readonly DOMRect[], to: DOMRec
     });
 
     later(flyAt, () => {
-      play(fish, flightKeyframes(s, target, k, c) as unknown as Keyframe[], { duration: W.fishFlightMs, easing: 'linear', fill: 'forwards' });
-      const ctrl = fishControlPoint(s, target, k, c);
+      play(fish, flightKeyframes(s, target, k, c, count) as unknown as Keyframe[], { duration: W.fishFlightMs, easing: 'linear', fill: 'forwards' });
+      const ctrl = fishControlPoint(s, target, k, c, count);
       const dots = Math.max(0, Math.round(W.fishTrailDots));
       for (let j = 0; j < dots; j++) {
         const u = (j + 1) / (dots + 1);

@@ -26,6 +26,19 @@ for (const def of defs) {
 const keyOf = (r: LevelRecord): string => canonicalKey(r.n, decodeRegions(r.r, r.n));
 
 describe('event packs (phase2b §4.2)', () => {
+  it('phase2c §5.5: every milestone grants hints and kitties only (no fish), with the spec tracks', () => {
+    for (const def of defs) {
+      for (const m of def.track) expect(Object.keys(m.reward).every((k) => k === 'hints' || k === 'kitties'), `${def.id} @${m.at}`).toBe(true);
+      expect(def.track.map((m) => [m.at, m.reward])).toEqual([
+        [3, { hints: 2 }],
+        [7, { hints: 2 }],
+        [12, { kitties: 2 }],
+        [16, { hints: 2, kitties: 1 }],
+        [21, { hints: 3, kitties: 5 }],
+      ]);
+    }
+  });
+
   it('events.json is valid and every def has its pack with the right count', () => {
     expect(errors).toEqual([]);
     expect(defs.length).toBe(3);

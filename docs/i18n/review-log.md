@@ -43,6 +43,27 @@ All drafts were written on 2026-10-09 by Claude (AI) from our English copy, `met
 | `hi` | Hindi | 2026-10-09 | everyday Hindi with loanwords (लेवल, कॉलम); `unit.kind.*` are oblique plurals; "किटी" for kitty; some long sentences were shortened to keep the chunk ≤ 24 KB |
 | `ar` | Arabic (Modern Standard, RTL) | 2026-10-09 | all six plural forms; zero/one/two forms leave out the number; masculine singular imperative; "قُطيطة" for kitty; Latin digits by design |
 
+## Phase 2c redraft: fish are lives (2026-10-09, workstream G2)
+
+The 16 catalogues were redrafted on 2026-10-09 by Claude (AI) for [`docs/phase2c/fish-lives-spec.md`](../phase2c/fish-lives-spec.md) Appendix A, again from our own English copy, `meta.ts` and the [glossary](glossary.md) only. Every change below is an **unreviewed AI draft**; an approval row above covers a catalogue only if its commit includes these keys.
+
+- **Changed in place (A.1):** the lives copy now says fish, never hearts: `game.hearts.a11y`, `howto.hearts`, `fail.title`, `fail.continue.a11y.*`, `a11y.mistake.*`, `a11y.lost`, `a11y.revived`; the group copy no longer pays fish: `group.body.rank`, `group.participation`.
+- **New (A.2), in a block headed "Phase 2c" at the end of each catalogue:** `period.total.*`, `period.pill.*`, `rank.title.period.*`, `rank.tab.period.*`, `rank.records.best.*`, `rank.sub.period.*`, `rank.records.streak`, `rank.records.streakBest` (G2 addition: "4 (best 9)"), `a11y.fishKept.*`, `victory.streak`, `victory.streak.a11y.*`, `howto.points.*`.
+- **Removed (A.3):** the fish currency copy: `victory.bonus.*`, `shop.swap*`, `shop.product.fish_*`, `rewarded.swap`, `event.reward.fish.*`, `a11y.fishEarned.*`, `shop.notEnough`, and the paw-points title `rank.title.points`. (`rank.points` "{points} points" stays until I-3 for the retired board's score format.)
+
+Points a reviewer should check first:
+
+| Locale | Check |
+|---|---|
+| all | The fish word is the glossary's (a life and a ranking point, never money or "golden"); no heart word remains in the lives copy (a unit test enforces this per locale); "This week" means the current UTC week, not the last 7 days |
+| `it` | `rank.title.period.week` "Classifica settimanale" is 22 characters, over the soft limit of 20 (the only `i18n:check` warning); it fits the panel title at 320 px in the e2e screenshots, but a shorter title is welcome; `rank.tab.period.week` is "Settimana" to fit the tab |
+| `pl`, `ru`, `ar`, `hi` | `{total}`, `{best}` and `{points}` use label + colon constructions ("Ten tydzień: {total}", «Очки: +{points}»); check they read naturally next to the plural fish forms |
+| `ru` | `period.total.week` «За неделю: {total}» and the pill «{count} рыбки за эту неделю» (few/many forms) |
+| `tr` | no case suffix follows `{total}` or `{count}` (colons instead); `howto.points.*` says "00:00 UTC itibarıyla yeniden başlar": check it reads naturally |
+| `ar` | all six plural forms of `period.pill.*`, `rank.sub.period.*`, `a11y.fishKept.*`, `victory.streak.a11y.*`; zero/one/two forms leave the number out |
+| `th`, `ja`, `ko`, `zh-Hans` | classifiers for fish (ตัว, 匹, 마리, 条) in every fish count; `victory.streak` is a short chip ("Perfect ×4") |
+| `de`, `fr`, `es`, `pt-BR`, `id`, `vi` | the perfect-streak chip and the How to play sentence about the 00:00 UTC reset |
+
 ## Known limits of the drafts
 
 - Event names, product names and praise words are our own and were translated for meaning and tone, not literally; reviewers may propose better local names (they must stay our own, never another game's).

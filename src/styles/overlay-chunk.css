@@ -103,6 +103,8 @@
 .fail__body { max-width: 300px; margin: 4px auto 0; color: rgba(255, 255, 255, 0.82); font-size: var(--fs-m); }
 .fail__continue .btn__badge { margin-inline-start: 10px; background: var(--accent-deep); color: #fff; }
 .fail__continue .btn__badge .icon { width: 1.1em; height: 1.1em; margin-inline-start: 3px; color: #fff; --icon-fill: #fff; }
+/* Phase 2c §1.4: the "+1" badge ends with a 16 px fish (our icon-fish keeps its own colours). */
+.fail__continue .btn__badge .btn__badge-icon { flex: none; width: 16px; height: 16px; margin-inline-start: 3px; }
 .fail__retry { color: var(--ink); }
 
 /* O5 settings + About */
@@ -152,7 +154,8 @@
 .howto__notes p { display: flex; align-items: flex-start; color: var(--ink-2); font-size: var(--fs-s); line-height: 1.45; }
 .howto__notes p + p { margin-top: 8px; }
 .howto__note-icon { width: 20px; height: 20px; margin: 0 10px 0 0; color: var(--accent); }
-.howto__note-icon--heart { color: var(--heart); }
+.howto__note-icon--fish { flex: none; width: 22px; margin-inline-start: -1px; margin-inline-end: 9px; }
+.howto__note-icon--trophy { color: var(--ink); --icon-fill: var(--gold); }
 .howto__note-icon--bulb { color: var(--gold-deep); }
 /* Keyboard controls: only where a keyboard is likely (a mouse or trackpad is present). */
 .howto__notes .howto__keys { display: none; }
@@ -468,7 +471,10 @@
 }
 
 .rank-records__value {
+  /* Phase 2c integration (lead): a value ("41 Fische", "4 (best 9)") never breaks; the label wraps. */
+  flex: none;
   margin: 0;
+  white-space: nowrap;
   color: #fff;
   font-family: var(--font-num);
   font-weight: var(--display-weight);
@@ -562,16 +568,6 @@
   padding-bottom: calc(var(--banner-reserve, 58px) + var(--banner-clear, 16px) + var(--safe-bottom));
 }
 
-/* Above the column's stacking context, so the turning rays never paint over the fish pill (UX-13). */
-.victory__top {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 48px;
-}
-
 .victory__col {
   position: relative;
   z-index: 0; /* a stacking context: the rays (z −1) paint behind every line of text */
@@ -655,10 +651,19 @@
   font-size: var(--fs-s);
 }
 
+/* Phase 2c §2.7: the reward block, two rows. Row 1, the fish kept: a white pill with the lives of
+   this attempt (kept fish full, lost ones as the empty outline), "+2" and "This week: 42". */
 .victory__reward {
-  display: inline-flex;
+  display: flex;
+  flex-direction: column;
   align-items: center;
   margin-top: 14px;
+}
+
+.victory__kept {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
   padding: 6px 16px;
   padding-inline-start: 10px;
   border-radius: var(--radius-pill);
@@ -670,6 +675,7 @@
 
 .victory__fishes {
   display: inline-flex;
+  flex: none;
   align-items: center;
 }
 
@@ -680,24 +686,28 @@
 }
 
 .victory__fish + .victory__fish {
-  margin-inline-start: -9px;
+  margin-inline-start: -4px;
 }
 
 .victory__plus {
+  flex: none;
   margin-inline-start: 8px;
   margin-inline-end: 12px;
   color: var(--accent-text);
   font-size: var(--fs-xl);
 }
 
-.victory__total {
+.victory__period {
+  min-width: 0;
   padding-inline-start: 12px;
   border-inline-start: 1px solid var(--line-2);
   color: var(--ink-2);
   font-size: var(--fs-m);
+  white-space: nowrap;
 }
 
-.victory__chips {
+/* Row 2: level points and, after a perfect win, the perfect-streak chip (--ink on --gold). */
+.victory__score {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
@@ -714,21 +724,18 @@
   font-family: var(--font-display);
   font-weight: var(--display-weight);
   font-size: var(--fs-s);
+  white-space: nowrap;
 }
 
-.victory__chip--bonus {
-  background: var(--hard);
-  color: #fff;
-}
-
-.victory__chip--bonus[data-kind='daily'] {
-  background: var(--accent-text);
-}
-
-.victory__chip--points {
+.victory__points {
   background: var(--accent-soft);
   color: var(--accent-text);
   font-family: var(--font-num);
+}
+
+.victory__streak {
+  background: var(--gold);
+  color: var(--ink);
 }
 
 .victory__event {
@@ -856,10 +863,6 @@
   margin-top: 10px;
 }
 
-.victory[data-tight] .victory__top {
-  height: 44px;
-}
-
 .victory[data-tight] .victory__time {
   font-size: var(--fs-xl);
 }
@@ -877,25 +880,13 @@
   display: none;
 }
 
-/* ── Shop sheet (§8.5) ─────────────────────────────────────────────────── */
+/* ── Shop sheet (§8.5; Phase 2c §5.2: the Buy section only, no balance and no swaps) ── */
 .shop {
   text-align: start;
 }
 
 .shop .overlay__head {
   margin-bottom: 4px;
-}
-
-.shop__balance.fish-pill {
-  height: 36px;
-  margin-inline-end: 8px;
-  background: var(--page-2);
-  box-shadow: none;
-}
-
-.shop__balance .fish-pill__icon {
-  width: 28px;
-  height: 28px;
 }
 
 .shop__section {
@@ -936,16 +927,10 @@
   height: 28px;
 }
 
-.shop__row[data-item='hint'] .shop__icon,
 .shop__row[data-item='hints_15'] .shop__icon {
   background: var(--gold-soft);
   color: var(--gold-deep);
   --icon-fill: var(--gold);
-}
-
-.shop__row[data-item='fish_250'] .shop__icon,
-.shop__row[data-item='fish_900'] .shop__icon {
-  color: var(--ink);
 }
 
 .shop__text {
@@ -977,20 +962,6 @@
   font-size: var(--fs-m);
 }
 
-.shop__price {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px 2px 2px;
-  border-radius: var(--radius-pill);
-  background: var(--page-2);
-}
-
-.shop__price-icon {
-  width: 22px;
-  height: 22px;
-  color: var(--ink);
-}
-
 .shop__cost {
   color: var(--accent-text);
 }
@@ -1003,7 +974,6 @@
   font-weight: var(--display-weight);
 }
 
-.shop__note,
 .shop__state {
   margin-top: 6px;
   color: var(--ink-2);
@@ -1157,12 +1127,6 @@
   outline-offset: -2px;
 }
 
-/* ── O2: the swap button (§2.8) ────────────────────────────────────────── */
-.rewarded__swap .btn__icon {
-  width: 1.6em;
-  height: 1.6em;
-}
-
 /* Short screens (compact, < 640 px high, 02 §19). */
 @media (max-height: 639px) {
   .victory:not([data-fit]) {
@@ -1170,30 +1134,6 @@
     --v-rays: 320px;
     --v-praise: 2rem;
     --v-gap: 14px;
-  }
-}
-
-/* Phones up to 389 px: the swap button stacks its label over the fish price, so a long localized
-   item name ("1 подсказка") keeps its room instead of running under the button (review UX-8). */
-@media (max-width: 389px) {
-  .shop__swap.btn {
-    flex-direction: column;
-    flex-shrink: 1;
-    min-width: 0;
-    padding: 4px 12px;
-    line-height: 1.05;
-  }
-
-  .shop__swap.btn > * + *,
-  [dir='rtl'] .shop__swap.btn > * + .num {
-    margin-top: 2px;
-    margin-right: 0;
-    margin-left: 0;
-  }
-
-  .shop__swap .shop__price {
-    padding: 0 6px 0 0;
-    background: transparent;
   }
 }
 

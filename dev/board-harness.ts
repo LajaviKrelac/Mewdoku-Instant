@@ -201,7 +201,7 @@ function galleryScene(): void {
   });
   section('Cats on tiles (36 px slot)', tiles);
   const ids: SymbolId[] = [
-    'icon-house', 'icon-gear', 'icon-bulb', 'icon-paw', 'icon-heart', 'icon-heart-empty', 'icon-trophy', 'icon-lock',
+    'icon-house', 'icon-gear', 'icon-bulb', 'icon-paw', 'icon-fish', 'icon-fish-empty', 'icon-trophy', 'icon-lock',
     'icon-calendar', 'icon-play-video', 'icon-close', 'icon-chevron', 'icon-rule-colours', 'icon-rule-lines', 'icon-rule-space',
   ];
   section('Icons', ids.map((id) => swatch(id.slice(5), icon(id, { class: 'hx-icon' }))));

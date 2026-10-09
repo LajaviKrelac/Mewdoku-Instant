@@ -1,10 +1,10 @@
-// Owner: B (Phase 2b; was ui-shell)
-// O4 fail overlay (02 §5 O4, §10.2): Continue (+1 heart) when offered, Retry level, Home.
+// Owner: B (Phase 2b; was ui-shell); G2 (Phase 2c: "Out of fish", the "+1" badge ends with a fish)
+// O4 fail overlay (02 §5 O4, §10.2): Continue (+1 fish, Phase 2c §1.4) when offered, Retry level, Home.
 // Every button is gated until buttonDelayMs has passed and while `busy` (waiting for an ad).
 // Esc and scrim taps are ignored: Home here discards the attempt, so it must be a deliberate tap.
 //
 // Classes: .overlay[data-overlay=fail] > .overlay__scrim--dark + .overlay__panel--stage.fail
-//          .fail__art .fail__continue (.btn__badge) .fail__retry .fail__home ; [data-busy]
+//          .fail__art .fail__continue (.btn__badge > .btn__badge-icon) .fail__retry .fail__home ; [data-busy]
 import { t } from '../../i18n';
 import { illustration } from '../art/illustrations';
 import { icon } from '../art/sprite';
@@ -40,7 +40,13 @@ export function createFailOverlay(): OverlayView<FailOverlayProps> {
     label: t('fail.continue'),
     block: true,
     className: 'fail__continue',
-    trailing: h('span', { class: 'btn__badge', 'aria-hidden': 'true' }, L.text(document.createTextNode(''), () => t('fail.continue.bonus')), icon('icon-heart')),
+    // "+1" and a 16 px fish, decorative: the button's accessible name says "+1 fish" (§1.4).
+    trailing: h(
+      'span',
+      { class: 'btn__badge', 'aria-hidden': 'true' },
+      L.text(document.createTextNode(''), () => t('fail.continue.bonus')),
+      icon('icon-fish', { class: 'btn__badge-icon' }),
+    ),
     onPress: () => props?.onContinue(),
   });
   const retry = makeButton({

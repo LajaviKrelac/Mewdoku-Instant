@@ -38,7 +38,7 @@ function fakeView(name: string, extra: Record<string, unknown> = {}) {
 }
 vi.mock('../../../src/ui/hud/pills', () => ({
   createPills: fakeView('pills'),
-  createFishPill: fakeView('fishPill', { iconRect: () => null }),
+  createPeriodPill: fakeView('periodPill'),
 }));
 vi.mock('../../../src/ui/hud/rule-chips', () => ({ createRuleChips: fakeView('chips') }));
 vi.mock('../../../src/ui/hud/tool-bar', () => ({ createToolBar: fakeView('tools', { toolRect: () => null }) }));
@@ -120,7 +120,7 @@ describe('S1 home', () => {
     showTrophy: false,
     fbSafeZone: false,
     extraCards: [],
-    fish: 128,
+    period: { kind: 'week', total: 42 },
     event: null,
     bannerReserved: false,
     ...over,
@@ -131,7 +131,6 @@ describe('S1 home', () => {
     onSettings: vi.fn(),
     onTrophy: vi.fn(),
     onCard: vi.fn(),
-    onShop: vi.fn(),
     onEvent: vi.fn(),
   });
 
@@ -189,6 +188,10 @@ describe('S1 home', () => {
     expect(q(home.el, '.stock__item--hints').getAttribute('aria-label')).toBe('Hints: 5');
     expect(q(home.el, '.stock__item--kitties').textContent).toBe('3');
     expect(callsOf('topbar', 'create')[0]).toMatchObject({ title: null, showHome: false, showSettings: true, showTrophy: false });
+    // Phase 2c §2.8: the period pill (this week's fish), not the fish pill with a shop "+".
+    expect(callsOf('periodPill', 'create')[0]).toEqual({ kind: 'week', total: 42 });
+    home.update(view({ period: { kind: 'week', total: 45 } }));
+    expect(lastOf('periodPill', 'update')).toEqual({ kind: 'week', total: 45 });
     home.update(view());
     expect(home.el.querySelectorAll('.home-card')).toHaveLength(0);
   });

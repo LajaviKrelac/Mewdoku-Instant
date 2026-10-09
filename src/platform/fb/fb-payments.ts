@@ -1,4 +1,4 @@
-// Owner: D
+// Owner: D (Phase 2b); G3 (Phase 2c: catalogue ids vs retired purchase ids, docs/phase2c/fish-lives-spec.md §5.3)
 // PaymentsProvider over FB payments (phase2b §8.2, §8.4): onReady, getCatalogAsync, purchaseAsync
 // ({productID, developerPayload}), getPurchasesAsync (unconsumed), consumePurchaseAsync(token).
 // Supported iff getPlatform() !== 'IOS' and 'payments.purchaseAsync' is in getSupportedAPIs(); if
@@ -8,8 +8,12 @@
 // (shop-flow: record, grant, save, then consume).
 //
 // Ours on top of the SDK:
-//   - only our five product ids (cfg.iap.products) are passed on, in the catalogue and in purchases:
-//     the game could not grant anything else (fb-dashboard.md lists the products to create);
+//   - only our product ids are passed on (fb-dashboard.md lists the products to create): the
+//     catalogue and purchase() take the products on sale only (cfg.iap.catalog: No Ads, Bulb Bundle,
+//     Kitty Basket); purchases() also passes on the RETIRED ones (cfg.iap.retired: fish_250, fish_900,
+//     phase2c §5.3), so an unconsumed old fish pack reaches the boot restore (which compensates it in
+//     hints and kitties and consumes it) instead of staying unconsumed forever. Anything else could
+//     not be granted, so it is never surfaced (and never consumed);
 //   - purchases() drops entries marked consumed or with a paymentActionType other than 'charge'
 //     (a refund must never grant), so a boot restore can only grant real, unconsumed charges;
 //   - catalogue, purchases and consume calls are bounded by iap.readyTimeoutMs; purchase() is not
@@ -49,12 +53,20 @@ export function mapPurchaseError(err: unknown): PurchaseFailReason {
   }
 }
 
-/** Our product id for an SDK id, or null when it is not one of ours. */
-function ourId(id: unknown, c: GameConfig): ProductId | null {
-  return typeof id === 'string' && c.iap.products.some((p) => p.id === id) ? (id as ProductId) : null;
+/** A product on sale (cfg.iap.catalog) for an SDK id, or null (phase2c §5.3: a retired id is not on sale). */
+function saleId(id: unknown, c: GameConfig): ProductId | null {
+  return typeof id === 'string' && c.iap.catalog.some((p) => p.id === id) ? (id as ProductId) : null;
 }
 
-/** SDK purchase → ours; null for anything we must not grant (unknown product, no token, consumed, refund). */
+/** Our product id for an SDK purchase: on sale or retired (phase2c §5.3); null when it is not one of ours. */
+function ourId(id: unknown, c: GameConfig): ProductId | null {
+  return saleId(id, c) ?? (typeof id === 'string' && c.iap.retired.some((p) => p.id === id) ? (id as ProductId) : null);
+}
+
+/**
+ * SDK purchase → ours; null for anything we must not grant (unknown product, no token, consumed,
+ * refund). A retired product (cfg.iap.retired) is ours: the restore compensates it (phase2c §5.3).
+ */
 export function toPurchase(p: FBPurchase | null | undefined, c: GameConfig = cfg): Purchase | null {
   if (!p || typeof p !== 'object') return null;
   const productId = ourId(p.productID, c);
@@ -72,10 +84,13 @@ export function toPurchase(p: FBPurchase | null | undefined, c: GameConfig = cfg
   };
 }
 
-/** SDK catalogue row → ours; null for products that are not ours or carry no price. */
+/**
+ * SDK catalogue row → ours; null for products that are not on sale (not ours, or retired: a test app
+ * may still list fish_250 / fish_900, phase2c §5.3) or carry no price.
+ */
 export function toProduct(p: FBProduct | null | undefined, c: GameConfig = cfg): Product | null {
   if (!p || typeof p !== 'object') return null;
-  const id = ourId(p.productID, c);
+  const id = saleId(p.productID, c);
   if (!id || typeof p.price !== 'string' || p.price.trim() === '') return null;
   return { id, price: p.price, currency: typeof p.priceCurrencyCode === 'string' ? p.priceCurrencyCode : '' };
 }
@@ -136,7 +151,7 @@ export function createFbPayments(sdk: FBInstantSDK, opts: FbPaymentsOptions): Pa
     async purchase(id, payload) {
       if (!api) return { ok: false, reason: 'unsupported' };
       if (!isReady || buying) return { ok: false, reason: 'not_ready' };
-      if (!ourId(id, c)) return { ok: false, reason: 'error' };
+      if (!saleId(id, c)) return { ok: false, reason: 'error' }; // not on sale (unknown or retired): never reaches FB
       buying = true;
       try {
         // No deadline: FB's payment dialog takes as long as the player needs.

@@ -1,4 +1,5 @@
-// Owner: D (Phase 2b; was platform)
+// Owner: D (Phase 2b; was platform); G3 (Phase 2c: period_points is the generic board, the band
+// read's boardRank through the facade, retired packs never bought; fish-lives-spec §4.5, §5.3)
 // FB adapter lifecycle and capabilities (05 §4, 04 §6.3): initializeAsync is the first SDK call,
 // progress reaches 100 before startGameAsync, locale read after start, capabilities from
 // getSupportedAPIs + placement IDs, onPause, haptics, player ID.
@@ -13,7 +14,7 @@ import type { SaveData } from '../../../src/game/types';
 import { createStub, drain, MemoryStorage, track, type StubConfig } from './helpers';
 
 const PLACEMENTS = { interstitial: 'int-1', rewarded: 'rew-1' };
-const BOARDS_JSON = JSON.stringify({ paw_points: 'pp', daily_fastest: 'df' });
+const BOARDS_JSON = JSON.stringify({ period_points: 'pp', daily_fastest: 'df' });
 
 function setup(
   config: StubConfig = {},
@@ -332,9 +333,9 @@ describe('createFbPlatform: phase2b social facades (lazy fb-social chunk)', () =
     await platform.start();
     const ranking = platform.ranking!;
     expect(ranking.caps()).toEqual({ api: 'classic', global: true, myRank: true, overlay: true, overlayInRect: false });
-    await expect(ranking.submit('paw_points', 55)).resolves.toBe('ok');
-    await expect(ranking.mine('paw_points')).resolves.toEqual({ rank: 1, score: 55, isMe: true });
-    await expect(ranking.top('paw_points', 10)).resolves.toEqual([{ rank: 1, score: 55, isMe: true }]);
+    await expect(ranking.submit('period_points', 55)).resolves.toBe('ok');
+    await expect(ranking.mine('period_points')).resolves.toEqual({ rank: 1, score: 55, isMe: true });
+    await expect(ranking.top('period_points', 10)).resolves.toEqual([{ rank: 1, score: 55, isMe: true }]);
     expect(control.leaderboard('pp')).toEqual([expect.objectContaining({ playerId: 'me', score: 55 })]);
     // A board without an id never loads anything or reaches the SDK.
     await expect(ranking.submit('event_snow_paws_2026', 5)).resolves.toBe('unsupported');
@@ -348,7 +349,7 @@ describe('createFbPlatform: phase2b social facades (lazy fb-social chunk)', () =
     );
     await platform.start();
     const ranking = platform.ranking!;
-    expect(ranking.supports?.('paw_points')).toBe(true);
+    expect(ranking.supports?.('period_points')).toBe(true);
     expect(ranking.supports?.('event_snow_paws_2026')).toBe(false); // no id in this build
     // daily_fastest is not in the dashboard (names: ['pp']): the read finds out, then supports() is false.
     expect(ranking.supports?.('daily_fastest')).toBe(true);
@@ -360,7 +361,19 @@ describe('createFbPlatform: phase2b social facades (lazy fb-social chunk)', () =
     );
     await banded.platform.start();
     const keep = (score: number): boolean => Math.floor(score / 100_000) === 281;
-    await expect(banded.platform.ranking!.top('daily_fastest', 10, keep)).resolves.toEqual([{ rank: 1, score: day(281, 9), isMe: false }]);
+    await expect(banded.platform.ranking!.top('daily_fastest', 10, keep)).resolves.toEqual([{ rank: 1, score: day(281, 9), isMe: false, boardRank: 2 }]);
+    // phase2c: the period band through the facade, past a future-dated entry (week 39 = the fake clock's).
+    const week = setup(
+      { playerId: 'me', leaderboards: { entries: { pp: [{ playerId: 'ahead', band: 40, total: 1 }, { playerId: 'w', period: 0, total: 3 }, { playerId: 'old', period: -1, total: 9 }] } } },
+      { leaderboards: BOARDS_JSON, loadSocial: realChunk },
+    );
+    await week.platform.start();
+    await week.platform.ranking!.submit('period_points', 39 * 100_000 + 2);
+    const thisWeek = (score: number): boolean => Math.floor(score / 100_000) === 39;
+    await expect(week.platform.ranking!.top('period_points', 10, thisWeek)).resolves.toEqual([
+      { rank: 1, score: 39 * 100_000 + 3, isMe: false, boardRank: 2 },
+      { rank: 2, score: 39 * 100_000 + 2, isMe: true, boardRank: 3 },
+    ]);
   });
 
   it('NEZP: no rank of my own; the facade answers null for mine without loading', async () => {
@@ -368,7 +381,7 @@ describe('createFbPlatform: phase2b social facades (lazy fb-social chunk)', () =
     const { platform } = setup({ presets: ['lb-nezp', 'no-overlay', 'no-tournament', 'no-payments'] }, { leaderboards: BOARDS_JSON, loadSocial: () => (loads++, realChunk()) });
     await platform.init();
     expect(platform.ranking!.caps()).toMatchObject({ api: 'nezp', myRank: false });
-    await expect(platform.ranking!.mine('paw_points')).resolves.toBeNull();
+    await expect(platform.ranking!.mine('period_points')).resolves.toBeNull();
     expect(loads).toBe(0);
   });
 
@@ -377,16 +390,16 @@ describe('createFbPlatform: phase2b social facades (lazy fb-social chunk)', () =
     const loadSocial = (): Promise<SocialModule> => (++attempt === 1 ? Promise.reject(new Error('chunk 404')) : realChunk());
     const { platform } = setup({ playerId: 'me' }, { leaderboards: BOARDS_JSON, loadSocial });
     await platform.init();
-    await expect(platform.ranking!.top('paw_points', 10)).resolves.toEqual([]);
-    await expect(platform.ranking!.submit('paw_points', 10)).resolves.toBe('ok');
+    await expect(platform.ranking!.top('period_points', 10)).resolves.toEqual([]);
+    await expect(platform.ranking!.submit('period_points', 10)).resolves.toBe('ok');
     expect(attempt).toBe(2);
   });
 
   it('a chunk that never loads cannot hold the ranking panel: answers within rank.fetchTimeoutMs', async () => {
     const { platform, clock } = setup({}, { leaderboards: BOARDS_JSON, loadSocial: () => new Promise(() => undefined) });
     await platform.init();
-    const top = track(platform.ranking!.top('paw_points', 10));
-    const sub = track(platform.ranking!.submit('paw_points', 10));
+    const top = track(platform.ranking!.top('period_points', 10));
+    const sub = track(platform.ranking!.submit('period_points', 10));
     await clock.advanceAsync(cfg.rank.fetchTimeoutMs);
     await drain();
     expect(top.value).toEqual([]);
@@ -403,9 +416,13 @@ describe('createFbPlatform: phase2b social facades (lazy fb-social chunk)', () =
     await platform.start();
     await vi.waitFor(() => expect(seen).toEqual(['ready']));
     expect(payments.ready()).toBe(true);
-    const r = await payments.purchase('fish_250', 'stub-player-1:n1');
+    const r = await payments.purchase('hints_15', 'stub-player-1:n1');
     expect(r.ok).toBe(true);
     expect(control.purchases()).toHaveLength(1);
+    // phase2c §5.3: a retired fish pack is never bought (no SDK call); the catalogue lists the three on sale.
+    await expect(payments.purchase('fish_250', 'stub-player-1:n2')).resolves.toEqual({ ok: false, reason: 'error' });
+    expect(control.count('payments.purchaseAsync')).toBe(1);
+    expect((await payments.catalog()).map((p) => p.id)).toEqual(['remove_ads', 'hints_15', 'kitties_8']);
   });
 
   it('groups: create / current / post through the facade', async () => {

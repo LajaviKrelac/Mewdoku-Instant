@@ -1,6 +1,8 @@
-// Owner: D (Phase 2b; was platform)
+// Owner: D (Phase 2b; was platform); G3 (Phase 2c)
 // The FBInstant test double itself (tests/fixtures/fbinstant-stub.js): global install, ?fbstub=
 // presets, player data persisted across reloads, flush semantics, call recording.
+// Phase 2c: the three-product catalogue (retired fish packs cannot be bought), the unconsumed
+// shorthand and the 'unconsumed-fish-250' preset, and leaderboard rows seeded by period band.
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -130,12 +132,75 @@ describe('fbinstant-stub', () => {
     await first.sdk.initializeAsync();
     await first.sdk.startGameAsync();
     await new Promise<void>((r) => first.sdk.payments!.onReady(r));
-    const p = await first.sdk.payments!.purchaseAsync({ productID: 'fish_900', developerPayload: 'x' });
+    const p = await first.sdk.payments!.purchaseAsync({ productID: 'kitties_8', developerPayload: 'x' });
     const second = load({ setTimeout: realTimers, sessionStorage });
     expect((await second.sdk.payments!.getPurchasesAsync()).map((x) => x.purchaseToken)).toEqual([p.purchaseToken]);
     await second.sdk.payments!.consumePurchaseAsync(p.purchaseToken);
     expect(await second.sdk.payments!.getPurchasesAsync()).toEqual([]);
     const ios = load({ setTimeout: realTimers, __FB_STUB_CONFIG__: { presets: ['ios'] } }).sdk;
     expect(ios.payments).toBeUndefined();
+  });
+
+  // ── phase2c ──
+  it('payments: the catalogue is the three products on sale; a retired fish pack cannot be bought', async () => {
+    const { sdk } = load({ setTimeout: realTimers });
+    await sdk.initializeAsync();
+    await sdk.startGameAsync();
+    await new Promise<void>((r) => sdk.payments!.onReady(r));
+    expect((await sdk.payments!.getCatalogAsync()).map((p) => p.productID)).toEqual(['remove_ads', 'hints_15', 'kitties_8']);
+    await expect(sdk.payments!.purchaseAsync({ productID: 'fish_250', developerPayload: 'x' })).rejects.toMatchObject({ code: 'INVALID_PARAM' });
+    await expect(sdk.payments!.purchaseAsync({ productID: 'fish_900', developerPayload: 'x' })).rejects.toMatchObject({ code: 'INVALID_PARAM' });
+  });
+
+  it('payments: an unconsumed purchase given by productID alone is a full unconsumed charge; the preset seeds a fish_250', async () => {
+    const t = Date.UTC(2026, 9, 9, 12, 0, 0);
+    const win = { setTimeout: realTimers, __stubNow: () => t, __FB_STUB_CONFIG__: { payments: { unconsumed: [{ productID: 'fish_250' }, { productID: 'hints_15', purchaseToken: 'mine' }] } } };
+    const { sdk } = load(win as FakeWindow);
+    expect(await sdk.payments!.getPurchasesAsync()).toEqual([
+      {
+        productID: 'fish_250',
+        purchaseToken: 'stub-unconsumed-1-fish_250',
+        paymentID: 'stub-unconsumed-payment-1',
+        purchaseTime: String(t / 1000 - 86_400),
+        paymentActionType: 'charge',
+        isConsumed: false,
+      },
+      expect.objectContaining({ productID: 'hints_15', purchaseToken: 'mine', isConsumed: false }),
+    ]);
+    const preset = load({ setTimeout: realTimers, location: { search: '?fbstub=unconsumed-fish-250' } }).sdk;
+    expect((await preset.payments!.getPurchasesAsync()).map((p) => [p.productID, p.purchaseToken])).toEqual([['fish_250', 'stub-unconsumed-1-fish_250']]);
+  });
+
+  it('leaderboards: rows seeded by period band (absolute or relative to the stub clock); periodIndex follows periods.kind', async () => {
+    const t = Date.UTC(2026, 9, 9, 12, 0, 0); // a Friday in UTC week 39 from 2026-01-05 (spec §3.5)
+    const entries = {
+      lb: [
+        { playerId: 'ahead', period: 1, total: 2 },
+        { playerId: 'now', period: 0, total: 7 },
+        { playerId: 'abs', band: 12, total: 99_999 },
+        { playerId: 'plain', score: 5 },
+      ],
+    };
+    const weekWin = { setTimeout: realTimers, __stubNow: () => t, __FB_STUB_CONFIG__: { leaderboards: { entries } } };
+    const week = load(weekWin as FakeWindow);
+    expect(week.control.periodIndex()).toBe(39);
+    expect(week.control.periodIndex(-1)).toBe(38);
+    const lb = await week.sdk.getLeaderboardAsync!('lb');
+    expect((await lb.getEntriesAsync(10, 0)).map((e) => [e.getScore(), e.getRank!()])).toEqual([
+      [4_000_002, 1],
+      [3_900_007, 2],
+      [1_299_999, 3],
+      [5, 4],
+    ]);
+    const dayWin = { setTimeout: realTimers, __stubNow: () => t, __FB_STUB_CONFIG__: { leaderboards: { periods: { kind: 'day' } } } };
+    expect(load(dayWin as FakeWindow).control.periodIndex()).toBe(277);
+    const monthWin = { setTimeout: realTimers, __stubNow: () => t, __FB_STUB_CONFIG__: { leaderboards: { periods: { kind: 'month' } } } };
+    expect(load(monthWin as FakeWindow).control.periodIndex()).toBe(9);
+    // A board seeded before the week turned: relative rows are fixed when the board is first read.
+    let clock = Date.UTC(2026, 9, 11, 23, 59, 0); // Sunday, still week 39
+    const turn = load({ setTimeout: realTimers, __stubNow: () => clock, __FB_STUB_CONFIG__: { leaderboards: { entries: { lb: [{ playerId: 'x', period: 0, total: 1 }] } } } } as FakeWindow);
+    clock = Date.UTC(2026, 9, 12, 0, 0, 0); // Monday 00:00 UTC: week 40
+    expect(turn.control.periodIndex()).toBe(40);
+    expect(turn.control.leaderboard('lb')[0]?.score).toBe(4_000_001);
   });
 });

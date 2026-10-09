@@ -1,26 +1,28 @@
-// Owner: B (Phase 2b)
+// Owner: B (Phase 2b); G2 (Phase 2c: the period pill replaces the fish pill)
 // S1 Home (02 §5): top bar (Trophy*, Gear), wordmark + mascot, primary level button, daily card,
 // stock readout. Phase 3 hook: extra cards array (02 §22).
-// Phase 2b (B): the fish pill in the top bar's lead slot (§2.5), the event card above the Level
+// Phase 2b (B): the event card above the Level
 // button (§4.4: rendered in the extra-cards area as its event variant), data-banner (§3.2).
+// Phase 2c (G2, fish-lives-spec §2.8): the top bar's lead slot shows the PERIOD PILL (icon-trophy and
+// this period's leaderboard points, "42 fish this week"), not a button; Home has no shop entry.
 // The event card's art is A's eventArt(def, 'card'), which lives in the lazy `events` chunk: the app
 // passes it in (HomeEventCardView.art) once that chunk has loaded; the card renders without it until then.
 //
 // Classes: .screen.screen--home[data-banner] > .home__body > .home__hero(.home__wordmark .home__tagline .home__mascot)
 //          .home__actions(.home__cards > .event-card[data-state] .home__play .badge.badge--hard
-//          .daily-card[data-state] .home-card) .home__stock(.stock__item); the top bar's lead slot holds .fish-pill
+//          .daily-card[data-state] .home-card) .home__stock(.stock__item); the top bar's lead slot holds .period-pill
 // Review fixes: the hero never overlaps the top bar or the cards below it (UX-2, I18N-LAYOUT-2): it is
 // centred with auto margins (overflow can only go down), and fitHero() shrinks the mascot (then
 // drops the tagline) until the hero fits the space the event card, the banner reserve and the
 // localized text leave. The static texts follow the language (A11Y-I18N-1).
-import { cfg } from '../../app/config';
+import { cfg, type PeriodKind } from '../../app/config';
 import type { EventDef } from '../../game/events';
 import type { DailyCardState } from '../../game/progression';
 import { formatClock, formatDuration, formatShortDate, onLocaleChanged, t, translate } from '../../i18n';
 import { mascotIllustration } from '../art/mascot';
 import { icon } from '../art/sprite';
 import { clear, h, setText, type View } from '../dom';
-import { createFishPill } from '../hud/pills';
+import { createPeriodPill } from '../hud/pills';
 import { createTopBar, type TopBarProps } from '../hud/top-bar';
 import { createLocaleText } from '../locale-text';
 import { setTextKeepTogether } from '../overlays/overlay-base';
@@ -97,8 +99,8 @@ export interface HomeView {
   readonly showTrophy: boolean;
   readonly fbSafeZone: boolean;
   readonly extraCards: readonly HomeCardView[];
-  /** Wallet fish for the Home fish pill (phase2b §2.5). */
-  readonly fish: number;
+  /** Phase 2c §2.8: this period's leaderboard points for the Home period pill (periodTotal(save, now); 0 after a rollover). */
+  readonly period: { readonly kind: PeriodKind; readonly total: number };
   /** The event card, or null when no event is active or teased (phase2b §4.4). */
   readonly event: HomeEventCardView | null;
   /** phase2b §3.2: the banner band is reserved (root data-banner). */
@@ -112,8 +114,6 @@ export interface HomeCallbacks {
   onSettings(): void;
   onTrophy(): void;
   onCard(id: string): void;
-  /** Fish pill "+" (phase2b §2.5, §8.5). */
-  onShop(): void;
   /** Event card tap (active, locked or done; a teaser is not tappable), phase2b §4.4. */
   onEvent(): void;
 }
@@ -165,12 +165,13 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
     showTrophy: v.showTrophy,
     fbSafeZone: v.fbSafeZone,
   });
-  // phase2b §2.5: the fish pill (with "+", the shop) at the top bar's lead, after the FB safe zone.
-  const fishPill = createFishPill({ count: view.fish, onPlus: () => cb.onShop() });
+  // Phase 2c §2.8: the period pill at the top bar's lead, after the FB safe zone (not a button).
+  const periodOf = (v: HomeView): { readonly kind: PeriodKind; readonly total: number } => v.period ?? { kind: cfg.period.kind, total: 0 };
+  const periodPill = createPeriodPill(periodOf(view));
   const topBar = createTopBar(
     topBarProps(view),
     { onHome: () => undefined, onSettings: () => cb.onSettings(), onTrophy: () => cb.onTrophy() },
-    { lead: fishPill.el },
+    { lead: periodPill.el },
   );
 
   // phase2b §4.4 event card (above the Level button): art, title, status line, 4 px progress bar.
@@ -330,7 +331,7 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
     last = v;
     L.apply();
     topBar.update(topBarProps(v));
-    fishPill.update({ count: v.fish, onPlus: () => cb.onShop() });
+    periodPill.update(periodOf(v));
     renderEvent(v.event);
     el.toggleAttribute('data-banner', v.bannerReserved);
     el.style.setProperty('--banner-reserve', `${cfg.ads.banner.reservePx}px`);
@@ -390,7 +391,7 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
       w0?.removeEventListener('resize', scheduleFit);
       if (fitRaf) win()?.cancelAnimationFrame(fitRaf);
       topBar.destroy();
-      fishPill.destroy();
+      periodPill.destroy();
       el.remove();
     },
   };

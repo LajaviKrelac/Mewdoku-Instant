@@ -1,13 +1,13 @@
-// Owner: B (Phase 2b)
+// Owner: B (Phase 2b); G2 (Phase 2c: no swap)
 // O2 rewarded-ad prompt (02 §5 O2, §13.3). Revive does not use it (the O4 button is the prompt).
 // The variant is chosen by the app when the dialog opens; the countdown variant ticks live.
-// phase2b §2.8: "Swap {price} fish" (secondary, with the fish icon) whenever `swap` is given and the
-// balance covers the price, in every variant. Order: Watch video / Take it, Swap, OK, Not now.
+// Phase 2c (fish-lives-spec §5.4): back to the Phase 2 card, [Watch video] [Not now] / "Here's a free
+// hint." [Take it] / the countdown with [OK]: no swap row, no balance (fish are lives, not a currency).
 //
 // Classes: .overlay[data-overlay=rewarded] > .overlay__panel--dialog.rewarded[data-variant]
 //          .rewarded__icon .overlay__title .overlay__body .overlay__actions(.rewarded__accept
-//          .rewarded__swap .rewarded__ok .rewarded__decline)
-import { formatClock, formatNumber, t } from '../../i18n';
+//          .rewarded__ok .rewarded__decline)
+import { formatClock, t } from '../../i18n';
 import { icon } from '../art/sprite';
 import { clear, h, setText, type OverlayView } from '../dom';
 import { createOverlayShell, createTicker, makeButton, setButtonLabel } from './overlay-base';
@@ -28,12 +28,6 @@ export interface RewardedPromptProps {
   onAccept(): void;
   /** Not now / OK / Esc. */
   onDecline(): void;
-  /**
-   * phase2b §2.8: the "Swap {price} fish" button (rewarded.swap), shown whenever balance ≥ price,
-   * between Watch video and Not now. Absent = no swap (the app omits it below the price).
-   * [F0: typed; B renders it]
-   */
-  readonly swap?: { readonly price: number; readonly balance: number; onSwap(): void };
 }
 
 /** Countdown refresh period; finer than 1 s so the display never skips a second. */
@@ -94,18 +88,7 @@ export function createRewardedPrompt(): OverlayView<RewardedPromptProps> {
     className: 'rewarded__ok',
     onPress: () => props?.onDecline(),
   });
-  const swap = makeButton({
-    variant: 'secondary',
-    label: '',
-    icon: 'icon-fish',
-    block: true,
-    className: 'rewarded__swap',
-    onPress: () => {
-      const s = props?.swap;
-      if (s && s.balance >= s.price) s.onSwap();
-    },
-  });
-  shell.panel.append(iconSlot, title, body, h('div', { class: 'overlay__actions overlay__actions--stack' }, accept, swap, ok, notNow));
+  shell.panel.append(iconSlot, title, body, h('div', { class: 'overlay__actions overlay__actions--stack' }, accept, ok, notNow));
 
   const videoIcon = icon('icon-play-video', { class: 'btn__icon' });
 
@@ -134,11 +117,6 @@ export function createRewardedPrompt(): OverlayView<RewardedPromptProps> {
     } else {
       videoIcon.remove();
     }
-
-    // §2.8: shown at ≥ price, hidden below (the app may also omit `swap`).
-    const s = p.swap;
-    swap.hidden = !s || s.balance < s.price;
-    if (s) setButtonLabel(swap, t('rewarded.swap', { count: formatNumber(s.price) }));
 
     if (countdown) {
       ticker.start(TICK_MS, () => {

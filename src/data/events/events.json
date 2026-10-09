@@ -12,10 +12,10 @@
     "gen": { "sizes": [[7, 1], [8, 2], [9, 2], [10, 1]], "band": [2, 3] },
     "track": [
       { "at": 3, "reward": { "hints": 2 } },
-      { "at": 7, "reward": { "fish": 30 } },
+      { "at": 7, "reward": { "hints": 2 } },
       { "at": 12, "reward": { "kitties": 2 } },
-      { "at": 16, "reward": { "fish": 60 } },
-      { "at": 21, "reward": { "fish": 100, "kitties": 3 } }
+      { "at": 16, "reward": { "hints": 2, "kitties": 1 } },
+      { "at": 21, "reward": { "hints": 3, "kitties": 5 } }
     ],
     "leaderboard": "event_lantern_walk_2026"
   },
@@ -32,10 +32,10 @@
     "gen": { "sizes": [[8, 2], [9, 2], [10, 2], [11, 1]], "band": [3, 4] },
     "track": [
       { "at": 3, "reward": { "hints": 2 } },
-      { "at": 7, "reward": { "fish": 30 } },
+      { "at": 7, "reward": { "hints": 2 } },
       { "at": 12, "reward": { "kitties": 2 } },
-      { "at": 16, "reward": { "fish": 60 } },
-      { "at": 21, "reward": { "fish": 100, "kitties": 3 } }
+      { "at": 16, "reward": { "hints": 2, "kitties": 1 } },
+      { "at": 21, "reward": { "hints": 3, "kitties": 5 } }
     ],
     "leaderboard": "event_snow_paws_2026"
   },
@@ -52,10 +52,10 @@
     "gen": { "sizes": [[9, 2], [10, 2], [11, 2], [12, 1]], "band": [3, 4] },
     "track": [
       { "at": 3, "reward": { "hints": 2 } },
-      { "at": 7, "reward": { "fish": 30 } },
+      { "at": 7, "reward": { "hints": 2 } },
       { "at": 12, "reward": { "kitties": 2 } },
-      { "at": 16, "reward": { "fish": 60 } },
-      { "at": 21, "reward": { "fish": 100, "kitties": 3 } }
+      { "at": 16, "reward": { "hints": 2, "kitties": 1 } },
+      { "at": 21, "reward": { "hints": 3, "kitties": 5 } }
     ],
     "leaderboard": "event_yarn_hearts_2027"
   }

@@ -1,4 +1,5 @@
 // Owner: C (Phase 2b; F0 added the 2b bus events and analytics rows: add entries, never change existing payloads).
+// Phase 2c (G1): analytics row win_points (§3.9); the bus event `wallet` is removed (no fish wallet).
 // Typed event bus (04 §3) and the analytics event table (02 §20). Phase 3 hook: achievements,
 // quests and stats subscribe here without touching the session.
 import type { HintKind } from '../engine/types';
@@ -97,6 +98,9 @@ export interface AnalyticsParamsMap {
   group_result: { mode: 'participation' | 'rank'; place?: number; wins: number; doubled: 0 | 1 };
   // ── phase2b §8.4 purchases: never a price or payment id ──
   iap: { product: ProductId; result: 'ok' | PurchaseFailReason; platform: string };
+  // ── phase2c §3.9: once per counted scored win ──
+  /** fish = fish (lives) kept; total = this period's leaderboard points after; points = level points; streak = the perfect streak after. */
+  win_points: { mode: ModeId; fish: number; total: number; points: number; streak: number };
 }
 export type AnalyticsName = keyof AnalyticsParamsMap;
 export type AnalyticsEvent = { [K in AnalyticsName]: { name: K; params: AnalyticsParamsMap[K] } }[AnalyticsName];
@@ -125,6 +129,7 @@ export const ANALYTICS_PARAM_KEYS: { readonly [K in AnalyticsName]: readonly (ke
   group_create: [],
   group_result: ['mode', 'place', 'wins', 'doubled'],
   iap: ['product', 'result', 'platform'],
+  win_points: ['mode', 'fish', 'total', 'points', 'streak'],
 };
 
 // ─────────────────────────────── App events ───────────────────────────────
@@ -156,8 +161,6 @@ export interface AppEventMap {
   error: { readonly where: string; readonly error: unknown };
   /** phase2b §6.3: the active catalogue changed (boot, Settings → Language). Screens re-render; open overlays update(props). */
   'locale:changed': { readonly locale: LocaleId; readonly dir: 'ltr' | 'rtl' };
-  /** phase2b §2.8: the fish wallet changed (win, swap, purchase, milestone). */
-  wallet: { readonly fish: number; readonly earned: number };
   /** phase2b §5.5: what the ranking fetch for a board returned (or 'local' when there is no provider). */
   'rank:result': RankResult;
 }

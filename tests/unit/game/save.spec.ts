@@ -1,7 +1,9 @@
-// Owner: C. Save schema v2 (phase2b §9; v1 = 04 §4.3, §7): defaults, migrate (garbage, partial, wrong
-// types, v1 → v2), merge table (§7.3 + phase2b §9.3), in-progress validation (§7.2), cells codec, size bound.
-// Phase 2b: the fixtures are v2 documents; the last two blocks cover the full §9.4 list (v1 → v2,
-// garbage per field, the merge table with the paid-grant repair, round trip, size bound, event slots).
+// Owner: C (Phase 2b). Phase 2c (G1): schema v3 (docs/phase2c/fish-lives-spec.md §3.8): the fixtures
+// are v3 documents; the last block covers v2 → v3 (wallet and paw_points pending dropped, retired
+// packs compensated once), the streak and period validation (a changed period kind starts fresh) and
+// their merge rows.
+// Save schema (phase2b §9; v1 = 04 §4.3, §7): defaults, migrate (garbage, partial, wrong
+// types, v1 → v3), merge table (§7.3 + phase2b §9.3), in-progress validation (§7.2), cells codec, size bound.
 import { describe, expect, it } from 'vitest';
 import { mergeConfig } from '../../../src/app/config';
 import { toInProgress } from '../../../src/game/factory';
@@ -15,16 +17,16 @@ import {
   migrateReport,
   validateInProgress,
 } from '../../../src/game/save';
-import type { InProgressV2, SaveData, SaveDataV1 } from '../../../src/game/types';
+import type { InProgressV2, SaveData, SaveDataV1, SaveDataV2 } from '../../../src/game/types';
 import { dbl, lostState, makePuzzle, P5, P5G, playing, R5, run, S5, SOL5, tap, wonState, WRONG5 } from './fixtures';
 
 const NOW = 1_790_000_000_000;
 
-/** A fully populated, valid v2 save. */
+/** A fully populated, valid v3 save. */
 function full(): SaveData {
   const level = toInProgress(run(playing(P5), [tap(1), dbl(WRONG5[1] as number)]).state, NOW - 5);
   return {
-    v: 2,
+    v: 3,
     updatedAt: NOW - 10,
     firstSeenAt: NOW - 86_400_000 * 9,
     sessions: 12,
@@ -36,26 +38,33 @@ function full(): SaveData {
     ads: { lastAdAt: NOW - 200_000, lastFallbackGrantAt: NOW - 700_000 },
     inProgress: { level, daily: null, event: null },
     ext: { coins: 3, nested: { a: [1, 2] } },
-    wallet: { fish: 42, earned: 90 },
     points: { total: 375 },
     events: { 'lantern-walk-2026': { solved: 3, ms: 400_000, lastAt: NOW - 50 } },
     groups: { 'tour-1': { endsAt: NOW + 3_600_000, total: 120, wins: 2, claimed: 0 } },
-    purchases: { noAds: false, tokens: ['fish_250|tok-1'] },
-    rank: { pending: { paw_points: 375 }, lastSubmitAt: NOW - 20_000 },
+    purchases: { noAds: false, tokens: ['hints_15|tok-1'] },
+    rank: { pending: { period_points: 3_900_042 }, lastSubmitAt: NOW - 20_000 },
+    streak: { current: 2, best: 6 },
+    period: { key: '2026-10-05', total: 42, bestKey: '2026-09-28', bestTotal: 57 },
   };
+}
+
+/** The same player as a stored v2 document (Phase 2b shape: a wallet, no streak or period). */
+function fullV2(): SaveDataV2 {
+  const { v: _v, streak: _s, period: _p, ...rest } = full();
+  return { ...rest, v: 2, wallet: { fish: 42, earned: 90 }, rank: { pending: { event_lantern_walk_2026: 3_000_123 }, lastSubmitAt: NOW - 20_000 } };
 }
 
 /** The same player as a stored v1 document (Phase 2 shape). */
 function fullV1(): SaveDataV1 {
-  const { v: _v, settings, inProgress, wallet: _w, points: _p, events: _e, groups: _g, purchases: _pu, rank: _r, ...rest } = full();
+  const { v: _v, settings, inProgress, points: _p, events: _e, groups: _g, purchases: _pu, rank: _r, streak: _s, period: _pe, ...rest } = full();
   const { locale: _l, ...v1Settings } = settings;
   return { ...rest, v: 1, settings: v1Settings, inProgress: { level: inProgress.level as SaveDataV1['inProgress']['level'], daily: null } };
 }
 
 describe('defaults (04 §4.3)', () => {
-  it('matches the spec exactly (04 §4.3 + phase2b §9.2 v2 fields)', () => {
+  it('matches the spec exactly (04 §4.3 + phase2b §9.2 v2 fields + phase2c §3.8 v3 records, no wallet)', () => {
     expect(defaults(NOW)).toEqual({
-      v: 2,
+      v: 3,
       updatedAt: NOW,
       firstSeenAt: NOW,
       sessions: 0,
@@ -67,12 +76,13 @@ describe('defaults (04 §4.3)', () => {
       ads: { lastAdAt: 0, lastFallbackGrantAt: 0 },
       inProgress: { level: null, daily: null, event: null },
       ext: {},
-      wallet: { fish: 0, earned: 0 },
       points: { total: 0 },
       events: {},
       groups: {},
       purchases: { noAds: false, tokens: [] },
       rank: { pending: {}, lastSubmitAt: 0 },
+      streak: { current: 0, best: 0 },
+      period: { key: '', total: 0, bestKey: '', bestTotal: 0 },
     });
   });
 
@@ -151,7 +161,7 @@ describe('migrate: wrong types are replaced field by field', () => {
     { path: 'inProgress.level', patch: (d) => ((d.inProgress as Record<string, unknown>).level = { id: 'L2', mode: 'level', cells: 'abc' }), check: (s) => s.inProgress.level, want: null },
     { path: 'inProgress.daily', patch: (d) => ((d.inProgress as Record<string, unknown>).daily = { ...full().inProgress.level, mode: 'level' }), check: (s) => s.inProgress.daily, want: null },
     { path: 'ext', patch: (d) => (d.ext = 'none'), check: (s) => s.ext, want: {} },
-    { path: 'v', patch: (d) => (d.v = '1'), check: (s) => s.v, want: 2 },
+    { path: 'v', patch: (d) => (d.v = '1'), check: (s) => s.v, want: 3 },
   ];
 
   it.each(ROWS)('$path', ({ path, patch, check, want }) => {
@@ -342,24 +352,23 @@ describe('size bound (04 §4.3)', () => {
 });
 
 describe('save v2 (phase2b §9.2, §9.3): the F0 baseline', () => {
-  it('a v1 document migrates to v2 with the §9.2 defaults; its level and daily slots are kept', () => {
+  it('a v1 document migrates (v1 → v2 → v3) with the §9.2 and §3.8 defaults; its level and daily slots are kept', () => {
     const r = migrateReport(JSON.parse(JSON.stringify(fullV1())) as unknown, NOW);
     expect(r.outcome).toBe('ok');
     expect(r.save).toEqual({
       ...full(),
       settings: { ...full().settings, locale: 'auto' },
-      wallet: { fish: 0, earned: 0 },
       points: { total: 0 },
       events: {},
       groups: {},
       purchases: { noAds: false, tokens: [] },
       rank: { pending: {}, lastSubmitAt: 0 },
+      streak: { current: 0, best: 0 },
+      period: { key: '', total: 0, bestKey: '', bestTotal: 0 },
     });
   });
 
   const V2_ROWS: { path: string; patch: (d: Record<string, unknown>) => void; check: (s: SaveData) => unknown; want: unknown }[] = [
-    { path: 'wallet.fish', patch: (d) => (d.wallet = { fish: -1, earned: 3 }), check: (s) => s.wallet, want: { fish: 0, earned: 3 } },
-    { path: 'wallet', patch: (d) => (d.wallet = 7), check: (s) => s.wallet, want: { fish: 0, earned: 0 } },
     { path: 'points.total', patch: (d) => (d.points = { total: 2.5 }), check: (s) => s.points, want: { total: 0 } },
     {
       path: 'events',
@@ -369,15 +378,15 @@ describe('save v2 (phase2b §9.2, §9.3): the F0 baseline', () => {
     },
     {
       path: 'purchases.tokens',
-      patch: (d) => (d.purchases = { noAds: true, tokens: ['fish_250|a', 'fish_250|a', 'nope', 7] }),
+      patch: (d) => (d.purchases = { noAds: true, tokens: ['hints_15|a', 'hints_15|a', 'nope', 7] }),
       check: (s) => s.purchases,
-      want: { noAds: true, tokens: ['fish_250|a'] },
+      want: { noAds: true, tokens: ['hints_15|a'] },
     },
     {
       path: 'rank.pending',
-      patch: (d) => (d.rank = { pending: { paw_points: 5, bogus: 1 }, lastSubmitAt: 3 }),
+      patch: (d) => (d.rank = { pending: { period_points: 5, bogus: 1 }, lastSubmitAt: 3 }),
       check: (s) => s.rank,
-      want: { pending: { paw_points: 5 }, lastSubmitAt: 3 },
+      want: { pending: { period_points: 5 }, lastSubmitAt: 3 },
     },
     { path: 'settings.locale', patch: (d) => ((d.settings as Record<string, unknown>).locale = 'xx'), check: (s) => s.settings.locale, want: 'auto' },
   ];
@@ -390,22 +399,23 @@ describe('save v2 (phase2b §9.2, §9.3): the F0 baseline', () => {
     expect(r.repairedFields).toContain(path);
   });
 
-  it('merge: points max, events by more solved, noAds OR, ledger union, wallet from the newer document + paid repair', () => {
-    const a: SaveData = { ...full(), updatedAt: NOW - 10, points: { total: 900 }, purchases: { noAds: true, tokens: ['fish_900|old'] } };
+  it('merge: points max, events by more solved, noAds OR, ledger union, stock from the newer document + paid repair', () => {
+    const a: SaveData = { ...full(), updatedAt: NOW - 10, points: { total: 900 }, purchases: { noAds: true, tokens: ['kitties_8|old'] } };
     const b: SaveData = {
       ...full(),
       updatedAt: NOW,
-      wallet: { fish: 5, earned: 5 },
+      stock: { hints: 5, kitties: 5 },
       points: { total: 10 },
       events: { 'lantern-walk-2026': { solved: 4, ms: 900_000, lastAt: NOW } },
       purchases: { noAds: false, tokens: ['hints_15|new'] },
     };
     const m = merge(a, b);
-    // The newer wallet, plus the fish_900 that only the older copy holds (§9.3 paid-grant repair; paid fish are not "earned").
-    expect(m.wallet).toEqual({ fish: 905, earned: 5 });
+    // The newer stock, plus the kitties_8 that only the older copy holds (§9.3 paid-grant repair).
+    expect(m.stock).toEqual({ hints: 5, kitties: 13 });
+    expect(m).not.toHaveProperty('wallet');
     expect(m.points.total).toBe(900);
     expect(m.events['lantern-walk-2026']).toEqual({ solved: 4, ms: 900_000, lastAt: NOW });
-    expect(m.purchases).toEqual({ noAds: true, tokens: ['fish_900|old', 'hints_15|new'] });
+    expect(m.purchases).toEqual({ noAds: true, tokens: ['kitties_8|old', 'hints_15|new'] });
   });
 
   it('an event slot below its event\'s solved count is cleared after a merge', () => {
@@ -425,17 +435,17 @@ describe('save v2 (phase2b §9.4): merge table, paid-grant repair, event slots, 
     ...extra,
   });
 
-  it('a fish_900 on the OLDER document survives a merge with a newer document that lacks it, exactly once', () => {
-    const older = T(['fish_900|tok-1'], NOW - 50, { wallet: { fish: 960, earned: 60 } });
-    const newer = T([], NOW, { wallet: { fish: 12, earned: 70 } });
+  it('a fish_900 on the OLDER document survives a merge with a newer document that lacks it, exactly once (as its compensation)', () => {
+    const older = T(['fish_900|tok-1'], NOW - 50, { stock: { hints: 40, kitties: 20 } });
+    const newer = T([], NOW, { stock: { hints: 1, kitties: 2 } });
     const m = merge(older, newer);
-    expect(m.wallet.fish).toBe(912);
+    expect(m.stock).toEqual({ hints: 31, kitties: 17 });
     expect(m.purchases.tokens).toEqual(['fish_900|tok-1']);
     // Merging the result again (with either copy) never grants it a second time.
-    expect(merge({ ...m, updatedAt: NOW + 5 }, older).wallet.fish).toBe(912);
-    expect(merge(newer, { ...m, updatedAt: NOW + 5 }).wallet.fish).toBe(912);
+    expect(merge({ ...m, updatedAt: NOW + 5 }, older).stock).toEqual(m.stock);
+    expect(merge(newer, { ...m, updatedAt: NOW + 5 }).stock).toEqual(m.stock);
     // Order of the arguments does not matter: the newer copy is picked by updatedAt.
-    expect(merge(newer, older).wallet.fish).toBe(912);
+    expect(merge(newer, older).stock).toEqual(m.stock);
   });
 
   it('the repair covers hints and kitties packs; a token both copies hold is not re-applied', () => {
@@ -443,7 +453,6 @@ describe('save v2 (phase2b §9.4): merge table, paid-grant repair, event slots, 
     const newer = T(['fish_250|both'], NOW, { stock: { hints: 1, kitties: 0 } });
     const m = merge(older, newer);
     expect(m.stock).toEqual({ hints: 16, kitties: 8 });
-    expect(m.wallet).toEqual(newer.wallet);
   });
 
   it('No Ads from either document survives (OR); its ledger entry adds nothing else', () => {
@@ -452,7 +461,6 @@ describe('save v2 (phase2b §9.4): merge table, paid-grant repair, event slots, 
     const m = merge(older, newer);
     expect(m.purchases.noAds).toBe(true);
     expect(m.stock).toEqual(newer.stock);
-    expect(m.wallet).toEqual(newer.wallet);
   });
 
   it('an older-only entry that does not survive the 50-entry ledger cap is not re-granted', () => {
@@ -461,7 +469,7 @@ describe('save v2 (phase2b §9.4): merge table, paid-grant repair, event slots, 
     const newer = T(fifty, NOW);
     const m = merge(older, newer);
     expect(m.purchases.tokens).toEqual(fifty);
-    expect(m.wallet).toEqual(newer.wallet);
+    expect(m.stock).toEqual(newer.stock);
   });
 
   it('events: more solved wins, a tie keeps the smaller ms, lastAt is the max; groups: union with max', () => {
@@ -483,7 +491,7 @@ describe('save v2 (phase2b §9.4): merge table, paid-grant repair, event slots, 
 
   it('rank.pending and inProgress.event follow the newer document; lastSubmitAt is the max', () => {
     const slot = { ...(full().inProgress.level as InProgressV2), id: 'Elantern-walk-2026/5' as const, mode: 'event' as const };
-    const a = T([], NOW - 50, { rank: { pending: { paw_points: 99 }, lastSubmitAt: 70 }, inProgress: { level: null, daily: null, event: slot } });
+    const a = T([], NOW - 50, { rank: { pending: { period_points: 99 }, lastSubmitAt: 70 }, inProgress: { level: null, daily: null, event: slot } });
     const b = T([], NOW, { rank: { pending: { daily_fastest: 5 }, lastSubmitAt: 10 } });
     const m = merge(a, b);
     expect(m.rank).toEqual({ pending: { daily_fastest: 5 }, lastSubmitAt: 70 });
@@ -491,14 +499,14 @@ describe('save v2 (phase2b §9.4): merge table, paid-grant repair, event slots, 
     expect(merge(b, { ...a, updatedAt: NOW + 1 }).inProgress.event).toEqual(slot);
   });
 
-  it('round trip: a v2 document with every new field set survives JSON + migrate unchanged', () => {
+  it('round trip: a v3 document with every new field set survives JSON + migrate unchanged', () => {
     const slot = { ...(full().inProgress.level as InProgressV2), id: 'Elantern-walk-2026/3' as const, mode: 'event' as const };
     const s: SaveData = {
       ...full(),
       inProgress: { ...full().inProgress, event: slot },
       groups: { 'tour-1': { endsAt: NOW + 5, total: 120, wins: 4, claimed: 0 } },
       purchases: { noAds: true, tokens: ['remove_ads|t1', 'fish_250|t2'] },
-      rank: { pending: { event_lantern_walk_2026: 3_000_123 }, lastSubmitAt: NOW - 3 },
+      rank: { pending: { event_lantern_walk_2026: 3_000_123, period_points: 3_900_042 }, lastSubmitAt: NOW - 3 },
     };
     const r = migrateReport(JSON.parse(JSON.stringify(s)) as unknown, NOW);
     expect(r.outcome).toBe('ok');
@@ -537,5 +545,101 @@ describe('save v2 (phase2b §9.4): merge table, paid-grant repair, event slots, 
     const json = JSON.stringify(s);
     expect(json.length).toBeLessThan(40_000);
     expect(migrate(JSON.parse(json) as unknown, NOW)).toEqual(s);
+  });
+});
+
+describe('save v3 (phase2c §3.8)', () => {
+  it('a v2 document migrates to v3: no wallet, the streak and period defaults, everything else kept', () => {
+    const r = migrateReport(JSON.parse(JSON.stringify(fullV2())) as unknown, NOW);
+    expect(r.outcome).toBe('ok');
+    expect(r.save).not.toHaveProperty('wallet');
+    expect(r.save).toEqual({
+      ...full(),
+      rank: fullV2().rank,
+      streak: { current: 0, best: 0 },
+      period: { key: '', total: 0, bestKey: '', bestTotal: 0 },
+    });
+  });
+
+  it('the acceptance case: a wallet, a paw_points pending score and a fish_250 entry → no wallet, no paw score, +10 hints +3 kitties once', () => {
+    const v2 = { ...fullV2(), rank: { pending: { paw_points: 375, event_snow_paws_2026: 2_000_000 }, lastSubmitAt: 1 }, purchases: { noAds: false, tokens: ['fish_250|tok-9'] } };
+    const s = migrate(JSON.parse(JSON.stringify(v2)) as unknown, NOW);
+    expect(s).not.toHaveProperty('wallet');
+    expect(s.rank.pending).toEqual({ event_snow_paws_2026: 2_000_000 });
+    expect(s.stock).toEqual({ hints: full().stock.hints + 10, kitties: full().stock.kitties + 3 });
+    expect(s.purchases.tokens).toEqual(['fish_250|tok-9']);
+    // Already v3: a second migration (the next boot) does not compensate again.
+    expect(migrate(JSON.parse(JSON.stringify(s)) as unknown, NOW).stock).toEqual(s.stock);
+    // Also after a merge with its own v2 cloud copy (both migrated): once.
+    const cloud = migrate(JSON.parse(JSON.stringify({ ...v2, updatedAt: NOW - 1000 })) as unknown, NOW);
+    expect(merge(s, cloud).stock).toEqual(s.stock);
+    expect(merge(cloud, s).stock).toEqual(s.stock);
+  });
+
+  it('a v3 document is never compensated (its retired entries were compensated when it was migrated)', () => {
+    const s: SaveData = { ...full(), purchases: { noAds: false, tokens: ['fish_900|x'] } };
+    expect(migrate(JSON.parse(JSON.stringify(s)) as unknown, NOW).stock).toEqual(s.stock);
+  });
+
+  const V3_ROWS: { path: string; patch: (d: Record<string, unknown>) => void; check: (s: SaveData) => unknown; want: unknown }[] = [
+    { path: 'streak', patch: (d) => (d.streak = 'hot'), check: (s) => s.streak, want: { current: 0, best: 0 } },
+    { path: 'streak.current', patch: (d) => (d.streak = { current: -1, best: 4 }), check: (s) => s.streak, want: { current: 0, best: 4 } },
+    { path: 'streak.best', patch: (d) => (d.streak = { current: 7, best: 3 }), check: (s) => s.streak, want: { current: 7, best: 7 } },
+    { path: 'streak.best', patch: (d) => (d.streak = { current: 1, best: 2_000_000 }), check: (s) => s.streak, want: { current: 1, best: 1 } },
+    { path: 'period', patch: (d) => (d.period = null), check: (s) => s.period, want: { key: '', total: 0, bestKey: '', bestTotal: 0 } },
+    // A key that is not a Monday (e.g. written under another period.kind) resets the whole record.
+    { path: 'period', patch: (d) => (d.period = { key: '2026-10-06', total: 4, bestKey: '', bestTotal: 0 }), check: (s) => s.period, want: { key: '', total: 0, bestKey: '', bestTotal: 0 } },
+    { path: 'period', patch: (d) => (d.period = { key: '2026-10-05', total: 4, bestKey: 'last week', bestTotal: 9 }), check: (s) => s.period, want: { key: '', total: 0, bestKey: '', bestTotal: 0 } },
+    { path: 'period.total', patch: (d) => (d.period = { key: '2026-10-05', total: 100_000, bestKey: '2026-09-28', bestTotal: 9 }), check: (s) => s.period, want: { key: '2026-10-05', total: 0, bestKey: '2026-09-28', bestTotal: 9 } },
+    { path: 'period.total', patch: (d) => (d.period = { key: '', total: 5, bestKey: '', bestTotal: 0 }), check: (s) => s.period, want: { key: '', total: 0, bestKey: '', bestTotal: 0 } },
+    { path: 'period.bestTotal', patch: (d) => (d.period = { key: '2026-10-05', total: 12, bestKey: '2026-10-05', bestTotal: 3 }), check: (s) => s.period, want: { key: '2026-10-05', total: 12, bestKey: '2026-10-05', bestTotal: 12 } },
+  ];
+
+  it.each(V3_ROWS)('garbage in $path → repaired', ({ path, patch, check, want }) => {
+    const raw = JSON.parse(JSON.stringify(full())) as Record<string, unknown>;
+    patch(raw);
+    const r = migrateReport(raw, NOW);
+    expect(check(r.save)).toEqual(want);
+    expect(r.outcome).toBe('repaired');
+    expect(r.repairedFields).toContain(path);
+    expect(r.save.stock).toEqual(full().stock);
+  });
+
+  it('a changed period.kind starts the period record fresh; the streak is kept', () => {
+    const day = mergeConfig({ period: { kind: 'day' } });
+    const month = mergeConfig({ period: { kind: 'month' } });
+    const weekly = JSON.parse(JSON.stringify(full())) as unknown;
+    // '2026-10-05' is a day start too: kept under 'day'; under 'month' it is not a period start.
+    expect(migrate(weekly, NOW, day).period).toEqual(full().period);
+    expect(migrate(weekly, NOW, month).period).toEqual({ key: '', total: 0, bestKey: '', bestTotal: 0 });
+    expect(migrate(weekly, NOW, month).streak).toEqual(full().streak);
+  });
+
+  it('merge: streak.current from the newer document, best = max of both', () => {
+    const a: SaveData = { ...full(), updatedAt: NOW - 10, streak: { current: 9, best: 9 } };
+    const b: SaveData = { ...full(), updatedAt: NOW, streak: { current: 0, best: 4 } }; // a mistake on the newer device
+    expect(merge(a, b).streak).toEqual({ current: 0, best: 9 });
+    expect(merge(b, a).streak).toEqual({ current: 0, best: 9 });
+  });
+
+  it('merge: equal period keys → total max; different keys → the later key; best = the higher bestTotal (tie: later key)', () => {
+    const P = (key: string, total: number, bestKey: string, bestTotal: number): SaveData['period'] => ({ key, total, bestKey, bestTotal });
+    const a: SaveData = { ...full(), updatedAt: NOW, period: P('2026-10-05', 7, '2026-09-28', 30) };
+    const b: SaveData = { ...full(), updatedAt: NOW - 10, period: P('2026-10-05', 11, '2026-10-05', 11) };
+    expect(merge(a, b).period).toEqual(P('2026-10-05', 11, '2026-09-28', 30));
+    // The newer document's period is OLDER (it was not played this week): the later key wins anyway.
+    const c: SaveData = { ...full(), updatedAt: NOW, period: P('2026-09-28', 20, '2026-09-28', 20) };
+    const d: SaveData = { ...full(), updatedAt: NOW - 10, period: P('2026-10-05', 3, '2026-09-21', 20) };
+    expect(merge(c, d).period).toEqual(P('2026-10-05', 3, '2026-09-28', 20));
+    expect(merge(d, c).period).toEqual(P('2026-10-05', 3, '2026-09-28', 20));
+    // best is never below the merged total.
+    const e: SaveData = { ...full(), period: P('2026-10-05', 40, '2026-10-05', 40) };
+    const f: SaveData = { ...full(), updatedAt: NOW, period: P('2026-10-05', 10, '2026-09-28', 30) };
+    expect(merge(e, f).period).toEqual(P('2026-10-05', 40, '2026-10-05', 40));
+  });
+
+  it('the pending period_points score round-trips and follows the newer document', () => {
+    const s = migrate(JSON.parse(JSON.stringify(full())) as unknown, NOW);
+    expect(s.rank.pending).toEqual({ period_points: 3_900_042 });
   });
 });

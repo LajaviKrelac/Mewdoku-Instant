@@ -1,6 +1,6 @@
 # Asset provenance
 
-Status: Phase 2 integration (2026-10-07); Phase 2b drafts (F0, A, B, E) merged at the 2b integration, 2026-10-09 · Required by [06 §2 step 4](phase1/06-legal-and-originality.md#2-clean-room-process).
+Status: Phase 2 integration (2026-10-07); Phase 2b drafts (F0, A, B, E) merged at the 2b integration, 2026-10-09; Phase 2c G2 rows (§9), 2026-10-09 · Required by [06 §2 step 4](phase1/06-legal-and-originality.md#2-clean-room-process).
 
 This file records, for every asset that ships, who made it, how and when it was made, and with which tools. Each row is a clean-room asset: none uses material from the original game, its web build, a teardown of either, or the sources listed in 06 §4. Update this file in the same change that adds or changes an asset (06 §9 checklist).
 
@@ -136,3 +136,21 @@ The translation brief, as given to the model (one session, all 16 languages):
 ### 8.6 The drafts
 
 The workstream drafts `docs/phase2b/provenance-{F0,A,B,E}.md` are merged above; each now only points here. C and D added no art, sound or text beyond the event content (§5) and the platform strings (`src/i18n/en/platform.ts`, D: none new in 2b).
+
+## 9. Phase 2c: fish are lives (workstream G2, 2026-10-09)
+
+The full rows, with method notes, are in the draft [`docs/phase2c/provenance-G2.md`](phase2c/provenance-G2.md); the lead merges any further 2c rows (G1, G3) here at I-5. Everything below is ours, written as code and text by Claude (Anthropic) for G2 from [fish-lives-spec](phase2c/fish-lives-spec.md) §1–§5 and Appendix A. No reference image, no source of 06 §4, and no colour, size or timing sampled from the original (spec R6).
+
+| Asset | File(s) | Author and date | Method |
+|---|---|---|---|
+| Empty-life fish `icon-fish-empty` (one outline of our fish silhouette, ink at 30 %, `--life-empty` wash) | `src/ui/art/fish.ts`, `src/ui/art/sprite.ts` | G2, 2026-10-09 | Hand-coded on the 24-unit grid of `icon-fish`. `icon-heart`, `icon-heart-empty` and `clip-heart-*` are retired (deleted) |
+| Lives pill (three fish slots) | `src/ui/hud/pills.ts`, `src/styles/hud.css` | G2, 2026-10-09 | DOM and CSS; replaces the hearts pill |
+| Fish loss (wriggle, flip out, three droplets, outline fades in, pill swell; 700 / 400 ms) and the revive pop (520 ms, two droplets) | `src/ui/hud/pills.ts`, `src/styles/fx.css` | G2, 2026-10-09 | Designed in words in spec §1.3–§1.4, keyframes and timings ours, tuned on captures of our own build |
+| Period pill (Home) and in-game period counter (roll, bump, rising "+N") | `src/ui/hud/pills.ts`, `src/styles/screens.css`, `src/styles/fx.css` | G2, 2026-10-09 (motion from B's 2b fish pill) | Our `icon-trophy` in `--gold` on a white pill; replaces the fish pill and its "+" |
+| Victory kept-fish row, level points chip, perfect-streak chip; period board, records rows and "This week" tab; How to play lives and points notes; out-of-fish badge | `src/ui/overlays/{victory-screen,ranking-panel,rank-hub,how-to-play,fail-overlay}.ts`, `src/styles/overlay-chunk.css` | G2, 2026-10-09 | Layouts ours, from our own icons |
+| Fish flight from the lives pill (`startScale`, spread for 1–N fish, size from the icon) | `src/ui/fx/fish-flight.ts` | G2, 2026-10-09, extending B's 2b flight | Bézier path in JS |
+| English copy (Appendix A.1, A.2, `rank.records.streakBest`) and the 16 redrafted catalogues (**AI drafts, unreviewed**) | `src/i18n/en.ts`, `src/i18n/en/ui-2c.ts`, `src/i18n/locales/*.ts`, `src/i18n/meta.ts`, `docs/i18n/glossary.md` | G2 (Claude), 2026-10-09 | Same brief as §8.4: our English, `meta.ts` and the glossary only; logged in `docs/i18n/review-log.md` |
+
+No new sound: the fish loss keeps the `mistake` and `heart_last` cues (ids unchanged).
+
+**Integration (lead, I-5, 2026-10-09).** No further rows: G1 (game and app logic, the event milestone data) and G3 (platform, the FB stub) made no drawing, animation, sound or player-facing copy; the lead's integration changes are code and text only (the `dev/**` harnesses, which are never shipped, and the removal of the paw-points strings `rank.points` and `rank.records.thisLevel`). The `docs/phase2c/screenshots/final-*.png` set was captured by the lead from our own built e2e apps (STATUS-2c §6). No source of 06 §4 was opened.

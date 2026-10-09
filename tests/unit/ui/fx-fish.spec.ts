@@ -1,5 +1,7 @@
-// Owner: B. The win flow's fish (phase2b §2.3, §2.13): source rows, the path's control point, the
-// size clamp, the fx layer, the schedule (pop, flight, arrival), cleanup, cancel / finish, reduced motion.
+// Owner: B (Phase 2b); G2 (Phase 2c). The win flow's fish (phase2b §2.3, §2.13): the path's
+// control point, the size clamp, the fx layer, the schedule (pop, flight, arrival), cleanup,
+// cancel / finish, reduced motion. Phase 2c (fish-lives-spec §2.3): the kept lives fly (N = 1, 2, 3,
+// 5 sources from the lives pill), the spread by N, startScale 1 and the size from the life's rect.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cfg } from '../../../src/app/config';
 import {
@@ -7,8 +9,8 @@ import {
   ensureFxLayer,
   fishControlPoint,
   fishPose,
-  fishSizePx,
-  fishSourceRows,
+  fishSizeFromRect,
+  fishSpread,
   flightKeyframes,
   flyFish,
   quadPoint,
@@ -21,22 +23,6 @@ afterEach(() => {
 
 const rect = (x: number, y: number, w = 40, h = 40): DOMRect => ({ left: x, top: y, width: w, height: h, right: x + w, bottom: y + h, x, y, toJSON: () => ({}) }) as DOMRect;
 const W = cfg.fx.win;
-
-describe('fishSourceRows (§2.3)', () => {
-  it('picks floor((n−1)/4), floor((n−1)/2), floor(3(n−1)/4); rows 0, 1, 2 on the 4×4 tutorial', () => {
-    expect(fishSourceRows(4)).toEqual([0, 1, 2]);
-    expect(fishSourceRows(5)).toEqual([1, 2, 3]);
-    expect(fishSourceRows(8)).toEqual([1, 3, 5]);
-    expect(fishSourceRows(9)).toEqual([2, 4, 6]);
-    expect(fishSourceRows(12)).toEqual([2, 5, 8]);
-    for (let n = 4; n <= 12; n++) {
-      const [a, b, c] = fishSourceRows(n);
-      expect(a).toBeLessThan(b);
-      expect(b).toBeLessThan(c);
-      expect(c).toBeLessThan(n);
-    }
-  });
-});
 
 describe('fishControlPoint (§2.3)', () => {
   it('lifts the midpoint perpendicular toward the top by 0.35 × |ST|, spread −10 %, 0, +10 % per fish', () => {
@@ -69,13 +55,6 @@ describe('fishControlPoint (§2.3)', () => {
 });
 
 describe('fish geometry helpers', () => {
-  it('fishSizePx: 0.5 × slot, clamped to 22…36', () => {
-    expect(fishSizePx(20)).toBe(W.fishMinPx);
-    expect(fishSizePx(60)).toBe(30);
-    expect(fishSizePx(200)).toBe(W.fishMaxPx);
-    expect(fishSizePx(Number.NaN)).toBe(W.fishMinPx);
-  });
-
   it('the flight easing is cubic-bezier(.45,0,.25,1): fixed ends, monotone, slow start', () => {
     expect(easeFishFlight(0)).toBe(0);
     expect(easeFishFlight(1)).toBe(1);
@@ -241,5 +220,108 @@ describe('flyFish (§2.2 schedule)', () => {
     expect(calls.length).toBeGreaterThanOrEqual(2 + W.fishTrailDots); // pop, flight, trail dots
     for (const frames of calls) for (const f of frames) for (const k of Object.keys(f)) expect(['transform', 'opacity', 'offset', 'easing']).toContain(k);
     expect(calls[1]).toHaveLength(W.fishPathSamples);
+  });
+});
+
+describe('Phase 2c: the kept lives fly (§2.3)', () => {
+  const lives = (n: number): DOMRect[] => Array.from({ length: n }, (_, k) => rect(330 - 30 * k, 80, 32, 32));
+  const counter = rect(150, 84, 28, 28);
+
+  it('fishSpread by N: one fish 0, two ±½, three −1 / 0 / +1 (2b), five evenly from −1 to +1', () => {
+    expect(fishSpread(0, 1)).toBe(0);
+    expect([0, 1].map((k) => fishSpread(k, 2))).toEqual([-0.5, 0.5]);
+    expect([0, 1, 2].map((k) => fishSpread(k, 3))).toEqual([-1, 0, 1]);
+    expect([0, 1, 2, 3, 4].map((k) => fishSpread(k, 5))).toEqual([-1, -0.5, 0, 0.5, 1]);
+    // The 2b default (three fish) is unchanged, indices past 2 reuse the outer arc.
+    expect([0, 1, 2, 3].map((k) => fishSpread(k))).toEqual([-1, 0, 1, 1]);
+  });
+
+  it('the control point lifts by fishArcLift × |ST| × (1 + spread × fishArcSpread) for each N', () => {
+    const s = { x: 330, y: 96 };
+    const t = { x: 164, y: 98 };
+    const len = Math.hypot(t.x - s.x, t.y - s.y);
+    const lift = (k: number, n: number): number => {
+      const c = fishControlPoint(s, t, k, cfg, n);
+      return Math.hypot(c.x - (s.x + t.x) / 2, c.y - (s.y + t.y) / 2);
+    };
+    expect(lift(0, 1)).toBeCloseTo(W.fishArcLift * len, 6);
+    expect(lift(0, 2)).toBeCloseTo(W.fishArcLift * len * (1 - W.fishArcSpread / 2), 6);
+    expect(lift(1, 2)).toBeCloseTo(W.fishArcLift * len * (1 + W.fishArcSpread / 2), 6);
+    expect(lift(0, 3)).toBeCloseTo(W.fishArcLift * len * (1 - W.fishArcSpread), 6);
+    expect(lift(2, 3)).toBeCloseTo(W.fishArcLift * len * (1 + W.fishArcSpread), 6);
+    // The arc bows toward the top of the screen (the HUD row is short: it lifts into the top bar).
+    expect(fishControlPoint(s, t, 0, cfg, 1).y).toBeLessThan(Math.min(s.y, t.y));
+  });
+
+  it('fishSizeFromRect: the life icon\'s width, rounded and clamped to fishMinPx…fishMaxPx', () => {
+    expect(fishSizeFromRect({ width: 31.9 })).toBe(32);
+    expect(fishSizeFromRect({ width: 10 })).toBe(W.fishMinPx);
+    expect(fishSizeFromRect({ width: 80 })).toBe(W.fishMaxPx);
+    expect(fishSizeFromRect(null)).toBe(W.fishMinPx);
+    expect(fishSizeFromRect({ width: Number.NaN })).toBe(W.fishMinPx);
+  });
+
+  it.each([1, 2, 3, 5])('flies N = %i fish, popping from startScale 1, each to the counter in order', (n) => {
+    vi.useFakeTimers();
+    const layer = ensureFxLayer(document.body);
+    const pops: Keyframe[][] = [];
+    const proto = HTMLElement.prototype as unknown as { animate?: unknown };
+    const had = 'animate' in proto;
+    proto.animate = function (frames: Keyframe[], o: KeyframeAnimationOptions) {
+      if (o.duration === W.fishPopMs) pops.push(frames);
+      return { cancel: () => undefined, finish: () => undefined } as unknown as Animation;
+    };
+    const popped: number[] = [];
+    const arrived: [number, number][] = [];
+    try {
+      const from = lives(n);
+      flyFish(layer, from, counter, {
+        sizePx: fishSizeFromRect(from[0]),
+        startScale: 1,
+        reduced: false,
+        onPop: (k) => popped.push(k),
+        onArrive: (k) => arrived.push([k, Date.now()]),
+      });
+      vi.advanceTimersByTime(0);
+      const first = layer.querySelector<HTMLElement>('.fx-fish') as HTMLElement;
+      // The flying fish starts at the life's size and over it (no pop from nothing).
+      expect(first.style.width).toBe('32px');
+      expect(parseFloat(first.style.left)).toBe(346);
+      expect(first.style.transform).toBe('scale(1)');
+      expect(first.dataset.dir).toBe('l'); // the counter is to the left of the lives
+      vi.advanceTimersByTime(5000);
+    } finally {
+      if (!had) delete proto.animate;
+    }
+    expect(popped).toEqual(Array.from({ length: n }, (_, k) => k));
+    expect(arrived.map(([k]) => k)).toEqual(Array.from({ length: n }, (_, k) => k));
+    for (let k = 1; k < n; k++) expect((arrived[k] as [number, number])[1] - (arrived[k - 1] as [number, number])[1]).toBe(W.fishStaggerMs);
+    expect(pops).toHaveLength(n);
+    for (const f of pops) {
+      expect(f[0]?.transform).toBe('scale(1)');
+      expect(f[1]?.transform).toBe('scale(1.15)');
+      expect(f[2]?.transform).toBe('scale(1)');
+    }
+    expect(layer.children).toHaveLength(0);
+  });
+
+  it('without startScale the 2b pop from nothing is kept', () => {
+    vi.useFakeTimers();
+    const layer = ensureFxLayer(document.body);
+    const pops: Keyframe[][] = [];
+    const proto = HTMLElement.prototype as unknown as { animate?: unknown };
+    const had = 'animate' in proto;
+    proto.animate = function (frames: Keyframe[], o: KeyframeAnimationOptions) {
+      if (o.duration === W.fishPopMs) pops.push(frames);
+      return { cancel: () => undefined, finish: () => undefined } as unknown as Animation;
+    };
+    try {
+      flyFish(layer, lives(1), counter, { sizePx: 24, reduced: false });
+      vi.advanceTimersByTime(0);
+      expect(layer.querySelector<HTMLElement>('.fx-fish')?.style.transform).toBe('');
+    } finally {
+      if (!had) delete proto.animate;
+    }
+    expect(pops[0]?.[0]?.transform).toBe('scale(0)');
   });
 });

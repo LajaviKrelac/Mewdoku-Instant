@@ -161,7 +161,7 @@ export function homeView(over: Partial<HomeView> = {}): HomeView {
     showTrophy: false,
     fbSafeZone: false,
     extraCards: [],
-    fish: 128,
+    period: { kind: 'week', total: 42 },
     event: null,
     bannerReserved: false,
     ...over,

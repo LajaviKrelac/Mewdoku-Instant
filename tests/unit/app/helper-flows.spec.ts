@@ -281,62 +281,40 @@ describe('revive flow (02 §10.2)', () => {
   });
 });
 
-describe('fish swap in O2 (phase2b §2.8)', () => {
-  const rich = (fish: number, hints = 0, kitties = 0) => (s: SaveData): SaveData => ({ ...s, stock: { hints, kitties }, wallet: { fish, earned: fish } });
+describe('O2 without a fish swap (phase2c §5.4)', () => {
+  const empty = (s: SaveData): SaveData => ({ ...s, stock: { hints: 0, kitties: 0 } });
 
-  it('the swap is offered at ≥ the price (15 for a hint) and hidden below it', async () => {
-    const h = createHarness({ save: rich(15) });
+  it('the video card offers Watch video / Not now only: no swap row, no balance', async () => {
+    const h = createHarness({ save: empty });
     h.router.rewardedAnswer = null;
     await playing(h);
     void h.session.onBulb();
     await h.settle(0);
-    expect(h.router.props.rewarded?.swap).toMatchObject({ price: 15, balance: 15 });
-    const poor = createHarness({ save: rich(14) });
-    poor.router.rewardedAnswer = null;
-    await playing(poor);
-    void poor.session.onBulb();
-    await poor.settle(0);
-    expect(poor.router.isOpen('rewarded')).toBe(true);
-    expect(poor.router.props.rewarded?.swap).toBeUndefined();
+    expect(h.router.isOpen('rewarded')).toBe(true);
+    const props = h.router.props.rewarded as unknown as Record<string, unknown>;
+    expect(props.variant).toBe('video');
+    expect(props).not.toHaveProperty('swap');
   });
 
-  it('Swap spends exactly the price, grants one hint, saves at once, makes no ad call, then the hint opens', async () => {
-    const h = createHarness({ save: rich(40) });
-    h.router.rewardedAnswer = 'swap';
+  it('the countdown card informs only: [OK] grants nothing, no ad call, no swap', async () => {
+    const h = createHarness({ save: (s) => ({ ...empty(s), ads: { lastAdAt: 0, lastFallbackGrantAt: NOW - 1000 } }), caps: { rewarded: false } });
+    h.router.rewardedAnswer = 'accept';
     await playing(h);
     await h.session.onBulb();
-    expect(slice(h.log, FLOW)).toEqual(['open:rewarded', 'close:rewarded', 'save:now:h1k0', 'engine:getHint', 'save:now:h0k0', 'status:hint', 'open:hint']);
-    expect(h.log.some((l) => l.startsWith('ad:'))).toBe(false);
-    expect(h.save().wallet.fish).toBe(25);
-    expect(h.save().ads.lastFallbackGrantAt).toBe(0); // no fallback cooldown
-  });
-
-  it('a kitty swap costs 30 and works on the web without ads too', async () => {
-    const h = createHarness({ save: rich(30), caps: { rewarded: false } });
-    h.router.rewardedAnswer = 'swap';
-    await playing(h);
-    await h.session.onPaw();
-    expect(h.save().wallet.fish).toBe(0);
-    expect(h.game().kittiesUsed).toBe(1);
-    expect(h.save().stock.kitties).toBe(0);
+    expect(h.router.props.rewarded?.variant).toBe('countdown');
+    expect(h.router.props.rewarded as unknown as Record<string, unknown>).not.toHaveProperty('swap');
+    expect(h.save().stock.hints).toBe(0);
+    expect(h.game().status).toBe('playing');
     expect(h.log.some((l) => l.startsWith('ad:'))).toBe(false);
   });
 
-  it('the swap is offered in the countdown variant too (no video, no free grant)', async () => {
-    const h = createHarness({ save: (s) => ({ ...rich(20)(s), ads: { lastAdAt: 0, lastFallbackGrantAt: NOW - 1000 } }), caps: { rewarded: false } });
-    h.router.rewardedAnswer = 'swap';
+  it('the free card grants the hint (the 02 §13.3 fallback); the session no longer wires a wallet callback', async () => {
+    const h = createHarness({ save: empty, caps: { rewarded: false } });
+    h.router.rewardedAnswer = 'accept';
     await playing(h);
     await h.session.onBulb();
-    expect(h.save().wallet.fish).toBe(5);
+    expect(h.router.props.rewarded?.variant).toBe('free');
     expect(h.game().status).toBe('hint');
-  });
-
-  it('a revive is never for sale (O4 has no swap)', async () => {
-    const h = createHarness({ save: rich(999), caps: { rewarded: false } });
-    h.router.rewardedAnswer = 'swap';
-    await startLevel(h);
-    await loseGame(h);
-    await h.session.onContinue(); // free fallback revive, no fish spent
-    expect(h.save().wallet.fish).toBe(999);
+    expect(h.save()).not.toHaveProperty('wallet');
   });
 });

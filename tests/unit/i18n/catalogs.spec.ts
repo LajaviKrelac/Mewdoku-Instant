@@ -1,4 +1,4 @@
-// Owner: E. The translated catalogues (phase2b §6.7, §6.9): one AI draft per non-English locale; for
+// Owner: E (Phase 2b); G2 (Phase 2c: lives are fish in every catalogue). The translated catalogues (phase2b §6.7, §6.9): one AI draft per non-English locale; for
 // every locale every English key present and non-empty (English-only date parts and `.one` forms a
 // language never selects excepted), placeholder sets equal to English, every plural category that
 // Intl.PluralRules selects for 0…200 and 1 000, nothing translatable left identical to English, no
@@ -108,6 +108,62 @@ for (const [id, catalog] of CATALOGS) {
     });
   });
 }
+
+// ── Phase 2c (G2, fish-lives-spec §1.5, Appendix A): the lives are fish in every catalogue ──
+describe('Phase 2c: lives are fish, the period and streak copy, no fish currency', () => {
+  /** Each draft's 2b word for a heart (glossary §2), which no lives string may keep. */
+  const HEART: Readonly<Record<string, RegExp>> = {
+    de: /herz/i, es: /coraz/i, fr: /cœur/i, it: /cuor/i, 'pt-BR': /coraç/i, id: /\bhati\b/i, tr: /kalp|kalb/i, pl: /serc|serduszk/i,
+    ru: /серд/i, vi: /\btim\b/i, th: /หัวใจ/, ja: /ハート/, ko: /하트/, 'zh-Hans': /[颗]心|心用|心，/, hi: /दिल/, ar: /قلب|قلو/,
+  };
+  const LIVES = (key: string): boolean =>
+    ['game.hearts.a11y', 'howto.hearts', 'fail.title', 'a11y.lost', 'a11y.revived'].includes(key) ||
+    key.startsWith('fail.continue.a11y.') ||
+    key.startsWith('a11y.mistake.');
+  const REMOVED = [
+    'victory.bonus.hard', 'victory.bonus.daily', 'shop.swap', 'shop.swap.hint', 'shop.swap.kitty', 'shop.swap.action', 'shop.swap.done',
+    'shop.swap.a11y', 'rewarded.swap', 'shop.product.fish_250.name', 'shop.product.fish_250.desc', 'shop.product.fish_900.name',
+    'shop.product.fish_900.desc', 'event.reward.fish.one', 'event.reward.fish.other',
+    // The last three once G1 stopped calling them (G1 request R2): the fish-earned line, the paw-points title, "Not enough fish".
+    'a11y.fishEarned.one', 'a11y.fishEarned.other', 'rank.title.points', 'shop.notEnough',
+    // Integration step I-3: the paw-points score and its "This level" records row went with the board.
+    'rank.points', 'rank.records.thisLevel',
+  ];
+
+  it.each([...CATALOGS.keys()].sort())('%s: no lives string still says "heart"', (id) => {
+    const catalog = CATALOGS.get(id) as Strings;
+    const re = HEART[id] as RegExp;
+    expect(re, `a heart word for ${id}`).toBeDefined();
+    const left = Object.entries(catalog).filter(([k, v]) => LIVES(k) && typeof v === 'string' && re.test(v)).map(([k]) => k);
+    expect(left).toEqual([]);
+    // Every lives string is there (the drafts were redone, not dropped).
+    for (const k of ['game.hearts.a11y', 'howto.hearts', 'fail.title', 'a11y.lost', 'a11y.revived']) expect(catalog[k], `${id} ${k}`).toBeTruthy();
+  });
+
+  it('the fish-currency keys are gone from English and every catalogue (A.3)', () => {
+    for (const key of REMOVED) expect(key in en, key).toBe(false);
+    for (const [id, catalog] of CATALOGS) {
+      const stale = Object.keys(catalog).filter(
+        (k) => REMOVED.includes(k) || k.startsWith('event.reward.fish.') || k.startsWith('a11y.fishEarned.') || k.startsWith('shop.swap'),
+      );
+      expect(stale, id).toEqual([]);
+    }
+  });
+
+  it('every catalogue has the period, streak and kept-fish copy for all three period kinds', () => {
+    const kinds = ['day', 'week', 'month'] as const;
+    const singles = kinds.flatMap((k) => [`period.total.${k}`, `rank.title.period.${k}`, `rank.tab.period.${k}`, `rank.records.best.${k}`, `howto.points.${k}`]);
+    const plurals = [...kinds.flatMap((k) => [`period.pill.${k}`, `a11y.fishKept.${k}`]), 'rank.sub.period', 'victory.streak.a11y'];
+    for (const key of [...singles, 'rank.records.streak', 'rank.records.streakBest', 'victory.streak']) expect(SOURCE[key], key).toBeTruthy();
+    for (const base of plurals) expect(BASES, base).toContain(base);
+    for (const [id, catalog] of CATALOGS) {
+      for (const key of [...singles, 'rank.records.streak', 'rank.records.streakBest', 'victory.streak']) expect(catalog[key], `${id} ${key}`).toBeTruthy();
+      for (const base of plurals) expect(catalog[`${base}.other`], `${id} ${base}.other`).toBeTruthy();
+      // The weekly copy names Monday 00:00 UTC (a fixed boundary for every player): the digits stay.
+      expect(catalog['howto.points.week'], id).toContain('00:00 UTC');
+    }
+  });
+});
 
 describe('i18n-check catches seeded faults', () => {
   const de = CATALOGS.get('de') ?? {};

@@ -1,5 +1,8 @@
-// Owner: C. The shell's phase2b parts: the Home event card (tap → event screen, locked → toast,
-// teaser → nothing), the event screen's Play / Top list / Home, the fish pill "+" (shop), the
+// Owner: C (Phase 2b). Phase 2c (G1): Home carries this period's total (no fish pill, no "+"), the
+// Settings Shop row only where the Buy section can show something (never on the web or FB iOS), and
+// the hub's first tab is the period board ("Today" only with rank.dailyBoard).
+// The shell's phase2b parts: the Home event card (tap → event screen, locked → toast,
+// teaser → nothing), the event screen's Play / Top list / Home, the
 // trophy (rankings hub with its tabs), the Settings rows (Language, Shop, Remove ads), and the banner
 // rules on Home and the event screen (shown after mount, hidden under modals and before leaving).
 import { afterEach, describe, expect, it } from 'vitest';
@@ -49,7 +52,7 @@ function setup(
   const banners = createBannerFlow({ platform: h.platform, store: h.store, clock: h.clock });
   const rankings = createRankingFlow({ platform: h.platform, clock: h.clock, bus: h.bus, save: () => h.save(), updateSave, touch: () => h.saves.touch() });
   const viewCtx = () => ({ now: h.clock.now(), capabilities: h.platform.caps, platformId: h.platform.id, events: DEFS });
-  const rankHub = createRankHubFlow({ store: h.store, router: h.router, clock: h.clock, rankings, activeEvent: () => events.active(), viewCtx });
+  const rankHub = createRankHubFlow({ store: h.store, router: h.router, clock: h.clock, rankings, activeEvent: () => events.active(), viewCtx, ...(opts.config ? { config: opts.config } : {}) });
   const shop = createShopFlow({
     payments: () => undefined,
     capabilities: () => h.platform.caps,
@@ -172,12 +175,12 @@ describe('shell: banners on Home and the event screen (§3.2)', () => {
 describe('shell: the victory screen is a banner screen (reviews L2B-1, FB2B-2)', () => {
   const banner = (h: Harness): string[] => h.log.filter((l) => l.startsWith('banner'));
 
-  it('the shop opened from the victory fish pill hides its banner; closing after the window shows one again', async () => {
+  it('a modal opened over the victory (the shop) hides its banner; closing after the window shows one again', async () => {
     const { h, shell, banners } = setup();
     await banners.screenShown('victory');
     h.router.open('victory', {} as never);
     expect(banner(h)).toEqual(['banner:show']);
-    shell.openShop(); // the victory pill's "+"
+    shell.openShop(); // any modal over the victory (phase2c: the victory itself has no shop entry)
     await flush(h);
     expect(banner(h)).toEqual(['banner:show', 'banner:hide']);
     h.router.close('shop');
@@ -241,19 +244,38 @@ describe('shell: an event that ended (review L2B-4, §4.4 "After the end")', () 
   });
 });
 
-describe('shell: shop, hub, settings rows (§5.5, §6.8, §8.5)', () => {
-  it('the fish pill "+" opens the shop with the swaps (web: no Buy section)', () => {
-    const { h, shell } = setup((s) => ({ ...s, wallet: { fish: 31, earned: 31 } }));
+describe('shell: shop, hub, settings rows (§5.5, §6.8, §8.5; phase2c §5.2, §4.7, §2.8)', () => {
+  const buyState = (kind: 'hidden' | 'loading' | 'error' | 'unavailable') => (real: ShopFlow): ShopFlow => ({ ...real, buyState: () => ({ kind }) as never });
+
+  it('the shop sheet carries no swaps and no balance (phase2c §5.2)', () => {
+    const { h, shell } = setup();
     shell.openShop();
     const p = h.router.props.shop as ShopProps;
-    expect(p).toMatchObject({ fish: 31, hintPrice: 15, kittyPrice: 30, buy: { kind: 'hidden' } });
+    expect(p).toMatchObject({ buy: { kind: 'hidden' }, busy: false });
+    expect(p as unknown as Record<string, unknown>).not.toHaveProperty('fish');
+    expect(p as unknown as Record<string, unknown>).not.toHaveProperty('onSwap');
   });
 
-  it('Settings: Shop always; Remove ads only with a ready Buy section; Language only with several locales', () => {
+  it('Settings → Shop only where the Buy section can show something: never on the web or FB iOS; with loading, error or products', () => {
+    const web = setup(); // the web build: Buy section hidden, nothing to sell → no shop at all
+    web.shell.openSettings();
+    expect(web.h.router.props.settings?.onShop).toBeUndefined();
+    const ios = setup((s) => s, { shop: buyState('unavailable') });
+    ios.shell.openSettings();
+    expect(ios.h.router.props.settings?.onShop).toBeUndefined();
+    for (const kind of ['loading', 'error'] as const) {
+      const fb = setup((s) => s, { shop: buyState(kind) });
+      fb.shell.openSettings();
+      expect(typeof fb.h.router.props.settings?.onShop, kind).toBe('function');
+      fb.h.router.props.settings?.onShop?.();
+      expect(fb.h.router.isOpen('shop')).toBe(true);
+    }
+  });
+
+  it('Settings: Remove ads only with a ready Buy section; Language only with several locales', () => {
     const plain = setup();
     plain.shell.openSettings();
     const p = plain.h.router.props.settings;
-    expect(typeof p?.onShop).toBe('function');
     expect(p?.onRemoveAds).toBeUndefined();
     const lang = setup((s) => s, { locales: true });
     lang.shell.openSettings();
@@ -271,9 +293,10 @@ describe('shell: shop, hub, settings rows (§5.5, §6.8, §8.5)', () => {
       ...real,
       buyState: () => ({ kind: 'ready', products: ids.map((id) => ({ id: id as never, price: '$1', owned: false })) }),
     });
-    const without = setup((s) => s, { shop: ready(['hints_15', 'fish_250']) });
+    const without = setup((s) => s, { shop: ready(['hints_15', 'kitties_8']) });
     without.shell.openSettings();
     expect(without.h.router.props.settings?.onRemoveAds).toBeUndefined();
+    expect(typeof without.h.router.props.settings?.onShop).toBe('function'); // a ready Buy section: the Shop row
     const withIt = setup((s) => s, { shop: ready(['remove_ads', 'hints_15']) });
     withIt.shell.openSettings();
     expect(typeof withIt.h.router.props.settings?.onRemoveAds).toBe('function');
@@ -282,14 +305,20 @@ describe('shell: shop, hub, settings rows (§5.5, §6.8, §8.5)', () => {
     expect(owned.h.router.props.settings?.onRemoveAds).toBeUndefined();
   });
 
-  it('the trophy opens the rankings hub: Paw points, Today and Event tabs; the web shows my records', async () => {
-    const { h, shell } = setup();
+  it('the trophy opens the rankings hub: "This week" first, then Event (no "Paw points", no "Today" while rank.dailyBoard is off); the web shows my period records', async () => {
+    const { h, shell } = setup((s) => ({ ...s, period: { key: '2026-11-09', total: 12, bestKey: '2026-11-02', bestTotal: 30 }, streak: { current: 2, best: 5 } }));
     shell.showHome();
     h.router.homeCb?.onTrophy();
     await flush(h);
     const p = h.router.props.rank_hub;
-    expect(p?.tabs).toEqual(['points', 'daily', 'event']);
+    expect(p?.tabs).toEqual(['period', 'event']);
+    expect(p?.tab).toBe('period');
+    expect(p?.periodKind).toBe('week');
     expect(p?.list.kind).toBe('records');
+    if (p?.list.kind === 'records') {
+      // eventStart(LANTERN) + 1 h = Friday 2026-11-13: this week is 2026-11-09.
+      expect(p.list.records).toMatchObject({ board: 'period', period: { kind: 'week', total: 12, best: 30 }, streak: { current: 2, best: 5 } });
+    }
     p?.onTab('event');
     await flush(h);
     const q = h.router.props.rank_hub;
@@ -328,11 +357,23 @@ describe('shell: shop, hub, settings rows (§5.5, §6.8, §8.5)', () => {
     if (tab?.kind === 'records') expect(tab.records.thisMs).toBe(0);
   });
 
-  it('the fish pill "+" on Home opens the shop', () => {
-    const { h, shell } = setup();
+  it('with rank.dailyBoard on, the hub shows "Today" after "This week"', async () => {
+    const { h, shell } = setup((s) => s, { config: mergeConfig({ rank: { dailyBoard: true } }) });
     shell.showHome();
-    h.router.homeCb?.onShop();
-    expect(h.router.isOpen('shop')).toBe(true);
+    h.router.homeCb?.onTrophy();
+    await flush(h);
+    expect(h.router.props.rank_hub?.tabs).toEqual(['period', 'daily', 'event']);
+  });
+
+  it('Home has no shop entry and no fish pill: the lead slot shows this period\'s total (0 after a rollover)', () => {
+    const thisWeek = setup((s) => ({ ...s, period: { key: '2026-11-09', total: 12, bestKey: '2026-11-09', bestTotal: 12 } }));
+    thisWeek.shell.showHome();
+    expect(thisWeek.h.router.homeCb).not.toHaveProperty('onShop');
+    expect(thisWeek.h.router.homeView?.period).toEqual({ kind: 'week', total: 12 });
+    expect(thisWeek.h.router.homeView).not.toHaveProperty('fish');
+    const lastWeek = setup((s) => ({ ...s, period: { key: '2026-11-02', total: 12, bestKey: '2026-11-02', bestTotal: 12 } }));
+    lastWeek.shell.showHome();
+    expect(lastWeek.h.router.homeView?.period).toEqual({ kind: 'week', total: 0 });
   });
 
   it('the event screen top list opens the ranking panel for the event board, no tap gate', async () => {

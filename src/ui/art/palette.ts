@@ -57,7 +57,8 @@ export type TokenName =
   | 'fish-deep'
   | 'fish-hi'
   | 'danger'
-  | 'heart'
+  /** Phase 2c §1.2: the wash inside an empty life (icon-fish-empty); replaces the 2b --heart* tokens. */
+  | 'life-empty'
   | 'scrim'
   | 'glow'
   | 'wrong'
@@ -95,7 +96,7 @@ export const TOKENS: Readonly<Record<TokenName, string>> = Object.freeze({
   'fish-deep': '#C98200',
   'fish-hi': '#FFE08A',
   danger: '#D33A4A',
-  heart: '#E8506A',
+  'life-empty': '#EDE8E2',
   scrim: 'rgba(28,23,32,.82)',
   glow: 'rgba(255,194,61,.65)',
   wrong: '#A3193A',

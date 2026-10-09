@@ -1,10 +1,11 @@
 // Owner: lead (Phase 2b final integration). The review items the fixer groups handed over for files
-// they did not own, each pinned here: L2B-3 (the victory fish pill follows the wallet), PAR-8 (the
+// they did not own, each pinned here: L2B-3 (2b; moot in 2c: no victory fish pill), PAR-8 (the
 // board-entry cue), PERF-3 (the screen turns inert at the scrim step, released when the board goes),
 // FB2B-7 (my own overlay-list row shows my exact time) and ROB-1 (the event flow's loader names its
 // stylesheet).
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createRankingFlow } from '../../../src/app/ranking-flow';
+import { panelAt } from '../../../src/app/win-flow';
 import { encodeDailyScore } from '../../../src/game/scoring';
 import { encodeCells, defaults } from '../../../src/game/save';
 import type { InProgressV2, SaveData } from '../../../src/game/types';
@@ -15,25 +16,20 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('L2B-3: the victory fish pill follows the wallet', () => {
-  it('a swap or purchase made from the victory ("+" → shop) updates the open victory\'s fish total', async () => {
+describe('L2B-3 (2b) is moot in 2c: the victory has no fish pill, no "+" and no wallet to follow (phase2c §2.7)', () => {
+  it('the open victory never follows a save change for fish, and has no shop callback', async () => {
     const h = createHarness();
     await startLevel(h);
     winGame(h);
     await h.settle(h.config.fx.winOverlayDelayMs);
     await tapRanking(h);
     expect(h.router.isOpen('victory')).toBe(true);
-    const before = h.router.props.victory?.fish?.total;
-    expect(before).toBe(3);
-    // The shop (opened from the pill) swaps 15 fish away, then a purchase grants 100.
-    h.store.update((s) => ({ ...s, save: { ...s.save, wallet: { ...s.save.wallet, fish: 120 } } }));
-    expect(h.router.props.victory?.fish?.total).toBe(120);
-    expect(h.router.props.victory?.fish?.earned).toBe(3); // this win's own count is unchanged
-    // Leaving the board stops following (no update after the victory is gone).
-    h.session.onHome();
-    const after = h.router.props.victory;
-    h.store.update((s) => ({ ...s, save: { ...s.save, wallet: { ...s.save.wallet, fish: 7 } } }));
-    expect(h.router.props.victory).toBe(after);
+    const props = h.router.props.victory;
+    expect(props).not.toHaveProperty('onShop');
+    expect(props).not.toHaveProperty('fish');
+    // A save change (stock from a purchase elsewhere) does not re-render the victory.
+    h.store.update((s) => ({ ...s, save: { ...s.save, stock: { hints: 99, kitties: 99 } } }));
+    expect(h.router.props.victory).toBe(props);
   });
 });
 
@@ -82,7 +78,8 @@ describe('PAR-8: the board-entry cue', () => {
 });
 
 describe('PERF-3: the screen turns inert at the scrim step, ahead of the ranking panel', () => {
-  it('reserveModal() at fx.win.scrimAtMs (after showScrim); releaseModal() when the board goes', async () => {
+  // Phase 2c §2.2: the scrim comes fx.win.scrimLeadMs before panelAt(N) (a perfect win keeps 3 fish).
+  it('reserveModal() at the scrim, panelAt(3) − scrimLeadMs (after showScrim); releaseModal() when the board goes', async () => {
     const h = createHarness();
     const calls: string[] = [];
     Object.assign(h.router, {
@@ -92,11 +89,12 @@ describe('PERF-3: the screen turns inert at the scrim step, ahead of the ranking
     await startLevel(h);
     calls.length = 0;
     winGame(h);
-    await h.settle(h.config.fx.win.scrimAtMs - 1);
+    const scrimAt = panelAt(3, h.config) - h.config.fx.win.scrimLeadMs;
+    await h.settle(scrimAt - 1);
     expect(calls).toEqual([]);
     await h.settle(1);
     expect(calls).toEqual(['reserve@1']); // the scrim is already up
-    await h.settle(h.config.fx.winOverlayDelayMs - h.config.fx.win.scrimAtMs);
+    await h.settle(h.config.fx.win.scrimLeadMs);
     expect(h.router.isOpen('ranking')).toBe(true);
     h.session.onHome();
     expect(calls).toContain('release');
@@ -127,7 +125,7 @@ describe('FB2B-7: my own row in the FB overlay list shows my exact time', () => 
       touch: () => undefined,
     });
     const board = h.config.rank.boards.daily;
-    expect(await flow.showList(board, 'Daily', undefined, undefined, TODAY, { kind: 'time', ms: 3300 })).toBe(true);
+    expect(await flow.showList(board, 'Daily', undefined, undefined, { day: TODAY }, { kind: 'time', ms: 3300 })).toBe(true);
     const view = shown as RankListView | null;
     expect(view?.formatMine).toBeTypeOf('function');
     const mine = encodeDailyScore(TODAY, 3300, h.config); // the board keeps whole seconds (0:04)
@@ -137,7 +135,7 @@ describe('FB2B-7: my own row in the FB overlay list shows my exact time', () => 
     expect(view?.formatMine?.(other)).toBe(view?.formatScore(other));
     // Without my score (the hub) there is no override.
     shown = null;
-    await flow.showList(board, 'Daily', undefined, undefined, TODAY);
+    await flow.showList(board, 'Daily', undefined, undefined, { day: TODAY });
     expect((shown as RankListView | null)?.formatMine).toBeUndefined();
   });
 });

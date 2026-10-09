@@ -1,6 +1,9 @@
-// Owner: B (Phase 2b; was ui-shell)
+// Owner: B (Phase 2b; was ui-shell); G2 (Phase 2c: the lives are fish, plus the points note)
 // O6 how to play (02 §4.2, §14): three illustrated rules, controls, plus "I know how to play"
 // (only while the first-run tutorial runs) or "Replay tutorial" (after it is done).
+// Phase 2c (fish-lives-spec §1.5): the lives note shows our fish (icon-fish, howto.hearts "Your fish
+// are your lives…"), and a points note with icon-trophy follows it (howto.points.<kind>: the kept
+// fish go to this period's ranking, a perfect streak earns more points).
 // The three rule pictures are small SVG boards drawn here (our own art, 06 §5).
 //
 // Classes: .overlay[data-overlay=how_to_play] > .overlay__panel--dialog.howto
@@ -8,10 +11,12 @@
 //
 // Review fixes: the rules' keywords print in the accent colour (PAR-7; `*…*` in the catalogue, rich
 // text), and every text follows the language (A11Y-I18N-1).
+import { cfg } from '../../app/config';
 import { t, translate, translateMarked, type I18nKey } from '../../i18n';
 import { icon, type SymbolId } from '../art/sprite';
 import { h, s, type OverlayView } from '../dom';
 import { createLocaleText } from '../locale-text';
+import { howtoPointsText } from '../period-text';
 import { setRichText } from '../rich-text';
 import { closeButton, createOverlayShell, makeButton } from './overlay-base';
 
@@ -115,7 +120,13 @@ export function createHowToPlay(): OverlayView<HowToPlayProps> {
       h('p', null, icon('icon-paw', { class: 'howto__note-icon howto__note-icon--paw' }), note('howto.controls')),
       // Keyboard play (02 §6.3); CSS shows it only where a mouse or trackpad is present.
       h('p', { class: 'howto__keys' }, icon('icon-paw', { class: 'howto__note-icon howto__note-icon--paw' }), note('howto.keys')),
-      h('p', null, icon('icon-heart', { class: 'howto__note-icon howto__note-icon--heart' }), note('howto.hearts')),
+      h('p', { class: 'howto__lives' }, icon('icon-fish', { class: 'howto__note-icon howto__note-icon--fish' }), note('howto.hearts')),
+      h(
+        'p',
+        { class: 'howto__points' },
+        icon('icon-trophy', { class: 'howto__note-icon howto__note-icon--trophy' }),
+        L.text(h('span'), () => howtoPointsText(cfg.period.kind)),
+      ),
       h('p', null, icon('icon-bulb', { class: 'howto__note-icon howto__note-icon--bulb' }), note('howto.helpers')),
     ),
     extra,

@@ -2,14 +2,14 @@
 // Helper and ad flows of the session, exactly in the 04 §5.7 order (02 §9, §10.2, §13):
 //   stock check → O2 → rewarded ad or free fallback → (+1 stock, saves.now) → engine → debit +
 //   saves.now → dispatch. Interstitials: pacing gate → ad → lastAdAt; the transition always goes on.
-// phase2b §2.8: O2 also offers "Swap 15 fish" (30 for a kitty) whenever the wallet holds the price:
-//   stock check → O2 with swap → spend the fish + 1 item + saves.now() → dispatch; no ad, no cooldown.
+// Phase 2c (G1, docs/phase2c/fish-lives-spec.md §5.4): O2 is back to the Phase 2 card (Watch video /
+// Not now, free, countdown): fish are lives, so there is no "Swap 15 fish" and no wallet.
 // No Ads (phase2b §8.3) turns interstitials off; rewarded ads stay (opt-in).
 // A flow that needs a lazily loaded card (O1, O2) first checks router.overlaysReady(): when the chunk
 // cannot be loaded it toasts and charges nothing, so the game stays playable (04 §8).
 import type { RewardedVariant } from '../ui/overlays/rewarded-prompt';
 import { interstitialGate, type InterstitialTrigger } from '../game/ad-pacing';
-import { canAfford, fallbackAvailable, fallbackReadyAt, grant, recordAdShown, recordFallbackGrant, spend, swapFish, swapPrice } from '../game/economy';
+import { fallbackAvailable, fallbackReadyAt, grant, recordAdShown, recordFallbackGrant, spend } from '../game/economy';
 import { getMode } from '../game/modes';
 import { canRevive } from '../game/reducer';
 import { encodeCells } from '../game/save';
@@ -55,8 +55,6 @@ export interface HelperHost {
   log(e: AnalyticsEvent): void;
   /** Dispatches HINT_OPEN and opens O1 (sound, announcement, analytics). */
   openHint(step: HintStep, charged: boolean): void;
-  /** phase2b §2.8: the fish wallet changed (a swap): bus 'wallet'. Optional for older test doubles. */
-  walletChanged?(): void;
   /** After KITTY: schedules KITTY_DONE in kitty.revealMs (unless the kitty's cat won). */
   afterKitty(): void;
 }
@@ -92,49 +90,31 @@ export function createHelperFlows(host: HelperHost): HelperFlows {
     host.bus.emit('stock', { hints, kitties });
   }
 
-  type O2Answer = 'accept' | 'decline' | 'swap';
-
-  /**
-   * O2 as a question: 'accept' (not for the countdown variant), 'swap' (phase2b §2.8: the "Swap 15
-   * fish" button, offered whenever the wallet holds at least the price), or 'decline'.
-   */
-  function askO2(placement: 'hint' | 'kitty', variant: RewardedVariant): Promise<O2Answer> {
+  /** O2 as a question (02 §13.3, phase2c §5.4): true = accept (never for the countdown variant), false = "Not now". */
+  function askO2(placement: 'hint' | 'kitty', variant: RewardedVariant): Promise<boolean> {
     return new Promise((resolve) => {
       let done = false;
       let off: () => void = () => undefined;
-      const finish = (value: O2Answer): void => {
+      const finish = (value: boolean): void => {
         if (done) return;
         done = true;
         off();
         host.router.close('rewarded');
         resolve(value);
       };
-      const price = swapPrice(placement, c);
-      const balance = host.save().wallet.fish;
       host.router.open('rewarded', {
         placement,
         variant,
         nextFreeAt: fallbackReadyAt(host.save(), c),
         now: () => host.clock.now(),
-        onAccept: () => finish(variant !== 'countdown' ? 'accept' : 'decline'),
-        onDecline: () => finish('decline'),
-        ...(balance >= price ? { swap: { price, balance, onSwap: () => finish('swap') } } : {}),
+        onAccept: () => finish(variant !== 'countdown'),
+        onDecline: () => finish(false),
       });
       // Closed from elsewhere (screen change, closeAll): treat as "Not now".
       off = host.bus.on('overlay:close', ({ id }) => {
-        if (id === 'rewarded') finish('decline');
+        if (id === 'rewarded') finish(false);
       });
     });
-  }
-
-  /** The §2.8 swap: spend the price, +1 item, saved at once; no ad, no fallback cooldown. */
-  function doSwap(placement: 'hint' | 'kitty'): boolean {
-    if (!canAfford(host.save(), swapPrice(placement, c))) return false;
-    host.updateSave((s) => swapFish(s, placement, c));
-    host.saves.now();
-    stockChanged();
-    host.walletChanged?.();
-    return true;
   }
 
   /** The O1/O2 chunk is (or gets) loaded; else `message` is toasted and nothing is charged. */
@@ -154,22 +134,15 @@ export function createHelperFlows(host: HelperHost): HelperFlows {
   }
 
   /**
-   * The rewarded / fallback part of a helper refill. 'swapped' = the player swapped fish in O2 instead
-   * (the item is already granted and saved); true = the ad or the free grant succeeded (the caller
-   * grants); false = nothing.
+   * The rewarded / fallback part of a helper refill: true = the ad or the free grant succeeded (the
+   * caller grants); false = nothing.
    */
-  async function rewardedOrSwap(p: HelperPlacement): Promise<boolean | 'swapped'> {
+  async function rewardedOrFallback(p: HelperPlacement): Promise<boolean> {
     const asks = p !== 'revive';
     if (asks && !(await cardsReady(() => true, t(p === 'hint' ? 'hint.unavailable' : 'kitty.unavailable')))) return false;
-    const ask = async (variant: RewardedVariant): Promise<boolean | 'swapped'> => {
-      if (!asks) return true;
-      const a = await askO2(p as 'hint' | 'kitty', variant);
-      if (a === 'swap') return doSwap(p as 'hint' | 'kitty') ? 'swapped' : false;
-      return a === 'accept';
-    };
+    const ask = async (variant: RewardedVariant): Promise<boolean> => (asks ? askO2(p as 'hint' | 'kitty', variant) : true);
     if (rewardedAvailable()) {
-      const a = await ask('video');
-      if (a !== true) return a;
+      if (!(await ask('video'))) return false;
       const r = await host.adFlow.rewarded(p);
       if (r.ok) {
         if (c.ads.rewarded.resetsInterstitialClock) {
@@ -186,28 +159,16 @@ export function createHelperFlows(host: HelperHost): HelperFlows {
       return false;
     }
     if (fallbackAvailable(host.save(), host.clock.now(), c)) {
-      const a = await ask('free');
-      if (a !== true) return a;
+      if (!(await ask('free'))) return false;
       return grantFallback(p);
     }
-    if (asks) {
-      const a = await ask('countdown');
-      return a === 'swapped' ? a : false;
-    }
+    if (asks) await ask('countdown'); // the countdown card only informs: [OK] grants nothing
     return false;
   }
 
-  async function rewardedOrFallback(p: HelperPlacement): Promise<boolean> {
-    const r = await rewardedOrSwap(p);
-    // A swap already granted its item: for the caller that is "no ad grant" (revive never swaps).
-    return r === true;
-  }
-
-  /** Stock is empty: O2 → ad / free grant (+1, saved) or a fish swap (+1, saved). True when the stock went up. */
+  /** Stock is empty: O2 → ad / free grant (+1, saved). True when the stock went up. */
   async function refill(p: 'hint' | 'kitty'): Promise<boolean> {
-    const r = await rewardedOrSwap(p);
-    if (r === 'swapped') return true;
-    if (!r) return false;
+    if (!(await rewardedOrFallback(p))) return false;
     host.updateSave((s) => grant(s, p === 'hint' ? 'hints' : 'kitties', undefined, c));
     host.saves.now();
     stockChanged();

@@ -7,15 +7,25 @@
 // localStorage with cloud save (PLAT-3), a startGameAsync that fails (PLAT-8).
 // Phase 2b (§3.6, §5.10, §8.8): the win flow (ranking panel → victory "Level N"), banners (none
 // before 10 completed levels; Home and victory with the 58 px reserve; never while the game screen
-// shows), the paw_points score reaching the stub's leaderboard (classic: "Your rank", NEZP: "Your
-// score"), and purchases (hints_15 granted and consumed once; remove_ads ends interstitials and
-// banners; no Buy section on iOS).
+// shows), the leaderboard score reaching the stub's board (classic: "Your rank", NEZP: "Your score";
+// 2b paw_points, 2c period_points below), and purchases (hints_15 granted and consumed once;
+// remove_ads ends interstitials and banners; no Buy section on iOS).
 // Review fixes (2026-10-09): a banner load slower than ads.readyTimeoutMs, a failing hide and a load
 // that never settles never leave a banner on the game screen, and the banner is down before an
 // interstitial (FB2B-1); the shop opened from the victory screen hides its banner (FB2B-2, L2B-1); a
 // boot restore of No Ads takes the Home banner down (L2B-2); a failed catalogue offers Retry (FB2B-3);
 // iOS says "unavailable" at once (FB2B-5); the daily panel ranks me within today, past the later time
 // zones' next-day entries, with one time for one solve (FB2B-4, FB2B-7).
+// Phase 2c (G3, docs/phase2c/fish-lives-spec.md §4, §5, §7.3 G3 item 6): the win submits the period board
+// (period_points → the stub's e2e_period_points) with this UTC week's total, the fish kept: classic
+// "Your rank: #1", NEZP "Your score: 3 fish", no API → the personal period records; the band ignores a
+// future-dated entry and older weeks, and "Your rank" is exact past 200 entries (RankEntry.boardRank).
+// The shop opens from Settings only (no Home or victory "+"), sells three products and has no swap
+// section; iOS has no Shop row; the banner under the shop is re-based on Home → Settings → Shop; a boot
+// restore of an unconsumed retired fish_250 grants 10 hints + 3 kitties once and consumes it. The daily
+// board is off by default (rank.dailyBoard), so the FB2B-4 daily-band test became the period-band test
+// (the daily band reader keeps its unit tests).
+// Needs VITE_FB_LEADERBOARDS with period_points → e2e_period_points in the fbig-e2e build (lead, I-1).
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -43,6 +53,8 @@ interface StubControl {
   find(name: string): StubCall[];
   pause(): void;
   clearCalls(): void;
+  leaderboard(name: string): { playerId: string; score: number }[];
+  purchases(): { productID: string; purchaseToken: string; isConsumed: boolean }[];
 }
 type TestWindow = Window & { __fbStub?: StubControl; __FB_STUB_CONFIG__?: unknown; __mewdoku?: E2EHooks };
 
@@ -52,7 +64,9 @@ const sel = {
   /** phase2b: the victory screen's wide "Level N" button (victory.next). */
   victoryNext: (page: Page) => page.getByRole('button', { name: /^Level \d+$/ }),
   rankingTap: (page: Page) => page.getByRole('button', { name: 'Tap to keep going' }),
-  shop: (page: Page) => page.getByRole('button', { name: 'Shop' }).first(),
+  /** phase2c §5.2: the shop's only entry, Settings → Shop (shown only where the Buy section can show something). */
+  homeSettings: (page: Page) => page.locator('.screen--home .top-bar__btn--settings'),
+  shopRow: (page: Page) => page.locator('[data-overlay="settings"] .settings__shop-link'),
   hintTool: (page: Page) => page.getByRole('button', { name: /^Hint\b/ }),
   watchVideo: (page: Page) => page.getByRole('button', { name: 'Watch video' }),
   cell: (page: Page, row: number, col: number) => page.locator(`[aria-label^="Row ${row + 1}, column ${col + 1},"]`).first(),
@@ -131,6 +145,32 @@ async function toVictory(page: Page): Promise<void> {
 }
 
 const count = (page: Page, name: string): Promise<number> => stub(page, new Function('s', `return s.count(${JSON.stringify(name)})`) as (s: StubControl) => number);
+
+/** phase2c §5.2: Home → Settings → Shop (the only way in); waits for the sheet. */
+async function openShop(page: Page): Promise<void> {
+  await sel.homeSettings(page).click();
+  await expect(page.locator('[data-overlay="settings"]')).toBeVisible();
+  await expect(sel.shopRow(page)).toBeVisible({ timeout: 8_000 });
+  await sel.shopRow(page).click();
+  await expect(page.locator('[data-overlay="shop"]')).toBeVisible();
+}
+
+/** Closes every overlay with Esc (the shop sits on Settings). */
+async function closeOverlays(page: Page): Promise<void> {
+  await expect(async () => {
+    if ((await appState(page)).overlays.length > 0) await page.keyboard.press('Escape');
+    expect((await appState(page)).overlays).toEqual([]);
+  }).toPass({ timeout: 5_000 });
+}
+
+/** The leaderboard band encoding, written out from the spec (§4.3), not the app's encoder. */
+const PERIOD_SPAN = 100_000;
+/** UTC week index of `at` from cfg.rank.periodEpoch 2026-01-05, a Monday (spec §3.5). */
+const weekIndexAt = (at: number): number => {
+  const d = new Date(at);
+  return Math.floor((Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - Date.UTC(2026, 0, 5)) / 86_400_000 / 7);
+};
+const pageNow = (page: Page): Promise<number> => page.evaluate(() => Date.now());
 
 test.describe('FBIG lifecycle', () => {
   test('initializeAsync first, progress 100 before startGameAsync, locale after start', async ({ page }) => {
@@ -424,46 +464,87 @@ test.describe('FBIG banners (phase2b §3)', () => {
   });
 });
 
-test.describe('FBIG rankings (phase2b §5)', () => {
-  test('classic leaderboard: the paw_points score reaches the board; the panel shows "Your rank"', async ({ page }) => {
+test.describe('FBIG rankings (phase2b §5, phase2c §4)', () => {
+  test('classic leaderboard: this week\'s fish reach e2e_period_points as week × 100 000 + 3; the panel shows "Your rank: #1"', async ({ page }) => {
     await openGame(page, { data: { save: seededSave(5, 4) } });
     await startLevel(page);
-    await solve(page, { slow: true });
+    await solve(page, { slow: true }); // no mistake: the 3 fish are kept
     await expect.poll(() => stub(page, (s) => s.calls.filter((c) => c.name === 'leaderboard.setScoreAsync').map((c) => c.args[0])), { timeout: 8_000 }).toEqual([
-      'e2e_paw_points',
+      'e2e_period_points',
     ]);
-    const posted = (await stub(page, (s) => s.find('leaderboard.setScoreAsync')[0]?.args[1])) as number;
-    expect(posted).toBe((await appState(page)).save.points.total);
+    const expected = weekIndexAt(await pageNow(page)) * PERIOD_SPAN + 3;
+    expect(await stub(page, (s) => s.find('leaderboard.setScoreAsync')[0]?.args[1])).toBe(expected);
+    expect(await stub(page, (s) => s.leaderboard('e2e_period_points'))).toEqual([expect.objectContaining({ playerId: 'stub-player-1', score: expected })]);
+    // paw_points is retired and daily_fastest off: nothing else is submitted.
+    expect(await stub(page, (s) => s.calls.filter((c) => c.name === 'getLeaderboardAsync').map((c) => c.args[0]))).toEqual(['e2e_period_points']);
+    expect((await appState(page)).save.period.total).toBe(3);
     await expect(page.getByRole('dialog').getByText(/^Your rank: #1$/)).toBeVisible({ timeout: 10_000 });
   });
 
-  test('NEZP leaderboard: the score is posted by id; the panel shows "Your score", never a rank', async ({ page }) => {
+  test('NEZP leaderboard: the week\'s total is posted by id; the panel shows "Your score: 3 fish", never a rank', async ({ page }) => {
     await openGame(page, { presets: ['lb-nezp'], data: { save: seededSave(5, 4) } });
     await startLevel(page);
     await solve(page, { slow: true });
     await expect
       .poll(() => stub(page, (s) => s.calls.filter((c) => c.name === 'globalLeaderboards.setScoreAsync').map((c) => c.args[0])), { timeout: 8_000 })
-      .toEqual(['e2e_paw_points']);
-    await expect(page.getByRole('dialog').getByText(/^Your score: /).first()).toBeVisible({ timeout: 10_000 });
+      .toEqual(['e2e_period_points']);
+    expect(await stub(page, (s) => s.find('globalLeaderboards.setScoreAsync')[0]?.args[1])).toBe(weekIndexAt(await pageNow(page)) * PERIOD_SPAN + 3);
+    await expect(page.getByRole('dialog').getByText(/^Your score: 3 fish$/).first()).toBeVisible({ timeout: 10_000 });
     await expect(page.getByRole('dialog').getByText(/Your rank/)).toHaveCount(0);
   });
 
-  test('no leaderboard API: personal records only, no other players and no SDK leaderboard call', async ({ page }) => {
+  test('no leaderboard API: the personal period records only, no other players and no SDK leaderboard call', async ({ page }) => {
     await openGame(page, { presets: ['lb-none'], data: { save: seededSave(5, 4) } });
     await startLevel(page);
     await solve(page, { slow: true });
     await expect(sel.rankingTap(page)).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole('dialog').getByText('Total points')).toBeVisible();
+    const records = page.getByRole('dialog').locator('.rank-records[data-board="period"]');
+    await expect(records).toBeVisible();
+    await expect(records.getByText('This week', { exact: true })).toBeVisible();
+    await expect(records.getByText('Perfect streak', { exact: true })).toBeVisible();
     expect(await stub(page, (s) => s.calls.filter((c) => /eaderboard/i.test(c.name)).length)).toBe(0);
+  });
+
+  test('the week band: a future-dated entry and older weeks are skipped; 250 better players this week make me #251 (past 200 entries), and the list pins #251', async ({ page }) => {
+    test.setTimeout(60_000);
+    // Seeded relative to the stub clock (the page's): one device a week ahead, 250 players of this week
+    // with 5 fish, three of last week with 99. My 3 fish come after all of this week's 5s.
+    const entries = [
+      { playerId: 'ahead', period: 1, total: 1 },
+      ...Array.from({ length: 250 }, (_, i) => ({ playerId: `week-${i}`, period: 0, total: 5 })),
+      ...Array.from({ length: 3 }, (_, i) => ({ playerId: `last-${i}`, period: -1, total: 99 })),
+    ];
+    await openGame(page, { persist: false, data: { save: seededSave(5, 4) }, leaderboards: { entries: { e2e_period_points: entries } } });
+    await startLevel(page);
+    await solve(page, { slow: true });
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByText(/^Your rank: #251$/)).toBeVisible({ timeout: 15_000 });
+    const board = await stub(page, (s) => s.leaderboard('e2e_period_points'));
+    expect(board.findIndex((r) => r.playerId === 'stub-player-1')).toBe(251); // 0-based: the board's own rank is 252
+    await dialog.getByRole('button', { name: /See top players/i }).click();
+    await expect.poll(() => count(page, 'overlayViews.createOverlayViewWithXMLString')).toBe(1);
+    const rows = await stub(page, (s) =>
+      (JSON.parse(String(s.find('overlayViews.createOverlayViewWithXMLString')[0]?.args[2])) as { rows: { rank: string; kind: string; score: string }[] }).rows,
+    );
+    expect(rows.slice(0, 10).map((r) => `${r.rank}:${r.kind}`)).toEqual(Array.from({ length: 10 }, (_, i) => `#${i + 1}:other`));
+    expect(rows.slice(10).map((r) => `${r.rank}:${r.kind}`)).toEqual(['#251:mine']);
+    expect(rows[10]?.score).toMatch(/\b3\b/);
   });
 });
 
-test.describe('FBIG purchases (phase2b §8)', () => {
-  test('buying hints_15 grants +15 hints and consumes the purchase once', async ({ page }) => {
+test.describe('FBIG purchases (phase2b §8, phase2c §5)', () => {
+  test('the shop opens from Settings, sells the three products and has no swap section; buying hints_15 grants +15 hints and consumes once', async ({ page }) => {
     await openGame(page, { persist: false, data: { save: seededSave(5, 4, (s) => ({ ...s, stock: { hints: 2, kitties: 3 } })) } });
-    await sel.shop(page).click();
+    // No "+" to the shop on Home any more (the fish pill is gone).
+    await expect(page.locator('.screen--home .fish-pill__plus')).toHaveCount(0);
+    await openShop(page);
+    const sheet = page.locator('[data-overlay="shop"]');
+    await expect(sheet.locator('.shop__section--buy')).toBeVisible();
+    await expect(sheet.getByRole('button', { name: /^Buy / })).toHaveCount(3, { timeout: 8_000 });
+    await expect(sheet.getByRole('button', { name: /^Buy (No Ads|Bulb Bundle|Kitty Basket), / })).toHaveCount(3);
+    await expect(sheet.locator('.shop__section')).toHaveCount(1);
+    await expect(sheet.getByText(/swap|fish/i)).toHaveCount(0);
     const buy = page.getByRole('button', { name: /^Buy Bulb Bundle, / });
-    await expect(buy).toBeVisible({ timeout: 8_000 });
     await buy.click();
     await expect.poll(async () => (await appState(page)).save.stock.hints, { timeout: 8_000 }).toBe(17);
     await expect.poll(() => count(page, 'payments.consumePurchaseAsync')).toBe(1);
@@ -482,11 +563,11 @@ test.describe('FBIG purchases (phase2b §8)', () => {
     const t0 = Date.UTC(2026, 9, 7, 10, 0, 0);
     await openGame(page, { persist: false, data: { save: seededSave(15, 14) } }, { clockAt: t0 });
     await expect.poll(() => count(page, 'loadBannerAdAsync')).toBe(1); // a banner on Home before the purchase
-    await sel.shop(page).click();
+    await openShop(page);
     await page.getByRole('button', { name: /^Buy No Ads, / }).click();
     await expect.poll(async () => (await appState(page)).save.purchases.noAds, { timeout: 8_000 }).toBe(true);
     await expect.poll(() => count(page, 'payments.consumePurchaseAsync')).toBe(1);
-    await page.keyboard.press('Escape');
+    await closeOverlays(page);
     await stub(page, (s) => s.clearCalls());
     await page.clock.fastForward(70_000); // past the session grace and the banner window
     await startLevel(page);
@@ -499,13 +580,53 @@ test.describe('FBIG purchases (phase2b §8)', () => {
     expect(await stub(page, (s) => s.calls.filter((c) => c.name === 'ad.showAsync' || c.name === 'loadBannerAdAsync').map((c) => c.name))).toEqual([]);
   });
 
-  test('iOS: no Buy section, only "Swap fish"', async ({ page }) => {
+  test('iOS: no Shop row in Settings (nothing can be sold there), no payments call (FB2B-5 superseded)', async ({ page }) => {
     await openGame(page, { presets: ['ios'], data: { save: seededSave(5, 4) } });
-    await sel.shop(page).click();
-    await expect(page.getByText('Swap fish').first()).toBeVisible();
-    await expect(page.getByText("Purchases aren't available here.")).toBeVisible({ timeout: 8_000 });
-    await expect(page.getByRole('button', { name: /^Buy / })).toHaveCount(0);
+    await sel.homeSettings(page).click();
+    await expect(page.locator('[data-overlay="settings"]')).toBeVisible();
+    await page.waitForTimeout(500);
+    await expect(sel.shopRow(page)).toBeHidden();
+    await expect(page.locator('[data-overlay="settings"] .settings__removeads-link')).toBeHidden();
+    await expect(page.locator('.screen--home .fish-pill__plus')).toHaveCount(0);
     expect(await count(page, 'payments.purchaseAsync')).toBe(0);
+    expect(await count(page, 'payments.getCatalogAsync')).toBe(0);
+  });
+
+  // Lead (Phase 2c I-2, G3's gap): Messenger.com offers the payments API but onReady never fires. Once
+  // iap.readyTimeoutMs (4 s) has passed since the session started, the Buy section is 'unavailable', so
+  // Settings has no Shop row and no Remove ads row (spec §5.2 D9), and no catalogue is ever asked for.
+  test('Messenger.com (payments never ready): no Shop row once iap.readyTimeoutMs has passed, no catalogue call', async ({ page }) => {
+    await openGame(page, { presets: ['payments-never-ready'], data: { save: seededSave(5, 4) } }, { clockAt: Date.now() });
+    await page.clock.fastForward(5_000);
+    await sel.homeSettings(page).click();
+    await expect(page.locator('[data-overlay="settings"]')).toBeVisible();
+    await page.waitForTimeout(500);
+    await expect(sel.shopRow(page)).toBeHidden();
+    await expect(page.locator('[data-overlay="settings"] .settings__removeads-link')).toBeHidden();
+    expect(await count(page, 'payments.onReady')).toBeGreaterThan(0);
+    expect(await count(page, 'payments.getCatalogAsync')).toBe(0);
+    expect(await count(page, 'payments.purchaseAsync')).toBe(0);
+  });
+
+  test('a boot restore of an unconsumed retired fish_250 grants 10 hints + 3 kitties once and consumes it', async ({ page }) => {
+    // persist: true (the default): the stub keeps its player data and purchases across the reload below.
+    await openGame(page, { presets: ['unconsumed-fish-250'], data: { save: seededSave(5, 4, (s) => ({ ...s, stock: { hints: 2, kitties: 3 } })) } });
+    await expect.poll(async () => (await appState(page)).save.stock, { timeout: 8_000 }).toEqual({ hints: 12, kitties: 6 });
+    await expect.poll(() => count(page, 'payments.consumePurchaseAsync')).toBe(1);
+    expect(await stub(page, (s) => s.find('payments.consumePurchaseAsync')[0]?.args[0])).toBe('stub-unconsumed-1-fish_250');
+    expect((await appState(page)).save.purchases.tokens.some((t) => t.startsWith('fish_250|'))).toBe(true);
+    expect(await stub(page, (s) => s.purchases().map((p) => [p.productID, p.isConsumed]))).toEqual([['fish_250', true]]);
+    // The retired pack is never offered.
+    await openShop(page);
+    await expect(page.getByRole('button', { name: /^Buy / })).toHaveCount(3, { timeout: 8_000 });
+    await closeOverlays(page);
+    // Once: a reload grants nothing more (consumed, and recorded in the ledger).
+    await page.waitForTimeout(800); // the debounced cloud write of the closing state
+    await page.reload();
+    await page.waitForFunction(() => (window as TestWindow).__fbStub?.state.started === true && !!(window as TestWindow).__mewdoku);
+    await page.waitForTimeout(1_000);
+    expect((await appState(page)).save.stock).toEqual({ hints: 12, kitties: 6 });
+    expect(await count(page, 'payments.consumePurchaseAsync')).toBe(0);
   });
 });
 
@@ -573,27 +694,21 @@ test.describe('FBIG banners never in play (review FB2B-1)', () => {
 });
 
 test.describe('FBIG banner under modals and No Ads (reviews FB2B-2, L2B-1, L2B-2)', () => {
-  test('the shop opened from the victory fish pill hides the banner; buying No Ads there keeps it down', async ({ page }) => {
+  test('Home → Settings → Shop hides the Home banner; buying No Ads there keeps it down (re-based in 2c: no fish pill "+")', async ({ page }) => {
     test.setTimeout(90_000);
     const t0 = Date.UTC(2026, 9, 7, 10, 0, 0);
     await openGame(page, { persist: false, data: { save: seededSave(11, 10) } }, { clockAt: t0 });
     await expect.poll(() => count(page, 'loadBannerAdAsync')).toBe(1);
-    await startLevel(page);
-    await page.clock.fastForward(61_000);
-    await solve(page, { clock: true });
-    await page.clock.fastForward(5_000);
-    await toVictory(page);
-    await expect.poll(() => count(page, 'loadBannerAdAsync')).toBe(2);
     await expect(stubBanner(page)).toBeVisible();
     await stub(page, (s) => s.clearCalls());
-    await page.locator('.victory').getByRole('button', { name: 'Shop' }).click();
-    await expect.poll(async () => (await appState(page)).overlays).toEqual(['victory', 'shop']);
+    await openShop(page);
+    await expect.poll(async () => (await appState(page)).overlays).toEqual(['settings', 'shop']);
     expect(await count(page, 'hideBannerAdAsync')).toBeGreaterThanOrEqual(1);
     await expect(stubBanner(page)).toHaveCount(0);
     await page.getByRole('button', { name: /^Buy No Ads, / }).click();
     await expect.poll(async () => (await appState(page)).save.purchases.noAds, { timeout: 8_000 }).toBe(true);
-    await page.keyboard.press('Escape');
-    await expect.poll(async () => (await appState(page)).overlays).toEqual(['victory']);
+    await closeOverlays(page);
+    expect((await appState(page)).screen).toBe('home');
     await page.clock.fastForward(61_000);
     await page.waitForTimeout(300);
     await expect(stubBanner(page)).toHaveCount(0);
@@ -622,64 +737,22 @@ test.describe('FBIG banner under modals and No Ads (reviews FB2B-2, L2B-1, L2B-2
   });
 });
 
-test.describe('FBIG shop states (reviews FB2B-3, FB2B-5)', () => {
-  test('a failed catalogue shows Retry (not an empty Buy section); Retry asks again and lists the five products', async ({ page }) => {
-    await openGame(page, { persist: false, payments: { errors: { getCatalogAsync: ['NETWORK_FAILURE'] } }, data: { save: seededSave(5, 4) } });
-    await sel.shop(page).click();
+test.describe('FBIG shop states (review FB2B-3)', () => {
+  test('a failed catalogue shows Retry (not an empty Buy section); Retry asks again and lists the three products', async ({ page }) => {
+    // 2c: Settings asks for the catalogue to decide on its Shop row (an error still shows it: Retry),
+    // and opening the shop asks again (FB2B-3), so every call fails until the test clears the queue.
+    const failing = Array(6).fill('NETWORK_FAILURE');
+    await openGame(page, { persist: false, payments: { errors: { getCatalogAsync: failing } }, data: { save: seededSave(5, 4) } });
+    await openShop(page);
     const retry = page.locator('.shop__retry');
     await expect(retry).toBeVisible({ timeout: 8_000 });
     await expect(page.getByRole('button', { name: /^Buy / })).toHaveCount(0);
+    const asked = await count(page, 'payments.getCatalogAsync');
+    expect(asked).toBeGreaterThanOrEqual(1);
+    await configureStub(page, { payments: { errors: { getCatalogAsync: [] } } });
     await retry.click();
-    await expect(page.getByRole('button', { name: /^Buy / })).toHaveCount(5, { timeout: 8_000 });
-    expect(await count(page, 'payments.getCatalogAsync')).toBe(2);
-  });
-
-  test('iOS: "Purchases aren\'t available here." at once, never "Getting the shop ready…"', async ({ page }) => {
-    await openGame(page, { presets: ['ios'], data: { save: seededSave(5, 4) } });
-    await sel.shop(page).click();
-    await expect(page.getByText("Purchases aren't available here.")).toBeVisible({ timeout: 1_500 });
-    await expect(page.getByText('Getting the shop ready…')).toHaveCount(0);
-  });
-});
-
-test.describe('FBIG daily ranking across time zones (reviews FB2B-4, FB2B-7)', () => {
-  test("twelve next-day entries above today: the panel says #1 for today's best, one time for one solve, and the list starts at #1", async ({ page }) => {
-    test.setTimeout(60_000);
-    await page.route('https://connect.facebook.net/**', (route) =>
-      route.fulfill({ status: 200, contentType: 'application/javascript', body: STUB_SRC }),
-    );
-    // The board is seeded in the page, from the page's own local date (dayIndex of today and tomorrow).
-    await page.addInitScript((save) => {
-      const d = new Date();
-      const today = Math.round((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - Date.UTC(2026, 0, 1)) / 86_400_000);
-      const at = (day: number, secs: number): number => day * 100_000 + (99_999 - secs);
-      const entries = [
-        ...Array.from({ length: 12 }, (_, i) => ({ playerId: `ahead-${i}`, score: at(today + 1, 60 + i) })),
-        ...Array.from({ length: 3 }, (_, i) => ({ playerId: `today-${i}`, score: at(today, 200 + 10 * i) })),
-      ];
-      (window as TestWindow).__FB_STUB_CONFIG__ = { persist: false, data: { save }, leaderboards: { entries: { e2e_daily_fastest: entries } } };
-    }, seededSave(25, 24));
-    await page.goto('/');
-    await page.waitForFunction(() => (window as TestWindow).__fbStub?.state.started === true && !!(window as TestWindow).__mewdoku);
-    await page.locator('.daily-card').click();
-    await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
-    await solve(page, { slow: true });
-    const dialog = page.getByRole('dialog');
-    await expect(dialog.getByText(/^Your rank: #1$/)).toBeVisible({ timeout: 15_000 });
-    const solved = /Solved in (\d+:\d\d)/.exec(await dialog.innerText())?.[1];
-    expect(solved).toBeTruthy();
-    await expect(dialog.getByText(`Your score: ${solved}`)).toBeVisible();
-    await dialog.getByRole('button', { name: /See top players/i }).click();
-    await expect.poll(() => count(page, 'overlayViews.createOverlayViewWithXMLString')).toBe(1);
-    const rows = await stub(page, (s) =>
-      (JSON.parse(String(s.find('overlayViews.createOverlayViewWithXMLString')[0]?.args[2])) as { rows: { rank: string; kind: string }[] }).rows,
-    );
-    expect(rows.map((r) => `${r.rank}:${r.kind}`)).toEqual(['#1:mine', '#2:other', '#3:other', '#4:other']);
-    // FB2B-7 (final integration): my row in the overlay list shows the panel's exact time too.
-    const scores = await stub(page, (s) =>
-      (JSON.parse(String(s.find('overlayViews.createOverlayViewWithXMLString')[0]?.args[2])) as { rows: { score: string; kind: string }[] }).rows,
-    );
-    expect(scores.find((r) => r.kind === 'mine')?.score).toBe(solved);
+    await expect(page.getByRole('button', { name: /^Buy / })).toHaveCount(3, { timeout: 8_000 });
+    expect(await count(page, 'payments.getCatalogAsync')).toBe(asked + 1);
   });
 });
 
@@ -737,15 +810,17 @@ for (const locale of ['en_US', 'ar_AR'] as const) {
       await expect(page.locator('[data-overlay="how_to_play"]')).toBeVisible();
       await settle();
       expect(await zoneHits(), 'How to play').toEqual([]);
-      await page.keyboard.press('Escape');
-      await page.keyboard.press('Escape');
-      await expect(page.locator('.overlay:visible')).toHaveCount(0);
-      await page.locator('.screen--home .fish-pill__plus').click();
+      await page.keyboard.press('Escape'); // How to play
+      await expect(page.locator('[data-overlay="how_to_play"]')).toBeHidden();
+      // phase2c §5.2: the shop opens from Settings (no fish pill "+" on Home).
+      await page.locator('[data-overlay="settings"] .settings__shop-link').click();
       await expect(page.locator('[data-overlay="shop"]')).toBeVisible();
       await settle();
       expect(await zoneHits(), 'Shop').toEqual([]);
       await page.keyboard.press('Escape');
       await expect(page.locator('[data-overlay="shop"]')).toBeHidden();
+      await page.keyboard.press('Escape');
+      await expect(page.locator('.overlay:visible')).toHaveCount(0);
       await page.locator('.home__play').click(); // locale-neutral (startLevel matches the English label)
       await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
       await page.locator('.screen--game .top-bar__btn--settings').click();

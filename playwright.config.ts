@@ -63,9 +63,10 @@ export default defineConfig({
         VITE_FB_PLACEMENT_REWARDED: 'e2e-rewarded',
         // phase2b (D's fbig.spec.ts): test banner placement and leaderboard ids for the stub.
         VITE_FB_PLACEMENT_BANNER: 'e2e-banner',
+        // Phase 2c (I-1): one period board (fish kept this UTC week); `paw_points` is retired and
+        // `daily_fastest` is off (`rank.dailyBoard: false`), so neither is mapped.
         VITE_FB_LEADERBOARDS: JSON.stringify({
-          paw_points: 'e2e_paw_points',
-          daily_fastest: 'e2e_daily_fastest',
+          period_points: 'e2e_period_points',
           event_lantern_walk_2026: 'e2e_event_lantern_walk_2026',
           event_snow_paws_2026: 'e2e_event_snow_paws_2026',
           event_yarn_hearts_2027: 'e2e_event_yarn_hearts_2027',

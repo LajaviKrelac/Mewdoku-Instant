@@ -1,8 +1,10 @@
-// Owner: B. Dev harness for phase2b workstream B (not shipped): /dev/b-harness.html?view=<name>.
+// Owner: B (Phase 2b); lead (Phase 2c I-2/I-3). Dev harness (not shipped): /dev/b-harness.html?view=<name>.
 // Run `npx vite --port 5182 --strictPort` and open the index (no view) for the list.
-// Options: &rm=1 (reduced motion), &fb=1 (FB safe zone), &banner=1 (banner reserve), &n=<size>.
-// The `win` view plays the phase2b §2.2 timeline the way C's win flow drives it (glow, fish pill, three
-// fish, labels, scrim, ranking panel, victory screen), so frames can be captured at any t.
+// Options: &rm=1 (reduced motion), &fb=1 (FB safe zone), &banner=1 (banner reserve), &n=<size>,
+// &kept=1|2|3 (fish kept at the win).
+// The `win` view plays the Phase 2c §2.2 timeline the way the app's win flow drives it (glow, the
+// period counter, the KEPT fish lifting off the lives pill and flying to it, "+N", scrim, ranking
+// panel, victory screen), so frames can be captured at any t.
 // A tiny router stand-in mounts overlays above the screen, traps focus for modal ones, makes the
 // screen inert and sends Esc to dismiss(). Callbacks show a toast with their name.
 import '../src/styles/tokens.css';
@@ -18,12 +20,13 @@ import '../src/styles/overlay-chunk.css';
 import '../src/styles/events-chunk.css';
 import eventsJson from '../src/data/events/events.json';
 import { cfg } from '../src/app/config';
+import { panelAt } from '../src/app/win-flow';
 import type { EventDef } from '../src/game/events';
 import { CellState } from '../src/game/types';
 import { setInert, trapFocus } from '../src/ui/a11y/focus-trap';
 import { mountSprite } from '../src/ui/art/sprite';
 import type { OverlayView } from '../src/ui/dom';
-import { ensureFxLayer, fishSizePx, fishSourceRows, flyFish } from '../src/ui/fx/fish-flight';
+import { ensureFxLayer, fishSizeFromRect, flyFish } from '../src/ui/fx/fish-flight';
 import { applyMotion } from '../src/ui/fx/motion';
 import { playScreenTransition } from '../src/ui/fx/transitions';
 import { createGroupResult, type GroupResultOutcome } from '../src/ui/overlays/group-result';
@@ -115,7 +118,6 @@ const homeCallbacks = {
   onSettings: log('onSettings'),
   onTrophy: log('onTrophy'),
   onCard: log('onCard'),
-  onShop: log('onShop'),
   onEvent: log('onEvent'),
 };
 
@@ -143,9 +145,10 @@ function home(over: Partial<HomeView> = {}): void {
 
 function rankingProps(list: RankingListState, over: Partial<RankingPanelProps> = {}): RankingPanelProps {
   return {
-    board: 'points',
+    board: 'period',
     eventNameKey: null,
-    result: { kind: 'level', pointsEarned: 55, ms: 134_000 },
+    result: { kind: 'period', gained: 3, total: 42, periodKind: 'week' },
+    periodKind: 'week',
     list,
     tapMinMs: reduced ? cfg.fx.win.reduced.tapMinMs : cfg.rank.panelTapMinMs,
     reducedMotion: reduced,
@@ -159,7 +162,17 @@ function rankingProps(list: RankingListState, over: Partial<RankingPanelProps> =
 const RECORDS: RankingListState = {
   kind: 'records',
   reason: 'local',
-  records: { board: 'points', thisMs: 134_000, n: 8, bestSizeMs: 118_000, totalPoints: 1240, levelsSolved: 37, event: null },
+  records: {
+    board: 'period',
+    thisMs: 134_000,
+    n: 8,
+    bestSizeMs: 118_000,
+    totalPoints: 1240,
+    levelsSolved: 37,
+    event: null,
+    period: { kind: 'week', total: 42, best: 57 },
+    streak: { current: 4, best: 9 },
+  },
 };
 
 function victoryProps(over: Partial<VictoryProps> = {}): VictoryProps {
@@ -168,9 +181,9 @@ function victoryProps(over: Partial<VictoryProps> = {}): VictoryProps {
     praise: 1,
     level: 37,
     nextLevel: 38,
-    fish: { earned: 3, total: 128 },
-    bonus: null,
-    pointsEarned: 55,
+    pointsEarned: 120,
+    streak: 4,
+    kept: { fish: 3, max: 3, gained: 3, total: 42, kind: 'week' },
     daily: null,
     event: null,
     buttonDelayMs: cfg.fx.winButtonDelayMs,
@@ -179,20 +192,21 @@ function victoryProps(over: Partial<VictoryProps> = {}): VictoryProps {
     now: () => Date.now(),
     onPrimary: log('onPrimary'),
     onHome: log('onHome'),
-    onShop: log('onShop'),
     ...over,
   };
 }
 
-// ─────────────────────────────── the win flow (phase2b §2.2) ───────────────────────────────
+// ─────────────────────────────── the win flow (Phase 2c §2.2) ───────────────────────────────
 
-/** Plays §2.2 on timers, as C's win flow does: t = 0 is the WON event. */
-function winFlow(level: number, opts: { bonus: number; tutorial: boolean }): void {
+/** Plays Phase 2c §2.2 on timers, as the app's win flow does: t = 0 is the WON event; `kept` fish fly. */
+function winFlow(level: number, opts: { kept: number; tutorial: boolean }): void {
   const b = solved(level);
-  const g = game(gameView(b, { status: 'won', inputLocked: true, fbSafeZone: fb, reducedMotion: reduced, chromeLocked: true }));
-  const n = b.puzzle.n;
+  const kept = opts.tutorial ? 3 : Math.max(1, Math.min(3, Math.floor(opts.kept)));
+  const g = game(gameView(b, { status: 'won', inputLocked: true, fbSafeZone: fb, reducedMotion: reduced, chromeLocked: true, hearts: kept }));
   const W = cfg.fx.win;
-  const before = 125;
+  const before = 39;
+  const total = before + kept;
+  const n = opts.tutorial ? 0 : kept; // the tutorial keeps no fish for the board and flies none (§2.5)
   const at = (ms: number, fn: () => void): void => void setTimeout(fn, ms);
   // The flow starts at a fixed 1 000 ms after load (the entry has ended by then), so a screenshot at
   // page time 1 000 + t shows the flow at t.
@@ -200,42 +214,44 @@ function winFlow(level: number, opts: { bonus: number; tutorial: boolean }): voi
   const cats = Array.from(b.cells.keys()).filter((i) => b.cells[i] === CellState.Cat);
   at(t0, () => {
     g.playEvent({ type: 'WON' } as never);
+    if (opts.tutorial) {
+      at(cfg.fx.winHappyDelayMs, () => g.glow(cats));
+      at(W.replayVictoryAtMs, () => openVictory());
+      return;
+    }
     if (reduced) {
       at(cfg.fx.winHappyDelayMs, () => {
         g.glow(cats);
-        g.showFishPill(before + 3 + opts.bonus);
-        g.fishLabel(`+${3 + opts.bonus}`);
+        g.showPeriodCounter(total);
+        for (const s of g.lifeSlots()) g.departLife(s.slot);
+        g.periodLabel(`+${kept}`);
       });
       at(W.reduced.rankingAtMs, () => openRanking());
       return;
     }
     at(cfg.fx.winHappyDelayMs, () => g.glow(cats));
-    at(W.fishPillInAtMs, () => g.showFishPill(before));
+    at(W.fishPillInAtMs, () => g.showPeriodCounter(before));
     at(W.fishAtMs, () => {
-      const rows = fishSourceRows(n);
-      const rects = rows.map((r) => g.cellRect(r * n + (b.puzzle.solution[r] ?? 0))).filter((x): x is DOMRect => x !== null);
-      const to = g.fishRect();
-      if (!to) return;
-      const slot = rects[0]?.width ?? 36;
-      flyFish(ensureFxLayer(app), rects, to, {
-        sizePx: fishSizePx(slot),
-        reduced: false,
-        onArrive: (k) => g.showFishPill(before + k + 1),
-      });
+      const slots = g.lifeSlots().slice(0, n);
+      const to = g.periodRect();
+      if (!to || slots.length === 0) return;
+      flyFish(
+        ensureFxLayer(app),
+        slots.map((s) => s.rect),
+        to,
+        {
+          sizePx: fishSizeFromRect(slots[0]?.rect),
+          startScale: 1,
+          reduced: false,
+          onPop: (k) => g.departLife(slots[k]?.slot ?? 0),
+          onArrive: (k) => g.showPeriodCounter(before + k + 1),
+        },
+      );
     });
-    at(2550, () => g.fishLabel('+3'));
-    if (opts.bonus > 0) {
-      at(W.bonusLabelAtMs, () => {
-        g.fishLabel(`+${opts.bonus}`);
-        g.showFishPill(before + 3 + opts.bonus);
-      });
-    }
-    if (opts.tutorial) {
-      at(W.tutorialVictoryAtMs, () => openVictory());
-      return;
-    }
-    at(W.scrimAtMs, () => g.showScrim?.());
-    at(cfg.fx.winOverlayDelayMs, () => openRanking());
+    const lastArrival = W.fishAtMs + (n - 1) * W.fishStaggerMs + W.fishHoldMs + W.fishFlightMs;
+    at(lastArrival, () => g.periodLabel(`+${kept}`));
+    at(panelAt(n) - W.scrimLeadMs, () => g.showScrim?.());
+    at(panelAt(n), () => openRanking());
   });
 
   const ranking = createRankingPanel();
@@ -244,6 +260,7 @@ function winFlow(level: number, opts: { bonus: number; tutorial: boolean }): voi
     openOverlay(
       ranking,
       rankingProps(RECORDS, {
+        result: { kind: 'period', gained: kept, total, periodKind: 'week' },
         onContinue: () => {
           setTimeout(() => {
             closeOverlay(ranking);
@@ -258,11 +275,11 @@ function winFlow(level: number, opts: { bonus: number; tutorial: boolean }): voi
       victory,
       victoryProps({
         level,
-        nextLevel: level + 1,
-        fish: { earned: 3 + opts.bonus, total: before + 3 + opts.bonus },
-        bonus: opts.bonus ? { kind: 'hard', count: opts.bonus } : null,
+        nextLevel: opts.tutorial ? 2 : level + 1,
         variant: opts.tutorial ? 'tutorial' : 'level',
-        pointsEarned: opts.tutorial ? null : 55,
+        pointsEarned: opts.tutorial ? null : kept === 3 ? 120 : 80,
+        streak: opts.tutorial || kept < 3 ? null : 4,
+        kept: opts.tutorial ? null : { fish: kept, max: 3, gained: kept, total, kind: 'week' },
       }),
     );
   }
@@ -296,15 +313,11 @@ function settingsProps(over: Partial<SettingsProps> = {}): SettingsProps {
 }
 const settingsModal = createSettingsModal();
 
-function shop(buy: ShopBuyState, fish = 128, busy = false): void {
-  home({ fish });
+function shop(buy: ShopBuyState, busy = false): void {
+  home();
   openOverlay(createShopSheet(), {
-    fish,
-    hintPrice: cfg.shop.hintFish,
-    kittyPrice: cfg.shop.kittyFish,
     buy,
     busy,
-    onSwap: log('onSwap'),
     onBuy: log('onBuy'),
     onRetry: log('onRetry'),
     onClose: log('onClose'),
@@ -317,19 +330,18 @@ const PRODUCTS: ShopBuyState = {
     { id: 'remove_ads', price: '$3.99', owned: false },
     { id: 'hints_15', price: '$1.99', owned: false },
     { id: 'kitties_8', price: '$1.99', owned: false },
-    { id: 'fish_250', price: '$1.99', owned: false },
-    { id: 'fish_900', price: '$4.99', owned: false },
   ],
 };
 
 function hub(tab: RankHubTab, list: RankingListState): void {
   home({ showTrophy: true });
   const h = createRankHub();
-  const tabs: RankHubTab[] = ['points', 'daily', 'event', 'groups'];
+  const tabs: RankHubTab[] = ['period', 'daily', 'event', 'groups'];
   const props = {
     tabs,
     tab,
     eventNameKey: lantern.nameKey,
+    periodKind: 'week' as const,
     list,
     groups: { canStart: true, active: null, rewardMode: 'participation' as const, minWins: 3, hours: 72, kitties: 2 },
     now: () => NOW,
@@ -374,10 +386,10 @@ const VIEWS: Record<string, () => void> = {
   game: () => void game(gameView(midGame(Number(q.get('level') ?? 37)), { fbSafeZone: fb, reducedMotion: reduced })),
   'game-event': () =>
     void game(gameView(midGame(37), { mode: 'event', level: null, event: { def: lantern, index: 12 }, fbSafeZone: fb, reducedMotion: reduced })),
-  win: () => winFlow(Number(q.get('level') ?? 37), { bonus: Number(q.get('bonus') ?? 0), tutorial: false }),
-  'win-hard': () => winFlow(40, { bonus: 2, tutorial: false }),
-  'win-tutorial': () => winFlow(1, { bonus: 0, tutorial: true }),
-  'heart-break': () => {
+  win: () => winFlow(Number(q.get('level') ?? 37), { kept: Number(q.get('kept') ?? 3), tutorial: false }),
+  'win-kept-1': () => winFlow(40, { kept: 1, tutorial: false }),
+  'win-tutorial': () => winFlow(1, { kept: 3, tutorial: true }),
+  'fish-loss': () => {
     const b = midGame(37, 1);
     const g = game(gameView(b, { fbSafeZone: fb, reducedMotion: reduced }));
     setTimeout(() => {
@@ -391,15 +403,15 @@ const VIEWS: Record<string, () => void> = {
   },
   'ranking-mine': () => {
     game(gameView(solved(37), { status: 'won', inputLocked: true }));
-    openOverlay(createRankingPanel(), rankingProps({ kind: 'mine', mine: { rank: 1234, score: { kind: 'points', points: 1240 }, count: 58_210 } }));
+    openOverlay(createRankingPanel(), rankingProps({ kind: 'mine', mine: { rank: 12, score: { kind: 'fish', fish: 42 }, count: 58_210 } }));
   },
   'ranking-score': () => {
     game(gameView(solved(37), { status: 'won', inputLocked: true }));
-    openOverlay(createRankingPanel(), rankingProps({ kind: 'mine', mine: { rank: null, score: { kind: 'points', points: 1240 }, count: null } }));
+    openOverlay(createRankingPanel(), rankingProps({ kind: 'mine', mine: { rank: null, score: { kind: 'fish', fish: 42 }, count: null } }));
   },
   'ranking-seetop': () => {
     game(gameView(solved(37), { status: 'won', inputLocked: true }));
-    openOverlay(createRankingPanel(), rankingProps({ kind: 'see_top', mine: { rank: 87, score: { kind: 'points', points: 1240 }, count: null } }));
+    openOverlay(createRankingPanel(), rankingProps({ kind: 'see_top', mine: { rank: 87, score: { kind: 'fish', fish: 42 }, count: null } }));
   },
   'ranking-loading': () => {
     game(gameView(solved(37), { status: 'won', inputLocked: true }));
@@ -435,7 +447,7 @@ const VIEWS: Record<string, () => void> = {
   },
   'victory-hard': () => {
     game(gameView(solved(40), { status: 'won', inputLocked: true }));
-    openOverlay(createVictoryScreen(), victoryProps({ level: 40, nextLevel: 41, fish: { earned: 5, total: 1130 }, bonus: { kind: 'hard', count: 2 }, pointsEarned: 120 }));
+    openOverlay(createVictoryScreen(), victoryProps({ level: 40, nextLevel: 41, pointsEarned: 200, streak: null, kept: { fish: 2, max: 3, gained: 2, total: 41, kind: 'week' } }));
   },
   'victory-daily': () => {
     game(gameView(solved(80), { mode: 'daily', level: null, dateKey: '2026-10-06', status: 'won', inputLocked: true }));
@@ -445,9 +457,9 @@ const VIEWS: Record<string, () => void> = {
         variant: 'daily',
         level: null,
         nextLevel: null,
-        fish: { earned: 5, total: 245 },
-        bonus: { kind: 'daily', count: 2 },
-        pointsEarned: 65,
+        pointsEarned: 80,
+        streak: null,
+        kept: { fish: 2, max: 3, gained: 2, total: 44, kind: 'week' },
         daily: { dateKey: '2026-10-06', ms: 252_000, mistakes: 1, hints: 0, kitties: 0, nextPuzzleAt: Date.now() + (7 * 60 + 48) * 60_000 },
       }),
     );
@@ -460,30 +472,31 @@ const VIEWS: Record<string, () => void> = {
         variant: 'event',
         level: null,
         nextLevel: null,
-        fish: { earned: 3, total: 161 },
-        pointsEarned: 60,
-        event: { nameKey: lantern.nameKey, index: 6, total: 21, solvedBefore: 6, solvedAfter: 7, reward: { fish: 30 }, last: false },
+        pointsEarned: 140,
+        streak: 5,
+        kept: { fish: 3, max: 3, gained: 3, total: 45, kind: 'week' },
+        event: { nameKey: lantern.nameKey, index: 6, total: 21, solvedBefore: 6, solvedAfter: 7, reward: { hints: 2 }, last: false },
       }),
     );
   },
   'victory-tutorial': () => {
     game(gameView(solved(1), { mode: 'tutorial', status: 'won', inputLocked: true }));
-    openOverlay(createVictoryScreen(), victoryProps({ variant: 'tutorial', level: 1, nextLevel: 2, fish: { earned: 3, total: 3 }, pointsEarned: null }));
+    openOverlay(createVictoryScreen(), victoryProps({ variant: 'tutorial', level: 1, nextLevel: 2, pointsEarned: null, streak: null, kept: null }));
   },
   'victory-replay': () => {
     game(gameView(solved(1), { mode: 'tutorial', status: 'won', inputLocked: true }));
-    openOverlay(createVictoryScreen(), victoryProps({ variant: 'tutorial_replay', level: 1, nextLevel: null, fish: null, pointsEarned: null }));
+    openOverlay(createVictoryScreen(), victoryProps({ variant: 'tutorial_replay', level: 1, nextLevel: null, pointsEarned: null, streak: null, kept: null }));
   },
   'shop-web': () => shop({ kind: 'hidden' }),
-  'shop-fb': () => shop(PRODUCTS, 1240),
-  'shop-loading': () => shop({ kind: 'loading' }, 40),
-  'shop-error': () => shop({ kind: 'error' }, 22),
-  'shop-poor': () => shop({ kind: 'unavailable' }, 9),
-  'hub-points': () => hub('points', { kind: 'mine', mine: { rank: 1234, score: { kind: 'points', points: 1240 }, count: null } }),
+  'shop-fb': () => shop(PRODUCTS),
+  'shop-loading': () => shop({ kind: 'loading' }),
+  'shop-error': () => shop({ kind: 'error' }),
+  'shop-unavailable': () => shop({ kind: 'unavailable' }),
+  'hub-period': () => hub('period', { kind: 'mine', mine: { rank: 12, score: { kind: 'fish', fish: 42 }, count: null } }),
   'hub-daily': () => hub('daily', { kind: 'records', reason: 'local', records: { board: 'daily', thisMs: 0, n: 9, bestSizeMs: 188_000, totalPoints: 1240, levelsSolved: 37, event: null } }),
   'hub-groups': () => hub('groups', { kind: 'loading' }),
   'group-participation': () => group({ kind: 'participation', kitties: 2, kittiesWithAd: 4 }),
-  'group-place': () => group({ kind: 'place', place: 3, count: 8, fish: 10 }),
+  'group-place': () => group({ kind: 'place', place: 3, count: 8, hints: cfg.groups.placeHints }),
   'event-screen': () => eventScreen(7, 7),
   'event-screen-soon': () => eventScreen(16, 16, { endsAt: NOW + 20 * 3_600_000 }),
   'event-screen-done': () => eventScreen(21, null),
@@ -496,7 +509,7 @@ const VIEWS: Record<string, () => void> = {
     openOverlay(settingsModal, settingsProps());
     settingsModal.el.querySelector<HTMLElement>('.settings__language-link')?.click();
   },
-  'rewarded-swap': () => {
+  'rewarded-video': () => {
     game(gameView(midGame(37), { hints: 0, inputLocked: true }));
     openOverlay(createRewardedPrompt(), {
       placement: 'hint',
@@ -505,7 +518,6 @@ const VIEWS: Record<string, () => void> = {
       now: () => Date.now(),
       onAccept: log('onAccept'),
       onDecline: log('onDecline'),
-      swap: { price: cfg.shop.hintFish, balance: 128, onSwap: log('onSwap') },
     });
   },
   'transition-to-game': () => {

@@ -1,12 +1,15 @@
-// Owner: C
+// Owner: C (Phase 2b). Phase 2c (G1, docs/phase2c/fish-lives-spec.md §2, §3, §7.3 e2e): the fish
+// that fly are the lives kept, to this week's points counter; the panel opens at 4.5 s for 3 fish
+// (4.4–4.8) and 4.2 s for 1 fish (4.1–4.5); reduced motion ≤ 1.4 s; two perfect wins leave
+// save.period.total = 6 and save.streak = {2, 2}.
 // The post-win flow end to end (phase2b §2.2, §2.7, §2.13) on the web e2e build: solve through the
-// hook → rewards saved at once → the in-game fish pill counts +3 → the ranking panel at 4.5 s
-// (4.4–4.8) → tap → the victory screen with the wide "Level 3" → the next board, input locked until
-// its entry ends. With reduced motion the panel comes at 1.2 s (≤ 1.4). Home and Gear do nothing
-// before the panel.
+// hook → rewards saved at once → the in-game period counter counts +3 → the ranking panel → tap → the
+// victory screen with the wide "Level 3" → the next board, input locked until its entry ends. Home and
+// Gear do nothing before the panel.
 import { expect, test, type Page } from '@playwright/test';
 import type { E2EHooks } from '../../src/app/boot';
 import { defaults } from '../../src/game/save';
+import { periodKeyAt } from '../../src/game/scoring';
 import type { SaveData } from '../../src/game/types';
 
 type TestWindow = Window & { __mewdoku?: E2EHooks };
@@ -42,6 +45,19 @@ async function solve(page: Page): Promise<number> {
   });
 }
 
+/** `count` wrong cats (double clicks on non-solution cells), each a mistake that costs a fish. */
+async function mistakes(page: Page, count: number): Promise<void> {
+  const sol = await page.evaluate(() => (window as TestWindow).__mewdoku?.solution() ?? []);
+  const n = sol.length;
+  let done = 0;
+  for (let i = 0; i < n * n && done < count; i++) {
+    if (sol[Math.floor(i / n)] === i % n) continue;
+    await page.locator('.cell').nth(i).dblclick();
+    await page.waitForTimeout(350); // cellLockAfterCatMs
+    done++;
+  }
+}
+
 /** ms from `t0` (page clock) until the ranking panel is on the overlay stack. */
 async function panelAfter(page: Page, t0: number): Promise<number> {
   const h = await page.waitForFunction(
@@ -52,43 +68,64 @@ async function panelAfter(page: Page, t0: number): Promise<number> {
   return (await h.jsonValue()) as number;
 }
 
-test('win: rewards at once, fish +3, panel at 4.5 s, tap → victory "Level 3" → next board after its entry', async ({ page }) => {
-  await open(page, atLevel(2));
-  await playNext(page);
-  const t0 = await solve(page);
+async function tapPanel(page: Page): Promise<void> {
+  const panel = page.locator('[data-overlay="ranking"]');
+  await expect(panel).toBeVisible({ timeout: 10_000 });
+  await expect(panel.locator('.ranking__tap')).toBeEnabled({ timeout: 3000 });
+  await panel.locator('.ranking__tap').click();
+}
 
-  // t = 0: fish, points and progress are already saved (the critical save went to localStorage).
-  const stored = await page.evaluate(() => {
+const stored = (page: Page) =>
+  page.evaluate(() => {
     const raw = localStorage.getItem('mewdoku.save.v1');
     return raw ? (JSON.parse(raw) as SaveData) : null;
   });
-  expect(stored?.wallet.fish).toBe(3);
-  expect(stored?.progress.level).toBe(3);
-  expect(stored?.points.total).toBeGreaterThan(0);
+
+test('win with 3 fish kept: rewards at once, the lives fly to "this week" (+3), panel at 4.5 s, tap → victory "Level 3" → next board after its entry', async ({ page }) => {
+  await open(page, atLevel(2));
+  await playNext(page);
+  await expect(page.locator('.pill--lives .life[data-full]')).toHaveCount(3);
+  const t0 = await solve(page);
+
+  // t = 0: the period points, the streak, level points and progress are already saved (the critical save).
+  const s = await stored(page);
+  expect(s).not.toHaveProperty('wallet');
+  expect(s?.period).toMatchObject({ key: periodKeyAt(Date.now()), total: 3 });
+  expect(s?.streak).toEqual({ current: 1, best: 1 });
+  expect(s?.progress.level).toBe(3);
+  expect(s?.points.total).toBeGreaterThan(0);
 
   // Home and Gear do nothing before the panel.
   await page.locator('.top-bar').getByRole('button', { name: 'Home' }).click({ force: true });
   expect(await page.evaluate(() => (window as TestWindow).__mewdoku?.app().screen)).toBe('game');
 
-  // The in-game fish pill counts up to +3.
-  const pill = page.locator('.pills .fish-pill');
-  await expect(pill).toBeVisible({ timeout: 2000 });
-  await expect(pill.locator('.fish-pill__main')).toHaveAttribute('aria-label', '3 fish', { timeout: 4000 });
+  // The in-game period counter counts up to +3; each life empties as its fish leaves.
+  const counter = page.locator('.pills .period-pill[data-in-game]');
+  await expect(counter).toBeVisible({ timeout: 2000 });
+  await expect(counter).toHaveAttribute('aria-label', '3 fish this week', { timeout: 4000 });
+  await expect(counter.locator('.period-pill__n').last()).toHaveText('3');
+  await expect(page.locator('.pill--lives .life[data-full]')).toHaveCount(0);
 
   const dt = await panelAfter(page, t0);
   expect(dt).toBeGreaterThanOrEqual(4400);
   expect(dt).toBeLessThanOrEqual(4800);
 
   const panel = page.locator('[data-overlay="ranking"]');
-  await expect(panel).toBeVisible();
-  await expect(panel.locator('.ranking__tap')).toBeEnabled({ timeout: 3000 });
-  await panel.locator('.ranking__tap').click();
+  await expect(panel).toContainText('Weekly ranking');
+  await expect(panel).toContainText('+3 fish');
+  await tapPanel(page);
 
-  const primary = page.locator('[data-overlay="victory"] .victory__primary');
+  const victory = page.locator('[data-overlay="victory"]');
+  const primary = victory.locator('.victory__primary');
   await expect(primary).toBeVisible();
   await expect(primary).toHaveText(/Level 3/);
   await expect(primary).toBeEnabled({ timeout: 2000 });
-  await expect(page.locator('[data-overlay="victory"]')).toContainText('+3');
+  await expect(victory.locator('.victory__kept')).toHaveAttribute('data-count', '3');
+  await expect(victory.locator('.victory__period')).toHaveText('This week: 3');
+  await expect(victory.locator('.victory__points')).toContainText('points');
+  await expect(victory.locator('.victory__streak')).toHaveText('Perfect ×1');
+  // §2.7: no fish pill, no "+" (shop).
+  await expect(victory.locator('.fish-pill, .fish-pill__plus')).toHaveCount(0);
   await primary.click();
 
   // The next board: input locked (status ready) until its entry ends, then playing.
@@ -98,7 +135,25 @@ test('win: rewards at once, fish +3, panel at 4.5 s, tap → victory "Level 3" �
   await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing', undefined, { timeout: 3000 });
 });
 
-test('reduced motion: the panel at 1.2 s (≤ 1.4 s) with the count already +3', async ({ page }) => {
+test('a 1-fish win (two mistakes): one fish flies, the panel at 4.2 s (4.1–4.5), no streak chip', async ({ page }) => {
+  await open(page, atLevel(2, { streak: { current: 5, best: 5 } }));
+  await playNext(page);
+  await mistakes(page, 2);
+  await expect(page.locator('.pill--lives .life[data-full]')).toHaveCount(1);
+  expect((await page.evaluate(() => (window as TestWindow).__mewdoku?.app().save.streak))).toEqual({ current: 0, best: 5 });
+  const t0 = await solve(page);
+  const dt = await panelAfter(page, t0);
+  expect(dt).toBeGreaterThanOrEqual(4100);
+  expect(dt).toBeLessThanOrEqual(4500);
+  await expect(page.locator('.pills .period-pill[data-in-game]')).toHaveAttribute('aria-label', '1 fish this week');
+  await tapPanel(page);
+  const victory = page.locator('[data-overlay="victory"]');
+  await expect(victory.locator('.victory__kept')).toHaveAttribute('data-count', '1');
+  await expect(victory.locator('.victory__streak')).toBeHidden();
+  expect((await stored(page))?.streak).toEqual({ current: 0, best: 5 });
+});
+
+test('reduced motion: the panel at 1.2 s (≤ 1.4 s) with the counter already +3', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await open(page, atLevel(2));
   await playNext(page);
@@ -106,20 +161,28 @@ test('reduced motion: the panel at 1.2 s (≤ 1.4 s) with the count already +3',
   const dt = await panelAfter(page, t0);
   expect(dt).toBeLessThanOrEqual(1400);
   expect(dt).toBeGreaterThanOrEqual(1100);
-  await expect(page.locator('.pills .fish-pill .fish-pill__main')).toHaveAttribute('aria-label', '3 fish');
+  await expect(page.locator('.pills .period-pill[data-in-game]')).toHaveAttribute('aria-label', '3 fish this week');
 });
 
-test('a Hard level shows the bonus chip and +5 fish in total', async ({ page }) => {
-  await open(page, atLevel(30, { wallet: { fish: 10, earned: 10 } }));
+test('two perfect wins: save.period.total = 6 and save.streak = {2, 2}; the Home pill shows 6 fish this week', async ({ page }) => {
+  await open(page, atLevel(2));
   await playNext(page);
   await solve(page);
-  const panel = page.locator('[data-overlay="ranking"]');
-  await expect(panel).toBeVisible({ timeout: 10_000 });
-  await expect(panel.locator('.ranking__tap')).toBeEnabled({ timeout: 3000 });
-  await panel.locator('.ranking__tap').click();
-  const victory = page.locator('[data-overlay="victory"]');
-  await expect(victory).toContainText('Hard level bonus +2');
-  expect(await page.evaluate(() => (window as TestWindow).__mewdoku?.app().save.wallet.fish)).toBe(15);
+  await tapPanel(page);
+  const primary = page.locator('[data-overlay="victory"] .victory__primary');
+  await expect(primary).toBeEnabled({ timeout: 3000 });
+  await primary.click();
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing', undefined, { timeout: 5000 });
+  await solve(page);
+  await tapPanel(page);
+  await expect(page.locator('[data-overlay="victory"] .victory__streak')).toHaveText('Perfect ×2');
+  await expect(page.locator('[data-overlay="victory"] .victory__period')).toHaveText('This week: 6');
+  const s = await stored(page);
+  expect(s?.period).toMatchObject({ key: periodKeyAt(Date.now()), total: 6 });
+  expect(s?.streak).toEqual({ current: 2, best: 2 });
+  await page.locator('[data-overlay="victory"] .victory__home').click();
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');
+  await expect(page.locator('.screen--home .period-pill')).toHaveAttribute('aria-label', '6 fish this week');
 });
 
 // ── 2b review fixes (R): PAR-6 / UX-4 — no frame falls back to the bare or stale board ──
@@ -214,10 +277,10 @@ test('PAR-6: Home from the victory never shows the solved board again', async ({
   expect(stale).toEqual([]);
 });
 
-// ── review UX-12: the rising "+3" starts above the in-game fish pill, never over its icon and count ──
+// ── review UX-12: the rising "+3" starts above the in-game period counter, never over its icon and count ──
 
 for (const size of [null, { width: 320, height: 568 }] as const) {
-  test(`UX-12: the "+3" chip stays above the in-game fish pill (and on screen) while it rises${size ? ` at ${size.width}×${size.height}` : ''}`, async ({ page }) => {
+  test(`UX-12: the "+3" chip stays above the in-game period counter (and on screen) while it rises${size ? ` at ${size.width}×${size.height}` : ''}`, async ({ page }) => {
     if (size) await page.setViewportSize(size);
     await open(page, atLevel(2));
     await playNext(page);
@@ -230,8 +293,8 @@ for (const size of [null, { width: 320, height: 568 }] as const) {
       await new Promise<void>((resolve) => {
         const step = (): void => {
           const t = performance.now() - t0;
-          const chip = document.querySelector('.fish-pill__label .fish-pill__chip');
-          const pill = document.querySelector('.pills .fish-pill');
+          const chip = document.querySelector('.period-pill__label .period-pill__chip');
+          const pill = document.querySelector('.pills .period-pill[data-in-game]');
           if (t >= 1500 && chip && pill) {
             seen++;
             const c = chip.getBoundingClientRect();

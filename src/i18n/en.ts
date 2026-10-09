@@ -6,12 +6,15 @@
 // Phase 2b (phase2b §6.7, §12.1 F0 item 7): new keys live in per-owner files under ./en/ and are
 // spread into `en` below, so the workstreams never edit the same file:
 //   en/art.ts (A) · en/ui-2b.ts (B) · en/events.ts (C) · en/platform.ts (D) · en/i18n.ts (E).
+// Phase 2c (fish-lives-spec §1.5, Appendix A): G2 owns every file here; the 2c keys are in en/ui-2c.ts.
+// The lives are fish: the 2b "heart" values changed (same keys, A.1), the fish-currency keys went (A.3).
 // A key must exist in exactly one file (tests/unit/sanity.spec.ts checks it).
 import { enArt } from './en/art';
 import { enEvents } from './en/events';
 import { enI18n } from './en/i18n';
 import { enPlatform } from './en/platform';
 import { enUi2b } from './en/ui-2b';
+import { enUi2c } from './en/ui-2c';
 
 /** The Phase 2 catalogue (02 §21), E-owned. Values may change; keys and placeholders never do. */
 export const enCore = {
@@ -55,7 +58,7 @@ export const enCore = {
   'game.title.daily': 'Daily · {date}',
   'game.cats': '{placed} / {n}',
   'game.cats.a11y': '{placed} of {n} cats placed',
-  'game.hearts.a11y': '{hearts} of {max} hearts left',
+  'game.hearts.a11y': '{hearts} of {max} fish left',
   'game.chip.colours': '1 cat each colour',
   'game.chip.lines': '1 cat each line',
   'game.chip.space': 'Cats keep apart',
@@ -155,12 +158,12 @@ export const enCore = {
   'win.tutorial.play': 'Play Level {level}',
 
   // ── Fail overlay (O4) ──────────────────────────────────────────────────────
-  'fail.title': 'Out of hearts',
+  'fail.title': 'Out of fish',
   'fail.body': 'Every wrong tile stays marked, so you know more than before.',
   'fail.continue': 'Continue',
   'fail.continue.bonus': '+1',
-  'fail.continue.a11y.video': 'Watch a video to continue with one more heart',
-  'fail.continue.a11y.free': 'Continue with one more heart',
+  'fail.continue.a11y.video': 'Watch a video to continue with one more fish',
+  'fail.continue.a11y.free': 'Continue with one more fish',
   'fail.retry': 'Retry level',
 
   // ── Settings (O5, 02 §14) and About ────────────────────────────────────────
@@ -188,7 +191,7 @@ export const enCore = {
   'howto.rule.lines': 'Every row and every column holds *one cat* too.',
   'howto.rule.space': 'Cats like their space: two cats *never touch, not even at the corners*.',
   'howto.controls': 'Tap a tile to cross it out. Double-tap to place a cat. Swipe across tiles to cross out several at once.',
-  'howto.hearts': 'A cat on the wrong tile costs a heart. Lose all three and you can try the level again.',
+  'howto.hearts': 'Your fish are your lives. A cat on the wrong tile costs a fish. Lose all three and you can try the level again.',
   'howto.helpers': 'Stuck? The bulb explains one step. The paw finds a cat for you.',
   'howto.skip': 'I know how to play',
   'howto.replay': 'Replay tutorial',
@@ -225,16 +228,16 @@ export const enCore = {
   'a11y.cell.given': 'given cat',
   'a11y.catPlaced': 'Cat placed. {placed} of {n}.',
   'a11y.catRemoved': 'Cat removed. {placed} of {n}.',
-  'a11y.mistake.one': 'Wrong tile. {count} heart left.',
-  'a11y.mistake.other': 'Wrong tile. {count} hearts left.',
+  'a11y.mistake.one': 'Wrong tile. {count} fish left.',
+  'a11y.mistake.other': 'Wrong tile. {count} fish left.',
   'a11y.regionDone': '{color} done.',
   'a11y.marked.one': '{count} tile crossed out.',
   'a11y.marked.other': '{count} tiles crossed out.',
   'a11y.unmarked.one': '{count} tile cleared.',
   'a11y.unmarked.other': '{count} tiles cleared.',
   'a11y.won': 'Solved! Every cat found its tile.',
-  'a11y.lost': 'Out of hearts.',
-  'a11y.revived': 'One heart back. Keep going.',
+  'a11y.lost': 'Out of fish.',
+  'a11y.revived': 'One fish back. Keep going.',
   'a11y.kitty': 'The kitty found a cat. {placed} of {n}.',
   'a11y.hint': 'Hint: {text}',
   'a11y.hintApplied': 'Hint applied.',
@@ -287,18 +290,18 @@ export const enCore = {
   /** How to play: keyboard controls (02 §6.3), shown where a keyboard or mouse is present. */
   'howto.keys': 'Keyboard: arrow keys move, Space crosses out, Enter places a cat, H for a hint, K for the kitty.',
   /** Fail Continue: the accessible name contains the visible label "Continue +1" (WCAG 2.5.3). */
-  'fail.continue.a11y.videoLabel': 'Continue +1 heart, after a short video',
-  'fail.continue.a11y.freeLabel': 'Continue +1 heart',
+  'fail.continue.a11y.videoLabel': 'Continue +1 fish, after a short video',
+  'fail.continue.a11y.freeLabel': 'Continue +1 fish',
   /** About: the one piece of third-party code in the bundle (Vite's module preload helper, MIT). */
   'about.code': 'Includes a loader helper from Vite, © 2019-present VoidZero Inc. and Vite contributors, MIT License.',
   'about.codeLicence': 'MIT licence',
 } as const;
 
 /** The English catalogue: the Phase 2 keys plus every owner's Phase 2b file. */
-export const en = { ...enCore, ...enArt, ...enUi2b, ...enEvents, ...enPlatform, ...enI18n } as const;
+export const en = { ...enCore, ...enArt, ...enUi2b, ...enUi2c, ...enEvents, ...enPlatform, ...enI18n } as const;
 
 /** The per-owner parts of `en`, for the disjointness check (sanity.spec.ts). */
-export const EN_PARTS = { enCore, enArt, enUi2b, enEvents, enPlatform, enI18n } as const;
+export const EN_PARTS = { enCore, enArt, enUi2b, enUi2c, enEvents, enPlatform, enI18n } as const;
 
 export type En = typeof en;
 export type I18nKey = keyof En;

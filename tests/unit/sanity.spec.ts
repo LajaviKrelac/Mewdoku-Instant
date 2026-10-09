@@ -40,8 +40,9 @@ describe('i18n', () => {
     expect(joinList(['Lavender'])).toBe('Lavender');
     expect(joinList(['Lavender', 'Mint'])).toBe('Lavender and Mint');
     expect(joinList(['2', '4', '5'])).toBe('2, 4 and 5');
-    expect(tn('a11y.mistake', 1)).toBe('Wrong tile. 1 heart left.');
-    expect(tn('a11y.mistake', 2)).toBe('Wrong tile. 2 hearts left.');
+    // Phase 2c: the lives are fish (fish-lives-spec §1.6).
+    expect(tn('a11y.mistake', 1)).toBe('Wrong tile. 1 fish left.');
+    expect(tn('a11y.mistake', 2)).toBe('Wrong tile. 2 fish left.');
     expect(colorName(7)).toBe('Lavender');
     expect(formatShortDate('2026-10-06')).toBe('Tue 6 Oct');
     expect(formatClock(252_000)).toBe('4:12');
@@ -92,7 +93,21 @@ describe('i18n', () => {
     }
     expect(en['game.tool.kitty']).toBe('Kitty');
     expect(tn('event.reward.kitties', 2)).toBe('2 kitties');
-    expect(t('rewarded.swap', { count: 15 })).toBe('Swap 15 fish');
+    // Phase 2c (fish-lives-spec A.3): fish are no currency, so no swap copy is left.
+    expect('rewarded.swap' in en).toBe(false);
+  });
+
+  it('Phase 2c: the lives are fish in the English copy; "heart" survives only as the pattern glyph and an event name', () => {
+    const hearts = Object.entries(en).filter(([, v]) => /\bhearts?\b/i.test(v.replace(/\{\w+\}/g, ''))).map(([k]) => k);
+    expect(hearts.sort()).toEqual(['event.yarn.name', 'glyph.9']);
+    expect(t('game.hearts.a11y', { hearts: 2, max: 3 })).toBe('2 of 3 fish left');
+    expect(t('fail.title')).toBe('Out of fish');
+    expect(t('a11y.lost')).toBe('Out of fish.');
+    expect(t('a11y.revived')).toBe('One fish back. Keep going.');
+    expect(t('fail.continue.a11y.freeLabel')).toBe('Continue +1 fish');
+    // No currency words for fish anywhere (glossary §2): fish are lives and leaderboard points.
+    const currency = Object.entries(en).filter(([, v]) => /\b(coins?|money|wallet|swap)\b/i.test(v)).map(([k]) => k);
+    expect(currency).toEqual([]);
   });
 });
 

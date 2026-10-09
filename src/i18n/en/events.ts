@@ -1,4 +1,4 @@
-// Owner: C
+// Owner: C (Phase 2b); G2 (Phase 2c: milestone rewards are hints and kitties only, the fish keys went)
 // Phase 2b English strings for limited-time events (phase2b §4.3, §4.4, Appendix A). Our own names
 // and taglines (06 §3; never the original's event names). Owners may refine until the M1 copy freeze.
 // Wired into ../en.ts. EventDef.nameKey / taglineKey point here.
@@ -20,8 +20,6 @@ export const enEvents = {
   'event.topList': 'Top list',
   'event.title.game': '{event} · {index}',
   'event.results.local': 'Your results: {solved} of {total}, total {time}',
-  'event.reward.fish.one': '{count} fish',
-  'event.reward.fish.other': '{count} fish',
   'event.reward.hints.one': '{count} hint',
   'event.reward.hints.other': '{count} hints',
   'event.reward.kitties.one': '{count} kitty',

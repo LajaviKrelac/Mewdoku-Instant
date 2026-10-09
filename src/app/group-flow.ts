@@ -1,12 +1,14 @@
-// Owner: C
+// Owner: C (Phase 2b). Phase 2c (G1, docs/phase2c/fish-lives-spec.md §4.8): a challenge's score is the
+// FISH KEPT at each counted win (not level points), and rank-mode non-winners get groups.placeHints
+// hints (there are no fish to give).
 // Group challenges (phase2b §5.6; FB only, flag groupChallenges, off until §14 G2): start a challenge
-// (GroupProvider.create, groups.durationH), add each win's points to save.groups[id] in a challenge's
+// (GroupProvider.create, groups.durationH), add each win's fish kept to save.groups[id] in a challenge's
 // context and post the total, and on the first launch after endsAt resolve the reward — participation
 // mode (default): wins ≥ groups.minWinsForReward → 2 kitties, or 4 with the `group_double` video (not
 // 2 + 4), copy says "finished", never "won"; rank mode: standings or fall back to participation. One
 // claim per challenge; no rank or result is ever guessed; rewards are for playing, never for inviting.
 // C-internal module. platform.groups is read at call time (the FB social chunk adds it after start()).
-import { addFish, grant } from '../game/economy';
+import { grant } from '../game/economy';
 import { capGroups } from '../game/save-v2';
 import type { GroupRecord, SaveData } from '../game/types';
 import type { GroupProvider } from '../platform/types';
@@ -47,8 +49,8 @@ export interface GroupFlow {
   enabled(): boolean;
   /** Rankings hub → "Start a group challenge". Never rejects. */
   start(title: string): Promise<boolean>;
-  /** After a counted win: add points in the current challenge's context and post the total. Never rejects. */
-  onWin(points: number): Promise<void>;
+  /** After a counted win: add its fish kept in the current challenge's context and post the total. Never rejects. */
+  onWin(fish: number): Promise<void>;
   /** Launch: the first ended, unclaimed challenge's result to show (group_result), or null. Never rejects. */
   pendingResult(): Promise<PendingGroupResult | null>;
   /**
@@ -101,18 +103,18 @@ export function createGroupFlow(deps: GroupFlowDeps): GroupFlow {
         return false;
       }
     },
-    async onWin(points) {
+    async onWin(fish) {
       const p = provider();
-      if (!p || points <= 0) return;
+      if (!p || fish <= 0) return;
       const cur = await current(p);
       if (!cur) return;
       const now = clock.now();
       const prev = deps.save().groups[cur.id];
       const endsAt = prev?.endsAt ?? cur.endTimeMs;
-      if (now >= endsAt) return; // points after the end never count
+      if (now >= endsAt) return; // fish after the end never count
       const rec: GroupRecord = {
         endsAt,
-        total: (prev?.total ?? 0) + Math.max(0, Math.floor(points)),
+        total: (prev?.total ?? 0) + Math.max(0, Math.floor(fish)),
         wins: (prev?.wins ?? 0) + 1,
         claimed: prev?.claimed ?? 0,
       };
@@ -152,7 +154,7 @@ export function createGroupFlow(deps: GroupFlowDeps): GroupFlow {
           }
           if (st === null) result = participation(); // no standings: the participation rule, never a guess
           else if (st.myRank === 1 || st.tiedFirst) result = { id, outcome: { kind: 'won', kitties: c.groups.rewardKitties, kittiesWithAd: withAd }, place: 1 };
-          else if (g.wins >= 1) result = { id, outcome: { kind: 'place', place: st.myRank, count: st.count, fish: c.fish.groupParticipation }, place: st.myRank };
+          else if (g.wins >= 1) result = { id, outcome: { kind: 'place', place: st.myRank, count: st.count, hints: c.groups.placeHints }, place: st.myRank };
         } else result = participation();
         if (result) return result;
         // Nothing earned: close it quietly so it is never asked about again.
@@ -178,7 +180,7 @@ export function createGroupFlow(deps: GroupFlowDeps): GroupFlow {
       if (!latest || latest.claimed === 1) return false;
       deps.updateSave((s) => {
         let out = s;
-        if (o.kind === 'place') out = addFish(out, o.fish, c);
+        if (o.kind === 'place') out = grant(out, 'hints', o.hints, c);
         else out = grant(out, 'kitties', doubledOk && o.kittiesWithAd !== null ? o.kittiesWithAd : o.kitties, c);
         return { ...out, groups: { ...out.groups, [result.id]: { ...latest, claimed: 1 } } };
       });

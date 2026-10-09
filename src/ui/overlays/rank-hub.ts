@@ -1,8 +1,9 @@
-// Owner: B
+// Owner: B (Phase 2b); G2 (Phase 2c: the period tab)
 // Rankings hub (new overlay `rank_hub`, phase2b §5.5): a sheet from the Home trophy (shown when
-// capabilities().leaderboards) with tabs "Paw points", "Today", "Event" (while an event is active)
-// and "Groups" (flag groupChallenges). Each list tab shows the same states as the ranking panel
-// (RankingListState: the three FB modes, loading, personal records). The Groups tab offers "Start a
+// capabilities().leaderboards) with tabs "This week" (Phase 2c §4.7: the period board, first and
+// default; the app lists the tabs), "Today" (only with rank.dailyBoard), "Event" (while an event is
+// active) and "Groups" (flag groupChallenges). The 2b "Paw points" tab is gone (Phase 2c I-3). Each
+// list tab shows the same states as the ranking panel (RankingListState: the three FB modes, loading, personal records). The Groups tab offers "Start a
 // group challenge" (group.start) and the running challenge. Never a fabricated row.
 // Tabs follow the WAI-ARIA tabs pattern (role tablist / tab / tabpanel, roving tabindex, arrow keys,
 // Home / End); a tab press calls onTab and the app answers with update() (the hub never switches by
@@ -14,14 +15,17 @@
 //
 // Review fixes (A11Y-HUB-1): 44 px tabs (overlay-chunk.css), and ArrowRight / ArrowLeft move to the
 // tab on that side in right-to-left layouts too. The labels follow the language (A11Y-I18N-1).
+import { cfg, type PeriodKind } from '../../app/config';
 import { formatNumber, t, tn, translate, type I18nKey } from '../../i18n';
 import { h, setText, type OverlayView } from '../dom';
 import { createLocaleText } from '../locale-text';
 import { formatDaysHours } from '../screens/home-screen';
 import { arrowStep, closeButton, createOverlayShell, inlineDir, makeButton, nextId, setGated } from './overlay-base';
+import { periodTabLabel } from '../period-text';
 import { rankTitle, renderRankList, type RankingListState } from './ranking-panel';
 
-export type RankHubTab = 'points' | 'daily' | 'event' | 'groups';
+/** Phase 2c §4.7: 'period' is the first tab (the 2b 'points' tab was removed at I-3). */
+export type RankHubTab = 'period' | 'daily' | 'event' | 'groups';
 
 /** The Groups tab (phase2b §5.6). */
 export interface RankHubGroupsView {
@@ -41,6 +45,8 @@ export interface RankHubProps {
   readonly tab: RankHubTab;
   /** The active event's name key for the Event tab title; null without an event. */
   readonly eventNameKey: I18nKey | null;
+  /** Phase 2c §4.7: the period's kind (config period.kind): "This week" tab, "Weekly ranking" heading. */
+  readonly periodKind: PeriodKind;
   /** The current list tab's content (ignored on the Groups tab). */
   readonly list: RankingListState;
   /** The Groups tab's content; null when the tab is absent. */
@@ -54,11 +60,11 @@ export interface RankHubProps {
   onClose(): void;
 }
 
-/** The tab's label (§5.5: "Paw points", "Today", "Event", "Groups"); the panel heading names the event. */
-export function tabLabel(tab: RankHubTab, eventNameKey: I18nKey | null): string {
+/** The tab's label (2c: "This week", "Today", "Event", "Groups"); the panel heading names the event. */
+export function tabLabel(tab: RankHubTab, eventNameKey: I18nKey | null, periodKind: PeriodKind = cfg.period.kind): string {
   switch (tab) {
-    case 'points':
-      return t('rank.title.points');
+    case 'period':
+      return periodTabLabel(periodKind);
     case 'daily':
       return t('rank.tab.today');
     case 'event':
@@ -132,7 +138,7 @@ export function createRankHub(): OverlayView<RankHubProps> {
 
   let tabsLang = '';
   const renderTabs = (p: RankHubProps): void => {
-    const key = `${p.tabs.join(',')}|${p.eventNameKey ?? ''}|${tabsLang}`;
+    const key = `${p.tabs.join(',')}|${p.eventNameKey ?? ''}|${p.periodKind}|${tabsLang}`;
     if (key !== tabsKey) {
       tabsKey = key;
       tabs.textContent = '';
@@ -141,7 +147,7 @@ export function createRankHub(): OverlayView<RankHubProps> {
         const b = h(
           'button',
           { type: 'button', class: 'rank-hub__tab', role: 'tab', id: `${panelId}-${tab}`, 'aria-controls': panelId, dataset: { tab } },
-          tabLabel(tab, p.eventNameKey),
+          tabLabel(tab, p.eventNameKey, p.periodKind),
         );
         b.addEventListener('click', () => press(tab));
         tabButtons.set(tab, b);
@@ -213,7 +219,7 @@ export function createRankHub(): OverlayView<RankHubProps> {
       renderGroups(p.groups, p.now());
       listKind = null;
     } else {
-      setText(heading, rankTitle(p.tab, p.eventNameKey));
+      setText(heading, rankTitle(p.tab, p.eventNameKey, p.periodKind));
       if (p.list.kind !== listKind || p.list.kind !== 'overlay' || p.tab !== listTab) {
         renderRankList(list, p.list, { onSeeTop: () => props?.onSeeTop() });
         listKind = p.list.kind;

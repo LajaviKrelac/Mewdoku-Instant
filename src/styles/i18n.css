@@ -16,7 +16,7 @@
 }
 
 /* The FB safe zone is the top-left 64×64, so Home and Settings stay at the top right and the lead
-   slot (Home fish pill) stays after the safe zone. Only the title text runs right to left. */
+   slot (the Home period pill) stays after the safe zone. Only the title text runs right to left. */
 [dir='rtl'] .top-bar {
   direction: ltr;
 }

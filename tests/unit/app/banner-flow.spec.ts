@@ -193,7 +193,7 @@ describe('banner-flow (§3.2)', () => {
   it('entitlementChanged: No Ads now owned hides the banner on show (the reserve stays until unmount)', async () => {
     const s = setup();
     await s.flow.screenShown('home');
-    await s.flow.entitlementChanged(); // something else changed (a fish swap): nothing to do
+    await s.flow.entitlementChanged(); // something else changed (a hint pack): nothing to do
     expect(s.log).toEqual(['banner:show:bottom']);
     s.store.update((st) => ({ ...st, save: { ...st.save, purchases: { noAds: true, tokens: [] } } }));
     await s.flow.entitlementChanged();

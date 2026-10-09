@@ -1,12 +1,13 @@
-// Owner: C
-// The shop (phase2b §2.8, §8.4, §8.5): fish swaps (swapFish + saves.now(), no ad, no fallback
-// cooldown) and FB purchases with the grant order record → grant → saves.critical() → consume (or
+// Owner: C (Phase 2b). Phase 2c (G1, docs/phase2c/fish-lives-spec.md §5.2, §5.3): no fish swaps and no
+// fish packs: the sheet sells iap.catalog only (No Ads, hint pack, kitty pack); a boot restore still
+// delivers an unconsumed purchase of a RETIRED pack (iap.retired) as its compensation in hints and
+// kitties, recorded in the ledger and consumed, exactly like a catalogue product.
+// The shop (phase2b §8.4, §8.5): FB purchases with the grant order record → grant → saves.critical() → consume (or
 // consume first when iap.grantBeforeConsume is false); the boot restore of unconsumed purchases
 // (grant only tokens not yet in the ledger, consume all); onReady gating and the iap.readyTimeoutMs
 // "Getting the shop ready…" state; toasts shop.thanks / shop.error (a cancel is silent); the iap
 // analytics row (never a price or payment id). C-internal module; ShopProps (B) and
 // PaymentsProvider (D) are fixed. platform.payments is read at call time (FB social chunk).
-import { canAfford, swapFish, swapPrice } from '../game/economy';
 import { applyPurchase, isRecorded, productDef } from '../game/purchases';
 import type { ProductId, SaveData } from '../game/types';
 import type { Capabilities, PaymentsProvider, PlatformId, Product, Purchase } from '../platform/types';
@@ -38,7 +39,7 @@ export interface ShopFlowDeps {
   };
   toast(message: string): void;
   log(e: AnalyticsEvent): void;
-  /** Stock or wallet changed (bus 'stock' / 'wallet'). */
+  /** Stock or the No Ads entitlement changed (bus 'stock', the banner gate). */
   changed(): void;
   /** The shop opened over a screen (banner hide, §3.2). */
   onOpen?(): void;
@@ -46,13 +47,14 @@ export interface ShopFlowDeps {
 }
 
 export interface ShopFlow {
-  /** Opens the shop sheet (Home / victory fish pill "+", Settings → Shop / Remove ads). */
+  /** Opens the shop sheet (Settings → Shop / Remove ads; phase2c §5.2: no Home or victory entry). */
   open(): void;
-  /** Swap fish for one hint or kitty; false when the wallet is below the price. */
-  swap(item: 'hint' | 'kitty'): boolean;
-  /** Buys a product (the sheet's Buy). Never rejects. */
+  /** Buys a product of iap.catalog (the sheet's Buy; a retired id is never sold). Never rejects. */
   buy(id: ProductId): Promise<void>;
-  /** Boot: restore unconsumed purchases after start() and onReady. Never rejects. */
+  /**
+   * Boot: restore unconsumed purchases after start() and onReady: catalogue products and retired
+   * packs (their compensation), each granted once by token and consumed. Never rejects.
+   */
   restore(): Promise<void>;
   /** The Buy section's state now (Settings decides whether to show "Remove ads"). */
   buyState(): ShopBuyState;
@@ -93,10 +95,13 @@ export function createShopFlow(deps: ShopFlowDeps): ShopFlow {
     }
   };
 
+  /** What is on sale (phase2c §5.3): iap.catalog, in its order. */
+  const onSale = (id: ProductId): boolean => c.iap.catalog.some((d) => d.id === id);
+
   function products(): ShopProductView[] {
     const noAds = deps.save().purchases.noAds;
     const out: ShopProductView[] = [];
-    for (const def of c.iap.products) {
+    for (const def of c.iap.catalog) {
       const p = catalog?.find((x) => x.id === def.id);
       if (p) out.push({ id: def.id, price: p.price, owned: def.noAds === true && noAds });
     }
@@ -145,12 +150,8 @@ export function createShopFlow(deps: ShopFlowDeps): ShopFlow {
 
   function props(): ShopProps {
     return {
-      fish: deps.save().wallet.fish,
-      hintPrice: swapPrice('hint', c),
-      kittyPrice: swapPrice('kitty', c),
       buy: computeBuy(),
       busy,
-      onSwap: (item) => void flow.swap(item),
       onBuy: (id) => void flow.buy(id),
       onRetry: () => {
         catalogState = 'idle';
@@ -225,22 +226,9 @@ export function createShopFlow(deps: ShopFlowDeps): ShopFlow {
       hookReady();
       deps.overlay.open(props());
     },
-    swap(item) {
-      if (busy) return false;
-      const s = deps.save();
-      if (!canAfford(s, swapPrice(item, c))) {
-        deps.toast(t('shop.notEnough'));
-        return false;
-      }
-      deps.updateSave((sv) => swapFish(sv, item, c));
-      deps.saves.now();
-      deps.changed();
-      refresh();
-      return true;
-    },
     async buy(id) {
       const p = provider();
-      if (busy || !p || !productDef(id, c)) return;
+      if (busy || !p || !onSale(id)) return;
       if (productDef(id, c)?.noAds && deps.save().purchases.noAds) return; // "Owned"
       busy = true;
       refresh();
@@ -272,6 +260,8 @@ export function createShopFlow(deps: ShopFlowDeps): ShopFlow {
         const list = await p.purchases();
         if (!list) return; // failure: nothing changes; the next boot tries again
         for (const purchase of list) {
+          // A catalogue product or a retired pack (productDef knows both): a retired one is delivered
+          // as its compensation, so it never stays unconsumed forever (phase2c §5.3).
           if (!productDef(purchase.productId, c)) continue;
           if (!isRecorded(deps.save(), purchase.purchaseToken, c)) {
             // Not delivered yet (the game died before saving): the §8.4 grant order.

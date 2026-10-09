@@ -7,6 +7,11 @@
 // once, then win-flow.ts plays glow → fish → ranking panel → victory screen on the session clock.
 // Helper flows live in helper-flows.ts, pure effect tables in session-effects.ts, timers and overlay
 // props in session-parts.ts.
+// Phase 2c (G1, docs/phase2c/fish-lives-spec.md): fish are the lives. A MISTAKE (or a REVIVE) breaks
+// the perfect streak at once, in the same store update as the board slot, so Home, a reload, a fail
+// or Retry cannot undo it (§3.2). A scored win submits this period's leaderboard points (and an event
+// win its event board) as one batch, the panel shows the period board, and the fish kept fly from the
+// lives pill to the period counter (§2, §4.4). No fish wallet, no shop entry from the victory.
 import type { CellIndex, HintStep, Puzzle } from '../engine/types';
 import { eventEnd, eventRules, type EventDef } from '../game/events';
 import { newGame, restoreGame, toInProgress } from '../game/factory';
@@ -14,17 +19,18 @@ import { getMode, rulesFor } from '../game/modes';
 import { isHard } from '../game/progression';
 import { reduce } from '../game/reducer';
 import { validateSlot } from '../game/save';
-import { encodeDailyScore, encodeEventScore, encodePointsScore } from '../game/scoring';
+import { breakStreak, encodeDailyScore, encodeEventScore, encodePeriodScore } from '../game/scoring';
 import { advance, filterTutorialAction, tutorialStep } from '../game/tutorial';
 import type { Action, BoardKey, GameEvent, GameState, ModeId, RuleFlags } from '../game/types';
-import { fishSourceRows } from '../ui/fx/fish-flight';
 import type { RankingListState, RankScoreView } from '../ui/overlays/ranking-panel';
+import { periodRankTitle } from '../ui/period-text';
 import type { GameScreen, GameScreenCallbacks, GameView } from '../ui/screens/game-screen';
-import { t, translate } from '../i18n';
+import { t } from '../i18n';
 import type { TimerId } from './clock';
 import { cfg } from './config';
 import type { AnalyticsEvent, RankResult } from './events';
 import { createHelperFlows } from './helper-flows';
+import type { BoardScore } from './ranking-flow';
 import { feedbackFor, failEvent, levelParam, mistakeEvent, startEvents, winBookkeeping, type WinSummary } from './session-effects';
 import { createFeedbackPlayer, createSessionTimers, defaultColors, defaultPraise, overlayProps, withoutSlot, withSlot, type SaveSlot } from './session-parts';
 import { createTransitions } from './session-transitions';
@@ -123,13 +129,7 @@ export function createSession(deps: SessionDeps): Session {
     afterKitty: () => {
       if (game()?.status === 'kitty') timers.later(c.kitty.revealMs, () => dispatch({ type: 'KITTY_DONE' }));
     },
-    walletChanged: () => emitWallet(),
   });
-
-  function emitWallet(): void {
-    const { fish, earned } = save().wallet;
-    bus.emit('wallet', { fish, earned });
-  }
 
   const winFlow = createWinFlow({
     clock,
@@ -184,12 +184,15 @@ export function createSession(deps: SessionDeps): Session {
     const slot = slotFor(m);
     const writeSlot = slot !== null && changed && state.status !== 'won';
     const now = clock.now();
-    if (state !== prev || writeSlot) {
-      store.update((app) => ({
-        ...app,
-        game: state,
-        save: writeSlot ? withSlot(app.save, slot, toInProgress(state, now)) : app.save,
-      }));
+    // phase2c §3.2: a mistake (with the mistake penalty) or a revive breaks the perfect streak at once,
+    // saved with the board, so leaving, reloading, failing or retrying never restores it.
+    const breaks = streakBreaks(state, events, m);
+    const streakBroken = breaks && save().streak.current !== 0;
+    if (state !== prev || writeSlot || streakBroken) {
+      store.update((app) => {
+        const slotted = writeSlot ? withSlot(app.save, slot, toInProgress(state, now)) : app.save;
+        return { ...app, game: state, save: breaks ? breakStreak(slotted) : slotted };
+      });
     }
     if (state.cells !== prev.cells || a.type === 'RETRY' || a.type === 'REVIVE') helpers.clearHintCache();
     if (events.length) bus.emit('game:events', { events, state, prev });
@@ -205,9 +208,15 @@ export function createSession(deps: SessionDeps): Session {
       else if (ev.type === 'LOST') onLost(state, m);
     }
     if (lines.length) fx.announce(lines.join(' '));
-    if (writeSlot) deps.saves.touch();
+    if (writeSlot || streakBroken) deps.saves.touch();
     timers.sync();
     if (m.mode === 'tutorial') tutorialAdvance();
+  }
+
+  /** phase2c §3.2: whether these events break the perfect streak (a MISTAKE with the penalty, or REVIVED) in a scored mode. */
+  function streakBreaks(state: GameState, events: readonly GameEvent[], m: SessionMeta): boolean {
+    if (!(c.levelPoints.modes as readonly string[]).includes(m.mode)) return false;
+    return events.some((ev) => (ev.type === 'MISTAKE' && state.rules.mistakePenalty) || ev.type === 'REVIVED');
   }
 
   // ─────────────────────────────── win (phase2b §2.2) ───────────────────────────────
@@ -223,18 +232,6 @@ export function createSession(deps: SessionDeps): Session {
     logged: boolean;
   } | null = null;
 
-  /** The three fish source cats (§2.3): rows floor((n−1)/4), floor((n−1)/2), floor(3(n−1)/4). */
-  function fishSources(puzzle: Puzzle): CellIndex[] {
-    const n = puzzle.n;
-    let rows: readonly number[];
-    try {
-      rows = fishSourceRows(n);
-    } catch {
-      rows = [Math.floor((n - 1) / 4), Math.floor((n - 1) / 2), Math.floor((3 * (n - 1)) / 4)];
-    }
-    return rows.map((r) => r * n + (puzzle.solution[r] ?? 0));
-  }
-
   /** Every cat cell in row order (the solution cells of a won board). */
   function catCells(puzzle: Puzzle): CellIndex[] {
     const out: CellIndex[] = [];
@@ -242,26 +239,27 @@ export function createSession(deps: SessionDeps): Session {
     return out;
   }
 
-  /** The board a win ranks on and its score now (§5.3), or null (tutorial). */
-  function boardScore(summary: WinSummary, m: SessionMeta): { board: BoardKey; score: number } | null {
-    if (summary.mode === 'level') return { board: c.rank.boards.points, score: encodePointsScore(summary.pointsTotal, c) };
-    if (summary.mode === 'daily' && m.dateKey) return { board: c.rank.boards.daily, score: encodeDailyScore(m.dateKey, summary.ms, c) };
+  /**
+   * The boards a counted win submits, as one batch (phase2c §4.4): this period's leaderboard points
+   * when the win added some (G > 0), the event board for an event win, daily_fastest only with
+   * rank.dailyBoard. A win that adds nothing submits nothing.
+   */
+  function winBoards(summary: WinSummary, m: SessionMeta): BoardScore[] {
+    const out: BoardScore[] = [];
+    if (!summary.counted || summary.mode === 'tutorial') return out;
+    const p = summary.period;
+    if (p && p.gained > 0) out.push({ board: c.rank.boards.period, score: encodePeriodScore(p.key, p.total, c) });
     if (summary.mode === 'event' && summary.event) {
       const e = summary.event;
-      return { board: e.def.leaderboard, score: encodeEventScore(e.solvedAfter, e.totalMs) };
+      out.push({ board: e.def.leaderboard, score: encodeEventScore(e.solvedAfter, e.totalMs) });
     }
-    return null;
+    if (summary.mode === 'daily' && m.dateKey && c.rank.dailyBoard) out.push({ board: c.rank.boards.daily, score: encodeDailyScore(m.dateKey, summary.ms, c) });
+    return out;
   }
 
-  /** My own score as I know it, for "Your score" when the provider cannot tell (never a guess). */
+  /** My own score on the period board as I know it ("Your score: 42 fish"), never a guess. */
   function myScoreView(summary: WinSummary): RankScoreView | null {
-    if (summary.mode === 'level') return { kind: 'points', points: summary.pointsTotal };
-    if (summary.mode === 'daily') return { kind: 'time', ms: summary.ms };
-    if (summary.mode === 'event' && summary.event) {
-      const e = summary.event;
-      return { kind: 'event', solved: e.solvedAfter, total: e.def.puzzles.count, ms: e.totalMs };
-    }
-    return null;
+    return summary.period ? { kind: 'fish', fish: summary.period.total } : null;
   }
 
   function listFor(w: NonNullable<typeof win>): RankingListState {
@@ -272,17 +270,15 @@ export function createSession(deps: SessionDeps): Session {
       n: s.n,
       thisMs: s.ms,
       event: s.event?.def ?? null,
-    });
-    const day = s.mode === 'daily' ? w.meta.dateKey : null;
-    const ctx = { records, myScore: myScoreView(s), ...(s.event ? { eventTotal: s.event.def.puzzles.count } : {}), ...(day ? { day } : {}) };
+    }, c);
+    const ctx = { records, myScore: myScoreView(s), ...(s.period ? { periodKey: s.period.key } : {}) };
     if (!deps.rankings) return { kind: 'records', records, reason: 'local' };
     return deps.rankings.listState(w.result, ctx);
   }
 
+  /** The period board's title ("Weekly ranking"), for the FB overlay list (phase2c §2.6). */
   function rankingTitle(w: NonNullable<typeof win>): string {
-    const e = w.summary.event;
-    if (e) return t('rank.title.event', { event: translate(e.def.nameKey) });
-    return w.summary.mode === 'daily' ? t('rank.title.daily') : t('rank.title.points');
+    return periodRankTitle(w.summary.period?.kind ?? c.period.kind);
   }
 
   function logPanel(w: NonNullable<typeof win>): void {
@@ -295,19 +291,19 @@ export function createSession(deps: SessionDeps): Session {
   }
 
   function rankingProps(w: NonNullable<typeof win>, tapMinMs: number) {
+    const band = w.summary.period ? { periodKey: w.summary.period.key } : undefined;
     return {
-      ...selectRankingView(store.get(), viewCtx(), w.summary, listFor(w), { tapMinMs }),
+      ...selectRankingView(store.get(), viewCtx(), w.summary, listFor(w), { tapMinMs }, c),
       onContinue: () => winFlow.continueFromRanking(),
       onSeeTop: () => {
-        if (w.board) void deps.rankings?.showList(w.board, rankingTitle(w), undefined, w.summary.event?.def.puzzles.count, w.meta.dateKey ?? undefined, myScoreView(w.summary) ?? undefined);
+        if (w.board) void deps.rankings?.showList(w.board, rankingTitle(w), undefined, undefined, band, myScoreView(w.summary) ?? undefined);
       },
       onListArea: (rect: DOMRect) => {
         if (!w.board || !deps.rankings) return;
-        // FB2B-7: my own row in the overlay list shows my exact time, like the panel ("Solved in").
-        void deps.rankings.showList(w.board, rankingTitle(w), rect, w.summary.event?.def.puzzles.count, w.meta.dateKey ?? undefined, myScoreView(w.summary) ?? undefined).then((ok) => {
+        void deps.rankings.showList(w.board, rankingTitle(w), rect, undefined, band, myScoreView(w.summary) ?? undefined).then((ok) => {
           if (ok || win !== w || !router.isOpen('ranking')) return;
           // The overlay could not be placed: the honest fallback is my own records.
-          const records = personalRecords(store.get(), viewCtx(), { board: boardKindOf(w.summary.mode), n: w.summary.n, thisMs: w.summary.ms, event: w.summary.event?.def ?? null });
+          const records = personalRecords(store.get(), viewCtx(), { board: boardKindOf(w.summary.mode), n: w.summary.n, thisMs: w.summary.ms, event: w.summary.event?.def ?? null }, c);
           router.update('ranking', { ...rankingProps(w, tapMinMs), list: { kind: 'records', records, reason: 'unavailable' } });
         });
       },
@@ -324,8 +320,6 @@ export function createSession(deps: SessionDeps): Session {
     logPanel(w);
   }
 
-  /** L2B-3: the open victory's fish pill follows the wallet (a swap or purchase made from its "+"). */
-  let unbindVictory: (() => void) | null = null;
   function openVictory(): void {
     const w = win;
     if (!w) return;
@@ -334,7 +328,7 @@ export function createSession(deps: SessionDeps): Session {
     if (deps.banners) void deps.banners.screenShown('victory', { firstRunTutorial }).catch(() => undefined);
     const data = selectVictoryView(store.get(), viewCtx(), w.summary, { praise: w.praise }, c);
     const m = w.meta;
-    let vprops = {
+    router.open('victory', {
       ...data,
       now: () => clock.now(),
       onPrimary: () => {
@@ -342,18 +336,7 @@ export function createSession(deps: SessionDeps): Session {
         else void session.onNext();
       },
       onHome: () => session.onHome(),
-      onShop: () => deps.openShop?.(),
-    };
-    router.open('victory', vprops);
-    unbindVictory?.();
-    unbindVictory = store.select(
-      (s) => s.save.wallet.fish,
-      (fish) => {
-        if (win !== w || !router.isOpen('victory') || !vprops.fish || vprops.fish.total === fish) return;
-        vprops = { ...vprops, fish: { ...vprops.fish, total: fish } };
-        router.update('victory', vprops);
-      },
-    );
+    });
     deps.rankings?.closeList();
     // UX-4: a crossfade. The victory opens over the ranking panel at the tap and fades in (the overlay
     // fade, fx.overlayFadeMs; reduced: fx.screenReducedMs); the panel, fading out under it, closes
@@ -372,7 +355,6 @@ export function createSession(deps: SessionDeps): Session {
     if (book.critical) deps.saves.critical(); // t = 0: every reward is saved before any animation (§2.2)
     for (const e of book.events) log(e);
     const s = book.summary;
-    if (book.fishEarned !== 0) emitWallet();
     if (book.save.stock !== before.stock) bus.emit('stock', { hints: book.save.stock.hints, kitties: book.save.stock.kitties });
     if (m.mode === 'level' && m.level !== null) deps.levels.prefetch(m.level + 1);
     router.close('coach');
@@ -385,32 +367,37 @@ export function createSession(deps: SessionDeps): Session {
           ? 'tutorial_replay'
           : 'tutorial'
         : s.mode;
-    const target = s.mode !== 'tutorial' ? boardScore(s, m) : null;
+    // phase2c §2.6: the panel shows the period board after every non-tutorial win.
+    const panelBoard: BoardKey | null = s.mode !== 'tutorial' ? c.rank.boards.period : null;
+    const submits = winBoards(s, m);
     win = {
       summary: s,
       meta: m,
       praise: (deps.pickPraise ?? defaultPraise)(),
-      board: target?.board ?? null,
+      board: panelBoard,
       result: null,
       panelOpen: false,
       logged: false,
     };
     const w = win;
-    // §5.5 steps 2 then 3, from t = 0 so the panel is ready at 4.5 s (deadline rank.fetchTimeoutMs):
-    // the new score's submit starts first, so mine() reads the board after it; older queued scores
-    // (rank.pending) are retried once it has settled, never ahead of it.
-    if (target && s.counted) {
+    // §5.5 steps 2 then 3, from t = 0 so the panel is ready in time (deadline rank.fetchTimeoutMs):
+    // the win's scores are submitted first as one batch (phase2c §4.4), so mine() reads the board
+    // after them; older queued scores (rank.pending) are retried once it has settled, never ahead.
+    if (submits.length > 0) {
       const r = deps.rankings;
       if (r) {
         void r
-          .submit(target.board, target.score, s.ms)
-          .then(() => r.flushPending({ except: target.board }))
+          .submitAll(submits, s.ms)
+          .then(() => r.flushPending({ except: submits.map((e) => e.board) }))
           .catch(() => undefined);
       }
-      if (s.pointsEarned > 0) void deps.groups?.onWin(s.pointsEarned).catch(() => undefined);
     }
-    if (target && variant !== 'restored') {
-      const fetched = deps.rankings ? deps.rankings.fetch(target.board) : Promise.resolve<RankResult>({ board: target.board, api: 'local', mine: null, top: [], ok: true });
+    // phase2c §4.8: a group challenge ranks the fish kept.
+    const gained = s.counted ? (s.period?.gained ?? 0) : 0;
+    if (gained > 0) void deps.groups?.onWin(gained).catch(() => undefined);
+    if (panelBoard && variant !== 'restored') {
+      const band = s.period ? { periodKey: s.period.key } : undefined;
+      const fetched = deps.rankings ? deps.rankings.fetch(panelBoard, band) : Promise.resolve<RankResult>({ board: panelBoard, api: 'local', mine: null, top: [], ok: true });
       void fetched.then(
         (result) => {
           if (win !== w) return;
@@ -430,10 +417,11 @@ export function createSession(deps: SessionDeps): Session {
       variant,
       screen: scr,
       catCells: catCells(state.puzzle),
-      fishSources: fishSources(state.puzzle),
-      fishBefore: s.fish?.before ?? before.wallet.fish,
-      fishBase: s.fish?.base ?? 0,
-      fishBonus: s.fish?.bonus ?? 0,
+      // §2.2: only the fish kept fly, and only when the win adds leaderboard points.
+      kept: gained > 0 ? s.kept : 0,
+      perFish: c.period.pointsPerFish,
+      periodBefore: s.period?.before ?? 0,
+      periodKind: s.period?.kind ?? c.period.kind,
       reducedMotion: store.get().ui.reducedMotion,
     });
   }
@@ -524,8 +512,6 @@ export function createSession(deps: SessionDeps): Session {
     winFlow.cancel();
     router.releaseModal?.();
     deps.rankings?.closeList();
-    unbindVictory?.();
-    unbindVictory = null;
     win = null;
     timers.clear();
     unbindView?.();

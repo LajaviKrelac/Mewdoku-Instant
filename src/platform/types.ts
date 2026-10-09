@@ -1,4 +1,6 @@
 // Owner: D (Phase 2b; F0 fixed the 2b contract: additive only, ask the lead to change a shape).
+// Owner: G3 (Phase 2c): RankEntry.boardRank (additive), band docs generalised to the period board,
+// payments catalogue vs retired ids (docs/phase2c/fish-lives-spec.md §4.5, §5.3, §7.4).
 // Platform adapter contract (04 §4.4, §6; phase2b §3.5, §5.4, §5.6, §8.4). Depends only on game/ types.
 import type { BoardKey, ProductId, SaveData } from '../game/types';
 
@@ -120,10 +122,18 @@ export interface PlatformAds {
 
 /** A leaderboard row as game code sees it: never a name or photo (those live only in overlay views, §5.7). */
 export interface RankEntry {
+  /** The rank shown: the board's own rank, or on a band read (top(…, keep)) the 1-based position inside the band. */
   readonly rank: number;
   readonly score: number;
   /** false whenever the API cannot tell (NEZP entries carry session ids only). */
   readonly isMe: boolean;
+  /**
+   * [2c, additive; phase2c §4.5] The board's own rank of this entry, set on band reads (top(…, keep))
+   * and absent otherwise. Classic: the entry's getRank(); NEZP: its 1-based position in the API's
+   * ordered list (getRank() when the API offers one). With it, "my rank inside the band" is exact at
+   * any depth: `mine.rank − (band[0].boardRank − 1)` (the entries above the band are not counted).
+   */
+  readonly boardRank?: number;
 }
 
 export interface RankingCaps {
@@ -153,11 +163,13 @@ export interface RankListView {
    */
   readonly formatScore: (score: number) => string;
   /**
-   * Which entries the list may show (additive, 2b integration): daily_fastest is one board for every
-   * day, and its readers keep only the shown day's entries (phase2b §5.3). Supplied by the app (it
-   * decodes scores); absent = every entry. A filtered list shows fewer rows, never padded ones.
-   * The band is read past the entries above it, and its rows are numbered by their position inside
-   * it (review FB2B-4; see RankingProvider.top).
+   * Which entries the list may show (additive, 2b integration; generalised in 2c): a BAND of a board
+   * that holds several bands, best first. daily_fastest keeps the shown day's entries (phase2b §5.3),
+   * period_points the shown period's (phase2c §4.5): each is one board whose score carries the day or
+   * period index in its high digits. Supplied by the app (it decodes scores); absent = every entry.
+   * A filtered list shows fewer rows, never padded ones. The band is read past the entries above it
+   * (later days, clocks ahead), and its rows are numbered by their position inside it (review FB2B-4;
+   * see RankingProvider.top). My pinned row (classic) carries my rank inside the band.
    */
   readonly keep?: (score: number) => boolean;
   /**
@@ -176,10 +188,13 @@ export interface RankingProvider {
   mine(board: BoardKey): Promise<RankEntry | null>;
   /**
    * [] when unsupported, on error or timeout. Never fabricated: only rows the API returned. Never rejects.
-   * [additive, review FB2B-4] `keep` (daily_fastest: the shown day, phase2b §5.3): only the entries it
-   * accepts, best first, read past the entries above that band (later time zones that already posted
-   * the next day's daily), with `rank` = the 1-based position inside the band (every better entry of
-   * the band was read, so it is the true rank for that day).
+   * [additive, review FB2B-4; generalised in 2c] `keep` selects a band (daily_fastest: the shown day,
+   * phase2b §5.3; period_points: the shown period, phase2c §4.5): only the entries it accepts, best
+   * first, read past the entries above that band (later time zones that already posted the next day's
+   * daily, devices whose clocks run ahead), with `rank` = the 1-based position inside the band (every
+   * better entry of the band was read, so it is the true rank in it) and `boardRank` = the board's own
+   * rank of the entry (phase2c §4.5, so a caller can place my board rank inside the band exactly).
+   * The read stops once `n` band entries are in, the band ends, or BAND_MAX_PAGES pages were read.
    */
   top(board: BoardKey, n: number, keep?: (score: number) => boolean): Promise<readonly RankEntry[]>;
   /**
@@ -236,9 +251,15 @@ export interface PaymentsProvider {
   ready(): boolean;
   /** cb at once if already ready; never called on iOS / Messenger.com (payments unsupported). */
   onReady(cb: () => void): void;
+  /** The products on sale (phase2c §5.3: cfg.iap.catalog ids only; a retired product is never listed). */
   catalog(): Promise<readonly Product[]>;
+  /** A product on sale (cfg.iap.catalog); a retired or unknown id answers 'error' without an SDK call. */
   purchase(id: ProductId, payload: string): Promise<{ ok: true; p: Purchase } | { ok: false; reason: PurchaseFailReason }>;
-  /** Unconsumed purchases; null on failure (the boot restore then changes nothing). */
+  /**
+   * Unconsumed purchases; null on failure (the boot restore then changes nothing). Phase 2c §5.3: also
+   * those of cfg.iap.retired ids (fish_250, fish_900), so the restore compensates and consumes them
+   * instead of leaving them unconsumed forever.
+   */
   purchases(): Promise<readonly Purchase[] | null>;
   consume(token: string): Promise<boolean>;
 }

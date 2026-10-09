@@ -2,7 +2,10 @@
 // Home and the shared modals (02 §4–5, §12, §14): S1 Home with its callbacks, O5 Settings (applied at
 // once, saved with 'touch'), O6 How to play (skip / replay tutorial), O7 reopened from a solved daily
 // card, and the stale-daily rule applied whenever Home is shown.
-// Phase 2b: the Home fish pill "+" (shop, §8.5), the event card and the event screen (§4.4, lazy
+// Phase 2c (G1, docs/phase2c/fish-lives-spec.md §2.8, §5.2): Home shows the period pill (no fish pill,
+// no "+"); the shop opens only from Settings, and its row shows only where the Buy section can show
+// something (never on the web, FB iOS or Messenger.com).
+// Phase 2b: the event card and the event screen (§4.4, lazy
 // `events` chunk), the trophy's rankings hub (§5.5), the Settings Language / Shop / Remove ads rows
 // (§6.8, §8.5), and the banner rules on Home and the event screen (§3.2: shown after the screen
 // mounts, hidden before it goes and while a modal is open).
@@ -168,6 +171,9 @@ export function createShell(deps: ShellDeps): Shell {
     const locales = buildLocales();
     const shop = deps.shop && isFlagOn('shop') ? deps.shop : null;
     const buy = shop?.buyState();
+    // phase2c §5.2 [DECISION]: the Shop row only when the Buy section can show something (loading,
+    // error with Retry, or the products): no shop on the web (hidden) or where FB cannot sell (unavailable).
+    const canSell = buy?.kind === 'loading' || buy?.kind === 'error' || buy?.kind === 'ready';
     return {
       settings: s.settings,
       showVibration: deps.platform.capabilities().haptics,
@@ -213,7 +219,7 @@ export function createShell(deps: ShellDeps): Shell {
       // review PAR-5: the Feedback row, from config (empty by default = no row); on FBIG only with
       // support.feedbackOnFbig (Meta's external-link rules, parity-spec §0.7, §14).
       ...(feedbackUrl() ? { feedbackUrl: feedbackUrl() } : {}),
-      ...(shop ? { onShop: () => shell.openShop() } : {}),
+      ...(shop && canSell ? { onShop: () => shell.openShop() } : {}),
       // §8.5: "Remove ads" only on FB with payments ready, the catalogue listing remove_ads (review
       // FB2B-3: never a row that opens an empty Buy section) and No Ads not owned.
       ...(shop && buy?.kind === 'ready' && buy.products.some((p) => p.id === 'remove_ads') && !s.purchases.noAds
@@ -264,7 +270,6 @@ export function createShell(deps: ShellDeps): Shell {
         // §5.5: the trophy shows only when capabilities().leaderboards.
         onTrophy: () => deps.rankHub?.open(),
         onCard: () => undefined, // Phase 3 hook
-        onShop: () => shell.openShop(),
         onEvent: () => {
           const card = selectHomeView(store.get(), ctx(), c).event;
           if (!card || card.state === 'teaser') return;

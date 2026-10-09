@@ -109,7 +109,7 @@ export const SHELL_CSS = String.raw`
 .howto__notes p { display: flex; align-items: flex-start; color: var(--ink-2); font-size: var(--fs-s); line-height: 1.45; }
 .howto__notes p + p { margin-top: 8px; }
 .howto__note-icon { width: 20px; height: 20px; margin: 0 10px 0 0; color: var(--accent); }
-.howto__note-icon--heart { color: var(--heart); }
+.howto__note-icon--fish { color: var(--fish-deep); }
 .howto__note-icon--bulb { color: var(--gold-deep); }
 .howto__extra { flex-direction: column; align-items: stretch; margin-top: 16px; }
 .howto__extra > * + * { margin-top: 10px; }

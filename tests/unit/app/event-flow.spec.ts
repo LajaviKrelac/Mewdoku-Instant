@@ -1,6 +1,6 @@
 // Owner: C. Events in the app (phase2b §4.4, §4.5, §4.9): the Home card states (teaser, active,
 // locked, done, ends soon), the event screen view, an event session (slot E<id>/<i>, save and
-// restore, hearts modifier, event_start), its win (record, milestone, fish, points, the victory's
+// restore, hearts modifier, event_start), its win (record, milestone, period points, level points, the victory's
 // event variant), the event_next interstitial and "Back to event", and the slot cleared after the end.
 import { afterEach, describe, expect, it } from 'vitest';
 import { createEventFlow, bundledEventDefs } from '../../../src/app/event-flow';
@@ -152,17 +152,20 @@ describe('event sessions (§4.4, §4.5)', () => {
     expect(h.game().hearts).toBe(2);
   });
 
-  it('a win counts the puzzle, grants 3 fish and the event points, and the victory shows the event variant', async () => {
+  it('a win counts the puzzle, adds its kept fish to this period and level points, and the victory shows the event variant (D5, D7)', async () => {
     const h = eventHarness((s) => ({ ...s, events: { [LANTERN.id]: { solved: 2, ms: 50_000, lastAt: 1 } } }));
     await play(h, 2);
     for (const c of SOL5) h.session.onCellDoubleTap(c);
     expect(h.save().events[LANTERN.id]?.solved).toBe(3);
-    expect(h.save().wallet.fish).toBe(3);
+    expect(h.save().period.total).toBe(3); // the fish kept go to this period's board in every scored mode
+    expect(h.save().streak.current).toBe(1);
+    expect(h.save()).not.toHaveProperty('wallet');
     expect(h.save().stock.hints).toBe(5 + 2); // the 3-puzzle milestone: +2 hints at once
-    expect(h.save().points.total).toBe(25 + 10 + 10 + 5);
+    expect(h.save().points.total).toBe(5 * 10 + 10);
     expect(h.analytics).toContainEqual({ name: 'event_milestone', params: { id: LANTERN.id, at: 3 } });
     await h.settle(h.config.fx.winOverlayDelayMs);
-    expect(h.router.props.ranking).toMatchObject({ board: 'event', eventNameKey: LANTERN.nameKey, result: { kind: 'event', solved: 3, total: 21 } });
+    // phase2c §2.6: the post-win panel shows the period board in every mode (the event board stays on the event screen).
+    expect(h.router.props.ranking).toMatchObject({ board: 'period', eventNameKey: null, result: { kind: 'period', gained: 3, total: 3 } });
     await tapRanking(h);
     expect(h.router.props.victory?.event).toMatchObject({ index: 2, total: 21, solvedBefore: 2, solvedAfter: 3, reward: { hints: 2 }, last: false });
   });

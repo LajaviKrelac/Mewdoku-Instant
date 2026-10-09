@@ -1,5 +1,7 @@
-// Owner: A. Sprite, Tux, poses, event art, palette helpers and the board cell's X underlay
-// (phase2b §1.5–§1.7, §1.12, §2.9, §4.4).
+// Owner: A (Phase 2b); G2 (Phase 2c: the empty life, no heart icons). Sprite, Tux, poses, event art,
+// palette helpers and the board cell's X underlay (phase2b §1.5–§1.7, §1.12, §2.9, §4.4).
+// Phase 2c (fish-lives-spec §1.2): icon-fish-empty (one 30 % outline, a pale wash, no eye); the heart
+// icons and the heart clip paths are gone (only the colour-pattern glyph 9 is a heart).
 // phase2b F0 split: the fx and a11y cases moved to fx-a11y.spec.ts (B).
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cfg } from '../../../src/app/config';
@@ -7,7 +9,7 @@ import type { EventDef } from '../../../src/game/events';
 import { accessoryMarkup, mountAccessories } from '../../../src/ui/art/accessories';
 import { CAT, catHead, earOuterPath, EAR_FLICK_PIVOT, MASK_PATH } from '../../../src/ui/art/cat-parts';
 import { eventArt, eventPatternUrl } from '../../../src/ui/art/event-art';
-import { fishMarkup } from '../../../src/ui/art/fish';
+import { FISH_BODY, FISH_OUTLINE_OPACITY, fishMarkup, fishOutlineMarkup } from '../../../src/ui/art/fish';
 import { illustration, type IllustrationKind } from '../../../src/ui/art/illustrations';
 import { mascotIllustration, startHeadTilt } from '../../../src/ui/art/mascot';
 import { CAT_COLORS, mixHex, PALETTE, regionColorsFor, regionColorVar, TOKENS, xEdgeColor } from '../../../src/ui/art/palette';
@@ -24,14 +26,16 @@ afterEach(() => {
 describe('sprite', () => {
   const ids: SymbolId[] = [
     'cat-idle', 'cat-happy', 'cat-sad', 'cat-surprised', 'cat-blink', 'mark-x', 'wrong-x',
-    'icon-house', 'icon-gear', 'icon-bulb', 'icon-paw', 'icon-heart', 'icon-heart-empty', 'icon-trophy', 'icon-lock',
+    'icon-house', 'icon-gear', 'icon-bulb', 'icon-paw', 'icon-trophy', 'icon-lock',
     'icon-calendar', 'icon-play-video', 'icon-close', 'icon-chevron', 'icon-rule-colours', 'icon-rule-lines', 'icon-rule-space',
     ...Array.from({ length: 12 }, (_, i) => `glyph-${i}` as SymbolId),
     // phase2b §1.7, §2.9
     'icon-fish', 'icon-plus', 'icon-shop', 'icon-globe', 'icon-crown', 'icon-users', 'cat-ear-flick',
+    // Phase 2c §1.2
+    'icon-fish-empty',
   ];
 
-  it('mounts once and defines every symbol plus the heart clip paths', () => {
+  it('mounts once and defines every symbol; the heart icons and clip paths are gone (Phase 2c)', () => {
     mountSprite();
     mountSprite();
     expect(document.querySelectorAll(`#${SPRITE_ID}`)).toHaveLength(1);
@@ -39,8 +43,35 @@ describe('sprite', () => {
     expect(sprite.getAttribute('aria-hidden')).toBe('true');
     expect(document.body.firstChild).toBe(sprite);
     for (const id of ids) expect(sprite.querySelector(`symbol[id="${id}"]`), id).not.toBeNull();
-    expect(sprite.querySelector('#clip-heart-l')).not.toBeNull();
-    expect(sprite.querySelector('#clip-heart-r')).not.toBeNull();
+    for (const gone of ['icon-heart', 'icon-heart-empty', 'clip-heart-l', 'clip-heart-r']) expect(sprite.querySelector(`[id="${gone}"]`), gone).toBeNull();
+    // The colour-pattern glyph 9 is still a heart shape (a pattern, not a life).
+    expect(sprite.querySelector('symbol[id="glyph-9"] path')).not.toBeNull();
+  });
+
+  it('icon-fish-empty (§1.2): the fish silhouette as one 30 % ink outline around a pale wash; no eye, sheen or band', () => {
+    mountSprite();
+    const sym = document.querySelector('symbol[id="icon-fish-empty"]') as Element;
+    expect(sym.getAttribute('viewBox')).toBe('0 0 24 24');
+    // The same body as the full fish, three shapes (tail, fin, body).
+    const outline = sym.querySelector(`g[opacity="${FISH_OUTLINE_OPACITY}"]`) as Element;
+    expect(FISH_OUTLINE_OPACITY).toBe(0.3);
+    expect(outline.querySelectorAll('path')).toHaveLength(3);
+    expect(Array.from(outline.querySelectorAll('path')).some((p) => p.getAttribute('d') === FISH_BODY)).toBe(true);
+    for (const p of Array.from(outline.querySelectorAll('path'))) {
+      expect(p.getAttribute('style')).toContain('stroke:var(--ink,');
+      expect(p.getAttribute('stroke-width')).toBe('2.80'); // 2 × 1.4: the fills cover the inner half
+      expect(p.getAttribute('fill')).toBe('none');
+    }
+    const wash = sym.querySelector('g[style*="--life-empty"]') as Element;
+    expect(wash.querySelectorAll('path')).toHaveLength(3);
+    expect(wash.getAttribute('style')).toContain(`var(--life-empty,${TOKENS['life-empty']})`);
+    // Fills paint after the strokes (one outline, no seams inside), and no eye, gill or sheen.
+    expect(sym.innerHTML.indexOf('--life-empty')).toBeGreaterThan(sym.innerHTML.indexOf('stroke:var(--ink'));
+    expect(sym.querySelector('circle')).toBeNull();
+    expect(sym.innerHTML).not.toContain('--fish');
+    // It takes the full fish's room: scaled so its outer edge matches fishMarkup's.
+    expect(sym.querySelector('g[transform]')?.getAttribute('transform')).toMatch(/scale\(0\.93\d+\)/);
+    expect(fishOutlineMarkup(1)).toContain('stroke-width="2.00"');
   });
 
   it('icon() is decorative by default and labelled on request', () => {

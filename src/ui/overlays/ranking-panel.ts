@@ -1,4 +1,4 @@
-// Owner: B
+// Owner: B (Phase 2b); G2 (Phase 2c: the period board, the fish score, the period records)
 // Ranking panel (new overlay `ranking`, phase2b §2.4): a dimmed full-screen --scrim with a centred
 // --stage panel (orange --title-on-dark title, the subtitle for this win, the list area) and the
 // "Tap to keep going" footer in --tap-text. Opens at t = fx.winOverlayDelayMs (4.5 s) of the win flow.
@@ -11,26 +11,34 @@
 // Reduced motion (§2.7): the whole overlay fades in over fx.reducedMotionFadeMs (WAAPI, so the global
 // reduced-motion CSS rule does not cut it), no pop and no pulse.
 // Lazy overlay chunk.
+// Phase 2c (fish-lives-spec §2.6, §4.6): after every scored win the panel shows THE leaderboard, the
+// period board ('period': "Weekly ranking", "+2 fish · This week: 42", scores as "42 fish"); without
+// a provider the records card shows This week · Your best week · Perfect streak · Levels solved.
 //
 // Classes: .overlay[data-overlay=ranking] > .overlay__scrim--dark + .overlay__panel--stage.ranking[data-list]
 //          > .ranking__card(.ranking__title .ranking__sub .rank-list[data-kind]) .ranking__tap
 //          (the dialog element holds the card and the footer, so aria-modal never hides the footer)
 //          List parts (shared with the rankings hub): .rank-list__skeleton .rank-mine(.rank-mine__rank
 //          .rank-mine__score .rank-mine__count) .rank-records(.rank-records__row) .rank-list__note .rank-list__seetop
-import { cfg } from '../../app/config';
+import { cfg, type PeriodKind } from '../../app/config';
 import { formatClock, formatNumber, t, tn, translate, type I18nKey } from '../../i18n';
 import { h, setText, type OverlayView } from '../dom';
 import { createLocaleText } from '../locale-text';
+import { periodBestLabel, periodRankTitle, periodResultText, periodTabLabel } from '../period-text';
 import { createDelay, createOverlayShell, makeButton, setGated, setButtonLabel } from './overlay-base';
 
-/** Which board the panel or hub tab shows (phase2b §5.3). */
-export type RankingBoardKind = 'points' | 'daily' | 'event';
+/**
+ * Which board the panel or hub tab shows (phase2b §5.3; Phase 2c §4.1: 'period' is the leaderboard;
+ * the retired paw-points board 'points' was removed at I-3).
+ */
+export type RankingBoardKind = 'period' | 'daily' | 'event';
 
 /** A score already decoded by the app (game/scoring.ts decodeScore); the UI formats it. */
 export type RankScoreView =
-  | { readonly kind: 'points'; readonly points: number }
   | { readonly kind: 'time'; readonly ms: number }
-  | { readonly kind: 'event'; readonly solved: number; readonly total: number; readonly ms: number };
+  | { readonly kind: 'event'; readonly solved: number; readonly total: number; readonly ms: number }
+  /** Phase 2c: a period score, the fish kept this period ("42 fish"). */
+  | { readonly kind: 'fish'; readonly fish: number };
 
 /** My line when other players' rows cannot be shown in the panel (§2.4). */
 export interface RankMineView {
@@ -54,6 +62,10 @@ export interface PersonalRecordsView {
   readonly levelsSolved: number;
   /** Event board: "Your results: 7 of 21, total 1:12:04". */
   readonly event: { readonly solved: number; readonly total: number; readonly totalMs: number } | null;
+  /** Phase 2c §4.6 (board 'period'): this period's total and the best period's total (row hidden while 0). */
+  readonly period?: { readonly kind: PeriodKind; readonly total: number; readonly best: number };
+  /** Phase 2c §4.6 (board 'period'): the perfect streak now and its best ("best N" when best > current). */
+  readonly streak?: { readonly current: number; readonly best: number };
 }
 
 /**
@@ -70,11 +82,15 @@ export type RankingListState =
   | { readonly kind: 'mine'; readonly mine: RankMineView }
   | { readonly kind: 'records'; readonly records: PersonalRecordsView; readonly reason: 'local' | 'unavailable' };
 
-/** The subtitle: this win's result ("+55 points · 2:14", "Solved in 3:08", "13 of 21 solved"). */
+/**
+ * The subtitle: this win's result ("+2 fish · This week: 42", "Solved in 3:08", "13 of 21 solved").
+ * The 2b paw-points subtitle ('level', "+55 points · 2:14") was removed with its board at I-3.
+ */
 export type RankingResultView =
-  | { readonly kind: 'level'; readonly pointsEarned: number; readonly ms: number }
   | { readonly kind: 'daily'; readonly ms: number }
-  | { readonly kind: 'event'; readonly solved: number; readonly total: number };
+  | { readonly kind: 'event'; readonly solved: number; readonly total: number }
+  /** Phase 2c §2.6: "+2 fish · This week: 42" (gained > 0), else "This week: 42". */
+  | { readonly kind: 'period'; readonly gained: number; readonly total: number; readonly periodKind: PeriodKind };
 
 export interface RankingPanelProps {
   readonly board: RankingBoardKind;
@@ -85,6 +101,8 @@ export interface RankingPanelProps {
   /** rank.panelTapMinMs (or fx.win.reduced.tapMinMs): taps before this, counted from open(), are ignored. */
   readonly tapMinMs: number;
   readonly reducedMotion: boolean;
+  /** Phase 2c §2.6: the period's kind for board 'period' (rank.title.period.<kind>); default cfg.period.kind. */
+  readonly periodKind?: PeriodKind;
   /** Tap, Enter, Space or Esc after the gate: the app closes the panel and opens the victory screen. */
   onContinue(): void;
   /** 'see_top' mode: open the FB overlay view full screen (RankingProvider.showList without a rect). */
@@ -95,18 +113,18 @@ export interface RankingPanelProps {
 
 // ─────────────────────────────── shared text helpers ───────────────────────────────
 
-/** The board title (Appendix A rank.title.*). */
-export function rankTitle(board: RankingBoardKind, eventNameKey: I18nKey | null): string {
+/** The board title (Appendix A rank.title.*; Phase 2c: rank.title.period.<kind> "Weekly ranking"). */
+export function rankTitle(board: RankingBoardKind, eventNameKey: I18nKey | null, periodKind: PeriodKind = cfg.period.kind): string {
   if (board === 'daily') return t('rank.title.daily');
   if (board === 'event') return t('rank.title.event', { event: eventNameKey ? translate(eventNameKey) : '' });
-  return t('rank.title.points');
+  return periodRankTitle(periodKind);
 }
 
-/** "1,240 points", "3:08", "13 / 21 solved · 1:12:04". */
+/** "42 fish" (Phase 2c), "3:08", "13 / 21 solved · 1:12:04". */
 export function formatRankScore(s: RankScoreView): string {
   switch (s.kind) {
-    case 'points':
-      return t('rank.points', { points: formatNumber(s.points) });
+    case 'fish':
+      return tn('fish.count', s.fish, { count: formatNumber(s.fish) });
     case 'time':
       return formatClock(s.ms);
     case 'event':
@@ -117,23 +135,28 @@ export function formatRankScore(s: RankScoreView): string {
 /** The subtitle for this win (§2.4). */
 export function resultText(r: RankingResultView): string {
   switch (r.kind) {
-    case 'level':
-      return `${t('victory.points', { points: formatNumber(r.pointsEarned) })} · ${formatClock(r.ms)}`;
     case 'daily':
       return t('daily.solvedIn', { time: formatClock(r.ms) });
     case 'event':
       return t('event.card.progress', { solved: formatNumber(r.solved), total: formatNumber(r.total) });
+    case 'period':
+      return periodResultText(r.periodKind, r.gained, r.total);
   }
 }
 
-/** The live-region sentence (§2.4 A11y): "Your rank: #1,234. 55 points." from what is known. */
+/**
+ * The live-region sentence (§2.4 A11y), from what is known. Phase 2c §2.6, the period board: "Your rank: #12. 42 fish."; "Your score: 42 fish." when only the
+ * score is known; else the subtitle ("+2 fish · This week: 42.").
+ */
 export function announcement(p: Pick<RankingPanelProps, 'list' | 'result'>): string {
   const parts: string[] = [];
   const mine = p.list.kind === 'mine' || p.list.kind === 'see_top' ? p.list.mine : null;
   if (mine?.rank != null) parts.push(t('rank.yourRank', { rank: formatNumber(mine.rank) }));
   else if (mine?.score) parts.push(t('rank.yourScore', { score: formatRankScore(mine.score) }));
-  if (p.result.kind === 'level') parts.push(t('rank.points', { points: formatNumber(p.result.pointsEarned) }));
-  else parts.push(resultText(p.result));
+  if (p.result.kind === 'period') {
+    if (mine?.rank != null) parts.push(tn('fish.count', p.result.total, { count: formatNumber(p.result.total) }));
+    else if (!mine?.score) parts.push(resultText(p.result));
+  } else parts.push(resultText(p.result));
   return parts.map((s) => (/[.!?…]$/.test(s) ? s : `${s}.`)).join(' ');
 }
 
@@ -144,7 +167,7 @@ export interface RankListRenderOptions {
   onSeeTop(): void;
 }
 
-/** My line: "Your rank: #1,234", "Your score: 1,240 points", "5,678 players" (only what the API gave). */
+/** My line: "Your rank: #1,234", "Your score: 42 fish", "5,678 players" (only what the API gave). */
 function mineBlock(mine: RankMineView): HTMLElement {
   const box = h('div', { class: 'rank-mine' });
   if (mine.rank !== null) box.appendChild(h('p', { class: 'rank-mine__rank num' }, t('rank.yourRank', { rank: formatNumber(mine.rank) })));
@@ -154,10 +177,36 @@ function mineBlock(mine: RankMineView): HTMLElement {
   return box;
 }
 
-/** The personal records card (§2.4 "Web / no provider"; §4.8 for the event board). */
+/**
+ * Phase 2c §4.6, board 'period': This week · Your best week (hidden while 0) · Perfect streak (with
+ * "best N" when the best is longer) · Levels solved. Only facts from the save.
+ */
+export function periodRecordRows(r: PersonalRecordsView): [string, string][] {
+  const kind = r.period?.kind ?? cfg.period.kind;
+  const fish = (n: number): string => tn('fish.count', n, { count: formatNumber(n) });
+  const rows: [string, string][] = [[periodTabLabel(kind), fish(r.period?.total ?? 0)]];
+  const best = r.period?.best ?? 0;
+  if (best > 0) rows.push([periodBestLabel(kind), fish(best)]);
+  const streak = r.streak ?? { current: 0, best: 0 };
+  rows.push([
+    t('rank.records.streak'),
+    streak.best > streak.current
+      ? t('rank.records.streakBest', { count: formatNumber(streak.current), best: formatNumber(streak.best) })
+      : formatNumber(streak.current),
+  ]);
+  rows.push([t('rank.records.solved'), formatNumber(r.levelsSolved)]);
+  return rows;
+}
+
+/** The personal records card (§2.4 "Web / no provider"; §4.8 for the event board; 2c §4.6 the period board). */
 function recordsBlock(r: PersonalRecordsView): HTMLElement {
+  if (r.board === 'period') {
+    const card = h('dl', { class: 'rank-records', dataset: { board: 'period' } });
+    for (const [label, value] of periodRecordRows(r)) card.appendChild(recordRow(label, value));
+    return card;
+  }
   const rows: [string, string][] = [];
-  if (r.thisMs > 0) rows.push([r.board === 'points' ? t('rank.records.thisLevel') : t('rank.records.thisPuzzle'), formatClock(r.thisMs)]);
+  if (r.thisMs > 0) rows.push([t('rank.records.thisPuzzle'), formatClock(r.thisMs)]);
   if (r.board === 'event' && r.event) {
     // The summary line, then the rows in their own <dl>: a dt/dd pair is valid only inside a <dl>
     // (review A11Y-DL-1).
@@ -297,7 +346,7 @@ export function createRankingPanel(): OverlayView<RankingPanelProps> {
     props = p;
     L.apply();
     shell.panel.dataset.board = p.board;
-    setText(title, rankTitle(p.board, p.eventNameKey));
+    setText(title, rankTitle(p.board, p.eventNameKey, p.periodKind ?? (p.result.kind === 'period' ? p.result.periodKind : cfg.period.kind)));
     setText(sub, resultText(p.result));
     if (p.list.kind !== listKind || p.list.kind !== 'overlay') {
       // Re-render on any data change; the overlay area is left alone (the FB view sits on it).

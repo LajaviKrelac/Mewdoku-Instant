@@ -1,7 +1,9 @@
-// Owner: B. Phase 2b screens and overlays outside the win flow: the Home fish pill and event card
-// (§2.5, §4.4), the game screen's win-flow hooks and event mode (§2.2, §4.4), the event screen (§4.4),
-// the shop sheet (§8.5), the group result (§5.6), the Settings Language / Shop / Remove ads rows
-// (§6.8, §8.5) and the O2 swap button (§2.8).
+// Owner: B (Phase 2b); G2 (Phase 2c). Phase 2b screens and overlays outside the win flow: the Home
+// event card (§4.4), the game screen's win-flow hooks and event mode (§2.2, §4.4), the event screen
+// (§4.4), the shop sheet (§8.5), the group result (§5.6), the Settings Language / Shop / Remove ads
+// rows (§6.8, §8.5) and the O2 prompt. Phase 2c (fish-lives-spec): the Home period pill replaces the
+// fish pill (§2.8), the win flow's lift-off hooks (§2.2, §7.4), milestone rewards without fish (§5.5),
+// the shop is the Buy section only (§5.2), rank-mode non-winners get hints (§4.8) and O2 has no swap (§5.4).
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import eventsJson from '../../../src/data/events/events.json';
 import { cfg } from '../../../src/app/config';
@@ -41,12 +43,12 @@ const homeView = (over: Partial<HomeView> = {}): HomeView => ({
   showTrophy: false,
   fbSafeZone: false,
   extraCards: [],
-  fish: 128,
+  period: { kind: 'week', total: 42 },
   event: null,
   bannerReserved: false,
   ...over,
 });
-const homeCb = () => ({ onPlay: vi.fn(), onDaily: vi.fn(), onSettings: vi.fn(), onTrophy: vi.fn(), onCard: vi.fn(), onShop: vi.fn(), onEvent: vi.fn() });
+const homeCb = () => ({ onPlay: vi.fn(), onDaily: vi.fn(), onSettings: vi.fn(), onTrophy: vi.fn(), onCard: vi.fn(), onEvent: vi.fn() });
 const card = (state: HomeEventCardView['state'], over: Partial<HomeEventCardView> = {}): HomeEventCardView => ({
   def: lantern,
   state,
@@ -60,17 +62,28 @@ const card = (state: HomeEventCardView['state'], over: Partial<HomeEventCardView
   ...over,
 });
 
-describe('Home: fish pill, event card, banner (phase2b §2.5, §4.4, §3.2)', () => {
-  it('puts the fish pill in the top bar after the safe zone; its "+" opens the shop', () => {
+describe('Home: period pill, event card, banner (phase2c §2.8; phase2b §4.4, §3.2)', () => {
+  it('puts the period pill (this week\'s fish) in the top bar after the safe zone; no fish pill, no shop "+"', () => {
     const cb = homeCb();
     const home = createHomeScreen(homeView({ fbSafeZone: true }), cb);
     document.body.appendChild(home.el);
-    const pill = q(home.el, '.top-bar .top-bar__slot .fish-pill');
-    expect(q(pill, '.fish-pill__n').textContent).toBe('128');
-    q(pill, '.fish-pill__plus').click();
-    expect(cb.onShop).toHaveBeenCalledTimes(1);
-    home.update(homeView({ fish: 1240 }));
-    expect(q(pill, '.fish-pill__n').textContent).toBe('1,240');
+    const pill = q(home.el, '.top-bar .top-bar__slot .period-pill');
+    expect(pill.hasAttribute('data-in-game')).toBe(false);
+    expect(q(pill, '.period-pill__n').textContent).toBe('42');
+    expect(pill.getAttribute('role')).toBe('img');
+    expect(pill.getAttribute('aria-label')).toBe('42 fish this week');
+    expect(pill.querySelector('use')?.getAttribute('href')).toBe('#icon-trophy');
+    // Not a button (§2.8 [DECISION]); Home has no shop entry (§5.2).
+    expect(pill.closest('button')).toBeNull();
+    expect(pill.querySelector('button')).toBeNull();
+    expect(home.el.querySelector('.fish-pill, .fish-pill__plus')).toBeNull();
+    home.update(homeView({ period: { kind: 'week', total: 1240 } }));
+    expect(q(pill, '.period-pill__n').textContent).toBe('1,240');
+    expect(pill.getAttribute('aria-label')).toBe('1,240 fish this week');
+    // After a rollover the app passes 0; a monthly period reads "this month".
+    home.update(homeView({ period: { kind: 'month', total: 0 } }));
+    expect(q(pill, '.period-pill__n').textContent).toBe('0');
+    expect(pill.getAttribute('aria-label')).toBe('0 fish this month');
   });
 
   it('active event card: above the Level button, status line, progress, a button labelled with its status', () => {
@@ -175,15 +188,28 @@ function gameView(over: Partial<GameView> = {}): GameView {
 const gameCb = () => ({ onTap: vi.fn(), onDoubleTap: vi.fn(), onPaint: vi.fn(), onBulb: vi.fn(), onPaw: vi.fn(), onHome: vi.fn(), onSettings: vi.fn() });
 
 describe('game screen: win-flow hooks and event mode (phase2b §2.2, §4.4)', () => {
-  it('fish pill hooks: hidden during play, shown and counted by the win flow', () => {
+  it('Phase 2c lift-off hooks (§2.2, §7.4): life slots, departures, the period counter and its "+N"', () => {
     const g = createGameScreen(gameView(), gameCb());
     document.body.appendChild(g.el);
-    expect(g.fishRect()).toBeNull();
-    g.showFishPill(125);
-    expect(g.fishRect()).not.toBeNull();
-    expect(q(g.el, '.pills .fish-pill .fish-pill__n').textContent).toBe('125');
-    g.fishLabel('+3');
-    expect(q(g.el, '.fish-pill__label').textContent).toBe('+3');
+    // The lives pill: three fish where the hearts were (§1.1).
+    expect(g.el.querySelectorAll('.pills .pill--lives .life[data-full]')).toHaveLength(3);
+    expect(q(g.el, '.pill--lives').getAttribute('aria-label')).toBe('3 of 3 fish left');
+    expect(g.lifeSlots().map((s) => s.slot)).toEqual([2, 1, 0]);
+    expect(g.periodRect()).toBeNull();
+    g.showPeriodCounter(39);
+    expect(g.periodRect()).not.toBeNull();
+    expect(q(g.el, '.pills .period-pill[data-in-game] .period-pill__n').textContent).toBe('39');
+    g.departLife(2);
+    g.departLife(1);
+    expect(g.lifeSlots().map((s) => s.slot)).toEqual([0]);
+    expect(g.el.querySelectorAll('.pill--lives .life[data-full]')).toHaveLength(1);
+    g.showPeriodCounter(41);
+    expect(q(g.el, '.period-pill__n.is-in').textContent).toBe('41');
+    g.periodLabel('+2');
+    expect(q(g.el, '.period-pill__label').textContent).toBe('+2');
+    // The 2b fish-pill hooks are gone (I-3); no fish pill is ever drawn.
+    for (const k of ['fishRect', 'showFishPill', 'fishLabel']) expect((g as unknown as Record<string, unknown>)[k]).toBeUndefined();
+    expect(g.el.querySelector('.fish-pill')).toBeNull();
     g.destroy();
   });
 
@@ -270,7 +296,9 @@ describe('event screen (phase2b §4.4)', () => {
     expect(nodes).toHaveLength(5);
     expect(nodes.map((n) => n.hasAttribute('data-reached'))).toEqual([true, true, false, false, false]);
     expect(nodes[0]?.getAttribute('aria-label')).toBe('3 solved: 2 hints. Reached.');
-    expect(nodes[4]?.getAttribute('aria-label')).toBe('21 solved: 100 fish + 3 kitties');
+    // Phase 2c §5.5: milestones grant hints and kitties only.
+    expect(nodes[4]?.getAttribute('aria-label')).toBe('21 solved: 3 hints + 5 kitties');
+    expect(s.el.querySelector('.event__node-icon use[href="#icon-fish"]')).toBeNull();
     // Node spans add up to the whole rail.
     const total = nodes.reduce((a, n) => a + Number(n.style.getPropertyValue('--seg')), 0);
     expect(total).toBeCloseTo(1, 3);
@@ -303,7 +331,9 @@ describe('event screen (phase2b §4.4)', () => {
     expect(q(s.el, '.event__ends').hasAttribute('data-soon')).toBe(true);
     expect(s.el.hasAttribute('data-banner')).toBe(true);
     expect(endsText(0, (cfg.events.cardEndsSoonHours + 1) * HOUR).soon).toBe(false);
-    expect(milestoneRewardText({ fish: 30 })).toBe('30 fish');
+    // A stray 2b fish reward (Reward.fish was deleted at I-3) is never shown.
+    expect(milestoneRewardText({ fish: 30, hints: 2 } as Parameters<typeof milestoneRewardText>[0])).toBe('2 hints');
+    expect(milestoneRewardText({ hints: 3, kitties: 5 })).toBe('3 hints + 5 kitties');
   });
 });
 
@@ -311,12 +341,8 @@ describe('event screen (phase2b §4.4)', () => {
 
 function shopProps(over: Partial<ShopProps> = {}): ShopProps {
   return {
-    fish: 128,
-    hintPrice: cfg.shop.hintFish,
-    kittyPrice: cfg.shop.kittyFish,
-    buy: { kind: 'hidden' },
+    buy: { kind: 'loading' },
     busy: false,
-    onSwap: vi.fn(),
     onBuy: vi.fn(),
     onRetry: vi.fn(),
     onClose: vi.fn(),
@@ -324,34 +350,21 @@ function shopProps(over: Partial<ShopProps> = {}): ShopProps {
   };
 }
 
-describe('shop sheet (phase2b §8.5)', () => {
-  it('web: the balance and "Swap fish" only; each swap is disabled below its price', () => {
+describe('shop sheet (phase2b §8.5; Phase 2c §5.2: the Buy section only)', () => {
+  it('has no balance and no swap section, even when stray 2b swap props are handed in', () => {
     const shop = createShopSheet();
     document.body.appendChild(shop.el);
-    const p = shopProps({ fish: 20 });
-    shop.open(p);
-    expect(q(shop.el, '.shop__balance .fish-pill__n').textContent).toBe('20');
-    expect(q<HTMLElement>(shop.el, '.shop__section--buy').hidden).toBe(true);
-    const hint = q<HTMLButtonElement>(shop.el, '.shop__row[data-item="hint"] .shop__swap');
-    const kitty = q<HTMLButtonElement>(shop.el, '.shop__row[data-item="kitty"] .shop__swap');
-    expect(hint.getAttribute('aria-label')).toBe('Swap 15 fish for 1 hint');
-    expect(kitty.getAttribute('aria-label')).toBe('Swap 30 fish for 1 kitty');
-    expect(hint.hasAttribute('aria-disabled')).toBe(false);
-    expect(kitty.getAttribute('aria-disabled')).toBe('true');
-    hint.click();
-    kitty.click();
-    expect(p.onSwap).toHaveBeenCalledTimes(1);
-    expect(p.onSwap).toHaveBeenCalledWith('hint');
-    expect(q<HTMLElement>(shop.el, '.shop__note').hidden).toBe(true);
-    shop.update(shopProps({ fish: 14 }));
-    expect(q<HTMLElement>(shop.el, '.shop__note').hidden).toBe(false);
-    expect(q(shop.el, '.shop__note').textContent).toBe('Not enough fish yet.');
-    // Exactly the price is enough.
-    shop.update(shopProps({ fish: 30 }));
-    expect(kitty.hasAttribute('aria-disabled')).toBe(false);
+    const onSwap = vi.fn();
+    // The 2b swap members were deleted at I-3; a stray object carrying them must still draw nothing.
+    shop.open(shopProps({ fish: 128, hintPrice: 15, kittyPrice: 30, onSwap } as unknown as Partial<ShopProps>));
+    expect(shop.el.querySelector('.shop__section--swap, .shop__swap, .shop__balance, .fish-pill')).toBeNull();
+    expect(shop.el.querySelectorAll('.shop__section')).toHaveLength(1);
+    expect(q<HTMLElement>(shop.el, '[data-overlay="shop"] .shop__section--buy, .shop__section--buy').hidden).toBe(false);
+    expect(shop.el.textContent).not.toMatch(/swap|not enough fish/i);
+    expect(onSwap).not.toHaveBeenCalled();
   });
 
-  it('FB ready: five products with our names, the catalogue price and Buy, or "Owned" for No Ads; busy disables all', () => {
+  it('FB ready: the three products on sale with our names, the catalogue price and Buy, or "Owned" for No Ads; busy disables all', () => {
     const shop = createShopSheet();
     const p = shopProps({
       buy: {
@@ -360,25 +373,27 @@ describe('shop sheet (phase2b §8.5)', () => {
           { id: 'remove_ads', price: '$3.99', owned: true },
           { id: 'hints_15', price: '$1.99', owned: false },
           { id: 'kitties_8', price: '$1.99', owned: false },
+          // A retired pack is never listed, even if it is handed in (iap.retired, §5.3).
           { id: 'fish_250', price: '$1.99', owned: false },
-          { id: 'fish_900', price: '$4.99', owned: false },
         ],
       },
     });
     shop.open(p);
     const rows = Array.from(shop.el.querySelectorAll<HTMLElement>('.shop__list .shop__row'));
-    expect(rows.map((r) => q(r, '.shop__name').textContent)).toEqual(['No Ads', 'Bulb Bundle', 'Kitty Basket', 'Fish Bucket', 'Fish Crate']);
+    expect(rows.map((r) => q(r, '.shop__name').textContent)).toEqual(['No Ads', 'Bulb Bundle', 'Kitty Basket']);
+    expect(rows.map((r) => r.dataset.item)).toEqual(cfg.iap.catalog.map((d) => d.id));
     expect(q(rows[0] as HTMLElement, '.shop__owned').textContent).toBe('Owned');
     expect(rows[0]?.querySelector('.shop__buy')).toBeNull();
-    const buy = q<HTMLButtonElement>(rows[4] as HTMLElement, '.shop__buy');
-    expect(buy.getAttribute('aria-label')).toBe('Buy Fish Crate, $4.99');
-    expect(q(buy, '.shop__cost').textContent).toBe('$4.99');
+    const buy = q<HTMLButtonElement>(rows[2] as HTMLElement, '.shop__buy');
+    expect(buy.getAttribute('aria-label')).toBe('Buy Kitty Basket, $1.99');
+    expect(q(buy, '.shop__cost').textContent).toBe('$1.99');
     buy.click();
-    expect(p.onBuy).toHaveBeenCalledWith('fish_900');
+    expect(p.onBuy).toHaveBeenCalledWith('kitties_8');
     shop.update({ ...p, busy: true });
     for (const b of Array.from(shop.el.querySelectorAll('.shop__action'))) expect(b.getAttribute('aria-disabled')).toBe('true');
     buy.click();
     expect(p.onBuy).toHaveBeenCalledTimes(1);
+    expect(shop.el.innerHTML).not.toContain('icon-fish');
   });
 
   it('loading, unavailable and error (with retry) states; Esc and the scrim close', () => {
@@ -401,9 +416,19 @@ describe('shop sheet (phase2b §8.5)', () => {
   it('arrow keys move between the actions', () => {
     const shop = createShopSheet();
     document.body.appendChild(shop.el);
-    shop.open(shopProps({ fish: 100, buy: { kind: 'ready', products: [{ id: 'hints_15', price: '$1.99', owned: false }] } }));
-    const actions = Array.from(shop.el.querySelectorAll<HTMLElement>('.shop__action'));
-    expect(actions.length).toBeGreaterThanOrEqual(3);
+    shop.open(
+      shopProps({
+        buy: {
+          kind: 'ready',
+          products: [
+            { id: 'hints_15', price: '$1.99', owned: false },
+            { id: 'kitties_8', price: '$1.99', owned: false },
+          ],
+        },
+      }),
+    );
+    const actions = Array.from(shop.el.querySelectorAll<HTMLElement>('.shop__action')).filter((b) => !b.hidden && !b.closest('[hidden]'));
+    expect(actions).toHaveLength(2);
     actions[0]?.focus();
     actions[0]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
     expect(document.activeElement).toBe(actions[1]);
@@ -433,13 +458,16 @@ describe('group result (phase2b §5.6)', () => {
     expect(q<HTMLElement>(d.el, '.group-result__double').hidden).toBe(true);
   });
 
-  it('rank mode: won, or a place with fish for taking part; busy gates both', () => {
+  it('rank mode: won, or a place with hints for taking part (Phase 2c §4.8); busy gates both', () => {
     expect(groupResultBody({ kind: 'won', kitties: 2, kittiesWithAd: 4 })).toBe('You won your group challenge!');
     const d = createGroupResult();
-    const p = props({ kind: 'place', place: 3, count: 8, fish: 10 }, true);
+    const p = props({ kind: 'place', place: 3, count: 8, hints: cfg.groups.placeHints }, true);
     d.open(p);
-    expect(q(d.el, '.overlay__body').textContent).toBe('You finished #3 of 8. Thanks for playing: +10 fish');
-    expect(q(d.el, '.group-result__take').textContent).toBe('Take 10 fish');
+    expect(q(d.el, '.overlay__body').textContent).toBe('You finished #3 of 8. Thanks for playing: +1 hint');
+    expect(q(d.el, '.group-result__take').textContent).toBe('Take 1 hint');
+    d.update(props({ kind: 'place', place: 2, count: 8, hints: 3 }, true));
+    expect(q(d.el, '.overlay__body').textContent).toBe('You finished #2 of 8. Thanks for playing: +3 hints');
+    expect(d.el.textContent).not.toMatch(/fish/i);
     expect(q(d.el, '.group-result__take').getAttribute('aria-disabled')).toBe('true');
     expect(d.dismiss()).toBe(false);
   });
@@ -506,33 +534,30 @@ describe('Settings rows (phase2b §6.8, §8.5)', () => {
   });
 });
 
-describe('O2 swap (phase2b §2.8)', () => {
+describe('O2 (Phase 2c §5.4): Watch video / Not now, the free hint, the countdown; no swap', () => {
   function prompt(over: Partial<RewardedPromptProps> = {}): RewardedPromptProps {
     return { placement: 'hint', variant: 'video', nextFreeAt: 0, now: () => 0, onAccept: vi.fn(), onDecline: vi.fn(), ...over };
   }
 
-  it('"Swap 15 fish" sits between Watch video and Not now when the wallet covers it', () => {
+  it('shows only Watch video and Not now, even when a stray 2b swap is handed in', () => {
     const o = createRewardedPrompt();
     const onSwap = vi.fn();
-    o.open(prompt({ swap: { price: 15, balance: 128, onSwap } }));
+    // RewardedPromptProps.swap was deleted at I-3; a stray one must still draw nothing.
+    o.open(prompt({ swap: { price: 15, balance: 128, onSwap } } as unknown as Partial<RewardedPromptProps>));
     const visible = Array.from(o.el.querySelectorAll<HTMLButtonElement>('.overlay__actions button')).filter((b) => !b.hidden);
-    expect(visible.map((b) => b.className.split(' ').find((c) => c.startsWith('rewarded__')))).toEqual(['rewarded__accept', 'rewarded__swap', 'rewarded__decline']);
-    const swap = q(o.el, '.rewarded__swap');
-    expect(swap.textContent).toBe('Swap 15 fish');
-    expect(swap.querySelector('use')?.getAttribute('href')).toBe('#icon-fish');
-    swap.click();
-    expect(onSwap).toHaveBeenCalledTimes(1);
+    expect(visible.map((b) => b.className.split(' ').find((c) => c.startsWith('rewarded__')))).toEqual(['rewarded__accept', 'rewarded__decline']);
+    expect(o.el.querySelector('.rewarded__swap')).toBeNull();
+    expect(o.el.textContent).not.toMatch(/swap|fish/i);
+    expect(onSwap).not.toHaveBeenCalled();
   });
 
-  it('is hidden below the price and without swap props; shown in the countdown variant too', () => {
+  it('the free and countdown variants have no swap either', () => {
     const o = createRewardedPrompt();
-    o.open(prompt({ swap: { price: 15, balance: 14, onSwap: vi.fn() } }));
-    expect(q<HTMLElement>(o.el, '.rewarded__swap').hidden).toBe(true);
-    o.update(prompt());
-    expect(q<HTMLElement>(o.el, '.rewarded__swap').hidden).toBe(true);
-    o.update(prompt({ placement: 'kitty', variant: 'countdown', nextFreeAt: 60_000, swap: { price: 30, balance: 30, onSwap: vi.fn() } }));
-    expect(q<HTMLElement>(o.el, '.rewarded__swap').hidden).toBe(false);
-    expect(q(o.el, '.rewarded__swap').textContent).toBe('Swap 30 fish');
+    o.open(prompt({ variant: 'free' }));
+    expect(Array.from(o.el.querySelectorAll<HTMLButtonElement>('.overlay__actions button')).filter((b) => !b.hidden)).toHaveLength(2);
+    o.update(prompt({ placement: 'kitty', variant: 'countdown', nextFreeAt: 60_000, swap: { price: 30, balance: 30, onSwap: vi.fn() } } as unknown as Partial<RewardedPromptProps>));
+    const visible = Array.from(o.el.querySelectorAll<HTMLButtonElement>('.overlay__actions button')).filter((b) => !b.hidden);
+    expect(visible.map((b) => b.className.split(' ').find((c) => c.startsWith('rewarded__')))).toEqual(['rewarded__ok']);
     o.close();
   });
 });

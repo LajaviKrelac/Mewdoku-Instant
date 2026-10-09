@@ -7,7 +7,9 @@
 // play starts without a click (SPEC-01, A11Y-4), and a phone shows no focus ring until a key is used.
 // Phase 2b (§3.6, §7): the mock banner's reserved band never overlaps the Home Level button or the
 // victory's primary button (the e2e build's ?ads= mock banner follows the FB rules), and a keyboard
-// alone gets through the win flow (Enter on the panel, Enter on "Level N") and the shop.
+// alone gets through the win flow (Enter on the panel, Enter on "Level N") and Settings.
+// Phase 2c (G1, §5.2): the web build has no shop (no Home "+", no Settings Shop row), so the
+// keyboard shop part became "Settings by keyboard shows no Shop row"; the FB shop is fbig.spec's (G3).
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -286,9 +288,9 @@ test('the banner reserve never overlaps the victory screen\'s primary button', a
   await noHorizontalOverflow(page);
 });
 
-test('keyboard only: Enter continues the panel, Enter on "Level N", and the shop swaps with the keyboard', async ({ page }, info) => {
+test('keyboard only: Enter continues the panel, Enter on "Level N", and Settings (no Shop row on the web) by keyboard', async ({ page }, info) => {
   test.skip(info.project.name !== 'web-1280', 'desktop keyboard only');
-  await boot(page, veteranSave(5, { wallet: { fish: 40, earned: 40 }, stock: { hints: 0, kitties: 3 } }));
+  await boot(page, veteranSave(5, { stock: { hints: 0, kitties: 3 } }));
   await page.locator('.home__play').focus();
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
@@ -304,21 +306,20 @@ test('keyboard only: Enter continues the panel, Enter on "Level N", and the shop
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.puzzle.id === 'L6');
   await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
-  // Home → the fish pill "+" → the shop, all by keyboard.
+  // Home → Settings, all by keyboard: the web has nothing to sell, so there is no Shop row (§5.2).
   await page.locator('.top-bar').getByRole('button', { name: 'Home' }).focus();
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');
-  const plus = page.locator('.screen--home .fish-pill__plus'); // the game screen may still be fading out
-  await plus.focus();
-  await expect(plus).toBeFocused();
+  await expect(page.locator('.screen--home .fish-pill__plus')).toHaveCount(0);
+  const gear = page.locator('.screen--home').getByRole('button', { name: 'Settings' }); // the game screen may still be fading out
+  await gear.focus();
+  await expect(gear).toBeFocused();
   await page.keyboard.press('Enter');
-  const shop = page.locator('[data-overlay="shop"]');
-  await expect(shop).toBeVisible();
-  await shop.locator('.shop__row[data-item="hint"] .shop__swap').focus();
-  await page.keyboard.press('Enter');
-  await expect.poll(async () => page.evaluate(() => (window as TestWindow).__mewdoku?.app().save.stock.hints)).toBe(1);
+  const settings = page.locator('[data-overlay="settings"]');
+  await expect(settings).toBeVisible();
+  await expect(settings.getByRole('button', { name: 'Shop' })).toHaveCount(0);
   await page.keyboard.press('Escape');
-  await expect(shop).toBeHidden();
+  await expect(settings).toBeHidden();
 });
 
 // ── 2b review fixes (R): A11Y-FOCUS-1 — focus is never lost through a screen change (spec §7) ──

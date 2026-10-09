@@ -1,6 +1,9 @@
-// Owner: C (Phase 2b)
-// Save schema v2 (phase2b §9; v1 = 04 §4.3): defaults, migration/validation, merge, cell encoding,
-// slot validation (04 §7). The v2 field rules live in save-v2.ts; the paid-grant repair in purchases.ts.
+// Owner: C (Phase 2b). Phase 2c (G1): schema v3 (docs/phase2c/fish-lives-spec.md §3.8): no wallet,
+// the perfect streak and the period points (save-v3.ts), the v2 → v3 migration and the one-time
+// compensation of retired fish packs in a migrated document (purchases.ts compensateRetired).
+// Save schema v3 (phase2c §3.8; v2 = phase2b §9; v1 = 04 §4.3): defaults, migration/validation, merge,
+// cell encoding, slot validation (04 §7). The v2 field rules live in save-v2.ts, the v3 ones in
+// save-v3.ts; the paid-grant repair in purchases.ts.
 import { cfg, type GameConfig } from '../app/config';
 import {
   copySlot,
@@ -12,21 +15,22 @@ import {
   readBest,
   readDaily,
 } from './save-fields';
-import { repairPaidGrants } from './purchases';
+import { compensateRetired, repairPaidGrants } from './purchases';
 import { isLocaleSetting, mergeV2Fields, migrate_1_to_2, parseEventSlotId, readV2Fields, v2Defaults } from './save-v2';
+import { mergeV3Fields, migrate_2_to_3, readV3Fields, v3Defaults } from './save-v3';
 import type { DailyRecord, InProgressV2, LevelBest, ReduceMotionSetting, SaveData, SettingsV2 } from './types';
 
-export type { InProgressV1, InProgressV2, SaveData, SaveDataV1, SaveDataV2 } from './types';
+export type { InProgressV1, InProgressV2, PeriodRecord, SaveData, SaveDataV1, SaveDataV2, SaveDataV3, StreakRecord } from './types';
 export { decodeCells, encodeCells, validateInProgress, validateSlot, slotLimitsOf, isInProgressShape } from './save-fields';
 export type { SlotCheck, SlotLimits } from './save-fields';
 
-/** Current schema version (phase2b §9). Storage keys stay `mewdoku.save.v1` / cloud `save` [DECISION]. */
-export const SAVE_VERSION = 2;
+/** Current schema version (phase2c §3.8). Storage keys stay `mewdoku.save.v1` / cloud `save` [DECISION]. */
+export const SAVE_VERSION = 3;
 
-/** 04 §4.3 defaults (stock from cfg; firstSeenAt = updatedAt = now) plus the phase2b §9.2 v2 fields. */
+/** 04 §4.3 defaults (stock from cfg; firstSeenAt = updatedAt = now), the phase2b §9.2 v2 fields and the phase2c §3.8 v3 records. */
 export function defaults(now: number, c: GameConfig = cfg): SaveData {
   return {
-    v: 2,
+    v: 3,
     updatedAt: now,
     firstSeenAt: now,
     sessions: 0,
@@ -39,6 +43,7 @@ export function defaults(now: number, c: GameConfig = cfg): SaveData {
     inProgress: { level: null, daily: null, event: null },
     ext: {},
     ...v2Defaults(),
+    ...v3Defaults(),
   };
 }
 
@@ -53,12 +58,17 @@ export interface MigrateReport {
   readonly repairedFields: readonly string[];
 }
 
-/** vN → vN+1 steps, run in order up to SAVE_VERSION before validation (phase2b §9.2). */
+/** vN → vN+1 steps, run in order up to SAVE_VERSION before validation (phase2b §9.2, phase2c §3.8). */
 const MIGRATIONS: Readonly<Record<number, (d: Record<string, unknown>) => Record<string, unknown>>> = {
   1: migrate_1_to_2,
+  2: migrate_2_to_3,
 };
 
-/** vN → v2 chain, then field-by-field validation; invalid fields get defaults; garbage → defaults(now). */
+/**
+ * vN → v3 chain, then field-by-field validation; invalid fields get defaults; garbage → defaults(now).
+ * A document whose input v was below 3 then gets the one-time compensation of its retired fish packs
+ * (phase2c §3.8, purchases.ts compensateRetired).
+ */
 export function migrate(raw: unknown, now: number, c: GameConfig = cfg): SaveData {
   return migrateReport(raw, now, c).save;
 }
@@ -78,16 +88,22 @@ export function migrateReport(raw: unknown, now: number, c: GameConfig = cfg): M
 
   const repaired: string[] = [];
   let doc = data;
+  const inputV = doc.v;
   while (typeof doc.v === 'number' && doc.v < SAVE_VERSION && MIGRATIONS[doc.v]) {
     doc = (MIGRATIONS[doc.v] as (d: Record<string, unknown>) => Record<string, unknown>)(doc);
   }
   if (doc.v !== SAVE_VERSION) repaired.push('v');
-  const save = validateV2(doc, now, c, repaired);
+  let save = validateV3(doc, now, c, repaired);
+  // §3.8: a v2 (or v1) document's ledger entries of retired fish packs are compensated once, here.
+  if (typeof inputV === 'number' && inputV < 3) save = compensateRetired(save, c);
   return { save, outcome: repaired.length > 0 ? 'repaired' : 'ok', repairedFields: repaired };
 }
 
-/** Field-by-field validation of a v2 candidate (validateV1 + phase2b §9.2). Never throws; every invalid field gets its default. */
-function validateV2(d: Record<string, unknown>, now: number, c: GameConfig, rep: string[]): SaveData {
+/**
+ * Field-by-field validation of a v3 candidate (validateV1 + phase2b §9.2 + phase2c §3.8). Never
+ * throws; every invalid field gets its default.
+ */
+function validateV3(d: Record<string, unknown>, now: number, c: GameConfig, rep: string[]): SaveData {
   const def = defaults(now, c);
   const field = <T>(value: unknown, ok: (v: unknown) => v is T, fallback: T, path: string): T => {
     if (ok(value)) return value;
@@ -158,7 +174,7 @@ function validateV2(d: Record<string, unknown>, now: number, c: GameConfig, rep:
   }
 
   return {
-    v: 2,
+    v: 3,
     updatedAt: field(d.updatedAt, isTime, now, 'updatedAt'),
     firstSeenAt: field(d.firstSeenAt, isTime, now, 'firstSeenAt'),
     sessions: field(d.sessions, isNonNegInt, 0, 'sessions'),
@@ -171,6 +187,7 @@ function validateV2(d: Record<string, unknown>, now: number, c: GameConfig, rep:
     inProgress: { level: slot('level'), daily: slot('daily'), event: slot('event') },
     ext: isRecord(d.ext) ? { ...d.ext } : (rep.push('ext'), {}),
     ...readV2Fields(d, c, rep),
+    ...readV3Fields(d, c, rep),
   };
 }
 
@@ -184,12 +201,12 @@ function isReduceMotion(x: unknown): x is ReduceMotionSetting {
 
 // ─────────────────────────────── merge (04 §7.3) ───────────────────────────────
 
-/** Local mirror vs cloud (04 §7.3 + phase2b §9.3 merge tables), then clears stale in-progress slots. */
+/** Local mirror vs cloud (04 §7.3 + phase2b §9.3 + phase2c §3.8 merge tables), then clears stale in-progress slots. */
 export function merge(local: SaveData, cloud: SaveData, c: GameConfig = cfg): SaveData {
   const newer = cloud.updatedAt > local.updatedAt ? cloud : local;
   const older = newer === local ? cloud : local;
   const merged: SaveData = {
-    v: 2,
+    v: 3,
     updatedAt: Math.max(local.updatedAt, cloud.updatedAt),
     firstSeenAt: Math.min(local.firstSeenAt, cloud.firstSeenAt),
     sessions: Math.max(local.sessions, cloud.sessions),
@@ -206,8 +223,10 @@ export function merge(local: SaveData, cloud: SaveData, c: GameConfig = cfg): Sa
     inProgress: { level: newer.inProgress.level, daily: newer.inProgress.daily, event: newer.inProgress.event },
     ext: { ...newer.ext },
     ...mergeV2Fields(local, cloud, newer, c),
+    ...mergeV3Fields(local, cloud, newer),
   };
-  // §9.3: wallet and stock came from the newer copy; paid grants only the older copy holds are re-applied once.
+  // §9.3: stock came from the newer copy; paid grants (and retired-pack compensation, phase2c §3.8)
+  // only the older copy holds are re-applied once.
   return clearStaleSlots(repairPaidGrants(merged, older, newer, c));
 }
 

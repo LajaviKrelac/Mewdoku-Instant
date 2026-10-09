@@ -1,9 +1,9 @@
-/* Owner: B (Phase 2b; was ui-board)
-   Keyframes (drop, draw-in, heart break, board entry, idle loops, the win-flow fish) and
+/* Owner: B (Phase 2b; was ui-board); G2 (Phase 2c: the fish loss, the revive pop, the period counter)
+   Keyframes (drop, draw-in, the fish loss, board entry, idle loops, the win-flow fish) and
    reduced-motion overrides (02 §17.5, phase2b §2.2, §2.7, §2.9). Only transform and opacity are
-   animated (04 §5.3), plus stroke-dashoffset for the X draw-in and the heart's crack line.
+   animated (04 §5.3), plus stroke-dashoffset for the X draw-in.
    Durations that JS also reads come from cfg through custom properties set by the components
-   (--entry-*, --breathe-*, --flick-ms, --t-break, --bump-ms, --label-ms, --rays-ms, --pop-ms, …);
+   (--entry-*, --breathe-*, --flick-ms, --t-life-loss, --t-life-hurt, --bump-ms, --label-ms, --rays-ms, --pop-ms, …);
    keyframe percentages, angles and scales are CSS-only constants (phase2b §0.4).
    Reduced motion: the universal rule at the end cuts CSS animations to 1 ms, so every reduced
    variant that must still be seen (board fade, "+3" label, ranking and victory fades) runs on WAAPI.
@@ -279,22 +279,26 @@
   }
 }
 
-/* ── HUD: heart break (phase2b §2.9) ──────────────────────────────────────
-   One timeline of --t-break (fx.heartBreakMs, 700 ms) for every part; the percentages are the spec's
-   phase times over 700 ms: shake 0–120 (0–17.1 %), crack 120–220 (17.1–31.4 %), halves fall 220–700
-   (31.4–100 %), shards 220–600 (31.4–85.7 %), the empty outline 400–700 (57.1–100 %). */
-.heart--break .heart__full {
+/* ── HUD: the fish loss (Phase 2c §1.3; ours) ─────────────────────────────
+   One timeline of --t-life-loss (fx.lifeLossMs, 700 ms) for every part; the percentages are the
+   spec's phase times over 700 ms: wriggle 0–140 (0–20 %: −12° → +12° → −8° → 0°, two tail flicks),
+   flip out 140–560 (20–80 %: a 6 px hop up to 240 = 34.3 %, then a 22 px fall turning belly-up to
+   180° and shrinking to 0.8; opacity 1 → 0 from 300 = 42.9 %), droplets 140–480 (20–68.6 %), the
+   empty outline 300–700 (42.9–100 %). pills.ts adds the falling stand-in (.life__lost) and the
+   droplets (.life__splash, --dx / --dy per droplet) for the loss only; the real fish hides at once. */
+.life--lose .life__full {
   opacity: 0;
   transition: none;
 }
 
-.heart--break .heart__empty {
-  animation: heart-empty-in var(--t-break, 700ms) linear both;
+.life--lose .life__empty {
+  transition: none;
+  animation: life-empty-in var(--t-life-loss, 700ms) linear both;
 }
 
-@keyframes heart-empty-in {
+@keyframes life-empty-in {
   0%,
-  57.1% {
+  42.9% {
     opacity: 0;
   }
   100% {
@@ -302,145 +306,134 @@
   }
 }
 
-.heart__crack .heart__shake {
-  animation: heart-shake var(--t-break, 700ms) linear both;
+.life--lose .life__lost {
+  transform-origin: 50% 50%;
+  animation: life-lost var(--t-life-loss, 700ms) linear both;
 }
 
-@keyframes heart-shake {
-  0%,
-  17.1%,
-  100% {
-    transform: none;
-  }
-  3.4%,
-  10.3% {
-    transform: translateX(1.7px);
-  }
-  6.9%,
-  13.7% {
-    transform: translateX(-1.7px);
-  }
-}
-
-.heart__half {
-  transform-box: fill-box;
-  transform-origin: 50% 80%;
-}
-
-.heart__crack .heart__half--l {
-  animation: half-l var(--t-break, 700ms) linear both;
-}
-
-.heart__crack .heart__half--r {
-  animation: half-r var(--t-break, 700ms) linear both;
-}
-
-@keyframes half-l {
-  0%,
-  31.4% {
-    opacity: 1;
-    transform: none;
-    animation-timing-function: cubic-bezier(0.5, 0, 0.9, 0.6);
-  }
-  100% {
-    opacity: 0;
-    transform: translate(-22%, 60%) rotate(-28deg);
-  }
-}
-
-@keyframes half-r {
-  0%,
-  31.4% {
-    opacity: 1;
-    transform: none;
-    animation-timing-function: cubic-bezier(0.5, 0, 0.9, 0.6);
-  }
-  100% {
-    opacity: 0;
-    transform: translate(22%, 60%) rotate(28deg);
-  }
-}
-
-/* The unclipped heart hides the seam between the two clipped halves until they start to fall. */
-.heart__crack .heart__whole {
-  animation: heart-whole var(--t-break, 700ms) step-end both;
-}
-
-@keyframes heart-whole {
+@keyframes life-lost {
   0% {
     opacity: 1;
-  }
-  31.4%,
-  100% {
-    opacity: 0;
-  }
-}
-
-/* The white zigzag crack (pathLength 1) draws in, then fades as the halves part. */
-.heart__zig {
-  fill: none;
-  stroke: #fff;
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-dasharray: 1;
-  animation: heart-zig var(--t-break, 700ms) linear both;
-}
-
-@keyframes heart-zig {
-  0%,
-  17.1% {
-    opacity: 1;
-    stroke-dashoffset: 1;
-  }
-  31.4%,
-  38% {
-    opacity: 1;
-    stroke-dashoffset: 0;
-  }
-  50%,
-  100% {
-    opacity: 0;
-    stroke-dashoffset: 0;
-  }
-}
-
-/* Three shards in --heart fly 18 units outward (--dx, --dy set per shard) and fade by 600 ms. */
-.heart__shard {
-  fill: var(--heart);
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: heart-shard var(--t-break, 700ms) linear both;
-}
-
-@keyframes heart-shard {
-  0%,
-  31.3% {
-    opacity: 0;
     transform: none;
+    animation-timing-function: ease-in-out;
   }
-  31.4% {
-    opacity: 1;
+  5% {
+    transform: rotate(-12deg);
+    animation-timing-function: ease-in-out;
+  }
+  10% {
+    transform: rotate(12deg);
+    animation-timing-function: ease-in-out;
+  }
+  15% {
+    transform: rotate(-8deg);
+    animation-timing-function: ease-in-out;
+  }
+  20% {
     transform: none;
     animation-timing-function: cubic-bezier(0.2, 0.7, 0.4, 1);
   }
-  85.7%,
+  34.3% {
+    transform: translateY(-6px) rotate(45deg) scale(0.96);
+    animation-timing-function: cubic-bezier(0.55, 0, 0.85, 0.5);
+  }
+  42.9% {
+    opacity: 1;
+  }
+  80%,
   100% {
     opacity: 0;
-    transform: translate(var(--dx, 0), var(--dy, -18px)) rotate(var(--spin, 90deg));
+    transform: translateY(22px) rotate(180deg) scale(0.8);
   }
 }
 
-.heart--pop .heart__full {
-  animation: heart-pop 520ms var(--ease-drop);
+/* Droplets: circles r 1.2 in --fish-hi with a --fish-deep 0.6 outline (pills.ts sets r and the
+   width), bursting from the slot centre at −50°, −10°, +35° (from straight up) and gone by 480 ms. */
+.life__drop {
+  opacity: 0;
+  fill: var(--fish-hi);
+  stroke: var(--fish-deep);
+  transform-box: fill-box;
+  transform-origin: center;
 }
 
-@keyframes heart-pop {
-  from {
-    transform: scale(0.2);
+.life--lose .life__drop {
+  animation: life-drop var(--t-life-loss, 700ms) linear both;
+}
+
+@keyframes life-drop {
+  0%,
+  19.9% {
+    opacity: 0;
+    transform: scale(0.6);
   }
-  to {
+  20% {
+    opacity: 1;
+    transform: scale(0.6);
+    animation-timing-function: cubic-bezier(0.2, 0.7, 0.4, 1);
+  }
+  50% {
+    opacity: 1;
+  }
+  68.6%,
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx, 0), var(--dy, -10px)) scale(1);
+  }
+}
+
+/* The lives pill's own shake on a mistake (fx.lifeLossPillMs). */
+.pill--hurt {
+  animation: hurt var(--t-life-hurt, 400ms) ease;
+}
+
+@keyframes hurt {
+  0%,
+  100% {
     transform: none;
+  }
+  30% {
+    transform: scale(1.06);
+  }
+}
+
+/* ── HUD: a revive (Phase 2c §1.4): the restored fish pops back with two droplets ── */
+.life--pop .life__full {
+  transition: none;
+  animation: life-pop var(--t-life-pop, 520ms) var(--ease-drop) both;
+}
+
+.life--pop .life__empty {
+  opacity: 0;
+  transition: none;
+}
+
+@keyframes life-pop {
+  0% {
+    opacity: 1;
+    transform: scale(0.4);
+  }
+  60% {
+    transform: scale(1.15);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.life--pop .life__drop {
+  animation: life-pop-drop var(--t-pop-splash, 300ms) ease-out both;
+}
+
+@keyframes life-pop-drop {
+  0% {
+    opacity: 1;
+    transform: scale(0.6);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx, 0), var(--dy, -9px)) scale(1);
   }
 }
 
@@ -456,20 +449,6 @@
   }
   40% {
     transform: scale(1.25);
-  }
-}
-
-.pill--hurt {
-  animation: hurt var(--t-crack) ease;
-}
-
-@keyframes hurt {
-  0%,
-  100% {
-    transform: none;
-  }
-  30% {
-    transform: scale(1.06);
   }
 }
 
@@ -593,24 +572,24 @@
   clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
 }
 
-/* ── Fish pill (phase2b §2.2, §2.5): fade-in, number roll, icon bump, rising label ── */
-.fish-pill--in {
+/* ── Period counter (Phase 2c §2.2; was the 2b fish pill): fade-in, number roll, icon bump, rising label ── */
+.period-pill--in {
   animation: mw-fade-in var(--fade-ms, 200ms) ease-out both;
 }
 
-.fish-pill--bump .fish-pill__icon {
+.period-pill--bump .period-pill__icon {
   animation: bump var(--bump-ms, 360ms) var(--ease-drop);
 }
 
-.fish-pill__n.is-in {
-  animation: fish-roll-in var(--bump-ms, 360ms) var(--ease-out) both;
+.period-pill__n.is-in {
+  animation: period-roll-in var(--bump-ms, 360ms) var(--ease-out) both;
 }
 
-.fish-pill__n.is-out {
-  animation: fish-roll-out var(--bump-ms, 360ms) var(--ease-out) both;
+.period-pill__n.is-out {
+  animation: period-roll-out var(--bump-ms, 360ms) var(--ease-out) both;
 }
 
-@keyframes fish-roll-in {
+@keyframes period-roll-in {
   from {
     opacity: 0;
     transform: translateY(80%);
@@ -621,7 +600,7 @@
   }
 }
 
-@keyframes fish-roll-out {
+@keyframes period-roll-out {
   from {
     opacity: 1;
     transform: none;
@@ -632,12 +611,12 @@
   }
 }
 
-.fish-pill__label:not([data-reduced]) {
-  animation: fish-label-rise var(--label-ms, 700ms) var(--ease-out) both;
+.period-pill__label:not([data-reduced]) {
+  animation: period-label-rise var(--label-ms, 700ms) var(--ease-out) both;
 }
 
 /* The chip pops up from the pill's top edge, then rises --label-rise and fades (UX-12). */
-@keyframes fish-label-rise {
+@keyframes period-label-rise {
   0% {
     opacity: 0;
     transform: translateY(6px) scale(0.6);
@@ -668,7 +647,8 @@
 }
 
 [data-motion='reduced'] .cell__spark,
-[data-motion='reduced'] .heart__crack,
+[data-motion='reduced'] .life__lost,
+[data-motion='reduced'] .life__splash,
 [data-motion='reduced'] .fx-dot {
   display: none;
 }

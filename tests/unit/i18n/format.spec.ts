@@ -76,8 +76,8 @@ describe('plural categories (Intl.PluralRules)', () => {
     await setLocale('ja', { doc });
     expect(tn('fish.count', 1)).toBe('さかな1匹'); // .one is absent: falls back to .other
     await setLocale('en', { doc });
-    expect(tn('a11y.mistake', 1)).toBe('Wrong tile. 1 heart left.');
-    expect(tn('a11y.mistake', 0)).toBe('Wrong tile. 0 hearts left.');
+    expect(tn('a11y.mistake', 1)).toBe('Wrong tile. 1 fish left.');
+    expect(tn('a11y.mistake', 0)).toBe('Wrong tile. 0 fish left.');
     expect(tn('fish.count', 1240)).toBe('1,240 fish');
   });
 });

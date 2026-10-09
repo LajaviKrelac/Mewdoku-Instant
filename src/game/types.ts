@@ -1,4 +1,6 @@
 // Owner: C (Phase 2b; F0 added the v2 contract types: additive only, ask the lead to change a shape).
+// Phase 2c (G1): BoardKey 'period_points', save schema v3 (StreakRecord, PeriodRecord, no wallet),
+// docs/phase2c/fish-lives-spec.md §3.8, §4.1, §7.4.
 // Game state, actions, events (04 §4.2) and save data (04 §4.3, phase2b §9). PURE types.
 import type { LocaleId, ProductId } from '../app/config';
 import type { CellIndex, HintStep, Puzzle, PuzzleId } from '../engine/types';
@@ -15,10 +17,13 @@ export type ModeId = 'tutorial' | 'level' | 'daily' | 'event';
 export type EventId = string;
 
 /**
- * Ranking boards (phase2b §5.3, §5.4): the post-win points board, the one daily board, and one board
- * per event (`event_<id with - → _>`). Re-exported by platform/types.ts (platform may import game types).
+ * Ranking boards (phase2c §4.1): the per-period leaderboard points board (`period_points`, THE
+ * post-win board), the daily board (off unless rank.dailyBoard), and one board per event
+ * (`event_<id with - → _>`). `paw_points` is @deprecated (phase2c: retired; kept in the union so an
+ * old save's pending score still parses, then the v3 migration drops it). Re-exported by
+ * platform/types.ts (platform may import game types).
  */
-export type BoardKey = 'paw_points' | 'daily_fastest' | `event_${string}`;
+export type BoardKey = 'period_points' | 'paw_points' | 'daily_fastest' | `event_${string}`;
 export type Status = 'ready' | 'playing' | 'hint' | 'kitty' | 'won' | 'lost';
 /** Drag mode, chosen by the start cell: Mark → erase, anything else → mark (02 §6.1). */
 export type PaintMode = 'mark' | 'erase';
@@ -174,9 +179,12 @@ export interface SaveDataV2 extends Omit<SaveDataV1, 'v' | 'settings' | 'inProgr
   v: 2;
   settings: SettingsV2;
   inProgress: { level: InProgressV2 | null; daily: InProgressV2 | null; event: InProgressV2 | null };
-  /** Fish (phase2b §2.8); earned = lifetime total, for stats. Both 0…fish.max. */
+  /**
+   * Fish (phase2b §2.8); earned = lifetime total, for stats. Both 0…fish.max. v2 only: phase2c removes
+   * the wallet (SaveDataV3 omits it; fish are lives, not a currency).
+   */
   wallet: { fish: number; earned: number };
-  /** Paw points (phase2b §5.3), 0…points.max. */
+  /** Paw points (phase2b §5.3), 0…points.max. Phase 2c: the lifetime LEVEL POINTS total (same field). */
   points: { total: number };
   events: Record<EventId, EventRecord>;
   /** ≤ groups.keep entries (oldest endsAt dropped). */
@@ -187,8 +195,36 @@ export interface SaveDataV2 extends Omit<SaveDataV1, 'v' | 'settings' | 'inProgr
   rank: { pending: Partial<Record<BoardKey, number>>; lastSubmitAt: number };
 }
 
-/** The current save schema. Every consumer types its save as SaveData; SaveDataV1 is the stored v1 shape only. */
-export type SaveData = SaveDataV2;
+// ─────────────────────────── Save data v3 (phase2c §3.8) ───────────────────────────
+
+/** The perfect streak (phase2c §3.2): 0 ≤ current ≤ best ≤ 1 000 000. */
+export interface StreakRecord {
+  current: number;
+  best: number;
+}
+
+/**
+ * Leaderboard points per UTC period (phase2c §3.4, §3.5). Keys are '' (none yet) or a period start
+ * `YYYY-MM-DD` of the configured period.kind; totals 0…period.max.
+ */
+export interface PeriodRecord {
+  /** The period the total belongs to. */
+  key: string;
+  total: number;
+  /** The best period so far and its total (bestTotal ≥ total when bestKey === key). */
+  bestKey: string;
+  bestTotal: number;
+}
+
+/** v3 = v2 without the fish wallet, plus the perfect streak and the period points (phase2c §3.8). */
+export interface SaveDataV3 extends Omit<SaveDataV2, 'v' | 'wallet'> {
+  v: 3;
+  streak: StreakRecord;
+  period: PeriodRecord;
+}
+
+/** The current save schema. Every consumer types its save as SaveData; SaveDataV1/V2 are stored shapes only. */
+export type SaveData = SaveDataV3;
 
 /** How urgently to persist (04 §7.1, 02 §15). */
 export type SaveMode = 'touch' | 'now' | 'critical';

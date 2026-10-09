@@ -1,4 +1,4 @@
-// Owner: A (Phase 2b)
+// Owner: A (Phase 2b); G2 (Phase 2c: icon-fish-empty; the heart icons and their clip paths went)
 // One hidden inline SVG sprite of <symbol>s (04 §5.3): Tux's moods, the white X with its edge, the
 // wrong X, 12 pattern glyphs, our icon set (02 §17.6, phase2b §1.7), the fish and the board cats'
 // ear-flick overlay (phase2b §1.6, §2.9). All drawn by us: the cat on a 100-unit grid, icons and the
@@ -7,12 +7,12 @@
 // acc-yarn) are added to this sprite by art/accessories.ts from the lazy `events` chunk (phase2b §1.6
 // bundle column), so they cost the first load nothing.
 import { CAT, catBlink, catEarFlick, catHead } from './cat-parts';
-import { fishMarkup } from './fish';
+import { fishMarkup, fishOutlineMarkup } from './fish';
 import { TOKENS } from './palette';
 
 export type CatSymbol = 'cat-idle' | 'cat-happy' | 'cat-sad' | 'cat-surprised';
-/** Phase 2b symbols (phase2b §1.7, §2.9, §4.4). */
-export type FishSymbol = 'icon-fish';
+/** Phase 2b symbols (phase2b §1.7, §2.9, §4.4); Phase 2c: the empty life (fish-lives-spec §1.2). */
+export type FishSymbol = 'icon-fish' | 'icon-fish-empty';
 /** The board cats' ear-flick overlay (phase2b §2.9), shown only on `.cell.is-flick`. */
 export type CatOverlaySymbol = 'cat-ear-flick';
 /** Event accessories layered on the head and pose (phase2b §4.4); mounted lazily by art/accessories.ts. */
@@ -22,8 +22,6 @@ export type IconSymbol =
   | 'icon-gear'
   | 'icon-bulb'
   | 'icon-paw'
-  | 'icon-heart'
-  | 'icon-heart-empty'
   | 'icon-trophy'
   | 'icon-lock'
   | 'icon-calendar'
@@ -35,6 +33,8 @@ export type IconSymbol =
   | 'icon-rule-space'
   // phase2b §1.7: the fish and the new icons (same 24-grid LINE style)
   | 'icon-fish'
+  // Phase 2c §1.2: a life that is gone (the lives pill, the victory's kept-fish row)
+  | 'icon-fish-empty'
   | 'icon-plus'
   | 'icon-shop'
   | 'icon-globe'
@@ -50,6 +50,7 @@ export type SymbolId = CatSymbol | IconSymbol | GlyphSymbol | 'mark-x' | 'wrong-
 export const SPRITE_ID = 'mewdoku-sprite';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
+/** The colour-pattern glyph 9 ("heart", 02 §18): a pattern shape, not a life (the lives are fish, Phase 2c). */
 const HEART = 'M12 20.6C5.4 16.4 2.6 12.6 2.6 8.9 2.6 5.9 4.9 3.6 7.8 3.6 9.6 3.6 11.1 4.5 12 5.9 12.9 4.5 14.4 3.6 16.2 3.6 19.1 3.6 21.4 5.9 21.4 8.9 21.4 12.6 18.6 16.4 12 20.6Z';
 const LINE = 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
 const SOFT_FILL = 'style="fill:var(--icon-fill,none)"';
@@ -149,8 +150,6 @@ function iconSymbols(): string {
         `<ellipse cx="5.6" cy="10.4" rx="2" ry="2.6" transform="rotate(-24 5.6 10.4)"/><ellipse cx="9.4" cy="6" rx="2.1" ry="2.8" transform="rotate(-8 9.4 6)"/>` +
         `<ellipse cx="14.6" cy="6" rx="2.1" ry="2.8" transform="rotate(8 14.6 6)"/><ellipse cx="18.4" cy="10.4" rx="2" ry="2.6" transform="rotate(24 18.4 10.4)"/></g>`,
     ),
-    icon24('icon-heart', `<path d="${HEART}" fill="currentColor"/><path d="M6.4 7.6A2.4 2.4 0 0 1 8.6 6.2" fill="none" stroke="#fff" stroke-opacity=".7" stroke-width="1.6" stroke-linecap="round"/>`),
-    icon24('icon-heart-empty', `<path d="${HEART}" ${LINE} ${SOFT_FILL}/>`),
     icon24(
       'icon-trophy',
       `<path d="M7.4 4.2h9.2v4.6a4.6 4.6 0 0 1-9.2 0z" ${LINE} ${SOFT_FILL}/>` +
@@ -190,6 +189,8 @@ function iconSymbols(): string {
 function newIcons(): string {
   return [
     sym('icon-fish', '0 0 24 24', fishMarkup()),
+    // Phase 2c §1.2 (G2): the empty life, one 30 % ink outline around a pale wash.
+    sym('icon-fish-empty', '0 0 24 24', fishOutlineMarkup()),
     icon24('icon-plus', `<path d="M12 5.4v13.2M5.4 12h13.2" ${LINE} stroke-width="2.6"/>`),
     icon24(
       'icon-shop',
@@ -206,17 +207,11 @@ function newIcons(): string {
   ].join('');
 }
 
-/** Clip paths that split icon-heart along a zig-zag crack (hud/pills heart crack, 02 §17.5). */
-const DEFS =
-  '<clipPath id="clip-heart-l"><path d="M0 0H12.6L10.8 7.6 13.4 11.4 10.6 15.2 12.4 24H0Z"/></clipPath>' +
-  '<clipPath id="clip-heart-r"><path d="M24 0H12.6L10.8 7.6 13.4 11.4 10.6 15.2 12.4 24H24Z"/></clipPath>';
-
 let cached: string | null = null;
 
-/** The sprite's inner markup (symbols + defs). Built once. */
+/** The sprite's inner markup (symbols). Built once. Phase 2c: the heart clip paths (defs) went with the heart break. */
 export function spriteMarkup(): string {
   cached ??=
-    `<defs>${DEFS}</defs>` +
     catSymbols() +
     markSymbols() +
     GLYPHS.map((g, i) => sym(`glyph-${i}`, '0 0 24 24', `<g fill="currentColor" transform="${GLYPH_FILL}">${g}</g>`)).join('') +
@@ -256,7 +251,7 @@ export function icon(id: SymbolId, opts?: { class?: string; label?: string }): S
   return svg;
 }
 
-/** Re-points an icon()'s <use> at another symbol (mood swaps, heart full/empty). */
+/** Re-points an icon()'s <use> at another symbol (mood swaps). */
 export function setIcon(svg: SVGSVGElement, id: SymbolId): void {
   const use = svg.querySelector('use');
   if (use && use.getAttribute('href') !== `#${id}`) use.setAttribute('href', `#${id}`);

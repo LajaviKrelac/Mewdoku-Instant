@@ -1,4 +1,4 @@
-// Owner: D
+// Owner: D (Phase 2b); G3 (Phase 2c: period_points accepted, docs/phase2c/fish-lives-spec.md §4.1)
 // Capability probes for the phase2b FB features (§3.2, §5.4, §5.6, §8.4). Main bundle: these few
 // checks let capabilities() be final right after init() without loading the lazy `fb-social` chunk.
 // fb-ranking.ts, fb-groups.ts and fb-payments.ts re-export them (their F0 export sites).
@@ -102,8 +102,12 @@ export function paymentsSupported(sdk: FBInstantSDK, apis: ReadonlySet<string> =
   return apis.has(FB_2B_API.purchase) && !!p && isFn(p.purchaseAsync) && isFn(p.onReady);
 }
 
-/** A BoardKey as the spec names them (§5.3): paw_points, daily_fastest, event_<id with - → _>. */
-const BOARD_KEY = /^(paw_points|daily_fastest|event_[a-z0-9_]{3,40})$/;
+/**
+ * A BoardKey as the specs name them: period_points (phase2c §4.1, THE leaderboard), daily_fastest
+ * (phase2b §5.3; read only with rank.dailyBoard), event_<id with - → _>, and the retired paw_points
+ * (still a BoardKey so an old map parses; the app never submits or reads it).
+ */
+const BOARD_KEY = /^(period_points|paw_points|daily_fastest|event_[a-z0-9_]{3,40})$/;
 /** Dashboard names / ids we accept as values: short, printable, no spaces. */
 const BOARD_NAME = /^[A-Za-z0-9_.:-]{1,64}$/;
 

@@ -1,4 +1,4 @@
-/* Owner: A (Phase 2b; was ui-board)
+/* Owner: A (Phase 2b; was ui-board); G2 (Phase 2c: the lives pill)
    Top bar (with the phase2b lead slot), pills, rule chips, tool bar, compact mode (02 §5, §19).
    Classic look (phase2b §1.4): white pills and round tools with soft shadows, orange accents, count
    badges with white text on --accent-text (small white text never sits on --accent). Tokens only. */
@@ -18,7 +18,7 @@
   min-width: calc(var(--fb-safe) - var(--sp-3));
 }
 
-/* The lead slot (phase2b §2.5; the Home fish pill): column 1, right after the FB safe zone on FBIG,
+/* The lead slot (phase2b §2.5; Phase 2c §2.8: the Home period pill): column 1, right after the FB safe zone on FBIG,
    at the inline start on the web. It shares the lead's grid cell and keeps clear of the safe zone. */
 .top-bar__lead,
 .top-bar__slot {
@@ -89,7 +89,7 @@
   margin-left: var(--sp-2);
 }
 
-/* ── Pills: cat counter · hearts ───────────────────────────────────────── */
+/* ── Pills: cat counter · lives (fish, Phase 2c) ─────────────────────────── */
 .pills {
   display: flex;
   justify-content: space-between;
@@ -129,11 +129,14 @@
   background: var(--accent-soft);
 }
 
-.pill--hearts {
+/* ── Lives (Phase 2c §1.1): three fish where the hearts were, same pill and icon box ──
+   Each slot stacks the empty outline (icon-fish-empty) under the full fish (icon-fish); a full slot
+   hides the outline. The fish loss and the revive pop are in fx.css. */
+.pill--lives {
   padding: 0 10px;
 }
 
-.heart {
+.life {
   position: relative;
   display: inline-block;
   width: 28px;
@@ -141,36 +144,51 @@
   margin: 0 1px;
 }
 
-.heart .icon,
-.heart__crack {
+/* The fish is wide and shallow (the body is 10 of the 24 grid units tall), so each slot draws its
+   icons at 114 % of the slot box, centred: the same box and pill width as the 2b hearts. */
+.life .icon,
+.life__splash {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  top: -7%;
+  left: -7%;
+  width: 114%;
+  height: 114%;
 }
 
-.heart__empty {
-  color: var(--heart-empty-line);
-  --icon-fill: var(--heart-empty);
+.life__empty {
+  transition: opacity 150ms ease;
 }
 
-.heart__full {
-  color: var(--heart);
+.life[data-full] .life__empty {
+  opacity: 0;
+}
+
+.life__full {
   opacity: 0;
   transform: scale(0.5);
   transition: opacity 150ms ease, transform 200ms ease;
 }
 
-.heart[data-full] .heart__full {
+.life[data-full] .life__full {
   opacity: 1;
   transform: none;
 }
 
-.heart__crack {
-  color: var(--heart);
+/* A fish that left for the win flight (§2.2): the slot shows empty at once. */
+.life[data-departed] .icon {
+  transition: none;
+}
+
+/* The falling fish and the droplets of a loss or a revive (fx.css): above the rows below the pill. */
+.life__lost,
+.life__splash {
+  z-index: 2;
   overflow: visible;
   pointer-events: none;
+}
+
+.life__lost {
+  opacity: 0;
 }
 
 .pills[data-compact] .pill {
@@ -183,7 +201,7 @@
   height: 26px;
 }
 
-.pills[data-compact] .heart {
+.pills[data-compact] .life {
   width: 23px;
   height: 23px;
 }

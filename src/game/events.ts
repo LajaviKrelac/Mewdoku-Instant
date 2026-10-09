@@ -1,11 +1,11 @@
-// Owner: C
+// Owner: C (Phase 2b). Phase 2c (G1): milestone rewards are hints and kitties only (§5.5).
 // Limited-time events (phase2b §4): the EventDef schema, validation, resolution against the device
 // clock, win bookkeeping and milestones. PURE: `now` is always passed in. The defs ship in the bundle
 // (src/data/events/events.json, C) and each event's 21 puzzles in src/data/events/<id>.json.
 import { cfg, type GameConfig } from '../app/config';
 import type { GenSpec, Grade, GradeBand, LevelRecord, SizeWeight } from '../engine/types';
 import type { I18nKey } from '../i18n';
-import { addFish, grant } from './economy';
+import { grant } from './economy';
 import { rulesFor } from './modes';
 import { makeGenSpec, SEEDS } from './ramp';
 import type { EventId, EventRecord, GameState, PuzzleId, RuleFlags, SaveData } from './types';
@@ -45,9 +45,8 @@ export interface EventPack {
   readonly puzzles: readonly LevelRecord[];
 }
 
-/** A milestone or group reward (phase2b §4.3, §5.6). */
+/** A milestone or group reward (phase2b §4.3, §5.6; phase2c §5.5: hints and kitties only). */
 export interface Reward {
-  readonly fish?: number;
   readonly hints?: number;
   readonly kitties?: number;
 }
@@ -106,12 +105,13 @@ function checkReward(x: unknown, path: string, errors: string[]): Reward | null 
     errors.push(`${path}: not an object`);
     return null;
   }
-  const out: { fish?: number; hints?: number; kitties?: number } = {};
+  const out: { hints?: number; kitties?: number } = {};
   let any = false;
   for (const key of Object.keys(x)) {
-    if (key !== 'fish' && key !== 'hints' && key !== 'kitties') errors.push(`${path}.${key}: unknown reward`);
+    // phase2c §5.5: fish are lives, not a reward; a `fish` reward is unknown.
+    if (key !== 'hints' && key !== 'kitties') errors.push(`${path}.${key}: unknown reward`);
   }
-  for (const key of ['fish', 'hints', 'kitties'] as const) {
+  for (const key of ['hints', 'kitties'] as const) {
     const v = x[key];
     if (v === undefined) continue;
     if (!isNonNegInt(v) || v === 0) errors.push(`${path}.${key}: not a positive integer`);
@@ -318,28 +318,24 @@ export function eventRules(def: EventDef, c: GameConfig = cfg): RuleFlags {
   return hearts === undefined || hearts === base.heartsPerAttempt ? base : Object.freeze({ ...base, heartsPerAttempt: hearts });
 }
 
-/** Applies a reward (milestone or group): fish (earned), hints and kitties. */
+/** Applies a reward (milestone or group): hints and kitties (phase2c §5.5: never fish). */
 export function applyReward(save: SaveData, reward: Reward, c: GameConfig = cfg): SaveData {
   let out = save;
-  if (reward.fish) out = addFish(out, reward.fish, c);
   if (reward.hints) out = grant(out, 'hints', reward.hints, c);
   if (reward.kitties) out = grant(out, 'kitties', reward.kitties, c);
   return out;
 }
 
-/** Sum of several rewards (a win that crosses two milestones shows one line). */
+/** Sum of several rewards (a win that crosses two milestones shows one line). Hints and kitties only. */
 export function sumRewards(rewards: readonly Reward[]): Reward | null {
   if (rewards.length === 0) return null;
-  let fish = 0;
   let hints = 0;
   let kitties = 0;
   for (const r of rewards) {
-    fish += r.fish ?? 0;
     hints += r.hints ?? 0;
     kitties += r.kitties ?? 0;
   }
-  const out: { fish?: number; hints?: number; kitties?: number } = {};
-  if (fish) out.fish = fish;
+  const out: { hints?: number; kitties?: number } = {};
   if (hints) out.hints = hints;
   if (kitties) out.kitties = kitties;
   return out;
@@ -363,8 +359,8 @@ export interface EventWinResult {
 
 /**
  * Event win bookkeeping (phase2b §4.3, §4.6): counts puzzle `index` (0-based) once, adds its ms,
- * sets lastAt, grants reached milestone rewards at once (no claim step). Fish and points for the win
- * itself are economy.ts / scoring.ts, applied by the caller. Puzzles are played in order, so only the
+ * sets lastAt, grants reached milestone rewards at once (no claim step). Level and leaderboard points
+ * for the win itself are scoring.ts, applied by the caller (phase2c §3.7). Puzzles are played in order, so only the
  * puzzle at index `solved` counts; any other index (already solved, or a merge moved progress on)
  * leaves the record unchanged. The event slot of this puzzle is cleared either way.
  */

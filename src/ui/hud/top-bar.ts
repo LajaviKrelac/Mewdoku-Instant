@@ -2,7 +2,7 @@
 // Top bar (02 §5): title + Hard badge, Home and Gear (and Trophy on Home if leaderboards exist) at
 // the top RIGHT; the top-left 64×64 px stays empty in the FBIG build (FB safe zone, 02 §19).
 // Phase 2b (F0, phase2b §2.5, §12.3): an optional `lead` slot right after the safe zone (at the
-// inline start on web) where B puts the Home fish pill. A styles it (hud.css).
+// inline start on web) for Home's lead pill (Phase 2c §2.8: the period pill). A styles it (hud.css).
 // Classes: .top-bar[data-fb-safe] > .top-bar__lead .top-bar__slot? .top-bar__title(.top-bar__text .badge--hard)
 //          .top-bar__actions > .btn.btn--icon.top-bar__btn--trophy|home|settings
 // Review fixes: the title renders as a shrinking name plus a non-shrinking " · 13" / " · Fri 9 Oct"
@@ -51,7 +51,7 @@ export function splitTitle(title: string): { readonly name: string; readonly suf
 
 /** Optional content slots (phase2b §12.3 A → B). */
 export interface TopBarSlots {
-  /** Placed after the FB safe zone (the Home fish pill). The caller owns and destroys it. */
+  /** Placed after the FB safe zone (Home's period pill, Phase 2c §2.8). The caller owns and destroys it. */
   readonly lead?: HTMLElement;
 }
 

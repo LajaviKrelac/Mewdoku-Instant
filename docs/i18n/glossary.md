@@ -1,6 +1,6 @@
 # Translation glossary
 
-Status: Phase 2b AI-draft glossary · Date: 2026-10-09 · Owner: workstream E (localization) · Used with [`src/i18n/meta.ts`](../../src/i18n/meta.ts) (per-key notes and max lengths) and the English catalogue [`src/i18n/en.ts`](../../src/i18n/en.ts)
+Status: Phase 2b AI-draft glossary, Phase 2c fish update · Date: 2026-10-09 · Owner: workstream E (localization); Phase 2c rows: workstream G2 · Used with [`src/i18n/meta.ts`](../../src/i18n/meta.ts) (per-key notes and max lengths) and the English catalogue [`src/i18n/en.ts`](../../src/i18n/en.ts)
 
 This glossary is part of the translation brief (phase2b §6.7 step 2). The brief contains **only our own English copy, `meta.ts` and this file**. It never names, quotes or describes any other game, and translators must not look at any other game's localized UI (06 §2 step 6).
 
@@ -13,11 +13,13 @@ This glossary is part of the translation brief (phase2b §6.7 step 2). The brief
 | Placeholders | Keep every `{name}` exactly. Move it wherever the grammar needs it. Never translate the name inside the braces. |
 | Keyword markers | Teaching copy (`tutorial.step1`–`step4`, `howto.rule.*`) wraps its rule keyword in `*…*` ("Every colour hides `*exactly one cat*`"); the game prints it in the accent colour. Keep exactly as many marked spans as the English has, around the words that carry the same rule in your sentence, and never add markers elsewhere (`npm run i18n:check` enforces both; review PAR-7). |
 | Plurals | Keys ending in `.one` / `.other` are plural pairs. Add `.zero`, `.two`, `.few` or `.many` where your language uses them (the catalogue test lists what `Intl.PluralRules` requires). `{count}` may be left out only in a form that stands for one exact number (Arabic one, two and zero). |
-| Numbers in non-plural keys | `{points}`, `{hours}`, `{kitties}`, `{count}` outside `.one`/`.other` keys can be any number. In languages with case or number agreement (ru, pl, ar, hi), use a label + colon construction so any number reads correctly: ru «Очки: +{points}», pl «Punkty: +{points}». |
+| Numbers in non-plural keys | `{points}`, `{hours}`, `{kitties}`, `{total}`, `{best}`, `{count}` outside `.one`/`.other` keys can be any number. In languages with case or number agreement (ru, pl, ar, hi), use a label + colon construction so any number reads correctly: ru «Очки: +{points}», pl «Punkty: +{points}». |
 | Colour names in sentences | `{color}` is a proper name. Use it **in apposition** ("the colour Lavender", «цвет «Лаванда»», *la couleur Lavande*) so adjectives never need to agree with it. |
 | Rows, columns and colours as `{unit}` | `{unit}` is a row ("row 3"), a column ("column 5") or a colour name. In languages with grammatical case, build the sentence so `{unit}` stays in the nominative, usually with a colon: «{unit}: осталась одна свободная клетка…». |
 | Digits | Latin digits everywhere, including Arabic and Hindi. |
 | Banned | Never write "golden fish" (or its translation); fish are just fish. Never use another game's rule names or slogans. |
+| Fish are lives and points, never money (Phase 2c) | A fish is a life in a level; the fish left at a win are added to the period ranking total. Never write coins, wallet, balance, price, "buy with fish", "spend" or "earn" for fish, and never call them hearts. Key names such as `game.hearts.a11y`, `howto.hearts`, `fail.*` and the `{hearts}` placeholder are code names only: the copy says fish. The only heart left in the game is the pattern glyph 9 (section 4) and our event's yarn heart. |
+| Period words (Phase 2c) | The ranking period resets at 00:00 UTC (`cfg.period.kind`: day, week by default, or month). "This week" in a pill or a tab is the current period, never "the last 7 days". Keep the three kinds parallel (Today / This week / This month). |
 | Length | Respect `maxLength` in `meta.ts` (chips 18, buttons 22, titles 28, badges 6–9). Abbreviate units ("h", "min") freely. |
 
 ## 2. Core terms
@@ -26,19 +28,21 @@ This glossary is part of the translation brief (phase2b §6.7 step 2). The brief
 |---|---|---|---|---|---|---|---|---|---|
 | cat (piece) | the game piece | Katze | gato | chat | gatto | gato | kucing | kedi | kot |
 | kitty (paw booster) | a cute word for a small cat, always the same word; plural kitties | Kätzchen | gatito | minou | micio | gatinho | meong | pisi | kotek |
-| fish (currency) | plain fish, never "golden" | Fisch | pez / peces | poisson | pesce | peixe | ikan | balık | rybka |
+| fish (a life; a ranking point) | plain fish, never "golden", never money; one fish = one life, and the fish left at a win go to the period ranking | Fisch | pez / peces | poisson | pesce | peixe | ikan | balık | rybka |
 | hint (bulb) | | Tipp | pista | indice | indizio | dica | petunjuk | ipucu | podpowiedź |
-| heart | the mistake counter | Herz | corazón | cœur | cuore | coração | hati | kalp | serce |
 | tile | one square of the board | Feld | casilla | case | casella | casa | kotak | kare | pole |
 | cross out (X) | mark a tile as "no cat" | durchstreichen | tachar | barrer | barrare | riscar | coret | çarpı koymak | skreślić |
 | row / column | numbered from 1 | Zeile / Spalte | fila / columna | ligne / colonne | riga / colonna | linha / coluna | baris / kolom | satır / sütun | wiersz / kolumna |
 | colour (region) | | Farbe | color | couleur | colore | cor | warna | renk | kolor |
 | level | | Level | nivel | niveau | livello | nível | level | bölüm | poziom |
 | daily puzzle | | Tagesrätsel | reto del día | défi du jour | puzzle del giorno | desafio do dia | teka-teki harian | günün bulmacası | zagadka dnia |
-| paw points | the score ranking | Pfotenpunkte | puntos de patita | points de patte | punti zampa | pontos de patinha | poin tapak | pati puanı | punkty łapek |
+| points (level points) | the score a win gives; better with a perfect streak | Punkte | puntos | points | punti | pontos | poin | puan | punkty |
+| weekly ranking | the period ranking of fish kept (title) | Wochenrangliste | ranking semanal | classement hebdo | classifica settimanale | ranking semanal | peringkat mingguan | haftalık sıralama | ranking tygodnia |
+| this week | the current period (tab, pill) | diese Woche | esta semana | cette semaine | settimana | esta semana | minggu ini | bu hafta | ten tydzień |
+| perfect streak | wins in a row without a mistake | perfekte Serie | racha perfecta | série parfaite | serie perfetta | sequência perfeita | rentetan sempurna | kusursuz seri | idealna seria |
 | event | limited-time event | Event | evento | événement | evento | evento | event | etkinlik | wydarzenie |
 | group challenge | | Gruppen-Challenge | desafío en grupo | défi de groupe | sfida di gruppo | desafio em grupo | tantangan grup | grup yarışması | wyzwanie grupowe |
-| shop / swap | swap = pay fish for an item | Shop / tauschen | tienda / canjear | boutique / échanger | negozio / scambiare | loja / trocar | toko / tukar | mağaza / takas | sklep / wymienić |
+| shop | real-money packs only; there is no swap and no fish for sale (Phase 2c) | Shop | tienda | boutique | negozio | loja | toko | mağaza | sklep |
 | Settings | | Einstellungen | Ajustes | Réglages | Impostazioni | Ajustes | Pengaturan | Ayarlar | Ustawienia |
 | colour patterns | small symbols on the colours | Farbmuster | patrones de color | motifs de couleur | motivi colore | padrões de cor | pola warna | renk desenleri | wzory kolorów |
 
@@ -46,19 +50,21 @@ This glossary is part of the translation brief (phase2b §6.7 step 2). The brief
 |---|---|---|---|---|---|---|---|---|
 | cat (piece) | кошка | mèo | แมว | ねこ | 고양이 | 猫 | बिल्ली | قطة |
 | kitty (paw booster) | котик | mèo con | เหมียว | こねこ | 냥이 | 猫咪 | किटी | قُطيطة |
-| fish (currency) | рыбка | cá | ปลา | さかな | 물고기 | 小鱼 | मछली | سمكة |
+| fish (a life; a ranking point) | рыбка | cá | ปลา | さかな | 물고기 | 小鱼 | मछली | سمكة |
 | hint (bulb) | подсказка | gợi ý | คำใบ้ | ヒント | 힌트 | 提示 | संकेत | تلميح |
-| heart | сердце | tim | หัวใจ | ハート | 하트 | 爱心 | दिल | قلب |
 | tile | клетка | ô | ช่อง | マス | 칸 | 格子 | खाना | خانة |
 | cross out (X) | вычеркнуть | gạch | กากบาท | バツをつける | X 표시 | 划掉 | काटना | شطب |
 | row / column | строка / столбец | hàng / cột | แถว / คอลัมน์ | 行 / 列 | 행 / 열 | 行 / 列 | पंक्ति / कॉलम | صف / عمود |
 | colour (region) | цвет | màu | สี | 色 | 색 | 颜色 | रंग | لون |
 | level | уровень | màn | ด่าน | レベル | 레벨 | 关 (第 N 关) | लेवल | المستوى |
 | daily puzzle | пазл дня | câu đố hôm nay | ปริศนาประจำวัน | 今日のパズル | 오늘의 퍼즐 | 每日谜题 | आज की पहेली | لغز اليوم |
-| paw points | очки-лапки | điểm chân mèo | แต้มอุ้งเท้า | 肉球ポイント | 발바닥 포인트 | 爪印积分 | पंजा पॉइंट | نقاط البصمات |
+| points (level points) | очки | điểm | แต้ม | ポイント | 포인트 | 积分 | पॉइंट | النقاط |
+| weekly ranking | рейтинг недели | xếp hạng tuần | อันดับรายสัปดาห์ | 週間ランキング | 주간 랭킹 | 本周排行 | हफ़्ते की रैंकिंग | ترتيب الأسبوع |
+| this week | эта неделя | tuần này | สัปดาห์นี้ | 今週 | 이번 주 | 本周 | इस हफ़्ते | هذا الأسبوع |
+| perfect streak | идеальная серия | chuỗi hoàn hảo | ชนะแบบเพอร์เฟกต์ติดกัน | パーフェクト連勝 | 퍼펙트 연승 | 完美连胜 | परफ़ेक्ट सिलसिला | سلسلة مثالية |
 | event | событие | sự kiện | อีเวนต์ | イベント | 이벤트 | 活动 | इवेंट | فعالية |
 | group challenge | групповое испытание | thử thách nhóm | ชาเลนจ์กลุ่ม | グループチャレンジ | 그룹 챌린지 | 小组挑战 | ग्रुप चैलेंज | تحدي المجموعة |
-| shop / swap | магазин / обменять | cửa hàng / đổi | ร้านค้า / แลก | ショップ / 交換 | 상점 / 교환 | 商店 / 兑换 | दुकान / बदलें | المتجر / استبدال |
+| shop | магазин | cửa hàng | ร้านค้า | ショップ | 상점 | 商店 | दुकान | المتجر |
 | Settings | Настройки | Cài đặt | การตั้งค่า | 設定 | 설정 | 设置 | सेटिंग्स | الإعدادات |
 | colour patterns | узоры на цветах | họa tiết màu | ลวดลายสี | 色の模様 | 색상 무늬 | 颜色图案 | रंग पैटर्न | نقوش الألوان |
 

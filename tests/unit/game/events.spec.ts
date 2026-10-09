@@ -8,6 +8,7 @@ import rawEvents from '../../../src/data/events/events.json';
 import {
   activeEvent,
   applyEventWin,
+  applyReward,
   clearEndedEventSlot,
   eventBoardKey,
   eventEnd,
@@ -22,6 +23,7 @@ import {
   validateEventDef,
   validateEventDefs,
   type EventDef,
+  type Reward,
 } from '../../../src/game/events';
 import { defaults } from '../../../src/game/save';
 import type { InProgressV2, SaveData } from '../../../src/game/types';
@@ -62,12 +64,13 @@ describe('events.json (our three events, §4.3)', () => {
       expect(d.puzzles.count).toBe(21);
       expect(d.unlockAfterLevel).toBe(10);
       expect(d.rules?.hearts).toBeUndefined();
+      // phase2c §5.5: the milestone fish became hints and kitties at the old swap rates.
       expect(d.track).toEqual([
         { at: 3, reward: { hints: 2 } },
-        { at: 7, reward: { fish: 30 } },
+        { at: 7, reward: { hints: 2 } },
         { at: 12, reward: { kitties: 2 } },
-        { at: 16, reward: { fish: 60 } },
-        { at: 21, reward: { fish: 100, kitties: 3 } },
+        { at: 16, reward: { hints: 2, kitties: 1 } },
+        { at: 21, reward: { hints: 3, kitties: 5 } },
       ]);
       expect(d.leaderboard).toBe(eventBoardKey(d.id));
       expect(d.puzzles.file).toBe(`events/${d.id}.json`);
@@ -100,9 +103,11 @@ describe('validateEventDef rejects', () => {
     { what: 'a bad id', patch: (d) => (d.id = 'Bad_ID'), error: /^id/ },
     { what: 'end before start', patch: (d) => (d.endUtc = '2026-11-01T00:00Z'), error: /^dates/ },
     { what: 'a non-UTC date', patch: (d) => (d.startUtc = '2026-11-13'), error: /^startUtc/ },
-    { what: 'a descending track', patch: (d) => ((d.track as { at: number }[])[1] = { at: 2, reward: { fish: 1 } } as never), error: /not ascending/ },
-    { what: 'a milestone beyond the count', patch: (d) => ((d.track as unknown[]).push({ at: 22, reward: { fish: 1 } })), error: /beyond/ },
+    { what: 'a descending track', patch: (d) => ((d.track as { at: number }[])[1] = { at: 2, reward: { hints: 1 } } as never), error: /not ascending/ },
+    { what: 'a milestone beyond the count', patch: (d) => ((d.track as unknown[]).push({ at: 22, reward: { hints: 1 } })), error: /beyond/ },
     { what: 'an empty reward', patch: (d) => ((d.track as unknown[])[0] = { at: 3, reward: {} }), error: /empty reward/ },
+    // phase2c §5.5: fish are lives, not a reward; a fish reward is unknown (and alone it is empty).
+    { what: 'a fish reward', patch: (d) => ((d.track as unknown[])[1] = { at: 7, reward: { fish: 30, hints: 1 } }), error: /fish: unknown reward/ },
     { what: 'a wrong leaderboard', patch: (d) => (d.leaderboard = 'event_other'), error: /^leaderboard/ },
     { what: 'a theme colour that is not hex', patch: (d) => ((d.theme as Record<string, unknown>).page = 'orange'), error: /theme.page/ },
     { what: 'an unknown page art', patch: (d) => ((d.theme as Record<string, unknown>).pageArt = 'stars'), error: /pageArt/ },
@@ -173,18 +178,32 @@ describe('applyEventWin (§4.3)', () => {
     expect(twice.save.events).toEqual(once.events);
   });
 
-  it('a milestone is granted at once, exactly once (3 → +2 hints; 7 → +30 fish; 21 → +100 fish +3 kitties)', () => {
+  it('a milestone is granted at once, exactly once (3 → +2 hints; 7 → +2 hints; 16 → +2 hints +1 kitty; 21 → +3 hints +5 kitties)', () => {
     const s2 = at(2);
     const r = applyEventWin(s2, LANTERN, 2, won, NOW);
     expect(r.milestones.map((m) => m.at)).toEqual([3]);
     expect(r.save.stock.hints).toBe(s2.stock.hints + 2);
     expect(applyEventWin(r.save, LANTERN, 2, won, NOW).save.stock.hints).toBe(s2.stock.hints + 2);
+    const st = defaults(NOW).stock;
     const r7 = applyEventWin(at(6), LANTERN, 6, won, NOW);
-    expect(r7.save.wallet).toEqual({ fish: 30, earned: 30 });
+    expect(r7.save.stock).toEqual({ hints: st.hints + 2, kitties: st.kitties });
+    expect(r7.save).not.toHaveProperty('wallet');
+    const r16 = applyEventWin(at(15), LANTERN, 15, won, NOW);
+    expect(r16.save.stock).toEqual({ hints: st.hints + 2, kitties: st.kitties + 1 });
     const r21 = applyEventWin(at(20), LANTERN, 20, won, NOW);
-    expect(r21.save.wallet.fish).toBe(100);
-    expect(r21.save.stock.kitties).toBe(defaults(NOW).stock.kitties + 3);
+    expect(r21.save.stock).toEqual({ hints: st.hints + 3, kitties: st.kitties + 5 });
     expect(applyEventWin(r21.save, LANTERN, 21, won, NOW).counted).toBe(false); // past the count
+  });
+
+  it('applyReward never grants fish, even from an old def that still lists them (phase2c §5.5)', () => {
+    const s = defaults(NOW);
+    // Reward.fish was deleted at I-3; a stray old def object must still grant hints and kitties only.
+    const stray = (r: Record<string, number>): Reward => r as unknown as Reward;
+    const out = applyReward(s, stray({ fish: 30, hints: 1 }));
+    expect(out).not.toHaveProperty('wallet');
+    expect(out.stock).toEqual({ hints: s.stock.hints + 1, kitties: s.stock.kitties });
+    expect(applyReward(s, stray({ fish: 30 }))).toBe(s);
+    expect(sumRewards([stray({ fish: 30 }), { hints: 2 }])).toEqual({ hints: 2 });
   });
 
   it('clears this puzzle\'s slot; another index never counts', () => {
@@ -199,7 +218,7 @@ describe('applyEventWin (§4.3)', () => {
   it('milestonesBetween and sumRewards', () => {
     expect(milestonesBetween(LANTERN, 0, 21).map((m) => m.at)).toEqual([3, 7, 12, 16, 21]);
     expect(milestonesBetween(LANTERN, 3, 6)).toEqual([]);
-    expect(sumRewards(milestonesBetween(LANTERN, 15, 21).map((m) => m.reward))).toEqual({ fish: 160, kitties: 3 });
+    expect(sumRewards(milestonesBetween(LANTERN, 15, 21).map((m) => m.reward))).toEqual({ hints: 5, kitties: 6 });
     expect(sumRewards([])).toBeNull();
   });
 });

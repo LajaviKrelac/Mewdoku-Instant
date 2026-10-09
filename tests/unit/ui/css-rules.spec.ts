@@ -83,12 +83,14 @@ describe('colour literals live only in tokens.css (phase2b §1.3, §1.12)', () =
       page: '#faf6f0', 'page-2': '#f1eadf', card: '#ffffff', ink: '#2f2a35', 'ink-2': '#665e6c', 'ink-3': '#b2aab4',
       accent: '#e57010', 'accent-deep': '#b4560a', 'accent-title': '#d2620c', 'accent-text': '#a84b08', 'accent-soft': '#fde9d6',
       focus: '#b9520a', 'title-on-dark': '#e57010', 'tap-text': '#ffd45c', stage: '#2a2430', gold: '#ffc23d',
-      fish: '#ffb81f', 'fish-deep': '#c98200', 'fish-hi': '#ffe08a', heart: '#e8506a', danger: '#d33a4a', wrong: '#a3193a', hard: '#6c3fb5',
+      // Phase 2c: --life-empty replaces the 2b --heart / --heart-empty / --heart-empty-line tokens.
+      fish: '#ffb81f', 'fish-deep': '#c98200', 'fish-hi': '#ffe08a', 'life-empty': '#ede8e2', danger: '#d33a4a', wrong: '#a3193a', hard: '#6c3fb5',
     };
     for (const [name, hex] of Object.entries(want)) expect(new RegExp(`--${name}:\\s*${hex};`, 'i').test(css), `--${name}`).toBe(true);
     expect(css).toMatch(/--scrim:\s*rgba\(28, 23, 32, 0\.82\);/);
     expect(css).toMatch(/--glow:\s*rgba\(255, 194, 61, 0\.65\);/);
     for (const rgb of ['ink-rgb: 47, 42, 53', 'accent-rgb: 229, 112, 16', 'gold-rgb: 255, 194, 61']) expect(css).toContain(`--${rgb};`);
+    for (const gone of ['--heart:', '--heart-empty:', '--heart-empty-line:', '--t-crack:']) expect(css, gone).not.toContain(gone);
   });
 });
 

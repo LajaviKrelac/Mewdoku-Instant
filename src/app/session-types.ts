@@ -1,4 +1,4 @@
-// Owner: C (Phase 2b; was app)
+// Owner: C (Phase 2b; was app). Phase 2c (G1): no shop entry from the victory (openShop removed).
 // Public shape of the level session (04 §3, §5.2): the commands screens and overlays call, the
 // Session handle, and its dependencies. Implemented by session.ts.
 import type { CellIndex, Puzzle } from '../engine/types';
@@ -104,12 +104,10 @@ export interface SessionDeps {
   goEvent?(def: EventDef): void;
   /** Post-win ranking (§5.5): submit, fetch, list state. Absent = personal records only. */
   readonly rankings?: RankingFlow;
-  /** Group challenges (§5.6): a counted win's points. */
+  /** Group challenges (§5.6; phase2c §4.8): a counted win's fish kept. */
   readonly groups?: Pick<GroupFlow, 'onWin'>;
   /** Banners (§3.2): the victory screen shows one; hidden before every new board. */
   readonly banners?: BannerFlow;
-  /** The fish pill's "+" on the victory screen (§2.5, §8.5). */
-  openShop?(): void;
   /** The app root for the fish layer (§2.3); null without a DOM. */
   root?(): HTMLElement | null;
   /** B's fx functions for the win flow (test seam; default: ui/fx). */

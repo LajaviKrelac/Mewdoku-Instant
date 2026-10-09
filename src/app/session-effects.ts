@@ -1,16 +1,17 @@
-// Owner: C (Phase 2b; was app)
+// Owner: C (Phase 2b; was app). Phase 2c (G1): the win's rewards are level points with the perfect
+// streak and this period's leaderboard points from the fish (lives) kept; no fish wallet
+// (docs/phase2c/fish-lives-spec.md §3.1–§3.9).
 // Pure parts of the session's effects layer (04 §5.2): per-event feedback (sound, vibration, live
 // announcement; 02 §16, §18), analytics payloads (02 §20) and win bookkeeping (02 §10.1 + phase2b
-// §2.8 fish, §4.3 event wins, §5.3 points: all saved with the win, before any animation).
+// §4.3 event wins + phase2c §3.7: all saved with the win, before any animation).
 import type { SfxId } from '../audio/sfx';
-import { addFish, fishForWin } from '../game/economy';
 import { applyEventWin, type EventDef, type Milestone } from '../game/events';
 import { getMode } from '../game/modes';
-import { addPoints, pointsFor } from '../game/scoring';
+import { addPeriodPoints, addPoints, keptPoints, levelPointsFor, periodKeyAt, periodTotal, streakAfterWin } from '../game/scoring';
 import { applyDailyWin, applyLevelWin, applyTutorialDone } from '../game/stats';
 import type { GameEvent, GameState, ModeId, SaveData } from '../game/types';
 import { colorName, t, tn } from '../i18n';
-import { cfg, type GameConfig } from './config';
+import { cfg, type GameConfig, type PeriodKind, type ScoredMode } from './config';
 import type { AnalyticsEvent } from './events';
 import type { SessionMeta } from './store';
 
@@ -126,8 +127,20 @@ export interface EventWinSummary {
   readonly totalMs: number;
 }
 
+/** The period part of a win (phase2c §3.4, §3.7): this period's leaderboard points before and after. */
+export interface WinPeriodSummary {
+  readonly kind: PeriodKind;
+  /** The current period's key (its first day, YYYY-MM-DD, UTC). */
+  readonly key: string;
+  /** Leaderboard points this win added (fish kept × period.pointsPerFish; 0 when it adds none). */
+  readonly gained: number;
+  /** This period's total before the win (0 after a rollover) and after it. */
+  readonly before: number;
+  readonly total: number;
+}
+
 /**
- * What one win earned and how it ends (phase2b §2.2, §2.6, §2.10): the input of the win flow, the
+ * What one win earned and how it ends (phase2b §2.10, phase2c §3.7): the input of the win flow, the
  * ranking panel, the victory screen and the ranking submission. Everything here is already saved.
  */
 export interface WinSummary {
@@ -145,9 +158,21 @@ export interface WinSummary {
   readonly mistakes: number;
   readonly hints: number;
   readonly kitties: number;
-  /** Fish of this win; null when none were awarded (replay, a win that did not count). */
-  readonly fish: { readonly base: number; readonly bonus: number; readonly bonusKind: 'hard' | 'daily' | null; readonly before: number; readonly total: number } | null;
+  /** Fish (lives) kept: state.hearts at WON (1…maxKept). */
+  readonly kept: number;
+  /** The attempt's lives (rules.heartsPerAttempt): the victory's kept-fish row shows this many slots. */
+  readonly maxKept: number;
+  /** 0 mistakes and 0 revives. */
+  readonly perfect: boolean;
+  /** The perfect streak after this win (unchanged by a win that does not count or the tutorial). */
+  readonly streak: { readonly current: number; readonly best: number };
+  /** Whether this win moved the streak (counted, perfect, in a mode of levelPoints.modes): "Perfect ×N". */
+  readonly streakUp: boolean;
+  /** This period's leaderboard points; null for the tutorial (never scored). */
+  readonly period: WinPeriodSummary | null;
+  /** Level points of this win (§3.1); 0 when it scores none. */
   readonly pointsEarned: number;
+  /** Lifetime level points (points.total) after the win. */
   readonly pointsTotal: number;
   readonly event: EventWinSummary | null;
 }
@@ -157,12 +182,9 @@ export interface WinBookkeeping {
   /** One `critical` save (02 §15); false for a tutorial replay, which saves nothing. */
   readonly critical: boolean;
   readonly events: readonly AnalyticsEvent[];
-  /** phase2b §2.10: the rewards, for the win flow (`{ save, fishEarned, pointsEarned, bonus }` and the rest). */
+  /** The rewards, for the win flow, the panel and the victory (phase2c §3.7). */
   readonly summary: WinSummary;
-  /** Fish added to the wallet by this win, milestones included (0 when none). */
-  readonly fishEarned: number;
   readonly pointsEarned: number;
-  readonly bonus: number;
 }
 
 export interface WinContext {
@@ -173,11 +195,15 @@ export interface WinContext {
   readonly config?: GameConfig;
 }
 
+const inModes = (mode: ModeId, modes: readonly ScoredMode[]): boolean => (modes as readonly string[]).indexOf(mode) >= 0;
+
 /**
- * 02 §10.1 + phase2b §2.8, §4.3, §5.3 win bookkeeping per mode: level, daily, event, first-run
- * tutorial, tutorial replay (none). Fish and points are added only when the win COUNTS: a level not
+ * 02 §10.1 + phase2b §4.3 + phase2c §3.7 win bookkeeping per mode: level, daily, event, first-run
+ * tutorial, tutorial replay (none). The rewards are added only when the win COUNTS: a level not
  * counted before (applyLevelWin's guard), a daily's first win for its date, an event puzzle once per
- * index, the first-run tutorial once. Everything returned is saved in the same critical save as the win.
+ * index; the tutorial is never scored. Order inside the call: mode bookkeeping (progress / daily /
+ * event record and milestones) → streak → level points → period points; everything returned is saved
+ * in the same critical save as the win.
  */
 export function winBookkeeping(save: SaveData, meta: SessionMeta, state: GameState, ctx: WinContext = { now: 0 }): WinBookkeeping {
   const c = ctx.config ?? cfg;
@@ -185,6 +211,8 @@ export function winBookkeeping(save: SaveData, meta: SessionMeta, state: GameSta
   const flow = getMode(meta.mode).winFlow;
   const replay = meta.request.mode === 'tutorial' && meta.request.replay;
   const solveMs = ms(state.elapsedMs);
+  const perfect = state.mistakes === 0 && state.revivesUsed === 0;
+  const kept = Math.max(0, state.hearts);
   const base = {
     mode: meta.mode,
     replay,
@@ -197,46 +225,47 @@ export function winBookkeeping(save: SaveData, meta: SessionMeta, state: GameSta
     mistakes: state.mistakes,
     hints: state.hintsUsed,
     kitties: state.kittiesUsed,
+    kept,
+    maxKept: state.rules.heartsPerAttempt,
+    perfect,
   };
-  const points = (mode: ModeId): number =>
-    pointsFor(
-      {
-        mode,
-        n: size,
-        hard: meta.hard,
-        mistakes: state.mistakes,
-        revivesUsed: state.revivesUsed,
-        hintsUsed: state.hintsUsed,
-        kittiesUsed: state.kittiesUsed,
-        tutorial: mode === 'tutorial',
-      },
-      c,
-    );
-  /** Fish + points of a counted win (and the summary parts). */
+  /** Streak, level points and period points of a counted win (§3.7 order), and the summary. */
   const reward = (next: SaveData, counted: boolean, mode: ModeId, event: EventWinSummary | null, critical: boolean, events: AnalyticsEvent[]): WinBookkeeping => {
     let out = next;
-    let fish: WinSummary['fish'] = null;
     let pts = 0;
-    if (counted) {
-      const award = fishForWin(mode, { hard: meta.hard, replay }, c);
-      const before = save.wallet.fish;
-      if (award.base + award.bonus > 0) {
-        out = addFish(out, award.base + award.bonus, c);
-        fish = { base: award.base, bonus: award.bonus, bonusKind: award.bonusKind, before, total: out.wallet.fish };
-      }
-      pts = points(mode);
-      if (pts > 0) out = { ...out, points: { total: addPoints(out.points.total, pts, c) } };
+    let streakUp = false;
+    let period: WinPeriodSummary | null = null;
+    const scored = mode !== 'tutorial';
+    if (scored) {
+      const before = periodTotal(out, ctx.now, c);
+      period = { kind: c.period.kind, key: periodKeyAt(ctx.now, c), gained: 0, before, total: before };
     }
-    const summary: WinSummary = { ...base, counted, fish, pointsEarned: pts, pointsTotal: out.points.total, event };
-    return {
-      save: out,
-      critical,
-      events,
-      summary,
-      fishEarned: out.wallet.fish - save.wallet.fish,
+    if (counted && scored) {
+      const streaked = streakAfterWin(out, mode, perfect, c);
+      streakUp = perfect && streaked.streak.current > out.streak.current;
+      out = streaked;
+      pts = levelPointsFor({ mode, n: size, hard: meta.hard, streak: perfect ? out.streak.current : 0 }, c);
+      if (pts > 0) out = { ...out, points: { total: addPoints(out.points.total, pts, c) } };
+      const before = period?.before ?? 0;
+      out = addPeriodPoints(out, keptPoints(mode, kept, c), ctx.now, c);
+      const total = periodTotal(out, ctx.now, c);
+      // gained is what the total really moved (a capped total at period.max adds less, or nothing).
+      period = { kind: c.period.kind, key: periodKeyAt(ctx.now, c), gained: total - before, before, total };
+      if (inModes(mode, c.levelPoints.modes) || inModes(mode, c.period.modes)) {
+        events.push({ name: 'win_points', params: { mode, fish: kept, total, points: pts, streak: out.streak.current } });
+      }
+    }
+    const summary: WinSummary = {
+      ...base,
+      counted,
+      streak: { current: out.streak.current, best: out.streak.best },
+      streakUp,
+      period,
       pointsEarned: pts,
-      bonus: fish?.bonus ?? 0,
+      pointsTotal: out.points.total,
+      event,
     };
+    return { save: out, critical, events, summary, pointsEarned: pts };
   };
 
   if (flow === 'level') {

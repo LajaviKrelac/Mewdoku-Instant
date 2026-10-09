@@ -2,10 +2,13 @@
 // Web build happy and sad paths (04 §11 cases 1–12) against dist/e2e (window.__mewdoku hooks on).
 // Saves are seeded through the hooks and applied with a reload; the mock ads are steered by ?ads=.
 // Phase 2b: a win goes ranking panel → victory screen; on the web the panel shows personal records
-// with the rank.localOnly line and no other player's row (§5.10); the shop offers only "Swap fish" (§8.8).
+// with the rank.localOnly line and no other player's row (§5.10).
+// Phase 2c (G1): a mistake costs a fish (the lives pill shows 2 full); on the web there is no shop at
+// all (no Home "+", no Settings Shop row); the panel's records are this week's; the victory rows.
 import { expect, test, type Page } from '@playwright/test';
 import type { E2EHooks } from '../../src/app/boot';
 import { defaults } from '../../src/game/save';
+import { periodKeyAt } from '../../src/game/scoring';
 import type { InProgressV2, SaveData } from '../../src/game/types';
 
 type TestWindow = Window & { __mewdoku?: E2EHooks };
@@ -100,13 +103,18 @@ test('1 · first run: the tutorial completes and leads to Level 2', async ({ pag
   expect((await app(page))?.save).toMatchObject({ tutorialDone: true, progress: { level: 2, completed: 1 } });
 });
 
-test('2 · a wrong cat costs a heart and leaves a red X', async ({ page }) => {
+test('2 · a wrong cat costs a fish (the lives pill shows 2 full) and leaves a red X', async ({ page }) => {
   await open(page, '', returning());
   await playLevel(page);
+  const lives = page.locator('.pill--lives');
+  await expect(lives.locator('.life')).toHaveCount(3);
+  await expect(lives.locator('.life[data-full]')).toHaveCount(3);
   const [w] = await wrongCells(page, 1);
   await dbl(page, w as number);
   expect((await game(page))?.hearts).toBe(2);
   await expect(cell(page, w as number)).toHaveAttribute('data-s', 'w');
+  await expect(lives.locator('.life[data-full]')).toHaveCount(2);
+  await expect(lives).toHaveAttribute('aria-label', '2 of 3 fish left');
 });
 
 test('3 · three mistakes → fail overlay → Retry → fresh board', async ({ page }) => {
@@ -149,21 +157,40 @@ test('4b · web rankings: my own records and the rankings-not-available line, ne
   await expect(panel).toBeVisible({ timeout: 10_000 });
   await expect(panel).toContainText("Rankings with other players aren't available in this version. Here are your own records.");
   await expect(panel.locator('.rank-records')).toBeVisible();
+  await expect(panel).toContainText('This week');
+  await expect(panel).toContainText('Perfect streak');
   await expect(panel).toContainText('Levels solved');
   expect(await panel.locator('.rank-list__row, [data-rank-row]').count()).toBe(0);
-  expect((await app(page))?.save.wallet.fish).toBe(3);
+  expect((await app(page))?.save.period.total).toBe(3);
 });
 
-test('4c · the shop on the web: only "Swap fish"; a swap works', async ({ page }) => {
-  await open(page, '', returning({ wallet: { fish: 40, earned: 40 }, stock: { hints: 0, kitties: 3 } }));
-  await page.locator('.screen--home .fish-pill__plus').click();
-  const shop = page.locator('[data-overlay="shop"]');
-  await expect(shop).toBeVisible();
-  await expect(shop.locator('.shop__section--swap')).toContainText('Swap fish');
-  await expect(shop.locator('.shop__section--buy')).toBeHidden();
-  await shop.locator('.shop__row[data-item="hint"] .shop__swap').click();
-  await expect.poll(async () => (await app(page))?.save.stock.hints).toBe(1);
-  expect((await app(page))?.save.wallet.fish).toBe(25);
+test('4c · no shop on the web (phase2c §5.2): no fish pill "+" on Home, no Shop row in Settings; Home shows this week\'s fish', async ({ page }) => {
+  const week = periodKeyAt(Date.now());
+  await open(page, '', returning({ period: { key: week, total: 42, bestKey: week, bestTotal: 42 } }));
+  await expect(page.locator('.screen--home .fish-pill, .screen--home .fish-pill__plus')).toHaveCount(0);
+  const pill = page.locator('.screen--home .period-pill');
+  await expect(pill).toBeVisible();
+  await expect(pill).toHaveAttribute('aria-label', '42 fish this week');
+  await page.locator('.screen--home').getByRole('button', { name: 'Settings' }).click();
+  const settings = page.locator('[data-overlay="settings"]');
+  await expect(settings).toBeVisible();
+  await expect(settings.getByRole('button', { name: 'Shop' })).toHaveCount(0);
+  expect((await app(page))?.save).not.toHaveProperty('wallet');
+});
+
+test('4d · the victory rows: the fish kept, "This week", level points and "Perfect ×1"', async ({ page }) => {
+  await open(page, '', returning());
+  await playLevel(page);
+  const sol = await solution(page);
+  for (let r = 0; r < sol.length; r++) await dbl(page, r * sol.length + (sol[r] as number));
+  await continueFromPanel(page);
+  const victory = page.locator('[data-overlay="victory"]');
+  await expect(victory.locator('.victory__kept')).toHaveAttribute('data-count', '3');
+  await expect(victory.locator('.victory__period')).toHaveText('This week: 3');
+  await expect(victory.locator('.victory__points')).toHaveText(/^\+\d+ points$/);
+  await expect(victory.locator('.victory__streak')).toHaveText('Perfect ×1');
+  const n = sol.length;
+  await expect(victory.locator('.victory__points')).toHaveText(`+${10 * n + 10} points`);
 });
 
 test('5 · reload mid-level restores the exact board', async ({ page }) => {

@@ -1,4 +1,6 @@
-// Owner: C (Phase 2b). F0 baseline of save schema v2 (phase2b §9): the v1 → v2 migration (§9.2),
+// Owner: C (Phase 2b). Phase 2c (G1): the wallet is gone from the live shape (v3, save-v3.ts); the
+// v1 → v2 step still writes the stored v2 shape (with its wallet), which v2 → v3 then drops.
+// F0 baseline of save schema v2 (phase2b §9): the v1 → v2 migration (§9.2),
 // validation of the fields v2 adds (§9.2, "an invalid field gets its default") and their merge rules
 // (§9.3). PURE. save.ts wires these into migrate() / merge().
 // Two §9.3 rules live elsewhere because they need other modules: the paid-grant repair
@@ -8,13 +10,15 @@ import { cfg, type GameConfig, type LocaleId } from '../app/config';
 import { EVENT_ID_RE, isNonNegInt, isRecord, isTime } from './save-fields';
 import type { BoardKey, EventRecord, GroupRecord, SaveData } from './types';
 
-/** The fields v2 adds to v1 (phase2b §9.1), besides settings.locale and inProgress.event. */
-export type V2Fields = Pick<SaveData, 'wallet' | 'points' | 'events' | 'groups' | 'purchases' | 'rank'>;
+/**
+ * The fields v2 adds to v1 (phase2b §9.1), besides settings.locale and inProgress.event, that the
+ * current save still has (phase2c: the v2 wallet is dropped by the v2 → v3 migration).
+ */
+export type V2Fields = Pick<SaveData, 'points' | 'events' | 'groups' | 'purchases' | 'rank'>;
 
-/** §9.2 defaults of the new fields. No retro grant of fish or points [DECISION]. */
+/** §9.2 defaults of the new fields. No retro grant of points [DECISION]. */
 export function v2Defaults(): V2Fields {
   return {
-    wallet: { fish: 0, earned: 0 },
     points: { total: 0 },
     events: {},
     groups: {},
@@ -34,6 +38,8 @@ export function migrate_1_to_2(d: Record<string, unknown>): Record<string, unkno
     v: 2,
     settings: isRecord(d.settings) ? { ...d.settings, locale: 'auto' } : d.settings,
     inProgress: isRecord(d.inProgress) ? { ...d.inProgress, event: null } : d.inProgress,
+    // The stored v2 shape still had the fish wallet (phase2b §9.1); v2 → v3 drops it again.
+    wallet: { fish: 0, earned: 0 },
     ...v2Defaults(),
   };
 }
@@ -42,7 +48,8 @@ export function migrate_1_to_2(d: Record<string, unknown>): Record<string, unkno
 
 /** "<productId>|<purchaseToken>" (§8.4, §9.2). */
 const LEDGER_RE = /^[a-z0-9_]{1,40}\|.{1,200}$/;
-const BOARD_KEY_RE = /^(paw_points|daily_fastest|event_[a-z0-9_]{3,40})$/;
+/** phase2c §3.8: pending scores may be for period_points; paw_points still parses (the v3 migration drops it). */
+const BOARD_KEY_RE = /^(period_points|paw_points|daily_fastest|event_[a-z0-9_]{3,40})$/;
 /** Events solved per id never exceed this (§9.2). */
 const EVENT_SOLVED_MAX = 1000;
 
@@ -99,12 +106,6 @@ export function readV2Fields(d: Record<string, unknown>, c: GameConfig, rep: str
     return fallback;
   };
 
-  const w = group('wallet');
-  const fishOk = intIn(0, c.fish.max);
-  const wallet = w
-    ? { fish: field(w.fish, fishOk, 0, 'wallet.fish'), earned: field(w.earned, fishOk, 0, 'wallet.earned') }
-    : def.wallet;
-
   const p = group('points');
   const points = p ? { total: field(p.total, intIn(0, c.points.max), 0, 'points.total') } : def.points;
 
@@ -149,7 +150,7 @@ export function readV2Fields(d: Record<string, unknown>, c: GameConfig, rep: str
     rank = { pending, lastSubmitAt: field(r.lastSubmitAt, isTime, 0, 'rank.lastSubmitAt') };
   }
 
-  return { wallet, points, events, groups, purchases, rank };
+  return { points, events, groups, purchases, rank };
 }
 
 // ─────────────────────────────── merge (§9.3) ───────────────────────────────
@@ -187,7 +188,7 @@ function mergeGroups(a: Record<string, GroupRecord>, b: Record<string, GroupReco
 }
 
 /**
- * The §9.3 rows for the v2 fields: wallet from the newer document; points max; events and groups
+ * The §9.3 rows for the v2 fields (phase2c: no wallet any more): points max; events and groups
  * per id; noAds OR; ledger union (the newer document's order last), newest iap.tokensKept;
  * rank.pending from the newer document (lastSubmitAt max). settings and inProgress.event follow the
  * newer document in save.ts, which then runs the paid-grant repair (purchases.ts).
@@ -196,7 +197,6 @@ export function mergeV2Fields(local: SaveData, cloud: SaveData, newer: SaveData,
   const older = newer === local ? cloud : local;
   const newerSet = new Set(newer.purchases.tokens);
   return {
-    wallet: { ...newer.wallet },
     points: { total: Math.max(local.points.total, cloud.points.total) },
     events: mergeEvents(local.events, cloud.events),
     groups: mergeGroups(local.groups, cloud.groups, c.groups.keep),

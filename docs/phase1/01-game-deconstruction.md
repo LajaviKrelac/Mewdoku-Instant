@@ -31,6 +31,15 @@ Research limits: the shared web-search budget ran out mid-research, and WebFetch
 
 No new web searches were possible in this pass: the session's search budget was already used up. gamigion.com, felixbraberg.substack.com and pocketables.com are blocked to WebFetch. The heart and revive details, hint stock, monetization numbers and FB platform status therefore still rest on the original research summaries.
 
+**First-hand update (2026-10-09).** The user plays the original on the Play Store and reported four facts first-hand. They **override the research above** wherever the two disagree, and every row they touch carries the source tag **"user, first-hand, 2026-10-09"** (implemented in Phase 2c, [fish-lives-spec](../phase2c/fish-lives-spec.md)):
+
+- **F1. Fish are the lives.** The app shows fish everywhere, not hearts (5.11, 7.1.3; §17 and §18 entry 13).
+- **F2. Kept fish become leaderboard points.** When a level is passed, the remaining lives (fish) are added to the leaderboard points, and the leaderboard ranks points per period: a total that resets (7.1.2, 10.12, 10.16).
+- **F3. Level points reward clean play.** Separately, there are level points that get better when you make no mistakes, streak-like (10.17).
+- **F4. No fish currency.** Fish are not spent on anything. Our Phase 2b build had invented a fish wallet, fish swaps for hints and kitties, and fish packs; the user asked for them to be removed (11.13).
+
+The user did not give the period length, the reset time, the points numbers, or whether dailies and events count. Those are still unknown (§19), and our build uses defaults marked `[DECISION: default, user may change]`.
+
 ---
 
 ## 1. Identity, publisher and market
@@ -98,18 +107,21 @@ Rebuild note: a timed double-tap matters because a wrong cat costs a heart. If X
 
 ## 5. Mistakes, hearts and failure
 
+> **2026-10-09 (user, first-hand):** on the Play Store app the lives are **fish**, not hearts (5.11). "Hearts" in rows 5.1–5.9 is the research's word for the same three lives; read it as "lives (fish)" for the app.
+
 | # | Fact | Conf. | Applies to | Sources |
 |---|---|---|---|---|
-| 5.1 | **3 hearts** (mistake allowance) per level. The store description gives "three mistake chances" (via [tdk-gdd]), and App Store screenshots show a hearts system ([broadpass]). | confirmed | Both | [as], [tdk-gdd], [ac], [broadpass], [tdk-review] |
+| 5.1 | **3 hearts** (mistake allowance) per level. The store description gives "three mistake chances" (via [tdk-gdd]), and App Store screenshots show a hearts system ([broadpass]). **Note 2026-10-09:** the count (3) stands; on the Play Store app those three lives are drawn as fish (5.11; user, first-hand, 2026-10-09). | confirmed | Both | [as], [tdk-gdd], [ac], [broadpass], [tdk-review], user (first-hand, 2026-10-09) |
 | 5.2 | A wrong cat placement costs one heart immediately. | confirmed | Both | [as], [ac], [nicdoku] |
 | 5.3 | "Wrong" means **not in the stored solution**, even if the cell breaks no visible rule. The cat is never shown. The tile becomes a **red X** that stays as revealed information. An iPhone screenshot solver distinguishes "white/red Xs" ([nanma80-req], re-read 2026-10-06). That a wrong cat is never shown and that the check is against the solution, not the visible rules, comes from the web-build teardown and a press summary. | likely | Both | [pocket], [nicdoku], [nanma80-req] |
 | 5.4 | Consequence: every cat on the board is always correct, so the original never needs to highlight cat-vs-cat conflicts. | likely (deduction) | Both | [nicdoku] |
 | 5.5 | Wrong-cat feedback in the web build: the heart dims, the tile turns into a crimson X, a broken-heart effect plays, the board shakes, all placed cats look sad for a few seconds, and an error sound and vibration play. | likely | Web-Y | [nicdoku] |
 | 5.6 | At 0 hearts the attempt is lost. Android Central says you have to start the level over, and an Android macro presses "the retry button" on defeat and solves the level again. A revive offer may come first (5.7). | confirmed (attempt ends; retry exists) | Both | [ac], [leist] |
-| 5.7 | App: a **rewarded-ad revive** is offered after losing all hearts. The analyst source is single-origin, and a "How to revive" video corroborates it weakly. How many hearts a revive restores, and how often it is offered, are unknown. | likely | App | [gam-tenure], [yt-revive] |
+| 5.7 | App: a **rewarded-ad revive** is offered after losing all hearts. The analyst source is single-origin, and a "How to revive" video corroborates it weakly. How many hearts a revive restores, and how often it is offered, are unknown. **Note 2026-10-09:** on the Play Store app a revive gives back fish (the lives are fish, 5.11; user, first-hand, 2026-10-09); how many is still unknown. | likely | App | [gam-tenure], [yt-revive], user (first-hand, 2026-10-09) |
 | 5.8 | Web build: the "Try Again" screen (crying cat over a dark overlay) offers **Retry only**. Retry plays an interstitial, then restarts the same level from scratch with 3 hearts. There is no continue-with-ad, no menu and no hint offer. | likely | Web-Y | [nicdoku] |
 | 5.9 | Hearts are per level. There is no cross-level lives pool or energy meter, and the store copy promises "no energy meters". A claim of 15-minute heart recharge came from unrelated games and was dropped. | likely | App | [as], [ac] |
 | 5.10 | Whether Retry gives the same board: the web build restarts the same level. Not documented for the app. | likely (Web-Y) | Web-Y | [nicdoku] |
+| 5.11 | **On the Play Store app the lives are fish.** The game shows fish everywhere, not hearts; there are 3 per level, and a wrong cat costs one. The hearts in App Store screenshots ([broadpass], 5.1) are either the iOS build or an older version (§18 entry 13). Our parity target is the Play Store app, so our lives are fish. What an empty life looks like and how the loss is animated are unknown (§19). | confirmed | App (Android) | user (first-hand, 2026-10-09) |
 
 ## 6. Hints and boosters
 
@@ -131,8 +143,8 @@ Rebuild note: a timed double-tap matters because a wrong cat costs a heart. If X
 | # | Fact | Conf. | Sources |
 |---|---|---|---|
 | 7.1.1 | A main menu with an **orange level button** that starts the current level. | likely | [leist] |
-| 7.1.2 | After a win: a **"3-golden-fish" animation**, then a **Leaderboard / scoreboard modal**, then a victory screen with a next-level button. An ADB solver builds in "post-solve delays for 3-golden-fish animations" and auto-dismisses the "Scoreboard" and "Victory" screens. A macro "waits eight seconds after the last cat, closes the leaderboard, and presses the next level button" (both re-read 2026-10-06). The fish animation's length and the button colour are not stated first-hand. | likely | [hrafsa], [leist] |
-| 7.1.3 | "Fish" is a post-win reward, currency or rating. It is **not** lives (see §17). What it is used for is unknown. | likely | [hrafsa] |
+| 7.1.2 | After a win: a **"3-golden-fish" animation**, then a **Leaderboard / scoreboard modal**, then a victory screen with a next-level button. An ADB solver builds in "post-solve delays for 3-golden-fish animations" and auto-dismisses the "Scoreboard" and "Victory" screens. A macro "waits eight seconds after the last cat, closes the leaderboard, and presses the next level button" (both re-read 2026-10-06). The fish animation's length and the button colour are not stated first-hand. **2026-10-09 (user, first-hand):** the post-win fish are the **lives kept**: the fish left when the level is passed are added to the leaderboard points (10.16). "Three" fish is the perfect case (no mistake); fewer lives left means fewer fish. | likely (sequence) / confirmed (what the fish are) | [hrafsa], [leist], user (first-hand, 2026-10-09) |
+| 7.1.3 | "Fish" are the **lives** (5.11), and after a win the fish left go to the leaderboard points (10.16). They are not a currency: nothing is bought with them (11.13). This overturns the research's "fish is not lives" ([hrafsa]'s solver only saw the post-win fish; §17). | confirmed | user (first-hand, 2026-10-09); [hrafsa] |
 | 7.1.4 | On defeat, a retry button is shown ("On defeat the retry button is pressed", [leist]). A revive offer is also likely (5.7). | confirmed (retry) / likely (revive) | [leist], [gam-tenure] |
 | 7.1.5 | The player is "logged in". The Android app has Facebook login, probably for the leaderboard or account. | likely | [leist], [revanced] |
 | 7.1.6 | A Daily Puzzles mode exists (§10). | confirmed | [as] |
@@ -189,10 +201,12 @@ The cats-remaining counter is also reported for the app in a Russian review ([ir
 | 10.9 | Some users say levels repeat after about 50. This is hard to reconcile with Levels 351 and 428 existing. It may point to a recycled finite bank. | inferred | App | [worldsapps], [sudokitty] |
 | 10.10 | **Daily Puzzles**: a brand-new puzzle every day (store copy). The daily can be 12×12 (fixture "iphone-12x12-daily-0924"). Unlock level (a fan site says about 21), puzzles per day, calendar, streaks, rewards and reset time are all **unknown**. | confirmed (exists) / inferred (details) | App | [as], [nanma80], [hasokon-hoshi], [meowdokuonline] |
 | 10.11 | **Global leaderboards** to "break your fastest completion times" (store copy). A solve time must therefore be measured, but nothing confirms a visible timer. | confirmed (promise) | App | [as], [mwm] |
-| 10.12 | The app shows a post-win Leaderboard modal. The web build has a "Levels completed" leaderboard that needs sign-in. Users call the leaderboard fake or full of bots. Some mention "points", which suggests a score ranking. | likely | Both | [hrafsa], [nicdoku], [as-rev], [teruteru] |
+| 10.12 | The app shows a post-win Leaderboard modal, and on the Play Store app it is a **points ranking per period** (10.16): the "points" users mention are real. The web build has a "Levels completed" leaderboard that needs sign-in (a different product, §18 entry 7). Users call the app's leaderboard fake or full of bots. | confirmed (App, points per period) / likely (web) | Both | user (first-hand, 2026-10-09); [hrafsa], [nicdoku], [as-rev], [teruteru] |
 | 10.13 | Plays **offline**. Store copy: no energy meters, social grind or busywork. | confirmed | App | [as], [bluestacks] |
 | 10.14 | No play time limit. No source says this outright. | inferred | App | — |
 | 10.15 | Google Play ran LiveOps "event" cards for Oakever (ending around 8/12, 9/23 and 10/1). Their content is unknown, and they may belong to other Oakever titles. | inferred | App | [gp-events] |
+| 10.16 | **The leaderboard ranks points per period.** It shows a points total that resets each period. When a level is passed, the **remaining lives (fish) are added** to the player's leaderboard points. The period's length and reset time, and whether dailies and events add their fish too, are unknown (§19). | confirmed | App (Android) | user (first-hand, 2026-10-09) |
+| 10.17 | **Level points** exist separately from the leaderboard points, and they **get better when you make no mistakes** (streak-like: clean wins in a row are worth more). The numbers, and whether hints matter, are unknown (§19). | confirmed (exists) / unknown (numbers) | App (Android) | user (first-hand, 2026-10-09) |
 
 ## 11. Economy and monetization
 
@@ -210,6 +224,7 @@ The cats-remaining counter is also reported for the app in a Russian review ([ir
 | 11.10 | Android Central's "one BIG problem" is the **ad load**: "mandatory ads, one after almost every single level". The article was read only through search summaries. | likely | App | [ac], [ac-yahoo] |
 | 11.11 | User complaints: long, unskippable ads (some "longer than the levels"), ads that need several screens to close, scam or shopping banners, redirects, and the game's own ads calling it "ad-free" ("complete lies"). | likely | App | [as-rev], [appshunter], [unstar], [teruteru] |
 | 11.12 | iOS screenshots used by a solver contain ad content, which weakly suggests **banners during play**. | inferred | App | [nanma80-req] |
+| 11.13 | **Fish are not a currency.** They are lives (5.11) and, after a win, leaderboard points (10.16); nothing is bought with them. The fish wallet, the fish swaps for hints and kitties and the fish packs of our Phase 2b build were our own invention (parity-spec §2.8, §8.3), and the user asked for them to be removed. | confirmed | App (Android) | user (first-hand, 2026-10-09) |
 
 ## 12. Look and feel (described in words)
 
@@ -288,7 +303,7 @@ These are listed so Phase 2 does not import them by accident, and so Phase 3 has
 
 | Claim | Verdict | Why |
 |---|---|---|
-| Lives are "fish crackers" or "fish" | **Refuted** | App Store screenshots and store text show hearts. Android shows a post-win "3-fish collection", so fish is a reward, not lives. The fish-lives sources are fan or clone designs ([playbook], [cormort]). |
+| Lives are "fish crackers" or "fish" | **Confirmed for the Play Store app (user, first-hand, 2026-10-09)** (was: refuted) | The original verdict: App Store screenshots and store text show hearts, Android shows a post-win "3-fish collection", and the fish-lives sources were fan or clone designs ([playbook], [cormort]). The user, who plays the Play Store app, reports that the lives are fish everywhere and that the post-win fish are the lives kept (5.11, 7.1.3). The App Store hearts are the iOS build or an older version (§18 entry 13). "Fish crackers" stays unconfirmed: the user said fish. |
 | "250 campaign levels", 4×4–11×11 | **Refuted** (count and maximum) | iPhone Levels 351 and 428 exist, and 12×12 boards exist. "250" is just the size of a fan guide's catalogue. |
 | Hearts recharge every 15 min | **Dropped** | The source cited other apps (a Sensor Tower entry and an AARP Crosswordling FAQ). |
 | 5 000+ or 15 000+ levels | **Dropped** | These belong to clones or an unsupported summary. |
@@ -310,6 +325,7 @@ These are listed so Phase 2 does not import them by accident, and so Phase 3 has
 10. **Tap on an X**: clears it, but the teardown author once saw it fail to clear (likely a bug).
 11. **Brief versus research**: the project brief names Yandex 537825 "Meowdoku Cat Puzzle" and a Playgama port by "XdendunGames". Research found 537825 titled "Meowdoku", "Meowdoku Cat Puzzle" at 541580, and a Playgama port by "DRA".
 12. **Single-origin corroboration**: Gamigion and felixbraberg.substack.com are the same author, so the ad-cadence numbers have one origin.
+13. **Lives: hearts or fish** (added 2026-10-09). App Store screenshots ([broadpass]) and store text show hearts; the user, playing the Play Store app, sees fish everywhere (user, first-hand, 2026-10-09). Explanation: the iOS build differs from Android, or the screenshots show an older version. Our parity target is the Play Store app, so the first-hand report wins (5.11).
 
 ## 19. Unknowns that matter for the rebuild
 
@@ -318,10 +334,14 @@ These are carried into [02](02-rebuild-spec.md) as `[DECISION]`s:
 - Hint and kitty starting stock, refill amounts and the "in-game reward system" (app).
 - Whether the app's X → cat cycle is **timed** (a quick double tap) or untimed, i.e. what a slow second tap on an X does (4.2).
 - Whether the kitty button **places** the cat or only highlights it.
-- How many hearts a revive restores, and how many revives are allowed.
-- What the post-win golden fish are: a currency, a rating or a cosmetic.
+- How many hearts (fish) a revive restores, and how many revives are allowed.
+- ~~What the post-win golden fish are: a currency, a rating or a cosmetic.~~ **Resolved 2026-10-09 (user, first-hand):** they are the lives kept; they go to the leaderboard points (7.1.3, 10.16).
 - Daily puzzle structure: count, size, unlock, streaks, calendar, reset time.
-- Leaderboard scope (per level, per daily, levels-completed, points).
+- ~~Leaderboard scope (per level, per daily, levels-completed, points).~~ **Resolved 2026-10-09 (user, first-hand):** points per period, a total that resets (10.16).
+- **New (2026-10-09):** the leaderboard **period's length and reset time** (our default: UTC weeks from Monday 00:00 UTC).
+- **New:** the **points numbers**: how many leaderboard points a kept fish is worth, the level points per level, and how the no-mistake streak raises them (our defaults: 1 point per fish; 10 × n, × 2 on Hard, plus 10 × the streak up to 10).
+- **New:** whether **dailies and events** add their kept fish to the leaderboard and move the streak (our default: both do; the tutorial does neither).
+- **New:** what an **empty life** looks like, and the look and timing of the **fish-loss and win-fish animations** (ours are drawn and timed by us, [provenance](../provenance.md) §9).
 - The exact size and difficulty schedule per level number; whether boards are fixed or generated.
 - Settings in the app (haptics? music?), BGM, language list.
 - What Premium and Premium Plus include.

@@ -47,10 +47,8 @@
   --glow-0: rgba(255, 194, 61, 0); /* the same, transparent (gradient end) */
 
   /* ── Status ──────────────────────────────────────────────────────────── */
-  --heart: #e8506a;
-  --heart-empty: #efe5e8; /* empty-heart fill */
-  --heart-empty-line: #d6c6cc; /* empty-heart outline */
-  --danger: #d33a4a; /* error flash, lost heart */
+  --life-empty: #ede8e2; /* Phase 2c: the pale wash inside an empty life (icon-fish-empty) */
+  --danger: #d33a4a; /* error flash */
   --wrong: #a3193a; /* wrong-X glyph + ring: ≥ 3.18:1 on every tile */
   --hard: #6c3fb5; /* Hard badge: white on it 6.96 */
 
@@ -136,7 +134,6 @@
   --t-draw: 120ms;
   --t-drop: 280ms;
   --t-shake: 300ms;
-  --t-crack: 400ms;
   --t-fade: 400ms;
   --t-overlay: 200ms;
   --ease-drop: cubic-bezier(0.2, 1.4, 0.4, 1);
@@ -181,7 +178,6 @@
   --t-draw: 0ms;
   --t-drop: 0ms;
   --t-shake: 0ms;
-  --t-crack: 150ms;
   --t-fade: 150ms;
   --t-overlay: 150ms;
 }

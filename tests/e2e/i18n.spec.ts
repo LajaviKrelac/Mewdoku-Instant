@@ -1,10 +1,14 @@
-// Owner: E (phase2b §6.9). Localized layout at 320×568 (web-320) and 390×844 (web-390): for German,
+// Owner: E (phase2b §6.9); G2 (Phase 2c: lives are fish in every locale, the 2c victory rows, no web
+// shop). Localized layout at 320×568 (web-320) and 390×844 (web-390): for German,
 // Russian, Arabic, Thai, Japanese and the pseudo-locale "xx-long" (+40 % length, accents; dev and
 // e2e builds only, ?i18n=pseudo), Home, the game screen and Settings render in that language with
 // no horizontal overflow, no clipped button, chip or title, and — for Arabic — dir=rtl with the board
 // left to right and the top-bar actions on the right (the FB safe zone is top-left).
 // Screenshots: attached to the report; with I18N_SHOTS=1 the 320 px set is also written to
 // docs/i18n/screenshots/ for the native reviewers (docs/i18n/review-log.md).
+// Phase 2c (fish-lives-spec §5.2, §7.3): the web build has no shop at all, so the shop checks moved to
+// fbig.spec.ts (G3); each locale checks the lives pill's label (its own "fish left" copy) and the
+// victory's kept-fish row, level points and streak chip at 320 px instead.
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,6 +19,7 @@ import { catalog as de } from '../../src/i18n/locales/de';
 import { catalog as ja } from '../../src/i18n/locales/ja';
 import { catalog as ru } from '../../src/i18n/locales/ru';
 import { catalog as th } from '../../src/i18n/locales/th';
+import { en } from '../../src/i18n/en';
 
 type TestWindow = Window & { __mewdoku?: E2EHooks };
 
@@ -31,15 +36,19 @@ interface Case {
   readonly pseudo?: boolean;
   /** The Settings title the catalogue defines (proves the catalogue is the one on screen). */
   readonly settingsTitle: string;
+  /** The catalogue's lives label template (game.hearts.a11y), filled with 3 of 3 (Phase 2c §1.1). */
+  readonly livesLabel: string;
 }
 
+const lives = (template: string | undefined): string => (template ?? en['game.hearts.a11y']).replace('{hearts}', '3').replace('{max}', '3');
+
 const CASES: readonly Case[] = [
-  { name: 'de', browser: 'de-DE', lang: 'de', settingsTitle: de['settings.title'] ?? '' },
-  { name: 'ru', browser: 'ru-RU', lang: 'ru', settingsTitle: ru['settings.title'] ?? '' },
-  { name: 'ar', browser: 'ar-EG', lang: 'ar', rtl: true, settingsTitle: ar['settings.title'] ?? '' },
-  { name: 'th', browser: 'th-TH', lang: 'th', settingsTitle: th['settings.title'] ?? '' },
-  { name: 'ja', browser: 'ja-JP', lang: 'ja', settingsTitle: ja['settings.title'] ?? '' },
-  { name: 'xx-long', browser: 'en-US', lang: 'en', pseudo: true, settingsTitle: '⟦' },
+  { name: 'de', browser: 'de-DE', lang: 'de', settingsTitle: de['settings.title'] ?? '', livesLabel: lives(de['game.hearts.a11y']) },
+  { name: 'ru', browser: 'ru-RU', lang: 'ru', settingsTitle: ru['settings.title'] ?? '', livesLabel: lives(ru['game.hearts.a11y']) },
+  { name: 'ar', browser: 'ar-EG', lang: 'ar', rtl: true, settingsTitle: ar['settings.title'] ?? '', livesLabel: lives(ar['game.hearts.a11y']) },
+  { name: 'th', browser: 'th-TH', lang: 'th', settingsTitle: th['settings.title'] ?? '', livesLabel: lives(th['game.hearts.a11y']) },
+  { name: 'ja', browser: 'ja-JP', lang: 'ja', settingsTitle: ja['settings.title'] ?? '', livesLabel: lives(ja['game.hearts.a11y']) },
+  { name: 'xx-long', browser: 'en-US', lang: 'en', pseudo: true, settingsTitle: '⟦', livesLabel: '' },
 ];
 
 const strip = (s: string): string => s.replace(/[⁦-⁩]/g, '').trim();
@@ -92,7 +101,7 @@ async function noClipping(page: Page): Promise<void> {
   const clipped = await page.evaluate(() => {
     const out: string[] = [];
     const sel =
-      '.btn, .btn__label, .chip, .chip__text, .top-bar__text, .top-bar__suffix, .overlay__title, .settings-row__label, .segmented__opt, .switch__state, .daily-card__text > *, .tool__badge, .shop__name, .victory__sub, .victory__praise, .ranking__title';
+      '.btn, .btn__label, .chip, .chip__text, .top-bar__text, .top-bar__suffix, .overlay__title, .settings-row__label, .segmented__opt, .switch__state, .daily-card__text > *, .tool__badge, .shop__name, .victory__sub, .victory__praise, .ranking__title, .ranking__sub, .period-pill, .victory__kept, .victory__period, .victory__points, .victory__streak';
     for (const el of Array.from(document.querySelectorAll<HTMLElement>(sel))) {
       if (el.closest('[hidden], [inert], .sr-only')) continue;
       const s = getComputedStyle(el);
@@ -148,6 +157,9 @@ for (const c of CASES) {
       await page.waitForTimeout(900); // board entry
       await noOverflow(page);
       await noClipping(page);
+      // Phase 2c §1.1: three fish where the hearts were, labelled in the locale ("3 of 3 fish left").
+      await expect(page.locator('.pill--lives .life[data-full]')).toHaveCount(3);
+      if (!c.pseudo) expect(strip((await page.locator('.pill--lives').getAttribute('aria-label')) ?? '')).toBe(strip(c.livesLabel));
       await shot(page, info, c, 'game');
 
       if (c.rtl) {
@@ -182,16 +194,12 @@ for (const c of CASES) {
       await shot(page, info, c, 'settings');
     });
 
-    // Review UX-8: the shop and the win flow's screens are checked per locale too.
-    test('the shop, the ranking panel and the victory fit and read in the locale', async ({ page }, info) => {
+    // Review UX-8: the win flow's screens are checked per locale too (Phase 2c: the web has no shop;
+    // the period pill, the ranking subtitle and the victory's kept-fish row, points and streak chip).
+    test('the period pill, the ranking panel and the victory fit and read in the locale', async ({ page }, info) => {
       await bootHome(page, c);
-      await page.locator('.screen--home .fish-pill__plus').click();
-      await expect(page.locator('[data-overlay="shop"]')).toBeVisible();
-      await page.waitForTimeout(300);
-      await noOverflow(page);
-      await noClipping(page);
-      await shot(page, info, c, 'shop');
-      await page.keyboard.press('Escape');
+      await expect(page.locator('.screen--home .period-pill')).toBeVisible();
+      await expect(page.locator('.screen--home .fish-pill__plus')).toHaveCount(0);
       await page.locator('.home__play').click();
       await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
       await page.evaluate(() => (window as TestWindow).__mewdoku?.solve());
@@ -203,6 +211,9 @@ for (const c of CASES) {
       await shot(page, info, c, 'ranking');
       await tap.click();
       await expect(page.locator('[data-overlay="victory"] .victory__primary')).toBeVisible({ timeout: 4000 });
+      await expect(page.locator('[data-overlay="victory"] .victory__kept')).toBeVisible();
+      await expect(page.locator('[data-overlay="victory"] .victory__points')).toBeVisible();
+      await expect(page.locator('[data-overlay="victory"] .victory__streak')).toBeVisible();
       await page.waitForTimeout(800);
       await noOverflow(page);
       await noClipping(page);
@@ -212,12 +223,13 @@ for (const c of CASES) {
 }
 
 // ── Phase 2b review fixes (group U) ───────────────────────────────────────────────────────────────
-// A11Y-I18N-1: Settings → Language relabels the open dialog, a Shop opened before the switch and the
-// Home behind it at once. ROB-2: a locale chunk that failed is fetched again from a cache-busting URL
-// when the language is chosen again. UX-3: with the FB safe zone (emulated <html data-fb-safe>) no
-// dialog control sits in the top-left 64 × 64, also mirrored in Arabic. UX-8, I18N-TEXT-2: Russian
-// shop names never run under their button, and the event title keeps its " · N". I18N-TEXT-1: the
-// Home event card grows with 150 % text. UX-10: an Arabic price keeps its gap to its label.
+// A11Y-I18N-1: Settings → Language relabels the open dialog, a How to play opened before the switch
+// and the Home behind it (its period pill too) at once. ROB-2: a locale chunk that failed is fetched
+// again from a cache-busting URL when the language is chosen again. UX-3: with the FB safe zone
+// (emulated <html data-fb-safe>) no dialog control sits in the top-left 64 × 64, also mirrored in
+// Arabic. I18N-TEXT-2: the Russian event title keeps its " · N". I18N-TEXT-1: the Home event card
+// grows with 150 % text. Phase 2c: the web has no shop (§5.2), so the shop cases (UX-8 names, UX-10
+// Arabic price gap) live in fbig.spec.ts (G3).
 
 const IN_EVENT_MS = new Date('2026-11-16T12:00:00Z').getTime();
 
@@ -230,7 +242,7 @@ async function seededHome(page: Page, patch: Record<string, unknown> = {}, query
   const json = await page.evaluate((p) => {
     const s = (window as TestWindow).__mewdoku?.app().save;
     if (!s) throw new Error('no save');
-    return JSON.stringify({ ...s, tutorialDone: true, sessions: 4, progress: { ...s.progress, level: 37, completed: 36 }, wallet: { fish: 40, earned: 40 }, ...p });
+    return JSON.stringify({ ...s, tutorialDone: true, sessions: 4, progress: { ...s.progress, level: 37, completed: 36 }, ...p });
   }, patch);
   await page.evaluate((j) => (window as TestWindow).__mewdoku?.seedSave(j), json);
   await page.goto(query);
@@ -247,12 +259,14 @@ const visibleText = (page: Page, sel: string): Promise<string> =>
 test.describe('review fixes: switching and loading languages (A11Y-I18N-1, ROB-2)', () => {
   test.use({ locale: 'en-US' });
 
-  test('Settings → Language relabels Settings, a Shop opened before, and Home at once', async ({ page }) => {
+  test('Settings → Language relabels Settings, a How to play opened before, and Home at once', async ({ page }) => {
     await seededHome(page);
-    await page.locator('.screen--home .fish-pill__plus').click();
-    await expect(page.locator('[data-overlay="shop"]')).toBeVisible();
+    await page.locator('.screen--home .top-bar__btn--settings').click();
+    await page.locator('[data-overlay="settings"] .settings__howto-link').click();
+    await expect(page.locator('[data-overlay="how_to_play"]')).toBeVisible();
     await page.keyboard.press('Escape');
-    await expect(page.locator('[data-overlay="shop"]')).toBeHidden();
+    await expect(page.locator('[data-overlay="how_to_play"]')).toBeHidden();
+    await page.keyboard.press('Escape');
     await page.locator('.screen--home .top-bar__btn--settings').click();
     await page.locator('[data-overlay="settings"] .settings__language-link').click();
     await page.locator('[data-overlay="settings"] .lang-opt[data-locale="de"]').click();
@@ -262,11 +276,15 @@ test.describe('review fixes: switching and loading languages (A11Y-I18N-1, ROB-2
     expect(await visibleText(page, '[data-overlay="settings"] .overlay__title')).toBe(de['settings.title']);
     expect(await visibleText(page, '[data-overlay="settings"] [data-setting="sound"] .settings-row__label')).toBe(de['settings.sound']);
     expect(await visibleText(page, '.home__tagline')).toBe(de['app.tagline']);
+    // The Home period pill follows the language (its label is "0 Fische diese Woche").
+    const pillLabel = await page.locator('.screen--home .period-pill').getAttribute('aria-label');
+    expect(strip(pillLabel ?? '')).toBe((de['period.pill.week.other'] ?? '').replace('{count}', '0'));
     await page.keyboard.press('Escape');
-    await page.locator('.screen--home .fish-pill__plus').click();
-    await expect(page.locator('[data-overlay="shop"]')).toBeVisible();
-    expect(await visibleText(page, '[data-overlay="shop"] .shop__section--swap .shop__heading')).toBe(de['shop.swap']);
-    expect(await visibleText(page, '[data-overlay="shop"] .shop__row[data-item="hint"] .shop__name')).toBe(de['shop.swap.hint']);
+    await page.locator('.screen--home .top-bar__btn--settings').click();
+    await page.locator('[data-overlay="settings"] .settings__howto-link').click();
+    await expect(page.locator('[data-overlay="how_to_play"]')).toBeVisible();
+    expect(await visibleText(page, '[data-overlay="how_to_play"] .howto__lives')).toBe(de['howto.hearts']);
+    expect(await visibleText(page, '[data-overlay="how_to_play"] .howto__points')).toBe(de['howto.points.week']);
   });
 
   test('a locale chunk that failed loads from a cache-busting URL when the language is chosen again', async ({ page }) => {
@@ -293,7 +311,7 @@ test.describe('review fixes: switching and loading languages (A11Y-I18N-1, ROB-2
   });
 });
 
-test.describe('review fixes: Arabic (UX-3, UX-10)', () => {
+test.describe('review fixes: Arabic (UX-3)', () => {
   test.use({ locale: 'ar-EG' });
 
   test('with the FB safe zone, no dialog control sits in the top-left 64 × 64 (mirrored heads too)', async ({ page }, info) => {
@@ -307,12 +325,15 @@ test.describe('review fixes: Arabic (UX-3, UX-10)', () => {
       new MutationObserver(keep).observe(document.documentElement, { attributes: true, attributeFilter: ['data-fb-safe'] });
       keep();
     });
+    // A control counts when it is really there to tap: on screen, not clipped by its own scrolled
+    // panel and not covered by a dialog on top (Phase 2c: How to play opens over a scrolled Settings).
     const zoneHits = (): Promise<string[]> =>
       page.evaluate(() => {
         const out: string[] = [];
         for (const el of Array.from(document.querySelectorAll<HTMLElement>('.overlay button, .overlay a[href]'))) {
           const r = el.getBoundingClientRect();
           if (r.width === 0 || r.height === 0 || el.closest('[hidden]')) continue;
+          if (!el.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2))) continue;
           if (r.left < 64 && r.top < 64) out.push(`${el.className} [${Math.round(r.left)},${Math.round(r.top)}]`);
         }
         return out;
@@ -325,49 +346,20 @@ test.describe('review fixes: Arabic (UX-3, UX-10)', () => {
     await page.waitForTimeout(300);
     expect(await zoneHits(), 'About').toEqual([]);
     await page.keyboard.press('Escape');
-    await page.keyboard.press('Escape');
-    await page.locator('.screen--home .fish-pill__plus').click();
-    await expect(page.locator('[data-overlay="shop"]')).toBeVisible();
+    await page.locator('[data-overlay="settings"] .settings__howto-link').click();
+    await expect(page.locator('[data-overlay="how_to_play"]')).toBeVisible();
     await page.waitForTimeout(300);
-    expect(await zoneHits(), 'Shop').toEqual([]);
-  });
-
-  test('a price after a button label keeps its gap in right-to-left', async ({ page }, info) => {
-    test.skip(info.project.name !== 'web-390', 'the swap button stacks below 390 px');
-    await seededHome(page);
-    await page.locator('.screen--home .fish-pill__plus').click();
-    const btn = page.locator('[data-overlay="shop"] .shop__row[data-item="hint"] .shop__swap');
-    await expect(btn).toBeVisible();
-    const gap = await btn.evaluate((b) => {
-      const label = (b.querySelector('.btn__label') as HTMLElement).getBoundingClientRect();
-      const price = (b.querySelector('.num') as HTMLElement).getBoundingClientRect();
-      return Math.min(Math.abs(label.left - price.right), Math.abs(price.left - label.right));
-    });
-    expect(gap).toBeGreaterThanOrEqual(6);
+    expect(await zoneHits(), 'How to play').toEqual([]);
   });
 });
 
-test.describe('review fixes: Russian at the small phone (UX-8, I18N-TEXT-2)', () => {
+test.describe('review fixes: Russian at the small phone (I18N-TEXT-2)', () => {
   test.use({ locale: 'ru-RU' });
 
-  test('shop names stay clear of their buttons; the event title keeps its puzzle number', async ({ page }, info) => {
+  test('the event title keeps its puzzle number', async ({ page }, info) => {
     test.skip(info.project.name !== 'web-320', 'the small phone is the tight case');
     await page.clock.setFixedTime(IN_EVENT_MS);
     await seededHome(page);
-    await page.locator('.screen--home .fish-pill__plus').click();
-    await expect(page.locator('[data-overlay="shop"]')).toBeVisible();
-    const rows = await page.evaluate(() =>
-      Array.from(document.querySelectorAll<HTMLElement>('[data-overlay="shop"] .shop__row')).map((row) => {
-        const name = row.querySelector<HTMLElement>('.shop__name') as HTMLElement;
-        const action = row.querySelector<HTMLElement>('.shop__action') as HTMLElement;
-        return { name: name.textContent, sw: name.scrollWidth, cw: name.clientWidth, right: name.getBoundingClientRect().right, actionLeft: action.getBoundingClientRect().left };
-      }),
-    );
-    for (const r of rows) {
-      expect(r.sw, `${r.name} fits`).toBeLessThanOrEqual(r.cw + 1);
-      expect(r.right, `${r.name} ends before its button`).toBeLessThanOrEqual(r.actionLeft + 1);
-    }
-    await page.keyboard.press('Escape');
     await page.locator('.event-card').click();
     await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'event');
     await page.locator('.screen--event .event__play').click();

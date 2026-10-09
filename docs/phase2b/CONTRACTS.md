@@ -1,6 +1,6 @@
 # Phase 2b contracts: ownership, cross-workstream APIs, data flow, conventions
 
-Status: written by the F0 foundation step (2026-10-08); **updated at integration (2026-10-09) to the final APIs: §11 lists every change since F0** · Applies to: workstreams A–E of [parity-spec](parity-spec.md) §12 · Branch `claude/mewdoku-instant`
+Status: written by the F0 foundation step (2026-10-08); **updated at integration (2026-10-09) to the final APIs: §11 lists every change since F0**; **Phase 2c API changes: §12** (pointer to [fish-lives-spec §7.4](../phase2c/fish-lives-spec.md)) · Applies to: workstreams A–E of [parity-spec](parity-spec.md) §12 · Branch `claude/mewdoku-instant`
 
 This file is the contract between the five Phase 2b workstreams. It extends [Phase 2 CONTRACTS](../phase2/CONTRACTS.md); where the two differ, this file wins for 2b.
 
@@ -430,4 +430,23 @@ The fixer groups P (platform, banner, data), R (app core, performance) and U (UI
 | `game/ramp.ts` (C) | `DAILY_12_FROM`, `SUNDAY_12`, `isTwelveSunday(dateKey)` (PAR-1) |
 | Config (lead) | `support.feedbackUrl` (empty), `support.feedbackOnFbig` (false) |
 | Boot (C) | `<html data-fb-safe>` is set right after `init()` on FBIG (UX-3); the top bar keeps it in step |
+
+## 12. Phase 2c (2026-10-09): fish are lives — API changes
+
+The exact Phase 2c interfaces (G1 game + app, G2 UI, G3 platform) are **[fish-lives-spec §7.4](../phase2c/fish-lives-spec.md)**; where this file's §3–§11 disagree with them, §7.4 wins. Ownership for 2c was spec §7.1. What integration (I-1…I-3) settled beyond §7.4:
+
+| Area | Final state |
+|---|---|
+| Save (G1) | `SaveData = SaveDataV3` (`streak`, `period`; no `wallet`), `SAVE_VERSION = 3`, `src/game/save-v3.ts`; `BoardKey` keeps `'paw_points'` only so old saves parse |
+| Scoring (G1) | `periodKeyAt`, `periodIndex`, `PERIOD_SPAN`, `encodePeriodScore`, `periodTotal`, `addPeriodPoints`, `keptPoints`, `levelPointsFor`, `streakAfterWin`, `breakStreak`; `DecodedScore` is `'period' \| 'time' \| 'event'` (**the `'points'` kind was removed at I-3**); `boardFormat` has no paw-points format; `pointsFor` and `encodePointsScore` are gone |
+| Events (G1) | `Reward` is `{ hints?, kitties? }` (**`fish` removed at I-3**) |
+| Win flow (G1) | `WinSummary { kept, perfect, streak, period, pointsEarned, pointsTotal, … }`; `panelAt(N)`, `winTimeline` by N; `WinFlowInput { kept, perFish, periodBefore, periodKind, … }` |
+| Ranking flow (G1) | `submitAll(entries, solveMs)` (one limiter check per win), `fetch(board, band?)`, `bandFilter`; reads `RankEntry.boardRank` directly (the local intersection type went at I-3) |
+| Game screen / pills (G2) | `lifeSlots()`, `departLife(slot)`, `showPeriodCounter(total)`, `periodRect()`, `periodLabel(text)`; `createPeriodPill`. **Removed at I-3:** `GameScreen.fishRect / showFishPill / fishLabel`, `PillsView.showFish / fishRect / fishLabel` |
+| Fish flight (G2) | `FlyFishOptions.startScale`, `fishSpread(index, count)`, `fishSizeFromRect`. **Removed at I-3:** `fishSourceRows`, `fishSizePx` |
+| Overlays and screens (G2) | **Removed at I-3:** `VictoryProps.fish / bonus / onShop`, `HomeView.fish`, `HomeCallbacks.onShop`, `ShopProps.fish / hintPrice / kittyPrice / onSwap`, `RewardedPromptProps.swap`, `RankHubTab 'points'`, `RankingBoardKind 'points'`, `RankScoreView 'points'`, `RankingResultView 'level'` (the paw-points subtitle). `GroupResultOutcome 'place'` carries `hints` |
+| i18n (G2, lead) | Appendix A of the spec; **removed at I-3:** `rank.points`, `rank.records.thisLevel` (17 catalogues, `meta.ts`, `drafted-from.json`) |
+| Platform (G3) | `RankEntry.boardRank?` (set on every band read); `parseLeaderboardMap` accepts `period_points` (still parses the retired `paw_points`); `PaymentsProvider.catalog()` / `purchase()` take `iap.catalog` ids only, `purchases()` also returns `iap.retired` ids; band reads stop once they hold `n` band entries (lead accepted, STATUS-2c §5) |
+| Build (lead, I-1) | `playwright.config.ts` maps `period_points → e2e_period_points` and the three event boards; `paw_points` and `daily_fastest` are not mapped |
+| Config (lead) | 2c keys per spec §8; the 2b fish, shop and points keys stay `@deprecated` and unread (the config file never removes a key) |
 

@@ -141,8 +141,12 @@ export interface FakeGameScreen extends GameScreen {
   cb: GameScreenCallbacks;
   readonly played: string[];
   entries: number;
-  /** showScrim() calls (the win flow's scrim at fx.win.scrimAtMs). */
+  /** showScrim() calls (the win flow's scrim before the ranking panel). */
   scrims: number;
+  /** phase2c §2.2: departLife(slot) calls, in order. */
+  readonly departed: number[];
+  /** phase2c §2.2: showPeriodCounter(total) calls, in order. */
+  readonly counters: number[];
 }
 
 export interface FakeRouter extends Router {
@@ -153,8 +157,8 @@ export interface FakeRouter extends Router {
   homeCb: HomeCallbacks | null;
   eventView: EventScreenView | null;
   eventCb: EventScreenCallbacks | null;
-  /** Auto-answer for O2: 'accept' | 'decline' | 'swap' (phase2b §2.8; declines when no swap is offered) | null (stay open). */
-  rewardedAnswer: 'accept' | 'decline' | 'swap' | null;
+  /** Auto-answer for O2: 'accept' | 'decline' | null (stay open). Phase 2c: no swap (§5.4). */
+  rewardedAnswer: 'accept' | 'decline' | null;
   /** What overlaysReady() answers (false: the lazy overlay chunk cannot be loaded). */
   chunkOk: boolean;
   /** beginLeave() calls (PERF-1), in order. */
@@ -221,6 +225,8 @@ export function createFakeRouter(bus: AppBus, log: Log): FakeRouter {
         played: [],
         entries: 0,
         scrims: 0,
+        departed: [],
+        counters: [],
         update: (v) => void (g.last = v),
         destroy: () => undefined,
         playEvent: (ev) => void g.played.push(ev.type),
@@ -229,10 +235,12 @@ export function createFakeRouter(bus: AppBus, log: Log): FakeRouter {
         toolRect: () => null,
         boardRect: () => null,
         focusBoard: () => undefined,
-        // phase2b win-flow hooks (B's GameScreen; unused by the Phase 2 session)
-        fishRect: () => null,
-        showFishPill: () => undefined,
-        fishLabel: () => undefined,
+        // phase2c win-flow hooks (G2's GameScreen): no rects in Node, so the flow runs without a flight.
+        lifeSlots: () => [],
+        departLife: (slot) => void g.departed.push(slot),
+        showPeriodCounter: (total) => void g.counters.push(total),
+        periodRect: () => null,
+        periodLabel: () => undefined,
         glow: () => ({ done: Promise.resolve(), cancel: () => undefined, finish: () => undefined }),
         showScrim: () => void g.scrims++,
       };
@@ -252,7 +260,6 @@ export function createFakeRouter(bus: AppBus, log: Log): FakeRouter {
         const answer = r.rewardedAnswer;
         queueMicrotask(() => {
           if (answer === 'accept') rp.onAccept();
-          else if (answer === 'swap' && rp.swap) rp.swap.onSwap();
           else rp.onDecline();
         });
       }

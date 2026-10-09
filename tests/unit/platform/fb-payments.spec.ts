@@ -1,10 +1,13 @@
-// Owner: D
+// Owner: D (Phase 2b); G3 (Phase 2c)
 // FB payments (phase2b §8.2, §8.4, §8.8): the capability rule (not iOS, purchaseAsync supported),
 // onReady gating (never on Messenger.com), the iap.readyTimeoutMs bounds, error mapping, consume
 // calls, the stub catalogue, and what a restore may pass on (ours, unconsumed, charges only).
+// Phase 2c (docs/phase2c/fish-lives-spec.md §5.3): the catalogue and purchase() take the three products
+// on sale (cfg.iap.catalog) only; purchases() also passes on the retired fish packs (cfg.iap.retired),
+// so the boot restore can compensate and consume them.
 import { describe, expect, it } from 'vitest';
 import { createFakeClock } from '../../../src/app/clock';
-import { cfg } from '../../../src/app/config';
+import { cfg, mergeConfig } from '../../../src/app/config';
 import { createFbPayments, mapPurchaseError, paymentsSupported, toProduct, toPurchase } from '../../../src/platform/fb/fb-payments';
 import { createStub, drain, track, type StubConfig } from './helpers';
 
@@ -87,10 +90,11 @@ describe('createFbPayments: onReady', () => {
 });
 
 describe('createFbPayments: catalogue', () => {
-  it('lists our five products with the localised price string and currency; cached for iap.catalogCacheMs', async () => {
+  it('lists the three products on sale with the localised price string and currency; cached for iap.catalogCacheMs', async () => {
     const { payments, control, clock } = await setup();
     const list = await payments.catalog();
-    expect(list.map((p) => p.id)).toEqual(['remove_ads', 'hints_15', 'kitties_8', 'fish_250', 'fish_900']);
+    expect(list.map((p) => p.id)).toEqual(['remove_ads', 'hints_15', 'kitties_8']);
+    expect(list.map((p) => p.id)).toEqual(cfg.iap.catalog.map((p) => p.id));
     expect(list[0]).toEqual({ id: 'remove_ads', price: '$3.99', currency: 'USD' });
     await payments.catalog();
     expect(control.count('payments.getCatalogAsync')).toBe(1);
@@ -99,13 +103,30 @@ describe('createFbPayments: catalogue', () => {
     expect(control.count('payments.getCatalogAsync')).toBe(2);
   });
 
+  it('phase2c: a test app that still lists the retired fish packs: the catalogue never passes them on', async () => {
+    const { payments } = await setup({
+      payments: {
+        catalog: [
+          { productID: 'remove_ads', price: '$3.99', priceCurrencyCode: 'USD' },
+          { productID: 'fish_250', price: '$1.99', priceCurrencyCode: 'USD' },
+          { productID: 'hints_15', price: '$1.99', priceCurrencyCode: 'USD' },
+          { productID: 'fish_900', price: '$4.99', priceCurrencyCode: 'USD' },
+        ],
+      },
+    });
+    await expect(payments.catalog()).resolves.toEqual([
+      { id: 'remove_ads', price: '$3.99', currency: 'USD' },
+      { id: 'hints_15', price: '$1.99', currency: 'USD' },
+    ]);
+  });
+
   it('drops products that are not ours or have no price; a failure is [] and not cached', async () => {
     const { payments, control } = await setup({
       payments: {
         catalog: [
           { productID: 'hints_15', price: '1,99 €', priceCurrencyCode: 'EUR' },
           { productID: 'gems_100', price: '$0.99' },
-          { productID: 'fish_250', price: '' },
+          { productID: 'kitties_8', price: '' },
         ],
         errors: { getCatalogAsync: ['NETWORK_FAILURE'] },
       },
@@ -139,9 +160,9 @@ describe('createFbPayments: purchase, purchases, consume', () => {
 
   it('cancel is cancelled; other failures are error; nothing is left half-done', async () => {
     const { payments, control } = await setup({ payments: { purchase: 'USER_INPUT' } });
-    await expect(payments.purchase('fish_250', 'x')).resolves.toEqual({ ok: false, reason: 'cancelled' });
+    await expect(payments.purchase('kitties_8', 'x')).resolves.toEqual({ ok: false, reason: 'cancelled' });
     control.configure({ payments: { purchase: 'NETWORK_FAILURE' } });
-    await expect(payments.purchase('fish_250', 'x')).resolves.toEqual({ ok: false, reason: 'error' });
+    await expect(payments.purchase('kitties_8', 'x')).resolves.toEqual({ ok: false, reason: 'error' });
     expect(control.purchases()).toEqual([]);
   });
 
@@ -150,14 +171,43 @@ describe('createFbPayments: purchase, purchases, consume', () => {
     let release: () => void = () => undefined;
     const real = sdk.payments!.purchaseAsync.bind(sdk.payments);
     sdk.payments!.purchaseAsync = (c) => new Promise((res) => (release = () => void real(c).then(res)));
-    const first = track(payments.purchase('fish_900', 'x'));
+    const first = track(payments.purchase('kitties_8', 'x'));
     await drain();
-    await expect(payments.purchase('fish_250', 'x')).resolves.toEqual({ ok: false, reason: 'not_ready' });
+    await expect(payments.purchase('hints_15', 'x')).resolves.toEqual({ ok: false, reason: 'not_ready' });
     release();
     await drain();
     expect(first.value).toMatchObject({ ok: true });
     await expect(payments.purchase('gems' as never, 'x')).resolves.toEqual({ ok: false, reason: 'error' });
     expect(control.count('payments.purchaseAsync')).toBe(1);
+  });
+
+  it('phase2c: a retired fish pack can never be bought: purchase() answers error without an SDK call', async () => {
+    // Even where a test app still lists them in its catalogue.
+    const { payments, control } = await setup({ payments: { catalog: [{ productID: 'fish_250', price: '$1.99' }, { productID: 'fish_900', price: '$4.99' }] } });
+    await expect(payments.purchase('fish_250', 'x')).resolves.toEqual({ ok: false, reason: 'error' });
+    await expect(payments.purchase('fish_900', 'x')).resolves.toEqual({ ok: false, reason: 'error' });
+    expect(control.count('payments.purchaseAsync')).toBe(0);
+    expect(control.purchases()).toEqual([]);
+  });
+
+  it('phase2c: purchases() passes on unconsumed retired packs (fish_250, fish_900) with catalogue ones, for the restore', async () => {
+    const { payments, control } = await setup({ payments: { unconsumed: [{ productID: 'fish_250' }, { productID: 'hints_15' }, { productID: 'fish_900' }] } });
+    const list = await payments.purchases();
+    expect(list?.map((p) => p.productId)).toEqual(['fish_250', 'hints_15', 'fish_900']);
+    expect(list?.[0]).toMatchObject({ productId: 'fish_250', purchaseToken: 'stub-unconsumed-1-fish_250', paymentId: 'stub-unconsumed-payment-1' });
+    // The restore consumes it like any other purchase.
+    await expect(payments.consume('stub-unconsumed-1-fish_250')).resolves.toBe(true);
+    expect((await payments.purchases())?.map((p) => p.productId)).toEqual(['hints_15', 'fish_900']);
+    expect(control.purchases().find((p) => p.productID === 'fish_250')?.isConsumed).toBe(true);
+  });
+
+  it('phase2c: what counts as retired comes from cfg.iap.retired', async () => {
+    const clock = createFakeClock();
+    const { sdk } = createStub({ payments: { unconsumed: [{ productID: 'fish_250' }, { productID: 'kitties_8' }] } }, clock);
+    await sdk.initializeAsync();
+    await sdk.startGameAsync();
+    const noRetired = createFbPayments(sdk, { timers: clock, config: mergeConfig({ iap: { retired: [] } }) });
+    expect((await noRetired.purchases())?.map((p) => p.productId)).toEqual(['kitties_8']);
   });
 
   it('purchases() lists unconsumed purchases; consume() removes them; consume of an unknown token is false', async () => {
@@ -215,10 +265,14 @@ describe('createFbPayments: purchase, purchases, consume', () => {
 });
 
 describe('mapping helpers', () => {
-  it('toProduct / toPurchase accept only our ids', () => {
-    expect(toProduct({ productID: 'fish_250', price: '$1.99' })).toEqual({ id: 'fish_250', price: '$1.99', currency: '' });
-    expect(toProduct({ productID: 'FISH_250', price: '$1.99' })).toBeNull();
+  it('toProduct takes products on sale only; toPurchase takes ours, retired ones included (phase2c §5.3)', () => {
+    expect(toProduct({ productID: 'hints_15', price: '$1.99' })).toEqual({ id: 'hints_15', price: '$1.99', currency: '' });
+    expect(toProduct({ productID: 'fish_250', price: '$1.99' })).toBeNull(); // retired: never on sale
+    expect(toProduct({ productID: 'fish_900', price: '$4.99' })).toBeNull();
+    expect(toProduct({ productID: 'HINTS_15', price: '$1.99' })).toBeNull();
     expect(toProduct(null)).toBeNull();
+    expect(toPurchase({ productID: 'fish_900', purchaseToken: 'y', purchaseTime: 1_760_000_000 })).toMatchObject({ productId: 'fish_900' });
+    expect(toPurchase({ productID: 'gems_100', purchaseToken: 'z' })).toBeNull();
     expect(toPurchase({ productID: 'fish_250', purchaseToken: 'x', purchaseTime: 'soon' })).toEqual({
       productId: 'fish_250',
       purchaseToken: 'x',

@@ -59,12 +59,8 @@ const settingsProps = (over: Partial<SettingsProps> = {}): SettingsProps => ({
 });
 
 const shopProps = (over: Partial<ShopProps> = {}): ShopProps => ({
-  fish: 128,
-  hintPrice: cfg.shop.hintFish,
-  kittyPrice: cfg.shop.kittyFish,
-  buy: { kind: 'hidden' },
+  buy: { kind: 'ready', products: [{ id: 'hints_15', price: '$1.99', owned: false }] },
   busy: false,
-  onSwap: vi.fn(),
   onBuy: vi.fn(),
   onRetry: vi.fn(),
   onClose: vi.fn(),
@@ -81,12 +77,12 @@ const homeView = (over: Partial<HomeView> = {}): HomeView => ({
   showTrophy: true,
   fbSafeZone: false,
   extraCards: [],
-  fish: 128,
+  period: { kind: 'week', total: 42 },
   event: null,
   bannerReserved: false,
   ...over,
 });
-const homeCb = () => ({ onPlay: vi.fn(), onDaily: vi.fn(), onSettings: vi.fn(), onTrophy: vi.fn(), onCard: vi.fn(), onShop: vi.fn(), onEvent: vi.fn() });
+const homeCb = () => ({ onPlay: vi.fn(), onDaily: vi.fn(), onSettings: vi.fn(), onTrophy: vi.fn(), onCard: vi.fn(), onEvent: vi.fn() });
 
 function gameView(over: Partial<GameView> = {}): GameView {
   const n = 4;
@@ -147,9 +143,9 @@ function victoryProps(over: Partial<VictoryProps> = {}): VictoryProps {
     praise: 0,
     level: 37,
     nextLevel: 38,
-    fish: { earned: 3, total: 128 },
-    bonus: null,
     pointsEarned: 55,
+    streak: 1,
+    kept: { fish: 3, max: 3, gained: 3, total: 42, kind: 'week' },
     daily: null,
     event: null,
     buttonDelayMs: cfg.fx.winButtonDelayMs,
@@ -158,7 +154,6 @@ function victoryProps(over: Partial<VictoryProps> = {}): VictoryProps {
     now: () => 0,
     onPrimary: vi.fn(),
     onHome: vi.fn(),
-    onShop: vi.fn(),
     ...over,
   };
 }
@@ -194,8 +189,9 @@ describe('a language switch relabels every view, open or cached (A11Y-I18N-1)', 
     await setLocale('de');
     shop.open(shopProps());
     expect(text(q(shop.el, '.overlay__title'))).toBe(de['shop.title']);
-    expect(text(q(shop.el, '.shop__section--swap .shop__heading'))).toBe(de['shop.swap']);
-    expect(text(q(shop.el, '.shop__row[data-item="hint"] .shop__name'))).toBe(de['shop.swap.hint']);
+    // Phase 2c §5.2: the Buy section only.
+    expect(text(q(shop.el, '.shop__section--buy .shop__heading'))).toBe(de['shop.buy']);
+    expect(text(q(shop.el, '.shop__row[data-item="hints_15"] .shop__name'))).toBe(de['shop.product.hints_15.name']);
   });
 
   it('Home under a dialog: the tagline, the Hard badge and the top bar follow at once', async () => {
@@ -326,38 +322,19 @@ describe('board-entry cue (PAR-8)', () => {
   });
 });
 
-// ─────────────────────────────── A11Y-LIVE-1 ───────────────────────────────
+// ─────────────────────────────── A11Y-LIVE-1 (Phase 2c: no swaps) ───────────────────────────────
 
-describe('the shop confirms a swap to screen readers (A11Y-LIVE-1)', () => {
-  it('reads "1 hint added. Fish left: 5. Not enough fish yet." and describes the gated swaps', () => {
+describe('the shop has no swap to confirm any more (A11Y-LIVE-1 retired by Phase 2c §5.2)', () => {
+  it('no swap buttons, no swap live region, no "Not enough fish" note', () => {
     const shop = createShopSheet();
     document.body.appendChild(shop.el);
-    let props = shopProps({ fish: 20 });
-    const onSwap = vi.fn(() => {
-      props = shopProps({ fish: 5, onSwap });
-      shop.update(props);
-    });
-    props = shopProps({ fish: 20, onSwap });
-    shop.open(props);
-    const live = q(shop.el, '.shop__live');
-    expect(live.getAttribute('role')).toBe('status');
-    expect(live.getAttribute('aria-live')).toBe('polite');
-    expect(live.textContent).toBe('');
-    q(shop.el, '.shop__row[data-item="hint"] .shop__swap').click();
-    expect(onSwap).toHaveBeenCalledTimes(1);
-    expect(live.textContent).toBe('1 hint added. Fish left: 5. Not enough fish yet.');
-    const note = q(shop.el, '.shop__note');
-    for (const b of Array.from(shop.el.querySelectorAll('.shop__swap'))) expect(b.getAttribute('aria-describedby')).toBe(note.id);
-  });
-
-  it('says nothing when the swap did not go through', () => {
-    const shop = createShopSheet();
-    const props = shopProps({ fish: 40 });
-    shop.open(props);
-    q(shop.el, '.shop__row[data-item="hint"] .shop__swap').click();
-    shop.update(shopProps({ fish: 40 }));
-    expect(q(shop.el, '.shop__live').textContent).toBe('');
-    expect(q(shop.el, '.shop__swap').hasAttribute('aria-describedby')).toBe(false);
+    shop.open(shopProps());
+    expect(shop.el.querySelector('.shop__swap, .shop__live, .shop__note')).toBeNull();
+    // The buy states keep their own status / alert roles for screen readers.
+    shop.update(shopProps({ buy: { kind: 'error' } }));
+    expect(q(shop.el, '.shop__state').getAttribute('role')).toBe('alert');
+    shop.update(shopProps({ buy: { kind: 'loading' } }));
+    expect(q(shop.el, '.shop__state').getAttribute('role')).toBe('status');
   });
 });
 
@@ -426,9 +403,10 @@ describe('event personal records use a <dl> for their rows (A11Y-DL-1)', () => {
 // ─────────────────────────────── A11Y-HUB-1 ───────────────────────────────
 
 const hubProps = (over: Partial<RankHubProps> = {}): RankHubProps => ({
-  tabs: ['points', 'daily', 'event'],
-  tab: 'points',
+  tabs: ['period', 'daily', 'event'],
+  tab: 'period',
   eventNameKey: 'event.lantern.name' as I18nKey,
+  periodKind: 'week',
   list: { kind: 'loading' },
   groups: null,
   now: () => 0,
@@ -456,7 +434,7 @@ describe('arrow keys follow the visual order in right-to-left layouts (A11Y-HUB-
       hub.open(p);
       const tabs = Array.from(hub.el.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
       tabs[1]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
-      expect(p.onTab).toHaveBeenLastCalledWith('points');
+      expect(p.onTab).toHaveBeenLastCalledWith('period');
       tabs[1]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
       expect(p.onTab).toHaveBeenLastCalledWith('event');
     } finally {

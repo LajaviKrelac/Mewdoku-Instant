@@ -10,12 +10,16 @@
 // and "Your rank" there is my position inside that band, never the board's global rank (FB2B-4); a
 // board the provider reports missing (supports() false, LEADERBOARD_NOT_FOUND) gets personal records
 // (FB2B-6); "Your score" for the solve just made shows the same time as the panel's headline (FB2B-7).
-import { canSubmit, dayIndex, decodeScore, boardFormat, encodeDailyScore, encodeEventScore } from '../game/scoring';
+// Phase 2c (G1, docs/phase2c/fish-lives-spec.md §4): the period board (period_points) is read by its
+// band like daily_fastest (bandFilter), "Your rank" inside a band uses the band's own board rank
+// (RankEntry.boardRank) when the provider gives it, a win's boards are submitted as one batch under
+// one limiter check (submitAll), paw_points is retired and daily_fastest is off unless rank.dailyBoard.
+import { canSubmit, dayIndex, decodeScore, boardFormat, encodeDailyScore, encodeEventScore, PERIOD_SPAN, periodIndex, periodKeyAt } from '../game/scoring';
 import { localDateKey } from '../game/progression';
 import type { BoardKey, SaveData } from '../game/types';
-import type { PlatformAdapter, RankingCaps, RankingProvider, RankListView } from '../platform/types';
+import type { PlatformAdapter, RankEntry, RankingCaps, RankingProvider, RankListView } from '../platform/types';
 import type { PersonalRecordsView, RankingListState, RankMineView, RankScoreView } from '../ui/overlays/ranking-panel';
-import { formatClock, formatNumber, t } from '../i18n';
+import { formatClock, formatNumber, t, tn } from '../i18n';
 import type { Clock } from './clock';
 import { cfg, type GameConfig } from './config';
 import type { AppBus, RankResult } from './events';
@@ -32,40 +36,70 @@ export interface RankingFlowDeps {
   readonly config?: GameConfig;
 }
 
+/**
+ * The band a board is read in (phase2c §4.5): daily_fastest keeps one day's entries, period_points one
+ * period's. Other boards have no band.
+ */
+export interface RankBand {
+  /** daily_fastest: the day shown (YYYY-MM-DD, local). */
+  readonly day?: string;
+  /** period_points: the period shown (its key, the first day, UTC). */
+  readonly periodKey?: string;
+}
+
 /** What the list needs besides the provider's answer: my own records and my own score (never fabricated). */
 export interface ListContext {
   readonly records: PersonalRecordsView;
-  /** My score as I know it locally (points total, this daily's time, my event progress), for "Your score". */
+  /** My score as I know it locally (this period's fish, this daily's time, my event progress), for "Your score". */
   readonly myScore: RankScoreView | null;
   /** Event boards: the puzzle count (decoded rows say "13 of 21"). */
   readonly eventTotal?: number;
   /** daily_fastest: the day shown (date key); my entry counts only when it is that day's (§5.3). */
   readonly day?: string;
+  /** period_points: the period shown (its key); my entry counts only when it is that period's (phase2c §4.5). */
+  readonly periodKey?: string;
+}
+
+/** One board score of a win (phase2c §4.4: a win's boards are one batch). */
+export interface BoardScore {
+  readonly board: BoardKey;
+  readonly score: number;
 }
 
 export interface RankingFlow {
-  /** Submit (or queue) a board score; never rejects. */
+  /** Submit (or queue) a board score; never rejects. The same as submitAll with one entry. */
   submit(board: BoardKey, score: number, solveMs: number): Promise<void>;
   /**
-   * Retry rank.pending (boot, next win). `except`: a board whose score was just submitted (a score it
-   * queued under the rate limit waits for the next win or boot). Never rejects.
+   * Phase 2c §4.4: a win's board scores as ONE batch: the sanity limits (rank.minSolveMs / maxSolveMs)
+   * and the client limiter (rank.submitMinIntervalMs) are checked once for the batch, so an event win's
+   * second board is never pushed into rank.pending by the first. Retired or switched-off boards are
+   * skipped. Never rejects.
    */
-  flushPending(opts?: { readonly except?: BoardKey }): Promise<void>;
+  submitAll(entries: readonly BoardScore[], solveMs: number): Promise<void>;
+  /**
+   * Retry rank.pending (boot, next win). `except`: the boards whose scores were just submitted (a score
+   * one queued under the rate limit waits for the next win or boot). A pending score of a retired
+   * board (paw_points) or a switched-off one (daily_fastest without rank.dailyBoard) is dropped, never
+   * sent. Never rejects.
+   */
+  flushPending(opts?: { readonly except?: BoardKey | readonly BoardKey[] }): Promise<void>;
   /**
    * mine + top for a board within rank.fetchTimeoutMs; 'local' without a provider. Never rejects.
-   * daily_fastest: `top` is the band of `day` (default today), numbered inside it (FB2B-4).
+   * daily_fastest: `top` is the band of `band.day` (default today), numbered inside it (FB2B-4);
+   * period_points: the band of `band.periodKey` (default the current UTC period, phase2c §4.5).
    */
-  fetch(board: BoardKey, day?: string): Promise<RankResult>;
+  fetch(board: BoardKey, band?: RankBand): Promise<RankResult>;
   /** The list state for a fetched result (never padded). */
   listState(result: RankResult, ctx: ListContext): RankingListState;
   /** Milliseconds the last fetch of `board` took (rank_panel analytics), or null. */
   fetchMs(board: BoardKey): number | null;
   /**
    * Opens the FB overlay list (in `rect` when the provider can place it). Resolves false when it cannot.
-   * `day` (daily_fastest only, default today): the list keeps that day's entries alone (§5.3).
+   * `band` (daily_fastest: default today; period_points: default the current period): the list keeps
+   * that band's entries alone (§5.3, phase2c §4.5).
    * `mine` (FB2B-7, optional): my score as I know it; my row of the solve just made shows it exactly.
    */
-  showList(board: BoardKey, title: string, rect?: DOMRect, eventTotal?: number, day?: string, mine?: RankScoreView): Promise<boolean>;
+  showList(board: BoardKey, title: string, rect?: DOMRect, eventTotal?: number, band?: RankBand, mine?: RankScoreView): Promise<boolean>;
   /** Closes an open overlay list (the panel or hub closed). */
   closeList(): void;
   /** The provider's caps, or null without a provider (web). */
@@ -75,34 +109,51 @@ export interface RankingFlow {
 const TIMEOUT = Symbol('timeout');
 
 /**
- * daily_fastest is one board for every day (§5.3): readers keep only the entries of the day shown.
- * Undefined for every other board (nothing to filter).
+ * The band readers of a one-board-for-every-band board (phase2c §4.5, generalising phase2b §5.3):
+ * daily_fastest keeps the entries of `band.day`; period_points keeps those whose score's high digits
+ * are the period index of `band.periodKey` (floor(score / PERIOD_SPAN) === periodIndex). Undefined for
+ * every other board, or when the band is not given or cannot be read (nothing to filter).
  */
+export function bandFilter(board: BoardKey, band: RankBand, c: GameConfig = cfg): ((score: number) => boolean) | undefined {
+  try {
+    if (board === c.rank.boards.daily && band.day !== undefined) {
+      const shown = dayIndex(band.day, c);
+      return (score) => {
+        const d = decodeScore(board, score, c);
+        return d.kind === 'time' && d.dayIndex === shown;
+      };
+    }
+    if (board === c.rank.boards.period && band.periodKey !== undefined) {
+      const shown = periodIndex(band.periodKey, c);
+      return (score) => Number.isFinite(score) && Math.floor(score / PERIOD_SPAN) === shown;
+    }
+  } catch {
+    // a bad day or period key: no band (every entry)
+  }
+  return undefined;
+}
+
+/** daily_fastest's band (§5.3): bandFilter with a day. Undefined for every other board. */
 export function dayFilter(board: BoardKey, day: string, c: GameConfig = cfg): ((score: number) => boolean) | undefined {
-  if (board !== c.rank.boards.daily) return undefined;
-  const shown = dayIndex(day, c);
-  return (score) => {
-    const d = decodeScore(board, score, c);
-    return d.kind === 'time' && d.dayIndex === shown;
-  };
+  return board === c.rank.boards.daily ? bandFilter(board, { day }, c) : undefined;
 }
 
 /** A decoded board score in the panel's terms. */
 export function scoreView(board: BoardKey, score: number, eventTotal: number | undefined, c: GameConfig = cfg): RankScoreView {
   const d = decodeScore(board, score, c);
-  if (d.kind === 'points') return { kind: 'points', points: d.points };
+  if (d.kind === 'period') return { kind: 'fish', fish: d.total };
   if (d.kind === 'time') return { kind: 'time', ms: d.secs * 1000 };
   return { kind: 'event', solved: d.solved, total: eventTotal ?? d.solved, ms: d.totalSecs * 1000 };
 }
 
-/** The overlay rows' score text ("1 240 points", "3:08", "13 / 21 solved"), formatted by us (§5.4). */
+/** The overlay rows' score text ("42 fish", "3:08", "13 / 21 solved"), formatted by us (§5.4). */
 export function formatBoardScore(board: BoardKey, score: number, eventTotal: number | undefined, c: GameConfig = cfg): string {
   return formatScoreView(scoreView(board, score, eventTotal, c));
 }
 
 /** A score view's text, as formatBoardScore writes it. */
 export function formatScoreView(v: RankScoreView): string {
-  if (v.kind === 'points') return t('rank.points', { points: formatNumber(v.points) });
+  if (v.kind === 'fish') return tn('fish.count', v.fish); // "42 fish" (phase2c §2.6)
   if (v.kind === 'time') return formatClock(v.ms);
   return t('event.card.progress', { solved: formatNumber(v.solved), total: formatNumber(v.total) });
 }
@@ -158,6 +209,24 @@ export function createRankingFlow(deps: RankingFlowDeps): RankingFlow {
     });
   }
 
+  /**
+   * Whether a board is submitted at all (phase2c §4.1): paw_points is retired; daily_fastest only with
+   * rank.dailyBoard; period_points and the event boards always.
+   */
+  const active = (board: BoardKey): boolean =>
+    board !== c.rank.boards.points && (board !== c.rank.boards.daily || c.rank.dailyBoard);
+
+  /** A band with its defaults filled in: today (local) for the day band, the current UTC period for the period band. */
+  const shownBand = (band: RankBand | undefined): RankBand => ({
+    day: band?.day ?? localDateKey(clock.now()),
+    periodKey: band?.periodKey ?? periodKeyAt(clock.now(), c),
+  });
+
+  const listFormat = (board: BoardKey): RankListView['scoreFormat'] => {
+    const f = boardFormat(board, c);
+    return f === 'period' ? 'points' : f;
+  };
+
   /** The provider's supports(board) (FB2B-6); absent or throwing = supported. */
   const supports = (p: RankingProvider, board: BoardKey): boolean => {
     try {
@@ -168,23 +237,25 @@ export function createRankingFlow(deps: RankingFlowDeps): RankingFlow {
   };
 
   /**
-   * My rank for the shown day (FB2B-4): my position among that day's entries in `top`. `top` is read
-   * best-first from the top of the board (a provider honouring `keep` gives exactly the day's band),
-   * so every better entry of the day comes before mine and the position is the true rank for the day.
-   * null when my entry is not among them: the board's own rank counts other days and is never shown.
+   * My rank inside the shown band (phase2c §4.5; FB2B-4 for the day band). Exact at any depth when the
+   * band's first entry carries its board rank (RankEntry.boardRank, set by band reads): my board rank
+   * minus the entries above the band (`me.rank − (first.boardRank − 1)`). Otherwise my position among
+   * the band's entries in `top` (read best-first from the top of the board, so every better entry of
+   * the band comes before mine). null when neither tells: the board's own rank counts other bands and
+   * is never shown.
    */
-  function bandRank(result: RankResult, keep: (score: number) => boolean): number | null {
-    let pos = 0;
-    for (const e of result.top) {
-      if (!keep(e.score)) continue;
-      pos++;
-      if (e.isMe) return pos;
-    }
-    return null;
+  function bandRank(result: RankResult, me: RankEntry, keep: (score: number) => boolean): number | null {
+    // RankEntry.boardRank (phase2c §4.5, G3): the board's own rank, set on band reads (top(…, keep)).
+    const band = result.top.filter((e) => keep(e.score));
+    const top = band[0]?.boardRank;
+    if (top !== undefined && Number.isInteger(top) && top >= 1 && Number.isInteger(me.rank) && me.rank >= top) return me.rank - (top - 1);
+    const pos = band.findIndex((e) => e.isMe);
+    return pos >= 0 ? pos + 1 : null;
   }
 
   /** Whether a board entry is the encoding of my own score as I know it (the solve just made, FB2B-7). */
   function isMySolve(board: BoardKey, score: number, ctx: Pick<ListContext, 'myScore' | 'day'>): boolean {
+    // (A period total is exact on the board: its own decoded value is the one to show.)
     const m = ctx.myScore;
     if (!m) return false;
     try {
@@ -221,19 +292,22 @@ export function createRankingFlow(deps: RankingFlowDeps): RankingFlow {
   }
 
   const flow: RankingFlow = {
-    async submit(board, score, solveMs) {
+    submit: (board, score, solveMs) => flow.submitAll([{ board, score }], solveMs),
+    async submitAll(entries, solveMs) {
       const p = provider();
-      if (!p || unsupported.has(board)) return;
+      const batch = entries.filter((e) => active(e.board) && !unsupported.has(e.board));
+      if (!p || batch.length === 0) return;
       try {
         const caps = capsOf(p);
         if (caps && caps.api === 'none') return;
+        // One limiter check for the whole batch (phase2c §4.4).
         const limit = canSubmit(solveMs, clock.now(), deps.save().rank.lastSubmitAt, c);
         if (limit === 'too_fast' || limit === 'too_slow') return; // §5.3 sanity limits: never submitted
         if (limit === 'wait') {
-          setPending(board, score);
+          for (const e of batch) setPending(e.board, e.score);
           return;
         }
-        await send(p, board, score);
+        for (const e of batch) await send(p, e.board, e.score);
       } catch (error) {
         bus.emit('error', { where: 'rank_submit', error });
       }
@@ -244,17 +318,23 @@ export function createRankingFlow(deps: RankingFlowDeps): RankingFlow {
       try {
         const caps = capsOf(p);
         if (caps && caps.api === 'none') return;
+        const except = opts?.except === undefined ? [] : typeof opts.except === 'string' ? [opts.except] : opts.except;
         const pending = deps.save().rank.pending;
         for (const board of Object.keys(pending) as BoardKey[]) {
           const score = pending[board];
-          if (score === undefined || unsupported.has(board) || board === opts?.except) continue;
+          if (score === undefined) continue;
+          if (!active(board)) {
+            setPending(board, null); // retired (paw_points) or switched off (daily_fastest): never sent
+            continue;
+          }
+          if (unsupported.has(board) || except.includes(board)) continue;
           await send(p, board, score);
         }
       } catch (error) {
         bus.emit('error', { where: 'rank_flush', error });
       }
     },
-    async fetch(board, day) {
+    async fetch(board, band) {
       const p = provider();
       const started = clock.perf();
       let result: RankResult;
@@ -263,7 +343,7 @@ export function createRankingFlow(deps: RankingFlowDeps): RankingFlow {
       if (!p || !caps) result = { board, api: 'local', mine: null, top: [], ok: true };
       else if (caps.api === 'none' || unsupported.has(board) || !supports(p, board)) result = none(); // no API, or no id for this board
       else {
-        const keep = dayFilter(board, day ?? localDateKey(clock.now()), c);
+        const keep = bandFilter(board, shownBand(band), c);
         const both = Promise.all([
           caps.myRank ? Promise.resolve().then(() => p.mine(board)) : Promise.resolve(null),
           Promise.resolve().then(() => (keep ? p.top(board, c.rank.fetchCount, keep) : p.top(board, c.rank.fetchCount))),
@@ -290,11 +370,12 @@ export function createRankingFlow(deps: RankingFlowDeps): RankingFlow {
       const p = provider();
       const caps = p ? capsOf(p) : null;
       if (!caps) return { kind: 'records', records: ctx.records, reason: 'local' };
-      // daily_fastest: an entry of another day says nothing about the day shown (§5.3).
-      const keep = ctx.day === undefined ? undefined : dayFilter(result.board, ctx.day, c);
+      // daily_fastest / period_points: an entry of another day or period says nothing about the band
+      // shown (§5.3, phase2c §4.5).
+      const keep = bandFilter(result.board, { ...(ctx.day !== undefined ? { day: ctx.day } : {}), ...(ctx.periodKey !== undefined ? { periodKey: ctx.periodKey } : {}) }, c);
       const me = result.mine && (!keep || keep(result.mine.score)) ? result.mine : null;
       const mine: RankMineView = {
-        rank: caps.myRank && me ? (keep ? bandRank(result, keep) : me.rank) : null,
+        rank: caps.myRank && me ? (keep ? bandRank(result, me, keep) : me.rank) : null,
         // The provider's own entry for me, else my own score as I know it locally ("Your score"), never
         // a guess. The entry of the solve just made shows my own time (one value per solve, FB2B-7).
         score: me ? (isMySolve(result.board, me.score, ctx) ? ctx.myScore : scoreView(result.board, me.score, ctx.eventTotal, c)) : ctx.myScore,
@@ -305,7 +386,7 @@ export function createRankingFlow(deps: RankingFlowDeps): RankingFlow {
       return { kind: 'mine', mine };
     },
     fetchMs: (board) => lastMs.get(board) ?? null,
-    async showList(board, title, rect, eventTotal, day, myScore) {
+    async showList(board, title, rect, eventTotal, band, myScore) {
       flow.closeList();
       const mine = ++listGen;
       const p = provider();
@@ -313,13 +394,15 @@ export function createRankingFlow(deps: RankingFlowDeps): RankingFlow {
       if (!p || !caps || !caps.overlay || unsupported.has(board) || !supports(p, board)) return false;
       const view: { -readonly [K in keyof RankListView]: RankListView[K] } = {
         title,
-        scoreFormat: boardFormat(board, c),
+        // The platform knows three formats; a period total is a plain number (phase2c §4.3).
+        scoreFormat: listFormat(board),
         highlightMe: caps.myRank,
         count: c.rank.topCount,
         formatScore: (score) => formatBoardScore(board, score, eventTotal, c),
       };
-      const shownDay = day ?? localDateKey(clock.now());
-      const keep = dayFilter(board, shownDay, c);
+      const shown = shownBand(band);
+      const shownDay = shown.day ?? localDateKey(clock.now());
+      const keep = bandFilter(board, shown, c);
       if (keep) view.keep = keep;
       // FB2B-7: my row of the solve just made shows my exact time (the board keeps whole seconds).
       if (myScore) {

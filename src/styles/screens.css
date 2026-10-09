@@ -1,5 +1,5 @@
-/* Owner: B (phase2b §2.4, §2.5, §4.4, §5.5, §5.6, §8.5)
-   The first-load parts of the 2b screens: the fish pill, the Home event card and the game screen's
+/* Owner: B (phase2b §2.4, §2.5, §4.4, §5.5, §5.6, §8.5); G2 (Phase 2c: the period pill)
+   The first-load parts of the 2b screens: the period pill (was the fish pill), the Home event card and the game screen's
    win-flow scrim. 2b integration (04 §9 budget): the ranking panel, victory screen, shop sheet,
    rankings hub, group result, Settings language view and O2 swap button moved unchanged to
    overlay-chunk.css (lazy overlay chunk); the event screen to events-chunk.css (lazy events chunk). Tokens only (no colour literals
@@ -8,14 +8,17 @@
    Motion (keyframes, durations) lives in fx.css. Browser baseline (04 §1): no flex `gap`, no `inset`,
    no `dvh`, no `:has()`. */
 
-/* ── Fish pill (phase2b §2.5) ──────────────────────────────────────────── */
-.fish-pill {
+/* ── Period pill (Phase 2c §2.1, §2.8; was the 2b fish pill) ──────────────
+   This period's leaderboard points: a gold-filled trophy and the total. On Home in the top bar's lead
+   slot (not a button); in the game's pills row only during the win flow (the counter the kept fish
+   fly to). Motion (fade in, roll, bump, rising "+N") is in fx.css. */
+.period-pill {
   position: relative;
   display: inline-flex;
   flex: none;
   align-items: center;
   height: 40px;
-  padding-inline-start: 4px;
+  padding-inline-start: 6px;
   padding-inline-end: 14px;
   border-radius: var(--radius-pill);
   background: var(--card);
@@ -28,25 +31,17 @@
   white-space: nowrap;
 }
 
-.fish-pill[data-plus] {
-  padding-inline-end: 4px;
-}
-
-.fish-pill__main {
-  display: inline-flex;
-  align-items: center;
-}
-
-.fish-pill__icon {
-  width: 32px;
-  height: 32px;
-  margin-inline-end: 4px;
+.period-pill__icon {
+  width: 28px;
+  height: 28px;
+  margin-inline-end: 5px;
   color: var(--ink);
+  --icon-fill: var(--gold);
   transform-origin: 50% 70%;
 }
 
-/* The number rolls inside a clipped box (fx.css fish-roll-in / -out). */
-.fish-pill__count {
+/* The number rolls inside a clipped box (fx.css period-roll-in / -out). */
+.period-pill__count {
   position: relative;
   display: inline-block;
   overflow: hidden;
@@ -55,59 +50,20 @@
   font-variant-numeric: tabular-nums;
 }
 
-.fish-pill__n {
+.period-pill__n {
   display: block;
 }
 
-.fish-pill__n.is-out {
+.period-pill__n.is-out {
   position: absolute;
   top: 0;
   left: 0;
 }
 
-.fish-pill__plus {
-  position: relative;
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  margin-inline-start: 10px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: var(--accent);
-  color: #fff;
-  box-shadow: 0 2px 0 var(--accent-deep);
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
-/* 44 px touch target around the 32 px disc. */
-.fish-pill__plus::after {
-  content: '';
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  bottom: -6px;
-  left: -6px;
-}
-
-.fish-pill__plus:active {
-  transform: translateY(2px);
-  box-shadow: 0 0 0 var(--accent-deep);
-}
-
-.fish-pill__plus-icon {
-  width: 20px;
-  height: 20px;
-}
-
-/* The rising "+3" (fx.css fish-label-rise; reduced: a WAAPI fade in place): a chip anchored to the
+/* The rising "+3" (fx.css period-label-rise; reduced: a WAAPI fade in place): a chip anchored to the
    pill's top edge (review UX-12: never over the icon and the rolling count) that rises
    fx.win.plusLabelRisePx. White on --accent-text is 5.71:1 (small text allowed). */
-.fish-pill__label {
+.period-pill__label {
   position: absolute;
   right: 0;
   bottom: 100%;
@@ -121,11 +77,11 @@
 }
 
 /* Reduced motion: no rise; the chip fades in and out above the pill, clear of the count. */
-.fish-pill__label[data-reduced] {
+.period-pill__label[data-reduced] {
   transform: none;
 }
 
-.fish-pill__chip {
+.period-pill__chip {
   padding: 3px 9px;
   border-radius: var(--radius-pill);
   background: var(--accent-text);
@@ -137,18 +93,18 @@
 }
 
 /* In the game's pills row (win flow only): the row's height, centred between the two pills. */
-.fish-pill[data-in-game] {
+.period-pill[data-in-game] {
   height: 100%;
   margin: 0 8px;
 }
 
-.pills[data-compact] .fish-pill {
+.pills[data-compact] .period-pill {
   font-size: var(--fs-m);
 }
 
-.pills[data-compact] .fish-pill__icon {
-  width: 26px;
-  height: 26px;
+.pills[data-compact] .period-pill__icon {
+  width: 24px;
+  height: 24px;
 }
 
 /* ── Game screen: the win flow's scrim (§2.2 t = 4 200) ─────────────────── */
@@ -324,7 +280,7 @@
 
 /* Narrow phones (320–359 px). */
 @media (max-width: 359px) {
-  .fish-pill {
+  .period-pill {
     font-size: var(--fs-m);
   }
 }

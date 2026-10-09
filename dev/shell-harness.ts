@@ -145,18 +145,18 @@ const VIEWS: Record<string, () => void> = {
     mountScreen(boot.el);
     boot.setProgress(62);
   },
-  home: () => mountScreen(createHomeScreen(homeView(), { onPlay: log('onPlay'), onDaily: log('onDaily'), onSettings: log('onSettings'), onTrophy: log('onTrophy'), onCard: log('onCard'), onShop: log('onShop'), onEvent: log('onEvent') }).el),
+  home: () => mountScreen(createHomeScreen(homeView(), { onPlay: log('onPlay'), onDaily: log('onDaily'), onSettings: log('onSettings'), onTrophy: log('onTrophy'), onCard: log('onCard'), onEvent: log('onEvent') }).el),
   'home-locked': () =>
     mountScreen(
       createHomeScreen(homeView({ level: 7, daily: { state: 'locked', dateKey: '2026-10-06', n: 8, solvedMs: null, unlockLevel: 20 } }), {
-        onPlay: log('onPlay'), onDaily: log('onDaily'), onSettings: log('onSettings'), onTrophy: log('onTrophy'), onCard: log('onCard'), onShop: log('onShop'), onEvent: log('onEvent'),
+        onPlay: log('onPlay'), onDaily: log('onDaily'), onSettings: log('onSettings'), onTrophy: log('onTrophy'), onCard: log('onCard'), onEvent: log('onEvent'),
       }).el,
     ),
   'home-continue': () =>
     mountScreen(
       createHomeScreen(
         homeView({ level: 40, hard: true, continueLevel: true, hints: 0, daily: { state: 'solved', dateKey: '2026-10-07', n: 9, solvedMs: 252_000, unlockLevel: 20 } }),
-        { onPlay: log('onPlay'), onDaily: log('onDaily'), onSettings: log('onSettings'), onTrophy: log('onTrophy'), onCard: log('onCard'), onShop: log('onShop'), onEvent: log('onEvent') },
+        { onPlay: log('onPlay'), onDaily: log('onDaily'), onSettings: log('onSettings'), onTrophy: log('onTrophy'), onCard: log('onCard'), onEvent: log('onEvent') },
       ).el,
     ),
   game: () => void game(gameView(midGame(37))),
@@ -196,7 +196,7 @@ const VIEWS: Record<string, () => void> = {
     modal.el.querySelector<HTMLElement>('.settings__about-link')?.click();
   },
   howto: () => {
-    mountScreen(createHomeScreen(homeView(), { onPlay: log('onPlay'), onDaily: log('onDaily'), onSettings: log('onSettings'), onTrophy: log('onTrophy'), onCard: log('onCard'), onShop: log('onShop'), onEvent: log('onEvent') }).el);
+    mountScreen(createHomeScreen(homeView(), { onPlay: log('onPlay'), onDaily: log('onDaily'), onSettings: log('onSettings'), onTrophy: log('onTrophy'), onCard: log('onCard'), onEvent: log('onEvent') }).el);
     openOverlay(createHowToPlay(), { showSkip: false, showReplay: true, onSkip: log('onSkip'), onReplay: log('onReplay'), onClose: log('onClose') });
   },
   'howto-skip': () => {
@@ -217,7 +217,7 @@ const VIEWS: Record<string, () => void> = {
     toasts.show('No videos right now — try again soon.', { durationMs: 600_000 });
   },
   rotate: () => {
-    mountScreen(createHomeScreen(homeView(), { onPlay: log('onPlay'), onDaily: log('onDaily'), onSettings: log('onSettings'), onTrophy: log('onTrophy'), onCard: log('onCard'), onShop: log('onShop'), onEvent: log('onEvent') }).el);
+    mountScreen(createHomeScreen(homeView(), { onPlay: log('onPlay'), onDaily: log('onDaily'), onSettings: log('onSettings'), onTrophy: log('onTrophy'), onCard: log('onCard'), onEvent: log('onEvent') }).el);
     mountRotateNotice(document.body);
   },
 };

@@ -1,9 +1,11 @@
-// Owner: B (Phase 2b)
+// Owner: B (Phase 2b); G2 (Phase 2c: the lives pill hooks of the win flow)
 // S2 Game (02 §5): composes ui-board pieces (top bar, pills, rule chips, board, tool bar), runs the
 // 02 §19 layout on resize, and forwards input to the session through callbacks.
-// Phase 2b (B): the win-flow hooks C drives (fishRect, showFishPill, fishLabel, glow, showScrim;
-// phase2b §2.2), the Home / Gear lock during the win flow (GameView.chromeLocked), and event mode
+// Phase 2b (B): the win-flow hooks C drives (glow, showScrim; phase2b §2.2), the Home / Gear lock during the win flow (GameView.chromeLocked), and event mode
 // (§4.4): the "{event} · {index}" title, data-event-theme on the root and the accessory over the cats.
+// Phase 2c (G2, fish-lives-spec §2, §7.4): the lives are fish; the win flow lifts the kept fish off the
+// lives pill (lifeSlots, departLife) and flies them to the period counter (showPeriodCounter,
+// periodRect, periodLabel). The 2b fish-pill hooks were removed at integration step I-3.
 // Row heights from computeLayout() are published as CSS variables on the root so the HUD rows,
 // the board stage and the tool row follow the same numbers (compact mode below 640 px).
 //
@@ -23,7 +25,7 @@ import { cfg } from '../../app/config';
 import { formatShortDate, onLocaleChanged, t, translate } from '../../i18n';
 import { createBoardView, type BoardHighlight, type BoardModel } from '../board/board-view';
 import { computeLayout, readViewport, type GameLayout, type ViewportInfo } from '../board/layout';
-import { createPills, type PillsProps } from '../hud/pills';
+import { createPills, type LifeSlotRect, type PillsProps } from '../hud/pills';
 import { createRuleChips, type RuleChip, type RuleChipsProps } from '../hud/rule-chips';
 import { createToolBar, type ToolBarProps } from '../hud/tool-bar';
 import { createTopBar, type TopBarProps } from '../hud/top-bar';
@@ -38,7 +40,9 @@ export interface GameView {
   readonly hard: boolean;
   /** false during the first-run tutorial (02 §4.2). */
   readonly showHome: boolean;
+  /** Lives left: hearts = lives = fish (Phase 2c §0.5; the stored name stays). */
   readonly hearts: number;
+  /** Lives at the start of an attempt (3). */
   readonly maxHearts: number;
   readonly catsPlaced: number;
   readonly status: Status;
@@ -78,7 +82,7 @@ export interface GameScreenCallbacks {
 }
 
 export interface GameScreen extends View<GameView> {
-  /** Forwarded reducer events: board FX and heart crack. */
+  /** Forwarded reducer events: board FX and the fish loss / revive pop (Phase 2c §1.3, §1.4). */
   playEvent(ev: GameEvent): void;
   /** Board entry animation after a (re)mount; returns BoardView.playEntry()'s entryEndMs (when START is due). */
   playEntry(): number;
@@ -87,12 +91,16 @@ export interface GameScreen extends View<GameView> {
   /** Client rect of the board card (O1 hint card placement: HintCardProps.avoidRect). */
   boardRect(): DOMRect | null;
   focusBoard(): void;
-  /** Win flow (phase2b §2.3): the fish pill icon's client rect (flight target), null while hidden. */
-  fishRect(): DOMRect | null;
-  /** Win flow (§2.2 t = 1 000): show the fish pill in the pills row with `count`; a higher count later = an arrival bump. */
-  showFishPill(count: number): void;
-  /** Win flow (§2.2): the rising "+3" / "+2" label at the fish pill. */
-  fishLabel(text: string): void;
+  /** Phase 2c §2.3: full life slots in departure order (highest slot first), with their icon's client rect; [] while hidden. */
+  lifeSlots(): readonly LifeSlotRect[];
+  /** Phase 2c §2.2: the life in `slot` leaves for the win flight: it shows empty at once, no loss animation. Idempotent. */
+  departLife(slot: number): void;
+  /** Phase 2c §2.2 t = 1 000: shows the period counter (fade in at the first call); a higher total later rolls + bumps. */
+  showPeriodCounter(total: number): void;
+  /** Phase 2c §2.3: client rect of the counter's icon (flight target), null while hidden. */
+  periodRect(): DOMRect | null;
+  /** Phase 2c §2.2: the rising "+N" chip at the counter. */
+  periodLabel(text: string): void;
   /** Win flow (§2.2 t = 300): ui/fx/glow.ts playGlow on these cat cells of this board, with the screen's reduced-motion flag. */
   glow(cells: readonly CellIndex[]): FxHandle;
   /**
@@ -363,9 +371,11 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
     toolRect: (tool) => tools.toolRect(tool),
     boardRect: () => (board.el.isConnected ? board.el.getBoundingClientRect() : null),
     focusBoard: () => focusBoard(),
-    fishRect: () => pills.fishRect(),
-    showFishPill: (n) => pills.showFish(n),
-    fishLabel: (text) => pills.fishLabel(text),
+    lifeSlots: () => pills.lifeSlots(),
+    departLife: (slot) => pills.departLife(slot),
+    showPeriodCounter: (total) => pills.showPeriodCounter(total),
+    periodRect: () => pills.periodRect(),
+    periodLabel: (text) => pills.periodLabel(text),
     glow: (cells) => playGlow(board.el, cells, current.reducedMotion),
     showScrim() {
       if (!scrim.hidden) return;

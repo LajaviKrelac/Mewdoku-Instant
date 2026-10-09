@@ -310,8 +310,9 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
     openEventTopList: (def) => void social().then((s) => s.hub.openEventTopList(def), socialFailed),
   };
   const groups = {
-    onWin: async (points: number): Promise<void> => {
-      if (groupsOn()) await (await social()).groups.onWin(points);
+    // phase2c §4.8: a group challenge ranks the fish kept.
+    onWin: async (fish: number): Promise<void> => {
+      if (groupsOn()) await (await social()).groups.onWin(fish);
     },
   };
   const levelSize = (level: number): number | null => attempt(() => levels.peekLevel(level)?.n ?? null, null);
@@ -343,11 +344,10 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
     changed: () => {
       const s = store.get().save;
       bus.emit('stock', { hints: s.stock.hints, kitties: s.stock.kitties });
-      bus.emit('wallet', { fish: s.wallet.fish, earned: s.wallet.earned });
       // A No Ads purchase or boot restore takes a banner on show down at once (review L2B-2).
       void banners.entitlementChanged().catch(() => undefined);
     },
-    // §3.2: the shop is a modal over a banner screen (Home, event, victory): hide the banner first
+    // §3.2: the shop is a modal over a banner screen (Home, event): hide the banner first
     // (reviews L2B-1, FB2B-2; the shell also hides on overlay:open and re-gates on close).
     onOpen: () => void banners.hide().catch(() => undefined),
   });
@@ -399,7 +399,6 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
     rankings,
     groups,
     banners,
-    openShop: () => shell.openShop(),
     root: () => root,
     levelSize,
   });

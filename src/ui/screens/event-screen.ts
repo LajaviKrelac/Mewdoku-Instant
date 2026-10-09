@@ -1,4 +1,4 @@
-// Owner: B
+// Owner: B (Phase 2b); G2 (Phase 2c: milestone rewards are hints and kitties only)
 // Event screen (new screen `event`, phase2b §4.4), in the lazy `events` chunk: header art (A's
 // eventArt(def, 'header'): pattern + Tux with the accessory), name and tagline, "Ends in …", the
 // milestone track (5 nodes on a bar; reached nodes filled with the reward icon), the primary
@@ -54,18 +54,16 @@ export interface EventScreenCallbacks {
   onSettings(): void;
 }
 
-/** The milestone's reward as short text ("2 hints", "30 fish", "100 fish and 3 kitties"). */
+/** The milestone's reward as short text ("2 hints", "3 hints and 5 kitties"). Phase 2c: no fish. */
 export function milestoneRewardText(r: Reward): string {
   const parts: string[] = [];
   if (r.hints) parts.push(tn('event.reward.hints', r.hints, { count: formatNumber(r.hints) }));
-  if (r.fish) parts.push(tn('event.reward.fish', r.fish, { count: formatNumber(r.fish) }));
   if (r.kitties) parts.push(tn('event.reward.kitties', r.kitties, { count: formatNumber(r.kitties) }));
   return parts.join(' + ');
 }
 
 /** The icon a milestone node shows: its first reward kind. */
 function rewardIcon(r: Reward): IconSymbol {
-  if (r.fish) return 'icon-fish';
   if (r.kitties) return 'icon-paw';
   return 'icon-bulb';
 }

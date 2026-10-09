@@ -73,10 +73,18 @@ describe('tutorial session', () => {
       { step: 6 },
     ]);
     expect(h.router.isOpen('coach')).toBe(false);
-    await h.settle(h.config.fx.win.tutorialVictoryAtMs); // phase2b §2.6: no ranking after the tutorial
+    // phase2c §2.5: no counter, no flight, no ranking after the tutorial; the victory at 1 200.
+    await h.settle(h.config.fx.win.replayVictoryAtMs - 1);
+    expect(h.router.isOpen('victory')).toBe(false);
+    await h.settle(1);
     expect(h.router.isOpen('ranking')).toBe(false);
-    expect(h.router.props.victory).toMatchObject({ variant: 'tutorial', nextLevel: 2, fish: { earned: 3, total: 3 }, pointsEarned: null });
-    expect(h.save().wallet.fish).toBe(3);
+    expect(h.router.props.victory).toMatchObject({ variant: 'tutorial', nextLevel: 2, pointsEarned: null, streak: null, kept: null });
+    // The tutorial is scored for neither the period board nor the streak (§3.3).
+    expect(h.save().period).toEqual({ key: '', total: 0, bestKey: '', bestTotal: 0 });
+    expect(h.save().streak).toEqual({ current: 0, best: 0 });
+    expect(h.save()).not.toHaveProperty('wallet');
+    expect(h.router.game?.counters).toEqual([]);
+    expect(h.analytics.some((e) => e.name === 'win_points')).toBe(false);
     h.log.length = 0;
     await h.session.onNext();
     expect(slice(h.log, /^(ad:|screen:)/)).toEqual(['screen:game:L2']);
@@ -112,8 +120,9 @@ describe('tutorial session', () => {
     expect(h.platform.writes.some((w) => w.cloud === 'flush')).toBe(false);
     await h.settle(h.config.fx.win.replayVictoryAtMs);
     expect(h.router.props.victory?.variant).toBe('tutorial_replay');
-    expect(h.router.props.victory?.fish).toBeNull();
-    expect(h.save().wallet).toEqual(before.wallet);
+    expect(h.router.props.victory).toMatchObject({ kept: null, streak: null, pointsEarned: null });
+    expect(h.save().period).toEqual(before.period);
+    expect(h.save().streak).toEqual(before.streak);
     await h.session.onNext();
     expect(h.homeCalls).toBe(1);
     h.session.onSkipTutorial(); // not offered in a replay

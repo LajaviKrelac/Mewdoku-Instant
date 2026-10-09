@@ -142,15 +142,39 @@ describe('O4 fail overlay', () => {
     const cont = q(fail.el, '.fail__continue');
     expect(cont.querySelector('.icon-play-video')).not.toBeNull();
     // WCAG 2.5.3: the accessible name contains the visible label ("Continue" "+1"), and says it is a video.
-    expect(cont.getAttribute('aria-label')).toBe('Continue +1 heart, after a short video');
+    expect(cont.getAttribute('aria-label')).toBe('Continue +1 fish, after a short video');
+    // Phase 2c §1.4: the "+1" badge ends with our 16 px fish, decorative (the name says "+1 fish").
+    const badge = q(cont, '.btn__badge');
+    expect(badge.getAttribute('aria-hidden')).toBe('true');
+    expect(badge.querySelector('.btn__badge-icon use')?.getAttribute('href')).toBe('#icon-fish');
+    expect(cont.innerHTML).not.toContain('icon-heart');
     const visible = `${cont.querySelector('.btn__label')?.textContent ?? '?'} ${cont.querySelector('.btn__badge')?.textContent ?? '?'}`;
     expect(cont.getAttribute('aria-label')?.startsWith(visible)).toBe(true);
     fail.update(props({ continueOffer: 'free', buttonDelayMs: 0 }));
     expect(cont.querySelector('.icon-play-video')).toBeNull();
-    expect(cont.getAttribute('aria-label')).toBe('Continue +1 heart');
+    expect(cont.getAttribute('aria-label')).toBe('Continue +1 fish');
     fail.update(props({ continueOffer: null, buttonDelayMs: 0 }));
     expect(cont.hidden).toBe(true);
     expect(q(fail.el, '.fail__retry').hasAttribute('data-autofocus')).toBe(true);
+  });
+});
+
+describe('O6 how to play, Phase 2c (fish-lives-spec §1.5): the lives are fish, then the points note', () => {
+  it('the lives note shows our fish and says so; a trophy note explains the weekly ranking and the perfect streak', () => {
+    const howto = createHowToPlay();
+    document.body.append(howto.el);
+    howto.open({ showSkip: false, showReplay: true, onSkip: vi.fn(), onReplay: vi.fn(), onClose: vi.fn() });
+    const lives = q(howto.el, '.howto__lives');
+    expect(lives.querySelector('use')?.getAttribute('href')).toBe('#icon-fish');
+    expect(lives.textContent).toBe('Your fish are your lives. A cat on the wrong tile costs a fish. Lose all three and you can try the level again.');
+    const points = q(howto.el, '.howto__points');
+    expect(points.querySelector('use')?.getAttribute('href')).toBe('#icon-trophy');
+    expect(points.textContent).toContain('weekly ranking, which starts again every Monday at 00:00 UTC');
+    expect(points.textContent).toContain('perfect streak');
+    // The points note follows the lives note; no heart icon anywhere.
+    const notes = Array.from(q(howto.el, '.howto__notes').children);
+    expect(notes.indexOf(points)).toBe(notes.indexOf(lives) + 1);
+    expect(howto.el.innerHTML).not.toContain('icon-heart');
   });
 });
 

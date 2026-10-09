@@ -1,11 +1,14 @@
-// Owner: B
+// Owner: B (Phase 2b); G2 (Phase 2c: the kept-fish row, level points and the perfect streak)
 // Victory screen (new overlay `victory`, phase2b §2.5; replaces O3 `win` and, for dailies, O7
 // `daily_result`, which stay one release unopened). Full screen, opaque --page; 12 --accent-soft sun
 // rays behind the cat turning once per fx.victoryRaysTurnMs (static with reduced motion). Top to
-// bottom: praise word, the win pose, "Level 37 complete", the reward row (three fish, "+3", the total,
-// a bonus chip, "+55 points"), the event milestone line; then the wide orange primary button
-// (btn--primary btn--lg, enabled `buttonDelayMs` after open) and a ghost "Home". The fish pill (with
-// "+") sits on this screen too, centred at the top (clear of the FB safe zone in the top-left corner).
+// bottom: praise word, the win pose, "Level 37 complete", the reward block, the event milestone line;
+// then the wide orange primary button (btn--primary btn--lg, enabled `buttonDelayMs` after open) and
+// a ghost "Home".
+// Phase 2c (fish-lives-spec §2.7): no fish pill, no "+" (shop) and no bonus chip. The reward block has
+// two rows: the FISH KEPT (maxHearts fish, the kept ones full and the lost ones as icon-fish-empty,
+// "+2" and "This week: 42"; hidden when the win added no leaderboard points) and the LEVEL POINTS
+// ("+120 points" and, after a perfect win, the chip "Perfect ×4").
 // With `bannerReserved` the root gets data-banner (phase2b §3.2) and the column keeps the
 // ads.banner.reservePx band free under the buttons.
 // Esc and Enter: Enter presses the focused primary (autofocus); Esc is ignored (a choice is needed).
@@ -20,18 +23,19 @@
 // bar is named by its "3 / 21 solved" line (A11Y-NAME-1); static labels follow the language.
 //
 // Classes: .overlay[data-overlay=victory] > .victory[data-variant][data-banner]
-//          > .victory__top(.fish-pill) .victory__col(.victory__praise .victory__stage(.victory__rays .victory__art)
-//            .victory__sub .victory__daily .victory__reward(.victory__fishes .victory__plus .victory__total)
-//            .victory__chips(.victory__chip--bonus .victory__chip--points) .victory__event(.victory__bar .victory__milestone)
+//          > .victory__col(.victory__praise .victory__stage(.victory__rays .victory__art)
+//            .victory__sub .victory__daily .victory__event(.victory__bar .victory__milestone)
+//            .victory__reward(.victory__kept[data-count](.victory__fishes > .victory__fish[data-kept] .victory__plus .victory__period)
+//              .victory__score(.victory__chip.victory__points .victory__chip.victory__streak))
 //            .victory__actions(.victory__primary .victory__home))
-import { cfg } from '../../app/config';
+import { cfg, type PeriodKind } from '../../app/config';
 import type { Reward } from '../../game/events';
 import { formatClock, formatDuration, formatNumber, formatShortDate, joinList, praise, t, tn, translate, type I18nKey } from '../../i18n';
 import { illustration } from '../art/illustrations';
 import { icon } from '../art/sprite';
 import { h, setText, type OverlayView } from '../dom';
-import { createFishPill, type FishPillView } from '../hud/pills';
 import { createLocaleText } from '../locale-text';
+import { fishKeptText, periodTotalText } from '../period-text';
 import { createDelay, createOverlayShell, createTicker, makeButton, nextId, setButtonLabel, setGated, setTextKeepTogether } from './overlay-base';
 
 /**
@@ -59,7 +63,7 @@ export interface VictoryEventView {
   /** The progress bar animates from solvedBefore to solvedAfter (400 ms, CSS). */
   readonly solvedBefore: number;
   readonly solvedAfter: number;
-  /** "Event reward: +30 fish" when this win reached a milestone (already granted). */
+  /** "Event reward: +2 hints" when this win reached a milestone (already granted). */
   readonly reward: Reward | null;
   /** All puzzles solved: the button says "Back to event". */
   readonly last: boolean;
@@ -73,12 +77,15 @@ export interface VictoryProps {
   readonly level: number | null;
   /** The primary button's level ("Level 38"); 2 for the first-run tutorial; null otherwise. */
   readonly nextLevel: number | null;
-  /** Fish of this win (base + bonus) and the wallet total after it; null = no fish (tutorial replay, restored board). */
-  readonly fish: { readonly earned: number; readonly total: number } | null;
-  /** Bonus chip "Hard level bonus +2" / "Daily bonus +2". */
-  readonly bonus: { readonly kind: 'hard' | 'daily'; readonly count: number } | null;
-  /** "+55 points"; null when the win scores none (tutorial). */
+  /** Level points: "+120 points"; null (or 0) when the win scores none (tutorial, not counted). */
   readonly pointsEarned: number | null;
+  /** Phase 2c §2.7: "Perfect ×N" for a perfect win (N = streak after it, ≥ 1); null otherwise. */
+  readonly streak: number | null;
+  /**
+   * Phase 2c §2.7: the fish-kept row (`fish` of `max` lives kept, "+`gained`", the period `total`
+   * after the win); null when the win added no leaderboard points (tutorial, not counted, mode excluded).
+   */
+  readonly kept: { readonly fish: number; readonly max: number; readonly gained: number; readonly total: number; readonly kind: PeriodKind } | null;
   readonly daily: VictoryDailyView | null;
   readonly event: VictoryEventView | null;
   /** fx.winButtonDelayMs (600): the primary button turns active this long after open. */
@@ -91,14 +98,11 @@ export interface VictoryProps {
   /** The orange primary: next level / Play Level 2 / Home (replay) / Done (daily) / next puzzle or back to event. */
   onPrimary(): void;
   onHome(): void;
-  /** The fish pill's "+": open the shop. */
-  onShop(): void;
 }
 
-/** "+30 fish", "+2 hints and +3 kitties" (§4.5 "Event reward: +30 fish"). */
+/** "+2 hints and +3 kitties" (§4.5 "Event reward: +2 hints"). Phase 2c: milestones grant no fish. */
 export function rewardText(r: Reward): string {
   const parts: string[] = [];
-  if (r.fish) parts.push(t('fish.plus', { count: tn('event.reward.fish', r.fish, { count: formatNumber(r.fish) }) }));
   if (r.hints) parts.push(t('fish.plus', { count: tn('event.reward.hints', r.hints, { count: formatNumber(r.hints) }) }));
   if (r.kitties) parts.push(t('fish.plus', { count: tn('event.reward.kitties', r.kitties, { count: formatNumber(r.kitties) }) }));
   return joinList(parts);
@@ -133,8 +137,13 @@ export function fitLevel(overflowAt: (level: number) => number): number {
   for (let level = 0; level < FIT_LEVELS; level++) if (overflowAt(level) <= 1) return level;
   return FIT_LEVELS;
 }
-/** Three fish in the reward row, whatever the count (bonuses add a number, not more fish, §2.14). */
-const ROW_FISH = 3;
+
+/** The kept-fish row's data, clamped; null when the row is hidden (no row, or no fish added). */
+function keptRow(k: VictoryProps['kept'] | undefined): NonNullable<VictoryProps['kept']> | null {
+  if (!k || !(k.gained > 0)) return null;
+  const max = Math.max(1, Math.min(12, Math.floor(k.max)));
+  return { ...k, max, fish: Math.max(0, Math.min(max, Math.floor(k.fish))) };
+}
 
 export function createVictoryScreen(): OverlayView<VictoryProps> {
   let props: VictoryProps | null = null;
@@ -144,10 +153,6 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
   const delay = createDelay();
   const ticker = createTicker();
   const barDelay = createDelay();
-
-  // Top: the fish pill (with "+").
-  let pill: FishPillView | null = null;
-  const top = h('div', { class: 'victory__top' });
 
   const L = createLocaleText();
   const title = h('h2', { class: 'victory__praise', id: shell.titleId });
@@ -162,18 +167,19 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
   const dailyNext = h('p', { class: 'victory__next' });
   const daily = h('div', { class: 'victory__daily' }, dailyTime, dailyStats, dailyNext);
 
-  // Reward row: three fish, "+3", the total.
+  // Reward block (Phase 2c §2.7), row 1: the fish kept ("[fish][fish][empty] +2 | This week: 42").
   const fishes = h('span', { class: 'victory__fishes', 'aria-hidden': 'true' });
-  for (let k = 0; k < ROW_FISH; k++) fishes.appendChild(icon('icon-fish', { class: 'victory__fish' }));
+  let fishFor = '';
   const plus = h('span', { class: 'victory__plus num', 'aria-hidden': 'true' });
-  const total = h('span', { class: 'victory__total' });
-  const rewardId = nextId('victory-reward');
-  const reward = h('div', { class: 'victory__reward', role: 'group', id: rewardId }, fishes, plus, total);
-
-  const bonusChip = h('span', { class: 'victory__chip victory__chip--bonus' });
-  const pointsChip = h('span', { class: 'victory__chip victory__chip--points num' });
-  const chipsId = nextId('victory-chips');
-  const chips = h('div', { class: 'victory__chips', id: chipsId }, bonusChip, pointsChip);
+  const periodLine = h('span', { class: 'victory__period', 'aria-hidden': 'true' });
+  const keptId = nextId('victory-kept');
+  const kept = h('div', { class: 'victory__kept', role: 'img', id: keptId }, fishes, plus, periodLine);
+  // Row 2: level points and the perfect-streak chip.
+  const pointsChip = h('span', { class: 'victory__chip victory__points num' });
+  const streakChip = h('span', { class: 'victory__chip victory__streak', role: 'img' });
+  const scoreId = nextId('victory-score');
+  const score = h('div', { class: 'victory__score', id: scoreId }, pointsChip, streakChip);
+  const reward = h('div', { class: 'victory__reward' }, kept, score);
 
   // Event: progress bar + milestone line. The bar's name is its visible "3 / 21 solved" line (A11Y-NAME-1).
   const eventLabelId = nextId('victory-event-label');
@@ -204,12 +210,12 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
     h('div', { class: 'victory__stage' }, rays, art),
     sub,
     daily,
-    reward,
-    chips,
+    // Phase 2c §2.7: the daily's and the event's own lines sit above the reward block.
     event,
+    reward,
     h('div', { class: 'victory__actions' }, primary, home),
   );
-  root.append(top, col);
+  root.append(col);
   root.style.setProperty('--rays-ms', `${cfg.fx.victoryRaysTurnMs}ms`);
   root.style.setProperty('--banner-reserve', `${cfg.ads.banner.reservePx}px`);
   root.style.setProperty('--banner-clear', `${cfg.ads.banner.buttonClearancePx}px`);
@@ -271,17 +277,6 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
     root.toggleAttribute('data-reduced', p.reducedMotion);
     const tutorial = p.variant === 'tutorial' || p.variant === 'tutorial_replay';
 
-    // Fish pill: shown whenever this win has a wallet total.
-    if (p.fish) {
-      if (!pill) {
-        pill = createFishPill({ count: p.fish.total, onPlus: () => props?.onShop() });
-        top.appendChild(pill.el);
-      } else {
-        pill.update({ count: p.fish.total, onPlus: () => props?.onShop() });
-      }
-    }
-    top.hidden = !p.fish;
-
     setText(title, tutorial ? t('win.tutorial.title') : praise(p.praise));
     if (p.variant === 'daily' && p.daily) {
       const date = formatShortDate(p.daily.dateKey);
@@ -301,20 +296,40 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
       renderNext();
     }
 
-    reward.hidden = !p.fish;
-    if (p.fish) {
-      setText(plus, t('fish.plus', { count: formatNumber(p.fish.earned) }));
-      setText(total, tn('fish.count', p.fish.total, { count: formatNumber(p.fish.total) }));
-      reward.setAttribute('aria-label', tn('a11y.fishEarned', p.fish.earned, { count: formatNumber(p.fish.earned), total: formatNumber(p.fish.total) }));
+    // Row 1 (§2.7): hidden when the win added no leaderboard points; never on a tutorial.
+    const k = tutorial ? null : keptRow(p.kept);
+    kept.hidden = k === null;
+    if (k) {
+      kept.dataset.count = String(k.fish);
+      const want = `${k.fish}/${k.max}`;
+      if (want !== fishFor) {
+        fishFor = want;
+        fishes.textContent = '';
+        for (let i = 0; i < k.max; i++) {
+          const full = i < k.fish;
+          const f = icon(full ? 'icon-fish' : 'icon-fish-empty', { class: 'victory__fish' });
+          f.toggleAttribute('data-kept', full);
+          fishes.appendChild(f);
+        }
+      }
+      setText(plus, t('fish.plus', { count: formatNumber(k.gained) }));
+      setText(periodLine, periodTotalText(k.kind, k.total));
+      kept.setAttribute('aria-label', fishKeptText(k.kind, k.fish, k.total));
+    } else {
+      delete kept.dataset.count;
     }
-    bonusChip.hidden = !p.bonus;
-    if (p.bonus) {
-      bonusChip.dataset.kind = p.bonus.kind;
-      setText(bonusChip, p.bonus.kind === 'hard' ? t('victory.bonus.hard', { count: p.bonus.count }) : t('victory.bonus.daily', { count: p.bonus.count }));
+    // Row 2: "+120 points" and the "Perfect ×4" chip (a perfect win only).
+    const pts = tutorial ? null : p.pointsEarned;
+    pointsChip.hidden = pts === null || pts <= 0;
+    if (pts !== null && pts > 0) setText(pointsChip, t('victory.points', { points: formatNumber(pts) }));
+    const streak = tutorial || p.streak === null || !(p.streak >= 1) ? null : Math.floor(p.streak);
+    streakChip.hidden = streak === null;
+    if (streak !== null) {
+      setText(streakChip, t('victory.streak', { count: formatNumber(streak) }));
+      streakChip.setAttribute('aria-label', tn('victory.streak.a11y', streak, { count: formatNumber(streak) }));
     }
-    pointsChip.hidden = p.pointsEarned === null || p.pointsEarned <= 0;
-    if (p.pointsEarned !== null) setText(pointsChip, t('victory.points', { points: formatNumber(p.pointsEarned) }));
-    chips.hidden = bonusChip.hidden && pointsChip.hidden;
+    score.hidden = pointsChip.hidden && streakChip.hidden;
+    reward.hidden = kept.hidden && score.hidden;
 
     event.hidden = !(p.variant === 'event' && p.event);
     if (p.event) {
@@ -335,11 +350,12 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
       }
     }
 
-    // The dialog's description (§7 screen reader): the result line, the fish ("You caught 3 fish. You
-    // have 128."), the bonus and points, the event progress and milestone; only what is shown.
+    // The dialog's description (§7 screen reader): the result line, the fish kept ("You kept 2 fish.
+    // Your total this week: 42."), the points and the streak, the event progress and milestone; only
+    // what is shown.
     const described = [shell.descId];
-    if (!reward.hidden) described.push(rewardId);
-    if (!chips.hidden) described.push(chipsId);
+    if (!kept.hidden) described.push(keptId);
+    if (!score.hidden) described.push(scoreId);
     if (!event.hidden) described.push(eventId);
     root.setAttribute('aria-describedby', described.join(' '));
 
@@ -393,7 +409,6 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
       stopFit();
       win()?.removeEventListener('resize', refit);
       L.dispose();
-      pill?.destroy();
       props = null;
       shell.el.remove();
     },

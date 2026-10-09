@@ -1,7 +1,9 @@
-// Owner: C. Group challenges (phase2b §5.6, §5.10): participation mode — below 3 wins nothing, at 3 a
+// Owner: C (Phase 2b). Phase 2c (G1, §4.8): a challenge's score is the fish kept per counted win, and
+// rank-mode non-winners get groups.placeHints hints instead of fish.
+// Group challenges (phase2b §5.6, §5.10): participation mode — below 3 wins nothing, at 3 a
 // 2-kitty result, the group_double video gives 4 in total (not 2 + 4), one claim per challenge; rank
 // mode — ties share 1st, null standings fall back to participation; participation never says "won";
-// points are added only inside the challenge's context and window; behind the groupChallenges flag.
+// fish are added only inside the challenge's context and window; behind the groupChallenges flag.
 import { afterEach, describe, expect, it } from 'vitest';
 import { createFakeClock } from '../../../src/app/clock';
 import { mergeConfig, type GameConfig } from '../../../src/app/config';
@@ -77,17 +79,17 @@ describe('group challenges (§5.6)', () => {
     expect(s.analytics).toEqual([{ name: 'group_create', params: {} }]);
   });
 
-  it('wins in the challenge context add points and post the total; outside it or after the end nothing', async () => {
+  it('wins in the challenge context add the fish kept and post the total; outside it or after the end nothing', async () => {
     const s = setup();
-    await s.flow.onWin(45);
+    await s.flow.onWin(3);
     expect(s.calls).toEqual([]);
     s.setCurrent({ id: 't1', endTimeMs: NOW + 10 * H });
-    await s.flow.onWin(45);
-    await s.flow.onWin(55);
-    expect(s.save().groups.t1).toEqual({ endsAt: NOW + 10 * H, total: 100, wins: 2, claimed: 0 });
-    expect(s.calls).toEqual(['save', 'post:45', 'save', 'post:100']);
+    await s.flow.onWin(3);
+    await s.flow.onWin(2);
+    expect(s.save().groups.t1).toEqual({ endsAt: NOW + 10 * H, total: 5, wins: 2, claimed: 0 });
+    expect(s.calls).toEqual(['save', 'post:3', 'save', 'post:5']);
     s.clock.advance(10 * H);
-    await s.flow.onWin(30);
+    await s.flow.onWin(1);
     expect(s.save().groups.t1?.wins).toBe(2);
   });
 
@@ -127,7 +129,7 @@ describe('group challenges (§5.6)', () => {
     expect(f.save().stock.kitties).toBe(k0);
   });
 
-  it('rank mode: rank 1 and everyone tied for 1st win kitties; others with a win get 10 fish', async () => {
+  it('rank mode: rank 1 and everyone tied for 1st win kitties; others with a win get groups.placeHints hints (phase2c §4.8: no fish)', async () => {
     const config = mergeConfig({ groups: { rewardMode: 'rank' } });
     const first = setup({ config, save: ended(1), provider: { standings: async () => ({ myRank: 1, count: 6, tiedFirst: false }) } });
     expect((await first.flow.pendingResult())?.outcome).toEqual({ kind: 'won', kitties: 2, kittiesWithAd: 4 });
@@ -135,10 +137,12 @@ describe('group challenges (§5.6)', () => {
     expect((await tied.flow.pendingResult())?.outcome.kind).toBe('won');
     const third = setup({ config, save: ended(2), provider: { standings: async () => ({ myRank: 3, count: 6, tiedFirst: false }) } });
     const r = await third.flow.pendingResult();
-    expect(r?.outcome).toEqual({ kind: 'place', place: 3, count: 6, fish: 10 });
+    expect(r?.outcome).toEqual({ kind: 'place', place: 3, count: 6, hints: 1 });
     if (!r) throw new Error('no result');
+    const h0 = third.save().stock.hints;
     await third.flow.claim(r, false);
-    expect(third.save().wallet.fish).toBe(10);
+    expect(third.save().stock.hints).toBe(h0 + 1);
+    expect(third.save()).not.toHaveProperty('wallet');
     expect(third.analytics).toContainEqual({ name: 'group_result', params: { mode: 'rank', place: 3, wins: 2, doubled: 0 } });
   });
 

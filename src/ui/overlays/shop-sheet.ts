@@ -1,27 +1,26 @@
-// Owner: B
-// Shop (new overlay `shop`, phase2b §8.5): a bottom sheet (max-width 480 px). Header: the fish
-// balance. "Swap fish": 1 hint for shop.hintFish and 1 kitty for shop.kittyFish, each "Swap" disabled
-// below the price. "Buy" (FB, payments ready): the five products with our names and descriptions
-// (shop.product.<id>.*), the catalogue's localised price and "Buy" (or "Owned" for No Ads). Arrow
-// keys move inside the list (§7). Entry points: the fish pill "+", Settings → Shop / Remove ads.
+// Owner: B (Phase 2b); G2 (Phase 2c: the Buy section only)
+// Shop (new overlay `shop`, phase2b §8.5): a bottom sheet (max-width 480 px). Phase 2c
+// (fish-lives-spec §5.2): fish are lives, not a currency, so there is no balance and no swap; the
+// sheet is the "Buy" section (FB, payments ready): the catalogue's products (iap.catalog: No Ads, Bulb
+// Bundle, Kitty Basket) with our names and descriptions (shop.product.<id>.*), the catalogue's
+// localised price and "Buy" (or "Owned" for No Ads), with its states (loading, error + retry,
+// unavailable). Arrow keys move inside the list (§7). Entry point: Settings → Shop (the app shows that
+// row only where the Buy section can show something) and Remove ads.
 // Disabled actions stay focusable (aria-disabled) so the arrow keys and screen readers still find them.
 // Lazy overlay chunk.
 //
 // Classes: .overlay[data-overlay=shop] > .overlay__panel--sheet.shop[data-buy]
-//          .overlay__head(.overlay__title .fish-pill .overlay__close) .shop__section(.shop__heading
-//          .shop__row[data-item](.shop__icon .shop__text(.shop__name .shop__desc) .shop__action)) .shop__note .shop__state
+//          .overlay__head(.overlay__title .overlay__close) .shop__section.shop__section--buy(.shop__heading
+//          .shop__list > .shop__row[data-item](.shop__icon .shop__text(.shop__name .shop__desc) .shop__action)) .shop__state
 //
-// Review fixes: a swap is confirmed to screen readers ("1 hint added. Fish left: 5.", plus "Not enough
-// fish yet." when the fish run out) through the sheet's own polite live region, and the gated swap
-// buttons are described by the "Not enough fish yet." note (A11Y-LIVE-1). Every label follows the
-// language, also in a sheet opened before the switch (A11Y-I18N-1).
+// Review fixes: every label follows the language, also in a sheet opened before the switch (A11Y-I18N-1).
+import { cfg } from '../../app/config';
 import type { ProductId } from '../../game/types';
-import { formatNumber, t, translate, type I18nKey } from '../../i18n';
+import { t, translate, type I18nKey } from '../../i18n';
 import { icon, type IconSymbol } from '../art/sprite';
 import { h, setText, type OverlayView } from '../dom';
-import { createFishPill } from '../hud/pills';
 import { createLocaleText } from '../locale-text';
-import { closeButton, createOverlayShell, makeButton, nextId, setButtonLabel, setGated } from './overlay-base';
+import { closeButton, createOverlayShell, makeButton, setGated } from './overlay-base';
 
 export interface ShopProductView {
   readonly id: ProductId;
@@ -44,14 +43,9 @@ export type ShopBuyState =
   | { readonly kind: 'ready'; readonly products: readonly ShopProductView[] };
 
 export interface ShopProps {
-  readonly fish: number;
-  /** shop.hintFish / shop.kittyFish. */
-  readonly hintPrice: number;
-  readonly kittyPrice: number;
   readonly buy: ShopBuyState;
-  /** A purchase or swap is in flight: every action button is disabled. */
+  /** A purchase is in flight: every action button is disabled. */
   readonly busy: boolean;
-  onSwap(item: 'hint' | 'kitty'): void;
   onBuy(id: ProductId): void;
   /** Retry after a catalogue error. */
   onRetry(): void;
@@ -59,14 +53,15 @@ export interface ShopProps {
   onClose(): void;
 }
 
-/** The product's icon (ours, from the sprite). */
+/** The product's icon (ours, from the sprite). The retired fish packs are never listed (iap.catalog only). */
 const PRODUCT_ICON: Readonly<Record<string, IconSymbol>> = {
   remove_ads: 'icon-play-video',
   hints_15: 'icon-bulb',
   kitties_8: 'icon-paw',
-  fish_250: 'icon-fish',
-  fish_900: 'icon-fish',
 };
+
+/** Phase 2c §5.3: the products on sale. */
+const ON_SALE: ReadonlySet<ProductId> = new Set(cfg.iap.catalog.map((d) => d.id));
 
 const productKey = (id: ProductId, part: 'name' | 'desc'): I18nKey => `shop.product.${id}.${part}` as I18nKey;
 
@@ -81,35 +76,13 @@ export function createShopSheet(): OverlayView<ShopProps> {
   shell.panel.classList.add('shop');
 
   const L = createLocaleText();
-  const balance = createFishPill({ count: 0, onPlus: null });
-  balance.el.classList.add('shop__balance');
   const head = h(
     'div',
     { class: 'overlay__head' },
     L.text(h('h2', { class: 'overlay__title', id: shell.titleId }), () => t('shop.title')),
-    balance.el,
     L.attr(closeButton(() => void close()), 'aria-label', () => t('common.close')),
   );
-  /** Polite announcements of this sheet (A11Y-LIVE-1): a swap that went through. */
-  const live = h('p', { class: 'shop__live visually-hidden', role: 'status', 'aria-live': 'polite' });
-  /** The swap waiting for its result: the item, the price and the fish before it. */
-  let pendingSwap: { readonly item: 'hint' | 'kitty'; readonly price: number; readonly fishBefore: number } | null = null;
 
-  // ── Swap fish ──
-  const swapButton = (item: 'hint' | 'kitty'): HTMLButtonElement =>
-    makeButton({
-      variant: 'secondary',
-      label: t('shop.swap.action'),
-      className: 'shop__action shop__swap',
-      trailing: h('span', { class: 'shop__price num' }, icon('icon-fish', { class: 'shop__price-icon' }), h('span', { class: 'shop__price-n' })),
-      onPress: () => {
-        if (!props) return;
-        pendingSwap = { item, price: item === 'hint' ? props.hintPrice : props.kittyPrice, fishBefore: props.fish };
-        props.onSwap(item);
-      },
-    });
-  const swapHint = swapButton('hint');
-  const swapKitty = swapButton('kitty');
   const row = (item: string, sym: IconSymbol, name: HTMLElement, desc: HTMLElement | null, action: HTMLElement): HTMLElement =>
     h(
       'div',
@@ -118,20 +91,6 @@ export function createShopSheet(): OverlayView<ShopProps> {
       h('span', { class: 'shop__text' }, name, desc),
       action,
     );
-  const noteId = nextId('shop-note');
-  const notEnough = L.text(h('p', { class: 'shop__note', role: 'note', id: noteId }), () => t('shop.notEnough'));
-  const swapSection = L.attr(
-    h(
-      'section',
-      { class: 'shop__section shop__section--swap' },
-      L.text(h('h3', { class: 'shop__heading' }), () => t('shop.swap')),
-      row('hint', 'icon-bulb', L.text(h('span', { class: 'shop__name' }), () => t('shop.swap.hint')), null, swapHint),
-      row('kitty', 'icon-paw', L.text(h('span', { class: 'shop__name' }), () => t('shop.swap.kitty')), null, swapKitty),
-      notEnough,
-    ),
-    'aria-label',
-    () => t('shop.swap'),
-  );
 
   // ── Buy ──
   const buyList = h('div', { class: 'shop__list' });
@@ -145,7 +104,7 @@ export function createShopSheet(): OverlayView<ShopProps> {
     'aria-label',
     () => t('shop.buy'),
   );
-  shell.panel.append(head, swapSection, buySection, live);
+  shell.panel.append(head, buySection);
 
   /** Arrow keys move between the sheet's action buttons (§7 "shop: arrows inside the list"). */
   shell.panel.addEventListener('keydown', (ev) => {
@@ -169,6 +128,8 @@ export function createShopSheet(): OverlayView<ShopProps> {
     buyList.textContent = '';
     productButtons.clear();
     for (const p of products) {
+      // Only what is on sale (iap.catalog): a retired pack is never listed, even if handed in.
+      if (!ON_SALE.has(p.id)) continue;
       const name = translate(productKey(p.id, 'name'));
       const action = p.owned
         ? h('span', { class: 'shop__owned' }, t('shop.owned'))
@@ -193,41 +154,9 @@ export function createShopSheet(): OverlayView<ShopProps> {
     }
   };
 
-  /** After a swap: the confirmation once the fish went down, nothing when it did not go through. */
-  const announceSwap = (p: ShopProps): void => {
-    const s = pendingSwap;
-    if (!s || p.busy) return;
-    pendingSwap = null;
-    if (p.fish > s.fishBefore - s.price) return; // refused or failed: the app's toast says why
-    const item = s.item === 'hint' ? t('shop.swap.hint') : t('shop.swap.kitty');
-    const done = t('shop.swap.done', { item, count: formatNumber(p.fish) });
-    const out = p.fish < Math.min(p.hintPrice, p.kittyPrice) ? ` ${t('shop.notEnough')}` : '';
-    // A fresh text node each time, so the same sentence twice in a row is read twice.
-    live.textContent = '';
-    live.appendChild(document.createTextNode(`${done}${out}`));
-  };
-
   const render = (p: ShopProps): void => {
     props = p;
     L.apply();
-    balance.update({ count: p.fish, onPlus: null });
-    for (const [btn, price, item] of [
-      [swapHint, p.hintPrice, t('shop.swap.hint')],
-      [swapKitty, p.kittyPrice, t('shop.swap.kitty')],
-    ] as const) {
-      const n = btn.querySelector('.shop__price-n');
-      if (n) setText(n, formatNumber(price));
-      btn.setAttribute('aria-label', t('shop.swap.a11y', { price: formatNumber(price), item }));
-      const gated = p.busy || p.fish < price;
-      setGated(btn, gated);
-      // A gated swap says why (the note), also when focus lands on it (A11Y-LIVE-1).
-      if (!p.busy && p.fish < price) btn.setAttribute('aria-describedby', noteId);
-      else btn.removeAttribute('aria-describedby');
-      setButtonLabel(btn, t('shop.swap.action'));
-    }
-    notEnough.hidden = p.fish >= Math.min(p.hintPrice, p.kittyPrice);
-    announceSwap(p);
-
     const b = p.buy;
     shell.panel.dataset.buy = b.kind;
     buySection.hidden = b.kind === 'hidden';
@@ -257,8 +186,6 @@ export function createShopSheet(): OverlayView<ShopProps> {
     modal: true,
     open(p) {
       lastProducts = null;
-      pendingSwap = null;
-      live.textContent = '';
       render(p);
       shell.show();
     },
@@ -271,7 +198,6 @@ export function createShopSheet(): OverlayView<ShopProps> {
     dismiss: close,
     destroy() {
       L.dispose();
-      balance.destroy();
       props = null;
       shell.el.remove();
     },

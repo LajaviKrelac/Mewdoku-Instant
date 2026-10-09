@@ -1,6 +1,8 @@
 # 02 · Rebuild spec: Phase 2 "as is"
 
-Status: Phase 1 deliverable (2026-10-06); **Phase 2b notes added at integration (2026-10-09)** · Applies to: Phase 2 (rebuild), Phase 2b ("parity") and Phase 4 (Facebook Instant Games)
+Status: Phase 1 deliverable (2026-10-06); **Phase 2b notes added at integration (2026-10-09); Phase 2c notes (2026-10-09)** · Applies to: Phase 2 (rebuild), Phase 2b ("parity") and Phase 4 (Facebook Instant Games)
+
+> **Phase 2c (2026-10-09).** The user, who plays the Play Store app, reported first-hand that **the lives are fish**, that the fish left at a win are **added to the leaderboard points ranked per period**, that **level points grow without mistakes**, and that our fish currency was an invention. [fish-lives-spec](../phase2c/fish-lives-spec.md) wins over this document and over the 2b notes wherever they talk about hearts, fish, points, the shop or the save; the HUD (S2), win flow (§10), monetization (§13) and persistence (§15) sections carry a "Phase 2c" pointer. Status: [STATUS-2c](../phase2c/STATUS-2c.md).
 
 > **Phase 2b.** The [parity spec](../phase2b/parity-spec.md) changed the behaviour of several sections below to close the eight headline differences with the original. Where a "Phase 2b" note opens a section, the note and the parity spec win over the Phase 2 text that follows; the Phase 2 text is kept for history. Sections without a note are unchanged. The built APIs are in [phase2b CONTRACTS](../phase2b/CONTRACTS.md) §11.
 
@@ -197,6 +199,8 @@ All screens are portrait. The wireframes show a 390×844 CSS-px phone. Legend: `
 - The primary button reads "Level L" with a "Hard" badge when level L is a hard level (§11.3), or "Continue · Level L" when `inProgress.level` holds a board. (L is the level number; N is always the board size.)
 
 ### S2 Game
+
+> **Phase 2c** ([fish-lives-spec](../phase2c/fish-lives-spec.md) §1): the lives pill shows **3 fish** (our fish icon; a lost life is our empty fish outline), not hearts; a mistake plays our fish loss. In the win flow the fish still left fly from this pill to the period counter (§2). Below, "hearts" means these fish.
 
 ```
 ┌──────────────────────────────────────┐
@@ -516,6 +520,8 @@ In the tutorial, the hint and its auto-X effects are **free** and are not charge
 
 ## 10. Win and lose flows
 
+> **Phase 2c** ([fish-lives-spec](../phase2c/fish-lives-spec.md) §2, §3): the fish that fly are the **lives kept** (1–3), from the lives pill to this period's points counter; the panel opens at 4 200 / 4 350 / 4 500 ms for 1 / 2 / 3 fish and always shows the period board; the victory shows the level points, the "Perfect ×N" streak chip and the period total. No fish are saved as a currency. Losing: "Out of fish"; Continue gives one fish back.
+
 ### 10.1 Win (level mode)
 
 > **Phase 2b** (parity-spec §2.2, §2.6, §2.7): t = 0 the rewards (fish, points, progress) are saved in the same critical save, and Home and Gear turn aria-disabled; 300 glow and happy cats; 1 000 the fish pill appears; 1 200–2 550 three fish pop and fly to it ("+3", plus "+2" on Hard levels and dailies at 2 900); 4 200 scrim; **4 500 the ranking panel**; a tap from 5 700 fades the panel (200 ms) and opens the **victory screen** with the wide orange "Level N" (enabled after 600 ms); "Level N" → interstitial gate → the next board with a screen transition and the 700 ms entry. Reduced motion: the panel at 1 200. Tutorial: the victory at 3 300 (no panel); replay: at 1 200; a restored full board: at once. The O3 overlay and its confetti were removed. The table below is the Phase 2 flow.
@@ -674,6 +680,8 @@ Existence is confirmed (01 §10.10). Everything else is [DECISION]:
 
 ## 13. Monetization (Phase 2 behaviour)
 
+> **Phase 2c** ([fish-lives-spec](../phase2c/fish-lives-spec.md) §5): **no fish economy**: no wallet, no fish swaps for hints or kitties, no fish packs. The FB shop sells three products (No Ads, a hint pack, a kitty pack) and opens only from Settings → Shop where something can be sold; the out-of-hints card is back to Watch video / Not now. Retired fish packs are compensated in hints and kitties.
+
 > **Phase 2b** (parity-spec §3, §8): the interstitial gate and cadence are unchanged (120 / 100 / 90 s after 10 completed levels), with a new trigger `event_next`. **Banners** (FBIG) show on Home, the victory screen and the event screen only, never during play, from 10 completed levels, with a 58 px reserve and a 60 s reload window, and only when the SDK reports both banner APIs; the web's dev and e2e builds have a mock banner. **Purchases** (FBIG on facebook.com and Android): five consumable products in a shop sheet, among them "No Ads" (kept as a save entitlement: no interstitials and no banners; optional videos stay); hidden on iOS, Messenger.com and the web. A rewarded `group_double` placement doubles a group-challenge reward. "Next" below means the victory screen's "Level N".
 
 
@@ -735,6 +743,8 @@ after an interstitial resolves ok, or a rewarded ad completes
 | About | — | — | Version, licences (font OFL), privacy link (Phase 4) |
 
 ## 15. Persistence
+
+> **Phase 2c** ([fish-lives-spec](../phase2c/fish-lives-spec.md) §3.8): save **v3** drops the fish wallet and adds the perfect streak (`streak`) and this period's leaderboard points (`period`); see 04 §4.3.
 
 Save schema and adapters are in 04 §7.
 
