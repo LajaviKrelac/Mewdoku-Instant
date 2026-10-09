@@ -15,6 +15,9 @@ import '../src/styles/overlays.css';
 import '../src/styles/fx.css';
 import '../src/styles/art.css';
 import '../src/styles/screens.css';
+// 2b integration: the overlays' and the event screen's rules load with their lazy chunks in the app.
+import '../src/styles/overlay-chunk.css';
+import '../src/styles/events-chunk.css';
 import { recordToPuzzle } from '../src/engine/codec';
 import type { CellIndex, LevelPack, Puzzle } from '../src/engine/types';
 import type { EventDef } from '../src/game/events';

@@ -1,0 +1,265 @@
+/* Owner: lead (2b integration; rules from A's art.css and B's screens.css, moved unchanged)
+   The events chunk's stylesheet (phase2b §11): imported by src/app/events-chunk.ts, so it loads with
+   the lazy `events` chunk (the event screen and the event art) instead of in the first-load
+   stylesheet. The [data-event-theme] page rule stays in art.css: an event board (game screen) uses
+   it too. Tokens only (css-rules.spec.ts). */
+
+/* ═══════════════════════ from art.css (A) ═══════════════════════ */
+
+/* ── Event art: the Home card's art and the event-screen header (ui/art/event-art.ts) ── */
+.event-art {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background-color: var(--event-page, var(--page));
+  background-image: var(--event-art, none);
+  background-size: 72px 72px;
+}
+
+.event-art__pose {
+  display: block;
+  flex: none;
+}
+
+/* Card: a rounded 56 px tile at the card's inline start; the 48 px bust sits on its lower edge. */
+.event-art--card {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-m);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.event-art--card .event-art__pose {
+  width: 48px;
+  height: 48px;
+  margin-bottom: -2px;
+}
+
+/* Header: a wide band (B may set its size; 140 px tall by default) with Tux sitting at its foot. */
+.event-art--header {
+  width: 100%;
+  height: 140px;
+  border-radius: var(--radius-l);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.event-art--header .event-art__pose {
+  /* fills the band (minus a little air) and keeps its proportions, standing on the bottom edge
+     (preserveAspectRatio xMidYMax), so a shorter header never crops the ears */
+  position: absolute;
+  top: 8px;
+  right: 0;
+  bottom: 4px;
+  left: 0;
+  width: 100%;
+  height: calc(100% - 12px);
+}
+
+/* ═══════════════════════ from screens.css (B) ═══════════════════════ */
+/* ── Event screen (§4.4) ───────────────────────────────────────────────── */
+.screen--event {
+  background-color: var(--page);
+  background-image: var(--page-art, none);
+}
+
+.screen--event > :first-child {
+  width: 100%;
+  flex: none;
+}
+
+.event__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  width: 100%;
+  max-width: 512px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 16px 16px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.event__header {
+  position: relative;
+  flex: none;
+  overflow: hidden;
+  padding: 0 16px 16px;
+  border-radius: var(--radius-xl);
+  background: var(--card);
+  box-shadow: var(--shadow-1);
+  text-align: center;
+}
+
+.event__art {
+  height: 112px;
+  margin: 0 -16px 10px;
+  overflow: hidden;
+  background: var(--accent-soft);
+}
+
+.event__art > * {
+  width: 100%;
+  height: 100%;
+}
+
+.event__name {
+  color: var(--accent-title);
+  font-size: 2rem;
+  line-height: 1.1;
+}
+
+.event__tagline {
+  margin-top: 4px;
+  color: var(--ink-2);
+}
+
+.event__ends {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--page-2);
+  color: var(--ink-2);
+  font-weight: 600;
+  font-size: var(--fs-s);
+}
+
+.event__ends[data-soon] {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.event__track {
+  flex: none;
+  margin-top: 14px;
+  padding: 14px 16px 12px;
+  border-radius: var(--radius-l);
+  background: var(--card);
+  box-shadow: var(--shadow-1);
+}
+
+.event__track-title {
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* The rail and the node row share 18 px side margins, so a node's dot sits over its point on the rail. */
+.event__rail {
+  height: 8px;
+  margin: 28px 18px 0;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--page-2);
+}
+
+.event__rail-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.event__nodes {
+  display: flex;
+  margin: -21px 18px 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Each node spans the rail from the previous milestone (--seg of the whole); its dot ends the span. */
+.event__node {
+  display: flex;
+  flex: 0 0 calc(var(--seg, 0.2) * 100%);
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 0;
+}
+
+.event__node-dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  margin-inline-end: -17px;
+  border: 2px solid var(--line-2);
+  border-radius: 50%;
+  background: var(--card);
+  color: var(--ink-2);
+}
+
+.event__node-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.event__node[data-reached] .event__node-dot {
+  border-color: var(--accent-deep);
+  background: var(--accent);
+  color: #fff;
+  --icon-fill: rgba(255, 255, 255, 0.3);
+}
+
+.event__node-at {
+  width: 34px;
+  margin-top: 2px;
+  margin-inline-end: -17px;
+  color: var(--ink-2);
+  font-family: var(--font-num);
+  font-weight: var(--display-weight);
+  font-size: var(--fs-s);
+  text-align: center;
+}
+
+.event__progress {
+  margin-top: 8px;
+  color: var(--ink-2);
+  font-weight: 600;
+  font-size: var(--fs-s);
+  text-align: center;
+}
+
+.event__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  margin-top: auto;
+  padding-top: 16px;
+}
+
+.event__actions > * + * {
+  margin-top: 12px;
+}
+
+.event__actions > .event__home {
+  align-self: center;
+  margin-top: 4px;
+}
+
+.event__play.btn {
+  font-size: 1.5rem;
+}
+
+.event__done {
+  color: var(--accent-text);
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  font-size: var(--fs-l);
+  text-align: center;
+}
+
+/* Short screens (compact, < 640 px high, 02 §19). */
+@media (max-height: 639px) {
+  .event__art {
+    height: 84px;
+  }
+
+  .event__name {
+    font-size: 1.625rem;
+  }
+}

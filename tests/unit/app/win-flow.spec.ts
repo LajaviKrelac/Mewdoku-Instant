@@ -1,6 +1,7 @@
 // Owner: C. The post-win flow (phase2b §2.2, §2.6, §2.7, §2.13) on a fake clock: the exact step
-// times, the rewards saved at t = 0 (critical save) before any animation, Home and Gear inactive until
-// the panel, the reduced-motion timeline, the tutorial / replay / daily / event variants, teardown
+// times, the rewards saved at t = 0 (critical save) before any animation, Home and Gear inactive (and
+// rendered aria-disabled) until the panel, the scrim at 4 200, the pops from B's flight, the panel's
+// fade-out before the victory, the reduced-motion timeline, the tutorial / replay / daily / event variants, teardown
 // mid-flow (no timers, no fish nodes), a 10 s clock jump running each missed step once, and a restored
 // full board going to the victory at once with no second award.
 import { describe, expect, it } from 'vitest';
@@ -9,7 +10,7 @@ import { cfg } from '../../../src/app/config';
 import { arrivalAt, createWinFlow, winTimeline, type WinFlowInput } from '../../../src/app/win-flow';
 import type { FxHandle } from '../../../src/ui/fx/fish-flight';
 import type { GameScreen } from '../../../src/ui/screens/game-screen';
-import { createHarness, last, SOL5, startLevel, winGame, type Harness } from './harness';
+import { createHarness, last, SOL5, startLevel, winGame, type Harness, tapRanking } from './harness';
 
 const W = cfg.fx.win;
 
@@ -37,6 +38,7 @@ function fakeScreen(log: string[], now: () => number, opts: { rects?: boolean } 
       at(`glow:${cells.length}`);
       return { done: Promise.resolve(), cancel: () => at('glow:cancel'), finish: () => at('glow:finish') };
     },
+    showScrim: () => at('scrim'),
   };
 }
 
@@ -46,7 +48,8 @@ function setup(opts: { rects?: boolean } = {}) {
   const log: string[] = [];
   const now = (): number => clock.perf() - t0;
   const nodes: string[] = [];
-  const flights: { cancel: number; finish: number; onArrive?: (i: number) => void } = { cancel: 0, finish: 0 };
+  const flights: { cancel: number; finish: number; onArrive?: (i: number) => void; onPop?: (i: number) => void } = { cancel: 0, finish: 0 };
+  const blocking: boolean[] = [];
   const flow = createWinFlow({
     clock,
     sfx: { play: (id, o) => void log.push(`${now()}:sfx:${id}${o?.index !== undefined ? `:${o.index}` : ''}`) },
@@ -60,6 +63,8 @@ function setup(opts: { rects?: boolean } = {}) {
         log.push(`${now()}:fly:${from.length}`);
         nodes.push('a', 'b', 'c');
         flights.onArrive = o.onArrive;
+        flights.onPop = o.onPop;
+        o.onPop?.(0); // B pops fish 0 as the flight starts (fish 1 and 2 follow on its own clock)
         return {
           done: Promise.resolve(),
           cancel: () => {
@@ -76,6 +81,7 @@ function setup(opts: { rects?: boolean } = {}) {
     },
     openRanking: (o) => void log.push(`${now()}:ranking:${o.tapMinMs}`),
     openVictory: () => void log.push(`${now()}:victory`),
+    onBlockingChange: (b) => void blocking.push(b),
   });
   const screen = fakeScreen(log, now, opts);
   const input = (patch: Partial<WinFlowInput> = {}): WinFlowInput => ({
@@ -89,7 +95,7 @@ function setup(opts: { rects?: boolean } = {}) {
     reducedMotion: false,
     ...patch,
   });
-  return { clock, log, flow, input, nodes, flights, now };
+  return { clock, log, flow, input, nodes, flights, now, blocking };
 }
 
 describe('win timeline (§2.2)', () => {
@@ -117,6 +123,7 @@ describe('win timeline (§2.2)', () => {
       '2550:label:+3',
       '2550:say:You caught 3 fish. You have 128.',
       `${Math.max(2550, W.bonusLabelAtMs) + W.counterBumpMs}:pill:128`,
+      `${W.scrimAtMs}:scrim`,
       `4500:ranking:${cfg.rank.panelTapMinMs}`,
     ]);
     expect(arrivalAt(0)).toBe(2250);
@@ -128,7 +135,13 @@ describe('win timeline (§2.2)', () => {
     s.flow.start(s.input());
     s.clock.advance(W.fishAtMs);
     expect(s.log).toContain('1200:fly:3');
+    // The pops come from B's flight (FlyFishOptions.onPop), not from the flow's own schedule.
+    expect(s.log.filter((l) => l.includes('fish_pop'))).toEqual(['1200:sfx:fish_pop:0']);
+    s.flights.onPop?.(1);
+    expect(s.log.filter((l) => l.includes('fish_pop'))).toEqual(['1200:sfx:fish_pop:0', '1200:sfx:fish_pop:1']);
     s.clock.advance(1000); // t = 2 200: the flight's own clock delivers fish 0
+    // The flow's own pop steps (1 350, 1 500) stayed silent while the flight ran.
+    expect(s.log.filter((l) => l.includes('fish_pop'))).toHaveLength(2);
     s.flights.onArrive?.(0);
     s.flights.onArrive?.(0); // never twice
     expect(s.log.filter((l) => l.endsWith('pill:126'))).toHaveLength(1);
@@ -148,20 +161,49 @@ describe('win timeline (§2.2)', () => {
     expect(s.log).toContain('2550:say:You caught 5 fish. You have 130.');
   });
 
-  it('Home and Gear stay inactive (blocking) until the panel opens; the panel tap opens the victory', () => {
+  it('Home and Gear stay inactive (blocking, reported for aria-disabled) until the panel opens; the tap fades the panel, then the victory', () => {
     const s = setup();
     s.flow.start(s.input());
     expect(s.flow.blocking()).toBe(true);
+    expect(s.blocking).toEqual([true]);
     s.clock.advance(4499);
     expect(s.flow.blocking()).toBe(true);
     s.clock.advance(1);
     expect(s.flow.blocking()).toBe(false);
+    expect(s.blocking).toEqual([true, false]);
     expect(s.flow.running()).toBe(true);
+    s.clock.advance(2000);
     s.flow.continueFromRanking();
-    expect(last(s.log)).toBe('4500:victory');
-    expect(s.flow.running()).toBe(false);
+    // §2.2 "tap": the panel fades out over rank.panelOutMs; the victory comes in after it.
+    expect(s.log.some((l) => l.endsWith('victory'))).toBe(false);
     s.flow.continueFromRanking(); // only once
+    s.clock.advance(cfg.rank.panelOutMs - 1);
+    expect(s.log.some((l) => l.endsWith('victory'))).toBe(false);
+    s.clock.advance(1);
+    expect(last(s.log)).toBe(`${6500 + cfg.rank.panelOutMs}:victory`);
+    expect(s.flow.running()).toBe(false);
+    s.flow.continueFromRanking();
+    s.clock.advance(1000);
     expect(s.log.filter((l) => l.endsWith('victory'))).toHaveLength(1);
+    expect(s.blocking).toEqual([true, false]);
+  });
+
+  it('teardown during the panel fade-out never opens the victory', () => {
+    const s = setup();
+    s.flow.start(s.input());
+    s.clock.advance(4500);
+    s.flow.continueFromRanking();
+    s.flow.cancel();
+    s.clock.advance(1000);
+    expect(s.log.some((l) => l.endsWith('victory'))).toBe(false);
+  });
+
+  it('the scrim comes at 4 200 only before a ranking panel: not with reduced motion, not for the tutorial variants', () => {
+    const names = (v: WinFlowInput['variant'], reducedMotion = false): string[] =>
+      winTimeline({ variant: v, reducedMotion, fishBase: 3, fishBonus: 0 }).map((x) => `${x.at}:${x.name}`);
+    for (const v of ['level', 'daily', 'event'] as const) expect(names(v)).toContain(`${W.scrimAtMs}:scrim`);
+    for (const v of ['tutorial', 'tutorial_replay', 'restored'] as const) expect(names(v).some((n) => n.endsWith(':scrim'))).toBe(false);
+    expect(names('level', true).some((n) => n.endsWith(':scrim'))).toBe(false);
   });
 
   it('reduced motion (§2.7): static glow, the total at once, the label, plinks at the usual times, panel at 1 200 with a 600 ms gate', () => {
@@ -228,7 +270,8 @@ describe('win timeline (§2.2)', () => {
     expect(names.filter((n) => n.startsWith('sfx:fish_pop'))).toHaveLength(1); // the missed pops are silent
     expect(s.flights.finish).toBeGreaterThanOrEqual(1); // the flight jumped to its end
     // In order: glow, pill, label, bonus, panel.
-    const order = ['glow:5', 'pill:125', 'label:+3', 'label:+2', 'ranking:1200'].map((n) => names.indexOf(n));
+    expect(names.filter((n) => n === 'scrim')).toHaveLength(1);
+    const order = ['glow:5', 'pill:125', 'label:+3', 'label:+2', 'scrim', 'ranking:1200'].map((n) => names.indexOf(n));
     expect(order.every((i, k) => i >= 0 && (k === 0 || i > (order[k - 1] as number)))).toBe(true);
     // Nothing runs twice afterwards.
     const count = s.log.length;
@@ -268,17 +311,25 @@ describe('session win flow (§2.2 t = 0 and §2.6)', () => {
     expect(h.analytics.find((e) => e.name === 'level_win')).toBeDefined();
   });
 
-  it('Home and Gear in the top bar do nothing until the ranking panel opens', async () => {
+  it('Home and Gear in the top bar do nothing (and render aria-disabled) until the ranking panel opens', async () => {
     const h = createHarness();
-    await wonLevel(h);
+    await startLevel(h, 5);
+    expect(h.router.game?.last.chromeLocked).toBe(false);
+    winGame(h);
     const cb = h.router.game?.cb;
+    expect(h.router.game?.last.chromeLocked).toBe(true); // GameView.chromeLocked from WON (§2.2)
     await h.settle(2000);
     cb?.onHome();
     cb?.onSettings();
     expect(h.homeCalls).toBe(0);
     expect(h.log).not.toContain('openSettings');
-    await h.settle(cfg.fx.winOverlayDelayMs - 2000);
+    expect(h.router.game?.last.chromeLocked).toBe(true);
+    await h.settle(cfg.fx.win.scrimAtMs - 2000);
+    expect(h.router.game?.scrims).toBe(1); // the scrim at 4 200, before the panel
+    expect(h.router.isOpen('ranking')).toBe(false);
+    await h.settle(cfg.fx.winOverlayDelayMs - cfg.fx.win.scrimAtMs);
     expect(h.router.isOpen('ranking')).toBe(true);
+    expect(h.router.game?.last.chromeLocked).toBe(false);
     cb?.onSettings();
     expect(h.log).toContain('openSettings');
     cb?.onHome();
@@ -301,7 +352,7 @@ describe('session win flow (§2.2 t = 0 and §2.6)', () => {
     }
     expect(p?.tapMinMs).toBe(cfg.rank.panelTapMinMs);
     expect(h.analytics).toContainEqual({ name: 'rank_panel', params: { board: 'paw_points', api: 'local', ms: 0, ok: 1 } });
-    p?.onContinue();
+    await tapRanking(h);
     const v = h.router.props.victory;
     expect(v).toMatchObject({ variant: 'level', level: 5, nextLevel: 6, fish: { earned: 3, total: 3 }, bonus: null, pointsEarned: 45, buttonDelayMs: 600 });
     expect(h.router.isOpen('ranking')).toBe(false);
@@ -312,7 +363,7 @@ describe('session win flow (§2.2 t = 0 and §2.6)', () => {
     await wonLevel(h, 30);
     expect(h.save().wallet.fish).toBe(5);
     await h.settle(cfg.fx.winOverlayDelayMs);
-    h.router.props.ranking?.onContinue();
+    await tapRanking(h);
     expect(h.router.props.victory?.bonus).toEqual({ kind: 'hard', count: 2 });
     expect(h.router.props.victory?.pointsEarned).toBe(5 * 5 * 2 + 20);
   });
@@ -324,7 +375,7 @@ describe('session win flow (§2.2 t = 0 and §2.6)', () => {
     expect(h.save().wallet.fish).toBe(40);
     expect(h.save().points.total).toBe(0);
     await h.settle(cfg.fx.winOverlayDelayMs);
-    h.router.props.ranking?.onContinue();
+    await tapRanking(h);
     expect(h.router.props.victory?.fish).toBeNull();
   });
 

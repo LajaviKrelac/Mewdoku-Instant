@@ -1,6 +1,8 @@
 # 02 · Rebuild spec: Phase 2 "as is"
 
-Status: Phase 1 deliverable · Date: 2026-10-06 · Applies to: Phase 2 (rebuild) and Phase 4 (Facebook Instant Games)
+Status: Phase 1 deliverable (2026-10-06); **Phase 2b notes added at integration (2026-10-09)** · Applies to: Phase 2 (rebuild), Phase 2b ("parity") and Phase 4 (Facebook Instant Games)
+
+> **Phase 2b.** The [parity spec](../phase2b/parity-spec.md) changed the behaviour of several sections below to close the eight headline differences with the original. Where a "Phase 2b" note opens a section, the note and the parity spec win over the Phase 2 text that follows; the Phase 2 text is kept for history. Sections without a note are unchanged. The built APIs are in [phase2b CONTRACTS](../phase2b/CONTRACTS.md) §11.
 
 This is the functional spec for rebuilding the original game "as is", using **our own code, art, sound and text**. Wherever the original is unknown, we make a concrete choice and tag it **[DECISION]** with the reason. The evidence comes from [01-game-deconstruction.md](01-game-deconstruction.md), which this document cites as `01 §x.y`. Engine details are in [03](03-puzzle-engine.md), the code structure is in [04](04-architecture.md) and platform rules are in [05](05-fbig-platform.md).
 
@@ -55,6 +57,9 @@ Everything else that is "new" belongs to Phase 3, which the user will decide lat
 Marks (X) have **no** rule effect. The game never auto-marks cells, except the tutorial's scripted marks and the effect cells of a hint the player applies (likely, 01 §4.7; §6.2).
 
 ## 3. Tunables (`GameConfig`)
+
+> **Phase 2b** (parity-spec §10; every value in `src/app/config.ts`): `fx.winOverlayDelayMs` 800 → **4 500** (the ranking panel), `fx.winButtonDelayMs` 1 000 → **600**, `fx.boardEntryMs` 250 → **700** (the diagonal entry wave); the board geometry for even gutters (1.5 px below a 30 px slot, 2 px from 30 px), card padding 10 and radius 18, tile radius 0.2, cat 0.84 × slot, X 23→77 with a 12-unit stroke. New groups: `fx.win.*` (glow, fish flight, labels, scrim, reduced-motion timeline), `fish.*`, `shop.*`, `points.*`, `events.*`, `rank.*`, `groups.*`, `iap.*`, `ads.banner.*`, `i18n.*`. The confetti keys went with the O3 win overlay.
+
 
 Every number below is a single constant in `src/app/config.ts` (see 04). Changing one needs no other code change.
 
@@ -147,6 +152,9 @@ Routing rules that the map does not show:
 - Leaving the game with Home always saves the in-progress board first (§15). The fail overlay's Home is the exception: it discards the attempt (§10.2). The top-bar Home in the `fx.failOverlayDelayMs` between the last heart and O4 is an ordinary Home: it saves the 0-heart board, which restores into LOST with O4 and its unused revive (§15 step 5).
 
 ## 5. Screen wireframes
+
+> **Phase 2b:** Home gains the fish pill at the top-bar lead (with a "+" that opens the shop), the trophy (when FB leaderboards exist, opening the rankings hub) and the event card above the Level button; the game's pills row shows a centred fish pill during the win flow only; new overlays are the ranking panel (§2.4 of the parity spec), the victory screen (§2.5; it replaces O3, and O7 after a daily win), the shop sheet (§8.5), the rankings hub (§5.5) and the group result (§5.6); the event screen is new (§4.4). O7 still shows a solved daily reopened from Home. See `docs/phase2b/screenshots/final-*.png`.
+
 
 All screens are portrait. The wireframes show a 390×844 CSS-px phone. Legend: `<3` = full heart, `--` = lost heart, `[x]` = button, `X` = player mark, `#` = wrong (red X), `@` = cat. All on-screen text is **our own placeholder copy**; final copy is written in Phase 2 (§21).
 
@@ -510,6 +518,9 @@ In the tutorial, the hint and its auto-X effects are **free** and are not charge
 
 ### 10.1 Win (level mode)
 
+> **Phase 2b** (parity-spec §2.2, §2.6, §2.7): t = 0 the rewards (fish, points, progress) are saved in the same critical save, and Home and Gear turn aria-disabled; 300 glow and happy cats; 1 000 the fish pill appears; 1 200–2 550 three fish pop and fly to it ("+3", plus "+2" on Hard levels and dailies at 2 900); 4 200 scrim; **4 500 the ranking panel**; a tap from 5 700 fades the panel (200 ms) and opens the **victory screen** with the wide orange "Level N" (enabled after 600 ms); "Level N" → interstitial gate → the next board with a screen transition and the 700 ms entry. Reduced motion: the panel at 1 200. Tutorial: the victory at 3 300 (no panel); replay: at 1 200; a restored full board: at once. The O3 overlay and its confetti were removed. The table below is the Phase 2 flow.
+
+
 | t (ms) | What happens |
 |---|---|
 | 0 | The last cat lands (280 ms drop) |
@@ -663,6 +674,9 @@ Existence is confirmed (01 §10.10). Everything else is [DECISION]:
 
 ## 13. Monetization (Phase 2 behaviour)
 
+> **Phase 2b** (parity-spec §3, §8): the interstitial gate and cadence are unchanged (120 / 100 / 90 s after 10 completed levels), with a new trigger `event_next`. **Banners** (FBIG) show on Home, the victory screen and the event screen only, never during play, from 10 completed levels, with a 58 px reserve and a 60 s reload window, and only when the SDK reports both banner APIs; the web's dev and e2e builds have a mock banner. **Purchases** (FBIG on facebook.com and Android): five consumable products in a shop sheet, among them "No Ads" (kept as a save entitlement: no interstitials and no banners; optional videos stay); hidden on iOS, Messenger.com and the web. A rewarded `group_double` placement doubles a group-challenge reward. "Next" below means the victory screen's "Level N".
+
+
 ### 13.1 Ad placements
 
 | Placement | Type | Trigger | Basis |
@@ -707,6 +721,9 @@ after an interstitial resolves ok, or a rewarded ad completes
 - [DECISION] **Free fallback.** If rewarded ads are **unsupported** (`capabilities.rewarded === false`, or `ads.enabled === false`), the reward is granted free, at most once every `ads.unsupportedFallback.cooldownSec` (600 s). The cooldown is **shared** by hint, kitty and revive, and is stored as `save.ads.lastFallbackGrantAt`. This applies to the production web build. It also applies to FBIG builds made without placement IDs: the FB adapter reports `interstitial` and `rewarded` as false when `VITE_FB_PLACEMENT_*` is empty (04 §6.3), so builds made before monetization is approved fall back cleanly. "No fill" on a supported platform does **not** trigger the fallback. Players must never be hard-blocked by ad availability.
 
 ## 14. Settings
+
+> **Phase 2b** (parity-spec §6.8, §8.5): new rows **Language** (Automatic or one of the build's locales; shown only when the build has more than one), **Shop**, and **Remove ads** (FBIG with payments ready and No Ads not owned). The setting `settings.locale` ('auto' or a locale id) is saved (save v2).
+
 
 | Setting | Default | Stored | Notes |
 |---|---|---|---|
@@ -772,6 +789,9 @@ All sound effects are **synthesised at runtime with WebAudio**: no audio files, 
 - The FBIG adapter uses platform haptics where they exist (05 §4), and `navigator.vibrate` otherwise. iOS web has no vibration, which is acceptable.
 
 ## 17. Visual design (our own)
+
+> **Phase 2b** (parity-spec §1): one theme, the **Classic look**: our own black-and-white tuxedo-style cat "Tux" (signature marks: a notched left ear and an asymmetric blaze; 4 moods, 6 poses, idle loops) replaces the ginger cat; the Classic token set (off-white page `#FAF6F0`, ink `#2F2A35`, orange accent `#E57010` with its title, text, deep, soft and focus shades) replaces the teal tokens; per-script display stacks and a lazy latin-ext face. The region palette is unchanged. Provenance: `docs/provenance.md` §8.
+
 
 ### 17.1 Style goals
 
@@ -866,6 +886,9 @@ With reduced motion on: no shake, no confetti, no stagger. Fades are kept at ≤
 
 ## 18. Accessibility
 
+> **Phase 2b** (parity-spec §1.5, §7): even gutters and a **white X over a thin tinted edge** (the edge carries WCAG 1.4.11) replace the region-aware gaps and the ink X; the defaults look like the original (patterns off). Every extra below still works, also on the new screens (keyboard and screen reader complete).
+
+
 | Requirement | Spec |
 |---|---|
 | Not colour-only (WCAG 1.4.1) | Region-aware gaps (§17.4) are **always on**. The optional **Colour patterns** setting adds a 22 %-size glyph in each tile's corner. There are 12 glyphs (dot, ring, triangle, square, diamond, star, plus, bar, chevron, heart, drop, moon), one per palette index. The glyph is drawn in `--ink` at **85 % opacity** (65 % on a faded, done region), which keeps it ≥ 3:1 on every tile (`layout.patternOpacity`, `patternOpacityDone`). On small slots (11×11 and 12×12 on a phone) the glyph grows to at least **7 px** (`layout.patternMinPx`, at most 1.6× the 22 % size) so the shapes stay tellable apart (Phase 2 review UX-13, A11Y-5). |
@@ -902,6 +925,9 @@ compact     = H < 640 → pills and chips at 36 px, chip text hidden (icons only
 
 ## 20. Analytics events
 
+> **Phase 2b** adds: `event_start` (`id`, `index`, `size`), `event_win` (`id`, `index`, `size`, `ms`, `mistakes`), `event_milestone` (`id`, `at`), `rank_panel` (`board`, `api`, `ms`, `ok`), `group_create`, `group_result` (`mode`, `place`, `wins`, `doubled`), `iap` (`product`, `result`, `platform`).
+
+
 Sent through `platform.analytics.log`. FBIG uses `logEvent`: event names are 2–40 chars from `[A-Za-z0-9 _-]`, there are at most 25 params, **param keys are 2–40 chars**, and values are under 100 chars (confirmed, Meta's reference text, 05 §10). That is why the board size is sent as `size`, not `n`. The web build does not log.
 
 | Event | Params |
@@ -923,6 +949,9 @@ For a daily, `level` is sent as 0 and `mode` as `daily`.
 
 ## 21. Localization and copy
 
+> **Phase 2b** (parity-spec §6): **17 locales** (English plus AI drafts of es, pt-BR, fr, de, it, id, tr, pl, ru, vi, th, ja, ko, zh-Hans, hi, ar), resolved from `FBInstant.getLocale()` or `navigator.languages` plus the Settings override; Intl plural rules; Latin digits; Arabic right to left with an LTR board and top bar. Dev, e2e and preview builds carry all 17; release builds only `i18n.releaseLocales` (default `['en']`) until a native review approves a locale (`docs/i18n/review-log.md`). `?i18n=pseudo` (dev and e2e) shows the long pseudo-locale.
+
+
 - Phase 2 ships **English only**. The original reportedly has 62 languages (likely, 01 §1.7); that is for Phase 3 or 4.
 - All strings live in `src/i18n/en.ts` with named placeholders. Colour names are translatable keys.
 - The locale is read from the platform adapter **after** `startGameAsync` on FBIG (05 §4).
@@ -931,6 +960,9 @@ For a daily, `level` is sent as 0 and `mode` as `daily`.
 Praise words (draft, ours): "Clever cat!", "Whisker-perfect!", "Purr-fection!", "Nailed it!", "Brilliant!", "Paws up!".
 
 ## 22. Phase 3 hooks (extension points only, no designs)
+
+> **Phase 2b** used two of these seams: Home's extra-cards area holds the event card (`HomeView.event`; `extraCards` stays empty for Phase 3), and the trophy slot opens the rankings hub.
+
 
 Phase 2 must keep these seams clean. **What goes into Phase 3 is the user's decision.**
 

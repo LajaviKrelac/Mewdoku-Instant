@@ -140,6 +140,8 @@ export interface FakeGameScreen extends GameScreen {
   cb: GameScreenCallbacks;
   readonly played: string[];
   entries: number;
+  /** showScrim() calls (the win flow's scrim at fx.win.scrimAtMs). */
+  scrims: number;
 }
 
 export interface FakeRouter extends Router {
@@ -207,6 +209,7 @@ export function createFakeRouter(bus: AppBus, log: Log): FakeRouter {
         cb,
         played: [],
         entries: 0,
+        scrims: 0,
         update: (v) => void (g.last = v),
         destroy: () => undefined,
         playEvent: (ev) => void g.played.push(ev.type),
@@ -220,6 +223,7 @@ export function createFakeRouter(bus: AppBus, log: Log): FakeRouter {
         showFishPill: () => undefined,
         fishLabel: () => undefined,
         glow: () => ({ done: Promise.resolve(), cancel: () => undefined, finish: () => undefined }),
+        showScrim: () => void g.scrims++,
       };
       r.game = g;
       bus.emit('screen', { screen: 'game' });
@@ -477,6 +481,15 @@ export function winGame(h: Harness): void {
 }
 
 /** The log from the first entry matching `from`, filtered to entries matching `keep`. */
+/**
+ * phase2b §2.2 "tap": the ranking panel continues; it fades out over rank.panelOutMs and then the
+ * victory screen opens (integration: fade first, then the victory).
+ */
+export async function tapRanking(h: Harness): Promise<void> {
+  h.router.props.ranking?.onContinue();
+  await h.settle(h.config.rank.panelOutMs);
+}
+
 export function slice(log: Log, keep: RegExp): string[] {
   return log.filter((x) => keep.test(x));
 }

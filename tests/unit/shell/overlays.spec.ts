@@ -1,5 +1,7 @@
-// Owner: B (Phase 2b; was ui-shell). O1/O3/O4/O6/O7: open/close, Esc (dismiss), delayed and busy buttons, and the
-// router-style focus trap + inert background working with the overlays' markup (02 §18).
+// Owner: B (Phase 2b; was ui-shell). O1/O4/O6/O7: open/close, Esc (dismiss), delayed and busy buttons, and the
+// router-style focus trap + inert background working with the overlays' markup (02 §18). The O3 win
+// overlay was replaced by the 2b victory screen and removed at integration (its cases went with it;
+// the victory screen's are in tests/unit/shell/victory-ranking.spec.ts).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../../src/ui/art/illustrations', () => ({
@@ -17,7 +19,6 @@ import { createDailyResult } from '../../../src/ui/overlays/daily-result';
 import { createFailOverlay, type FailOverlayProps } from '../../../src/ui/overlays/fail-overlay';
 import { createHintCard, sheetPlacement } from '../../../src/ui/overlays/hint-card';
 import { createHowToPlay } from '../../../src/ui/overlays/how-to-play';
-import { createWinOverlay, type WinOverlayProps } from '../../../src/ui/overlays/win-overlay';
 
 const q = <E extends Element = HTMLElement>(root: ParentNode, sel: string): E => {
   const el = root.querySelector<E>(sel);
@@ -95,70 +96,6 @@ describe('O1 sheet placement', () => {
     card.close();
     vi.advanceTimersByTime(20);
     expect(avoid).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('O3 win overlay', () => {
-  const props = (over: Partial<WinOverlayProps> = {}): WinOverlayProps => ({
-    variant: 'level',
-    level: 37,
-    nextLevel: 38,
-    praise: 0,
-    buttonDelayMs: 1000,
-    reducedMotion: true,
-    onNext: vi.fn(),
-    onHome: vi.fn(),
-    ...over,
-  });
-
-  it('shows praise and the level, enables Next after the delay, Home at once', () => {
-    const win = createWinOverlay();
-    document.body.append(win.el);
-    const p = props();
-    win.open(p);
-    expect(q(win.el, '.win__praise').textContent).toBe('Clever cat!');
-    expect(q(win.el, '.win__sub').textContent).toBe('Level 37 complete');
-    const next = q(win.el, '.win__next');
-    expect(next.textContent).toContain('Next: Level 38');
-    expect(next.getAttribute('aria-disabled')).toBe('true');
-    press(next);
-    expect(p.onNext).not.toHaveBeenCalled();
-    press(q(win.el, '.win__home'));
-    expect(p.onHome).toHaveBeenCalledTimes(1);
-    vi.advanceTimersByTime(999);
-    expect(next.getAttribute('aria-disabled')).toBe('true');
-    vi.advanceTimersByTime(1);
-    expect(next.hasAttribute('aria-disabled')).toBe(false);
-    press(next);
-    expect(p.onNext).toHaveBeenCalledTimes(1);
-    expect(win.dismiss()).toBe(false);
-    expect(q(win.el, '.win__reward').hidden).toBe(true); // Phase 3 reward slot, empty
-  });
-
-  it('runs confetti unless reduced motion, and re-gates Next on every open', () => {
-    const win = createWinOverlay();
-    document.body.append(win.el);
-    win.open(props({ reducedMotion: false }));
-    expect(win.el.querySelectorAll('.confetti i').length).toBeGreaterThan(0);
-    win.close();
-    expect(win.el.querySelector('.confetti')).toBeNull();
-    win.open(props({ reducedMotion: true, praise: 3 }));
-    expect(win.el.querySelector('.confetti')).toBeNull();
-    expect(q(win.el, '.win__praise').textContent).toBe('Nailed it!');
-    expect(q(win.el, '.win__next').getAttribute('aria-disabled')).toBe('true');
-  });
-
-  it('tutorial variants: Play Level 2 only, or Home only on a replay', () => {
-    const win = createWinOverlay();
-    document.body.append(win.el);
-    win.open(props({ variant: 'tutorial', level: 1, nextLevel: 2 }));
-    expect(q(win.el, '.win__praise').textContent).toBe("You're ready!");
-    expect(q(win.el, '.win__next').textContent).toContain('Play Level 2');
-    expect(q(win.el, '.win__home').hidden).toBe(true);
-    win.update(props({ variant: 'tutorial_replay', level: 1, nextLevel: 2 }));
-    expect(q(win.el, '.win__next').hidden).toBe(true);
-    expect(q(win.el, '.win__home').hidden).toBe(false);
-    expect(q(win.el, '.win__home').classList.contains('btn--primary')).toBe(true);
   });
 });
 
@@ -296,7 +233,7 @@ describe('focus trap and inert background (router contract, 02 §18)', () => {
     const overlays = [
       { ov: createHintCard(), props: { step, n: 4, colors: Uint8Array.from([7, 4, 2, 0]), patterns: false, onApply: vi.fn(), onClose: vi.fn() } },
       { ov: createHowToPlay(), props: { showSkip: false, showReplay: true, onSkip: vi.fn(), onReplay: vi.fn(), onClose: vi.fn() } },
-      { ov: createWinOverlay(), props: { variant: 'level', level: 2, nextLevel: 3, praise: 1, buttonDelayMs: 0, reducedMotion: true, onNext: vi.fn(), onHome: vi.fn() } },
+      { ov: createFailOverlay(), props: { continueOffer: 'video', buttonDelayMs: 0, busy: false, onContinue: vi.fn(), onRetry: vi.fn(), onHome: vi.fn() } },
     ] as const;
     for (const { ov, props } of overlays) {
       document.body.append(ov.el);

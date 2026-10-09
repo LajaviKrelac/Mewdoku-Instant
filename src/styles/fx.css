@@ -1,12 +1,14 @@
 /* Owner: B (Phase 2b; was ui-board)
-   Keyframes (drop, draw-in, heart break, confetti, board entry, idle loops, the win-flow fish) and
+   Keyframes (drop, draw-in, heart break, board entry, idle loops, the win-flow fish) and
    reduced-motion overrides (02 §17.5, phase2b §2.2, §2.7, §2.9). Only transform and opacity are
    animated (04 §5.3), plus stroke-dashoffset for the X draw-in and the heart's crack line.
    Durations that JS also reads come from cfg through custom properties set by the components
    (--entry-*, --breathe-*, --flick-ms, --t-break, --bump-ms, --label-ms, --rays-ms, --pop-ms, …);
    keyframe percentages, angles and scales are CSS-only constants (phase2b §0.4).
    Reduced motion: the universal rule at the end cuts CSS animations to 1 ms, so every reduced
-   variant that must still be seen (board fade, "+3" label, ranking and victory fades) runs on WAAPI. */
+   variant that must still be seen (board fade, "+3" label, ranking and victory fades) runs on WAAPI.
+   2b integration: the ranking panel's and victory screen's motion (and their reduced-motion rules)
+   moved to overlay-chunk.css with the overlays; the dead O3 confetti was removed. */
 
 /* ── Board entry (phase2b §2.9) ────────────────────────────────────────────
    The card rises --entry-rise and fades in over --entry-card-ms; tile (r, c) scales 0.6 → 1.04 → 1
@@ -471,71 +473,6 @@
   }
 }
 
-/* ── Confetti (fx/confetti.ts): 40 <i>, launch then gravity, 1 600 ms ─── */
-.confetti {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  overflow: hidden;
-  pointer-events: none;
-  z-index: 5;
-}
-
-.confetti .cf {
-  position: absolute;
-  left: 50%;
-  top: 38%;
-  animation: confetti-x var(--dur, 1600ms) linear var(--delay, 0ms) both;
-}
-
-.confetti .cf b {
-  display: block;
-  width: calc(10px * var(--s, 1));
-  height: calc(10px * var(--s, 1));
-  margin: calc(-5px * var(--s, 1)) 0 0 calc(-5px * var(--s, 1));
-  background: var(--c, var(--gold));
-  border-radius: 2px;
-  animation: confetti-y var(--dur, 1600ms) linear var(--delay, 0ms) both;
-}
-
-.confetti .cf-rect b {
-  height: calc(5px * var(--s, 1));
-}
-
-.confetti .cf-dot b {
-  border-radius: 50%;
-}
-
-@keyframes confetti-x {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(var(--dx, 0));
-  }
-}
-
-@keyframes confetti-y {
-  0% {
-    opacity: 1;
-    transform: translateY(0) rotate(0deg);
-    animation-timing-function: cubic-bezier(0.2, 0.7, 0.4, 1);
-  }
-  28% {
-    transform: translateY(calc(-1 * var(--up, 24vmin))) rotate(calc(var(--rot, 360deg) * 0.3));
-    animation-timing-function: cubic-bezier(0.5, 0, 0.9, 0.6);
-  }
-  85% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(var(--fall, 50vmin)) rotate(var(--rot, 360deg));
-  }
-}
-
 /* ── Illustrations (art/illustrations.ts) ──────────────────────────────── */
 .illus__blink {
   opacity: 0;
@@ -718,57 +655,7 @@
   }
 }
 
-/* ── Ranking panel (phase2b §2.4): pop, tap pulse, fade-out ── */
-.ranking__card {
-  animation: rank-pop var(--pop-ms, 260ms) var(--ease-out) both;
-}
-
-@keyframes rank-pop {
-  0% {
-    opacity: 0;
-    transform: scale(0.9);
-  }
-  60% {
-    opacity: 1;
-    transform: scale(1.03);
-  }
-  100% {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-.overlay[data-overlay='ranking'].is-ready .ranking__tap {
-  animation: tap-pulse var(--pulse-ms, 1400ms) ease-in-out infinite;
-}
-
-@keyframes tap-pulse {
-  0%,
-  100% {
-    opacity: 0.55;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
-.overlay[data-overlay='ranking'].is-leaving {
-  opacity: 0;
-  transition: opacity var(--out-ms, 200ms) ease;
-}
-
-/* ── Victory screen (phase2b §2.5): the sun rays turn once per --rays-ms ── */
-.victory__rays {
-  animation: rays-turn var(--rays-ms, 20000ms) linear infinite;
-}
-
-@keyframes rays-turn {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* ── Reduced motion (02 §17.5): no shake, confetti, stagger or loops; fades ≤ 150 ms ──
+/* ── Reduced motion (02 §17.5): no shake, stagger or loops; fades ≤ 150 ms ──
    One universal rule: every animation jumps to its end state (static rings, hidden lids, landed
    cats), transitions shorten to 150 ms. The WAAPI shake is skipped in JS (fx/shake.ts). */
 [data-motion='reduced'] *,
@@ -780,16 +667,8 @@
   transition-duration: 150ms !important;
 }
 
-[data-motion='reduced'] .confetti,
 [data-motion='reduced'] .cell__spark,
 [data-motion='reduced'] .heart__crack,
 [data-motion='reduced'] .fx-dot {
   display: none;
-}
-
-/* Static rays, a steady footer, no breathing (phase2b §2.5, §2.7, §2.9). */
-[data-motion='reduced'] .victory__rays,
-.victory[data-reduced] .victory__rays,
-[data-motion='reduced'] .overlay[data-overlay='ranking'] .ranking__tap {
-  animation: none;
 }

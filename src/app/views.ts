@@ -30,6 +30,10 @@ export interface ViewContext {
   readonly events?: readonly EventDef[];
   /** Board size of a shipped level when it is known without loading (personal records "Your best n×n"). */
   readonly levelSize?: (level: number) => number | null;
+  /** phase2b §2.2: the win flow is blocking (from WON until the ranking panel opens): Home and Gear are aria-disabled. */
+  readonly chromeLocked?: boolean;
+  /** phase2b §4.4: the events chunk's eventArt once that chunk has loaded (the Home event card's art). */
+  readonly eventArt?: HomeEventCardView['art'];
 }
 
 /** A SessionMeta.tutorialStep as the tutorial module's step type (null outside 1..6). */
@@ -98,6 +102,7 @@ export function selectEventCard(state: AppState, ctx: ViewContext, c: GameConfig
     total,
     unlockLevel: def.unlockAfterLevel,
     endsSoon: !!live && endsAt - now <= c.events.cardEndsSoonHours * HOUR_MS,
+    art: ctx.eventArt ?? null,
   };
 }
 
@@ -163,6 +168,7 @@ export function selectGameView(state: AppState, ctx: ViewContext): GameView | nu
     fbSafeZone: ctx.platformId === 'fbig',
     reducedMotion: ui.reducedMotion,
     event: session.mode === 'event' && session.event ? { def: session.event.def, index: session.event.index } : null,
+    chromeLocked: ctx.chromeLocked === true,
   };
 }
 

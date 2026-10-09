@@ -1,11 +1,11 @@
-// Owner: B. fx and a11y utilities (shake, confetti, motion; announcer, focus trap, inert).
+// Owner: B. fx and a11y utilities (shake, motion; announcer, focus trap, inert). The O3 confetti was
+// removed with the Phase 2 win overlay at 2b integration (the victory screen replaced it).
 // phase2b F0 split: moved from art-a11y-fx.spec.ts (A). B adds fx-fish, board-entry and the
 // transitions/glow cases in their own files (phase2b §2.13).
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cfg } from '../../../src/app/config';
 import { createAnnouncer } from '../../../src/ui/a11y/announcer';
 import { focusableElements, setInert, trapFocus } from '../../../src/ui/a11y/focus-trap';
-import { burstConfetti } from '../../../src/ui/fx/confetti';
 import { applyMotion, resolveReducedMotion, systemPrefersReducedMotion, watchSystemReducedMotion } from '../../../src/ui/fx/motion';
 import { playGlow } from '../../../src/ui/fx/glow';
 import { shake, shakeOffsets } from '../../../src/ui/fx/shake';
@@ -25,19 +25,6 @@ describe('fx', () => {
     (el as unknown as { animate: typeof animate }).animate = animate;
     expect(shake(el)).not.toBeNull();
     expect(animate).toHaveBeenCalledWith(expect.any(Array), { duration: cfg.fx.wrongShakeMs, easing: 'linear' });
-  });
-
-  it('confetti: cfg.fx.confettiCount pieces, removed after cfg.fx.confettiMs or on cleanup', () => {
-    vi.useFakeTimers();
-    const host = document.createElement('div');
-    burstConfetti(host);
-    expect(host.querySelectorAll('.confetti .cf')).toHaveLength(cfg.fx.confettiCount);
-    vi.advanceTimersByTime(cfg.fx.confettiMs + 250);
-    expect(host.querySelector('.confetti')).toBeNull();
-    const stop = burstConfetti(host, { count: 5 });
-    expect(host.querySelectorAll('.cf')).toHaveLength(5);
-    stop();
-    expect(host.querySelector('.confetti')).toBeNull();
   });
 
   it('motion: setting resolution, system query and root attribute', () => {

@@ -741,52 +741,77 @@ On the web adapter, `now()` and `critical()` are the same thing: a synchronous `
 
 ## 9. Bundle budget (enforced by `scripts/size-check.ts`)
 
-| Item | Budget (uncompressed) | Rationale |
-|---|---|---|
-| Main JS (including the main-thread engine parts and bundled pack-000) | ≤ 190 KB | FB hosting may not serve compressed files, so budget raw bytes (05 §5). Phase 1 estimated 140 KB; the integrated app measured 187–194 KB before code splitting and 160–167 KB after it. The Phase 2 review fixes (resilience, the FB storage rework, a11y) added about 10 KB; the lead raised the ceiling from 170 KB to 190 KB (Phase 2 hardening) after moving the tutorial coach into the lazy overlay chunk |
-| CSS | ≤ 40 KB | Raised from 20 KB (integration) and 36 KB (Phase 2 hardening, lead decision; measured about 37 KB minified after the review fixes) |
-| Font (one OFL subset) | ≤ 25 KB | — |
-| `index.html` | ≤ 4 KB | — |
-| **First-load total** (what `index.html` loads before the first screen: the four rows above) | **≤ 250 KB** | Raised from 220 KB with the rows above (lead decision). Target load ≤ 2 s on 4G, well under the < 5 s guideline (05 §5.4) |
-| Worker JS | ≤ 25 KB, lazy | Created on the first generation, never during boot (§5.5), so it is not part of the first load |
-| Lazy JS chunks (overlays O1–O8, hint engine, sound recipes, RPC, main-thread generator) | ≤ 48 KB | Fetched right after the first screen (boot step 8) or on first use; on a first run the overlay chunk (with the coach) is fetched during boot. Raised from 45 KB because the coach (≈ 4.6 KB) moved here from the main JS; the minimal raise plus about 2 KB headroom |
-| Other packs (9 × ~15 KB) + daily months (27 × ~4.7 KB) | Lazy | Fetched on demand |
-| Files in the FB zip | ≤ 60 (platform cap 500) | — |
-| FB zip size | ≤ 500 KB | — |
+**Policy (lead decision, Phase 2b integration, 2026-10-09).** The first load is kept as small as practical and well within Meta's < 5 s load guideline on 4G (05 §5.4): everything a first screen does not need is lazy, and its stylesheet travels with its chunk. Each ceiling is the largest measured build (FBIG for JS, which carries the SDK glue) plus about 3 % headroom, so growth is noticed early. A ceiling moves only by a lead decision recorded here and in the `size-check.ts` history comment. The locale chunk cap is 28 KB per file (Devanagari and Thai take 3 bytes a character), and the FB zip stays ≤ 1 MB. Sizes are raw bytes (FB hosting may not compress, 05 §5); the first load is also budgeted gzipped (woff2 counted as it is), which is what a compressing CDN sends.
 
-## 10. npm scripts (planned)
+| Item | Ceiling | Measured 2026-10-09 (web · FBIG) | Notes |
+|---|---|---|---|
+| Main JS (entry + modulepreload chunks; incl. the main-thread engine parts, bundled pack-000, English strings) | ≤ 266 KB | 243.6 · 257.7 | Phase 2 final 173.3 (FBIG). 2b added Tux art, save v2, economy, scoring, events, the win flow, the FB banner and social facades, the i18n runtime and about 8 KB of English strings |
+| CSS (the stylesheet `index.html` links) | ≤ 43.5 KB | 42.1 · 42.1 | 70.9 KB before the integration split (42.0 KB right after it; a short-screen Home rule added 0.1 KB): the overlays' and the event screen's rules moved into their chunks' stylesheets |
+| Font (first load, the latin subset) | ≤ 17 KB | 16.5 | The latin-ext face is lazy (unicode-range), listed only |
+| `index.html` | ≤ 1 KB | 0.8 · 0.9 | — |
+| **First-load total** (the four rows above) | **≤ 327 KB** | 302.9 · 317.2 | 2b spec §11 projected ≈ 266 KB |
+| **First load + 1 locale** (the largest non-English catalogue added) | **≤ 351 KB** | 326.0 · 340.3 | A non-English player loads exactly one locale chunk |
+| **First load, gzip** | **≤ 121.5 KB** | 113.1 · 117.9 | About 0.6 s at 1.6 Mbit/s ("slow 4G"), well under the 5 s guideline |
+| Worker JS (lazy) | ≤ 18.5 KB | 17.7 · 17.6 | Created on the first generation, never during boot (§5.5) |
+| Locale chunk (each of 16) | ≤ 28 KB | 23.1 (hi) | Only the active locale loads; release builds carry only `i18n.releaseLocales` |
+| Lazy JS, core (overlay chunk with the 2b overlays, hint engine, sound recipes, RPC, main-thread generator and grader) | ≤ 68 KB | 65.9 · 65.7 | Fetched right after the first screen (boot step 8), or during boot on a first run (the coach) |
+| Lazy JS, optional (`events`, `fb-social`, `social-flows`) | ≤ 28.5 KB | 15.1 · 27.4 | `events` when an event is active or teased (or an event board mounts); `fb-social` after `start()`; `social-flows` on the first hub, top-list or group use |
+| Lazy CSS (`overlay-chunk-*.css`, `events-chunk-*.css`) | ≤ 28.5 KB | 27.4 | Loaded by Vite's preload helper before its chunk resolves |
+| Event packs (3 × 21 records), other packs (9 × ~15 KB), daily months (27 × ~4.7 KB) | listed | 9.6 + 273 | Fetched on demand |
+| Files in the FB zip | ≤ 100 (platform cap 500) | 77 (preview) · 61 (release) | — |
+| FB zip size | ≤ 1 MB hard (zip bytes), warning above 750 KB | see STATUS-2b | `zip-fbig.ts` (§10) |
+
+Before the integration pass the same builds measured: web first load 330.7 KB raw / 117.9 KB gzip (CSS 70.9 KB), FBIG 345.0 KB raw / 122.7 KB gzip. The split took 28 KB raw off every first load (and the dead O3 win overlay with its confetti about 4 KB of lazy JS and CSS).
+
+What stays in the main bundle, and why: the game screen and board (the first screen of a first run is the tutorial board), pack-000 (the first hundred levels play without a fetch, Phase 2), the save migration and merge, the win flow (it starts on the frame of `WON`, with the rewards already saved, §2.2 of the 2b spec; lazy-loading it would only save about 8 KB and add a load race at the moment that matters), and the FB social facades (they keep `capabilities()` final at `init()` while the social code stays lazy). Accidental duplication was checked from the source maps: only the engine modules appear twice, in the worker and in the lazy main-thread fallback chunks, by design (§5.5).
+
+History: Phase 1 estimated 140 KB of main JS; integration (2026-10-07) set CSS 36 KB and main JS 170 KB; Phase 2 hardening raised main JS to 190 KB, CSS to 40 KB and the first load to 250 KB after moving the coach into the overlay chunk; the 2b spec (§11) proposed 210 / 53 / 280 / 305 KB, which the integrated 2b code exceeded; the integration pass split the CSS, removed dead code and set the ceilings above.
+
+## 10. npm scripts
+
+As in `package.json` after the Phase 2b integration (2026-10-09):
 
 ```jsonc
 {
-  "dev": "vite",                                       // web build, mock ads (?ads=…)
+  "dev": "vite",                                       // web build, mock ads (?ads=…), ?i18n=pseudo
   "dev:fbig": "vite --mode fbig --host 127.0.0.1 --port 8080",   // HTTPS via basic-ssl; open the FB embed URL (05 §11)
-  "build": "vite build",                               // → dist/web
-  "build:fbig": "vite build --mode fbig",              // → dist/fbig (+ fbapp-config.json)
+  "build": "vite build",                               // → dist/web (all 17 locales)
+  "build:fbig": "vite build --mode fbig",              // → dist/fbig (+ fbapp-config.json; a preview build, all locales)
   "build:e2e": "vite build --mode e2e",                // → dist/e2e (test hooks on)
-  "zip:fbig": "tsx scripts/zip-fbig.ts",               // → dist-zip/*.zip, checks file count and size
+  "build:fbig-e2e": "vite build --mode fbig --outDir dist/fbig-e2e",   // with MEWDOKU_E2E=1 (Playwright fbig-390)
+  "build:release": "vite build --mode release && vite build --mode release-fbig && npm run i18n:check -- --release",
+                                                       // → dist/release-web, dist/release-fbig (i18n.releaseLocales only)
+  "zip:fbig": "tsx scripts/zip-fbig.ts",               // the production zip, from dist/release-fbig
+  "zip:fbig:preview": "tsx scripts/zip-fbig.ts --preview",   // a preview zip from dist/fbig, for testing on FB
   "preview": "vite preview --outDir dist/web",
+  "preview:e2e": "vite preview --mode e2e --host 127.0.0.1 --port 4173 --strictPort",
+  "preview:fbig-e2e": "vite preview --mode fbig --outDir dist/fbig-e2e --host 127.0.0.1 --port 4174 --strictPort",
   "typecheck": "tsc --noEmit",
   "test": "vitest run",
   "test:watch": "vitest",
-  "test:property": "vitest run tests/property",
+  "test:unit": "vitest run --project unit --project dom --passWithNoTests",
+  "test:property": "vitest run --project property --passWithNoTests",
   "test:e2e": "playwright test",
+  "levels:schedule": "tsx scripts/level-schedule.ts",
   "levels:gen": "tsx scripts/gen-levels.ts",
   "daily:gen": "tsx scripts/gen-daily.ts --from 2026-10 --to 2028-12",
-  "levels:verify": "tsx scripts/verify-levels.ts",
-  "palette:check": "tsx scripts/palette-check.ts",
-  "size": "tsx scripts/size-check.ts",
-  "verify": "npm run typecheck && npm run test && npm run levels:verify && npm run palette:check",
-  "release:fbig": "npm run verify && npm run build:fbig && npm run size && npm run zip:fbig",
-  "upload:fbig": "tsx scripts/upload-fbig.ts"          // Phase 4 (Graph API)
+  "events:gen": "tsx scripts/gen-events.ts",           // the three event packs (src/data/events/<id>.json)
+  "levels:verify": "tsx scripts/verify-levels.ts",     // levels, dailies and the event packs
+  "palette:check": "tsx scripts/palette-check.ts",     // tokens and the three event themes
+  "i18n:check": "tsx scripts/i18n-check.ts",           // catalogues; --release: the review log and the shipped locales
+  "size": "tsx scripts/size-check.ts",                 // §9; dist/web, dist/fbig, dist/release-* by default
+  "verify": "npm run typecheck && npm run test && npm run levels:verify && npm run palette:check && npm run i18n:check",
+  "release:fbig": "npm run verify && npm run build:release && npm run size -- dist/release-fbig && npm run zip:fbig",
+  "upload:fbig": "tsx scripts/upload-fbig.ts"          // Phase 4 (Graph API); ignores preview zips unless --preview
 }
 ```
 
-The FBIG build copies `platform-assets/fbig/fbapp-config.json` into `dist/fbig/` using a small `closeBundle` hook in the same Vite plugin. `zip-fbig.ts`:
+The FBIG builds copy `platform-assets/fbig/fbapp-config.json` into their dist folder using a small `closeBundle` hook in the same Vite plugin. `zip-fbig.ts` (rules as of Phase 2b):
 
-1. lists `dist/fbig/**`;
-2. refuses source maps, `.gz`/`.br` files, and anything over 500 files or 1 MB;
-3. zips with `index.html` at the root (no parent folder);
-4. writes `dist-zip/<name>-fbig-<version>-<gitsha>.zip` and prints a size table.
+1. zips `dist/release-fbig/**` by default (the release-mode build, only `i18n.releaseLocales`; refused when it holds any other locale chunk); `--preview` zips `dist/fbig` instead and says "preview" in the file name;
+2. refuses source maps, `.gz`/`.br` files, a build carrying the e2e test hooks, a missing `index.html` or `fbapp-config.json` at the root, more than 500 files, and a zip over **1 MB of zip bytes** (it was 1 MB raw before 2b; a preview build with all 17 locales is about 1 MB raw but well under 0.5 MB zipped); it warns above 100 files or a 750 KB zip;
+3. zips with `index.html` at the root (no parent folder), deterministically (sorted entries, fixed timestamps);
+4. writes `dist-zip/<name>-fbig[-preview]-<version>-<gitsha>.zip` and prints a size table.
 
 ## 11. Testing strategy
 

@@ -9,6 +9,8 @@ import '../src/styles/board.css';
 import '../src/styles/hud.css';
 import '../src/styles/overlays.css';
 import '../src/styles/fx.css';
+// 2b integration: the overlays' rules load with the lazy overlay chunk in the app.
+import '../src/styles/overlay-chunk.css';
 import type { Settings } from '../src/game/types';
 import { setInert, trapFocus } from '../src/ui/a11y/focus-trap';
 import { mountSprite } from '../src/ui/art/sprite';
@@ -23,7 +25,6 @@ import { createRewardedPrompt, type RewardedVariant } from '../src/ui/overlays/r
 import { mountRotateNotice } from '../src/ui/overlays/rotate-notice';
 import { createSettingsModal, type SettingsProps } from '../src/ui/overlays/settings-modal';
 import { createToastLayer } from '../src/ui/overlays/toast';
-import { createWinOverlay } from '../src/ui/overlays/win-overlay';
 import { createBootScreen } from '../src/ui/screens/boot-screen';
 import { createGameScreen, type GameScreen, type GameView } from '../src/ui/screens/game-screen';
 import { createHomeScreen } from '../src/ui/screens/home-screen';
@@ -177,14 +178,6 @@ const VIEWS: Record<string, () => void> = {
   'rewarded-video': () => rewarded('video', 'hint'),
   'rewarded-free': () => rewarded('free', 'kitty'),
   'rewarded-countdown': () => rewarded('countdown', 'hint'),
-  win: () => {
-    game(gameView(solved(37), { status: 'won', inputLocked: true }));
-    openOverlay(createWinOverlay(), { variant: 'level', level: 37, nextLevel: 38, praise: 0, buttonDelayMs: 1000, reducedMotion: params.get('motion') === 'reduced', onNext: log('onNext'), onHome: log('onHome') });
-  },
-  'win-tutorial': () => {
-    game(tutorialView(6));
-    openOverlay(createWinOverlay(), { variant: 'tutorial', level: 1, nextLevel: 2, praise: 0, buttonDelayMs: 1000, reducedMotion: true, onNext: log('onNext'), onHome: log('onHome') });
-  },
   fail: () => {
     game(gameView(midGame(37, 3), { status: 'lost', inputLocked: true }));
     openOverlay(createFailOverlay(), { continueOffer: 'video', buttonDelayMs: 600, busy: false, onContinue: log('onContinue'), onRetry: log('onRetry'), onHome: log('onHome') });

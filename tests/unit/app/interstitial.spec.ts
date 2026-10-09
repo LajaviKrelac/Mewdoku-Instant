@@ -2,7 +2,7 @@
 // checked first, the ad only when it passes, and the transition always goes ahead.
 import { describe, expect, it } from 'vitest';
 import type { SaveData } from '../../../src/game/types';
-import { createHarness, loseGame, NOW, slice, startLevel, winGame, type Harness } from './harness';
+import { createHarness, loseGame, NOW, slice, startLevel, winGame, type Harness, tapRanking } from './harness';
 
 /** 10+ completed levels, first seen long ago, no recent ad: the gate passes once the grace is over. */
 const veteran = (s: SaveData): SaveData => ({
@@ -18,7 +18,7 @@ async function wonLevel(h: Harness, level = 15): Promise<void> {
   winGame(h);
   await h.settle(h.config.fx.winOverlayDelayMs);
   expect(h.router.isOpen('ranking')).toBe(true); // phase2b §2.2: the ranking panel at 4.5 s, then the victory
-  h.router.props.ranking?.onContinue();
+  await tapRanking(h);
   expect(h.router.isOpen('victory')).toBe(true);
   h.log.length = 0;
 }
@@ -116,7 +116,7 @@ describe('daily_done (victory "Done")', () => {
     winGame(h);
     await h.settle(h.config.fx.winOverlayDelayMs);
     expect(h.router.isOpen('ranking')).toBe(true);
-    h.router.props.ranking?.onContinue();
+    await tapRanking(h);
     expect(h.router.props.victory?.variant).toBe('daily');
     h.log.length = 0;
     await h.session.onDailyDone();

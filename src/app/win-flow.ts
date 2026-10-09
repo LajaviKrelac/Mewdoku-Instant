@@ -1,15 +1,18 @@
 // Owner: C
 // The post-win orchestration (phase2b §2.2, §2.6, §2.7) on the session clock: rewards already saved
 // at t = 0 (critical save, same as the win), then glow (t = 300), the in-game fish pill (1 000), three
-// fish (1 200 …, B's flyFish), arrivals and labels, scrim (4 200, drawn by the panel), the ranking
-// panel (4 500, fx.winOverlayDelayMs), and on its tap the victory screen. Home and Gear are inert
-// until the panel opens (the session ignores them while blocking() is true); Esc does nothing.
+// fish (1 200 …, B's flyFish; each pop plays 'fish_pop' through FlyFishOptions.onPop), arrivals and
+// labels, the game screen's scrim (4 200, fx.win.scrimAtMs: GameScreen.showScrim), the ranking panel
+// (4 500, fx.winOverlayDelayMs), and on its tap, once the panel has faded out (rank.panelOutMs), the
+// victory screen. Home and Gear are inactive until the panel opens: the session ignores them while
+// blocking() is true and renders them aria-disabled (GameView.chromeLocked, via onBlockingChange).
+// Esc does nothing.
 // Teardown cancels every timer and WAAPI animation and empties the fish layer. A hidden page keeps
 // the schedule: on return every missed step runs once, in order, jumped to its end state. Variants:
 // tutorial (no panel; victory at fx.win.tutorialVictoryAtMs), replay (no fish; victory at
 // replayVictoryAtMs), restored full board (victory at once, no glow, no second award).
-// C-internal module: the B calls it makes are fixed (GameScreen.glow/showFishPill/fishLabel/fishRect,
-// flyFish, ensureFxLayer). Every B call is guarded: a failing effect never stops the flow.
+// C-internal module: the B calls it makes are fixed (GameScreen.glow/showFishPill/fishLabel/fishRect/
+// showScrim, flyFish, ensureFxLayer). Every B call is guarded: a failing effect never stops the flow.
 import type { Sfx } from '../audio/sfx';
 import type { CellIndex } from '../engine/types';
 import { tn, t } from '../i18n';
@@ -54,8 +57,10 @@ export interface WinFlowDeps {
   readonly config?: GameConfig;
   /** t = 4 500 (reduced: 1 200): open the ranking panel (ranking-flow supplies the props). */
   openRanking(opts: { readonly tapMinMs: number }): void;
-  /** Open the victory screen (after the panel's tap, or at once for the variants without a panel). */
+  /** Open the victory screen (rank.panelOutMs after the panel's tap, or at once for the variants without a panel). */
   openVictory(): void;
+  /** blocking() changed (the session re-renders the top bar's Home and Gear as aria-disabled or not). */
+  onBlockingChange?(blocking: boolean): void;
   /** A guarded effect threw (reported, never rethrown). */
   onError?(error: unknown): void;
 }
@@ -113,7 +118,12 @@ export function winTimeline(input: Pick<WinFlowInput, 'variant' | 'reducedMotion
   }
   if (variant === 'tutorial') out.push({ at: reduced ? w.reduced.rankingAtMs : w.tutorialVictoryAtMs, name: 'victory' });
   else if (variant === 'tutorial_replay') out.push({ at: w.replayVictoryAtMs, name: 'victory' });
-  else out.push({ at: reduced ? w.reduced.rankingAtMs : c.fx.winOverlayDelayMs, name: 'ranking' });
+  else {
+    // §2.2 t = 4 200: the scrim fades in so the panel opens on it (the reduced timeline, §2.7, has
+    // none: the panel fades in with its own scrim at 1 200).
+    if (!reduced) out.push({ at: w.scrimAtMs, name: 'scrim' });
+    out.push({ at: reduced ? w.reduced.rankingAtMs : c.fx.winOverlayDelayMs, name: 'ranking' });
+  }
   return out.sort((a, b) => a.at - b.at);
 }
 
@@ -141,6 +151,8 @@ export function createWinFlow(deps: WinFlowDeps): WinFlow {
   let blockingUi = false;
   let awaitingTap = false;
   const handles: FxHandle[] = [];
+  /** The running flow's step functions by name (continueFromRanking adds the victory step). */
+  let runs: Record<string, (late: boolean) => void> = {};
 
   const guard = (fn: () => void): void => {
     try {
@@ -152,6 +164,12 @@ export function createWinFlow(deps: WinFlowDeps): WinFlow {
 
   function finishHandles(): void {
     for (const h of handles) guard(() => h.finish());
+  }
+
+  function setBlocking(on: boolean): void {
+    if (blockingUi === on) return;
+    blockingUi = on;
+    guard(() => deps.onBlockingChange?.(on));
   }
 
   function clearTimer(): void {
@@ -190,18 +208,19 @@ export function createWinFlow(deps: WinFlowDeps): WinFlow {
     gen++;
     clearTimer();
     active = false;
-    blockingUi = false;
+    setBlocking(false);
     awaitingTap = false;
     for (const h of handles.splice(0)) guard(() => h.cancel());
     steps = [];
     next = 0;
+    runs = {};
   }
 
   const flow: WinFlow = {
     start(input) {
       stop();
       active = true;
-      blockingUi = true;
+      setBlocking(true);
       t0 = clock.perf();
       const { screen } = input;
       const base = input.fishBase;
@@ -209,6 +228,7 @@ export function createWinFlow(deps: WinFlowDeps): WinFlow {
       const total = input.fishBefore + base + bonus;
       const arrived = new Set<number>();
       let flying = false;
+      const pop = (k: number): void => guard(() => deps.sfx.play('fish_pop', { index: k }));
       const sounds = (k: number): void => {
         guard(() => deps.sfx.play('fish_plink', { index: k }));
         guard(() => deps.haptics(c.haptics.fish));
@@ -243,6 +263,9 @@ export function createWinFlow(deps: WinFlowDeps): WinFlow {
             sizePx: fx.fishSizePx(slot),
             reduced: false,
             onArrive: (i) => arrive(i),
+            // §2.2: each fish's "bloop" sounds when B's flight pops it (no pop, no sound: a skipped or
+            // finished flight stays silent).
+            onPop: (i) => pop(i),
           });
           handles.push(h);
           flying = true;
@@ -265,26 +288,29 @@ export function createWinFlow(deps: WinFlowDeps): WinFlow {
           for (let k = 0; k < 3; k++) arrive(k);
           guard(() => screen.showFishPill(total));
         },
+        scrim: () => guard(() => screen.showScrim?.()),
         ranking: () => {
-          blockingUi = false;
+          setBlocking(false);
           awaitingTap = true;
           deps.openRanking({ tapMinMs: input.reducedMotion ? c.fx.win.reduced.tapMinMs : c.rank.panelTapMinMs });
         },
         victory: () => {
-          blockingUi = false;
+          setBlocking(false);
           active = false;
           deps.openVictory();
         },
       };
       for (let k = 0; k < 3; k++) {
+        // Without a flight (no rects or root) the flow keeps the pops on its own schedule.
         run[`pop_${k}`] = (late) => {
-          if (!late) guard(() => deps.sfx.play('fish_pop', { index: k }));
+          if (!late && !flying) pop(k);
         };
         run[`arrive_${k}`] = (late) => {
           if (!flying || late) arrive(k);
         };
         run[`plink_${k}`] = () => sounds(k);
       }
+      runs = run;
       steps = winTimeline(input, c).map((s) => ({ at: s.at, name: s.name, run: run[s.name] ?? (() => undefined) }));
       next = 0;
       runDue();
@@ -292,11 +318,13 @@ export function createWinFlow(deps: WinFlowDeps): WinFlow {
     running: () => active,
     blocking: () => active && blockingUi,
     continueFromRanking() {
-      if (!awaitingTap) return;
+      if (!awaitingTap || !active) return;
       awaitingTap = false;
-      active = false;
-      clearTimer();
-      deps.openVictory();
+      // §2.2 "tap": the panel fades out over rank.panelOutMs (B's .is-leaving), then the victory comes
+      // in. A step on the flow's clock, so teardown cancels it and a hidden page catches it up.
+      const victory = runs['victory'] ?? (() => undefined);
+      steps = steps.slice(0, next).concat({ at: Math.max(0, clock.perf() - t0) + c.rank.panelOutMs, name: 'victory', run: victory });
+      runDue();
     },
     catchUp() {
       if (!active) return;

@@ -93,14 +93,13 @@ export function shallowEqual<T>(a: T, b: T): boolean {
 export type ScreenId = 'boot' | 'home' | 'game' | 'event';
 /**
  * Stack overlays managed by the router. Toast (O9) and rotate notice (O10) are separate layers.
- * phase2b adds `ranking` (§2.4), `victory` (§2.5; replaces O3 `win` and O7 `daily_result`, which stay
- * for one release, unopened), `shop` (§8.5), `rank_hub` (§5.5) and `group_result` (§5.6), all from
- * the lazy overlay chunk.
+ * phase2b adds `ranking` (§2.4), `victory` (§2.5; replaces O3 `win`, removed at integration, and O7
+ * `daily_result` after a daily win; O7 still shows a solved daily reopened from Home), `shop` (§8.5),
+ * `rank_hub` (§5.5) and `group_result` (§5.6), all from the lazy overlay chunk.
  */
 export type OverlayId =
   | 'hint'
   | 'rewarded'
-  | 'win'
   | 'fail'
   | 'settings'
   | 'how_to_play'

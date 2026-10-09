@@ -16,7 +16,7 @@ import { buildLocales, t } from '../i18n';
 import type { View } from '../ui/dom';
 import type { SettingsProps } from '../ui/overlays/settings-modal';
 import type { EventScreenView } from '../ui/screens/event-screen';
-import type { HomeView } from '../ui/screens/home-screen';
+import type { HomeEventCardView, HomeView } from '../ui/screens/home-screen';
 import type { BannerFlow } from './banner-flow';
 import type { Clock } from './clock';
 import { cfg, type GameConfig } from './config';
@@ -91,12 +91,15 @@ export function createShell(deps: ShellDeps): Shell {
       const next = fn(s.save);
       return next === s.save ? s : { ...s, save: next };
     });
+  /** The events chunk's eventArt once it has loaded (the Home card renders without art until then, §4.4). */
+  let eventArt: HomeEventCardView['art'] = null;
   const ctx = (): ViewContext => ({
     now: clock.now(),
     capabilities: deps.platform.capabilities(),
     platformId: deps.platform.id,
     ...(deps.events ? { events: deps.events.defs() } : {}),
     ...(deps.levelSize ? { levelSize: deps.levelSize } : {}),
+    ...(eventArt ? { eventArt } : {}),
   });
 
   let home: View<HomeView> | null = null;
@@ -246,7 +249,13 @@ export function createShell(deps: ShellDeps): Shell {
       // §3.2 (after the screen mounted) and §11 (the events chunk is prefetched after Home shows).
       void deps.banners?.screenShown('home').catch(() => undefined);
       const card = selectHomeView(store.get(), ctx(), c).event;
-      if (card) void deps.events?.preload();
+      if (card && deps.events) {
+        void deps.events.preload().then((chunk) => {
+          if (!chunk || eventArt) return;
+          eventArt = chunk.eventArt;
+          if (home === view) view.update(selectHomeView(store.get(), ctx(), c));
+        });
+      }
     },
     async showEvent(def) {
       const ev = def ?? deps.events?.active() ?? null;

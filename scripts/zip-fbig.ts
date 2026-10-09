@@ -80,12 +80,15 @@ function pkgInfo(): { name: string; version: string } {
 }
 
 /** Locale ids of the locale chunks in a build (assets/locale-<id>-<hash>.js). */
-export function localeChunkIds(paths: readonly string[]): string[] {
+export function localeChunkIds(paths: readonly string[], known: readonly string[] = cfg.i18n.locales): string[] {
   const ids = new Set<string>();
   for (const p of paths) {
     if (!LOCALE_CHUNK.test(p)) continue;
-    const m = /^assets\/locale-(.+)-[^-]+\.js$/.exec(p);
-    if (m) ids.add(m[1] as string);
+    const rest = p.slice('assets/locale-'.length);
+    // A Rolldown hash may itself contain '-' (locale-th-BLfe0o-k.js): match the known ids first,
+    // longest first (as scripts/i18n-check.ts does); an unknown id falls back to "up to the last dash".
+    const id = known.filter((k) => rest.startsWith(`${k}-`)).sort((a, b) => b.length - a.length)[0] ?? /^(.+)-[^-]+\.js$/.exec(rest)?.[1];
+    if (id) ids.add(id);
   }
   return Array.from(ids).sort();
 }

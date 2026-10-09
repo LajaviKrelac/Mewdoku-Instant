@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { unzipSync } from 'fflate';
 import { afterEach, describe, expect, it } from 'vitest';
-import { BUDGETS, checkSizes, FB_MAX_FILES, FIRST_LOAD_LOCALE_MAX, FIRST_LOAD_MAX } from '../../../scripts/size-check';
+import { BUDGETS, checkSizes, FB_MAX_FILES, FIRST_LOAD_GZIP_MAX, FIRST_LOAD_LOCALE_MAX, FIRST_LOAD_MAX } from '../../../scripts/size-check';
 import { latestZip, uploadBundle } from '../../../scripts/upload-fbig';
 import { BUDGET_ZIP_BYTES, localeChunkIds, zipFbig } from '../../../scripts/zip-fbig';
 
@@ -21,7 +21,7 @@ afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 
-function writeTree(root: string, files: Record<string, string | number>): void {
+function writeTree(root: string, files: Record<string, string | number | Uint8Array>): void {
   for (const [path, content] of Object.entries(files)) {
     const full = join(root, path);
     mkdirSync(dirname(full), { recursive: true });
@@ -37,11 +37,12 @@ const HTML = `<!doctype html><html><head>
 
 function fakeBuild(root: string, sizes: Partial<Record<string, number>> = {}): void {
   writeTree(root, {
-    'index.html': HTML,
+    // sizes.html pads index.html to that many bytes with a trailing comment.
+    'index.html': sizes.html ? HTML + `<!--${'p'.repeat(Math.max(0, sizes.html - HTML.length - 7))}-->` : HTML,
     'fbapp-config.json': '{"instant_games":{}}',
     'assets/index-abc.js': sizes.main ?? 100_000,
     'assets/shared-def.js': sizes.shared ?? 10_000,
-    'assets/engine.worker-123.js': sizes.worker ?? 20_000,
+    'assets/engine.worker-123.js': sizes.worker ?? 17_000,
     'assets/overlay-chunk-77.js': sizes.lazy ?? 18_000,
     'assets/index-abc.css': sizes.css ?? 15_000,
     'assets/display-latin-9.woff2': sizes.font ?? 16_468,
@@ -62,9 +63,12 @@ describe('size-check', () => {
     // First load = what index.html pulls in before the first screen; the worker is lazy (04 §5.5).
     expect(row('First-load total')?.bytes).toBe(110_000 + 15_000 + 16_468 + HTML.length);
     expect(row('First-load total')?.maxBytes).toBe(FIRST_LOAD_MAX);
-    expect(row('Worker JS (lazy)')?.bytes).toBe(20_000);
+    expect(row('Worker JS (lazy)')?.bytes).toBe(17_000);
     expect(row('Lazy JS (core)')?.bytes).toBe(18_000);
     expect(row('Lazy (packs, other)')?.bytes).toBe(18_000 + '{"instant_games":{}}'.length);
+    // 'x'-filled fakes gzip to almost nothing; the font (woff2) counts as it is.
+    expect(row('First load (gzip)')?.bytes).toBeGreaterThan(16_468);
+    expect(row('First load (gzip)')?.bytes).toBeLessThan(16_468 + 2_000);
     expect(r.rows.map((x) => x.label)).toEqual([
       'Main JS',
       'CSS',
@@ -73,10 +77,12 @@ describe('size-check', () => {
       'index.html',
       'First-load total',
       'First load + 1 locale',
+      'First load (gzip)',
       'Worker JS (lazy)',
       'Locale chunk (each)',
       'Lazy JS (optional)',
       'Lazy JS (core)',
+      'Lazy CSS',
       'Event packs',
       'Lazy (packs, other)',
     ]);
@@ -84,34 +90,59 @@ describe('size-check', () => {
     expect(r.maxFiles).toBeUndefined();
   });
 
-  it('has the phase2b §11 ceilings', () => {
+  it('has the 2b integration ceilings (measured + about 3 %, lead decision 2026-10-09, 04 §9)', () => {
     const max = (label: string) => BUDGETS.find((b) => b.label === label)?.maxBytes;
-    expect([max('Main JS'), max('CSS'), max('Font'), max('index.html'), FIRST_LOAD_MAX, FIRST_LOAD_LOCALE_MAX]).toEqual([
-      210_000, 53_000, 25_000, 4_000, 280_000, 305_000,
+    expect([max('Main JS'), max('CSS'), max('Font'), max('index.html'), FIRST_LOAD_MAX, FIRST_LOAD_LOCALE_MAX, FIRST_LOAD_GZIP_MAX]).toEqual([
+      266_000, 43_500, 17_000, 1_000, 327_000, 351_000, 121_500,
     ]);
-    expect([max('Worker JS (lazy)'), max('Lazy JS (core)'), max('Lazy JS (optional)'), max('Locale chunk (each)')]).toEqual([
-      25_000, 62_000, 25_000, 24_000,
+    expect([max('Worker JS (lazy)'), max('Lazy JS (core)'), max('Lazy JS (optional)'), max('Lazy CSS'), max('Locale chunk (each)')]).toEqual([
+      18_500, 68_000, 28_500, 28_500, 28_000,
     ]);
     expect(FB_MAX_FILES).toBe(100);
   });
 
+  it('counts only the stylesheet index.html links as first-load CSS; the chunks\' stylesheets are lazy', () => {
+    const d = tempDir('web');
+    fakeBuild(d);
+    writeTree(d, { 'assets/overlay-chunk-a1.css': 24_000, 'assets/events-chunk-b2.css': 3_500 });
+    const r = checkSizes(d, { fb: false });
+    const row = (label: string) => r.rows.find((x) => x.label === label);
+    expect(row('CSS')?.bytes).toBe(15_000);
+    expect(row('Lazy CSS')?.bytes).toBe(27_500);
+    expect(row('First-load total')?.bytes).toBe(110_000 + 15_000 + 16_468 + HTML.length);
+    writeTree(d, { 'assets/overlay-chunk-a1.css': 25_001 });
+    expect(checkSizes(d, { fb: false }).rows.find((x) => x.label === 'Lazy CSS')?.ok).toBe(false);
+  });
+
+  it('the first load gzipped has its own ceiling (incompressible bytes go over it while every raw row passes)', () => {
+    const d = tempDir('web');
+    fakeBuild(d);
+    writeTree(d, { 'assets/index-abc.js': randomBytes(110_000) });
+    const r = checkSizes(d, { fb: false });
+    const gz = r.rows.find((x) => x.label === 'First load (gzip)');
+    expect(gz?.bytes).toBeGreaterThan(FIRST_LOAD_GZIP_MAX);
+    expect(gz?.ok).toBe(false);
+    expect(r.rows.filter((x) => x.label !== 'First load (gzip)').every((x) => x.ok)).toBe(true);
+    expect(r.ok).toBe(false);
+  });
+
   it('fails when the first-load total or the lazy chunks are over budget', () => {
     const d = tempDir('web');
-    // shared-def.js (10 KB) is a modulepreload chunk, so main JS = 208 KB: each row ok, the sum over 280 KB.
-    fakeBuild(d, { main: 198_000, css: 52_500, font: 24_500 });
+    // shared-def.js (10 KB) is a modulepreload chunk, so main JS = 266 KB: each row at its ceiling, the sum over 327 KB.
+    fakeBuild(d, { main: 256_000, css: 43_500, font: 17_000, html: 1_000 });
     const r = checkSizes(d, { fb: false });
     expect(r.rows.find((x) => x.label === 'Main JS')?.ok).toBe(true);
     expect(r.rows.find((x) => x.label === 'CSS')?.ok).toBe(true);
     expect(r.rows.find((x) => x.label === 'First-load total')?.ok).toBe(false);
     expect(r.ok).toBe(false);
     const lazy = tempDir('web');
-    fakeBuild(lazy, { lazy: 62_001 });
+    fakeBuild(lazy, { lazy: 68_001 });
     expect(checkSizes(lazy, { fb: false }).ok).toBe(false);
   });
 
   it('fails when a budget is exceeded', () => {
     const d = tempDir('web');
-    fakeBuild(d, { main: 200_001 }); // + the 10 KB modulepreload chunk = 210.001 KB
+    fakeBuild(d, { main: 256_001 }); // + the 10 KB modulepreload chunk = 266.001 KB
     const r = checkSizes(d, { fb: false });
     expect(r.ok).toBe(false);
     expect(r.rows.find((x) => x.label === 'Main JS')?.ok).toBe(false);
@@ -127,7 +158,7 @@ describe('size-check', () => {
     expect(r.ok).toBe(false);
   });
 
-  it('phase2b rows: each locale chunk ≤ 24 KB, the largest one added to the first load; optional lazy JS; lazy fonts and event packs listed', () => {
+  it('phase2b rows: each locale chunk ≤ 28 KB, the largest one added to the first load; optional lazy JS; lazy fonts and event packs listed', () => {
     const d = tempDir('web');
     fakeBuild(d);
     writeTree(d, {
@@ -135,6 +166,7 @@ describe('size-check', () => {
       'assets/locale-pt-BR-bb.js': 23_000,
       'assets/events-cc.js': 7_000,
       'assets/fb-social-dd.js': 9_000,
+      'assets/social-flows-hh.js': 6_000,
       'assets/display-latin-ext-ee.woff2': 2_700,
       'assets/lantern-walk-2026-ff.json': 3_500,
     });
@@ -144,22 +176,22 @@ describe('size-check', () => {
     const first = row('First-load total')?.bytes ?? 0;
     expect(first).toBe(110_000 + 15_000 + 16_468 + HTML.length); // the lazy latin-ext face is not first load
     expect(row('First load + 1 locale')?.bytes).toBe(first + 23_000);
-    expect(row('Lazy JS (optional)')?.bytes).toBe(16_000);
+    expect(row('Lazy JS (optional)')?.bytes).toBe(22_000);
     expect(row('Lazy JS (core)')?.bytes).toBe(18_000); // locale and optional chunks are not core
     expect(row('Font (lazy)')).toMatchObject({ bytes: 2_700, files: 1 });
     expect(row('Event packs')).toMatchObject({ bytes: 3_500, files: 1 });
     expect(r.ok).toBe(true);
 
-    writeTree(d, { 'assets/locale-ar-gg.js': 24_001 });
+    writeTree(d, { 'assets/locale-ar-gg.js': 28_001 });
     const over = checkSizes(d, { fb: false });
-    expect(over.rows.find((x) => x.label === 'Locale chunk (each)')).toMatchObject({ bytes: 24_001, ok: false, files: 3 });
+    expect(over.rows.find((x) => x.label === 'Locale chunk (each)')).toMatchObject({ bytes: 28_001, ok: false, files: 3 });
     expect(over.ok).toBe(false);
   });
 
-  it('the optional lazy JS (events + fb-social) has its own 25 KB ceiling', () => {
+  it('the optional lazy JS (events + fb-social + social-flows) has its own ceiling', () => {
     const d = tempDir('web');
     fakeBuild(d);
-    writeTree(d, { 'assets/events-a.js': 13_000, 'assets/fb-social-b.js': 12_001 });
+    writeTree(d, { 'assets/events-a.js': 9_000, 'assets/fb-social-b.js': 13_000, 'assets/social-flows-c.js': 6_501 });
     const r = checkSizes(d, { fb: false });
     expect(r.rows.find((x) => x.label === 'Lazy JS (optional)')?.ok).toBe(false);
   });
@@ -229,6 +261,8 @@ describe('zip-fbig', () => {
     fakeBuild(d);
     writeTree(d, { 'assets/locale-de-Ab1.js': 100, 'assets/locale-pt-BR-x_9.js': 100 });
     expect(localeChunkIds(['assets/locale-de-Ab1.js', 'assets/locale-pt-BR-x_9.js', 'assets/index-a.js'])).toEqual(['de', 'pt-BR']);
+    // A hash with a dash in it (seen in a real build: locale-th-BLfe0o-k.js) still names its locale.
+    expect(localeChunkIds(['assets/locale-th-BLfe0o-k.js', 'assets/locale-zh-Hans-a-b.js'])).toEqual(['th', 'zh-Hans']);
     expect(() => zipFbig({ distDir: d, outDir: tempDir('zip'), sha: 'x', quiet: true })).toThrow(/outside i18n\.releaseLocales \(de, pt-BR\)/);
     expect(zipFbig({ distDir: d, outDir: tempDir('zip'), sha: 'x', quiet: true, releaseLocales: ['en', 'de', 'pt-BR'] }).fileCount).toBe(12);
     const preview = zipFbig({ distDir: d, outDir: tempDir('zip'), name: 'mew', version: '1', sha: 'x', quiet: true, release: false });

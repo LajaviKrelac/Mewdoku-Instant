@@ -7,7 +7,8 @@ import { createFakeClock } from '../../../src/app/clock';
 import { cfg } from '../../../src/app/config';
 import { createEventBus, type AppEventMap, type RankResult } from '../../../src/app/events';
 import { setFlagOverrides } from '../../../src/app/flags';
-import { createRankingFlow, formatBoardScore, scoreView, type ListContext } from '../../../src/app/ranking-flow';
+import { createRankingFlow, dayFilter, formatBoardScore, scoreView, type ListContext } from '../../../src/app/ranking-flow';
+import { dayIndex } from '../../../src/game/scoring';
 import { defaults } from '../../../src/game/save';
 import type { BoardKey, SaveData } from '../../../src/game/types';
 import type { RankEntry, RankingCaps, RankingProvider, RankListView } from '../../../src/platform/types';
@@ -228,6 +229,39 @@ describe('fetch and the list states (§2.4, §5.4)', () => {
     }
   });
 
+  it('daily_fastest keeps only the shown day: the overlay list filters its rows, and my entry of another day is not "my rank"', async () => {
+    const p = provider({ overlay: true });
+    const s = setup(p);
+    const day = '2026-10-07';
+    const today = (secs: number): number => dayIndex(day) * 100_000 + (99_999 - secs);
+    const yesterday = (secs: number): number => (dayIndex(day) - 1) * 100_000 + (99_999 - secs);
+    expect(await s.flow.showList('daily_fastest', 'Today', undefined, undefined, day)).toBe(true);
+    const keep = p.lists[0]?.view.keep;
+    expect(keep).toBeTypeOf('function');
+    expect(keep?.(today(188))).toBe(true);
+    expect(keep?.(yesterday(60))).toBe(false);
+    // Other boards are not filtered.
+    await s.flow.showList('paw_points', 'Paw points');
+    expect(p.lists[1]?.view.keep).toBeUndefined();
+    // dayFilter is the same rule; the default day is today's local date.
+    expect(dayFilter('daily_fastest', day)?.(today(5))).toBe(true);
+    expect(dayFilter('paw_points', day)).toBeUndefined();
+    // The panel's "Your rank" only from an entry of the day shown.
+    const r: RankResult = { board: 'daily_fastest', api: 'classic', mine: { rank: 3, score: yesterday(60), isMe: true }, top: [], ok: true };
+    const daily: ListContext = { records: { ...records, board: 'daily' }, myScore: { kind: 'time', ms: 188_000 }, day };
+    expect(s.flow.listState(r, daily)).toEqual({ kind: 'see_top', mine: { rank: null, score: { kind: 'time', ms: 188_000 }, count: null } });
+    const r2: RankResult = { ...r, mine: { rank: 2, score: today(150), isMe: true } };
+    expect(s.flow.listState(r2, daily)).toEqual({ kind: 'see_top', mine: { rank: 2, score: { kind: 'time', ms: 150_000 }, count: null } });
+  });
+
+  it('flushPending skips the board just submitted (its newer score supersedes the queued one)', async () => {
+    const p = provider();
+    const s = setup(p, { rank: { pending: { daily_fastest: 1, paw_points: 2 }, lastSubmitAt: 0 } });
+    await s.flow.flushPending({ except: 'paw_points' });
+    expect(p.calls).toEqual(['submit:daily_fastest:1']);
+    expect(s.save().rank.pending).toEqual({ paw_points: 2 });
+  });
+
   it('score views and texts decode our encodings', () => {
     expect(scoreView('daily_fastest', 278 * 100_000 + (99_999 - 188), undefined)).toEqual({ kind: 'time', ms: 188_000 });
     expect(formatBoardScore('daily_fastest', 278 * 100_000 + (99_999 - 188), undefined)).toBe('3:08');
@@ -252,12 +286,17 @@ describe('session: submit at WON, panel at 4.5 s (§5.5)', () => {
           }),
         }),
     });
+    h.store.update((st) => ({ ...st, save: { ...st.save, rank: { pending: { daily_fastest: 27_899_812, paw_points: 20 }, lastSubmitAt: 0 } } }));
     await startLevel(h, 5);
     await h.settle(5000); // a plausible solve time (≥ rank.minSolveMs)
     winGame(h);
     await h.settle(0);
-    expect(p.calls).toContain('submit:paw_points:45');
-    expect(p.calls).toContain('mine:paw_points');
+    // §5.5 steps 2 then 3: the new score's submit starts before mine/top read the board; the older
+    // queued scores follow once it settled, except the same board's (the new score supersedes it).
+    expect(p.calls.slice(0, 3)).toEqual(['submit:paw_points:45', 'mine:paw_points', 'top:paw_points:' + cfg.rank.fetchCount]);
+    expect(p.calls).toContain('submit:daily_fastest:27899812');
+    expect(p.calls).not.toContain('submit:paw_points:20');
+    expect(h.save().rank.pending).toEqual({});
     await h.settle(cfg.fx.winOverlayDelayMs);
     expect(h.router.props.ranking?.list).toEqual({ kind: 'mine', mine: { rank: 1234, score: { kind: 'points', points: 1240 }, count: null } });
     expect(h.analytics).toContainEqual({ name: 'rank_panel', params: { board: 'paw_points', api: 'classic', ms: expect.any(Number), ok: 1 } });

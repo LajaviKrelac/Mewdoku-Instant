@@ -32,7 +32,7 @@ interface Ui {
 
 function fakeUi(log: string[]): Ui {
   const ui: Ui = { home: null, overlays: new Map(), factories: {} };
-  const ids: OverlayId[] = ['hint', 'rewarded', 'win', 'fail', 'settings', 'how_to_play', 'daily_result', 'coach'];
+  const ids: OverlayId[] = ['hint', 'rewarded', 'fail', 'settings', 'how_to_play', 'daily_result', 'coach'];
   const overlays = Object.fromEntries(
     ids.map((id) => [
       id,

@@ -14,6 +14,8 @@
 //   assets/overlay-chunk-*.js   core overlays (O1–O8 + ranking, victory, shop, rank hub, group result)
 //   assets/events-*.js          src/app/events-chunk.ts: the event screen + event art (C/B/A)
 //   assets/fb-social-*.js       src/platform/fb/fb-social.ts: ranking, overlay views, groups, payments (D)
+//   assets/social-flows-*.js    src/app/social-flows.ts: rankings hub, event top list, group flows (C)
+//   assets/overlay-chunk-*.css, assets/events-chunk-*.css: those chunks' own stylesheets (cssCodeSplit)
 //   assets/locale-<id>-*.js     one per bundled non-English catalogue (E)
 // Each is reached through ONE dynamic import of its barrel module; nothing in the main bundle may
 // import those modules statically (that would pull them into the first load).
@@ -77,7 +79,10 @@ export default defineConfig(({ mode, command, isPreview }) => {
       target: 'es2020',
       sourcemap: !fb, // no maps in the FB zip
       assetsInlineLimit: 0, // keep packs and the font as files
-      cssCodeSplit: false,
+      // 2b integration (04 §9): the overlay and events chunks bring their own stylesheets
+      // (src/styles/overlay-chunk.css, events-chunk.css), loaded with the chunk; index.html links
+      // only the first-load stylesheet.
+      cssCodeSplit: true,
       modulePreload: { polyfill: false },
       rolldownOptions: {
         output: { chunkFileNames: (chunk) => chunkFileName(chunk.facadeModuleId) },

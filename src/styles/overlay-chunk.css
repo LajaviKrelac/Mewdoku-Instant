@@ -1,0 +1,1089 @@
+/* Owner: lead (2b integration; rules from B's overlays.css, fx.css and screens.css, moved unchanged)
+   The overlay chunk's stylesheet (04 §9 budget): imported by src/app/overlay-chunk.ts, so Vite emits
+   it as its own CSS file that loads with the lazy overlay chunk (preloaded after the first screen)
+   instead of in the first-load stylesheet. Every rule here styles an element that only a lazy
+   overlay builds (O1 hint card, O2 rewarded, O4 fail, O5 settings + the language list, O6 how to
+   play, O7 daily result, O8 coach, ranking panel, victory, shop, rankings hub, group result).
+   Order matters: this file loads after the main stylesheet, so it keeps the source order of its
+   parts (overlays.css, then fx.css, then screens.css) and the reduced-motion and media-query rules
+   that override them come after them here. Tokens only (css-rules.spec.ts); logical properties
+   for RTL (phase2b §6.5). */
+
+/* ═══════════════════════ from overlays.css (B) ═══════════════════════ */
+
+/* ── Overlays: root, scrims, panels (02 §5, §17.5 overlay fade 200 ms) ── */
+.overlay { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 40; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; padding: calc(16px + var(--safe-top)) 16px calc(16px + var(--safe-bottom));
+  animation: mw-fade-in var(--t-overlay) ease both; }
+.overlay__scrim { position: absolute; top: 0; right: 0; bottom: 0; left: 0; }
+.overlay__scrim--clear { background: transparent; }
+.overlay__scrim--soft { background: var(--scrim-soft); }
+.overlay__scrim--dark { background: var(--scrim); }
+.overlay__panel { position: relative; width: 100%; max-height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain; outline: none; }
+.overlay__panel--dialog { max-width: 400px; padding: 24px 20px 20px; border-radius: var(--radius-xl); background: var(--card);
+  box-shadow: var(--shadow-3); text-align: center; animation: mw-pop-in 220ms var(--ease-out) both; }
+.overlay__panel--stage { max-width: 360px; padding: 20px 20px 14px; border-radius: var(--radius-xl); background: var(--stage);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 18px 50px rgba(0, 0, 0, 0.35); color: #fff; text-align: center;
+  animation: mw-pop-in 260ms var(--ease-out) both; }
+/* The stage content sits on its own solid card (UX-04): the scrimmed board never shows through the
+   title, the cat or a button. Gated buttons (the fail delay, waiting for an ad)
+   stay opaque with a muted fill instead of turning translucent; aria-disabled keeps them focusable. */
+.overlay__panel--stage .btn[aria-disabled='true'] { opacity: 1; }
+.overlay__panel--stage .btn--primary[aria-disabled='true'] { background: rgba(255, 255, 255, 0.16); color: rgba(255, 255, 255, 0.74); box-shadow: 0 4px 0 rgba(0, 0, 0, 0.3); text-shadow: none; }
+.overlay__panel--stage .btn--secondary[aria-disabled='true'] { background: rgba(255, 255, 255, 0.72); color: var(--ink-2); box-shadow: 0 3px 0 rgba(0, 0, 0, 0.25); }
+.overlay__panel--stage .btn--ghost[aria-disabled='true'] { color: rgba(255, 255, 255, 0.55); }
+/* The stage card is its own stacking context and never clips:
+   the overlay itself scrolls when very large text makes the card taller than the screen. */
+.overlay[data-overlay='fail'] { justify-content: flex-start; overflow-y: auto; }
+.overlay__scrim--dark { position: fixed; } /* stays put if the overlay scrolls (fail, ranking) */
+.overlay__panel--stage { z-index: 1; flex: none; margin: auto 0; max-height: none; overflow: visible; }
+.overlay__panel--sheet { max-width: 480px; margin-top: auto; padding: 16px; border-radius: var(--radius-xl); background: var(--card);
+  box-shadow: var(--shadow-3); animation: mw-sheet-in 220ms var(--ease-out) both; }
+.overlay__head { display: flex; align-items: center; margin: -4px 0 8px; margin-inline-start: 0; margin-inline-end: -4px; text-align: start; }
+.overlay__head .overlay__title { flex: 1; min-width: 0; }
+.overlay__title { color: var(--ink); font-size: var(--fs-xxl); line-height: 1.15; text-wrap: balance; }
+.overlay__body { margin-top: 8px; color: var(--ink-2); font-size: var(--fs-l); line-height: 1.4; text-wrap: balance; }
+.overlay__actions { display: flex; align-items: center; justify-content: center; margin-top: 20px; }
+.overlay__actions--stack { flex-direction: column; align-items: stretch; }
+.overlay__actions--stack > * + * { margin-top: 12px; }
+.overlay__actions--stack > .btn--ghost { align-self: center; }
+.overlay__close, .overlay__back { width: 44px; height: 44px; min-height: 44px; background: var(--page-2); box-shadow: none; flex: none; }
+.overlay__back { margin-inline-end: 8px; }
+.overlay__back .btn__icon { transform: rotate(180deg); }
+.overlay__art { display: flex; justify-content: center; margin: 8px auto; }
+.overlay__art > svg { width: 168px; height: 168px; }
+
+/* O1 hint card: bottom sheet over the tool row; the board stays visible above (clear scrim). */
+.overlay[data-overlay='hint'] { justify-content: flex-end; padding-bottom: calc(12px + var(--safe-bottom)); }
+.hint-card__row { display: flex; align-items: flex-start; text-align: start; }
+.hint-card__icon { flex: none; width: 44px; height: 44px; margin-inline-end: 12px; padding: 8px; border-radius: 50%;
+  background: var(--gold-soft); color: var(--gold-deep); }
+.hint-card__desc { flex: 1 1 auto; min-width: 0; }
+.hint-card__text { padding-top: 2px; color: var(--ink); font-size: var(--fs-l); line-height: 1.4; }
+.hint-card__actions { margin-top: 14px; }
+.hint-card__apply { flex: 1; max-width: 260px; margin: 0 auto; }
+.hint-card__actions .overlay__close { margin-inline-start: 12px; }
+/* Flipped above the board when the bottom slot would cover it (HintCardProps.avoidRect): a full-width
+   sheet flush with the top edge, so the top bar's buttons never peek out around it. */
+.overlay[data-overlay='hint'][data-placement='top'] { justify-content: flex-start; padding: 0 0 calc(16px + var(--safe-bottom)); }
+.overlay[data-overlay='hint'][data-placement='top'] .hint-card { margin-top: 0; margin-bottom: auto; padding-top: calc(16px + var(--safe-top));
+  border-radius: 0 0 var(--radius-xl) var(--radius-xl); animation-name: mw-sheet-down; }
+
+/* O2 rewarded prompt */
+.rewarded__icon { display: flex; align-items: center; justify-content: center; width: 72px; height: 72px; margin: 0 auto 12px;
+  border-radius: 50%; background: var(--accent-soft); color: var(--accent-deep); }
+.rewarded__icon .icon { width: 40px; height: 40px; }
+.rewarded[data-placement='hint'] .rewarded__icon { background: var(--gold-soft); color: var(--gold-deep); }
+
+/* O4 fail: content on the dark scrim (the Phase 2 O3 win overlay was replaced by the ranking panel
+   and the victory screen in 2b and removed at integration). */
+.overlay[data-overlay='fail'] .overlay__title { color: #fff; font-size: 2.25rem;
+  text-shadow: 0 2px 0 rgba(var(--ink-rgb), 0.35); }
+.fail .overlay__actions { margin-top: 24px; }
+.fail__home { color: rgba(255, 255, 255, 0.9); }
+.fail__art > svg { width: 170px; height: 170px; }
+.fail__body { max-width: 300px; margin: 4px auto 0; color: rgba(255, 255, 255, 0.82); font-size: var(--fs-m); }
+.fail__continue .btn__badge { margin-inline-start: 10px; background: var(--accent-deep); color: #fff; }
+.fail__continue .btn__badge .icon { width: 1.1em; height: 1.1em; margin-inline-start: 3px; color: #fff; --icon-fill: #fff; }
+.fail__retry { color: var(--ink); }
+
+/* O5 settings + About */
+.settings, .howto { text-align: start; }
+.settings__list { margin-top: 4px; }
+.settings-row { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 56px; padding: 6px 2px;
+  border-top: 1px solid var(--line); }
+.settings__list > .settings-row:first-child { border-top: 0; }
+.settings-row__label { flex: 1; min-width: 0; padding-inline-end: 12px; color: var(--ink); font-family: var(--font-display); font-weight: var(--display-weight);
+  font-size: var(--fs-l); cursor: pointer; }
+.settings-row__note { display: block; margin-top: 2px; color: var(--ink-2); font-family: var(--font-body); font-weight: 400; font-size: var(--fs-s); }
+.settings-row--link.btn { min-height: 56px; padding: 0 2px; border-radius: 0; background: transparent; color: var(--ink); font-size: var(--fs-l);
+  justify-content: space-between; }
+.settings-row--link .btn__label { flex: 1; text-align: start; }
+.settings-row--link .btn__chev { color: var(--ink-3); }
+.settings-row--link.btn:focus-visible { border-radius: var(--radius-m); outline-offset: -2px; }
+/* Large text (200 %): the label keeps its width and the System / On / Off control wraps under it
+   instead of being drawn over it (A11Y-6). */
+.settings-row--motion { flex-wrap: wrap; }
+.settings-row--motion .settings-row__label { flex: 1 0 auto; }
+.settings-row--motion .segmented { margin: 4px 0; margin-inline-start: auto; }
+/* Pill-shaped, so the 3 px focus ring follows the rounded control (UX-16). */
+.switch { display: inline-flex; align-items: center; min-height: 44px; padding: 4px; padding-inline-start: 10px; border: 0; border-radius: var(--radius-pill);
+  background: none; cursor: pointer; }
+.switch__state { min-width: 2.2em; margin-inline-end: 8px; color: var(--ink-2); font-size: var(--fs-s); font-weight: 600; text-align: end; }
+.switch__track { position: relative; width: 52px; height: 32px; border-radius: 16px; background: var(--line-2); transition: background-color 150ms ease; }
+.switch__knob { position: absolute; top: 3px; left: 3px; width: 26px; height: 26px; border-radius: 50%; background: #fff;
+  box-shadow: 0 1px 3px rgba(var(--ink-rgb), 0.3); transition: transform 150ms var(--ease-out); }
+.switch[aria-checked='true'] .switch__track { background: var(--accent); }
+.switch[aria-checked='true'] .switch__knob { transform: translateX(20px); }
+.segmented { display: inline-flex; padding: 3px; border-radius: var(--radius-pill); background: var(--page-2); }
+.segmented__opt { min-width: 44px; min-height: 44px; padding: 0 12px; border: 0; border-radius: var(--radius-pill); background: transparent; color: var(--ink-2);
+  font-family: var(--font-display); font-weight: var(--display-weight); font-size: var(--fs-s); cursor: pointer; }
+.segmented__opt[aria-checked='true'] { background: var(--card); color: var(--ink); box-shadow: var(--shadow-1); }
+.about__name { margin-top: 8px; color: var(--accent-deep); font-family: var(--font-display); font-weight: var(--display-weight); font-size: var(--fs-xl); }
+.about__version { color: var(--ink-2); font-size: var(--fs-s); }
+.about__text { margin-top: 12px; color: var(--ink); font-size: var(--fs-m); line-height: 1.45; }
+.about__link { display: inline-block; margin: -11px 0; padding: 11px 0; color: var(--accent-deep); font-weight: 600; }
+
+/* O6 how to play */
+.howto__rules { margin: 0; padding: 0; list-style: none; }
+.howto-rule { display: flex; align-items: center; padding: 10px 0; }
+.howto-rule + .howto-rule { border-top: 1px solid var(--line); }
+.howto-rule__art { flex: none; width: 76px; height: 76px; margin-inline-end: 14px; filter: drop-shadow(0 1px 2px rgba(var(--ink-rgb), 0.16)); }
+.howto-rule__text { color: var(--ink); font-size: var(--fs-m); font-weight: 500; line-height: 1.4; }
+.howto__notes { margin-top: 10px; padding: 12px 14px; border-radius: var(--radius-l); background: var(--page-2); }
+.howto__notes p { display: flex; align-items: flex-start; color: var(--ink-2); font-size: var(--fs-s); line-height: 1.45; }
+.howto__notes p + p { margin-top: 8px; }
+.howto__note-icon { width: 20px; height: 20px; margin: 0 10px 0 0; color: var(--accent); }
+.howto__note-icon--heart { color: var(--heart); }
+.howto__note-icon--bulb { color: var(--gold-deep); }
+/* Keyboard controls: only where a keyboard is likely (a mouse or trackpad is present). */
+.howto__notes .howto__keys { display: none; }
+@media (any-pointer: fine) { .howto__notes .howto__keys { display: flex; } }
+.howto__extra { flex-direction: column; align-items: stretch; margin-top: 16px; }
+.howto__extra > * + * { margin-top: 10px; }
+
+/* O7 daily result */
+.daily-result__art > svg { width: 140px; height: 140px; }
+.daily-result__time { color: var(--ink); font-family: var(--font-num); font-weight: var(--display-weight); font-size: var(--fs-xxl); }
+.daily-result__stats { margin-top: 4px; color: var(--ink-2); }
+.daily-result__next { display: inline-block; margin-top: 14px; padding: 6px 14px; border-radius: var(--radius-pill); background: var(--accent-soft);
+  color: var(--accent-deep); font-weight: 600; font-size: var(--fs-s); }
+
+/* O8 tutorial coach (non-modal: only the card takes pointer events) */
+.coach { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 30; pointer-events: none; animation: mw-fade-in var(--t-overlay) ease both; }
+.coach__dim { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+.coach__dim-fill { fill: rgba(var(--ink-rgb), 0.4); }
+.coach__rings, .coach__ring { position: absolute; }
+.coach__ring { border-radius: 50%; animation: mw-coach-pulse 1.3s ease-in-out infinite; }
+.coach__hand { position: absolute; width: 48px; height: 48px; filter: drop-shadow(0 3px 4px rgba(var(--ink-rgb), 0.35));
+  animation: mw-hand-tap 1.3s ease-in-out infinite; }
+.coach[data-hand='double_tap'] .coach__hand { animation-name: mw-hand-double; }
+.coach[data-hand='swipe'] .coach__hand { animation: mw-hand-swipe 1.9s ease-in-out infinite; }
+.coach__card { position: absolute; left: 16px; right: 16px; max-width: 440px; margin: 0 auto; padding: 16px 18px; border-radius: var(--radius-xl);
+  background: var(--card); box-shadow: var(--shadow-3); text-align: center; pointer-events: auto; animation: mw-pop-in 220ms var(--ease-out) both; }
+/* First appearance: the empty live region is shown first, its text a moment later (coach.ts). */
+.coach__card[data-pending] { opacity: 0; animation: none; }
+.coach__text { color: var(--ink); font-size: var(--fs-l); font-weight: 500; line-height: 1.4; text-wrap: balance; }
+.coach__gotit { margin-top: 12px; min-width: 140px; }
+/* A modal above the coach (hint card in step 5, Settings, How to play): the router makes the coach
+   inert; its card, hand, rings and dim disappear until the modal closes (UX-01, UX-07, SPEC-04). */
+.coach[inert] { visibility: hidden; }
+
+@keyframes mw-sheet-down { from { opacity: 0; transform: translateY(-24px); } to { opacity: 1; transform: none; } }
+@keyframes mw-sheet-in { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+@keyframes mw-coach-pulse { 0%, 100% { box-shadow: 0 0 0 3px var(--gold), 0 0 0 6px rgba(var(--gold-rgb), 0.45); }
+  50% { box-shadow: 0 0 0 3px var(--gold), 0 0 0 14px rgba(var(--gold-rgb), 0); } }
+@keyframes mw-hand-tap { 0%, 100% { transform: translate(8px, 12px); } 45%, 60% { transform: translate(0, 0) scale(0.9); } }
+@keyframes mw-hand-double { 0%, 100% { transform: translate(8px, 12px); } 22% { transform: translate(0, 0) scale(0.9); }
+  34% { transform: translate(3px, 5px); } 46% { transform: translate(0, 0) scale(0.9); } 62% { transform: translate(8px, 12px); } }
+@keyframes mw-hand-swipe { 0% { opacity: 0; transform: translate(0, 0); } 12% { opacity: 1; transform: translate(0, 0); }
+  70% { opacity: 1; transform: translate(var(--dx, 0), var(--dy, 0)); } 85%, 100% { opacity: 0; transform: translate(var(--dx, 0), var(--dy, 0)); } }
+
+@media (max-height: 639px) {
+  .overlay__art > svg, .fail__art > svg { width: 120px; height: 120px; }
+  .overlay[data-overlay='fail'] .overlay__title { font-size: var(--fs-xxl); }
+  .hint-card { padding: 12px; }
+  .hint-card__text { font-size: var(--fs-m); }
+  .hint-card__icon { width: 36px; height: 36px; padding: 6px; }
+  .hint-card__actions { margin-top: 10px; }
+  .overlay[data-overlay='hint'][data-placement='top'] .hint-card { padding-top: calc(12px + var(--safe-top)); }
+  /* Compact coach card: it fits between the top bar and the board, or below the board (UX-06). */
+  .coach__card { padding: 10px 14px; }
+  .coach__text { font-size: var(--fs-m); line-height: 1.35; }
+  .coach__gotit { margin-top: 8px; min-height: 44px; }
+  .overlay__panel--stage { padding: 14px 16px 10px; }
+}
+@media (max-height: 599px) {
+  /* 320 × 568: the longest coach lines fit between the board and the screen edge. */
+  .coach__text { font-size: var(--fs-s); }
+}
+
+/* Reduced motion (02 §17.5): fades only, ≤ 150 ms; the coach hand stays still. */
+[data-motion='reduced'] .coach__hand, [data-motion='reduced'] .coach__ring { animation: none; }
+[data-motion='reduced'] .coach__ring { box-shadow: 0 0 0 3px var(--gold); }
+
+/* ═══════════════════════ from fx.css (B) ═══════════════════════ */
+/* ── Ranking panel (phase2b §2.4): pop, tap pulse, fade-out ── */
+.ranking__card {
+  animation: rank-pop var(--pop-ms, 260ms) var(--ease-out) both;
+}
+
+@keyframes rank-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.03);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.overlay[data-overlay='ranking'].is-ready .ranking__tap {
+  animation: tap-pulse var(--pulse-ms, 1400ms) ease-in-out infinite;
+}
+
+@keyframes tap-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.overlay[data-overlay='ranking'].is-leaving {
+  opacity: 0;
+  transition: opacity var(--out-ms, 200ms) ease;
+}
+
+/* ── Victory screen (phase2b §2.5): the sun rays turn once per --rays-ms ── */
+.victory__rays {
+  animation: rays-turn var(--rays-ms, 20000ms) linear infinite;
+}
+
+@keyframes rays-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Static rays, a steady footer, no breathing (phase2b §2.5, §2.7, §2.9). */
+[data-motion='reduced'] .victory__rays,
+.victory[data-reduced] .victory__rays,
+[data-motion='reduced'] .overlay[data-overlay='ranking'] .ranking__tap {
+  animation: none;
+}
+
+/* ═══════════════════════ from screens.css (B) ═══════════════════════ */
+/* ── Ranking panel (§2.4): a stage card on the scrim, the footer below it ── */
+/* The panel pops (fx.css); the overlay itself does not fade, so its scrim takes over from the game
+   screen's scrim without a flash. */
+.overlay[data-overlay='ranking'] {
+  animation: none;
+}
+
+.overlay__panel--stage.ranking {
+  max-width: 400px;
+  padding: 0;
+  overflow: visible;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  animation: none;
+}
+
+.ranking__card {
+  max-height: 78vh;
+  overflow-y: auto;
+  padding: 20px 16px 16px;
+  border-radius: 20px;
+  background: var(--stage);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 18px 50px rgba(0, 0, 0, 0.35);
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.overlay[data-overlay='ranking'] .ranking__title {
+  color: var(--title-on-dark);
+  font-size: 1.75rem;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.25);
+}
+
+.ranking__sub {
+  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.82);
+  font-family: var(--font-num);
+  font-weight: var(--display-weight);
+  font-size: var(--fs-l);
+}
+
+/* Hidden until the tap gate opens (beats the stage's opaque gated-button rule in overlays.css). */
+.overlay[data-overlay='ranking'] .ranking__tap.btn {
+  display: flex;
+  margin: 24px auto 0;
+  background: transparent;
+  color: var(--tap-text);
+  font-size: 1.125rem;
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+
+.overlay[data-overlay='ranking'].is-ready .ranking__tap.btn {
+  opacity: 1;
+}
+
+.ranking__tap.btn:active {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ranking__tap.btn:focus-visible {
+  outline-color: var(--tap-text);
+}
+
+/* ── The rank list (shared by the panel, dark, and the hub, light) ──────── */
+.rank-list {
+  min-height: 112px;
+  margin-top: 16px;
+  color: #fff;
+}
+
+/* The FB overlay view is placed over this area (overlay mode): reserve its height. */
+.rank-list[data-kind='overlay'] {
+  height: min(440px, 46vh);
+}
+
+.rank-list__skeleton {
+  display: block;
+}
+
+.rank-list__bar {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 12px;
+  border-radius: var(--radius-m);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.rank-list__bar + .rank-list__bar {
+  margin-top: 6px;
+}
+
+.rank-list__dot {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.rank-list__line {
+  flex: 1;
+  height: 10px;
+  margin-inline-start: 12px;
+  margin-inline-end: 30%;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.rank-list__note {
+  margin-top: 12px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: var(--fs-s);
+  line-height: 1.45;
+}
+
+.rank-mine {
+  padding: 14px 12px;
+  border-radius: var(--radius-l);
+  background: rgba(255, 255, 255, 0.06);
+  border-inline-start: 4px solid var(--accent);
+}
+
+.rank-mine__rank {
+  color: #fff;
+  font-family: var(--font-num);
+  font-weight: var(--display-weight);
+  font-size: var(--fs-xxl);
+}
+
+.rank-mine__score {
+  margin-top: 2px;
+  color: rgba(255, 255, 255, 0.86);
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  font-size: var(--fs-l);
+}
+
+.rank-mine__count {
+  margin-top: 2px;
+  color: rgba(255, 255, 255, 0.66);
+  font-size: var(--fs-s);
+}
+
+.rank-list__seetop {
+  margin-top: 14px;
+}
+
+.rank-records {
+  margin: 0;
+  padding: 4px 14px;
+  border-radius: var(--radius-l);
+  background: rgba(255, 255, 255, 0.06);
+  text-align: start;
+}
+
+.rank-records__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 10px 0;
+}
+
+.rank-records__row + .rank-records__row {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.rank-records__label {
+  min-width: 0;
+  padding-inline-end: 12px;
+  color: rgba(255, 255, 255, 0.74);
+}
+
+.rank-records__value {
+  margin: 0;
+  color: #fff;
+  font-family: var(--font-num);
+  font-weight: var(--display-weight);
+  font-size: var(--fs-l);
+}
+
+.rank-records__event {
+  padding: 10px 0;
+  color: #fff;
+  font-weight: 600;
+}
+
+/* Light variant (the rankings hub sheet). */
+.rank-list--light {
+  margin-top: 0;
+  color: var(--ink);
+}
+
+.rank-list--light .rank-list__bar {
+  background: var(--page-2);
+}
+
+.rank-list--light .rank-list__dot,
+.rank-list--light .rank-list__line {
+  background: rgba(var(--ink-rgb), 0.08);
+}
+
+.rank-list--light .rank-list__note {
+  color: var(--ink-2);
+}
+
+.rank-list--light .rank-mine,
+.rank-list--light .rank-records {
+  background: var(--page-2);
+}
+
+.rank-list--light .rank-mine__rank,
+.rank-list--light .rank-records__value,
+.rank-list--light .rank-records__event {
+  color: var(--ink);
+}
+
+.rank-list--light .rank-mine__score {
+  color: var(--ink);
+}
+
+.rank-list--light .rank-mine__count,
+.rank-list--light .rank-records__label {
+  color: var(--ink-2);
+}
+
+.rank-list--light .rank-records__row + .rank-records__row {
+  border-top-color: var(--line);
+}
+
+/* ── Victory screen (§2.5): full screen on the page colour ──────────────── */
+.overlay[data-overlay='victory'] {
+  justify-content: flex-start;
+  padding: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: var(--page);
+  -webkit-overflow-scrolling: touch;
+}
+
+.victory {
+  position: relative;
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: calc(10px + var(--safe-top)) 16px calc(16px + var(--safe-bottom));
+  text-align: center;
+  outline: none;
+}
+
+/* FB banner band (phase2b §3.2): the buttons stay ads.banner.buttonClearancePx above the reserve. */
+.victory[data-banner] {
+  padding-bottom: calc(var(--banner-reserve, 58px) + var(--banner-clear, 16px) + var(--safe-bottom));
+}
+
+.victory__top {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 48px;
+}
+
+.victory__col {
+  position: relative;
+  z-index: 0; /* a stacking context: the rays (z −1) paint behind every line of text */
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.victory__praise {
+  color: var(--accent-title);
+  font-size: 2.5rem;
+  line-height: 1.1;
+  text-wrap: balance;
+}
+
+.victory__stage {
+  position: relative;
+  width: 210px;
+  height: 210px;
+  margin: 6px 0 10px;
+}
+
+/* 12 rays (30° period: 15° ray, 15° gap), softened toward the edge. */
+.victory__rays {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 440px;
+  height: 440px;
+  margin: -220px 0 0 -220px;
+  border-radius: 50%;
+  background: repeating-conic-gradient(from 0deg, var(--accent-soft) 0deg 15deg, transparent 15deg 30deg);
+  -webkit-mask-image: radial-gradient(closest-side, rgba(0, 0, 0, 1) 30%, rgba(0, 0, 0, 0) 100%);
+  mask-image: radial-gradient(closest-side, rgba(0, 0, 0, 1) 30%, rgba(0, 0, 0, 0) 100%);
+  z-index: -1;
+  pointer-events: none;
+}
+
+.victory__art {
+  position: relative;
+}
+
+.victory__art > svg {
+  width: 210px;
+  height: 210px;
+}
+
+.victory__sub {
+  color: var(--ink-2);
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  font-size: 1.125rem;
+}
+
+.victory__daily {
+  margin-top: 6px;
+}
+
+.victory__time {
+  color: var(--ink);
+  font-family: var(--font-num);
+  font-weight: var(--display-weight);
+  font-size: var(--fs-xxl);
+}
+
+.victory__stats {
+  margin-top: 2px;
+  color: var(--ink-2);
+}
+
+.victory__next {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-weight: 600;
+  font-size: var(--fs-s);
+}
+
+.victory__reward {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 14px;
+  padding: 6px 16px;
+  padding-inline-start: 10px;
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  box-shadow: var(--shadow-1);
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+}
+
+.victory__fishes {
+  display: inline-flex;
+  align-items: center;
+}
+
+.victory__fish {
+  width: 30px;
+  height: 30px;
+  color: var(--ink);
+}
+
+.victory__fish + .victory__fish {
+  margin-inline-start: -9px;
+}
+
+.victory__plus {
+  margin-inline-start: 8px;
+  margin-inline-end: 12px;
+  color: var(--accent-text);
+  font-size: var(--fs-xl);
+}
+
+.victory__total {
+  padding-inline-start: 12px;
+  border-inline-start: 1px solid var(--line-2);
+  color: var(--ink-2);
+  font-size: var(--fs-m);
+}
+
+.victory__chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.victory__chip {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  margin: 3px;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  font-size: var(--fs-s);
+}
+
+.victory__chip--bonus {
+  background: var(--hard);
+  color: #fff;
+}
+
+.victory__chip--bonus[data-kind='daily'] {
+  background: var(--accent-text);
+}
+
+.victory__chip--points {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-family: var(--font-num);
+}
+
+.victory__event {
+  width: 100%;
+  max-width: 320px;
+  margin-top: 12px;
+}
+
+.victory__event-label {
+  color: var(--ink-2);
+  font-weight: 600;
+  font-size: var(--fs-s);
+}
+
+.victory__bar {
+  height: 10px;
+  margin-top: 6px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: var(--page-2);
+  box-shadow: inset 0 1px 2px rgba(var(--ink-rgb), 0.1);
+}
+
+.victory__bar-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 400ms var(--ease-out);
+}
+
+.victory--bar-static .victory__bar-fill {
+  transition: none;
+}
+
+.victory__milestone {
+  margin-top: 8px;
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.victory__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  margin-top: 20px;
+}
+
+/* The wide orange "Level N" (§2.5): column − 32 px, 64 px tall, a 24 px label. */
+.victory__primary.btn {
+  width: 100%;
+  min-height: 64px;
+  font-size: 1.5rem;
+}
+
+.victory__home {
+  margin-top: 8px;
+}
+
+/* ── Shop sheet (§8.5) ─────────────────────────────────────────────────── */
+.shop {
+  text-align: start;
+}
+
+.shop .overlay__head {
+  margin-bottom: 4px;
+}
+
+.shop__balance.fish-pill {
+  height: 36px;
+  margin-inline-end: 8px;
+  background: var(--page-2);
+  box-shadow: none;
+}
+
+.shop__balance .fish-pill__icon {
+  width: 28px;
+  height: 28px;
+}
+
+.shop__section {
+  margin-top: 12px;
+}
+
+.shop__heading {
+  margin-bottom: 4px;
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.shop__row {
+  display: flex;
+  align-items: center;
+  min-height: 64px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+
+.shop__icon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin-inline-end: 12px;
+  border-radius: 14px;
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+}
+
+.shop__icon .icon {
+  width: 28px;
+  height: 28px;
+}
+
+.shop__row[data-item='hint'] .shop__icon,
+.shop__row[data-item='hints_15'] .shop__icon {
+  background: var(--gold-soft);
+  color: var(--gold-deep);
+  --icon-fill: var(--gold);
+}
+
+.shop__row[data-item='fish_250'] .shop__icon,
+.shop__row[data-item='fish_900'] .shop__icon {
+  color: var(--ink);
+}
+
+.shop__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.shop__name {
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  font-size: var(--fs-l);
+}
+
+.shop__desc {
+  margin-top: 1px;
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+}
+
+.shop__action.btn {
+  flex: none;
+  min-height: 44px;
+  margin-inline-start: 10px;
+  padding: 0 14px;
+  font-size: var(--fs-m);
+}
+
+.shop__price {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px 2px 2px;
+  border-radius: var(--radius-pill);
+  background: var(--page-2);
+}
+
+.shop__price-icon {
+  width: 22px;
+  height: 22px;
+  color: var(--ink);
+}
+
+.shop__cost {
+  color: var(--accent-text);
+}
+
+.shop__owned {
+  flex: none;
+  margin-inline-start: 10px;
+  color: var(--accent-text);
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+}
+
+.shop__note,
+.shop__state {
+  margin-top: 6px;
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+}
+
+.shop__retry.btn {
+  margin-top: 10px;
+  margin-inline-start: 0;
+}
+
+/* ── Rankings hub (§5.5) ───────────────────────────────────────────────── */
+.rank-hub {
+  text-align: start;
+}
+
+.rank-hub__tabs {
+  display: flex;
+  margin: 2px 0 14px;
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--page-2);
+}
+
+.rank-hub__tab {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 8px;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink-2);
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  font-size: var(--fs-s);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.rank-hub__tab[aria-selected='true'] {
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: var(--shadow-1);
+}
+
+.rank-hub__panel {
+  outline: none;
+}
+
+.rank-hub__heading {
+  margin-bottom: 10px;
+  color: var(--ink);
+  font-size: var(--fs-l);
+}
+
+.rank-groups__body {
+  color: var(--ink-2);
+  line-height: 1.45;
+}
+
+.rank-groups__active {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-weight: 600;
+  font-size: var(--fs-s);
+}
+
+.rank-groups__start {
+  margin-top: 16px;
+}
+
+/* ── Group result (§5.6) ───────────────────────────────────────────────── */
+.group-result__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 12px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+}
+
+.group-result__icon .icon {
+  width: 40px;
+  height: 40px;
+}
+
+/* ── Settings: value on a link row, the language list (§6.8) ───────────── */
+.settings-row__value {
+  margin-inline-end: 6px;
+  color: var(--ink-2);
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: var(--fs-m);
+  white-space: nowrap;
+}
+
+.lang-list {
+  max-height: 60vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.lang-opt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 4px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  font-size: var(--fs-l);
+  text-align: start;
+  cursor: pointer;
+}
+
+.lang-list > .lang-opt:first-child {
+  border-top: 0;
+}
+
+.lang-opt__check {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-inline-start: 12px;
+  border: 2px solid var(--line-2);
+  border-radius: 50%;
+  transition: border-width 120ms ease;
+}
+
+.lang-opt[aria-checked='true'] .lang-opt__check {
+  border: 7px solid var(--accent);
+}
+
+.lang-opt:focus-visible {
+  border-radius: var(--radius-m);
+  outline-offset: -2px;
+}
+
+/* ── O2: the swap button (§2.8) ────────────────────────────────────────── */
+.rewarded__swap .btn__icon {
+  width: 1.6em;
+  height: 1.6em;
+}
+
+/* Short screens (compact, < 640 px high, 02 §19). */
+@media (max-height: 639px) {
+  .victory__praise {
+    font-size: 2rem;
+  }
+
+  .victory__stage,
+  .victory__art > svg {
+    width: 150px;
+    height: 150px;
+  }
+
+  .victory__rays {
+    width: 320px;
+    height: 320px;
+    margin: -160px 0 0 -160px;
+  }
+
+  .victory__actions {
+    margin-top: 14px;
+  }
+}
+
+/* Narrow phones (320–359 px). */
+@media (max-width: 359px) {
+  .rank-hub__tab {
+    padding: 0 6px;
+    font-size: var(--fs-xs);
+  }
+
+  .shop__icon {
+    width: 36px;
+    height: 36px;
+    margin-inline-end: 10px;
+  }
+
+  .shop__icon .icon {
+    width: 24px;
+    height: 24px;
+  }
+
+  .shop__action.btn {
+    padding: 0 10px;
+  }
+
+  .victory__praise {
+    font-size: 2rem;
+  }
+
+  .shop__name {
+    font-size: var(--fs-m);
+  }
+}

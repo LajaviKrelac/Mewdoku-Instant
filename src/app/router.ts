@@ -31,7 +31,6 @@ import type { RewardedPromptProps } from '../ui/overlays/rewarded-prompt';
 import type { SettingsProps } from '../ui/overlays/settings-modal';
 import { createLoadingIndicator, type LoadingIndicator } from '../ui/overlays/loading-indicator';
 import { createToastLayer, type ToastLayer } from '../ui/overlays/toast';
-import type { WinOverlayProps } from '../ui/overlays/win-overlay';
 import type { BootScreen } from '../ui/screens/boot-screen';
 import type { EventScreenCallbacks, EventScreenView } from '../ui/screens/event-screen';
 import { createGameScreen, type GameScreen, type GameScreenCallbacks, type GameView } from '../ui/screens/game-screen';
@@ -46,7 +45,6 @@ import type { OverlayId, ScreenId } from './store';
 export interface OverlayPropsMap {
   hint: HintCardProps;
   rewarded: RewardedPromptProps;
-  win: WinOverlayProps;
   fail: FailOverlayProps;
   settings: SettingsProps;
   how_to_play: HowToPlayProps;
@@ -151,7 +149,6 @@ export async function loadOverlayChunk(): Promise<Partial<OverlayFactories>> {
     coach: m.createCoach,
     hint: m.createHintCard,
     rewarded: m.createRewardedPrompt,
-    win: m.createWinOverlay,
     fail: m.createFailOverlay,
     settings: m.createSettingsModal,
     how_to_play: m.createHowToPlay,

@@ -33,12 +33,13 @@ describe('locale loader map (phase2b §6.7)', () => {
 });
 
 describe('lazy chunk names (phase2b §11)', () => {
-  it('names the locale, events and fb-social chunks for size-check; everything else keeps [name]', () => {
+  it('names the locale, events, fb-social and social-flows chunks for size-check; everything else keeps [name]', () => {
     expect(localeChunkName('/r/src/i18n/locales/zh-Hans.ts')).toBe('locale-zh-Hans');
     expect(localeChunkName('/r/src/i18n/en.ts')).toBeNull();
     expect(chunkFileName('/r/src/i18n/locales/pt-BR.ts')).toBe('assets/locale-pt-BR-[hash].js');
     expect(chunkFileName('/r/src/app/events-chunk.ts')).toBe('assets/events-[hash].js');
     expect(chunkFileName('C:\\r\\src\\platform\\fb\\fb-social.ts')).toBe('assets/fb-social-[hash].js');
+    expect(chunkFileName('/r/src/app/social-flows.ts')).toBe('assets/social-flows-[hash].js');
     expect(chunkFileName('/r/src/app/overlay-chunk.ts')).toBe('assets/[name]-[hash].js');
     expect(chunkFileName(null)).toBe('assets/[name]-[hash].js');
   });

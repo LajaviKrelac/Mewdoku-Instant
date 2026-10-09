@@ -6,7 +6,8 @@
 // data, else the personal records. Emits 'rank:result'. Also feeds the rankings hub and the event
 // screen's top list. C-internal module; the RankingProvider (D) and RankingPanelProps (B) are fixed.
 // platform.ranking is read at call time: the FB adapter adds it when its lazy chunk lands after start().
-import { canSubmit, decodeScore, boardFormat } from '../game/scoring';
+import { canSubmit, dayIndex, decodeScore, boardFormat } from '../game/scoring';
+import { localDateKey } from '../game/progression';
 import type { BoardKey, SaveData } from '../game/types';
 import type { PlatformAdapter, RankingCaps, RankingProvider, RankListView } from '../platform/types';
 import type { PersonalRecordsView, RankingListState, RankMineView, RankScoreView } from '../ui/overlays/ranking-panel';
@@ -34,21 +35,29 @@ export interface ListContext {
   readonly myScore: RankScoreView | null;
   /** Event boards: the puzzle count (decoded rows say "13 of 21"). */
   readonly eventTotal?: number;
+  /** daily_fastest: the day shown (date key); my entry counts only when it is that day's (§5.3). */
+  readonly day?: string;
 }
 
 export interface RankingFlow {
   /** Submit (or queue) a board score; never rejects. */
   submit(board: BoardKey, score: number, solveMs: number): Promise<void>;
-  /** Retry rank.pending (boot, next win). Never rejects. */
-  flushPending(): Promise<void>;
+  /**
+   * Retry rank.pending (boot, next win). `except`: a board whose score was just submitted (a score it
+   * queued under the rate limit waits for the next win or boot). Never rejects.
+   */
+  flushPending(opts?: { readonly except?: BoardKey }): Promise<void>;
   /** mine + top for a board within rank.fetchTimeoutMs; 'local' without a provider. Never rejects. */
   fetch(board: BoardKey): Promise<RankResult>;
   /** The list state for a fetched result (never padded). */
   listState(result: RankResult, ctx: ListContext): RankingListState;
   /** Milliseconds the last fetch of `board` took (rank_panel analytics), or null. */
   fetchMs(board: BoardKey): number | null;
-  /** Opens the FB overlay list (in `rect` when the provider can place it). Resolves false when it cannot. */
-  showList(board: BoardKey, title: string, rect?: DOMRect, eventTotal?: number): Promise<boolean>;
+  /**
+   * Opens the FB overlay list (in `rect` when the provider can place it). Resolves false when it cannot.
+   * `day` (daily_fastest only, default today): the list keeps that day's entries alone (§5.3).
+   */
+  showList(board: BoardKey, title: string, rect?: DOMRect, eventTotal?: number, day?: string): Promise<boolean>;
   /** Closes an open overlay list (the panel or hub closed). */
   closeList(): void;
   /** The provider's caps, or null without a provider (web). */
@@ -56,6 +65,19 @@ export interface RankingFlow {
 }
 
 const TIMEOUT = Symbol('timeout');
+
+/**
+ * daily_fastest is one board for every day (§5.3): readers keep only the entries of the day shown.
+ * Undefined for every other board (nothing to filter).
+ */
+export function dayFilter(board: BoardKey, day: string, c: GameConfig = cfg): ((score: number) => boolean) | undefined {
+  if (board !== c.rank.boards.daily) return undefined;
+  const shown = dayIndex(day, c);
+  return (score) => {
+    const d = decodeScore(board, score, c);
+    return d.kind === 'time' && d.dayIndex === shown;
+  };
+}
 
 /** A decoded board score in the panel's terms. */
 export function scoreView(board: BoardKey, score: number, eventTotal: number | undefined, c: GameConfig = cfg): RankScoreView {
@@ -166,7 +188,7 @@ export function createRankingFlow(deps: RankingFlowDeps): RankingFlow {
         bus.emit('error', { where: 'rank_submit', error });
       }
     },
-    async flushPending() {
+    async flushPending(opts) {
       const p = provider();
       if (!p) return;
       try {
@@ -175,7 +197,7 @@ export function createRankingFlow(deps: RankingFlowDeps): RankingFlow {
         const pending = deps.save().rank.pending;
         for (const board of Object.keys(pending) as BoardKey[]) {
           const score = pending[board];
-          if (score === undefined || unsupported.has(board)) continue;
+          if (score === undefined || unsupported.has(board) || board === opts?.except) continue;
           await send(p, board, score);
         }
       } catch (error) {
@@ -210,7 +232,9 @@ export function createRankingFlow(deps: RankingFlowDeps): RankingFlow {
       const p = provider();
       const caps = p ? capsOf(p) : null;
       if (!caps) return { kind: 'records', records: ctx.records, reason: 'local' };
-      const me = result.mine;
+      // daily_fastest: an entry of another day says nothing about the day shown (§5.3).
+      const keep = ctx.day === undefined ? undefined : dayFilter(result.board, ctx.day, c);
+      const me = result.mine && (!keep || keep(result.mine.score)) ? result.mine : null;
       const mine: RankMineView = {
         rank: caps.myRank && me ? me.rank : null,
         // The provider's own entry for me, else my own score as I know it locally ("Your score"), never a guess.
@@ -222,19 +246,21 @@ export function createRankingFlow(deps: RankingFlowDeps): RankingFlow {
       return { kind: 'mine', mine };
     },
     fetchMs: (board) => lastMs.get(board) ?? null,
-    async showList(board, title, rect, eventTotal) {
+    async showList(board, title, rect, eventTotal, day) {
       flow.closeList();
       const mine = ++listGen;
       const p = provider();
       const caps = p ? capsOf(p) : null;
       if (!p || !caps || !caps.overlay) return false;
-      const view: RankListView = {
+      const view: { -readonly [K in keyof RankListView]: RankListView[K] } = {
         title,
         scoreFormat: boardFormat(board, c),
         highlightMe: caps.myRank,
         count: c.rank.topCount,
         formatScore: (score) => formatBoardScore(board, score, eventTotal, c),
       };
+      const keep = dayFilter(board, day ?? localDateKey(clock.now()), c);
+      if (keep) view.keep = keep;
       try {
         const h = await p.showList(board, view, rect && caps.overlayInRect ? rect : undefined);
         if (!h) return false;

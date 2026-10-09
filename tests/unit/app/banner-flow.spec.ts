@@ -11,7 +11,7 @@ import { createStore, initialAppState, type AppState } from '../../../src/app/st
 import { defaults } from '../../../src/game/save';
 import type { SaveData } from '../../../src/game/types';
 import type { AdResult } from '../../../src/platform/types';
-import { createFakePlatform, createHarness, NOW, startLevel, winGame, type FakePlatform } from './harness';
+import { createFakePlatform, createHarness, NOW, startLevel, winGame, type FakePlatform, tapRanking } from './harness';
 
 const veteran = (s: SaveData): SaveData => ({ ...s, progress: { level: 15, completed: 14, best: {} } });
 
@@ -176,8 +176,7 @@ describe('banners in the session (§3.2)', () => {
     winGame(h);
     await h.settle(h.config.fx.winOverlayDelayMs);
     expect(h.store.get().ui.bannerReserved).toBe(false); // not on the ranking panel
-    h.router.props.ranking?.onContinue();
-    await h.settle(0);
+    await tapRanking(h);
     expect(h.router.props.victory?.bannerReserved).toBe(true);
     expect(h.log.filter((l) => l.startsWith('banner'))).toEqual(['banner:show']);
     h.log.length = 0;

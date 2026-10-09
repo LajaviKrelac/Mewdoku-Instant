@@ -1,6 +1,6 @@
 # Phase 2b contracts: ownership, cross-workstream APIs, data flow, conventions
 
-Status: written by the F0 foundation step · Date: 2026-10-08 · Applies to: workstreams A–E of [parity-spec](parity-spec.md) §12 · Branch `claude/mewdoku-instant`
+Status: written by the F0 foundation step (2026-10-08); **updated at integration (2026-10-09) to the final APIs: §11 lists every change since F0** · Applies to: workstreams A–E of [parity-spec](parity-spec.md) §12 · Branch `claude/mewdoku-instant`
 
 This file is the contract between the five Phase 2b workstreams. It extends [Phase 2 CONTRACTS](../phase2/CONTRACTS.md); where the two differ, this file wins for 2b.
 
@@ -9,7 +9,7 @@ This file is the contract between the five Phase 2b workstreams. It extends [Pha
 - **Config is frozen after F0.** Every §10 key exists with the spec's value (§7.2). To change a value or add a key, ask the lead.
 - Behaviour is in [parity-spec](parity-spec.md); the Phase 2 architecture is [04](../phase1/04-architecture.md).
 
-F0 left the game working as in Phase 2, with the §10 values switched on (§9 lists what a player now sees differently). Gates at the end of F0: `npx tsc --noEmit` 0 errors, `npx vitest run` 76 files and 1 186 tests green, and `npm run build`, `build:fbig`, `build:e2e`, `build:fbig-e2e` and `build:release` succeed with no warnings (§10). Playwright, all four projects: 48 passed and 5 skipped by design, the same as at the end of Phase 2.
+F0 left the game working as in Phase 2, with the §10 values switched on (§9 lists what a player now sees differently). The tables in §3–§8 describe F0; where the built API differs, §11 (integration) wins, and every stub of §8 is now implemented. Gates at the end of F0: `npx tsc --noEmit` 0 errors, `npx vitest run` 76 files and 1 186 tests green, and `npm run build`, `build:fbig`, `build:e2e`, `build:fbig-e2e` and `build:release` succeed with no warnings (§10). Playwright, all four projects: 48 passed and 5 skipped by design, the same as at the end of Phase 2.
 
 ## 1. File ownership (disjoint)
 
@@ -72,9 +72,9 @@ Unchanged and worth repeating:
 
 | API | Where | Status |
 |---|---|---|
-| `icon(id)` with `icon-fish`, `icon-plus`, `icon-shop`, `icon-globe`, `icon-crown`, `icon-users`, `cat-ear-flick`, `acc-lantern`, `acc-scarf`, `acc-yarn` | `ui/art/sprite.ts` | **placeholder art in place** (a fish is an ellipse plus a triangle, an accessory a circle); A replaces each in place under the same id |
+| `icon(id)` with `icon-fish`, `icon-plus`, `icon-shop`, `icon-globe`, `icon-crown`, `icon-users`, `cat-ear-flick`, `acc-lantern`, `acc-scarf`, `acc-yarn` | `ui/art/sprite.ts` | **final art (A)**; the `acc-*` symbols moved to the lazy `ui/art/accessories.ts` (`mountAccessories()`, re-exported by `event-art.ts`), added to the sprite when the events chunk loads |
 | `illustration(kind)`, `mascotIllustration(kind)` | `ui/art/illustrations.ts`, `mascot.ts` | unchanged signatures; today's art is the interim until Tux lands; the Home mascot animates itself (§2.9) |
-| `eventArt(def, 'card' \| 'header'): HTMLElement`, `eventPatternUrl(art)` | `ui/art/event-art.ts` (lazy `events` chunk) | `eventArt` returns a placeholder element; `eventPatternUrl` is a stub |
+| `eventArt(def, 'card' \| 'header'): HTMLElement`, `eventPatternUrl(art)` | `ui/art/event-art.ts` (lazy `events` chunk) | **implemented (A)**; the Home card gets it through `HomeEventCardView.art` once the chunk has loaded (§11) |
 | `xEdgeColor(paletteIndex, c?)` | `ui/art/palette.ts` | **implemented** (`mixHex(tile, TOKENS.ink, layout.markEdgeMix)`) |
 | `evenInsets(n, slotPx, c?): CellInsets[]` | `ui/board/layout.ts` | **implemented**; `board-view` uses it and re-applies it when the slot crosses `layout.insetSmallBelowSlot`. `regionInsets` is `@deprecated`; A deletes it (and its test) |
 | `buildCell(…)` DOM: `span.cell__glow` (every cell, between tile and SVG) and `use.cell__ear` (`href="#cat-ear-flick"`, in each cat group after the blink lid) | `ui/board/board-cells.ts`, `styles/board.css` | **nodes in place, invisible**: `.cell__glow` opacity 0 and size 0, `.cell__ear` shown only under `.cell.is-flick`. A styles the glow (radial `--glow`, `fx.win.glowScale` × slot) and adds the X edge underlay `.cell__xe` and `--xe` |
@@ -110,7 +110,7 @@ C → B: `selectHomeView` (now fills `fish`, `bannerReserved`; `event: null` unt
 
 ### 4.4 D → C
 
-`platform.ads.banner?` (`show('bottom'): Promise<AdResult>`, `hide()`), `platform.ranking?`, `platform.groups?`, `platform.payments?` and `capabilities()` (`banner`, `leaderboards` = `ranking.caps().global`, `overlayViews`, `groups`, `payments`). All of them never reject.
+`platform.ads.banner?` (`show('bottom'): Promise<AdResult>`, `hide()`), `platform.ranking?`, `platform.groups?`, `platform.payments?` and `capabilities()` (`banner`, `leaderboards` = `ranking.caps().global`, `overlayViews`, `groups`, `payments`). All of them never reject. As built (D): `RankingProvider.showList` resolves `{ close(): void; readonly closed?: Promise<void> } | null`; `caps().global` (so `capabilities().leaderboards`) also needs at least one board id in `VITE_FB_LEADERBOARDS`; on FB `platform.ranking` is always defined and `platform.groups` / `platform.payments` are getters (the social code lands lazily after `start()`). Integration adds `RankListView.keep?(score)` (§11).
 
 `RankListView.formatScore(score)` is supplied **by C**: C decodes with `game/scoring.ts` and formats with i18n. D renders rows `{ id, rankText, scoreText, isMe }` (`fb/views/rank-list.ts`) only from entries the API returned.
 
@@ -121,9 +121,10 @@ D's stubs: `bannerSupported`, `createFbBanner` (main bundle); `probeRankingApi`,
 From `src/i18n` (index):
 
 - unchanged: `t`, `translate`, `tn`, `formatShortDate`, `formatClock`, `formatDuration`;
-- **`setLocale(id): Promise<string>`** (was synchronous; boot is the only caller);
+- **`setLocale(input: string | readonly string[], opts?: SetLocaleOptions): Promise<LocaleId>`** (was synchronous; boot and Settings → Language are the callers; `opts.override` is the saved choice, `opts.doc` the document whose `lang`/`dir` it sets);
 - `getLocale()`, `getDir(): 'ltr' | 'rtl'`, `onLocaleChanged(cb): unsubscribe`, `buildLocales(): readonly LocaleId[]` (the locales this build contains, for the Language row);
-- `formatNumber(n)` (Latin digits).
+- `formatNumber(n)` (Latin digits);
+- as built (E, additive): `prefetchLocale(id)`, `prefetchGuess(nav?)`, `localeName(id)`, `stripIsolates(s)`; re-exports `resolveLocale`, `guessLocale`, `normalizeTag`, `isLocaleId`, `localeCandidates`; types `PluralExtraKey`, `LocaleCatalog` (accepts extra plural forms); `LOCALE_NAMES` in `en/i18n.ts`; `formatShortDateFor` returns `string | null`; `tn()` formats `{count}` with `formatNumber`.
 
 F0 implemented minimal working versions of these, so A–D can call them today. E replaces the internals: `locale.ts` resolution, `plural.ts` with Intl.PluralRules in `tn`, `format.ts`, bidi isolation, and chunk loading in `setLocale`. The signatures stay.
 
@@ -150,15 +151,18 @@ The B, D and E calls these modules make are fixed (§4.3–4.5); their own deps 
 ```
 WON ─► session.onWon ─► winBookkeeping: applyLevelWin + fish (economy) + points (scoring) [+ applyEventWin]
        └► saves.critical()                          rewards are saved BEFORE any animation (t = 0)
-       └► ranking-flow: submit(board, score) → rank.pending on failure; fetch mine + top (≤ rank.fetchTimeoutMs)
+       └► ranking-flow: submit(board, score) FIRST → rank.pending on failure; then fetch mine + top (≤ rank.fetchTimeoutMs);
+          flushPending({ except: board }) once the submit settled
        └► win-flow.start({ screen, catCells, fishSources, fishBefore, fishBase, fishBonus, reduced })
             300   screen.glow(catCells)                         (B: playGlow on .cell__glow)
             1000  screen.showFishPill(fishBefore)               (B: PillsView, centred, no "+")
-            1200  flyFish(ensureFxLayer(root), rects, screen.fishRect(), { onArrive })
+            0     GameView.chromeLocked = true (Home and Gear aria-disabled; win-flow onBlockingChange)
+            1200  flyFish(ensureFxLayer(root), rects, screen.fishRect(), { onArrive, onPop })
+                    onPop(i)    → sfx 'fish_pop' {index: i}
                     onArrive(i) → screen.showFishPill(n+1) + sfx 'fish_plink' {index: i} + haptics.fish
             2550  screen.fishLabel('+3')   2900  fishLabel('+2') + showFishPill(total)   (bonus only)
-            4200  scrim     4500  router.open('ranking', props from ranking-flow's RankResult)
-            tap ≥ rank.panelTapMinMs → close 'ranking' → router.open('victory', selectVictoryView…)
+            4200  screen.showScrim()      4500  router.open('ranking', …); chromeLocked = false
+            tap ≥ rank.panelTapMinMs → the panel fades (.is-leaving, rank.panelOutMs) → router.open('victory', …), close 'ranking'
             "Level N" → interstitial gate (trigger by mode) → next session → transition 'to_game' → board entry → START at playEntry()
        teardown (Home, overlay:failed, dispose): win-flow.cancel() — rewards already saved
 ```
@@ -198,6 +202,8 @@ The boot restore replays the same order (tokens already in the ledger are only c
 | `assets/overlay-chunk-*.js` | `src/app/overlay-chunk.ts` | as in Phase 2; now also ranking, victory, shop, rank hub, group result |
 | `assets/events-*.js` | `src/app/events-chunk.ts` (event screen + event art) | when an event is active or teased (C's `event-flow.preload()`) |
 | `assets/fb-social-*.js` | `src/platform/fb/fb-social.ts` | by D's `fb/index.ts` after `start()`, never blocking the first route |
+| `assets/social-flows-*.js` | `src/app/social-flows.ts` (rankings hub, event top list, group flows) | by `boot.ts` on first use (C; named explicitly at integration) |
+| `assets/overlay-chunk-*.css`, `assets/events-chunk-*.css` | `src/styles/overlay-chunk.css`, `events-chunk.css`, imported by the two barrels | with their chunk (Vite `cssCodeSplit`, integration) |
 | `assets/locale-<id>-*.js` | `src/i18n/locales/<id>.ts` through `virtual:mewdoku-locales` | by `setLocale` (E) |
 
 Chunk names come from `chunkFileName()` in `scripts/locale-loaders.ts`, so `size-check` (D) can budget them by name.
@@ -286,9 +292,9 @@ Every §10 key and changed value is in place. `layout.insetSamePx` and `insetDif
 - **Save v2 (C).**
   - Done: `SAVE_VERSION` 2, v2 `defaults()`, `migrate_1_to_2` exactly per §9.2, and validation of every new field (ranges, id and ledger patterns, dedupe, caps).
   - Done: the §9.3 merge rows (wallet newer; points max; events by more solved, then smaller ms; groups union with max; `noAds` OR; ledger union, newest 50; `rank.pending` newer; event slot newer) and clearing an event slot below `events[id].solved`.
-  - **Left to C:** the paid-grant repair (needs `applyPurchase`) and clearing an event slot whose event has ended.
+  - **Left to C (done in 2b):** the paid-grant repair (needs `applyPurchase`) and clearing an event slot whose event has ended.
   - Tests: `save.spec.ts` has 10 new cases.
-- **Event mode (C).** Registered in `MODES` (slot `event`, `winFlow: 'event'`, gate `event_next`, HUD title `event`); `restoreGame` and slot validation accept `E…` ids. `winBookkeeping` throws for event wins; this is unreachable until C's event-flow starts event sessions.
+- **Event mode (C).** Registered in `MODES` (slot `event`, `winFlow: 'event'`, gate `event_next`, HUD title `event`); `restoreGame` and slot validation accept `E…` ids. F0's `winBookkeeping` threw for event wins; C implemented them.
 - **i18n (E).** `setLocale` is async but keeps the Phase 2 lookup, and boot calls it without awaiting, so the boot timing is unchanged. `getDir`, `onLocaleChanged`, `buildLocales` and `formatNumber` work.
 - **Board (B/A).** `evenInsets` replaces the region-aware insets in `board-view`. `.cell__glow` and `.cell__ear` nodes and their hiding CSS are in place.
 - **Top bar (A).** The lead slot is implemented.
@@ -341,3 +347,60 @@ New lead tests:
 
 - `tests/unit/build-config.spec.ts`: locale lists per mode, the generated module, chunk names;
 - `tests/unit/sanity.spec.ts`: banned phrases over every catalogue, the per-owner key split, the Appendix A values.
+
+## 11. Integration (2026-10-09): the final APIs and what changed since F0
+
+Every F0 stub of §8 is implemented. This section lists each signature or behaviour that differs from §3–§8, by producer. All are additive unless marked **changed** or **removed**.
+
+### 11.1 C (logic, app)
+
+| What | As built |
+|---|---|
+| `EventDef.gen` | optional `{ sizes, band }` in `events.json`; `gen-events.ts` and the runtime substitute build each puzzle from it |
+| `game/events.ts` | + `EventPack`, `eventSizeSchedule`, `eventSpec`, `usableEventDefs` (the light runtime check; the full validator runs only in tests and scripts), `clearEndedEventSlot` |
+| Event packs | `src/data/events/<id>.json`, named by `events.json`, not in the read-only levels manifest; `verify-levels` finds them through `events.json`; records carry `i = index + 1` |
+| `PuzzleSource` | + `'event_pack'` |
+| `SessionRequest` | + `{ mode: 'event', eventId, index }`; `SessionMeta.event?` |
+| `SessionDeps` | 2b fields (`events`, `goEvent`, `rankings`, `groups`, `banners`, `openShop`, `root`, `winFx`); integration: `events.preload?()`, called when an event board mounts (its accessories live in the events chunk) |
+| `Router` | + `showEvent(view, cb)`; `RouterFactories.screenTransition`, `loadEventScreen`, `eventScreen` |
+| `GateDecision` | + `'no_ads'` |
+| `E2EHooks` | + `solve()` |
+| New modules | `rank-hub-flow.ts`, `social-flows.ts` (lazy chunk `social-flows`) |
+| `win-flow.ts` | `WinFlowDeps.onBlockingChange?(blocking)`; the timeline has a `scrim` step at `fx.win.scrimAtMs` (not with reduced motion, not for the tutorial variants) calling `GameScreen.showScrim?()`; fish pops play `fish_pop` from `FlyFishOptions.onPop` while B's flight runs (the flow's own pop steps only without a flight); **changed:** `continueFromRanking()` opens the victory `rank.panelOutMs` later (the panel's fade-out), as a step on the flow clock (teardown cancels it, a hidden page catches it up) |
+| `views.ts` | `ViewContext.chromeLocked?` → `GameView.chromeLocked`; `ViewContext.eventArt?` → `HomeEventCardView.art` |
+| `ranking-flow.ts` | **changed:** `flushPending(opts?: { except?: BoardKey })`; `showList(board, title, rect?, eventTotal?, day?)`; `ListContext.day?`; new `dayFilter(board, day)` (daily_fastest keeps only the shown day, spec §5.3) |
+| Session order at `WON` | **changed:** `submit` starts before `fetch` (spec §5.5 steps 2 then 3); older queued scores are flushed after it, except the same board's |
+| `OverlayId` | **removed:** `'win'` (the Phase 2 O3 win overlay, replaced by the victory screen; `win-overlay.ts`, `fx/confetti.ts`, their CSS and `fx.confettiMs` / `fx.confettiCount` are gone). O7 `daily_result` stays for reopening a solved daily from Home |
+| Fish | bought fish (IAP) do not count toward `wallet.earned` |
+
+### 11.2 B (animation, screens)
+
+All optional, so existing callers compile: `FlyFishOptions.onPop`, `GameScreen.showScrim?()`, `GameView.chromeLocked?`, `PillsProps.reducedMotion?`, `HomeEventCardView.art?`, `BoardViewOptions.random?`. One required member: `BoardView.setAccessory(acc)`. The rankings hub's event tab reads "Event" (`rank.tab.event`).
+
+### 11.3 D (platform)
+
+| What | As built |
+|---|---|
+| `RankingProvider.showList` | resolves `{ close(): void; readonly closed?: Promise<void> } \| null` |
+| `RankListView.keep?(score)` | integration: entries the list may show (daily_fastest: the shown day only); fewer rows, never padded; my pinned row only when kept |
+| New main-bundle modules | `fb/fb-probe.ts` (probes, `parseLeaderboardMap`), `fb/fb-social-glue.ts` (facades over the lazy chunk, so `capabilities()` is final after `init()`) |
+| Ranking reads | wait for an in-flight submit on the same board (read after write) |
+| `size-check.ts` | integration: CSS row = the stylesheet `index.html` links; new rows "First load (gzip)", "Lazy CSS"; `social-flows` counts as optional lazy JS; ceilings in 04 §9 |
+| `zip-fbig.ts` | production zip from `dist/release-fbig` (locale guard); `--preview` for `dist/fbig`; e2e builds refused; hard 1 MB on the zip's bytes, warning above 750 KB |
+
+### 11.4 E (i18n)
+
+See §4.5 ("as built"). `?i18n=pseudo` (dev and e2e builds only) applies the `xx-long` pseudo-locale over the active catalogue; it is a URL switch, not a `LocaleId`.
+
+### 11.5 A (art)
+
+Tokens added beyond the spec's §1.4 table: `--board-card`, `--glow-0`, `--page-rgb`, `--scrim-rgb`, `--accent-shadow-rgb`, `--fs-btn`, `--font-num`, `--display-weight`, `--stage-off`, `--stage-off-edge`, `--card-off`, `--gold-soft`, `--heart-empty-line`, `--side-dot-a`, `--side-dot-b`, `--banner-reserve`; `--gold-deep` is `#DD9A12`. Display-face text uses `var(--display-weight)` (600 Latin, 700 system-font scripts) and digits `.num` / `var(--font-num)`. The X edge draws in with `--x-draw-ms` / `--x-draw-gap`, shared with B's X draw-in.
+
+### 11.6 Lead (build, styles)
+
+- **CSS code splitting** (`vite.config.ts` `cssCodeSplit: true`). `src/styles/overlay-chunk.css` (imported by `app/overlay-chunk.ts`) holds every rule that styles a lazy overlay; `src/styles/events-chunk.css` (imported by `app/events-chunk.ts`) the event screen and the event art. The rules moved unchanged and in source order; a lazy stylesheet loads after the main one, so the reduced-motion and media-query rules that override moved rules moved with them. Rule for new CSS: style a lazy-only element in its chunk's stylesheet; a rule in a main stylesheet that must win over a lazy rule needs a higher specificity, not a later position.
+- `chunkFileName` names `social-flows-*.js`.
+- Physical spacing in A's and B's stylesheets is logical now (E's list); `i18n.css` keeps only the absolute offsets (`inset-inline-*` needs iOS 14.1) and the forced-LTR `.boot__pct`.
+- Favicon and `theme-color` use the Classic colours (`#E57010`, `#FFF4E6`; `theme-color` = `--page` `#FAF6F0`); `css-rules.spec.ts` guards the page shell too.
+- `tests/unit/sanity.spec.ts` imports `BANNED_PHRASES` from `scripts/i18n-check.ts` (one list).
+- `package.json`: `release:fbig` = verify → `build:release` → `size -- dist/release-fbig` → `zip:fbig`; new `zip:fbig:preview`.

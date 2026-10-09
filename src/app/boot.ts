@@ -365,7 +365,7 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
     sessionStartedAt,
     goHome: () => shell.showHome(),
     openSettings: () => shell.openSettings(),
-    events: { byId: (id) => events.byId(id) },
+    events: { byId: (id) => events.byId(id), preload: () => events.preload() },
     goEvent: (def) => void shell.showEvent(def),
     rankings,
     groups,

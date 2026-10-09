@@ -10,6 +10,8 @@ import '../src/styles/board.css';
 import '../src/styles/hud.css';
 import '../src/styles/overlays.css';
 import '../src/styles/fx.css';
+// 2b integration: the overlays' rules load with the lazy overlay chunk in the app.
+import '../src/styles/overlay-chunk.css';
 import { cfg } from '../src/app/config';
 import { recordToPuzzle } from '../src/engine/codec';
 import { getHintStep } from '../src/engine/hint';
@@ -24,7 +26,6 @@ import { icon, mountSprite, type SymbolId } from '../src/ui/art/sprite';
 import { createBoardView, type BoardModel, type CatMood } from '../src/ui/board/board-view';
 import { computeLayout, readViewport } from '../src/ui/board/layout';
 import { createAnnouncer } from '../src/ui/a11y/announcer';
-import { burstConfetti } from '../src/ui/fx/confetti';
 import { applyMotion } from '../src/ui/fx/motion';
 import { createPills } from '../src/ui/hud/pills';
 import { createRuleChips } from '../src/ui/hud/rule-chips';
@@ -89,7 +90,6 @@ function gameScene(): void {
       board.playEvent(ev);
       pills.playEvent(ev);
       if (ev.type === 'CAT_PLACED') announcer.say(t('a11y.catPlaced', { placed: state.catsPlaced, n }));
-      if (ev.type === 'WON') setTimeout(() => burstConfetti(document.body), cfg.fx.winOverlayDelayMs);
     }
   };
 

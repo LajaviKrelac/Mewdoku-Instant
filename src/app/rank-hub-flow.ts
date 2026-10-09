@@ -56,8 +56,10 @@ export function createRankHubFlow(deps: RankHubFlowDeps): RankHubFlow {
     let n = 0;
     let thisMs = 0;
     let myScore: RankScoreView | null = null;
+    let day: string | null = null;
     if (tab === 'daily') {
       const today = localDateKey(clock.now());
+      day = today;
       n = dailySlotFor(today).n;
       const rec = save.daily[today];
       thisMs = rec ? rec[0] : 0;
@@ -74,7 +76,7 @@ export function createRankHubFlow(deps: RankHubFlowDeps): RankHubFlow {
       myScore = { kind: 'points', points: save.points.total };
     }
     const records = personalRecords(state, ctx, { board: kindOf(tab), n, thisMs, event: tab === 'event' ? ev : null });
-    return { records, myScore, ...(ev && tab === 'event' ? { eventTotal: ev.puzzles.count } : {}) };
+    return { records, myScore, ...(ev && tab === 'event' ? { eventTotal: ev.puzzles.count } : {}), ...(day ? { day } : {}) };
   }
 
   const titleOf = (tab: Exclude<RankHubTab, 'groups'>, ev: EventDef | null): string =>

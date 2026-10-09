@@ -300,6 +300,26 @@ describe('createFbRanking: overlay list (showList)', () => {
     expect(rows.slice(0, 10).every((r) => r.kind === 'other')).toBe(true);
   });
 
+  it('RankListView.keep (daily_fastest: the shown day only) drops the other rows, and my pinned row when it is of another day', async () => {
+    // Scores 1 … 3 (×100 000 + secs) stand for three days; the list shows day 3.
+    const day = (d: number, secs: number): number => d * 100_000 + (99_999 - secs);
+    const entries = [
+      { playerId: 'p1', score: day(3, 100) },
+      { playerId: 'p2', score: day(3, 200) },
+      { playerId: 'p3', score: day(2, 10) },
+    ];
+    const keep = (score: number): boolean => Math.floor(score / 100_000) === 3;
+    const view: RankListView = { ...VIEW, title: 'Today', scoreFormat: 'time', keep };
+    const { ranking, control } = await setup({ leaderboards: { entries: { df: entries } } });
+    await ranking.submit('daily_fastest', day(1, 50)); // my entry is of day 1: never "mine" on day 3's list
+    await ranking.showList('daily_fastest', view);
+    expect(overlayData(control).rows.map((r) => r.id)).toEqual(['p1', 'p2']); // fewer rows, never padded
+    const again = await setup({ leaderboards: { entries: { df: entries } } });
+    await again.ranking.submit('daily_fastest', day(3, 150));
+    await again.ranking.showList('daily_fastest', view);
+    expect(overlayData(again.control).rows.map((r) => `${r.id}:${r.kind}`)).toEqual(['p1:other', 'me:mine', 'p2:other']);
+  });
+
   it('an empty board shows the honest empty state, no rows', async () => {
     const { ranking, control } = await setup();
     await ranking.showList('paw_points', { ...VIEW, highlightMe: false });

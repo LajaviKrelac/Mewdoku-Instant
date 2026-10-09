@@ -125,7 +125,7 @@ Everything below except the [05: confirmed] rows is **unverified**. "If wrong" s
 |---|---|---|
 | **Production** (only `i18n.releaseLocales`, default English) | `npm run build:release`, then `npm run zip:fbig` | `dist-zip/<name>-fbig-<version>-<sha>.zip` from `dist/release-fbig`. The zip is refused if the build holds any locale chunk outside `i18n.releaseLocales`, or the e2e test hooks. |
 | Preview on FB (all 17 locales) | `npm run build:fbig`, then `npm run zip:fbig -- --preview` | `dist-zip/<name>-fbig-preview-<version>-<sha>.zip` from `dist/fbig`. Never picked by `upload:fbig` unless `--preview` is passed. |
-| Budgets | `npm run size` (dist/web, dist/fbig, dist/release-web, dist/release-fbig when present) | §11 ceilings: main JS 210 KB, CSS 53 KB, first load 280 KB (305 KB with one locale chunk), core lazy JS 62 KB, optional lazy JS (events + fb-social) 25 KB, each locale chunk 24 KB, FB files 100 (platform cap 500), zip 750 KB (warns; 1 MB refused). |
+| Budgets | `npm run size` (dist/web, dist/fbig, dist/release-web, dist/release-fbig when present) | The 2b integration ceilings in [04 §9](../phase1/04-architecture.md) (measured + about 3 %, 2026-10-09): main JS 266 KB, first-load CSS 43.5 KB, first load 327 KB (351 KB with one locale chunk; 121.5 KB gzipped), core lazy JS 68 KB, optional lazy JS (events + fb-social + social-flows) 28.5 KB, lazy CSS 28.5 KB, each locale chunk 28 KB, FB files 100 (platform cap 500); zip 750 KB warns, over 1 MB refused. |
 
 ## 8. Phase 4 checklist (dashboard side)
 

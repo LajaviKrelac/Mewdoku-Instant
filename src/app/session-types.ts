@@ -94,8 +94,12 @@ export interface SessionDeps {
   pickPraise?(): number;
   readonly config?: GameConfig;
   // ── phase2b (all optional: absent = the feature is off in this session) ──
-  /** Bundled event defs by id (event sessions, §4.4). */
-  readonly events?: { byId(id: string): EventDef | null };
+  /**
+   * Bundled event defs by id (event sessions, §4.4), and the lazy `events` chunk's loader: an event
+   * board's cats wear the event accessory, whose symbols that chunk adds to the sprite, so an event
+   * session starts loading it (a restored board can mount before the event screen ever loaded it).
+   */
+  readonly events?: { byId(id: string): EventDef | null; preload?(): Promise<unknown> };
   /** Back to the event screen ("Back to event" after the last puzzle, §4.5). */
   goEvent?(def: EventDef): void;
   /** Post-win ranking (§5.5): submit, fetch, list state. Absent = personal records only. */

@@ -53,7 +53,7 @@ function setup(extra: Partial<RouterFactories> = {}, deps: { reducedMotion?: () 
     overlays.set(id, o);
     return o as never;
   };
-  const ids: OverlayId[] = ['hint', 'rewarded', 'win', 'fail', 'settings', 'how_to_play', 'daily_result', 'coach'];
+  const ids: OverlayId[] = ['hint', 'rewarded', 'fail', 'settings', 'how_to_play', 'daily_result', 'coach'];
   const ovf = Object.fromEntries(ids.map((id) => [id, factory(id, id !== 'coach')])) as unknown as OverlayFactories;
   const traps: string[] = [];
   const inert = new Map<HTMLElement, boolean>();
@@ -315,11 +315,11 @@ describe('router: lazy overlay chunk (04 §9)', () => {
   it('a failed chunk load tells the app which queued overlays failed, after closing them (RP-2)', async () => {
     const s = lazySetup();
     const failed: string[] = [];
-    s.router.open('win', {} as never);
+    s.router.open('fail', {} as never);
     s.router.open('settings', {} as never);
     s.onFailed((id) => failed.push(`${id}:${s.router.isOpen(id as OverlayId) ? 'open' : 'closed'}`));
     await s.fail();
-    expect(failed).toEqual(['win:closed', 'settings:closed']);
+    expect(failed).toEqual(['fail:closed', 'settings:closed']);
     expect(s.router.stack()).toEqual([]);
   });
 
@@ -369,7 +369,6 @@ describe('router: lazy overlay chunk (04 §9)', () => {
       'settings',
       'shop',
       'victory',
-      'win',
     ]);
   });
 

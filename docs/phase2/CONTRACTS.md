@@ -2,6 +2,8 @@
 
 Status: written by the Foundation step · Date: 2026-10-07 · Applies to: the six parallel Phase 2 workstreams
 
+> **Phase 2b:** [docs/phase2b/CONTRACTS.md](../phase2b/CONTRACTS.md) extends this file and wins where the two differ (ownership A–E, the 2b cross-workstream APIs, and in its §11 the final APIs at integration, 2026-10-09).
+
 This file is the contract between workstreams. The TypeScript stubs in `src/**` and `scripts/*.ts` are the authoritative signatures: every exported function, class and interface already exists with its final parameter and return types, and each stub body throws `not implemented: <name>`. Implement the bodies; **do not change a signature that another workstream calls** without asking the lead. Behaviour is specified in [02](../phase1/02-rebuild-spec.md), the engine in [03](../phase1/03-puzzle-engine.md), and the architecture in [04](../phase1/04-architecture.md). Each stub's JSDoc cites the section it implements.
 
 ## 1. File ownership

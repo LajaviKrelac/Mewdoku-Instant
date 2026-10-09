@@ -207,7 +207,11 @@ export function createFbRanking(sdk: FBInstantSDK, opts: FbRankingOptions): Rank
   const showList = async (board: BoardKey, view: RankListView, rect?: DOMRect): Promise<{ close(): void } | null> => {
     try {
       if (!overlays || !nameOf(board)) return null;
-      const [top, mine] = await Promise.all([topRaw(board, view.count), view.highlightMe ? mineRaw(board) : Promise.resolve(null)]);
+      const [allTop, myEntry] = await Promise.all([topRaw(board, view.count), view.highlightMe ? mineRaw(board) : Promise.resolve(null)]);
+      // RankListView.keep (daily_fastest: only the shown day's entries, phase2b §5.3); fewer rows, never padded.
+      const keep = view.keep;
+      const top = keep ? allTop.filter((r) => keep(r.entry.score)) : allTop;
+      const mine = myEntry && (!keep || keep(myEntry.entry.score)) ? myEntry : null;
       // My own entry's id also marks me in the top list (in case the list's ids could not be compared).
       const isMine = (r: RawEntry): boolean => r.entry.isMe || (mine !== null && mine.id !== '' && r.id === mine.id);
       const rows: RankListRow[] = top.map((r) => toRow(isMine(r) ? { ...r, entry: { ...r.entry, isMe: true } } : r, view));

@@ -57,6 +57,8 @@ export function createSession(deps: SessionDeps): Session {
     capabilities: caps(),
     platformId: platform.id,
     ...(deps.levelSize ? { levelSize: deps.levelSize } : {}),
+    // §2.2: from WON until the ranking panel opens, Home and Gear render aria-disabled.
+    ...(winFlow.blocking() ? { chromeLocked: true } : {}),
   });
 
   let gen = 0;
@@ -142,7 +144,14 @@ export function createSession(deps: SessionDeps): Session {
     onError: (error) => bus.emit('error', { where: 'win_flow', error }),
     openRanking: (opts) => openRanking(opts.tapMinMs),
     openVictory: () => openVictory(),
+    onBlockingChange: () => refreshGameView(),
   });
+
+  /** Re-renders the game screen from the store (state outside the store changed: the win flow's lock). */
+  function refreshGameView(): void {
+    const v = selectGameView(store.get(), viewCtx());
+    if (v && screen) screen.update(v);
+  }
 
   // ─────────────────────────────── reduce + effects ───────────────────────────────
 
@@ -262,7 +271,8 @@ export function createSession(deps: SessionDeps): Session {
       thisMs: s.ms,
       event: s.event?.def ?? null,
     });
-    const ctx = { records, myScore: myScoreView(s), ...(s.event ? { eventTotal: s.event.def.puzzles.count } : {}) };
+    const day = s.mode === 'daily' ? w.meta.dateKey : null;
+    const ctx = { records, myScore: myScoreView(s), ...(s.event ? { eventTotal: s.event.def.puzzles.count } : {}), ...(day ? { day } : {}) };
     if (!deps.rankings) return { kind: 'records', records, reason: 'local' };
     return deps.rankings.listState(w.result, ctx);
   }
@@ -287,11 +297,11 @@ export function createSession(deps: SessionDeps): Session {
       ...selectRankingView(store.get(), viewCtx(), w.summary, listFor(w), { tapMinMs }),
       onContinue: () => winFlow.continueFromRanking(),
       onSeeTop: () => {
-        if (w.board) void deps.rankings?.showList(w.board, rankingTitle(w), undefined, w.summary.event?.def.puzzles.count);
+        if (w.board) void deps.rankings?.showList(w.board, rankingTitle(w), undefined, w.summary.event?.def.puzzles.count, w.meta.dateKey ?? undefined);
       },
       onListArea: (rect: DOMRect) => {
         if (!w.board || !deps.rankings) return;
-        void deps.rankings.showList(w.board, rankingTitle(w), rect, w.summary.event?.def.puzzles.count).then((ok) => {
+        void deps.rankings.showList(w.board, rankingTitle(w), rect, w.summary.event?.def.puzzles.count, w.meta.dateKey ?? undefined).then((ok) => {
           if (ok || win !== w || !router.isOpen('ranking')) return;
           // The overlay could not be placed: the honest fallback is my own records.
           const records = personalRecords(store.get(), viewCtx(), { board: boardKindOf(w.summary.mode), n: w.summary.n, thisMs: w.summary.ms, event: w.summary.event?.def ?? null });
@@ -364,13 +374,15 @@ export function createSession(deps: SessionDeps): Session {
       logged: false,
     };
     const w = win;
-    // §5.5: submit and fetch from t = 0, so the panel is ready at 4.5 s (deadline rank.fetchTimeoutMs).
+    // §5.5 steps 2 then 3, from t = 0 so the panel is ready at 4.5 s (deadline rank.fetchTimeoutMs):
+    // the new score's submit starts first, so mine() reads the board after it; older queued scores
+    // (rank.pending) are retried once it has settled, never ahead of it.
     if (target && s.counted) {
       const r = deps.rankings;
       if (r) {
         void r
-          .flushPending()
-          .then(() => r.submit(target.board, target.score, s.ms))
+          .submit(target.board, target.score, s.ms)
+          .then(() => r.flushPending({ except: target.board }))
           .catch(() => undefined);
       }
       if (s.pointsEarned > 0) void deps.groups?.onWin(s.pointsEarned).catch(() => undefined);
@@ -520,6 +532,9 @@ export function createSession(deps: SessionDeps): Session {
     // The mode's RuleFlags under this session's config: the new board, the slot validation and the
     // restored board all use the same hearts / revive limits.
     const eventDef = req.mode === 'event' ? (deps.events?.byId(req.eventId) ?? null) : null;
+    // The accessory symbols live in the lazy events chunk (A, §1.6): an existing <use> picks them up
+    // when it lands, so start it now in case nothing loaded it yet (never blocks the board).
+    if (eventDef) void deps.events?.preload?.()?.catch(() => undefined);
     const rules: RuleFlags = eventDef ? eventRules(eventDef, c) : rulesFor(mode, c);
     let current = save();
     let state = newGame(puzzle, mode, rules);
@@ -767,7 +782,7 @@ export function createSession(deps: SessionDeps): Session {
       return toast(t('hint.unavailable'));
     }
     toast(t('toast.error'));
-    const winOverlay = id === 'win' || id === 'daily_result' || id === 'ranking' || id === 'victory';
+    const winOverlay = id === 'daily_result' || id === 'ranking' || id === 'victory';
     if (s?.status === 'won' ? winOverlay : s?.status === 'lost' && id === 'fail') session.onHome();
   }
 

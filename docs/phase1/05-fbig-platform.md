@@ -1,6 +1,8 @@
 # 05 · Facebook Instant Games platform: requirements, status and integration plan
 
-Status: Phase 1 deliverable · Research date: 2026-10-06 · Used by: Phase 2 (adapter design), Phase 4 (publishing)
+Status: Phase 1 deliverable · Research date: 2026-10-06 · **Phase 2b notes added at integration (2026-10-09)** · Used by: Phase 2 (adapter design), Phase 2b, Phase 4 (publishing)
+
+> **Phase 2b.** The parity pass uses banners, leaderboards, overlay views, tournaments and payments. The 2026-10-08 web-search facts are in [parity-spec](../phase2b/parity-spec.md) §3.1, §5.2, §8.2; what our code assumes, row by row, and the status of each assumption are in [fb-dashboard §6](../phase2b/fb-dashboard.md) (B1–B6, L1–L5, O1–O6, T1–T4, P1–P8). **Only P2 and P8 are [05: confirmed]; every other row is unverified** and each feature falls back safely until it is checked on developers.facebook.com (gates G1–G8, parity-spec §14 and §14 below).
 
 > **Research caveat.** `developers.facebook.com`, `connect.facebook.net` and `facebook.com` were blocked during research, and the web-search budget ran out. Nothing below was read on Meta's documentation site. The facts come from these readable sources:
 >
@@ -16,6 +18,9 @@ Status: Phase 1 deliverable · Research date: 2026-10-06 · Used by: Phase 2 (ad
 > **Review pass (2026-10-06).** The following were re-read first-hand and still match this document: Meta's `fbapp-config.json` samples (Unity plugin and NEZP), `PurchasePlatform.cs` (APPLE: "Not eligible"), `API_REFERENCE.md` (haptics, ad formats, banner position, tournaments, player data, `getSupportedAPIs`, overlay views; **no** leaderboard API), the Playgama Facebook bridge (`fbinstant.8.0.js`, `globalLeaderboards.*`, banner with position, `getLocale` before start), the npm registry (Playgama 2.3.0 on 2026-09-30, still the latest), the Defold and Cocos 4.0 docs, and the DefinitelyTyped reference text (`showAsync`, `setDataAsync`, `flushDataAsync`, 1 MB, `logEvent` limits, `getLocale`). The web-search budget for the session was already used up, so **no new evidence about whether Meta accepts new apps in 2026 could be gathered**. That row stays "Unknown".
 
 ## 1. Status at a glance
+
+> **Phase 2b update:** banners are now **in use** on non-gameplay screens (Home, victory, event; never during play), with the searched facts "loading shows the banner", 50 dp, a 45 s load limit and no banners in gameplay [search: Meta docs] (B1–B5); leaderboards through a probe of the classic `getLeaderboardAsync` and the NEZP `globalLeaderboards.*` APIs (L1–L5); overlay views for other players' names (O1–O6); tournaments for group challenges, with no standings API found (T1–T4); payments in use (P1–P8). See fb-dashboard §6.
+
 
 | Topic | Status as of 2026-10-06 | Conf. | Source (date) |
 |---|---|---|---|
@@ -168,7 +173,7 @@ Every key above appears in Meta's own samples ([meta-fbapp], [nezp-fbapp]). Othe
 
 ### 5.4 Performance targets for FBIG
 
-- First-load download ≤ 220 KB raw (04 §9).
+- First-load download ≤ 327 KB raw and ≤ 121.5 KB gzipped (04 §9, Phase 2b integration; it was 220 KB in Phase 1 and 280 KB in the 2b spec). Measured FBIG build 2026-10-09: 317.2 KB raw, 117.9 KB gzip.
 - Time to `startGameAsync` ≤ 2 s on a mid-range Android over 4G. Meta's guideline is < 5 s (*likely*, [defold]).
 - `setLoadingProgress` reports real progress and must reach 100 before `startGameAsync`.
 
@@ -179,6 +184,9 @@ The NAV_FLOATING platform menu overlays a corner of the game. We **reserve the t
 *inferred.* The exact position and size of the menu must be checked on device in Phase 4.
 
 ## 6. Ads plan
+
+> **Phase 2b** (parity-spec §3; fb-dashboard B1–B6): banners are in use on FBIG through `loadBannerAdAsync(placementID, 'bottom')` (which loads and shows) and `hideBannerAdAsync()`, on Home, the victory screen and the event screen only, from 10 completed levels, with a 58 px reserve and a 60 s reload window, and only when `getSupportedAPIs()` lists both banner calls. Hidden before a transition to the game screen, before any interstitial or rewarded ad, and while a modal is open. The interstitial cadence (120 / 100 / 90 s) is unchanged; new triggers `event_next` (interstitial) and `group_double` (rewarded). A "No Ads" purchase ends interstitials and banners.
+
 
 ### 6.1 Formats used
 
@@ -235,7 +243,9 @@ Until rewarded ads are actually available, the free-fallback rule (02 §13.3) me
 | Mirror per player | The localStorage mirror key is `mewdoku.save.v1:<playerId>` (URL-encoded `player.getID()`), so a second FB account on the same browser never sees, merges or uploads the first one's progress (PLAT-2). Without a player ID the unscoped key is a cache only and is never merged into a player's cloud copy. | ours |
 | Blocked localStorage | Cloud save still works, so the "progress can't be saved on this device" toast is not shown on FB while cloud save is available (PLAT-3). | ours |
 
-## 8. Leaderboards and social (Phase 4, optional)
+## 8. Leaderboards and social (Phase 2b; production switch in Phase 4)
+
+> **Phase 2b** (parity-spec §5; fb-dashboard L1–L5, O1–O6, T1–T4): both leaderboard APIs are supported through a probe (classic `getLeaderboardAsync` first, then NEZP `globalLeaderboards.*`, else none), with five boards (`paw_points`, `daily_fastest`, three event boards) named in `VITE_FB_LEADERBOARDS`; scores are our own integer encodings, decoded by us and passed to an **overlay view** as data (names and photos only inside the view, NEZP). Overlay views open full screen ("See top players") until G3 settles placement in a rect. **Tournaments** run the group challenges (behind the `groupChallenges` flag, off until G2: no API for standings was found, so the reward mode is "participation"). Every step falls back to personal records. The table below is the Phase 1 research.
 
 The store promises global fastest-time leaderboards for the original (confirmed, 01 §10.11). On FBIG:
 
@@ -249,7 +259,9 @@ The 7.1 `getLeaderboardAsync(name)` API was dropped by Playgama on 2025-05-30 ([
 
 Sharing, invites, shortcuts, community follow and join, and context switching all exist ([meta-api]) but are **not** used in Phase 2. `createShortcutAsync` is Android-only and can be called once per session (*likely*, [defold]).
 
-## 9. Payments (not in Phase 2)
+## 9. Payments (Phase 2b; production switch in Phase 4)
+
+> **Phase 2b** (parity-spec §8; fb-dashboard P1–P8): payments are in use on facebook.com and Android, never on iOS or Messenger.com: the Buy section waits for `payments.onReady`; five consumable products (No Ads, Bulb Bundle, Kitty Basket, Fish Bucket, Fish Crate; prices set in the dashboard); purchase → grant into the save's ledger → critical save → `consumePurchaseAsync(token)`, replayed on boot for unconsumed purchases, idempotent by token. "No Ads" is consumed and kept as a save entitlement (no non-consumables relied on). Which order Meta expects (grant before or after consume) and whether an unconsumed purchase breaks `getPurchasesAsync` are open (G5; `iap.grantBeforeConsume`, `iap.removeAdsMode`).
 
 - The API is `payments.onReady`, `getCatalogAsync`, `purchaseAsync({productID, developerPayload})`, `getPurchasesAsync` and `consumePurchaseAsync`.
 - Purchases carry `purchasePlatform`, `purchasePrice`, `paymentActionType` (charge or refund) and `isConsumed` ([meta-purchase]).
@@ -327,8 +339,8 @@ Legend: `[ours]` = handled by our design · `[verify]` = must be verified on dev
 - [ ] `[ours]` No ads at load or during gameplay; rewards granted only on completed rewarded ads
 - [ ] `[ours]` No incentivised sharing (sharing is not used at all in Phase 2)
 - [ ] `[ours]` Portrait layout correct on: iOS FB app, Android FB app, facebook.com desktop, mobile web; FB safe zone respected
-- [ ] `[ours]` Zip: `index.html` at the root, `fbapp-config.json` present, ≤ 60 files, no source maps or precompressed files
-- [ ] `[ours]` First-load ≤ 220 KB raw; time to start ≤ 2 s (target)
+- [ ] `[ours]` Zip: `index.html` at the root, `fbapp-config.json` present, ≤ 100 files (2b; platform cap 500), ≤ 1 MB zipped, from `dist/release-fbig`, no source maps, precompressed files or e2e hooks
+- [ ] `[ours]` First-load ≤ 327 KB raw and ≤ 121.5 KB gzip (04 §9, 2b integration); time to start ≤ 2 s (target)
 - [ ] `[verify]` Test via the embed URL, then upload, then test with testers in development, then push to production
 
 **Monetization**
@@ -343,6 +355,9 @@ Legend: `[ours]` = handled by our design · `[verify]` = must be verified on dev
 - [ ] Post-launch: `logEvent` dashboards (02 §20); tune ad pacing and difficulty bands from data
 
 ## 14. Uncertain or possibly deprecated items
+
+> **Phase 2b adds** the gates of parity-spec §14 (G1 leaderboard API and strings, G2 tournaments and reward policy, G3 overlay-view placement and bindings, G4 banner details, G5 payment order and unconsumed purchases, G6 interstitial frequency policy, G7 FB locale codes, G8 event-name clearance); each is broken down in fb-dashboard §6 and §8.
+
 
 | Item | Concern | Source date | Action |
 |---|---|---|---|

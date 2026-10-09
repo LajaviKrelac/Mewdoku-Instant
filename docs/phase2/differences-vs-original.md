@@ -1,6 +1,6 @@
 # Mewdoku vs Meowdoku (Play Store): what is different
 
-Status: Phase 2 review · Date: 2026-10-07 · Owner: game design
+Status: Phase 2 review (2026-10-07); §1 status updated after the Phase 2b "parity" integration (2026-10-09, §1.0) · Owner: game design
 
 This document compares our rebuild (working tree of 2026-10-07) with **"Meowdoku: Brain Puzzle Games"** by Oakever Games (`com.oakever.meowdoku`) as found on **Google Play**.
 
@@ -27,6 +27,25 @@ This document compares our rebuild (working tree of 2026-10-07) with **"Meowdoku
 ---
 
 ## 1. Headline: the biggest differences a player would notice
+
+### 1.0 Status after Phase 2b (2026-10-09)
+
+Phase 2b ([parity-spec](../phase2b/parity-spec.md)) set out to close all eight headline differences below, following the original wherever its behaviour is known, except where a platform rule, the clean-room rules or an unknown forbid it ([parity-spec §0.7](../phase2b/parity-spec.md)). The rows below describe the integrated build; the original's side is unchanged from this document's 2026-10-07 research (nothing was re-sampled, R6). "Closed" means a player meets the same kind of thing at the same moment; what is still ours (art, words, values) is listed with its reason.
+
+| # | Headline | Status | What the build does now | What remains different, and why |
+|---|---|---|---|---|
+| 1 | Cat and colour identity | **Closed** | One theme, the Classic look: "Tux", our own black-and-white tuxedo-style cat (4 moods, 6 poses, idle loops), orange buttons and titles, white X marks, even gutters, an off-white page. The ginger cat, teal tokens, dark X and region-aware gaps are gone | Tux is drawn by us with its own signature marks (a notched ear, an asymmetric blaze) and its own poses; every colour and size is our own value (legality, R1/R6). A thin tinted edge under the white X (WCAG 1.4.11; accessibility minimum). The trade-dress risk of the combination is accepted by the user and gated by G-LEGAL (§4) |
+| 2 | Win flow | **Closed** | Glow at 0.3 s → three fish fly to the pill (1.2–2.55 s) → "+3" (+2 bonus on Hard and dailies) → scrim at 4.2 s → ranking panel at 4.5 s → tap → victory screen with the wide orange "Level N". Fish are a saved currency (15 per hint, 30 per kitty in the shop) | Our own fish art and words ("fish", never "golden fish"), timings fitted to the reported wait times rather than measured, and our own victory layout (the original's is unknown) |
+| 3 | Ad load | **Partly closed** | FBIG: interstitials at the original's reported 120 / 100 / 90 s cadence after 10 completed levels (unchanged); banners now on Home, the victory and the event screen from 10 completed levels, with a 58 px reserve, when the SDK reports both banner APIs; a "No Ads" purchase | Banners never during play (Meta's guidance), and the production web build has no ads at all (no ad network: a free hint, kitty or revive every 10 minutes instead). Banner placement rules await G4 on developers.facebook.com |
+| 4 | Limited-time events | **Closed** | Three of our own events (Lantern Walk, Snow Paws, Yarn Hearts; 21 puzzles each, milestones with rewards), a Home card (teaser, active, locked, done), an event screen, an event mode with its own board, and an event top list (FB board; personal results on the web) | Our own names, themes and art (legality; G8 clears the names); the contents (puzzle count, milestones, no paid pass) are our choice because the original's are unknown |
+| 5 | Rankings and identity | **Partly closed** | A post-win ranking panel (paw points, today's fastest daily, the event board), a rankings hub behind the Home trophy, FB leaderboards through a probe (classic, NEZP or none) and overlay views, "Your rank" / "Your score", and an honest personal-records fallback at every step; group challenges implemented and tested | Other players' names appear only inside FB overlay views, never on the web (platform: the web has no shared backend). Group challenges stay behind a flag until G2 (no standings API found; reward policy unverified). Every FB SDK detail is unverified until G1/G3 ([fb-dashboard](../phase2b/fb-dashboard.md)). No login beyond the FB identity |
+| 6 | Language | **Partly closed** | 17 locales (English plus 16 AI-drafted catalogues), resolved from `FBInstant.getLocale()` or `navigator.languages`, a Settings override, Intl plural rules, Latin digits, Arabic right to left with an LTR board | Release builds ship English only until a native reviewer approves each locale (`i18n.releaseLocales`; a process gate, not code). 17 against the iOS app's 62 locales (the Android list is unknown; more can follow in Phase 3) |
+| 7 | Accessibility | **Kept by design** (user decision) | Colour patterns, Reduce motion, screen-reader labels and full keyboard play still work, now also on every new screen; the defaults look like the original (patterns off, even gutters, white X) | These remain our extras: the user chose to keep them (headline 7) |
+| 8 | Purchases | **Partly closed** | FBIG on facebook.com and Android: a shop with five consumable products (No Ads kept as a save entitlement, hint, kitty and fish packs), the purchase / consume / boot-restore order, and paid grants that survive a save merge; fish swaps everywhere | No purchases on iOS, Messenger.com or the web, and no subscriptions (platform). The payment details await G5 |
+
+The unverified rows further down moved too: the **motion** gap is mostly closed (a board-entry wave, screen transitions, board-cat breathing and ear flicks, a heart break, the win flow), and fish swaps and group rewards added a **helper economy** beside the starting stocks. **Board sizes** are unchanged and still unknown on the original's side.
+
+### 1.1 The Phase 2 headline (2026-10-07, for reference)
 
 The list is ranked by how much a player would notice each difference. It includes only differences where both sides are verified: our side in the code, the original's at *likely* or better.
 
@@ -259,9 +278,9 @@ These differences exist because the original's **expression** is protectable and
 | Element | The original's expression (do not copy) | Ours (keep) | Reference |
 |---|---|---|---|
 | Public name | "Meowdoku"; "Mewdoku" is one letter away (high confusion risk, *inferred*) | "Mewdoku" stays an internal code name; pick a distinct public name before Phase 4 | 06 §6.1–6.2 |
-| Cat character | Tuxedo or dark cat heads and their Spine animations | Ginger tabby "loaf" drawn as our own SVG | 06 §3 (Art), §5, §7 |
+| Cat character | Tuxedo or dark cat heads and their Spine animations | **Reversed by user decision 2026-10-08 ([phase2b §0.3](../phase2b/parity-spec.md))**: Tux, our own tuxedo-style cat with its own signature marks and poses (Phase 2: a ginger tabby "loaf"). The original's art and animations are still never used | 06 §3 (Art), §5, §7 |
 | Illustrations | Trumpet-playing win cat; crying cat hugging a broken heart | Party hat, bandage and our other poses | 06 §3 (Art), §7 |
-| Trade dress | The **combination** of tuxedo cat, cream page, orange pill buttons and white X marks on pastel tiles | Teal accent, dark X, region-aware gaps, white board card. Any future leaderboard or victory screen must not bring back orange titles or buttons | 06 §3 (Trade dress), §7 |
+| Trade dress | The **combination** of tuxedo cat, cream page, orange pill buttons and white X marks on pastel tiles | **Reversed by user decision 2026-10-08 ([phase2b §0.3](../phase2b/parity-spec.md))**: the Classic look brings the combination back as the only look; the residual risk is accepted, and a lawyer's review with the final public name (G-LEGAL) gates any public release. (Phase 2: teal accent, dark X, region-aware gaps, and no orange titles or buttons) | 06 §3 (Trade dress), §7 |
 | Copy | Store phrases, including the rule names "Exclusive Territory" and "The Aloof Rule"; tutorial lines; hint sentences; praise words; chip wording; UI strings | Every string comes from `src/i18n/en.ts` and is written by us | 06 §3 (Text), §7 |
 | Level layouts | The original's levels as reproduced by fan, walkthrough and solver sites | Levels generated by our engine; never import or "match" the original's levels | 06 §3 (Level content), §4 |
 | Audio | Sound files, sound names, jingles | Synthesised recipes only | 06 §3 (Audio) |

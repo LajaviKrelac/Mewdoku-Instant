@@ -4,7 +4,7 @@
 // rules on Home and the event screen (shown after mount, hidden under modals and before leaving).
 import { afterEach, describe, expect, it } from 'vitest';
 import { createBannerFlow } from '../../../src/app/banner-flow';
-import { createEventFlow, bundledEventDefs } from '../../../src/app/event-flow';
+import { createEventFlow, bundledEventDefs, type EventsChunk } from '../../../src/app/event-flow';
 import { setFlagOverrides } from '../../../src/app/flags';
 import { createRankHubFlow } from '../../../src/app/rank-hub-flow';
 import { createRankingFlow } from '../../../src/app/ranking-flow';
@@ -21,7 +21,7 @@ const H = 3_600_000;
 
 afterEach(() => setFlagOverrides({}));
 
-function setup(save: (s: SaveData) => SaveData = (s) => s, opts: { now?: number; locales?: boolean } = {}) {
+function setup(save: (s: SaveData) => SaveData = (s) => s, opts: { now?: number; locales?: boolean; chunk?: Partial<EventsChunk> } = {}) {
   const h = createHarness({
     save: (s) => save({ ...s, progress: { level: 15, completed: 14, best: {} } }),
     extra: () => ({ events: { byId: (id) => DEFS.find((d) => d.id === id) ?? null } }),
@@ -33,7 +33,7 @@ function setup(save: (s: SaveData) => SaveData = (s) => s, opts: { now?: number;
     hide: async () => void h.log.push('banner:hide'),
   };
   const updateSave = (fn: (s: SaveData) => SaveData): void => h.store.update((st) => ({ ...st, save: fn(st.save) }));
-  const events = createEventFlow({ store: h.store, defs: DEFS, now: () => h.clock.now(), loadChunk: async () => ({}) as never });
+  const events = createEventFlow({ store: h.store, defs: DEFS, now: () => h.clock.now(), loadChunk: async () => (opts.chunk ?? {}) as never });
   const banners = createBannerFlow({ platform: h.platform, store: h.store, clock: h.clock });
   const rankings = createRankingFlow({ platform: h.platform, clock: h.clock, bus: h.bus, save: () => h.save(), updateSave, touch: () => h.saves.touch() });
   const viewCtx = () => ({ now: h.clock.now(), capabilities: h.platform.caps, platformId: h.platform.id, events: DEFS });
@@ -112,6 +112,15 @@ describe('shell: Home event card and the event screen (§4.4)', () => {
     teaser.h.router.homeCb?.onEvent();
     await flush(teaser.h);
     expect(teaser.h.router.screen()).toBe('home');
+  });
+
+  it("the card's art comes from the lazy events chunk once it has loaded (HomeEventCardView.art)", async () => {
+    const art = (): HTMLElement => ({}) as HTMLElement;
+    const { h, shell } = setup((s) => s, { chunk: { eventArt: art } });
+    shell.showHome();
+    expect(h.router.homeView?.event?.art ?? null).toBeNull(); // the chunk is still loading: no art yet
+    await flush(h);
+    expect(h.router.homeView?.event?.art).toBe(art);
   });
 
   it('after the end the card is gone and Home shows no event', () => {

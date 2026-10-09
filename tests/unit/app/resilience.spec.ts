@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { localDateKey, localMidnightAfter, msUntilLocalMidnight } from '../../../src/game/progression';
 import type { SaveData } from '../../../src/game/types';
 import { t } from '../../../src/i18n';
-import { createHarness, slice, SOL5, startLevel, WRONG5, type Harness } from './harness';
+import { createHarness, slice, SOL5, startLevel, WRONG5, type Harness, tapRanking } from './harness';
 
 function withStock(hints: number, kitties: number): (s: SaveData) => SaveData {
   return (s) => ({ ...s, stock: { hints, kitties } });
@@ -185,7 +185,7 @@ describe('logic-5 / SPEC-03: the daily victory for a daily solved after midnight
     expect(localDateKey(h.clock.now())).not.toBe(day);
     h.session.onCellDoubleTap(SOL5[4] as number);
     await h.settle(h.config.fx.winOverlayDelayMs);
-    h.router.props.ranking?.onContinue();
+    await tapRanking(h);
     const victory = h.router.props.victory;
     const props = victory?.daily;
     expect(props?.dateKey).toBe(day); // credited to its original date (02 §12)
@@ -200,9 +200,10 @@ describe('logic-5 / SPEC-03: the daily victory for a daily solved after midnight
     await h.settle(h.config.fx.boardEntryMs);
     await solve(h);
     await h.settle(h.config.fx.winOverlayDelayMs);
-    h.router.props.ranking?.onContinue();
+    await tapRanking(h);
     const props = h.router.props.victory?.daily;
-    expect(props?.nextPuzzleAt).toBe(h.clock.now() - h.config.fx.winOverlayDelayMs + msUntilLocalMidnight(h.clock.now() - h.config.fx.winOverlayDelayMs));
+    const wonAt = h.clock.now() - h.config.fx.winOverlayDelayMs - h.config.rank.panelOutMs;
+    expect(props?.nextPuzzleAt).toBe(wonAt + msUntilLocalMidnight(wonAt));
   });
 });
 

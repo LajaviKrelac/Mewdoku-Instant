@@ -152,6 +152,12 @@ export interface RankListView {
    * (game/scoring.ts decode + i18n formatting): platform/ may not import game/ values (CONTRACTS §2).
    */
   readonly formatScore: (score: number) => string;
+  /**
+   * Which entries the list may show (additive, 2b integration): daily_fastest is one board for every
+   * day, and its readers keep only the shown day's entries (phase2b §5.3). Supplied by the app (it
+   * decodes scores); absent = every entry. A filtered list shows fewer rows, never padded ones.
+   */
+  readonly keep?: (score: number) => boolean;
 }
 
 export interface RankingProvider {

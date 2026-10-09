@@ -244,8 +244,6 @@ export interface GameConfig {
     readonly overlayFadeMs: number;
     /** Max fade length with reduced motion on (02 §17.5). */
     readonly reducedMotionFadeMs: number;
-    readonly confettiMs: number;
-    readonly confettiCount: number;
     readonly toastMs: number;
     readonly catBlinkMinMs: number;
     readonly catBlinkMaxMs: number;
@@ -640,8 +638,6 @@ export const cfg: GameConfig = deepFreeze({
     regionFadeMix: 0.45,
     overlayFadeMs: 200,
     reducedMotionFadeMs: 150,
-    confettiMs: 1600,
-    confettiCount: 40,
     toastMs: 2500,
     catBlinkMinMs: 3000,
     catBlinkMaxMs: 7000,

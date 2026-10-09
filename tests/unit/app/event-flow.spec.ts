@@ -10,7 +10,7 @@ import { selectEventCard, selectEventView, selectHomeView, type ViewContext } fr
 import { eventEnd, eventStart, type EventDef } from '../../../src/game/events';
 import { defaults } from '../../../src/game/save';
 import type { InProgressV2, SaveData } from '../../../src/game/types';
-import { createHarness, SOL5, WRONG5, type Harness } from './harness';
+import { createHarness, SOL5, WRONG5, type Harness, tapRanking } from './harness';
 
 const DEFS = bundledEventDefs();
 const LANTERN = DEFS[0] as EventDef;
@@ -105,7 +105,10 @@ describe('event sessions (§4.4, §4.5)', () => {
     const h = createHarness({
       save: (s) => save({ ...s, progress: { level: 15, completed: 14, best: {} }, ads: { lastAdAt: 0, lastFallbackGrantAt: 0 } }),
       extra: () => ({
-        events: { byId: (id) => DEFS.find((d) => d.id === id) ?? null },
+        events: {
+          byId: (id) => DEFS.find((d) => d.id === id) ?? null,
+          preload: () => (events.push('preload'), Promise.resolve(null)),
+        },
         goEvent: (def) => void events.push(`goEvent:${def.id}`),
       }),
     });
@@ -127,6 +130,8 @@ describe('event sessions (§4.4, §4.5)', () => {
     h.session.onCellTap(WRONG5[3] as number);
     expect(h.save().inProgress.event?.id).toBe(`E${LANTERN.id}/0`);
     expect(h.router.game?.last.event).toEqual({ def: LANTERN, index: 0 });
+    // The accessory symbols are in the lazy events chunk: an event board starts loading it (A's request).
+    expect(h.events).toContain('preload');
   });
 
   it('a saved event slot is restored when the same puzzle opens again', async () => {
@@ -157,7 +162,7 @@ describe('event sessions (§4.4, §4.5)', () => {
     expect(h.analytics).toContainEqual({ name: 'event_milestone', params: { id: LANTERN.id, at: 3 } });
     await h.settle(h.config.fx.winOverlayDelayMs);
     expect(h.router.props.ranking).toMatchObject({ board: 'event', eventNameKey: LANTERN.nameKey, result: { kind: 'event', solved: 3, total: 21 } });
-    h.router.props.ranking?.onContinue();
+    await tapRanking(h);
     expect(h.router.props.victory?.event).toMatchObject({ index: 2, total: 21, solvedBefore: 2, solvedAfter: 3, reward: { hints: 2 }, last: false });
   });
 
@@ -176,10 +181,10 @@ describe('event sessions (§4.4, §4.5)', () => {
     await play(h, 20);
     for (const c of SOL5) h.session.onCellDoubleTap(c);
     await h.settle(h.config.fx.winOverlayDelayMs);
-    h.router.props.ranking?.onContinue();
+    await tapRanking(h);
     expect(h.router.props.victory?.event?.last).toBe(true);
     await h.session.onNext();
-    expect(h.events).toEqual([`goEvent:${LANTERN.id}`]);
+    expect(h.events.filter((e) => e !== 'preload')).toEqual([`goEvent:${LANTERN.id}`]);
     expect(h.store.get().game).toBeNull();
   });
 
