@@ -14,7 +14,7 @@
 // Review fixes: every label follows the language at once, also the ones built here at creation
 // (A11Y-I18N-1: switching to Deutsch left "Settings / Sound / …" in English until a reload); a
 // Feedback row (PAR-5: the original's "Settings → Feedback") shown only when the app passes a
-// feedback link (config app.feedbackUrl, empty by default); the arrow keys of the Reduce motion
+// feedback link (config support.feedbackUrl, empty by default); the arrow keys of the Reduce motion
 // segments follow the visual order in right-to-left layouts (A11Y-HUB-1).
 import type { LocaleId, ReduceMotionSetting, Settings } from '../../game/types';
 import { t, translate, type I18nKey } from '../../i18n';
@@ -48,8 +48,8 @@ export interface SettingsProps {
   onRemoveAds?(): void;
   /**
    * Feedback row (review PAR-5): a link (https: or mailto:) the app passes from config
-   * (app.feedbackUrl; never on FBIG until Meta's external-link rules are checked). Absent or empty =
-   * row hidden.
+   * (support.feedbackUrl; on FBIG only with support.feedbackOnFbig, off until Meta's external-link
+   * rules are checked). Absent or empty = row hidden.
    */
   readonly feedbackUrl?: string;
 }

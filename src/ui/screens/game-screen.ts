@@ -119,6 +119,31 @@ export function sameHighlight(a: BoardHighlight | null, b: BoardHighlight | null
   return false;
 }
 
+/**
+ * The last viewport reading, shared by every game screen of a window (review PERF-1). A new game
+ * screen is built while the document is dirty (the previous screen is leaving), and reading
+ * innerWidth / visualViewport / the probe there forced a full style and layout pass on every mount
+ * (about 29 ms at 4× CPU). The values only change with a resize (window or visual viewport), which
+ * clears this cache before any screen's own resize handler re-reads it.
+ */
+const viewportCache = new WeakMap<Window, ViewportInfo>();
+const viewportWatched = new WeakSet<Window>();
+function sharedViewport(w: Window, fresh: boolean): ViewportInfo {
+  if (!viewportWatched.has(w)) {
+    viewportWatched.add(w);
+    const drop = (): void => void viewportCache.delete(w);
+    // Capture: at the window target these run before the screens' own (bubble) resize listeners.
+    w.addEventListener('resize', drop, { capture: true });
+    w.visualViewport?.addEventListener('resize', drop, { capture: true });
+  }
+  let v = fresh ? undefined : viewportCache.get(w);
+  if (!v) {
+    v = readViewport(w);
+    viewportCache.set(w, v);
+  }
+  return v;
+}
+
 export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameScreen {
   let current = view;
   let layout: GameLayout = computeLayout({ vw: 390, vh: 844, safeTop: 0, safeBottom: 0, n: view.board.n });
@@ -200,7 +225,7 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
   const relayout = (remeasure = false): void => {
     const w = win();
     if (!w) return;
-    if (remeasure || !vp) vp = readViewport(w);
+    if (remeasure || !vp) vp = sharedViewport(w, remeasure);
     const L = cfg.layout;
     const vh = finePointer(w) ? Math.max(vp.vh, L.minViewportH) : vp.vh;
     const next = computeLayout({ vw: vp.vw, vh, safeTop: vp.safeTop, safeBottom: vp.safeBottom, n: current.board.n, textScale: vp.remPx / 16 });

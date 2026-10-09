@@ -90,13 +90,13 @@ describe('size-check', () => {
     expect(r.maxFiles).toBeUndefined();
   });
 
-  it('has the 2b integration ceilings (measured + about 3 %, lead decision 2026-10-09, 04 §9)', () => {
+  it('has the 2b ceilings (measured + about 3 %, lead decision 2026-10-09, re-set after the review fixes, 04 §9)', () => {
     const max = (label: string) => BUDGETS.find((b) => b.label === label)?.maxBytes;
     expect([max('Main JS'), max('CSS'), max('Font'), max('index.html'), FIRST_LOAD_MAX, FIRST_LOAD_LOCALE_MAX, FIRST_LOAD_GZIP_MAX]).toEqual([
-      266_000, 43_500, 17_000, 1_000, 327_000, 351_000, 121_500,
+      279_000, 43_500, 17_000, 1_000, 340_000, 365_000, 126_500,
     ]);
     expect([max('Worker JS (lazy)'), max('Lazy JS (core)'), max('Lazy JS (optional)'), max('Lazy CSS'), max('Locale chunk (each)')]).toEqual([
-      18_500, 68_000, 28_500, 28_500, 28_000,
+      18_500, 74_000, 29_300, 31_200, 28_000,
     ]);
     expect(FB_MAX_FILES).toBe(100);
   });
@@ -110,7 +110,7 @@ describe('size-check', () => {
     expect(row('CSS')?.bytes).toBe(15_000);
     expect(row('Lazy CSS')?.bytes).toBe(27_500);
     expect(row('First-load total')?.bytes).toBe(110_000 + 15_000 + 16_468 + HTML.length);
-    writeTree(d, { 'assets/overlay-chunk-a1.css': 25_001 });
+    writeTree(d, { 'assets/overlay-chunk-a1.css': 27_701 }); // + 3 500 = 31 201 > 31.2 KB
     expect(checkSizes(d, { fb: false }).rows.find((x) => x.label === 'Lazy CSS')?.ok).toBe(false);
   });
 
@@ -128,21 +128,21 @@ describe('size-check', () => {
 
   it('fails when the first-load total or the lazy chunks are over budget', () => {
     const d = tempDir('web');
-    // shared-def.js (10 KB) is a modulepreload chunk, so main JS = 266 KB: each row at its ceiling, the sum over 327 KB.
-    fakeBuild(d, { main: 256_000, css: 43_500, font: 17_000, html: 1_000 });
+    // shared-def.js (10 KB) is a modulepreload chunk, so main JS = 279 KB: each row at its ceiling, the sum over 340 KB.
+    fakeBuild(d, { main: 269_000, css: 43_500, font: 17_000, html: 1_000 });
     const r = checkSizes(d, { fb: false });
     expect(r.rows.find((x) => x.label === 'Main JS')?.ok).toBe(true);
     expect(r.rows.find((x) => x.label === 'CSS')?.ok).toBe(true);
     expect(r.rows.find((x) => x.label === 'First-load total')?.ok).toBe(false);
     expect(r.ok).toBe(false);
     const lazy = tempDir('web');
-    fakeBuild(lazy, { lazy: 68_001 });
+    fakeBuild(lazy, { lazy: 74_001 });
     expect(checkSizes(lazy, { fb: false }).ok).toBe(false);
   });
 
   it('fails when a budget is exceeded', () => {
     const d = tempDir('web');
-    fakeBuild(d, { main: 256_001 }); // + the 10 KB modulepreload chunk = 266.001 KB
+    fakeBuild(d, { main: 269_001 }); // + the 10 KB modulepreload chunk = 279.001 KB
     const r = checkSizes(d, { fb: false });
     expect(r.ok).toBe(false);
     expect(r.rows.find((x) => x.label === 'Main JS')?.ok).toBe(false);
@@ -191,7 +191,9 @@ describe('size-check', () => {
   it('the optional lazy JS (events + fb-social + social-flows) has its own ceiling', () => {
     const d = tempDir('web');
     fakeBuild(d);
-    writeTree(d, { 'assets/events-a.js': 9_000, 'assets/fb-social-b.js': 13_000, 'assets/social-flows-c.js': 6_501 });
+    writeTree(d, { 'assets/events-a.js': 9_000, 'assets/fb-social-b.js': 13_000, 'assets/social-flows-c.js': 7_300 }); // 29.3 KB: at the ceiling
+    expect(checkSizes(d, { fb: false }).rows.find((x) => x.label === 'Lazy JS (optional)')?.ok).toBe(true);
+    writeTree(d, { 'assets/social-flows-c.js': 7_301 }); // one byte over
     const r = checkSizes(d, { fb: false });
     expect(r.rows.find((x) => x.label === 'Lazy JS (optional)')?.ok).toBe(false);
   });

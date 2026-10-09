@@ -14,7 +14,7 @@
 import { cfg } from '../../app/config';
 import type { CellIndex } from '../../engine/types';
 import { CellState, type GameEvent } from '../../game/types';
-import { t } from '../../i18n';
+import { onLocaleChanged, t } from '../../i18n';
 import { shake } from '../fx/shake';
 import { buildCell, cellLabel, ensureCat, ensurePattern, setCatMood, STATE_CODE, type CellRefs } from './board-cells';
 import type { EventAccessory } from '../../game/events';
@@ -443,6 +443,7 @@ export function createBoardView(model: BoardModel, input: BoardInput, opts: Boar
       keyboard?.focus(i, true);
     },
     destroy() {
+      offLocale();
       timers.clear();
       moodTimers.clear();
       idleTimers.clear();
@@ -454,5 +455,16 @@ export function createBoardView(model: BoardModel, input: BoardInput, opts: Boar
   };
 
   build();
+  // A11Y-I18N-1: the board's and every cell's accessible name follow Settings → Language at once
+  // (they were built only on creation and state changes, so they stayed in the old language).
+  const offLocale = onLocaleChanged(() => {
+    const n = m.n;
+    const boardLabel = t('a11y.board', { n });
+    if (el.getAttribute('aria-label') !== boardLabel) el.setAttribute('aria-label', boardLabel);
+    cells.forEach((refs, i) => {
+      const v = label(i, m.cells[i] as number);
+      if (refs.el.getAttribute('aria-label') !== v) refs.el.setAttribute('aria-label', v);
+    });
+  });
   return view;
 }

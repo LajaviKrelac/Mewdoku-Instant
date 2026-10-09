@@ -78,7 +78,7 @@ The Classic look brings that combination back on purpose, as the game's only loo
 
 ### 0.5 What does not change
 
-Rules, the reducer and the mistake model; gestures; the engine; the 1 000 levels and the daily packs; hearts, revive and the hint and kitty behaviour; the tutorial script; the save-merge principles; the clean-room process. The layering rules of CONTRACTS §2 still hold.
+Rules, the reducer and the mistake model; gestures; the engine; the 1 000 levels and the daily packs (except every second Sunday from 2026-10-18, now 12×12 G4 (review PAR-1); only those 58 days were regenerated); hearts, revive and the hint and kitty behaviour; the tutorial script; the save-merge principles; the clean-room process. The layering rules of CONTRACTS §2 still hold.
 
 The paw booster keeps its current user-facing name, **Kitty** (`game.tool.kitty`, plural "kitties"). All new copy (shop, rewards, events, groups) uses that name.
 
@@ -114,6 +114,7 @@ Parity is the goal (§0.1). Every difference that remains is there because of a 
 | 17 languages (the iOS app lists 62) | the Android list is unknown; more can follow in Phase 3 |
 | Accessibility extras (colour patterns, Reduce motion, screen reader, keyboard) | kept by the user's headline-7 decision; all off or invisible by default |
 | A web boot screen; keyboard and mouse input | platform (web) |
+| No Feedback row in Settings on FBIG until Meta's external-link rules are checked (config `support.feedbackOnFbig`, off; the web shows the row when `support.feedbackUrl` is set) | platform (review PAR-5; §14) |
 
 Reverted to the original's behaviour in this revision:
 
@@ -423,8 +424,8 @@ Interruptions:
 
 | Part | Spec |
 |---|---|
-| Layer | Full screen, opaque `--page`. Behind the cat, 12 sun rays in `--accent-soft` (conic gradient) turn once every 20 s; static with reduced motion. |
-| Content, top to bottom | Praise word (40 px, `--accent-title`); the win pose (210 px); "Level 37 complete" (18 px, `--ink-2`); reward row: three fish icons with "+3" and the total ("128"), a bonus chip "Hard level bonus +2" if any, and "+55 points"; event milestone line if any (§4.5). |
+| Layer | Full screen, opaque `--stage` (dark, like the fail card and the original's dark full-screen overlays of §1.2), light text, the orange "Level N" (review PAR-3: the light `--page` of the first draft contradicted §1.2). Behind the cat, 12 sun rays in the accent at 16 % (conic gradient) turn once every 20 s; static with reduced motion. |
+| Content, top to bottom | Praise word (40 px, `--title-on-dark`); the win pose (210 px); "Level 37 complete" (18 px, white at 82 %); reward row: three fish icons with "+3" and the total ("128"), a bonus chip "Hard level bonus +2" if any, and "+55 points"; event milestone line if any (§4.5). |
 | Primary button | **Wide orange "Level 38"**: `btn--primary btn--lg`, width = column − 32 px, height 64 px, label 24 px; enabled 600 ms after the screen shows. |
 | Secondary | Ghost "Home" |
 | Variants | **Level**: "Level {L+1}". **Tutorial** (first run): "You're ready!" with "Play Level 2". **Tutorial replay**: no fish; "Home". **Daily**: time, mistakes, hints, the next-puzzle countdown and "Done" (orange). **Event**: progress bar plus "Puzzle {i+1}", or "Back to event" after the last one. |
@@ -840,6 +841,8 @@ Examples: an 8×8 with 1 mistake and 1 hint scores 40; a 10×10 Hard, flawless a
 
 A per-level board (time on Level 37) was rejected: 1 000+ boards would each need provisioning, and the endless levels have no limit.
 
+**Reading `daily_fastest` (review FB2B-4).** The board holds every day, so once later time zones post the next day, the next day's entries rank above today's. Readers page past them to the shown day's band (`RankingProvider.top(board, n, keep)` and `RankListView.keep`; classic `getEntriesAsync(50, offset)`, at most 4 pages, so at most 4 × 50 entries are read) and number its rows by their position inside the band. "Your rank" on the panel is my position in that band, **never the board's own rank** (which counts other days). A band that starts more than 200 entries down shows the honest empty list. Phase 4 alternatives, if the dashboard allows them: one board per day, or a UTC-keyed day (fb-dashboard §3).
+
 Sanity limits (no server, so client-side only):
 
 - No submission for a solve under `rank.minSolveMs` (3 000 ms) or over 24 h.
@@ -1018,7 +1021,7 @@ Plural categories come from `Intl.PluralRules`; the test (§6.9) derives the req
 | Element | Rule |
 |---|---|
 | Document | `<html dir="rtl">`. Stylesheets switch to logical properties (`margin-inline-start`, `inset-inline-*`, `text-align: start`) wherever they touch the start or end edge; `src/styles/i18n.css` holds the few `[dir='rtl']` overrides that remain. |
-| Mirrored | Pills row (cat counter ↔ hearts; the fish pill stays centred); hearts deplete from the inline end; chevrons (`.btn__chev`, `.daily-card__chev`) turn 180°; progress bars fill from the right; sheets' close buttons; event milestone track; ranking "me" bar; coach card text; toast alignment; the coach hand art is flipped. |
+| Mirrored | Pills row (cat counter ↔ hearts; the fish pill stays centred); hearts deplete from the inline end; chevrons (`.btn__chev`, `.daily-card__chev`) turn 180°; progress bars fill from the right; sheets' close buttons (on FBIG every dialog and sheet starts below the top-left 64 × 64 safe zone, so a mirrored close button never lands in it; review UX-3); event milestone track; ranking "me" bar; coach card text; toast alignment; the coach hand art is flipped. |
 | **Not** mirrored | **The board** (`.board { direction: ltr }`): column 1 is always the leftmost, so hint text and screen-reader labels stay correct. Also the top-bar action buttons stay at the **top right**, because the FB safe zone is top-left; the clock, digits, fish flight geometry (computed from rects) and the victory sun rays. |
 | Swipe | No change (the board is LTR). |
 
@@ -1171,7 +1174,7 @@ Entry points: the "+" on the fish pill (Home, victory), Settings → "Shop", and
 | Surface | Purchases |
 |---|---|
 | FB on facebook.com, FB Android | the "Buy" section shown once `onReady` fires |
-| FB iOS, Messenger.com, or `onReady` never fires | hidden; "Swap fish" only |
+| FB iOS, Messenger.com, or `onReady` never fires | no Buy section: `shop.unavailable` ("Purchases aren't available here."), shown at once when payments are known to be unavailable (review FB2B-5); "Swap fish" stays |
 | Web build | hidden; "Swap fish" only; no payments code bundled (`payments` is undefined in the web adapter) |
 
 ### 8.7 Risks (accepted)
@@ -1648,3 +1651,19 @@ Checked and unchanged:
 | **Parity first** | Taste-driven deviations reverted to the original: the interstitial cooldown is back to 120/100/90 s; the "Wider gaps" and "Dark crosses" options are dropped (even gutters and a white X only). The remaining differences and their reasons (platform, legality, unknown, plus the X edge for the accessibility minimum) are listed in §0.7. The clean-room rules stay (R1, R3–R7: our own assets only, no sampled values); only R2, the switch back to Ginger, is withdrawn. |
 | **Paw booster name** | Stays "Kitty", as in the current build (§0.5, Appendix A). |
 | **Workstreams rebalanced** | A becomes "visual identity + art" and takes fonts (from E), the Home mascot loop, the event art component and the glow look (from B) and the visual parity token changes (from the lead); F0 adds `evenInsets` and the release-locale build mode; the parallel phase is 6–9 days (§12). |
+
+---
+
+## Appendix E. Spec changes from the code review (2026-10-09)
+
+A six-lens review of the integrated build (47 confirmed findings; STATUS-2b §11) changed these parts of the spec. Everything else stands.
+
+| Finding | What changed (section) |
+|---|---|
+| PAR-1 | Every second Sunday from 2026-10-18 the daily is 12×12 G4; only those 58 daily-pack days were regenerated (§0.5; 02 §12) |
+| PAR-3 | The victory screen is dark (`--stage`) with light text, matching §1.2's "dark full-screen overlays" (§2.5) |
+| PAR-5 | A Feedback row in Settings from `support.feedbackUrl` (empty by default); never on FBIG until `support.feedbackOnFbig` (§0.7, §14) |
+| PAR-8 | A soft board-entry cue (`board_in`) plays with a fresh or retried board's entry wave; a restored won or lost board has no wave and no cue (differences §3.5) |
+| FB2B-4 | The `daily_fastest` reader rule: the shown day's band, read past next-day entries (≤ 4 × 50), ranked inside the band (§5.3) |
+| FB2B-5 | iOS and Messenger show `shop.unavailable` at once, never a loading Buy section (§8.6) |
+| UX-3 | On FBIG every dialog and sheet starts below the top-left 64 × 64 safe zone, also with mirrored heads in Arabic (§6.5) |

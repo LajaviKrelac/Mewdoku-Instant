@@ -104,24 +104,25 @@
   height: 20px;
 }
 
-/* The rising "+3" (fx.css fish-label-rise; reduced: a WAAPI fade in place): a chip centred on the
-   pill that rises fx.win.plusLabelRisePx. White on --accent-text is 5.71:1 (small text allowed). */
+/* The rising "+3" (fx.css fish-label-rise; reduced: a WAAPI fade in place): a chip anchored to the
+   pill's top edge (review UX-12: never over the icon and the rolling count) that rises
+   fx.win.plusLabelRisePx. White on --accent-text is 5.71:1 (small text allowed). */
 .fish-pill__label {
   position: absolute;
-  top: 0;
   right: 0;
-  bottom: 0;
+  bottom: 100%;
   left: 0;
   z-index: 2;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
+  padding-bottom: 2px;
   pointer-events: none;
 }
 
-/* Reduced motion: no rise; the chip fades in and out where the rise would end, clear of the count. */
+/* Reduced motion: no rise; the chip fades in and out above the pill, clear of the count. */
 .fish-pill__label[data-reduced] {
-  transform: translateY(var(--label-rise, -24px));
+  transform: none;
 }
 
 .fish-pill__chip {
@@ -161,8 +162,10 @@
   background: var(--scrim);
 }
 
-/* A modal overlay brings its own scrim (same colour): this one steps aside, so they never stack. */
-[inert] .game__scrim {
+/* A modal overlay brings its own scrim (same colour): this one steps aside, so they never stack. The
+   router marks the screen host while a modal is open; not [inert], which it may set a little ahead of
+   the ranking panel (review PERF-3: router.reserveModal at the scrim step). */
+.app-screen[data-modal] .game__scrim {
   opacity: 0;
 }
 

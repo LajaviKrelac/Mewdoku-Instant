@@ -123,6 +123,30 @@ describe('router', () => {
     expect(s.inert.get(coachEl)).toBe(false);
   });
 
+  it('PERF-3: reserveModal() makes the screen inert ahead of the modal, without the [data-modal] scrim hand-off', () => {
+    const s = setup();
+    s.router.showGame({} as never, {} as never);
+    const screenHost = s.root.querySelector('.app-screen') as HTMLElement;
+    s.router.reserveModal?.();
+    expect(s.inert.get(screenHost)).toBe(true);
+    expect(screenHost.hasAttribute('data-modal')).toBe(false); // the win scrim stays up
+    s.router.open('fail', {} as never); // the modal takes the reservation over
+    expect(s.inert.get(screenHost)).toBe(true);
+    expect(screenHost.hasAttribute('data-modal')).toBe(true);
+    s.router.releaseModal?.(); // nothing left to release: the modal holds it
+    expect(s.inert.get(screenHost)).toBe(true);
+    s.router.close('fail');
+    expect(s.inert.get(screenHost)).toBe(false);
+    expect(screenHost.hasAttribute('data-modal')).toBe(false);
+    // Released without a modal; and a screen change drops a reservation.
+    s.router.reserveModal?.();
+    s.router.releaseModal?.();
+    expect(s.inert.get(screenHost)).toBe(false);
+    s.router.reserveModal?.();
+    s.router.showHome({} as never, {} as never);
+    expect(s.inert.get(screenHost)).toBe(false);
+  });
+
   it('keeps one focus trap on the top modal and restores focus on close', () => {
     const s = setup();
     const outside = document.getElementById('outside') as HTMLButtonElement;

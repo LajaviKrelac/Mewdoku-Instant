@@ -636,22 +636,22 @@
   animation: fish-label-rise var(--label-ms, 700ms) var(--ease-out) both;
 }
 
-/* The chip pops out of the pill's centre, then rises --label-rise and fades. */
+/* The chip pops up from the pill's top edge, then rises --label-rise and fades (UX-12). */
 @keyframes fish-label-rise {
   0% {
     opacity: 0;
-    transform: translateY(4px) scale(0.6);
+    transform: translateY(6px) scale(0.6);
   }
   15% {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: none;
   }
   65% {
     opacity: 1;
   }
   100% {
     opacity: 0;
-    transform: translateY(var(--label-rise, -24px)) scale(1);
+    transform: translateY(var(--label-rise, -24px));
   }
 }
 

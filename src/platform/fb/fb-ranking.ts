@@ -325,7 +325,7 @@ export function createFbRanking(sdk: FBInstantSDK, opts: FbRankingOptions): Rank
 function toRow(r: RawEntry, view: RankListView): RankListRow {
   let scoreText: string;
   try {
-    scoreText = view.formatScore(r.entry.score);
+    scoreText = r.entry.isMe && view.formatMine ? view.formatMine(r.entry.score) : view.formatScore(r.entry.score);
   } catch {
     scoreText = formatNumber(r.entry.score);
   }

@@ -145,6 +145,8 @@ export function createSession(deps: SessionDeps): Session {
     openRanking: (opts) => openRanking(opts.tapMinMs),
     openVictory: () => openVictory(),
     onBlockingChange: () => refreshGameView(),
+    // PERF-3: the screen turns inert under the scrim's fade, not in the ranking panel's first frame.
+    onScrim: () => router.reserveModal?.(),
   });
 
   /** Re-renders the game screen from the store (state outside the store changed: the win flow's lock). */
@@ -297,11 +299,12 @@ export function createSession(deps: SessionDeps): Session {
       ...selectRankingView(store.get(), viewCtx(), w.summary, listFor(w), { tapMinMs }),
       onContinue: () => winFlow.continueFromRanking(),
       onSeeTop: () => {
-        if (w.board) void deps.rankings?.showList(w.board, rankingTitle(w), undefined, w.summary.event?.def.puzzles.count, w.meta.dateKey ?? undefined);
+        if (w.board) void deps.rankings?.showList(w.board, rankingTitle(w), undefined, w.summary.event?.def.puzzles.count, w.meta.dateKey ?? undefined, myScoreView(w.summary) ?? undefined);
       },
       onListArea: (rect: DOMRect) => {
         if (!w.board || !deps.rankings) return;
-        void deps.rankings.showList(w.board, rankingTitle(w), rect, w.summary.event?.def.puzzles.count, w.meta.dateKey ?? undefined).then((ok) => {
+        // FB2B-7: my own row in the overlay list shows my exact time, like the panel ("Solved in").
+        void deps.rankings.showList(w.board, rankingTitle(w), rect, w.summary.event?.def.puzzles.count, w.meta.dateKey ?? undefined, myScoreView(w.summary) ?? undefined).then((ok) => {
           if (ok || win !== w || !router.isOpen('ranking')) return;
           // The overlay could not be placed: the honest fallback is my own records.
           const records = personalRecords(store.get(), viewCtx(), { board: boardKindOf(w.summary.mode), n: w.summary.n, thisMs: w.summary.ms, event: w.summary.event?.def ?? null });
@@ -321,6 +324,8 @@ export function createSession(deps: SessionDeps): Session {
     logPanel(w);
   }
 
+  /** L2B-3: the open victory's fish pill follows the wallet (a swap or purchase made from its "+"). */
+  let unbindVictory: (() => void) | null = null;
   function openVictory(): void {
     const w = win;
     if (!w) return;
@@ -329,7 +334,7 @@ export function createSession(deps: SessionDeps): Session {
     if (deps.banners) void deps.banners.screenShown('victory', { firstRunTutorial }).catch(() => undefined);
     const data = selectVictoryView(store.get(), viewCtx(), w.summary, { praise: w.praise }, c);
     const m = w.meta;
-    router.open('victory', {
+    let vprops = {
       ...data,
       now: () => clock.now(),
       onPrimary: () => {
@@ -338,7 +343,17 @@ export function createSession(deps: SessionDeps): Session {
       },
       onHome: () => session.onHome(),
       onShop: () => deps.openShop?.(),
-    });
+    };
+    router.open('victory', vprops);
+    unbindVictory?.();
+    unbindVictory = store.select(
+      (s) => s.save.wallet.fish,
+      (fish) => {
+        if (win !== w || !router.isOpen('victory') || !vprops.fish || vprops.fish.total === fish) return;
+        vprops = { ...vprops, fish: { ...vprops.fish, total: fish } };
+        router.update('victory', vprops);
+      },
+    );
     deps.rankings?.closeList();
     // UX-4: a crossfade. The victory opens over the ranking panel at the tap and fades in (the overlay
     // fade, fx.overlayFadeMs; reduced: fx.screenReducedMs); the panel, fading out under it, closes
@@ -507,7 +522,10 @@ export function createSession(deps: SessionDeps): Session {
     gen++;
     busy = false;
     winFlow.cancel();
+    router.releaseModal?.();
     deps.rankings?.closeList();
+    unbindVictory?.();
+    unbindVictory = null;
     win = null;
     timers.clear();
     unbindView?.();
@@ -595,11 +613,22 @@ export function createSession(deps: SessionDeps): Session {
     if (req.mode === 'level') deps.levels.prefetch(req.level);
     if (mode === 'tutorial') showCoach();
     if (state.status === 'ready') {
-      screen.playEntry();
-      timers.later(c.fx.boardEntryMs, () => dispatch({ type: 'START' }));
+      playBoardEntry();
     } else if (state.status === 'won') onWon(state, m, true);
     else if (state.status === 'lost') openFail(0);
     timers.sync();
+  }
+
+  /**
+   * The board-entry wave, its cue (review PAR-8: 'board_in', with the wave) and START when it ends.
+   * Only a fresh or retried board enters; a restored won or lost board does not (no wave, no cue).
+   */
+  function playBoardEntry(): void {
+    if (screen) {
+      screen.playEntry();
+      fx.play({ sfx: 'board_in' });
+    }
+    timers.later(c.fx.boardEntryMs, () => dispatch({ type: 'START' }));
   }
 
   const callbacks: GameScreenCallbacks = {
@@ -650,6 +679,8 @@ export function createSession(deps: SessionDeps): Session {
       const m = meta();
       const ev = m?.event;
       if (!ev) return null;
+      // L2B-4: an event that has ended offers no next puzzle (the shell routes "Back to event" Home).
+      if (clock.now() >= eventEnd(ev.def)) return null;
       const solved = save().events[ev.def.id]?.solved ?? 0;
       return solved < ev.def.puzzles.count ? solved : null;
     },
@@ -659,8 +690,7 @@ export function createSession(deps: SessionDeps): Session {
       const m = meta();
       if (!st || !m) return;
       for (const e of startEvents(m, st)) log(e);
-      screen?.playEntry();
-      timers.later(c.fx.boardEntryMs, () => dispatch({ type: 'START' }));
+      playBoardEntry();
     },
   });
 

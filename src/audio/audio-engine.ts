@@ -11,6 +11,12 @@ export type MuteReason = 'setting' | 'hidden' | 'pause' | 'ad';
 export interface AudioEngine {
   /** Creates/resumes the AudioContext. Call from a user gesture; idempotent. */
   unlock(): void;
+  /**
+   * Creates the AudioContext ahead of the first gesture, at an idle moment (review PERF-1: creating it
+   * inside the first tap took 68 ms of that tap's task at 4× CPU). It stays suspended until a gesture,
+   * which then only resumes it and plays the silent iOS unlock buffer. Optional; idempotent.
+   */
+  prewarm?(): void;
   /** null until unlocked or when WebAudio is unavailable. */
   context(): AudioContext | null;
   /** Master gain node that sfx connect to; null until unlocked. */
@@ -76,23 +82,34 @@ export function createAudioEngine(win: Window = window): AudioEngine {
     }
   };
 
+  /** The context and its master gain (not resumed, not primed); false when WebAudio is unavailable. */
+  const create = (): boolean => {
+    if (ctx) return true;
+    if (destroyed || unavailable) return false;
+    const Ctor = audioContextCtor(win);
+    if (!Ctor) {
+      unavailable = true;
+      return false;
+    }
+    try {
+      ctx = new Ctor();
+    } catch {
+      unavailable = true;
+      return false;
+    }
+    master = ctx.createGain();
+    master.gain.value = reasons.size > 0 ? 0 : level;
+    master.connect(ctx.destination);
+    return true;
+  };
+
+  /** Whether the silent unlock buffer has been played inside a gesture (iOS). */
+  let primed = false;
   const unlock = (): void => {
     if (destroyed || unavailable) return;
-    if (!ctx) {
-      const Ctor = audioContextCtor(win);
-      if (!Ctor) {
-        unavailable = true;
-        return;
-      }
-      try {
-        ctx = new Ctor();
-      } catch {
-        unavailable = true;
-        return;
-      }
-      master = ctx.createGain();
-      master.gain.value = reasons.size > 0 ? 0 : level;
-      master.connect(ctx.destination);
+    if (!create() || !ctx) return;
+    if (!primed) {
+      primed = true;
       primeSilence(ctx);
     }
     applyRunState();
@@ -105,6 +122,10 @@ export function createAudioEngine(win: Window = window): AudioEngine {
 
   return {
     unlock,
+    prewarm() {
+      // Before a gesture the browser keeps it suspended; nothing is resumed or played here.
+      create();
+    },
     context: () => ctx,
     output: () => master,
     setMuted(reason, muted) {

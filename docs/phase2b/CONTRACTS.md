@@ -25,7 +25,7 @@ Every file starts with `// Owner: <WS>` (CSS: `/* Owner: <WS>`). F0 rewrote the 
 
 **Lead (read-only for A–E):** `src/app/config.ts` · `src/i18n/virtual-locales.d.ts` · `scripts/locale-loaders.ts` · `vite.config.ts`, `vitest.config.ts`, `playwright.config.ts`, `tsconfig.json`, `package.json`, `package-lock.json` · `tests/unit/sanity.spec.ts`, `tests/unit/build-config.spec.ts` · `public/**` · `docs/phase2b/{parity-spec,CONTRACTS,provenance-F0}.md`. The lead also updates `docs/provenance.md`, 02, 04, 05, 06, Phase 2 CONTRACTS and STATUS at integration, from the `provenance-*.md` drafts (spec Appendix B).
 
-**Read-only for everyone in 2b:** `src/engine/**` (F0 made the one additive change: `PuzzleId` accepts `E…`, §7.1), `tests/unit/engine/**`, `tests/golden/**`, `src/ui/dom.ts`, the level and daily packs (`src/data/levels/**`, `src/data/daily/**`), the content scripts (`scripts/{gen-levels,gen-daily,gen-pool,level-schedule}.ts`) and their tests (`tests/property/{levels,hints,pipeline}.spec.ts`, `tests/e2e/determinism.spec.ts`).
+**Read-only for everyone in 2b:** `src/engine/**` (F0 made the one additive change: `PuzzleId` accepts `E…`, §7.1), `tests/unit/engine/**`, `tests/golden/**`, `src/ui/dom.ts`, the level and daily packs (`src/data/levels/**`, `src/data/daily/**`), the content scripts (`scripts/{gen-levels,gen-daily,gen-pool,level-schedule}.ts`) and their tests (`tests/property/{levels,hints,pipeline}.spec.ts`, `tests/e2e/determinism.spec.ts`). **Exception (review PAR-1, 2026-10-09):** every second Sunday from 2026-10-18 is now a 12×12 G4 daily (`game/ramp.ts` `DAILY_12_FROM`, `isTwelveSunday`), so `gen-daily --from 2026-10` regenerated the daily packs: exactly those 58 days changed (every other day is byte-identical) and the levels manifest's content version changed with them; `verify-levels` reports 0 issues.
 
 **Shared after F0: none.** Need a change in another workstream's file? Ask its owner. Need a change in a lead file (config value, a Playwright project, a package script)? Ask the lead.
 
@@ -110,7 +110,7 @@ C → B: `selectHomeView` (now fills `fish`, `bannerReserved`; `event: null` unt
 
 ### 4.4 D → C
 
-`platform.ads.banner?` (`show('bottom'): Promise<AdResult>`, `hide()`), `platform.ranking?`, `platform.groups?`, `platform.payments?` and `capabilities()` (`banner`, `leaderboards` = `ranking.caps().global`, `overlayViews`, `groups`, `payments`). All of them never reject. As built (D): `RankingProvider.showList` resolves `{ close(): void; readonly closed?: Promise<void> } | null`; `caps().global` (so `capabilities().leaderboards`) also needs at least one board id in `VITE_FB_LEADERBOARDS`; on FB `platform.ranking` is always defined and `platform.groups` / `platform.payments` are getters (the social code lands lazily after `start()`). Integration adds `RankListView.keep?(score)` (§11).
+`platform.ads.banner?` (`show('bottom'): Promise<AdResult>`, `hide()`), `platform.ranking?`, `platform.groups?`, `platform.payments?` and `capabilities()` (`banner`, `leaderboards` = `ranking.caps().global`, `overlayViews`, `groups`, `payments`). All of them never reject. As built (D): `RankingProvider.showList` resolves `{ close(): void; readonly closed?: Promise<void> } | null`; `caps().global` (so `capabilities().leaderboards`) also needs at least one board id in `VITE_FB_LEADERBOARDS`; on FB `platform.ranking` is always defined and `platform.groups` / `platform.payments` are getters (the social code lands lazily after `start()`). Integration adds `RankListView.keep?(score)` (§11); the review fixes add `RankingProvider.top(board, n, keep?)`, `RankingProvider.supports?(board)` and `RankListView.formatMine?(score)` (§11.7).
 
 `RankListView.formatScore(score)` is supplied **by C**: C decodes with `game/scoring.ts` and formats with i18n. D renders rows `{ id, rankText, scoreText, isMe }` (`fb/views/rank-list.ts`) only from entries the API returned.
 
@@ -404,3 +404,30 @@ Tokens added beyond the spec's §1.4 table: `--board-card`, `--glow-0`, `--page-
 - Favicon and `theme-color` use the Classic colours (`#E57010`, `#FFF4E6`; `theme-color` = `--page` `#FAF6F0`); `css-rules.spec.ts` guards the page shell too.
 - `tests/unit/sanity.spec.ts` imports `BANNED_PHRASES` from `scripts/i18n-check.ts` (one list).
 - `package.json`: `release:fbig` = verify → `build:release` → `size -- dist/release-fbig` → `zip:fbig`; new `zip:fbig:preview`.
+
+### 11.7 Review fixes (2026-10-09): API changes after the six-lens review
+
+The fixer groups P (platform, banner, data), R (app core, performance) and U (UI, accessibility, i18n), then the lead, changed these signatures. All are additive unless marked **changed**; every one has tests (STATUS-2b §11).
+
+| Area | What |
+|---|---|
+| `RankingProvider` (D) | `top(board, n, keep?)`: with `keep` (daily_fastest) the shown day's band is read past next-day entries (≤ `BAND_MAX_PAGES` = 4 pages of 50) and numbered inside it (FB2B-4). `supports?(board)`: false without a board id or after `LEADERBOARD_NOT_FOUND` (latched for the session, FB2B-6) |
+| `RankListView` (D) | `formatMine?(score)`: the text of **my** row when it differs from `formatScore` (the solve just made shows my exact time, FB2B-7) |
+| `ranking-flow.ts` (C) | `fetch(board, day?)`; **changed:** `showList(board, title, rect?, eventTotal?, day?, mine?)` (`mine`: my `RankScoreView`, FB2B-7); new `formatScoreView(view)` |
+| `BannerFlow` (C) | `entitlementChanged()`: No Ads became true (purchase, boot restore, late merge) → the banner and its reserve go (L2B-2). `fb-banner`: `HIDE_RETRY_MS`, `HIDE_RETRIES`, `stuckLoadMs()` (FB2B-1) |
+| `ShopFlowDeps.onOpen` (C) | now wired in boot: opening the shop hides a banner (FB2B-2) |
+| Build marker (D) | the FB builds carry `FB_IDS_MARKER` (`mewdoku-fb-ids:` + which ids are empty, never the ids); `zip-fbig` reads it and warns |
+| `Router` (C) | `beginLeave(to)` (PERF-1: the outgoing half of a screen change starts at the tap); `RouterFactories.screenOut`; a new screen is inserted before a leaving one; the victory is the outgoing layer (PAR-6). Lead: `reserveModal?()` / `releaseModal?()` (PERF-3: the screen turns inert at the win scrim, ahead of the ranking panel); the screen host carries `[data-modal]` while a modal is open, and the win scrim steps aside by that marker, not by `[inert]` |
+| `ui/fx/transitions.ts` (B) | `startScreenOut`, `releaseScreenOut`, `screenOutMs`, `screenOutStarted`; `playScreenTransition` joins an outgoing half that has already started |
+| `win-flow.ts` (C) | `victoryCrossfadeMs(reduced)`: the victory opens at the panel's tap and the panel closes once the victory is opaque (UX-4). Lead: `WinFlowDeps.onScrim?()` |
+| `session.ts` (C, lead) | the victory's fish pill follows the wallet while it is open (L2B-3); `nextEventIndex` is null after the event's end and the event victory's `last` is true then, so the primary reads "Back to event" (L2B-4); `board_in` plays with every board-entry wave (PAR-8) |
+| `workers/lazy-chunk.ts` (C) | `ChunkOptions.css` (the chunk's stylesheet pattern) and `ChunkOptions.reloadCss`; `failedCssUrl`, `reloadStylesheet`, `resetChunkCssState`: a failed lazy stylesheet is re-fetched with a cache-busting URL before the chunk resolves (ROB-1). Both loaders of the events chunk (router, event-flow) pass the same pattern |
+| Board (A, B) | custom properties sit on the element that uses them (PERF-1): `.board` has `--n --slot --pad --it --ir --ib --il --entry-*`; `.cell` `--xe`; `.cell__tile` `--c --diag`; `svg.cell__g` `--diag --breathe-delay`; `.cell__blink` `--blink-dur --blink-delay`. `board-cells.ts` `registerCellProperties()` registers `--diag`, `--breathe-delay`, `--blink-dur`, `--blink-delay` as non-inherited (`CELL_PROPERTIES`); `blinkTiming(cell)`. The input lock is one `::after` layer, not a rule on every cell. The board and cell labels follow a language change (A11Y-I18N-1) |
+| i18n (E) | `setLocale` retries a failed chunk from a cache-busting URL (`failedChunkUrl`, `setLocaleUrlImport` for tests, ROB-2); `translate`, `translateMarked`; `format.ts` `FSI PDI LRI RLI`, keyword marks `MARK`, `stripMarks`, `markCount`, `splitMarks` |
+| UI text (B) | `ui/locale-text.ts` `createLocaleText()` (static labels that follow the language); `ui/rich-text.ts` `richNodes`, `setRichText`, `stripTokens`; `ui/rich-tokens.ts` (keyword and colour-name tokens, PAR-7); `SettingsProps.feedbackUrl?` (PAR-5); `fittedMascot`, `MASCOT_MIN_PX` (UX-2); `fitLevel`, `FIT_LEVELS` (UX-1); `splitTitle` (I18N-TEXT-2); `arrowStep`, `inlineDir` (A11Y-HUB-1); `fbTopInset` (UX-9) |
+| `ShellDeps.applyLocale` (C) | **changed:** returns the locale now active (`Promise<LocaleId \| undefined>`); a pick that fell back toasts `toast.languageUnavailable` and restores the previous choice, so picking it again retries (ROB-2) |
+| Audio (B) | `AudioEngine.prewarm?()`: the context is created at an idle moment after the first route and only resumed in the first gesture (PERF-1). `attachUiClickFeedback(root, fb, { defer? })`, `afterNextFrame`: the click sound plays after the next frame, the haptic at once |
+| `game/ramp.ts` (C) | `DAILY_12_FROM`, `SUNDAY_12`, `isTwelveSunday(dateKey)` (PAR-1) |
+| Config (lead) | `support.feedbackUrl` (empty), `support.feedbackOnFbig` (false) |
+| Boot (C) | `<html data-fb-safe>` is set right after `init()` on FBIG (UX-3); the top bar keeps it in step |
+

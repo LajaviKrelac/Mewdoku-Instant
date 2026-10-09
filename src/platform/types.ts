@@ -160,6 +160,12 @@ export interface RankListView {
    * it (review FB2B-4; see RankingProvider.top).
    */
   readonly keep?: (score: number) => boolean;
+  /**
+   * [additive, review FB2B-7] The score text of MY row (isMe) when it differs from formatScore: the
+   * entry of the solve just made shows my exact time, as the panel does ("Solved in 0:03"), not the
+   * board's rounded-up second. Absent = formatScore for every row.
+   */
+  readonly formatMine?: (score: number) => string;
 }
 
 export interface RankingProvider {

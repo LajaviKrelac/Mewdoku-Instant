@@ -675,6 +675,96 @@ test.describe('FBIG daily ranking across time zones (reviews FB2B-4, FB2B-7)', (
       (JSON.parse(String(s.find('overlayViews.createOverlayViewWithXMLString')[0]?.args[2])) as { rows: { rank: string; kind: string }[] }).rows,
     );
     expect(rows.map((r) => `${r.rank}:${r.kind}`)).toEqual(['#1:mine', '#2:other', '#3:other', '#4:other']);
+    // FB2B-7 (final integration): my row in the overlay list shows the panel's exact time too.
+    const scores = await stub(page, (s) =>
+      (JSON.parse(String(s.find('overlayViews.createOverlayViewWithXMLString')[0]?.args[2])) as { rows: { score: string; kind: string }[] }).rows,
+    );
+    expect(scores.find((r) => r.kind === 'mine')?.score).toBe(solved);
   });
 });
+
+// ── review UX-3 / UX-9 (final integration): every dialog starts below FB's top-left 64 × 64 safe zone on
+// the small phone, in a left-to-right and a mirrored (Arabic) layout; the marker is the real FBIG one. ──
+
+for (const locale of ['en_US', 'ar_AR'] as const) {
+  test.describe(`FBIG dialogs clear the safe zone at 320 × 568 (${locale}; reviews UX-3, UX-9)`, () => {
+    test.use({ viewport: { width: 320, height: 568 } });
+
+    test('Settings, About, How to play, the shop, in-game Settings and a top-placed hint card', async ({ page }) => {
+      test.setTimeout(60_000);
+      await openGame(page, { locale, persist: false, data: { save: seededSave(12, 11) } });
+      await expect(page.locator('.home__play')).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.hasAttribute('data-fb-safe'))).toBe(true);
+      if (locale === 'ar_AR') await expect.poll(() => page.evaluate(() => document.documentElement.dir)).toBe('rtl');
+      // A control counts where it can be seen and tapped: its box clipped by every scrolling ancestor
+      // (a tall dialog scrolls inside its panel, which starts below the zone), and not under an inert
+      // dialog (a lower dialog in the stack cannot take a tap).
+      const zoneHits = (): Promise<string[]> =>
+        page.evaluate(() => {
+          const out: string[] = [];
+          for (const el of Array.from(document.querySelectorAll<HTMLElement>('.overlay button, .overlay a[href]'))) {
+            if (el.closest('[hidden], [inert]')) continue;
+            const r = el.getBoundingClientRect();
+            let top = r.top;
+            let left = r.left;
+            let bottom = r.bottom;
+            let right = r.right;
+            for (let a = el.parentElement; a; a = a.parentElement) {
+              const cs = getComputedStyle(a);
+              if (cs.overflowX === 'visible' && cs.overflowY === 'visible') continue;
+              const c = a.getBoundingClientRect();
+              top = Math.max(top, c.top);
+              left = Math.max(left, c.left);
+              bottom = Math.min(bottom, c.bottom);
+              right = Math.min(right, c.right);
+            }
+            if (right - left <= 0 || bottom - top <= 0) continue;
+            if (left < 64 && top < 64) out.push(`${el.className} [${Math.round(left)},${Math.round(top)}]`);
+          }
+          return out;
+        });
+      const settle = (): Promise<void> => page.waitForTimeout(350); // past the dialog's entry fade
+      await page.locator('.screen--home .top-bar__btn--settings').click();
+      await expect(page.locator('[data-overlay="settings"]')).toBeVisible();
+      await settle();
+      expect(await zoneHits(), 'Settings').toEqual([]);
+      await page.locator('[data-overlay="settings"] .settings__about-link').click();
+      await settle();
+      expect(await zoneHits(), 'Settings → About').toEqual([]);
+      await page.keyboard.press('Escape');
+      await settle();
+      await page.locator('[data-overlay="settings"] .settings__howto-link').click();
+      await expect(page.locator('[data-overlay="how_to_play"]')).toBeVisible();
+      await settle();
+      expect(await zoneHits(), 'How to play').toEqual([]);
+      await page.keyboard.press('Escape');
+      await page.keyboard.press('Escape');
+      await expect(page.locator('.overlay:visible')).toHaveCount(0);
+      await page.locator('.screen--home .fish-pill__plus').click();
+      await expect(page.locator('[data-overlay="shop"]')).toBeVisible();
+      await settle();
+      expect(await zoneHits(), 'Shop').toEqual([]);
+      await page.keyboard.press('Escape');
+      await expect(page.locator('[data-overlay="shop"]')).toBeHidden();
+      await page.locator('.home__play').click(); // locale-neutral (startLevel matches the English label)
+      await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
+      await page.locator('.screen--game .top-bar__btn--settings').click();
+      await expect(page.locator('[data-overlay="settings"]')).toBeVisible();
+      await settle();
+      expect(await zoneHits(), 'in-game Settings').toEqual([]);
+      await page.keyboard.press('Escape');
+      await expect(page.locator('[data-overlay="settings"]')).toBeHidden();
+      // The hint card: on the small phone it flips above the board (the bottom slot would cover it).
+      await page.locator('.screen--game .tool--bulb').click();
+      const card = page.locator('[data-overlay="hint"]');
+      await expect(card).toBeVisible();
+      await settle();
+      const placement = await card.getAttribute('data-placement');
+      expect(placement).toBe('top');
+      const rowTop = await card.locator('.hint-card__row').evaluate((el) => el.getBoundingClientRect().top);
+      expect(rowTop, 'top-placed hint card row').toBeGreaterThanOrEqual(64);
+      expect(await zoneHits(), `hint card (${placement})`).toEqual([]);
+    });
+  });
+}
 

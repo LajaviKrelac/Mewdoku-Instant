@@ -20,7 +20,7 @@ import { createLevelsRepo, type LevelsRepo } from '../game/levels-repo';
 import { localDateKey } from '../game/progression';
 import { migrate } from '../game/save';
 import type { GenResult, GenSpec } from '../engine/types';
-import { CellState, type GameState, type SaveData } from '../game/types';
+import { CellState, type GameState, type LocaleId, type SaveData } from '../game/types';
 import type { PlatformAdapter, RawSave } from '../platform/types';
 import { buildLocales, getDir, getLocale, onLocaleChanged, prefetchGuess, prefetchLocale, setLocale, t } from '../i18n';
 import { localeCandidates, resolveLocale } from '../i18n/locale';
@@ -149,6 +149,9 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
   // 1. FIRST: lets FB show its progress bar early (05 §4).
   await retryOnce(clock, cfg.boot.platformRetryDelayMs, () => platform.init());
   attempt(() => mountSprite(doc), undefined);
+  // UX-3: FB's top-left 64×64 safe zone, for the overlays' rules (:root[data-fb-safe]) from the first
+  // frame, whether or not a top bar has rendered yet (the top bar keeps it in step afterwards).
+  attempt(() => doc.documentElement.toggleAttribute('data-fb-safe', platform.id === 'fbig'), undefined);
   // S0 splash: web builds only (__PLATFORM__ is a build-time constant, so FBIG drops the module).
   const splash: Partial<RouterFactories> = __PLATFORM__ === 'web' ? { bootScreen: createBootScreen } : {};
   let storeRef: Store<AppState> | null = null;
@@ -214,7 +217,7 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
   // phase2b §6.3: the real locale (FB getLocale() is valid only now; the web's navigator.languages),
   // with the saved override; its chunk may hold the first route ≤ i18n.localeTimeoutMs. On a timeout
   // the game starts in English and switches when the chunk lands (onLocaleChanged below).
-  const applyLocale = (override: AppState['save']['settings']['locale']): Promise<unknown> =>
+  const applyLocale = (override: AppState['save']['settings']['locale']): Promise<LocaleId | undefined> =>
     setLocale(localeCandidates(platform.id, attempt(() => platform.getLocale(), 'en'), nav), { override, doc }).catch(() => undefined);
   const syncLocaleUi = (locale: AppState['ui']['locale'], dir: 'ltr' | 'rtl'): void =>
     store.update((s) => (s.ui.locale === locale && s.ui.dir === dir ? s : { ...s, ui: { ...s.ui, locale, dir } }));
@@ -373,7 +376,7 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
     banners,
     rankHub,
     levelSize,
-    applyLocale: (override) => void applyLocale(override),
+    applyLocale: (override) => applyLocale(override),
   });
   session = createSession({
     store,
@@ -519,6 +522,12 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
   //    start-up).
   void router.preloadOverlays();
   void lazySfx?.load();
+  // PERF-1: the AudioContext is created at an idle moment (suspended until a gesture), so the first
+  // tap only resumes it instead of building it inside that tap's task.
+  const prewarmAudio = (): void => attempt(() => audio.prewarm?.(), undefined);
+  const ric = (win as (Window & { requestIdleCallback?: (fn: () => void, o?: { timeout: number }) => number }) | null)?.requestIdleCallback;
+  if (typeof ric === 'function') attempt(() => ric.call(win, prewarmAudio, { timeout: 2000 }), undefined);
+  else clock.setTimeout(prewarmAudio, 1000);
   attempt(() => engine.preload(), undefined);
   // phase2b: retry unsent scores (§5.3), restore unconsumed purchases (§8.4) and show a finished
   // group challenge's result (§5.6). None of them blocks the first route.

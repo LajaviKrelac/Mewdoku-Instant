@@ -218,6 +218,14 @@ describe('a language switch relabels every view, open or cached (A11Y-I18N-1)', 
     expect(text(q(g.el, '.chip--colours .chip__text'))).toBe(de['game.chip.colours']);
     expect(q(g.el, '.tool--bulb').getAttribute('aria-label')).toBe(stripIsolates(t('game.tool.hint.a11y', { count: 5 })));
     expect(q(g.el, '.board')).toBe(board);
+    // Lead (final integration): the board's and every cell's accessible name follow too, in place.
+    expect(board.getAttribute('aria-label')).toBe(t('a11y.board', { n: 4 }));
+    expect(board.getAttribute('aria-label')).not.toBe('Puzzle board, 4 by 4');
+    const cell0 = q(g.el, '.cell[data-i="0"]');
+    expect(cell0.getAttribute('aria-label')).not.toMatch(/^Row 1, column 1/);
+    await setLocale('en');
+    expect(board.getAttribute('aria-label')).toBe('Puzzle board, 4 by 4');
+    expect(cell0.getAttribute('aria-label')).toMatch(/^Row 1, column 1, /);
   });
 
   it('the event screen relabels its static buttons and the track title', async () => {

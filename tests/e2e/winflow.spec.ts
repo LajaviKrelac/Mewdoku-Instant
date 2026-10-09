@@ -213,3 +213,40 @@ test('PAR-6: Home from the victory never shows the solved board again', async ({
   const stale = samples.filter((s) => s.games.some((g) => g.op > 0.02) && s.vic < 0.98);
   expect(stale).toEqual([]);
 });
+
+// ── review UX-12: the rising "+3" starts above the in-game fish pill, never over its icon and count ──
+
+for (const size of [null, { width: 320, height: 568 }] as const) {
+  test(`UX-12: the "+3" chip stays above the in-game fish pill (and on screen) while it rises${size ? ` at ${size.width}×${size.height}` : ''}`, async ({ page }) => {
+    if (size) await page.setViewportSize(size);
+    await open(page, atLevel(2));
+    await playNext(page);
+    const r = await page.evaluate(async () => {
+      const ok = (window as TestWindow).__mewdoku?.solve() ?? false;
+      if (!ok) throw new Error('solve failed');
+      const t0 = performance.now();
+      let seen = 0;
+      const bad: string[] = [];
+      await new Promise<void>((resolve) => {
+        const step = (): void => {
+          const t = performance.now() - t0;
+          const chip = document.querySelector('.fish-pill__label .fish-pill__chip');
+          const pill = document.querySelector('.pills .fish-pill');
+          if (t >= 1500 && chip && pill) {
+            seen++;
+            const c = chip.getBoundingClientRect();
+            const p = pill.getBoundingClientRect();
+            if (c.bottom > p.top + 1) bad.push(`t=${Math.round(t)}: chip bottom ${c.bottom.toFixed(1)} > pill top ${p.top.toFixed(1)}`);
+            if (c.top < 0) bad.push(`t=${Math.round(t)}: chip top ${c.top.toFixed(1)} < 0`);
+          }
+          if (t >= 4200) resolve();
+          else requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+      });
+      return { seen, bad };
+    });
+    expect(r.bad).toEqual([]);
+    expect(r.seen).toBeGreaterThan(0);
+  });
+}

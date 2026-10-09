@@ -341,7 +341,7 @@ test('keyboard only: focus moves into every new screen (event card → event, ev
   await page.locator('.screen--event .event__home').focus();
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');
-  await expect.poll(() => focusIn('.screen--home')).toBe(true); // was: <body>
+  await expect(page.locator('.home__play')).toBeFocused(); // its [data-autofocus] (was: <body>)
   // A level, won, then Home from the victory screen.
   await page.locator('.home__play').focus();
   await page.keyboard.press('Enter');
@@ -355,7 +355,7 @@ test('keyboard only: focus moves into every new screen (event card → event, ev
   await home.focus();
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');
-  await expect.poll(() => focusIn('.screen--home')).toBe(true); // was: <body>
+  await expect(page.locator('.home__play')).toBeFocused(); // was: <body>
   // And Tab goes on from there inside Home, not from the top of the document.
   await page.keyboard.press('Tab');
   expect(await focusIn('.screen--home')).toBe(true);

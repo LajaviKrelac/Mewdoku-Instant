@@ -26,6 +26,16 @@
 // a budget is raised only by a lead decision recorded here and in 04 §9). New rows: the first load
 // gzipped, the lazy CSS, social-flows under the optional lazy JS; the locale chunk cap is 28 KB
 // (Devanagari and Thai take 3 bytes a character, E's request). The FB zip stays ≤ 1 MB (zip-fbig).
+// Phase 2b review fixes (lead decision, 2026-10-09 final integration; 04 §9): the 47 review fixes
+// (banner and ranking hardening, PERF-1's screen-out and per-element properties, lazy-CSS retry,
+// relabelling on a language change, the dark victory, the FB safe zone, …) grew main JS 257.7 → 271.0
+// KB and the lazy chunks (core JS 65.7 → 71.8 KB, CSS 27.4 → 30.3 KB). Cheap lazy reductions were
+// tried first and found nothing to cut (no unused selector in the lazy stylesheets, no module
+// duplicated between main and lazy chunks but the by-design engine fallback; moving the hub and
+// group-result UIs to the optional chunk would save 4.8 KB of core lazy JS but needs a second overlay
+// loader, not a cheap change). Ceilings = the measured maximum + about 3 %: main JS 266 → 279, first
+// load 327 → 340 (2.7 %: kept below the sum of its rows' ceilings, so it still binds), + 1 locale 351 → 365, gzip 121.5 → 126.5, core lazy JS 68 → 74, lazy CSS 28.5 →
+// 31.2, and the optional lazy JS 28.5 → 29.3 (within, but at 28.4 KB it had 0.1 KB left). The first load stays inside Meta's < 5 s on Slow 4G (STATUS-2b §4, measured).
 //
 // Usage: tsx scripts/size-check.ts [distDir …] [--json]
 //   No dirs → every existing one of dist/web, dist/fbig, dist/release-web and dist/release-fbig. A dir
@@ -73,10 +83,11 @@ export const LOCALE_CHUNK = /^assets\/locale-[A-Za-z-]+-[^/]*\.js$/;
 
 /**
  * In matching order: a file is counted by the first budget it matches. Ceilings (2b integration,
- * 2026-10-09): the largest measured build (FBIG for JS) plus about 3 % (04 §9).
+ * 2026-10-09, re-set after the review fixes): the largest measured build (FBIG for JS) plus about 3 %
+ * (04 §9).
  */
 export const BUDGETS: readonly SizeBudget[] = [
-  { label: 'Main JS', pattern: /^assets\/index-[^/]*\.js$/, maxBytes: 266 * KB, fromHtml: 'js', firstLoad: true },
+  { label: 'Main JS', pattern: /^assets\/index-[^/]*\.js$/, maxBytes: 279 * KB, fromHtml: 'js', firstLoad: true },
   // Only the stylesheet index.html links; the lazy chunks' stylesheets are the 'Lazy CSS' row.
   { label: 'CSS', pattern: /^$/, maxBytes: 43.5 * KB, fromHtml: 'css', firstLoad: true },
   // The latin-ext face (tr, pl) is fetched only when such glyphs appear (unicode-range, phase2b §6.6).
@@ -85,18 +96,18 @@ export const BUDGETS: readonly SizeBudget[] = [
   { label: 'index.html', pattern: /^index\.html$/, maxBytes: 1 * KB, firstLoad: true },
   { label: 'Worker JS (lazy)', pattern: /^assets\/[^/]*worker[^/]*\.js$/, maxBytes: 18.5 * KB },
   { label: 'Locale chunk (each)', pattern: LOCALE_CHUNK, maxBytes: 28 * KB, perFile: true },
-  { label: 'Lazy JS (optional)', pattern: /^assets\/(?:events|fb-social|social-flows)-[^/]*\.js$/, maxBytes: 28.5 * KB },
-  { label: 'Lazy JS (core)', pattern: /^assets\/[^/]*\.js$/, maxBytes: 68 * KB },
-  { label: 'Lazy CSS', pattern: /^assets\/[^/]*\.css$/, maxBytes: 28.5 * KB },
+  { label: 'Lazy JS (optional)', pattern: /^assets\/(?:events|fb-social|social-flows)-[^/]*\.js$/, maxBytes: 29.3 * KB },
+  { label: 'Lazy JS (core)', pattern: /^assets\/[^/]*\.js$/, maxBytes: 74 * KB },
+  { label: 'Lazy CSS', pattern: /^assets\/[^/]*\.css$/, maxBytes: 31.2 * KB },
   { label: 'Event packs', pattern: /^assets\/[a-z][a-z-]*-\d{4}-[^/]*\.json$/, maxBytes: LISTED },
 ];
 
 /** Everything index.html loads before the first screen, English (the firstLoad rows). */
-export const FIRST_LOAD_MAX = 327 * KB;
+export const FIRST_LOAD_MAX = 340 * KB;
 /** The first load plus the largest non-English locale chunk (phase2b §11). */
-export const FIRST_LOAD_LOCALE_MAX = 351 * KB;
+export const FIRST_LOAD_LOCALE_MAX = 365 * KB;
 /** The first load gzipped (woff2 as is): what players download from a compressing host. */
-export const FIRST_LOAD_GZIP_MAX = 121.5 * KB;
+export const FIRST_LOAD_GZIP_MAX = 126.5 * KB;
 export const FB_MAX_FILES = 100;
 
 interface FileEntry {

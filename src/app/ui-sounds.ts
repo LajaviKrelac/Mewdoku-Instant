@@ -18,12 +18,34 @@ export function isUiButtonClick(root: HTMLElement, target: EventTarget | null): 
   return btn.closest('.board') === null;
 }
 
-/** Attaches the listener; returns detach(). Feedback errors never reach the page. */
-export function attachUiClickFeedback(root: HTMLElement, fb: UiClickFeedback): () => void {
+/**
+ * Runs `fn` after the next frame has been produced (review PERF-1: the click sound's synthesis took
+ * 33 ms of the tap's own task at 4× CPU, ahead of the button's visible answer). About one frame of
+ * audio latency, never a held frame. Without requestAnimationFrame: a plain task.
+ */
+export function afterNextFrame(fn: () => void, win: Window | null = typeof window === 'undefined' ? null : window): void {
+  const later = (): void => void setTimeout(fn, 0);
+  if (win && typeof win.requestAnimationFrame === 'function') win.requestAnimationFrame(later);
+  else later();
+}
+
+/**
+ * Attaches the listener; returns detach(). Feedback errors never reach the page. The sound is played
+ * through `defer` (default afterNextFrame), the haptic pulse at once (it needs the gesture).
+ */
+export function attachUiClickFeedback(root: HTMLElement, fb: UiClickFeedback, opts: { readonly defer?: (fn: () => void) => void } = {}): () => void {
+  const defer = opts.defer ?? ((fn: () => void) => afterNextFrame(fn, root.ownerDocument.defaultView));
+  const play = (): void => {
+    try {
+      fb.play();
+    } catch {
+      // audio must never break a button
+    }
+  };
   const onClick = (ev: Event): void => {
     if (!isUiButtonClick(root, ev.target)) return;
     try {
-      fb.play();
+      defer(play);
       fb.haptic();
     } catch {
       // audio / haptics must never break a button

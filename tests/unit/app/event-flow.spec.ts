@@ -10,6 +10,7 @@ import { selectEventCard, selectEventView, selectHomeView, type ViewContext } fr
 import { eventEnd, eventStart, type EventDef } from '../../../src/game/events';
 import { defaults } from '../../../src/game/save';
 import type { InProgressV2, SaveData } from '../../../src/game/types';
+import { t } from '../../../src/i18n';
 import { createHarness, SOL5, WRONG5, type Harness, tapRanking } from './harness';
 
 const DEFS = bundledEventDefs();
@@ -185,6 +186,22 @@ describe('event sessions (§4.4, §4.5)', () => {
     expect(h.router.props.victory?.event?.last).toBe(true);
     await h.session.onNext();
     expect(h.events.filter((e) => e !== 'preload')).toEqual([`goEvent:${LANTERN.id}`]);
+    expect(h.store.get().game).toBeNull();
+  });
+
+  it('L2B-4: a puzzle won after the end offers "Back to event"; onNext goes there, with no start and no error toast', async () => {
+    const h = eventHarness();
+    await play(h, 0);
+    h.clock.setNow(eventEnd(LANTERN) + 1000); // the event ended mid-puzzle
+    for (const c of SOL5) h.session.onCellDoubleTap(c);
+    await h.settle(h.config.fx.winOverlayDelayMs);
+    await tapRanking(h);
+    expect(h.router.props.victory?.event).toMatchObject({ solvedAfter: 1, total: 21, last: true });
+    h.log.length = 0;
+    await h.session.onNext();
+    expect(h.log.filter((l) => l.startsWith('screen:game'))).toEqual([]);
+    expect(h.events.filter((e) => e !== 'preload')).toEqual([`goEvent:${LANTERN.id}`]);
+    expect(h.router.toasts).not.toContain(t('toast.error'));
     expect(h.store.get().game).toBeNull();
   });
 

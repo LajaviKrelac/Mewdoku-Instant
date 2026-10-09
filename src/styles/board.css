@@ -4,10 +4,15 @@
    grid lines or region strokes; the white X over its tinted edge; Tux at 0.84 × slot; the solved-board
    glow. Glyph states (data-s), region fade (data-done) (02 §17.4, 04 §5.3). Tokens only.
    DOM (ui/board/board-view.ts, board-cells.ts):
-     .board[role=grid][data-mood][data-hl][data-patterns][aria-disabled] (--n --slot --pad)
-       > .board__row[role=row] > button.cell[data-i][data-s=e|m|c|w|g][data-done][data-f][data-ghost][data-mood]
-           (--c --xe --it --ir --ib --il --row --blink-dur --blink-delay)
-           > .cell__tile + .cell__glow + svg.cell__g > .cell__pat? .cell__xe ×2 .cell__x ×2 .cell__catg?(.cell__cat .cell__blink .cell__ear)
+     .board[role=grid][data-mood][data-hl][data-patterns][aria-disabled]
+         (--n --slot --pad --it --ir --ib --il --entry-*; ::after = the input-lock layer)
+       > .board__row[role=row] > button.cell[data-i][data-s=e|m|c|w|g][data-done][data-f][data-ghost][data-mood] (--xe)
+           > .cell__tile (--c --diag) + .cell__glow + svg.cell__g (--diag --breathe-delay)
+               > .cell__pat? .cell__xe ×2 .cell__x ×2 .cell__catg?(.cell__cat .cell__blink (--blink-dur --blink-delay) .cell__ear)
+   Custom properties sit on the element that uses them (review PERF-1): the even insets and the entry
+   timing once on .board; --diag, --breathe-delay, --blink-dur and --blink-delay are registered as
+   non-inherited (board-cells.ts registerCellProperties: 0 / 0ms / 5s / 0ms), and their var()
+   fallbacks here and in fx.css must stay equal to those initial values.
    Layering: tiles, then every glow (z 1, so a glow spills over the neighbouring tiles), then every
    cell's SVG (z 2: X marks and cats stay above all glows). The card's `contain` keeps it local. */
 
@@ -261,7 +266,18 @@
   }
 }
 
-.board[aria-disabled='true'] .cell {
+/* The input lock (02 §6.4): one layer over the cells gives the default cursor (review PERF-1 /
+   PERF-3: a `.board[aria-disabled] .cell` rule restyled every cell and its subtree each time the lock
+   toggled, 48–78 ms at 4× CPU on 12×12; this layer costs about 1 ms). Pointer input is hit-tested
+   from the board's geometry (gestures.ts), so it reaches the board as before and is ignored. */
+.board[aria-disabled='true']::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 3;
   cursor: default;
 }
 

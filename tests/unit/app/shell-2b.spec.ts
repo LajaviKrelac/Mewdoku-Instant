@@ -11,7 +11,9 @@ import { createRankingFlow } from '../../../src/app/ranking-flow';
 import { createShell, type Shell } from '../../../src/app/shell';
 import { createShopFlow, type ShopFlow } from '../../../src/app/shop-flow';
 import { eventEnd, eventStart, type EventDef } from '../../../src/game/events';
-import type { SaveData } from '../../../src/game/types';
+import type { LocaleId, SaveData } from '../../../src/game/types';
+import { mergeConfig, type GameConfig } from '../../../src/app/config';
+import { t } from '../../../src/i18n';
 import type { ShopProps } from '../../../src/ui/overlays/shop-sheet';
 import { createHarness, type Harness } from './harness';
 
@@ -23,7 +25,14 @@ afterEach(() => setFlagOverrides({}));
 
 function setup(
   save: (s: SaveData) => SaveData = (s) => s,
-  opts: { now?: number; locales?: boolean; chunk?: Partial<EventsChunk>; shop?: (real: ShopFlow) => ShopFlow } = {},
+  opts: {
+    now?: number;
+    locales?: boolean;
+    chunk?: Partial<EventsChunk>;
+    shop?: (real: ShopFlow) => ShopFlow;
+    config?: GameConfig;
+    applyLocale?: (o: 'auto' | LocaleId) => Promise<LocaleId | undefined> | void;
+  } = {},
 ) {
   const h = createHarness({
     save: (s) => save({ ...s, progress: { level: 15, completed: 14, best: {} } }),
@@ -77,7 +86,8 @@ function setup(
     shop: opts.shop ? opts.shop(shop) : shop,
     banners,
     rankHub,
-    ...(opts.locales ? { applyLocale: (o: string) => void locales.push(o) } : {}),
+    ...(opts.locales ? { applyLocale: opts.applyLocale ?? ((o: string) => void locales.push(o)) } : {}),
+    ...(opts.config ? { config: opts.config } : {}),
   });
   return { h, shell, locales, banners };
 }
@@ -342,5 +352,71 @@ describe('shell: shop, hub, settings rows (§5.5, §6.8, §8.5)', () => {
     expect(p?.list.kind).toBe('records');
     p?.onContinue();
     expect(h.router.isOpen('ranking')).toBe(false);
+  });
+});
+
+// ── review fixes, final integration: PAR-5 (Feedback row) and ROB-2 part 2 (a language that falls back) ──
+
+describe('shell: Settings Feedback row (review PAR-5)', () => {
+  const URL = 'https://example.org/mewdoku-feedback';
+  it('hidden with the default config (empty support.feedbackUrl)', () => {
+    const { h, shell } = setup();
+    shell.openSettings();
+    expect(h.router.props.settings?.feedbackUrl).toBeUndefined();
+  });
+
+  it('shown on the web when support.feedbackUrl is set', () => {
+    const { h, shell } = setup((s) => s, { config: mergeConfig({ support: { feedbackUrl: URL } }) });
+    shell.openSettings();
+    expect(h.router.props.settings?.feedbackUrl).toBe(URL);
+  });
+
+  it('hidden on FBIG unless support.feedbackOnFbig', () => {
+    const off = setup((s) => s, { config: mergeConfig({ support: { feedbackUrl: URL } }) });
+    (off.h.platform as { id: string }).id = 'fbig';
+    off.shell.openSettings();
+    expect(off.h.router.props.settings?.feedbackUrl).toBeUndefined();
+    const on = setup((s) => s, { config: mergeConfig({ support: { feedbackUrl: URL, feedbackOnFbig: true } }) });
+    (on.h.platform as { id: string }).id = 'fbig';
+    on.shell.openSettings();
+    expect(on.h.router.props.settings?.feedbackUrl).toBe(URL);
+  });
+});
+
+describe('shell: Settings → Language when the chunk cannot load (review ROB-2)', () => {
+  it('a pick that falls back toasts "That language couldn\'t load" and puts the previous choice back (picking it again retries)', async () => {
+    const picks: string[] = [];
+    const { h, shell } = setup((s) => s, {
+      locales: true,
+      applyLocale: (o) => {
+        picks.push(o);
+        return Promise.resolve<LocaleId>('en'); // the chunk failed: English stays
+      },
+    });
+    shell.openSettings();
+    const lang = h.router.props.settings?.language;
+    expect(lang).toBeDefined(); // the unit build has all 17 locales
+    if (!lang) return;
+    lang.onPick('de');
+    expect(h.save().settings.locale).toBe('de');
+    await flush(h);
+    expect(h.router.toasts).toContain(t('toast.languageUnavailable'));
+    expect(h.save().settings.locale).toBe('auto');
+    expect(h.router.props.settings?.language?.current).toBe('auto');
+    expect(picks).toEqual(['de']);
+  });
+
+  it('a pick that loads, "auto", or a superseded pick never toasts', async () => {
+    const { h, shell } = setup((s) => s, { locales: true, applyLocale: (o) => Promise.resolve<LocaleId>(o === 'auto' ? 'en' : o) });
+    shell.openSettings();
+    const lang = h.router.props.settings?.language;
+    expect(lang).toBeDefined();
+    if (!lang) return;
+    lang.onPick('fr');
+    await flush(h);
+    h.router.props.settings?.language?.onPick('auto');
+    await flush(h);
+    expect(h.router.toasts).not.toContain(t('toast.languageUnavailable'));
+    expect(h.save().settings.locale).toBe('auto');
   });
 });

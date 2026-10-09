@@ -38,6 +38,25 @@ describe('audio engine', () => {
     expect(FakeAudioContext.instances).toHaveLength(1);
   });
 
+  it('PERF-1: prewarm() builds the context before any gesture (suspended, nothing played); the first gesture only resumes and primes it', () => {
+    const win = fakeAudioWindow();
+    const engine = createAudioEngine(win);
+    engine.prewarm?.();
+    engine.prewarm?.();
+    expect(FakeAudioContext.instances).toHaveLength(1);
+    const ctx = ctxOf();
+    expect(ctx.state).toBe('suspended');
+    expect(ctx.calls.resume).toBe(0);
+    expect(ctx.sources).toHaveLength(0); // the silent unlock buffer waits for a gesture (iOS)
+    expect(engine.output()).toBe(ctx.gains[0] as unknown as AudioNode);
+    gesture(win);
+    expect(FakeAudioContext.instances).toHaveLength(1);
+    expect(ctx.state).toBe('running');
+    expect(ctx.sources[0]?.started).toBe(0);
+    gesture(win, 'keydown');
+    expect(ctx.sources).toHaveLength(1); // primed once
+  });
+
   it('resumes a context the OS suspended on the next gesture', () => {
     const win = fakeAudioWindow();
     createAudioEngine(win);

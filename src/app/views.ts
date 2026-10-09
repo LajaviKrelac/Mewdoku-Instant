@@ -213,7 +213,8 @@ export function selectVictoryView(state: AppState, ctx: ViewContext, win: WinSum
       solvedBefore: e.solvedBefore,
       solvedAfter: e.solvedAfter,
       reward: sumRewards(e.milestones.map((m) => m.reward)),
-      last: e.solvedAfter >= total,
+      // L2B-4: after the event's end there is no next puzzle: the primary reads "Back to event".
+      last: e.solvedAfter >= total || ctx.now >= eventEnd(e.def),
     };
   }
   const level = win.mode === 'level' ? (win.level ?? null) : win.mode === 'tutorial' ? 1 : null;

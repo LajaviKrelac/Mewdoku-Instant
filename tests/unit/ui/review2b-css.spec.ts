@@ -112,3 +112,32 @@ describe('sizes and text (A11Y-HUB-1, I18N-TEXT-1, UX-2, PAR-7)', () => {
     expect(decls('overlay-chunk.css', '.color-name')).not.toMatch(/(^|[;\s])color:/);
   });
 });
+
+// ── lead, final integration: the CSS halves of UX-12, PERF-1/PERF-3 and UX-4 ──
+
+describe('final integration: label, input lock, scrim hand-off, panel fade', () => {
+  it('UX-12: the "+3" label is anchored above the pill, and its keyframes rise from there', () => {
+    const label = decls('screens.css', '.fish-pill__label');
+    expect(label).toMatch(/bottom:\s*100%/);
+    expect(label).not.toMatch(/(^|;)\s*top:\s*0/);
+    expect(decls('screens.css', '.fish-pill__label[data-reduced]')).toMatch(/transform:\s*none/);
+    expect(css('fx.css')).toMatch(/@keyframes fish-label-rise\s*\{\s*0%\s*\{\s*opacity:\s*0;\s*transform:\s*translateY\(6px\) scale\(0\.6\);/);
+  });
+
+  it('PERF-1 / PERF-3: the input lock is one layer over the board, not a rule on every cell', () => {
+    expect(decls('board.css', ".board[aria-disabled='true'] .cell")).toBe('');
+    const lock = decls('board.css', ".board[aria-disabled='true']::after");
+    expect(lock).toMatch(/cursor:\s*default/);
+    expect(lock).toMatch(/position:\s*absolute/);
+  });
+
+  it('PERF-3: the win scrim steps aside by the router\'s [data-modal] marker, not by [inert]', () => {
+    expect(decls('screens.css', '[inert] .game__scrim')).toBe('');
+    expect(decls('screens.css', '.app-screen[data-modal] .game__scrim')).toMatch(/opacity:\s*0/);
+  });
+
+  it('UX-4: the ranking panel\'s leave fades its content, never its scrim', () => {
+    expect(decls('overlay-chunk.css', ".overlay[data-overlay='ranking'].is-leaving")).toBe('');
+    expect(decls('overlay-chunk.css', ".overlay[data-overlay='ranking'].is-leaving .overlay__panel")).toMatch(/opacity:\s*0/);
+  });
+});

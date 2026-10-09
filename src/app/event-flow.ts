@@ -48,7 +48,9 @@ export interface EventFlow {
 
 export function createEventFlow(deps: EventFlowDeps): EventFlow {
   const c = deps.config ?? cfg;
-  const load = deps.loadChunk ?? (() => loadChunk(() => import('./events-chunk')));
+  // ROB-1: the same stylesheet pattern as the router's loader, so a stylesheet that failed first here
+  // (or there) is re-fetched before the chunk resolves.
+  const load = deps.loadChunk ?? (() => loadChunk(() => import('./events-chunk'), { css: /events-chunk-[\w-]+\.css/ }));
   let chunk: Promise<EventsChunk | null> | null = null;
   const on = (): boolean => isFlagOn('events');
   return {

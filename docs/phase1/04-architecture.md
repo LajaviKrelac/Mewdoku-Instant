@@ -743,20 +743,20 @@ On the web adapter, `now()` and `critical()` are the same thing: a synchronous `
 
 **Policy (lead decision, Phase 2b integration, 2026-10-09).** The first load is kept as small as practical and well within Meta's < 5 s load guideline on 4G (05 §5.4): everything a first screen does not need is lazy, and its stylesheet travels with its chunk. Each ceiling is the largest measured build (FBIG for JS, which carries the SDK glue) plus about 3 % headroom, so growth is noticed early. A ceiling moves only by a lead decision recorded here and in the `size-check.ts` history comment. The locale chunk cap is 28 KB per file (Devanagari and Thai take 3 bytes a character), and the FB zip stays ≤ 1 MB. Sizes are raw bytes (FB hosting may not compress, 05 §5); the first load is also budgeted gzipped (woff2 counted as it is), which is what a compressing CDN sends.
 
-| Item | Ceiling | Measured 2026-10-09 (web · FBIG) | Notes |
+| Item | Ceiling | Measured 2026-10-09, final (web · FBIG) | Notes |
 |---|---|---|---|
-| Main JS (entry + modulepreload chunks; incl. the main-thread engine parts, bundled pack-000, English strings) | ≤ 266 KB | 243.6 · 257.7 | Phase 2 final 173.3 (FBIG). 2b added Tux art, save v2, economy, scoring, events, the win flow, the FB banner and social facades, the i18n runtime and about 8 KB of English strings |
-| CSS (the stylesheet `index.html` links) | ≤ 43.5 KB | 42.1 · 42.1 | 70.9 KB before the integration split (42.0 KB right after it; a short-screen Home rule added 0.1 KB): the overlays' and the event screen's rules moved into their chunks' stylesheets |
+| Main JS (entry + modulepreload chunks; incl. the main-thread engine parts, bundled pack-000, English strings) | ≤ 279 KB | 256.4 · 271.0 | Phase 2 final 173.3 (FBIG). 2b added Tux art, save v2, economy, scoring, events, the win flow, the FB banner and social facades, the i18n runtime and about 8 KB of English strings; the review fixes added 13 KB (banner and ranking hardening, the router's screen-out and focus, lazy-CSS retry, relabelling, the shared viewport reading). Was ≤ 266 (243.6 · 257.7) at the integration pass |
+| CSS (the stylesheet `index.html` links) | ≤ 43.5 KB | 42.6 · 42.6 | 70.9 KB before the integration split: the overlays' and the event screen's rules moved into their chunks' stylesheets |
 | Font (first load, the latin subset) | ≤ 17 KB | 16.5 | The latin-ext face is lazy (unicode-range), listed only |
 | `index.html` | ≤ 1 KB | 0.8 · 0.9 | — |
-| **First-load total** (the four rows above) | **≤ 327 KB** | 302.9 · 317.2 | 2b spec §11 projected ≈ 266 KB |
-| **First load + 1 locale** (the largest non-English catalogue added) | **≤ 351 KB** | 326.0 · 340.3 | A non-English player loads exactly one locale chunk |
-| **First load, gzip** | **≤ 121.5 KB** | 113.1 · 117.9 | About 0.6 s at 1.6 Mbit/s ("slow 4G"), well under the 5 s guideline |
+| **First-load total** (the four rows above) | **≤ 340 KB** | 316.3 · 331.0 | 2b spec §11 projected ≈ 266 KB; was ≤ 327 (302.9 · 317.2). 340 is 2.7 % over the FBIG build, kept below the sum of the rows' ceilings so it still binds |
+| **First load + 1 locale** (the largest non-English catalogue added) | **≤ 365 KB** | 339.8 · 354.4 | A non-English player loads exactly one locale chunk; was ≤ 351 |
+| **First load, gzip** | **≤ 126.5 KB** | 117.9 · 122.9 | Was ≤ 121.5 (113.1 · 117.9). Measured times: STATUS-2b §4 (the transfer alone understates the first load 4–7×, review DOC-1) |
 | Worker JS (lazy) | ≤ 18.5 KB | 17.7 · 17.6 | Created on the first generation, never during boot (§5.5) |
-| Locale chunk (each of 16) | ≤ 28 KB | 23.1 (hi) | Only the active locale loads; release builds carry only `i18n.releaseLocales` |
-| Lazy JS, core (overlay chunk with the 2b overlays, hint engine, sound recipes, RPC, main-thread generator and grader) | ≤ 68 KB | 65.9 · 65.7 | Fetched right after the first screen (boot step 8), or during boot on a first run (the coach) |
-| Lazy JS, optional (`events`, `fb-social`, `social-flows`) | ≤ 28.5 KB | 15.1 · 27.4 | `events` when an event is active or teased (or an event board mounts); `fb-social` after `start()`; `social-flows` on the first hub, top-list or group use |
-| Lazy CSS (`overlay-chunk-*.css`, `events-chunk-*.css`) | ≤ 28.5 KB | 27.4 | Loaded by Vite's preload helper before its chunk resolves |
+| Locale chunk (each of 16) | ≤ 28 KB | 23.5 (hi) | Only the active locale loads; release builds carry only `i18n.releaseLocales` |
+| Lazy JS, core (overlay chunk with the 2b overlays, hint engine, sound recipes, RPC, main-thread generator and grader) | ≤ 74 KB | 71.8 · 71.5 | Fetched right after the first screen (boot step 8), or during boot on a first run (the coach). Was ≤ 68 (65.9 · 65.7); the review fixes' overlay work (relabelling, rich teaching text, the victory's fit steps, the shop's live line) added 6 KB |
+| Lazy JS, optional (`events`, `fb-social`, `social-flows`) | ≤ 29.3 KB | 15.2 · 28.4 | `events` when an event is active or teased (or an event board mounts); `fb-social` after `start()`; `social-flows` on the first hub, top-list or group use |
+| Lazy CSS (`overlay-chunk-*.css`, `events-chunk-*.css`) | ≤ 31.2 KB | 30.3 | Loaded by Vite's preload helper before its chunk resolves (and re-fetched once with a cache-busting URL when it fails, review ROB-1). Was ≤ 28.5 (27.4); the dark victory, the FB safe zone and the sticky victory actions added 2.9 KB |
 | Event packs (3 × 21 records), other packs (9 × ~15 KB), daily months (27 × ~4.7 KB) | listed | 9.6 + 273 | Fetched on demand |
 | Files in the FB zip | ≤ 100 (platform cap 500) | 77 (preview) · 61 (release) | — |
 | FB zip size | ≤ 1 MB hard (zip bytes), warning above 750 KB | see STATUS-2b | `zip-fbig.ts` (§10) |
@@ -765,7 +765,9 @@ Before the integration pass the same builds measured: web first load 330.7 KB ra
 
 What stays in the main bundle, and why: the game screen and board (the first screen of a first run is the tutorial board), pack-000 (the first hundred levels play without a fetch, Phase 2), the save migration and merge, the win flow (it starts on the frame of `WON`, with the rewards already saved, §2.2 of the 2b spec; lazy-loading it would only save about 8 KB and add a load race at the moment that matters), and the FB social facades (they keep `capabilities()` final at `init()` while the social code stays lazy). Accidental duplication was checked from the source maps: only the engine modules appear twice, in the worker and in the lazy main-thread fallback chunks, by design (§5.5).
 
-History: Phase 1 estimated 140 KB of main JS; integration (2026-10-07) set CSS 36 KB and main JS 170 KB; Phase 2 hardening raised main JS to 190 KB, CSS to 40 KB and the first load to 250 KB after moving the coach into the overlay chunk; the 2b spec (§11) proposed 210 / 53 / 280 / 305 KB, which the integrated 2b code exceeded; the integration pass split the CSS, removed dead code and set the ceilings above.
+**Review fixes (lead decision, 2026-10-09, final integration).** The 47 fixes of the six-lens review pushed five rows over. Cheap reductions in the lazy chunks were tried first: no selector in the lazy stylesheets is unused (three candidates are all built at runtime), and the source maps show no module in two chunks except the by-design engine fallback; moving the rankings-hub and group-result UIs into the optional chunk would save 4.8 KB of core lazy JS but needs a second overlay loader in the router, which is not a cheap change. So each over-budget ceiling was set to the measured maximum plus about 3 % (table), and the optional lazy JS too (within its 28.5 KB at 28.4, with no headroom left). The first load stays within Meta's < 5 s on Slow 4G (measured, STATUS-2b §4).
+
+History: Phase 1 estimated 140 KB of main JS; integration (2026-10-07) set CSS 36 KB and main JS 170 KB; Phase 2 hardening raised main JS to 190 KB, CSS to 40 KB and the first load to 250 KB after moving the coach into the overlay chunk; the 2b spec (§11) proposed 210 / 53 / 280 / 305 KB, which the integrated 2b code exceeded; the integration pass split the CSS, removed dead code and set ceilings of 266 / 43.5 / 327 / 351 / 121.5 KB (lazy core 68, lazy CSS 28.5); the review fixes raised main JS, the first-load totals, the gzip row, the core and optional lazy JS and the lazy CSS to the values in the table.
 
 ## 10. npm scripts
 

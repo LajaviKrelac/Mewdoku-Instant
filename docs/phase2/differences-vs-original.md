@@ -43,7 +43,9 @@ Phase 2b ([parity-spec](../phase2b/parity-spec.md)) set out to close all eight h
 | 7 | Accessibility | **Kept by design** (user decision) | Colour patterns, Reduce motion, screen-reader labels and full keyboard play still work, now also on every new screen; the defaults look like the original (patterns off, even gutters, white X) | These remain our extras: the user chose to keep them (headline 7) |
 | 8 | Purchases | **Partly closed** | FBIG on facebook.com and Android: a shop with five consumable products (No Ads kept as a save entitlement, hint, kitty and fish packs), the purchase / consume / boot-restore order, and paid grants that survive a save merge; fish swaps everywhere | No purchases on iOS, Messenger.com or the web, and no subscriptions (platform). The payment details await G5 |
 
-The unverified rows further down moved too: the **motion** gap is mostly closed (a board-entry wave, screen transitions, board-cat breathing and ear flicks, a heart break, the win flow), and fish swaps and group rewards added a **helper economy** beside the starting stocks. **Board sizes** are unchanged and still unknown on the original's side.
+The unverified rows further down moved too: the **motion** gap is mostly closed (a board-entry wave with its own soft cue, screen transitions, board-cat breathing and ear flicks, a heart break, the win flow), and fish swaps and group rewards added a **helper economy** beside the starting stocks. **Board sizes** of the campaign are unchanged and still unknown on the original's side.
+
+After the Phase 2b code review (2026-10-09; STATUS-2b §11) three smaller rows moved: the **daily** is 12×12 every second Sunday from 2026-10-18 (§2 "Daily"), **Settings** can show a Feedback link (web; FBIG once Meta's link rules are checked) and a Language row (§2 "Settings"), and the victory screen is **dark** like the original's overlays (parity-spec §2.5).
 
 ### 1.1 The Phase 2 headline (2026-10-07, for reference)
 
@@ -138,7 +140,7 @@ The *Conf.* column gives our confidence about the original.
 
 | Aspect | Original (Play Store) | Ours | Type | Impact | Conf. |
 |---|---|---|---|---|---|
-| Daily | A new puzzle every day, separate from the campaign; can be 12×12 (iOS). Store copy pairs dailies with global fastest-time leaderboards; a daily-specific ranking was not re-found. Unlock level (fan claim: about 21), reset time and streaks are unknown | Unlocks after level 20; size by weekday from 8×8 to 11×11, never 12×12; a result card with the solve time; no ranking, streak or archive | **[gap]** (12×12; leaderboard), **[unknown]** (unlock, reset) | med | confirmed (exists), likely (12×12, leaderboard promise) |
+| Daily | A new puzzle every day, separate from the campaign; can be 12×12 (iOS). Store copy pairs dailies with global fastest-time leaderboards; a daily-specific ranking was not re-found. Unlock level (fan claim: about 21), reset time and streaks are unknown | Unlocks after level 20; size by weekday from 8×8 to 11×11, and **every second Sunday from 2026-10-18 a 12×12** (Phase 2b review PAR-1); the victory screen with the solve time and the next-puzzle countdown; a `daily_fastest` ranking on FBIG (personal records on the web); no streak or archive | *parity* (12×12 every other Sunday; the FBIG daily ranking, Phase 2b), **[unknown]** (unlock, reset) | med | confirmed (exists), likely (12×12, leaderboard promise) |
 | Limited-time events | At least three themed Google Play event cards in summer 2026: Long Live Meow (World Cat Day, ended 8/12), Meow Cup (stadium theme, with a leaderboard; dates unknown) and Moonlit Meows (harvest moon, ended 10/1). The card texts describe the same placement rules in a seasonal setting. In-event rewards and mechanics are unknown | None (the Home card slot is empty) | **[gap]** | high | confirmed (cards exist), likely (same puzzle, reskinned) |
 | Other modes | None reported (no endless, zen, PvP or time attack) | None; the campaign continues endlessly | parity | — | unknown (absence) |
 
@@ -191,7 +193,7 @@ The Google Play event card that ended on 9/23 ("Meowdoku Mode") belongs to *Bloc
 
 | Aspect | Original (Play Store) | Ours | Type | Impact | Conf. |
 |---|---|---|---|---|---|
-| Settings | A Feedback entry (iOS); sound, music, haptics, language and reset are undocumented | Sound, Vibration, Colour patterns, Reduce motion, How to play, About; no feedback, language or reset option | **[unknown]** | low | unknown |
+| Settings | A Feedback entry (iOS); sound, music, haptics, language and reset are undocumented | Sound, Vibration, Colour patterns, Reduce motion, Language, Shop, How to play, About; a **Feedback** link when `support.feedbackUrl` is set (on FBIG only with `support.feedbackOnFbig`, off until Meta's external-link rules are checked; Phase 2b review PAR-5); no reset | *parity* (Feedback on the web, Language), **[different-by-design]** (no Feedback on FBIG yet: platform), **[unknown]** (the rest) | low | unknown |
 | Localization | Localized Android UI (an Android solver reads Indonesian screen text); 62 locales listed on iOS | English only (a locale hook and about 230 catalogue keys exist) | **[gap]** (spec defers it, 02 §21) | high outside English markets | likely |
 | Colour-blind support | None; Android's colour-correction settings did not help a colour-blind reviewer (Pocketables) | Optional pattern glyphs; the palette is checked by script (pairwise CIEDE2000 ≥ 10) | **[extra]** (an accessibility minimum, 02 §0) | med | confirmed |
 | Other accessibility | Unknown | Screen-reader grid labels, keyboard play, Reduce motion, text that survives 200% zoom | **[extra]** / **[unknown]** | low | unknown |
@@ -258,9 +260,9 @@ Original times are not measured; our times come from `GameConfig` and the CSS.
 
 | Aspect | Original (Play Store) | Ours | Type | Impact | Conf. |
 |---|---|---|---|---|---|
-| Sound effects | A sound for each correct cat and a bigger one on a win were reported but **not re-found**. No cue is verified on Play; Web-Y has cues for X, cat, error, region, win, fail, hint, buttons and board entry | 11 cues synthesised at runtime with WebAudio (mark, unmark, cat, region ladder, mistake, last heart, win, hint open, hint apply, kitty, UI), master at −12 dBFS | **[unknown]** | low | inferred |
+| Sound effects | A sound for each correct cat and a bigger one on a win were reported but **not re-found**. No cue is verified on Play; Web-Y has cues for X, cat, error, region, win, fail, hint, buttons and board entry | 14 cues synthesised at runtime with WebAudio (mark, unmark, cat, region ladder, mistake, last heart, win, hint open, hint apply, kitty, UI; Phase 2b: fish pop, fish plink and a **board-entry** swell, `board_in`, played with every board-entry wave, review PAR-8), master at −12 dBFS | **[unknown]** (we match Web-Y's board-entry cue) | low | inferred |
 | Music | Unknown (Web-Y has none) | None | **[unknown]** | med | unknown |
-| Silent moments | Unknown | No sound for board entry, revive or the fail overlay | **[unknown]** | low | unknown |
+| Silent moments | Unknown | No sound for revive or the fail overlay; a restored won or lost board enters silently (it has no entry wave) | **[unknown]** | low | unknown |
 | Ads | Interstitials are reportedly muted by default (the ad's own sound; single origin) | Our sound is muted while any ad shows | n/a | — | likely |
 
 ### 3.6 Haptics
@@ -303,9 +305,9 @@ Effort is rough: **S** up to about 1 day, **M** a few days, **L** a week or more
 | Localize the UI into the main Play markets | M | The catalogue hook exists (about 230 keys). Long strings need layout checks. Spec 02 §21 put this in Phase 3 or 4, so changing it is a **scope decision for the user**. |
 | Ranking after a win and on the daily (FBIG) | L | Already planned for **Phase 4** (02 §4.1, 05 §8). Depends on live FBIG APIs; the web build has no backend. What is ranked (time or points) is still unknown (§6). |
 | A longer win moment: a solved-board glow before the overlay | S | Evidence is iOS store art (*confirmed* there, presumed on Play). Use our own look and timing. |
-| A 12×12 slot in the daily schedule | S | The original's dailies can be 12×12 (*likely*, iOS). Spec 02 §12 reserved 12×12 for Phase 3 events. |
+| ~~A 12×12 slot in the daily schedule~~ **Done (Phase 2b review PAR-1)** | S | Every second Sunday from 2026-10-18 is a 12×12 G4 daily (02 §12); only those 58 days of the packs were regenerated. |
 | Banner ads (FBIG only) | S–M | Parity only, and it makes play worse. Banners are single-origin, and their start level (said to be about 10) was not re-found. **A product call.** |
-| A Feedback link in Settings | S | Evidence is iOS only; check FBIG's rules on external links. |
+| ~~A Feedback link in Settings~~ **Done on the web (Phase 2b review PAR-5)** | S | The row shows when `support.feedbackUrl` is set (empty by default). On FBIG it stays off (`support.feedbackOnFbig`) until Meta's rules on external links are checked. |
 
 ### 5.2 Close only once the unknown is resolved (see §6)
 

@@ -63,8 +63,9 @@ export interface RankingFlow {
   /**
    * Opens the FB overlay list (in `rect` when the provider can place it). Resolves false when it cannot.
    * `day` (daily_fastest only, default today): the list keeps that day's entries alone (§5.3).
+   * `mine` (FB2B-7, optional): my score as I know it; my row of the solve just made shows it exactly.
    */
-  showList(board: BoardKey, title: string, rect?: DOMRect, eventTotal?: number, day?: string): Promise<boolean>;
+  showList(board: BoardKey, title: string, rect?: DOMRect, eventTotal?: number, day?: string, mine?: RankScoreView): Promise<boolean>;
   /** Closes an open overlay list (the panel or hub closed). */
   closeList(): void;
   /** The provider's caps, or null without a provider (web). */
@@ -96,7 +97,11 @@ export function scoreView(board: BoardKey, score: number, eventTotal: number | u
 
 /** The overlay rows' score text ("1 240 points", "3:08", "13 / 21 solved"), formatted by us (§5.4). */
 export function formatBoardScore(board: BoardKey, score: number, eventTotal: number | undefined, c: GameConfig = cfg): string {
-  const v = scoreView(board, score, eventTotal, c);
+  return formatScoreView(scoreView(board, score, eventTotal, c));
+}
+
+/** A score view's text, as formatBoardScore writes it. */
+export function formatScoreView(v: RankScoreView): string {
   if (v.kind === 'points') return t('rank.points', { points: formatNumber(v.points) });
   if (v.kind === 'time') return formatClock(v.ms);
   return t('event.card.progress', { solved: formatNumber(v.solved), total: formatNumber(v.total) });
@@ -179,7 +184,7 @@ export function createRankingFlow(deps: RankingFlowDeps): RankingFlow {
   }
 
   /** Whether a board entry is the encoding of my own score as I know it (the solve just made, FB2B-7). */
-  function isMySolve(board: BoardKey, score: number, ctx: ListContext): boolean {
+  function isMySolve(board: BoardKey, score: number, ctx: Pick<ListContext, 'myScore' | 'day'>): boolean {
     const m = ctx.myScore;
     if (!m) return false;
     try {
@@ -300,7 +305,7 @@ export function createRankingFlow(deps: RankingFlowDeps): RankingFlow {
       return { kind: 'mine', mine };
     },
     fetchMs: (board) => lastMs.get(board) ?? null,
-    async showList(board, title, rect, eventTotal, day) {
+    async showList(board, title, rect, eventTotal, day, myScore) {
       flow.closeList();
       const mine = ++listGen;
       const p = provider();
@@ -313,8 +318,14 @@ export function createRankingFlow(deps: RankingFlowDeps): RankingFlow {
         count: c.rank.topCount,
         formatScore: (score) => formatBoardScore(board, score, eventTotal, c),
       };
-      const keep = dayFilter(board, day ?? localDateKey(clock.now()), c);
+      const shownDay = day ?? localDateKey(clock.now());
+      const keep = dayFilter(board, shownDay, c);
       if (keep) view.keep = keep;
+      // FB2B-7: my row of the solve just made shows my exact time (the board keeps whole seconds).
+      if (myScore) {
+        const me = { myScore, day: shownDay };
+        view.formatMine = (score) => (isMySolve(board, score, me) ? formatScoreView(myScore) : formatBoardScore(board, score, eventTotal, c));
+      }
       try {
         const h = await p.showList(board, view, rect && caps.overlayInRect ? rect : undefined);
         if (!h) return false;

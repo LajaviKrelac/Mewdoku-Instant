@@ -56,8 +56,11 @@ export interface ShellDeps {
   readonly rankHub?: RankHubFlow;
   /** Board size of a shipped level when known (personal records). */
   levelSize?(level: number): number | null;
-  /** Settings → Language: applies the new override (boot resolves and loads the locale). */
-  applyLocale?(override: 'auto' | LocaleId): void;
+  /**
+   * Settings → Language: applies the new override (boot resolves and loads the locale). Resolves the
+   * locale now active (ROB-2: a chunk that could not load falls back), or undefined when unknown.
+   */
+  applyLocale?(override: 'auto' | LocaleId): Promise<LocaleId | undefined> | void;
 }
 
 export interface Shell {
@@ -155,6 +158,11 @@ export function createShell(deps: ShellDeps): Shell {
     });
   }
 
+  function feedbackUrl(): string {
+    const sup = c.support;
+    return deps.platform.id === 'fbig' ? (sup.feedbackOnFbig ? sup.feedbackUrl : '') : sup.feedbackUrl;
+  }
+
   function settingsProps(): SettingsProps {
     const s = save();
     const locales = buildLocales();
@@ -180,14 +188,31 @@ export function createShell(deps: ShellDeps): Shell {
               current: s.settings.locale,
               locales,
               onPick: (id: 'auto' | LocaleId) => {
+                const prev = save().settings.locale;
                 updateSave((sv) => ({ ...sv, settings: { ...sv.settings, locale: id } }));
                 saves.touch();
-                deps.applyLocale?.(id);
+                const applied = deps.applyLocale?.(id);
                 router.update('settings', settingsProps());
+                // ROB-2: a language whose chunk could not load falls back. Say so, and put the
+                // previous choice back so picking the language again retries (a same-row pick is a no-op).
+                if (id === 'auto' || !applied) return;
+                void applied.then(
+                  (got) => {
+                    if (got === undefined || got === id || save().settings.locale !== id) return;
+                    router.toast(t('toast.languageUnavailable'));
+                    updateSave((sv) => ({ ...sv, settings: { ...sv.settings, locale: prev } }));
+                    saves.touch();
+                    if (router.isOpen('settings')) router.update('settings', settingsProps());
+                  },
+                  () => undefined,
+                );
               },
             },
           }
         : {}),
+      // review PAR-5: the Feedback row, from config (empty by default = no row); on FBIG only with
+      // support.feedbackOnFbig (Meta's external-link rules, parity-spec §0.7, §14).
+      ...(feedbackUrl() ? { feedbackUrl: feedbackUrl() } : {}),
       ...(shop ? { onShop: () => shell.openShop() } : {}),
       // §8.5: "Remove ads" only on FB with payments ready, the catalogue listing remove_ads (review
       // FB2B-3: never a row that opens an empty Buy section) and No Ads not owned.

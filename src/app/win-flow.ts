@@ -63,6 +63,8 @@ export interface WinFlowDeps {
   openVictory(): void;
   /** blocking() changed (the session re-renders the top bar's Home and Gear as aria-disabled or not). */
   onBlockingChange?(blocking: boolean): void;
+  /** t = 4 200, right after the scrim starts: the panel is next (PERF-3: router.reserveModal). */
+  onScrim?(): void;
   /** A guarded effect threw (reported, never rethrown). */
   onError?(error: unknown): void;
 }
@@ -302,7 +304,10 @@ export function createWinFlow(deps: WinFlowDeps): WinFlow {
           for (let k = 0; k < 3; k++) arrive(k);
           guard(() => screen.showFishPill(total));
         },
-        scrim: () => guard(() => screen.showScrim?.()),
+        scrim: () => {
+          guard(() => screen.showScrim?.());
+          if (deps.onScrim) guard(() => deps.onScrim?.());
+        },
         ranking: () => {
           setBlocking(false);
           awaitingTap = true;

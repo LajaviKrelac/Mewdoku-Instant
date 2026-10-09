@@ -203,7 +203,8 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
   const hardBadge = L.text(h('span', { class: 'badge badge--hard' }), () => t('common.hard'));
   const play = h(
     'button',
-    { type: 'button', class: 'btn btn--primary btn--block btn--lg home__play', on: { click: () => cb.onPlay() } },
+    // A11Y-FOCUS-1: the router lands focus here after a screen change (not the wordmark or the first chip).
+    { type: 'button', class: 'btn btn--primary btn--block btn--lg home__play', 'data-autofocus': '', on: { click: () => cb.onPlay() } },
     playLabel,
     hardBadge,
     icon('icon-chevron', { class: 'btn__chev' }),

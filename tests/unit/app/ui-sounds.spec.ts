@@ -2,7 +2,7 @@
 // Owner: app. 02 §16 UI click (lead decision): one delegated listener on the app root plays the 'ui'
 // sound and the 4 ms haptic for enabled buttons outside the board; board cells and gated buttons
 // stay silent. Boot wires it to sfx.play('ui') (muted by the Sound setting in the audio engine).
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { attachUiClickFeedback, isUiButtonClick } from '../../../src/app/ui-sounds';
 
 function setup() {
@@ -13,7 +13,8 @@ function setup() {
     '<div id="plain">text</div></div><button id="outside">x</button>';
   const root = document.getElementById('app') as HTMLElement;
   const log: string[] = [];
-  const off = attachUiClickFeedback(root, { play: () => void log.push('ui'), haptic: () => void log.push('haptic') });
+  // The sound runs through `defer` (default: after the next frame, PERF-1); here at once.
+  const off = attachUiClickFeedback(root, { play: () => void log.push('ui'), haptic: () => void log.push('haptic') }, { defer: (fn) => fn() });
   const click = (id: string): void => void (document.getElementById(id) as HTMLElement).click();
   return { root, log, off, click };
 }
@@ -39,13 +40,41 @@ describe('UI click feedback', () => {
     s.click('play');
     expect(s.log).toEqual([]);
     const root = s.root;
-    const off = attachUiClickFeedback(root, {
-      play: () => {
-        throw new Error('no audio');
+    const off = attachUiClickFeedback(
+      root,
+      {
+        play: () => {
+          throw new Error('no audio');
+        },
+        haptic: () => undefined,
       },
-      haptic: () => undefined,
-    });
+      { defer: (fn) => fn() },
+    );
     expect(() => s.click('play')).not.toThrow();
     off();
+  });
+
+  it('PERF-1: by default the sound waits for the next frame (then a task); the haptic pulse is at once', () => {
+    vi.useFakeTimers();
+    try {
+      document.body.innerHTML = '<div id="app"><button id="play">Play</button></div>';
+      const root = document.getElementById('app') as HTMLElement;
+      const frames: FrameRequestCallback[] = [];
+      const win = root.ownerDocument.defaultView as Window;
+      const raf = vi.spyOn(win, 'requestAnimationFrame').mockImplementation((cb) => frames.push(cb));
+      const log: string[] = [];
+      const off = attachUiClickFeedback(root, { play: () => void log.push('ui'), haptic: () => void log.push('haptic') });
+      (document.getElementById('play') as HTMLElement).click();
+      expect(log).toEqual(['haptic']);
+      expect(frames).toHaveLength(1);
+      frames.shift()?.(0);
+      expect(log).toEqual(['haptic']); // not inside the frame's own callbacks
+      vi.runAllTimers();
+      expect(log).toEqual(['haptic', 'ui']);
+      off();
+      raf.mockRestore();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

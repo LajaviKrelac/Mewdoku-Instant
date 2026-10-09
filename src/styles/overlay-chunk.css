@@ -260,7 +260,10 @@
   }
 }
 
-.overlay[data-overlay='ranking'].is-leaving {
+/* The tap's fade-out (rank.panelOutMs) fades the content only: the dark scrim stays opaque while the
+   victory fades in over it, so the board never shows through mid-crossfade (review UX-4). */
+.overlay[data-overlay='ranking'].is-leaving .overlay__panel,
+.overlay[data-overlay='ranking'].is-leaving .ranking__tap {
   opacity: 0;
   transition: opacity var(--out-ms, 200ms) ease;
 }

@@ -93,6 +93,8 @@ interface StartOpts {
   levels?: Partial<LevelsRepo>;
   /** Adjusts the fake platform before boot (failures, storage hooks). */
   prepare?: (platform: FakePlatform) => void;
+  /** Gives the fake audio engine a prewarm() that logs 'audio:prewarm' (PERF-1). */
+  prewarm?: boolean;
 }
 
 /** boot() without awaiting it, for tests that drive the fake clock while it runs. */
@@ -107,6 +109,7 @@ function begin(local: SaveData | null, opts: StartOpts = {}) {
   opts.prepare?.(platform);
   const ui = fakeUi(log);
   const fa = createFakeAudio(log);
+  if (opts.prewarm) Object.assign(fa.audio, { prewarm: () => void log.push('audio:prewarm') });
   const done = boot(platform, root, {
     clock,
     doc: document,
@@ -141,6 +144,26 @@ const returning = (patch: Partial<SaveData> = {}): SaveData => ({
 });
 
 describe('boot', () => {
+  it('UX-3: <html data-fb-safe> is set right after init on FBIG (before any top bar), never on the web', async () => {
+    document.documentElement.removeAttribute('data-fb-safe');
+    const fb = begin(returning(), { prepare: (p) => void ((p as { id: string }).id = 'fbig') });
+    await settle(2);
+    expect(fb.log).toContain('platform:init');
+    expect(document.documentElement.hasAttribute('data-fb-safe')).toBe(true);
+    (await fb.done).dispose();
+    const web = await start(returning());
+    expect(document.documentElement.hasAttribute('data-fb-safe')).toBe(false);
+    web.app.dispose();
+  });
+
+  it('PERF-1: the AudioContext is prewarmed at an idle moment after the first route, not at a tap', async () => {
+    const s = await start(returning(), { prewarm: true });
+    expect(s.log).not.toContain('audio:prewarm');
+    await s.clock.advanceAsync(1000); // no requestIdleCallback in jsdom: a 1 s timer
+    expect(s.log.filter((l) => l === 'audio:prewarm')).toEqual(['audio:prewarm']);
+    s.app.dispose();
+  });
+
   it('first run: init first, progress 100 before start, straight into the tutorial, ads preloaded last', async () => {
     const s = await start(null);
     const order = s.log.filter((x) => /^(platform:|progress:|screen:|preload:)/.test(x));

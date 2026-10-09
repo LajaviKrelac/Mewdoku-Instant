@@ -106,6 +106,17 @@ export interface Router {
    * there is nothing to wait for. The next replaceScreen into `to` joins this half.
    */
   beginLeave(to: ScreenId): Promise<void> | null;
+  /**
+   * PERF-3: a modal is about to open over the current screen (the win flow's scrim step, 300 ms before
+   * the ranking panel): the screen turns inert now, so the full-subtree restyle that `inert` costs
+   * (80–100 ms at 4× CPU on 12×12) happens under the scrim's fade instead of in the panel's first
+   * frame. The game's scrim stays up (it steps aside for a modal's own scrim only once one is open,
+   * by the screen host's [data-modal], not by [inert]). The next modal takes the reservation over; a
+   * screen change or releaseModal() drops it. Optional (test routers).
+   */
+  reserveModal?(): void;
+  /** Drops a reserveModal() that no modal took over (the session left the board). */
+  releaseModal?(): void;
   /** Starts loading the lazy overlay chunk (boot calls it after the first route). Never rejects. */
   preloadOverlays(): Promise<void>;
   /**
@@ -276,9 +287,14 @@ export function createRouter(root: HTMLElement, deps: RouterDeps = {}): Router {
     return -1;
   }
 
+  /** PERF-3: the screen is inert ahead of a modal (reserveModal) until one opens or it is released. */
+  let reservedInert = false;
   function applyInert(): void {
     const m = topModalIndex();
-    setInertOnce(screenHost, m >= 0);
+    if (m >= 0) reservedInert = false; // the modal holds it now
+    setInertOnce(screenHost, m >= 0 || reservedInert);
+    // The win scrim's hand-off (screens.css): a modal brings its own scrim.
+    if (screenHost.hasAttribute('data-modal') !== m >= 0) screenHost.toggleAttribute('data-modal', m >= 0);
     for (const [id, v] of views) {
       const i = order.indexOf(id);
       setInertOnce(v.el, i >= 0 && i < m);
@@ -541,6 +557,10 @@ export function createRouter(root: HTMLElement, deps: RouterDeps = {}): Router {
     // A screen change right after another (the shell re-rendering Home) keeps the move-focus intent.
     const hadFocus = (pre?.hadFocus ?? focusInApp()) || focusRaf !== 0;
     const stand = joined ? null : shownVictory(); // PAR-6: taken before closeAll() hides it
+    if (reservedInert) {
+      reservedInert = false; // PERF-3: a reservation never outlives its screen
+      applyInert();
+    }
     closeAll();
     if (!joined) finishLeaving();
     else if (nowMs() - joined.at >= screenOutMs(joined.reduced, c)) {
@@ -652,6 +672,16 @@ export function createRouter(root: HTMLElement, deps: RouterDeps = {}): Router {
       if (order.indexOf(id) < 0) return;
       if (pending.has(id)) pending.set(id, props);
       else overlay(id)?.update(props);
+    },
+    reserveModal() {
+      if (destroyed || reservedInert) return;
+      reservedInert = true;
+      applyInert();
+    },
+    releaseModal() {
+      if (!reservedInert) return;
+      reservedInert = false;
+      applyInert();
     },
     close: closeInternal,
     closeAll,
