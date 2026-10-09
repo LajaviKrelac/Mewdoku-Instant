@@ -9,30 +9,14 @@ import { createStore } from '../../src/app/store';
 import { breatherBand, breatherPool, dailySlotFor, isHardLevel, pickWeighted, rampRowFor, RAMP } from '../../src/game/ramp';
 import { colorName, formatClock, formatDuration, formatShortDate, interpolate, joinList, setLocale, t, tn } from '../../src/i18n';
 import { COLOR_KEYS, en, EN_PARTS } from '../../src/i18n/en';
+import { BANNED_PHRASES } from '../../scripts/i18n-check';
 
 /**
  * Known phrases of the original game (06 §3) and its event names (phase2b §0.2), plus "golden fish"
- * (our copy says "fish", differences §4). Lowercase; matched case-insensitively in every catalogue.
+ * (our copy says "fish", differences §4). One list, shared with scripts/i18n-check.ts so the two
+ * guards cannot drift; lowercase, matched case-insensitively in every catalogue.
  */
-const BANNED_PHRASES = [
-  'exclusive territory',
-  'aloof',
-  'guess right',
-  'guess wrong',
-  'non-intrusive',
-  'test your iq',
-  'find the cats',
-  'endless levels',
-  "guessing won't",
-  'zero interruptions',
-  'one per color',
-  'no touching',
-  'meowdoku',
-  'meow cup',
-  'long live meow',
-  'moonlit meows',
-  'golden fish',
-] as const;
+const REQUIRED_BANNED = ['meowdoku', 'meow cup', 'long live meow', 'moonlit meows', 'golden fish', 'exclusive territory', 'one per color', 'no touching'];
 
 /** Every translated catalogue that exists (src/i18n/locales/<id>.ts, E), keyed by file. */
 const LOCALE_MODULES = import.meta.glob<{ catalog?: Record<string, string> }>('../../src/i18n/locales/*.ts', { eager: true });
@@ -70,6 +54,11 @@ describe('i18n', () => {
     expect(COLOR_KEYS).toHaveLength(12);
     const all = Object.values(en).join('\n').toLowerCase();
     for (const banned of BANNED_PHRASES) expect(all, banned).not.toContain(banned);
+  });
+
+  it('the shared banned list (scripts/i18n-check.ts) is lowercase and holds the clean-room minimum', () => {
+    for (const p of BANNED_PHRASES) expect(p, p).toBe(p.toLowerCase());
+    for (const p of REQUIRED_BANNED) expect(BANNED_PHRASES, p).toContain(p);
   });
 
   it('every locale catalogue stays clear of the original phrasing too (phase2b §6.9, G-CLEAN)', () => {

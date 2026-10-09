@@ -12,6 +12,7 @@
     "build:fbig-e2e": "vite build --mode fbig --outDir dist/fbig-e2e",
     "build:release": "vite build --mode release && vite build --mode release-fbig && npm run i18n:check -- --release",
     "zip:fbig": "tsx scripts/zip-fbig.ts",
+    "zip:fbig:preview": "tsx scripts/zip-fbig.ts --preview",
     "preview": "vite preview --outDir dist/web",
     "preview:e2e": "vite preview --mode e2e --host 127.0.0.1 --port 4173 --strictPort",
     "preview:fbig-e2e": "vite preview --mode fbig --outDir dist/fbig-e2e --host 127.0.0.1 --port 4174 --strictPort",
@@ -30,7 +31,7 @@
     "i18n:check": "tsx scripts/i18n-check.ts",
     "size": "tsx scripts/size-check.ts",
     "verify": "npm run typecheck && npm run test && npm run levels:verify && npm run palette:check && npm run i18n:check",
-    "release:fbig": "npm run verify && npm run build:fbig && npm run size && npm run zip:fbig",
+    "release:fbig": "npm run verify && npm run build:release && npm run size -- dist/release-fbig && npm run zip:fbig",
     "upload:fbig": "tsx scripts/upload-fbig.ts"
   },
   "devDependencies": {

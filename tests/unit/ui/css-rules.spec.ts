@@ -171,6 +171,22 @@ describe('retired-look guard (phase2b §1.8, §1.12)', () => {
     expect(hits).toEqual([]);
   });
 
+  it('nor in the page shell outside src/ (index.html, public/, the dev harness pages), and theme-color is --page', () => {
+    const shell = [join(ROOT, 'index.html'), ...walk(join(ROOT, 'public'), ['.svg', '.html', '.json', '.webmanifest']), ...walk(join(ROOT, 'dev'), ['.html'])];
+    const hits: string[] = [];
+    for (const f of shell) {
+      const text = read(f).replace(/\s+/g, '').toLowerCase();
+      for (const v of RETIRED) if (text.includes(v.toLowerCase())) hits.push(`${relative(ROOT, f)}: ${v}`);
+    }
+    expect(hits).toEqual([]);
+    const page = /--page:\s*(#[0-9a-fA-F]{6})/.exec(read(join(STYLES, 'tokens.css')))?.[1]?.toLowerCase();
+    expect(page).toBeTruthy();
+    for (const f of [join(ROOT, 'index.html'), ...walk(join(ROOT, 'dev'), ['.html'])]) {
+      const meta = /<meta name="theme-color" content="(#[0-9a-fA-F]{6})"/.exec(read(f))?.[1]?.toLowerCase();
+      if (meta) expect(meta, relative(ROOT, f)).toBe(page);
+    }
+  });
+
   it('no source file mentions data-skin (one theme, no skin system)', () => {
     const hits = files.filter((f) => /data-skin|dataset\.skin/.test(read(f))).map((f) => relative(ROOT, f));
     expect(hits).toEqual([]);

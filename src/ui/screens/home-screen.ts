@@ -203,8 +203,8 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
   );
 
   const cards = h('div', { class: 'home__cards' });
-  const hintsCount = h('span', { class: 'stock__count' });
-  const kittiesCount = h('span', { class: 'stock__count' });
+  const hintsCount = h('span', { class: 'stock__count num' });
+  const kittiesCount = h('span', { class: 'stock__count num' });
   const hintsItem = h('span', { class: 'stock__item stock__item--hints', role: 'img' }, icon('icon-bulb', { class: 'stock__icon' }), hintsCount);
   const kittiesItem = h('span', { class: 'stock__item stock__item--kitties', role: 'img' }, icon('icon-paw', { class: 'stock__icon' }), kittiesCount);
 

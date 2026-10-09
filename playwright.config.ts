@@ -4,6 +4,10 @@
 //   visual.spec.ts (A)  → web-320, web-390, web-1280 (screenshots to docs/phase2b/screenshots/)
 //   i18n.spec.ts (E)    → web-320, web-390
 //   winflow.spec.ts, events.spec.ts (C) → web-390
+// Screenshot switches (for a person's review, never diffed):
+//   visual.spec.ts always writes docs/phase2b/screenshots/A-visual-<screen>-<width>.png; VISUAL_OUT=<dir>
+//     writes them elsewhere (e.g. a scratch folder, to keep the committed set unchanged).
+//   I18N_SHOTS=1 makes i18n.spec.ts also write its 320 px per-locale set to docs/i18n/screenshots/.
 import { defineConfig } from '@playwright/test';
 
 process.env.PLAYWRIGHT_BROWSERS_PATH ??= '/opt/pw-browsers';

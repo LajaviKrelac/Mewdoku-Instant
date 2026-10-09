@@ -77,10 +77,8 @@
 }
 
 /* Ear flick: board-view adds .is-flick for --flick-ms every 8–14 s per cat; the cat-ear-flick overlay
-   turns 10° about the ear's base (on the cell's 100-unit grid). */
+   turns 10° outward about the notched left ear's base (the pivot is set in board.css). */
 .cell.is-flick .cell__ear {
-  transform-box: view-box;
-  transform-origin: 37px 38px;
   animation: ear-flick var(--flick-ms, 160ms) ease-in-out both;
 }
 
@@ -104,13 +102,14 @@
   display: inline;
 }
 
-/* X stroke draw-in: 120 ms ease-out, the second stroke slightly behind the first. */
+/* X stroke draw-in: 85 ms ease-out, the second stroke 35 ms behind the first. board.css draws the
+   X edge (.cell__xe) with the same two custom properties, so the edge and the white X stay in step. */
 .cell.fx-draw .cell__x {
-  animation: x-draw 85ms ease-out both;
+  animation: x-draw var(--x-draw-ms, 85ms) ease-out both;
 }
 
 .cell.fx-draw .cell__x + .cell__x {
-  animation-delay: 35ms;
+  animation-delay: var(--x-draw-gap, 35ms);
 }
 
 @keyframes x-draw {

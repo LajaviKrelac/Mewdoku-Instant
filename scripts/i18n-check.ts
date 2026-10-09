@@ -28,7 +28,7 @@ const DRAFTED_FROM = join(ROOT, 'docs/i18n/drafted-from.json');
 
 /**
  * Known phrases of the original game (06 §3), its event names (phase2b §0.2) and "golden fish"
- * (our copy says "fish"). Lowercase; matched case-insensitively. Mirrors tests/unit/sanity.spec.ts.
+ * (our copy says "fish"). Lowercase; matched case-insensitively. tests/unit/sanity.spec.ts imports this list.
  */
 export const BANNED_PHRASES: readonly string[] = [
   'exclusive territory',

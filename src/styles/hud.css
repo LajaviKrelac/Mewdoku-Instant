@@ -62,7 +62,7 @@
 
 .top-bar__title .badge {
   flex: none;
-  margin-left: var(--sp-2);
+  margin-inline-start: var(--sp-2);
 }
 
 .top-bar__actions {
@@ -89,7 +89,9 @@
   display: inline-flex;
   align-items: center;
   height: 100%;
-  padding: 0 16px 0 10px;
+  padding: 0;
+  padding-inline-start: 10px;
+  padding-inline-end: 16px;
   border-radius: var(--radius-pill);
   background: var(--card);
   box-shadow: var(--shadow-1);
@@ -102,7 +104,7 @@
 .pill__icon {
   width: 32px;
   height: 32px;
-  margin-right: 6px;
+  margin-inline-end: 6px;
   margin-top: -2px;
   transform-origin: 50% 80%;
 }
@@ -201,13 +203,13 @@
 }
 
 .chip + .chip {
-  margin-left: var(--sp-2);
+  margin-inline-start: var(--sp-2);
 }
 
 .chip__icon {
   width: 22px;
   height: 22px;
-  margin-right: 6px;
+  margin-inline-end: 6px;
   color: var(--ink);
 }
 
@@ -231,7 +233,7 @@
 }
 
 .rule-chips[data-compact] .chip__icon {
-  margin-right: 0;
+  margin-inline-end: 0;
 }
 
 @media (min-width: 400px) {
@@ -271,7 +273,7 @@
 }
 
 .tool + .tool {
-  margin-left: 44px;
+  margin-inline-start: 44px;
 }
 
 .tool__icon {

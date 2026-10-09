@@ -21,7 +21,7 @@
   box-shadow: var(--shadow-1);
   color: var(--ink);
   font-family: var(--font-display);
-  font-weight: 600;
+  font-weight: var(--display-weight);
   font-size: var(--fs-l);
   line-height: 1;
   white-space: nowrap;
@@ -217,7 +217,7 @@
 .event-card__title {
   overflow: hidden;
   font-family: var(--font-display);
-  font-weight: 600;
+  font-weight: var(--display-weight);
   font-size: var(--fs-l);
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -317,8 +317,8 @@
 .ranking__sub {
   margin-top: 4px;
   color: rgba(255, 255, 255, 0.82);
-  font-family: var(--font-display);
-  font-weight: 600;
+  font-family: var(--font-num);
+  font-weight: var(--display-weight);
   font-size: var(--fs-l);
 }
 
@@ -407,8 +407,8 @@
 
 .rank-mine__rank {
   color: #fff;
-  font-family: var(--font-display);
-  font-weight: 600;
+  font-family: var(--font-num);
+  font-weight: var(--display-weight);
   font-size: var(--fs-xxl);
 }
 
@@ -416,7 +416,7 @@
   margin-top: 2px;
   color: rgba(255, 255, 255, 0.86);
   font-family: var(--font-display);
-  font-weight: 600;
+  font-weight: var(--display-weight);
   font-size: var(--fs-l);
 }
 
@@ -459,8 +459,8 @@
 .rank-records__value {
   margin: 0;
   color: #fff;
-  font-family: var(--font-display);
-  font-weight: 600;
+  font-family: var(--font-num);
+  font-weight: var(--display-weight);
   font-size: var(--fs-l);
 }
 
@@ -602,7 +602,7 @@
 .victory__sub {
   color: var(--ink-2);
   font-family: var(--font-display);
-  font-weight: 600;
+  font-weight: var(--display-weight);
   font-size: 1.125rem;
 }
 
@@ -612,8 +612,8 @@
 
 .victory__time {
   color: var(--ink);
-  font-family: var(--font-display);
-  font-weight: 600;
+  font-family: var(--font-num);
+  font-weight: var(--display-weight);
   font-size: var(--fs-xxl);
 }
 
@@ -643,7 +643,7 @@
   background: var(--card);
   box-shadow: var(--shadow-1);
   font-family: var(--font-display);
-  font-weight: 600;
+  font-weight: var(--display-weight);
 }
 
 .victory__fishes {
@@ -690,7 +690,7 @@
   padding: 0 12px;
   border-radius: var(--radius-pill);
   font-family: var(--font-display);
-  font-weight: 600;
+  font-weight: var(--display-weight);
   font-size: var(--fs-s);
 }
 
@@ -706,6 +706,7 @@
 .victory__chip--points {
   background: var(--accent-soft);
   color: var(--accent-text);
+  font-family: var(--font-num);
 }
 
 .victory__event {
@@ -847,7 +848,7 @@
 
 .shop__name {
   font-family: var(--font-display);
-  font-weight: 600;
+  font-weight: var(--display-weight);
   font-size: var(--fs-l);
 }
 
@@ -888,7 +889,7 @@
   margin-inline-start: 10px;
   color: var(--accent-text);
   font-family: var(--font-display);
-  font-weight: 600;
+  font-weight: var(--display-weight);
 }
 
 .shop__note,
@@ -927,7 +928,7 @@
   background: transparent;
   color: var(--ink-2);
   font-family: var(--font-display);
-  font-weight: 600;
+  font-weight: var(--display-weight);
   font-size: var(--fs-s);
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -1140,8 +1141,8 @@
   margin-top: 2px;
   margin-inline-end: -17px;
   color: var(--ink-2);
-  font-family: var(--font-display);
-  font-weight: 600;
+  font-family: var(--font-num);
+  font-weight: var(--display-weight);
   font-size: var(--fs-s);
   text-align: center;
 }
@@ -1178,7 +1179,7 @@
 .event__done {
   color: var(--accent-text);
   font-family: var(--font-display);
-  font-weight: 600;
+  font-weight: var(--display-weight);
   font-size: var(--fs-l);
   text-align: center;
 }
@@ -1211,7 +1212,7 @@
   background: transparent;
   color: var(--ink);
   font-family: var(--font-display);
-  font-weight: 600;
+  font-weight: var(--display-weight);
   font-size: var(--fs-l);
   text-align: start;
   cursor: pointer;

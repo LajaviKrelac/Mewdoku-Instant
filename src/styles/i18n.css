@@ -4,10 +4,8 @@
 
    1. What must NOT mirror (spec §6.5): the board, the top bar, digits and counters.
    2. Icons that point somewhere: chevrons and the coach hand turn around.
-   3. Physical spacing (margin-left, padding-right, text-align: left …) that A's and B's stylesheets
-      still use. Each block names its source rule; the values are those rules' values, mirrored, so
-      the block stays correct after its owner switches the rule to a logical property, and can then
-      be deleted. Tokens only (css-rules.spec.ts). */
+   3. Absolute offsets (left / right) that need a mirrored value; everything else in A's and B's
+      stylesheets is a logical property (phase2b §6.5). Tokens only (css-rules.spec.ts). */
 
 /* ── 1. Not mirrored ─────────────────────────────────────────────────────── */
 
@@ -44,6 +42,11 @@
   transform: scaleX(-1);
 }
 
+/* A sub-view's Back chevron (overlays.css turns it 180° to point left) points right, the way back. */
+[dir='rtl'] .overlay__back .btn__icon {
+  transform: none;
+}
+
 /* The coach hand is art; its swipe path comes from board geometry (LTR) and is unchanged. */
 [dir='rtl'] .coach__hand > svg {
   transform: scaleX(-1);
@@ -59,116 +62,20 @@
   transform: translateX(-20px);
 }
 
-/* ── 3. Physical spacing, mirrored (until the owner's rule is logical) ───── */
+/* ── 3. Physical positions, mirrored ───────────────────────────────────────
+   Margins, paddings and text alignment in A's and B's stylesheets are logical properties now
+   (margin-inline-*, padding-inline-*, text-align: start | end), so they mirror on their own. What is
+   left here are absolute offsets (left / right): inset-inline-* needs iOS Safari 14.1, above the
+   04 §1 baseline (iOS 14). .boot__pct is direction: ltr (section 1), so a logical margin on it would
+   not mirror either. The values are the source rules' values, mirrored. */
 
-/* base.css (A): .btn > * + * { margin-left } */
-[dir='rtl'] .btn > * + * {
-  margin-left: 0;
-  margin-right: var(--sp-2);
-}
-
-/* hud.css (A): the badge after the title, pills, rule chips, tool bar. */
-[dir='rtl'] .top-bar__title .badge {
-  margin-left: 0;
-  margin-right: var(--sp-2);
-}
-
-[dir='rtl'] .pill:not(.pill--hearts) {
-  padding: 0 10px 0 16px;
-}
-
-[dir='rtl'] .pill__icon {
-  margin-right: 0;
-  margin-left: 6px;
-}
-
-[dir='rtl'] .chip + .chip {
-  margin-left: 0;
-  margin-right: var(--sp-2);
-}
-
-[dir='rtl'] .chip__icon {
-  margin-right: 0;
-  margin-left: 6px;
-}
-
-[dir='rtl'] .rule-chips[data-compact] .chip__icon {
-  margin-left: 0;
-}
-
-[dir='rtl'] .tool + .tool {
-  margin-left: 0;
-  margin-right: 44px;
-}
-
+/* hud.css (A): the count badge on a tool. */
 [dir='rtl'] .tool__badge {
   right: auto;
   left: -8px;
 }
 
-/* overlays.css (B): dialog heads, hint card, fail badge, settings, how to play, boot, Home. */
-[dir='rtl'] .overlay__head {
-  margin: -4px 0 8px -4px;
-  text-align: right;
-}
-
-[dir='rtl'] .overlay__back {
-  margin-right: 0;
-  margin-left: 8px;
-}
-
-[dir='rtl'] .hint-card__row,
-[dir='rtl'] .settings,
-[dir='rtl'] .howto,
-[dir='rtl'] .settings-row--link .btn__label,
-[dir='rtl'] .daily-card {
-  text-align: right;
-}
-
-[dir='rtl'] .hint-card__icon {
-  margin-right: 0;
-  margin-left: 12px;
-}
-
-[dir='rtl'] .hint-card__actions .overlay__close {
-  margin-left: 0;
-  margin-right: 12px;
-}
-
-[dir='rtl'] .fail__continue .btn__badge {
-  margin-left: 0;
-  margin-right: 10px;
-}
-
-[dir='rtl'] .fail__continue .btn__badge .icon {
-  margin-left: 0;
-  margin-right: 3px;
-}
-
-[dir='rtl'] .settings-row__label {
-  padding-right: 0;
-  padding-left: 12px;
-}
-
-[dir='rtl'] .settings-row--motion .segmented {
-  margin: 4px auto 4px 0;
-}
-
-[dir='rtl'] .switch {
-  padding: 4px 10px 4px 4px;
-}
-
-[dir='rtl'] .switch__state {
-  margin-right: 0;
-  margin-left: 8px;
-  text-align: left;
-}
-
-[dir='rtl'] .howto-rule__art {
-  margin-right: 0;
-  margin-left: 14px;
-}
-
+/* overlays.css (B): the boot percentage (forced LTR) and Home's Play chevron. */
 [dir='rtl'] .boot__pct {
   margin-left: 0;
   margin-right: 12px;
@@ -178,14 +85,4 @@
 [dir='rtl'] .home__play .btn__chev {
   right: auto;
   left: 22px;
-}
-
-[dir='rtl'] .daily-card__icon {
-  margin-right: 0;
-  margin-left: 12px;
-}
-
-[dir='rtl'] .stock__icon {
-  margin-right: 0;
-  margin-left: 6px;
 }

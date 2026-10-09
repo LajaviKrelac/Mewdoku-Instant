@@ -164,7 +164,7 @@ svg {
 }
 
 .btn > * + * {
-  margin-left: var(--sp-2);
+  margin-inline-start: var(--sp-2);
 }
 
 .btn__icon {
