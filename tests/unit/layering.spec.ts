@@ -19,7 +19,7 @@ interface Edge {
   readonly target: string | null; // resolved repo-relative path, '@platform', or null (bare / node:)
   readonly typeOnly: boolean;
   /** import(…) (also `typeof import(…)` in a type position): never part of the importer's chunk. */
-  readonly dynamic: boolean;
+  readonly dynamic?: boolean;
 }
 
 // ─────────────────────────────── scanning ───────────────────────────────

@@ -3,8 +3,8 @@
 // e2e builds only, ?i18n=pseudo), Home, the game screen and Settings render in that language with
 // no horizontal overflow, no clipped button, chip or title, and — for Arabic — dir=rtl with the board
 // left to right and the top-bar actions on the right (the FB safe zone is top-left).
-// Screenshots: attached to the report; with I18N_SHOTS=1 also written to docs/i18n/screenshots/ for
-// the native reviewers (docs/i18n/review-log.md).
+// Screenshots: attached to the report; with I18N_SHOTS=1 the 320 px set is also written to
+// docs/i18n/screenshots/ for the native reviewers (docs/i18n/review-log.md).
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -83,19 +83,34 @@ async function noOverflow(page: Page): Promise<void> {
   expect(r.out, 'text outside the viewport').toEqual([]);
 }
 
-/** Buttons, their labels, rule chips and titles show their whole text (no clipping, no ellipsis). */
+/**
+ * Buttons, their labels, rule chips and titles show their whole text: nothing is cut by hidden
+ * overflow or an ellipsis, and no button's text spills out of the button. (Text that wraps past its
+ * own box but stays visible is left to noOverflow; the pseudo-locale reports it in the screenshots.)
+ */
 async function noClipping(page: Page): Promise<void> {
   const clipped = await page.evaluate(() => {
     const out: string[] = [];
-    const sel = '.btn, .btn__label, .chip__text, .top-bar__text, .overlay__title, .settings-row__label, .segmented__opt, .switch__state, .daily-card__text > *';
+    const sel = '.btn, .btn__label, .chip, .chip__text, .top-bar__text, .overlay__title, .settings-row__label, .segmented__opt, .switch__state, .daily-card__text > *, .tool__badge';
     for (const el of Array.from(document.querySelectorAll<HTMLElement>(sel))) {
       if (el.closest('[hidden], [inert], .sr-only')) continue;
       const s = getComputedStyle(el);
       if (s.display === 'none' || s.visibility === 'hidden') continue;
       if (el.clientWidth === 0) continue;
-      const wide = el.scrollWidth > el.clientWidth + 1;
-      const tall = el.scrollHeight > el.clientHeight + 1 && s.overflowY !== 'visible';
-      if (wide || tall) out.push(`${el.className}: "${(el.textContent ?? '').trim().slice(0, 40)}" ${el.scrollWidth}×${el.scrollHeight} in ${el.clientWidth}×${el.clientHeight}`);
+      const clipsX = s.overflowX !== 'visible' || s.textOverflow === 'ellipsis';
+      const clipsY = s.overflowY !== 'visible' || s.webkitLineClamp !== 'none';
+      const wide = clipsX && el.scrollWidth > el.clientWidth + 1;
+      const tall = clipsY && el.scrollHeight > el.clientHeight + 1;
+      // A button's own text must stay inside the button even when the button lets it overflow.
+      const btn = el.closest<HTMLElement>('.btn');
+      const spills = btn !== null && btn !== el && (() => {
+        const a = el.getBoundingClientRect();
+        const b = btn.getBoundingClientRect();
+        return a.left < b.left - 1 || a.right > b.right + 1;
+      })();
+      if (wide || tall || spills) {
+        out.push(`${el.className}: "${(el.textContent ?? '').trim().slice(0, 40)}" ${el.scrollWidth}×${el.scrollHeight} in ${el.clientWidth}×${el.clientHeight}`);
+      }
     }
     return out;
   });
@@ -106,7 +121,8 @@ async function shot(page: Page, info: TestInfo, c: Case, screen: string): Promis
   const name = `${c.name}-${info.project.name}-${screen}.png`;
   const body = await page.screenshot();
   await info.attach(name, { body, contentType: 'image/png' });
-  if (process.env.I18N_SHOTS) {
+  // The 320 px set is the one reviewers need (the tightest layout); 390 stays in the report.
+  if (process.env.I18N_SHOTS && info.project.name === 'web-320') {
     mkdirSync(SHOTS_DIR, { recursive: true });
     await page.screenshot({ path: resolve(SHOTS_DIR, name) });
   }

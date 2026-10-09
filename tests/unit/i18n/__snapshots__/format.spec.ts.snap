@@ -1,0 +1,22 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`dates > other locales use Intl on the UTC date, with Latin digits (snapshot) 1`] = `
+{
+  "ar": "الثلاثاء، 6 أكتوبر",
+  "de": "Di., 6. Okt.",
+  "es": "mar, 6 oct",
+  "fr": "mar. 6 oct.",
+  "hi": "मंगल, 6 अक्टू॰",
+  "id": "Sel, 6 Okt",
+  "it": "mar 6 ott",
+  "ja": "10月6日(火)",
+  "ko": "10월 6일 (화)",
+  "pl": "wt., 6 paź",
+  "pt-BR": "ter., 6 de out.",
+  "ru": "вт, 6 окт.",
+  "th": "อ. 6 ต.ค.",
+  "tr": "6 Eki Sal",
+  "vi": "Th 3, 6 thg 10",
+  "zh-Hans": "10月6日周二",
+}
+`;
