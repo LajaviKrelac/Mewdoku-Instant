@@ -53,6 +53,12 @@ The user did not give the period length, the reset time, the points numbers, or 
 
 The user did not say what removing a placed cat does, whether dailies, events and the tutorial score, how and where the running total is drawn, or whether a lifetime total exists (§19). The per-cat increments are multiples of 96, which contradicts a review's "points only in multiples of 5" (§18 entry 14).
 
+**First-hand update (2026-10-10, user recording).** The user supplied **their own screen recording** (8 s, iPhone at 3×, a 402 × 874 CSS px viewport; the last seconds show the iOS control centre) and a screenshot of the original's **game screen** at Level 96 (10 × 10), and asked us to match its look, layout, palette and X marks ([phase2d/look-spec](../phase2d/look-spec.md) §0.1: measuring and colour sampling allowed by user decision; no tracing; our own art and copy). Rows it supports carry the source tag **"first-hand (user recording, 2026-10-10)"**; the numbers are in look-spec §1 and come from the measurement notes of that phase (colours from the PNG screenshot; the video decodes about gamma 0.84 darker). In short (rows 6.9, 8 note, 11.12, 12.12–12.21, §18 entry 13):
+
+- The game screen, top to bottom: a back arrow and a gear with a red dot in white discs, "Level / 96" and "Score / 0" as two centred columns; a white pill of 10 pastel cat-head silhouettes and a white pill of 3 golden fish; a white strip of 3 rule cards with mini diagrams; the board card; three round helpers (a winking tuxedo cat, a bulb, a grey mouse) with red count badges "2" and a green "play" badge on the mouse; a 320 × 50 banner ad **during play**.
+- The current **iOS** app also shows the lives as **fish** (3 golden fish), so the App Store screenshots with hearts are an older version (§18 entry 13).
+- What the recording cannot show: a placed cat, a wrong X, a finished region, the win, other board sizes, other screens (§19).
+
 ---
 
 ## 1. Identity, publisher and market
@@ -148,6 +154,7 @@ Rebuild note: a timed double-tap matters because a wrong cat costs a heart. If X
 | 6.6 | Hint stock (web build): **5 free hints** at start. The count carries across levels and shows as a badge on the round lamp button. At 0, a rewarded video grants +1 hint. If no ad is available, the game shows an "ads unavailable" message. | likely | Web-Y | [nicdoku] |
 | 6.7 | Starting stock, refill rules and kitty-booster details for the app are **unknown**. Developer review replies mention requests for "options to buy hints/cats". | likely (reply exists) | App | [as-ipad] |
 | 6.8 | A Japanese reviewer says the game never teaches intermediate techniques, so players who won't spend on hints drop off. | likely | App | [sarusaru] |
+| 6.9 | **Three helpers** on the game screen, left to right: a **winking tuxedo-cat face** (the kitty), a **lightbulb** (the hint), each with a red count badge ("2" and "2" in the recording), and a **grey mouse face** with a green rounded "play" badge (watch a video). The suggested helper **pulses** with a warm glow on a 1.5 s cycle: the bulb on a board with marks, the cat helper on an untouched board (screenshot). What the mouse does is not visible; one forum post says it crosses out 3 random cells that cannot hold a cat (likely, single source; it looks like a staged rollout). Research (search summaries) rates "the kitty places a cat" likely and says daily-ranking top places pay 2 hints + 2 kitties. | confirmed (three buttons, badges, pulse) / likely (mouse function) | App (iOS) | first-hand (user recording, 2026-10-10); research 2026-10-10 (worldsapps, GameWith, App Store reviews) |
 
 ## 7. Screens and flow
 
@@ -191,6 +198,15 @@ Web build, top to bottom (likely, [nicdoku]). The App Store screenshots confirm 
 The cats-remaining counter is also reported for the app in a Russian review ([irecommend], likely).
 
 **2026-10-10 (user, first-hand):** on the Play Store app the level's **points are shown as a running total during play**, rising as each cat is found (10.17). Where in the HUD and how it is drawn is not reported. A complaint that the board "feels like a little mini browser instead of full screen" may be about a web clone (fact-check note).
+
+**2026-10-10 (first-hand (user recording, 2026-10-10)):** the app's game screen (iOS, Level 96), top to bottom:
+
+1. Top bar: a **back arrow** in a white disc (left); two centred columns **"Level / 96"** and **"Score / 0"** (the level points live here, as "Score"); a **gear** in a white disc with a small **red dot** (right). No trophy, no Home button.
+2. A white pill of **cat-head silhouettes**, one per region colour, each a 50 % tint of its colour, ordered around the colour wheel from green (not board order); a white pill of **3 golden fish** (the lives).
+3. A white strip of **3 rule cards**, each a 3 × 3 mini diagram (tan tiles, brown boxed X's, a cat face) and a two-to-three-line rule text in a mauve-brown ink.
+4. The board card (no shadow), stacked tightly under the header.
+5. Three round helpers (6.9), then a **banner ad during play** (11.12).
+6. A cream **level-start toast** with an orange border, sliding off to the left ("…ared this level!" and a flexed-arm emoji; its start is cut off) (12.20).
 
 ## 9. Tutorial / onboarding
 
@@ -238,7 +254,7 @@ The cats-remaining counter is also reported for the app in a Russian review ([ir
 | 11.9 | The developer replies to reviews that it is "considering" remove-ads and "buy hints/cats" options. It says ads come from third-party networks and fund a small team. | likely | App | [as-ipad] |
 | 11.10 | Android Central's "one BIG problem" is the **ad load**: "mandatory ads, one after almost every single level". The article was read only through search summaries. | likely | App | [ac], [ac-yahoo] |
 | 11.11 | User complaints: long, unskippable ads (some "longer than the levels"), ads that need several screens to close, scam or shopping banners, redirects, and the game's own ads calling it "ad-free" ("complete lies"). | likely | App | [as-rev], [appshunter], [unstar], [teruteru] |
-| 11.12 | iOS screenshots used by a solver contain ad content, which weakly suggests **banners during play**. | inferred | App | [nanma80-req] |
+| 11.12 | iOS screenshots used by a solver contain ad content, which weakly suggests **banners during play**. **2026-10-10 (first-hand, user recording):** a standard **320 × 50 banner is shown at the bottom during play**, centred, 23 pt under the helper buttons; reviews describe a permanent bottom banner too. | confirmed | App | [nanma80-req]; first-hand (user recording, 2026-10-10) |
 | 11.13 | **Fish are not a currency.** They are lives (5.11) and, after a win, leaderboard points (10.16); nothing is bought with them. The fish wallet, the fish swaps for hints and kitties and the fish packs of our Phase 2b build were our own invention (parity-spec §2.8, §8.3), and the user asked for them to be removed. | confirmed | App (Android) | user (first-hand, 2026-10-09) |
 
 ## 12. Look and feel (described in words)
@@ -256,6 +272,16 @@ The cats-remaining counter is also reported for the app in a Russian review ([ir
 | 12.9 | App Store screenshots: portrait, flat cream background, bottom captions in bold rounded white text on a sky-blue band decorated with cat ears and paw prints. Captions include "Find the cats", "Endless levels" and a "Test your IQ" claim. Tiles are pastel pink, yellow, blue and lilac. The solved board shows "glowing cats". Tone: "cute, calm, minimal". (The `broad-pass.json` entry was re-read first-hand on 2026-10-06.) | confirmed | App | [broadpass] |
 | 12.10 | Store copy: "minimalist aesthetic and satisfying tactile feedback, takes just seconds to learn". | confirmed | App | [as] |
 | 12.11 | Portrait-only. | likely | Both | [nicdoku], [broadpass] |
+| 12.12 | **Region palette of a 10 × 10 board** (sampled from the user's PNG screenshot): green `#AED994`, teal `#48B5B2`, sky `#6BBCE7`, grey-blue `#A7BFD7`, purple `#9778D6`, magenta-pink `#EB85B7`, pink `#FAB4D0`, salmon `#D57374`, orange `#FFAA6D`, mustard `#E4BB49`: darker and more saturated than our 2b palette (mean L* 71.8, C* 40.3). Colours beyond these 10 (11 × 11, 12 × 12) are not seen. Page `#F7F2EF`, cards white, all text a mauve-brown `#935A5A`; the back arrow and the gear in their white discs a lighter `#996767`. | confirmed | App (iOS) | first-hand (user recording, 2026-10-10) |
+| 12.13 | **X mark**: pure white, no outline and no shadow; two bars about 19.7 % of the tile thick, the X about 61.5 % of the tile wide, bar ends rounded squares. | confirmed | App (iOS) | first-hand (user recording, 2026-10-10) |
+| 12.14 | **Board geometry (10 × 10)**: the card is 97 % of the screen width with no shadow and a small radius (about 3 % of its width); tiles 35 pt with a 3 pt gap (8.6 % of the tile) and an 11 % corner radius; flat tiles. | confirmed | App (iOS) | first-hand (user recording, 2026-10-10) |
+| 12.15 | **Type**: a rounded geometric face with a single-storey "a"; labels about weight 500, numbers about 800, rule text about 600. | likely (weights estimated) | App (iOS) | first-hand (user recording, 2026-10-10) |
+| 12.16 | **Cat-heads pill**: one flat cat-head silhouette per region colour in a 50 % white tint of that colour, in a fixed hue order. What a head does when its colour's cat is found is not visible (no cat placed). Research: the row is the "cats still to place" tracker (likely). | confirmed (look) / unknown (found state) | App (iOS) | first-hand (user recording, 2026-10-10); [irecommend] |
+| 12.17 | **Rule cards**: a white strip holding three pale beige cards, each with a 3 × 3 diagram (tan tiles, brown boxes with white X's, a tuxedo cat face) beside a short rule text. | confirmed | App (iOS) | first-hand (user recording, 2026-10-10) |
+| 12.18 | **Shadows**: warm orange soft shadows on the round buttons only; the pills, the rule strip and the board card have none (the heads pill a very faint one). | confirmed | App (iOS) | first-hand (user recording, 2026-10-10) |
+| 12.19 | **Helper pulse**: scale 1 → 1.08 with an orange glow, 0.48 s up, a short hold, 0.50 s down, 0.47 s rest (1.50 s period), repeating; the badge does not move. | confirmed | App (iOS) | first-hand (user recording, 2026-10-10) |
+| 12.20 | **Level-start toast**: a cream pill with an orange border and an emoji, laid over the top of the HUD, drifting off to the left at a constant ≈ 100 pt/s; its entry, full text and trigger are not visible. | confirmed (look, exit) / unknown (trigger, text) | App (iOS) | first-hand (user recording, 2026-10-10) |
+| 12.21 | **Red dot** on the settings gear (11 pt, up-right of the gear). What it signals is not known. | confirmed (look) / unknown (meaning) | App (iOS) | first-hand (user recording, 2026-10-10) |
 
 ## 13. Audio and haptics
 
@@ -340,7 +366,7 @@ These are listed so Phase 2 does not import them by accident, and so Phase 3 has
 10. **Tap on an X**: clears it, but the teardown author once saw it fail to clear (likely a bug).
 11. **Brief versus research**: the project brief names Yandex 537825 "Meowdoku Cat Puzzle" and a Playgama port by "XdendunGames". Research found 537825 titled "Meowdoku", "Meowdoku Cat Puzzle" at 541580, and a Playgama port by "DRA".
 12. **Single-origin corroboration**: Gamigion and felixbraberg.substack.com are the same author, so the ad-cadence numbers have one origin.
-13. **Lives: hearts or fish** (added 2026-10-09). App Store screenshots ([broadpass]) and store text show hearts; the user, playing the Play Store app, sees fish everywhere (user, first-hand, 2026-10-09). Explanation: the iOS build differs from Android, or the screenshots show an older version. Our parity target is the Play Store app, so the first-hand report wins (5.11).
+13. **Lives: hearts or fish** (added 2026-10-09). App Store screenshots ([broadpass]) and store text show hearts; the user, playing the Play Store app, sees fish everywhere (user, first-hand, 2026-10-09). Explanation: the iOS build differs from Android, or the screenshots show an older version. Our parity target is the Play Store app, so the first-hand report wins (5.11). **2026-10-10 (first-hand (user recording, 2026-10-10)):** the current iOS app shows 3 golden fish as the lives too, so the App Store screenshots show an older version.
 14. **Points in multiples of 5, or of 96** (added 2026-10-10). An iOS user review (AppFollow, cited in [differences-vs-original](../phase2/differences-vs-original.md) §2.6) says points come only in multiples of 5. The user's first-hand level-points rule on the Play Store app gives 576, 672, 768 … per cat (multiples of 96; totals such as 1 248 or 7 296 are not multiples of 5) (10.17). Explanations: the review means another number (the leaderboard points, an iOS build or an older version), or it is wrong. The first-hand report wins for level points.
 
 ## 19. Unknowns that matter for the rebuild
@@ -349,7 +375,7 @@ These are carried into [02](02-rebuild-spec.md) as `[DECISION]`s:
 
 - Hint and kitty starting stock, refill amounts and the "in-game reward system" (app).
 - Whether the app's X → cat cycle is **timed** (a quick double tap) or untimed, i.e. what a slow second tap on an X does (4.2).
-- Whether the kitty button **places** the cat or only highlights it.
+- Whether the kitty button **places** the cat or only highlights it. (2026-10-10 research, search summaries: **places**, likely; our kitty places one.)
 - How many hearts (fish) a revive restores, and how many revives are allowed.
 - ~~What the post-win golden fish are: a currency, a rating or a cosmetic.~~ **Resolved 2026-10-09 (user, first-hand):** they are the lives kept; they go to the leaderboard points (7.1.3, 10.16).
 - Daily puzzle structure: count, size, unlock, streaks, calendar, reset time.
@@ -362,6 +388,7 @@ These are carried into [02](02-rebuild-spec.md) as `[DECISION]`s:
 - The exact size and difficulty schedule per level number; whether boards are fixed or generated.
 - Settings in the app (haptics? music?), BGM, language list.
 - What Premium and Premium Plus include.
+- **New (2026-10-10, user recording):** what the **mouse** helper does and whether it has a stock or a limit (ours: 3 X's on cells without a cat, one video per use); what a **head** of the heads pill looks like once its colour has a cat (ours: full colour); the **colours beyond 10** for 11 × 11 and 12 × 12 (ours: Mint and Cocoa); the tile and gap rules for other board sizes (ours: the same ratios); which helper **pulses** when (ours: the cat on an untouched board, then the bulb); the **level-start toast**'s trigger and text (ours: our own line at every new level and Retry); what the gear's **red dot** means (ours: something unseen in Settings); whether the banner is always present during play and what hides it.
 
 <!-- References -->
 [as]: https://apps.apple.com/us/app/meowdoku/id6761760135

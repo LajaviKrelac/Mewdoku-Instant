@@ -15,6 +15,13 @@
 // earned PER CAT inside one level (levelPoints.firstIncrement, levelPoints.step) and shown by a HUD
 // counter (fx.levelPoints). The per-win formula and the cross-level perfect streak are gone: their
 // keys (levelPoints.perSize, hardMultiplier, streakStep, streakCap) are @deprecated and unread.
+// Phase 2d (docs/phase2d/look-spec.md §1, §4; user decision 2026-10-10: match the original's game
+// screen look and layout from the user's own recording): the spec stage added layout.game (the
+// scaled vertical stack measured at 402 CSS px), layout.mark (the X glyph), fx.helperPulse,
+// fx.headFoundMs, fx.markPopMs, fx.mouseStaggerMs, fx.startToast, mouse (the third helper),
+// settingsDot, ads.banner.duringPlay / bannerPx, and widened RewardedPlacementId (+ 'mouse') and
+// BannerScreen (+ 'game'). The game-screen keys they replace are @deprecated (unread once 2d is
+// built). No existing value changed except the unread ads.rewarded.placements list (+ 'mouse').
 
 /** The 17 locales of phase2b §6.2 (BCP 47 ids; FB `ll_CC` codes are mapped onto them by i18n/locale.ts, §6.3). */
 export type LocaleId =
@@ -32,10 +39,21 @@ export type PeriodKind = 'day' | 'week' | 'month';
 export type ScoredMode = 'level' | 'daily' | 'event';
 /** Interstitial triggers (02 §13.2 + phase2b §3.2 `event_next`). Mirrors platform InterstitialPlacement. */
 export type InterstitialTrigger = 'next_level' | 'retry' | 'daily_done' | 'event_next';
-/** Rewarded placements (02 §13.3 + phase2b §5.6 `group_double`). Mirrors platform RewardedPlacement. */
-export type RewardedPlacementId = 'hint' | 'kitty' | 'revive' | 'group_double';
-/** Screens that may carry an FB banner (phase2b §3.2). Never the game screen. */
-export type BannerScreen = 'home' | 'victory' | 'event';
+/**
+ * Rewarded placements (02 §13.3 + phase2b §5.6 `group_double`). Mirrors platform RewardedPlacement.
+ * Phase 2d (look-spec §1.12): + 'mouse', the third helper (one rewarded video per use).
+ */
+export type RewardedPlacementId = 'hint' | 'kitty' | 'revive' | 'group_double' | 'mouse';
+/**
+ * Screens that may carry an FB banner (phase2b §3.2). Phase 2d (look-spec §1.16): + 'game', the
+ * game screen during play, only while ads.banner.duringPlay is on (it is not in ads.banner.screens).
+ */
+export type BannerScreen = 'home' | 'victory' | 'event' | 'game';
+/**
+ * Phase 2d (look-spec §1.11): which helper the idle pulse invites. 'auto': the kitty while nothing is
+ * marked or placed in the attempt, then the bulb (fits both observations of the user's recording).
+ */
+export type HelperPulseTarget = 'auto' | 'bulb' | 'kitty' | 'off';
 
 /** One IAP catalogue row (phase2b §8.3): what a purchase of `id` grants. */
 export interface IapProductDef {
@@ -67,6 +85,13 @@ export interface GameConfig {
   };
   readonly hints: { readonly startStock: number; readonly perRewardedAd: number };
   readonly kitty: { readonly startStock: number; readonly perRewardedAd: number; readonly revealMs: number };
+  /**
+   * Phase 2d (look-spec §1.12) [DECISION-PENDING-USER]: the third helper, the mouse. Each use (one
+   * rewarded video on FBIG; the free fallback with its shared cooldown on the web) marks `cells`
+   * random empty tiles that cannot hold a cat with an X (one research source: 3). It has no stock.
+   * `enabled: false` hides the button everywhere (its slot in the tool row stays, so nothing moves).
+   */
+  readonly mouse: { readonly enabled: boolean; readonly cells: number };
   readonly revive: { readonly maxPerAttempt: number; readonly heartsRestored: number };
   readonly ads: {
     readonly enabled: boolean;
@@ -102,6 +127,15 @@ export interface GameConfig {
       readonly minReloadSec: number;
       /** Primary buttons sit at least this far above the reserved band (§2.5, §3.2). */
       readonly buttonClearancePx: number;
+      /**
+       * Phase 2d (look-spec §1.16) [DECISION: default, user may change]: the game screen may carry a
+       * banner during play, like the original in the user's recording (Meta's guidance against it is
+       * recorded there; gate G4 re-checks before production). The same gate applies (capability,
+       * fromCompletedLevels, No Ads, not the tutorial). Off: the 2b rule (never during play).
+       */
+      readonly duringPlay: boolean;
+      /** Phase 2d: the banner's own height on the game screen's band (the band adds layout.game.toolsToBanner and .bottom, scaled). */
+      readonly bannerPx: number;
     };
     readonly unsupportedFallback: { readonly cooldownSec: number };
     /** Dev/e2e mock ad overlay length (04 §6.2). */
@@ -296,6 +330,7 @@ export interface GameConfig {
     readonly failButtonDelayMs: number;
     readonly sadCatsMs: number;
     readonly catDropMs: number;
+    /** @deprecated phase2d: the X pops in over fx.markPopMs (look-spec §1.10); the stroke draw-in is deleted. */
     readonly markDrawMs: number;
     readonly wrongShakeMs: number;
     readonly shakePx: number;
@@ -328,6 +363,33 @@ export interface GameConfig {
       readonly plusRisePx: number;
       readonly reducedPlusInMs: number;
       readonly reducedPlusOutMs: number;
+    };
+    /**
+     * Phase 2d (look-spec §1.11; measured on the user's recording, 2026-10-10): the idle pulse of the
+     * suggested helper. One cycle of periodMs: rise to peakScale with the warm glow (0 → 32 %), hold
+     * (→ 36 %), fall (→ 69 %), rest (→ 100 %), forever; the count badge does not scale. `target`
+     * picks the helper ([DECISION]). Reduced motion: no pulse.
+     */
+    readonly helperPulse: { readonly target: HelperPulseTarget; readonly periodMs: number; readonly peakScale: number };
+    /** Phase 2d (look-spec §1.6) [DECISION]: a head of the cat-heads pill pops and fills when its colour gets its cat. */
+    readonly headFoundMs: number;
+    /** Phase 2d (look-spec §1.10): a new X mark pops in (scale 0.6 → 1.06 → 1), replacing the stroke draw-in. */
+    readonly markPopMs: number;
+    /** Phase 2d (look-spec §1.12): the mouse's X marks pop in one after another, this far apart. */
+    readonly mouseStaggerMs: number;
+    /**
+     * Phase 2d (look-spec §1.14): the level-start toast. It slides in from the inline start over
+     * inMs (delayMs after the board entry starts), holds holdMs, then drifts out to the inline start
+     * at exitPxPerSec (linear; 100 px/s measured on the user's recording) × the layout scale.
+     * Reduced motion: fade in, hold reducedHoldMs, fade out (fx.reducedMotionFadeMs each way).
+     */
+    readonly startToast: {
+      readonly enabled: boolean;
+      readonly delayMs: number;
+      readonly inMs: number;
+      readonly holdMs: number;
+      readonly exitPxPerSec: number;
+      readonly reducedHoldMs: number;
     };
   };
   readonly save: {
@@ -373,48 +435,68 @@ export interface GameConfig {
     /** One pulse per arriving fish (phase2b §2.2). */
     readonly fish: number;
   };
-  /** Responsive layout (02 §19) and board rendering (02 §17.4, §18). CSS px. */
+  /**
+   * Responsive layout (02 §19) and board rendering (02 §17.4, §18). CSS px.
+   * Phase 2d (look-spec §1.1, §1.8, §1.10): the game screen follows layout.game (a vertical stack
+   * measured on the user's recording at 402 CSS px, scaled by s) and the X follows layout.mark. The
+   * keys marked "@deprecated phase2d" below are unread once 2d is built (the rule never removes a key).
+   */
   readonly layout: {
+    /** @deprecated phase2d: the game column is layout.game.refWidth × s (cardMargin at the sides). */
     readonly gutter: number;
+    /** @deprecated phase2d: layout.game.refWidth × layout.game.maxScale. */
     readonly colMax: number;
+    /** @deprecated phase2d: layout.game.bar × s. */
     readonly topBar: number;
+    /** @deprecated phase2d: layout.game.pills × s. */
     readonly pills: number;
+    /** @deprecated phase2d: layout.game.rules × s (the rule cards). */
     readonly chips: number;
+    /** @deprecated phase2d: layout.game.tools × s. */
     readonly tools: number;
+    /** @deprecated phase2d: layout.game.boardToTools / toolsToBanner / bottom × s. */
     readonly toolsGap: number;
+    /** @deprecated phase2d: the measured gaps of layout.game × s. */
     readonly vGap: number;
+    /** @deprecated phase2d: the measured gaps of layout.game × s. */
     readonly vGapCount: number;
+    /** @deprecated phase2d: layout.game.cardPad × s (rounded). */
     readonly boardPad: number;
+    /** @deprecated phase2d: layout.game.cardRadius × s. */
     readonly boardRadius: number;
+    /** @deprecated phase2d: compact = s < layout.game.compactScale. */
     readonly compactHeight: number;
+    /** @deprecated phase2d: everything scales with s; no separate compact sizes. */
     readonly compactPills: number;
+    /** @deprecated phase2d: everything scales with s; no separate compact sizes. */
     readonly compactChips: number;
     readonly fbSafeZonePx: number;
     readonly rotateMaxHeight: number;
     readonly minViewportW: number;
     readonly minViewportH: number;
-    /** Tile corner radius as a fraction of the slot (phase2b §1.5: 0.2). */
+    /** Tile corner radius as a fraction of the slot (phase2b §1.5: 0.2). @deprecated phase2d: layout.game.tileRadiusFraction (of the tile edge). */
     readonly cellRadiusFraction: number;
     /** @deprecated phase2b §1.8: region-aware insets are deleted; not read after 2b. Use insetPx / insetSmallPx. */
     readonly insetSamePx: number;
     /** @deprecated phase2b §1.8: region-aware insets are deleted; not read after 2b. Use insetPx / insetSmallPx. */
     readonly insetDiffPx: number;
-    /** Even gutters (phase2b §1.5): every tile inset this much on all sides (a 4 px gutter) … */
+    /** Even gutters (phase2b §1.5): every tile inset this much on all sides (a 4 px gutter) … @deprecated phase2d: gap = round(slot × layout.game.gapFraction), inset = gap / 2. */
     readonly insetPx: number;
-    /** … or this much (a 3 px gutter) when the slot is below insetSmallBelowSlot. */
+    /** … or this much (a 3 px gutter) when the slot is below insetSmallBelowSlot. @deprecated phase2d: layout.game.gapFraction. */
     readonly insetSmallPx: number;
+    /** @deprecated phase2d: layout.game.gapFraction. */
     readonly insetSmallBelowSlot: number;
     /** Cat size as a fraction of the slot (phase2b §1.5: 0.84). */
     readonly catScale: number;
-    /** X mark size: path a→100−a with a = (1 − markScale)/2 × 100 (phase2b §1.5: 0.54 → 23…77). */
+    /** X mark size: path a→100−a with a = (1 − markScale)/2 × 100 (phase2b §1.5: 0.54 → 23…77). @deprecated phase2d: layout.mark.armFraction. */
     readonly markScale: number;
-    /** White X stroke on the 100-unit box ÷ 100 (phase2b §1.5: 12 units). */
+    /** White X stroke on the 100-unit box ÷ 100 (phase2b §1.5: 12 units). @deprecated phase2d: layout.mark.barFraction. */
     readonly markStrokeFraction: number;
     /** X opacity: 1 = the white X (phase2b §1.5). The 0.7 dark-ink X is retired (§1.8). */
     readonly markOpacity: number;
-    /** X edge underlay: extra stroke per side ÷ 100 (12 + 2 × 4 = 20 units), phase2b §1.5. */
+    /** X edge underlay: extra stroke per side ÷ 100 (12 + 2 × 4 = 20 units), phase2b §1.5. @deprecated phase2d: layout.mark.edgeFraction (shown only with colour patterns on). */
     readonly markEdgeFraction: number;
-    /** X edge colour: mixHex(tile, --ink, markEdgeMix) per palette index (ui/art/palette.ts xEdgeColor), §1.5. */
+    /** X edge colour: mixHex(tile, --ink, markEdgeMix) per palette index (ui/art/palette.ts xEdgeColor), §1.5. @deprecated phase2d: layout.mark.edgeMix toward --ink-deep. */
     readonly markEdgeMix: number;
     readonly wrongRingPx: number;
     readonly patternScale: number;
@@ -425,6 +507,67 @@ export interface GameConfig {
     readonly patternOpacityDone: number;
     /** Smallest drawn glyph box (CSS px): small slots scale the 22 % glyph up to this (11×11 / 12×12 on phones). [ui addition] */
     readonly patternMinPx: number;
+    /**
+     * Phase 2d (look-spec §1.1, §1.8; measured on the user's recording at a 402 × 874 CSS px viewport,
+     * user decision 2026-10-10). The game screen is one column stacked top-down at scale
+     *   s = clamp(min(min(vw, refWidth × maxScale) / refWidth, (A − B) / K), minScale, maxScale)
+     * with A = vh − safeTop − safeBottom, B = ads.banner.bannerPx when the banner band is reserved
+     * (else 0) and K = the sum of the rows and gaps below (toolsToBanner only with the band) plus the
+     * square board card (refWidth − 2 × cardMargin). Every value here is CSS px at s = 1, except the
+     * fractions. Spare height goes above the bar up to topSpareMax × s, the rest below.
+     */
+    readonly game: {
+      readonly refWidth: number;
+      readonly minScale: number;
+      readonly maxScale: number;
+      /** Below this scale the rule cards show their diagrams only (their text stays for screen readers). */
+      readonly compactScale: number;
+      readonly topSpareMax: number;
+      /** Top bar band (back and gear discs centred at bar / 2). */
+      readonly bar: number;
+      readonly barToPills: number;
+      /** Heads pill and fish pill height. */
+      readonly pills: number;
+      readonly pillsToRules: number;
+      /** The white rules container (three rule cards). */
+      readonly rules: number;
+      /**
+       * At a text scale above 1 the rules row grows by min(rulesGrowMax, textScale × 1.15) (not in compact mode)
+       * and the bar by min(rulesGrowMax, textScale) (look-spec §1.1 barH); the board gives up the space.
+       */
+      readonly rulesGrowMax: number;
+      readonly rulesToBoard: number;
+      /** Board card bottom → helper disc top. */
+      readonly boardToTools: number;
+      /** Helper disc diameter (the row's height; the badges reach into boardToTools). */
+      readonly tools: number;
+      /** Helper discs → banner, only when the banner band is reserved. */
+      readonly toolsToBanner: number;
+      /** Below the last row (the banner or the helpers), above safeBottom. */
+      readonly bottom: number;
+      /** Board card side margin; the card is refWidth − 2 × cardMargin wide at s = 1. */
+      readonly cardMargin: number;
+      /** Card edge → first slot edge (the first tile edge adds half a gap). Rounded to whole px, ≥ 3. */
+      readonly cardPad: number;
+      readonly cardRadius: number;
+      /** Gap between tiles ÷ slot: gap = max(1, round(slot × gapFraction)); every tile is inset gap / 2. */
+      readonly gapFraction: number;
+      /** Tile corner radius ÷ tile edge (slot − gap). */
+      readonly tileRadiusFraction: number;
+    };
+    /**
+     * Phase 2d (look-spec §1.10; measured on the user's recording): the X is two white rounded bars
+     * crossing at ±45°, as fractions of the cell's 100-unit box (the slot): each bar armFraction long
+     * and barFraction thick with corners of cornerFraction; no outline by default. With colour patterns
+     * on, an edge underlay (each bar grown by edgeFraction per side) in mixHex(tile, --ink-deep, edgeMix).
+     */
+    readonly mark: {
+      readonly armFraction: number;
+      readonly barFraction: number;
+      readonly cornerFraction: number;
+      readonly edgeFraction: number;
+      readonly edgeMix: number;
+    };
   };
   /** Offline generator and runtime substitute/endless generation (03 §4.5, §8.3). */
   readonly gen: {
@@ -692,6 +835,13 @@ export interface GameConfig {
     readonly feedbackUrl: string;
     readonly feedbackOnFbig: boolean;
   };
+  /**
+   * Phase 2d (look-spec §1.15) [DECISION]: the red dot on the Settings gear marks something in
+   * Settings the player has not seen. It shows while the save's seen marker (SaveData.ext
+   * 'settingsSeen', a number) is below `version`, and opening Settings sets the marker to `version`.
+   * Raise `version` when a release adds or changes a Settings row; 0 never shows the dot.
+   */
+  readonly settingsDot: { readonly version: number };
 }
 
 export const cfg: GameConfig = deepFreeze({
@@ -705,6 +855,7 @@ export const cfg: GameConfig = deepFreeze({
   },
   hints: { startStock: 5, perRewardedAd: 1 },
   kitty: { startStock: 3, perRewardedAd: 1, revealMs: 600 },
+  mouse: { enabled: true, cells: 3 },
   revive: { maxPerAttempt: 1, heartsRestored: 1 },
   ads: {
     enabled: true,
@@ -720,7 +871,7 @@ export const cfg: GameConfig = deepFreeze({
       sessionGraceSec: 60,
       triggers: ['next_level', 'retry', 'daily_done', 'event_next'],
     },
-    rewarded: { resetsInterstitialClock: true, placements: ['hint', 'kitty', 'revive', 'group_double'] },
+    rewarded: { resetsInterstitialClock: true, placements: ['hint', 'kitty', 'revive', 'group_double', 'mouse'] },
     banner: {
       enabled: true,
       fromCompletedLevels: 10,
@@ -729,6 +880,8 @@ export const cfg: GameConfig = deepFreeze({
       reservePx: 58,
       minReloadSec: 60,
       buttonClearancePx: 16,
+      duringPlay: true,
+      bannerPx: 50,
     },
     unsupportedFallback: { cooldownSec: 600 },
     mock: { durationMs: 1500 },
@@ -823,6 +976,11 @@ export const cfg: GameConfig = deepFreeze({
     catBlinkMinMs: 3000,
     catBlinkMaxMs: 7000,
     levelPoints: { rollMs: 360, plusMs: 700, plusRisePx: 6, reducedPlusInMs: 150, reducedPlusOutMs: 600 },
+    helperPulse: { target: 'auto', periodMs: 1500, peakScale: 1.08 },
+    headFoundMs: 300,
+    markPopMs: 140,
+    mouseStaggerMs: 90,
+    startToast: { enabled: true, delayMs: 150, inMs: 300, holdMs: 1200, exitPxPerSec: 100, reducedHoldMs: 1500 },
   },
   save: {
     localDebounceMs: 400,
@@ -886,6 +1044,30 @@ export const cfg: GameConfig = deepFreeze({
     patternOpacity: 0.85,
     patternOpacityDone: 0.65,
     patternMinPx: 7,
+    game: {
+      refWidth: 402,
+      minScale: 0.6,
+      maxScale: 1.2,
+      compactScale: 0.85,
+      topSpareMax: 62,
+      bar: 52,
+      barToPills: 10.3,
+      pills: 31.3,
+      pillsToRules: 8.3,
+      rules: 60.3,
+      rulesGrowMax: 2,
+      rulesToBoard: 25.7,
+      boardToTools: 53,
+      tools: 60.3,
+      toolsToBanner: 23.4,
+      bottom: 12.3,
+      cardMargin: 5.67,
+      cardPad: 5.17,
+      cardRadius: 11.6,
+      gapFraction: 0.079,
+      tileRadiusFraction: 0.11,
+    },
+    mark: { armFraction: 0.69, barFraction: 0.182, cornerFraction: 0.06, edgeFraction: 0.035, edgeMix: 0.85 },
   },
   gen: {
     maxAttempts: 5000,
@@ -970,6 +1152,7 @@ export const cfg: GameConfig = deepFreeze({
     releaseLocales: ['en'],
   },
   support: { feedbackUrl: '', feedbackOnFbig: false },
+  settingsDot: { version: 1 },
 });
 
 /** Drag threshold for a cell of `cellPx` CSS px: max(8, 0.2 × cellPx) (02 §3 input.dragStartPx). */
