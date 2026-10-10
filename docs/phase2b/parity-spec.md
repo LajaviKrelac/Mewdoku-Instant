@@ -2,6 +2,8 @@
 
 Status: Phase 2b spec, ready to build after review · Date: 2026-10-08 · Owner: game design + tech lead · Branch `claude/mewdoku-instant`
 
+> **Superseded in part (2026-10-10, Phase 2d, built and integrated).** [look-spec](../phase2d/look-spec.md) replaces the game screen's look, layout, palette and X (§1.3–§1.5 here, pointers below), R6 for the user's recording (§0.3), and the "never during play" banner rule on FBIG (§0.7, §0.8, §3.2: banners in play are a default the user may change, D-2d-15).
+
 > **Superseded in part (2026-10-09).** Phase 2c ([fish-lives-spec](../phase2c/fish-lives-spec.md)) supersedes §0.5 (hearts), §0.8 (fish rates, fish packs), §2.1 (what fish are for), §2.2–§2.3 (fish steps and sources), §2.5 (fish pill, reward row), §2.6, §2.8, §2.9 (heart break), §2.14, §5.3 (points and boards), §5.5 (board by mode), §5.6 (group scoring and fish), §8.3 (catalogue), §9 (wallet) and §10 (fish, shop, points). The user, who plays the Play Store app, reported first-hand (2026-10-09) that **fish are the lives**, that the fish left at a win are **added to the leaderboard points ranked per period**, that **level points grow without mistakes**, and that our fish currency was an invention to remove. Each of those sections carries a one-line pointer; the rest of this spec still holds. Build status: [STATUS-2c](../phase2c/STATUS-2c.md). **Phase 2c.1 (2026-10-10):** the user's exact level-points rule (per correct cat inside one level, 96 × (5 + s); every level and Retry start at 0) replaces 2c's per-win formula and its "Perfect ×N" streak; the running total shows in the HUD and at the win (fish-lives-spec §3.1–§3.2, §10; STATUS-2c §10).
 
 Review pass (2026-10-08): checked with three lenses (implementer, platform truth, originality) and fixed in place. Appendix C lists what changed and why.
@@ -109,9 +111,9 @@ Parity is the goal (§0.1). Every difference that remains is there because of a 
 | Difference | Reason |
 |---|---|
 | Our own cat (Tux, with signature marks; no tears, no instrument), fish art, sounds, strings, event names and event themes; copy says "fish", never "golden fish" | legality (R1; 06 §3; differences §4) |
-| Our own colour, size and timing values: the region palette, every token, all durations (fitted to the reported wait times, §0.2) | legality (R6: no sampled values); the original's values are unknown |
-| A thin tinted edge under the white X (1 px at a 25 px slot) | the accessibility minimum (02 §0, WCAG 1.4.11); white alone is 1.23–2.39:1 on our tiles (§1.5) |
-| Banners never during play (the original may show them in play); they start, like the original's reported start, at about level 10 | platform (Meta's guidance, §3.1) `[DECISION: default, user may change]` |
+| Our own colour, size and timing values: the region palette, every token, all durations (fitted to the reported wait times, §0.2) | legality (R6: no sampled values); the original's values are unknown. **Phase 2d:** on the game screen these are now **measured** from the user's recording (D-2d-0; look-spec §1); elsewhere ours |
+| A thin tinted edge under the white X (1 px at a 25 px slot) | the accessibility minimum (02 §0, WCAG 1.4.11); white alone is 1.23–2.39:1 on our tiles (§1.5). **Phase 2d:** the original's plain white X by default; the edge only with Colour patterns on (D-2d-5, look-spec §1.10) |
+| Banners never during play (the original may show them in play); they start, like the original's reported start, at about level 10 | platform (Meta's guidance, §3.1) `[DECISION: default, user may change]`. **Phase 2d:** reversed on FBIG: the user's recording shows a banner in play, so `ads.banner.duringPlay` is on (D-2d-15, look-spec §1.16; the policy risk is recorded and asked, §7 Q5; fb-dashboard B7–B9) |
 | No ads on the production web build; a free fallback grant instead | platform (no ad network) |
 | Other players' names only inside FB overlay views; personal records on the web; group rewards for taking part | platform (§5.2, §5.6) |
 | No subscriptions; no purchases on iOS, Messenger.com or the web | platform (§8.2) |
@@ -138,7 +140,7 @@ Each row is `[DECISION: default, user may change]`.
 
 | Decision | Default | Where |
 |---|---|---|
-| Banners | Home, victory and event screens only (where Meta's guidance allows), from 10 completed levels, never during play | §3.2 |
+| Banners | Home, victory and event screens only (where Meta's guidance allows), from 10 completed levels, never during play. **Phase 2d:** also on the game screen (FBIG, `ads.banner.duringPlay: true`, the band reserved from mount; D-2d-15) | §3.2, look-spec §1.16 |
 | Fish exchange rates | 1 hint = 15 fish, 1 kitty = 30 fish | §2.8, `shop.*` |
 | IAP prices | No Ads 3.99, Bulb Bundle 1.99, Kitty Basket 1.99, Fish Bucket 1.99, Fish Crate 4.99 (USD, set in the dashboard) | §8.3 |
 | Translations | AI drafts for all 16 locales now. Release builds ship only the locales in `i18n.releaseLocales` (default `['en']`); dev and web preview builds show all 17 | §6.7, `i18n.*` |
@@ -175,6 +177,8 @@ The current ginger look is **removed**, not kept: the ginger cat parts and poses
 | Chrome | Heavy rounded type, white pill counters, rounded cards with soft shadows, dark full-screen overlays | likely (Web-Y) |
 
 ### 1.3 Theme tokens (one set)
+
+> **Phase 2d:** the token values below are replaced by the measured ones of look-spec §1.2 (page `#F7F2EF`, ink `#935A5A`, …); §1.4 and §1.5 likewise by look-spec §1.2, §1.8–§1.10.
 
 | Piece | Spec |
 |---|---|
@@ -628,6 +632,8 @@ Two differences: the panel content (§2.4), and on FBIG a possible banner in its
 The original may show banners in play. We cannot copy that on FB, so our banners follow Meta's guidance. The original's *cadence* (an interstitial after nearly every level) is what a player notices most; we keep its reported grace and cooldowns (§3.2), which Phase 2 already uses.
 
 ### 3.2 Design (FBIG)
+
+> **Phase 2d:** the game screen now qualifies too when `ads.banner.duringPlay` is on (default on; look-spec §1.16, D-2d-15); the rest of this section is unchanged.
 
 | Format | Rule |
 |---|---|

@@ -657,7 +657,8 @@ async function hitAreaMisses(page: Page, selector: string, min: number): Promise
   return page.evaluate(
     ([sel, want]) => {
       const out: string[] = [];
-      const buttons = Array.from(document.querySelectorAll<HTMLElement>(sel));
+      // the rendered ones (Home hides its trophy and home buttons when they do not apply)
+      const buttons = Array.from(document.querySelectorAll<HTMLElement>(sel)).filter((b) => b.getBoundingClientRect().width > 0);
       if (buttons.length < want) out.push(`only ${buttons.length} round buttons`);
       const clamp = (v: number, hi: number): number => Math.min(hi - 0.5, Math.max(0.5, v));
       for (const el of buttons) {

@@ -798,7 +798,8 @@ async function serve(): Promise<{ url: string; stop: () => void }> {
   if (given) return { url: given.replace(/\/$/, ''), stop: () => undefined };
   if (!existsSync(join(ROOT, 'dist/e2e/index.html'))) throw new Error('look-compare: build first (npm run build:e2e)');
   const port = 4993;
-  const child: ChildProcess = spawn('npx', ['vite', 'preview', '--mode', 'e2e', '--host', '127.0.0.1', '--port', String(port), '--strictPort'], { cwd: ROOT, stdio: 'ignore' });
+  // vite's own bin under node (not `npx`), so stopping the child stops the server too.
+  const child: ChildProcess = spawn(process.execPath, [join(ROOT, 'node_modules/vite/bin/vite.js'), 'preview', '--mode', 'e2e', '--host', '127.0.0.1', '--port', String(port), '--strictPort'], { cwd: ROOT, stdio: 'ignore' });
   const url = `http://127.0.0.1:${port}`;
   for (let i = 0; i < 100; i++) {
     try {

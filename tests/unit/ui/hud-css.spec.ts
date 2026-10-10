@@ -157,7 +157,7 @@ describe('Phase 2d: the pills row (§1.5, §1.6)', () => {
   });
 
   it('2d I-polish c: the helper art boxes draw the art at the measured sizes (kitty 34.7 × 34.3, bulb 21.3 × 34, mouse 35 × 31.3)', () => {
-    expect(ruleOf(hud, '.tool--paw .tool__icon')).toBe('width: calc(var(--s) * 36px); height: calc(var(--s) * 36px);');
+    expect(ruleOf(hud, '.tool--paw .tool__icon')).toBe('position: relative; top: calc(var(--s) * -0.9px); width: calc(var(--s) * 36px); height: calc(var(--s) * 36px);');
     expect(ruleOf(hud, '.tool--bulb .tool__icon')).toBe('width: calc(var(--s) * 21.9px); height: calc(var(--s) * 34px);');
     expect(ruleOf(hud, '.tool--mouse .tool__icon')).toBe('width: calc(var(--s) * 36.2px); height: calc(var(--s) * 32.4px);');
   });

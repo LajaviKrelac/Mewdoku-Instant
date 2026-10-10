@@ -63,3 +63,14 @@ Status: living list · Owner: G3 · Spec: [look-spec §3](look-spec.md#3-workstr
   - `src/ui/screens/game-screen.ts`: `HelperKind`, `fbShift()`.
 - **Selectors for e2e specs** (G1's smoke, winflow, events and layout specs): the heads pill is `.pill--heads .head[data-done]`. The Score number is `.top-bar--game .points-pill__n`, its label `.points-pill__name`, its "+N" `.points-pill__chip`. The back disc is `.top-bar--game .top-bar__btn--back` (aria-label "Back"), the gear `.top-bar--game .top-bar__btn--settings` with `.top-bar__dot`. The helpers are `.tool--paw`, `.tool--bulb` and `.tool--mouse` (`[data-off]` when hidden; `[data-pulse]` while pulsing), with `.tool__badge`, `.tool__badge--video` and `.tool__badge--free`. The start toast is `.start-toast[data-kind]`. The cat counter (`.pill--cats`) and the in-row points pill are gone.
 - **CSS variables on `.screen--game`** (game-screen.ts, from G2's `computeLayout`): `--s`, `--col-w`, `--y-top`, `--bar`, `--pills`, `--rules`, `--tools`, `--g-bp`, `--g-pr`, `--g-rb`, `--g-bt`, `--g-tb`, `--g-bottom`, `--band`, `--board`, `--pulse-ms`, `--pulse-scale`, and `--fb-s` / `--fb-e` (the FB safe-zone shift at the inline start or end). While the game screen is mounted, `<html>` gets `--play-band`, `--play-band-bottom` and `--toast-bottom`, plus `data-play-band='1' | '0'`. A newer screen's values are never cleared by an older screen's destroy.
+
+## I-2 (lead, 2026-10-10): status of every request
+
+| # | Status |
+|---|---|
+| R1 | **Done**: G2 re-declared `--shadow-btn` on `.screen--game` (tokens.css), so `hud.css` dropped its scaled copy; `.tool__disc` uses `var(--shadow-btn)` and the game bar's discs take it from `.btn--icon`. The token was then re-fitted to the recording (look polish d): `0 3.5px 8px -2px rgba(--warm-rgb, .22)` × s. |
+| R2 | **Done**: `base.css` `.btn--icon::before` is square (no radius) for every round button; `hud.css`' game-bar override is gone; a new `layout` e2e test checks Home's round buttons at their corners. |
+| R3 | **Done**: `tests/e2e/layout.spec.ts` clamps each probe point into the viewport (shared helper `hitAreaMisses`). |
+| R4 | **Done at I-4**: the event page patterns moved to the lazy `events-chunk.css` and 16 unused custom properties went (first-load CSS 48.3 → 44.7 KB); the CSS ceiling then moved 43.5 → 46 KB (measured + 2.9 %, 04 §9, STATUS-2d §4). |
+| R5 | **Done at I-5**: CONTRACTS §7 and look-spec §4.6 name the label `.points-pill__name`. |
+| R6 | **Done at I-3**: every listed member is required; `PillsProps.compact` and `points` are deleted (also `BoardInput.mouse`, `KeyboardCallbacks.mouse`, `setSlot`'s frame, `HomeView` / `EventScreenView.settingsDot`). |

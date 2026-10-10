@@ -1,6 +1,6 @@
 # Phase 2d spec: match the original's game screen (look, layout, palette, X marks)
 
-Status: spec, ready to build · Date: 2026-10-10 · Owner: game design + tech lead · Branch `claude/mewdoku-instant`, base `ececec5` (Phase 2c.1 integrated: `tsc` clean, 2 175 unit tests in 110 files, 172 e2e)
+Status: **built and integrated** (G1–G3, integration I-1 to I-5 on 2026-10-10; the deviations the integration made are listed in §9 and marked "as built" where they apply; the acceptance pass runs after 2d.1, [STATUS-2d](STATUS-2d.md)) · Spec date: 2026-10-10 · Owner: game design + tech lead · Branch `claude/mewdoku-instant`, base `ececec5` (Phase 2c.1 integrated: `tsc` clean, 2 175 unit tests in 110 files, 172 e2e)
 
 **Config is already done.** The spec stage added every 2d key to `src/app/config.ts` (§0.6) and marked the game-screen keys 2d stops reading `@deprecated`. No value an existing reader uses changed, so the tree is still green: `npx tsc --noEmit` clean and `npx vitest run` **2 175 / 2 175 (110 files)** after the edit (2026-10-10). Workstreams G1–G3 do not edit `config.ts`.
 
@@ -170,7 +170,7 @@ The page, ink and helper colours are **sampled from the user's screenshot** (D-2
 | `--line`, `--line-2` | `rgba(47,42,53,.1)` / `.16` | **`rgba(147,90,90,.14)`** / **`.22`** | ours | hairlines | — |
 | `--page-rgb` | `250, 246, 240` | **`247, 242, 239`** | follows `--page` | — | — |
 | `--warm-rgb` | — | **`239, 134, 39`** (new) | measured (fit) | the round buttons' shadow | — |
-| `--shadow-btn` | — | **`0 3px 7px -2px rgba(var(--warm-rgb), .25)`** (new; × s via the screen's `--s` on the game screen) | measured (fit: 8.7 below, 5.3 at the sides) | top discs, helper discs, Home's icon buttons | — |
+| `--shadow-btn` | — | **`0 3px 7px -2px rgba(var(--warm-rgb), .25)`** (new; × s via the screen's `--s` on the game screen). **As built (I-polish d): `0 3.5px 8px -2px rgba(var(--warm-rgb), .22)`**, re-fitted to the recording's profile below the discs (§9) | measured (fit: 8.7 below, 5.3 at the sides) | top discs, helper discs, Home's icon buttons | — |
 | `--shadow-pill` | — | **`0 2px 6px rgba(var(--ink-rgb), .06)`** (new) | measured (very faint, about 8 below) | the heads pill only | — |
 | `--pulse-rgb` | — | **`255, 165, 30`** (new) | measured (fit; `#F7C880` at the disc edge, fades by about 11 px) | the helper pulse glow | — |
 | `--badge` | — | **`#DC2F2F`** (new) | measured `#E93636`, darkened to meet 4.5 for its 17.6 px digits | count badges | white on it 4.68 |
@@ -200,9 +200,9 @@ The page, ink and helper colours are **sampled from the user's screenshot** (D-2
 
 | Text | Size at s = 1 | Weight (ours) | Original (measured) | Colour |
 |---|---|---|---|---|
-| "Level" / "Score" labels | 19.3 px | 600 | ≈ 500 | `--ink` |
-| Level number, Score number | 22 px | 600 + `-webkit-text-stroke: .04em currentColor` (≈ 800) | ≈ 800 | `--ink` |
-| Rule-card text | 11.6 px, **min 10 px**, line-height 1.15 (13.3 px) | 600, display face (was system UI) | ≈ 600 | `--ink` |
+| "Level" / "Score" labels | 19.3 px | 600; **as built: thinned** (a 0.04 em text stroke in `--page` over Fredoka's one face; 500 on the system stacks), §9 | ≈ 500 | `--ink` |
+| Level number, Score number | 22 px | 600 + `-webkit-text-stroke: .04em currentColor` (≈ 800); **as built: 600 without the stroke** (measured like for like, the original's numbers are no heavier than Fredoka 600), §9 | ≈ 800 | `--ink` |
+| Rule-card text | 11.6 px, **min 10 px**, line-height 1.15 (13.3 px) | 600, display face (was system UI); **as built: thinned** (a 0.03 em stroke in the card's fill), §9 | ≈ 600 | `--ink` |
 | Count badge digits | 17.6 px | 600, `--font-num` | ≈ 600 | white |
 | Toast | 16.3 px | 600 | ≈ 600 | `--ink` |
 
@@ -236,7 +236,7 @@ Home and the event screen keep their own top bars (2b layout), restyled only: th
 | Part | Spec |
 |---|---|
 | Heads pill (replaces the cat counter "0 / 10") | white, radius = half its height, `--shadow-pill`; 270 × 31.3 at n = 10 [12.0–282.0]. Holds **n heads** (§1.6). Each head 21.3 × 21.7, 4.0 apart (pitch 25.33), the group centred, top inset 4.7 [first head x 22.3]. When n heads do not fit (n = 11, 12, or a narrow pill), heads and gaps shrink together so the group keeps 10.5 s of inset at each end (12 heads at s = 1: head 17.7). `role="img"`, `aria-label` = `game.cats.a11y` ("3 of 10 cats placed", reused). |
-| Fish pill (the lives) | white, **no shadow**, radius = half its height; 96.7 × 31.3 [293.3–390.0]. 3 fish (`maxHearts`), each 24.7 × 23.3 at pitch 25.3, insets 10.7 start / 10.3 end, top 4.0; one more fish adds 25.3 s to the pill (the heads pill gives the space). Lives drain from the last slot, the loss and revive motions of 2c §1.3–§1.4 are unchanged; `.pill--lives`, `.life[data-full]` and the accessible name stay. |
+| Fish pill (the lives) | white, **no shadow**, radius = half its height; 96.7 × 31.3 [293.3–390.0]. 3 fish (`maxHearts`), each 24.7 × 23.3 at pitch 25.3 (as built: the slot is 24.7 × 23.3 and the fish's art fills its width, §9), insets 10.7 start / 10.3 end, top 4.0; one more fish adds 25.3 s to the pill (the heads pill gives the space). Lives drain from the last slot, the loss and revive motions of 2c §1.3–§1.4 are unchanged; `.pill--lives`, `.life[data-full]` and the accessible name stay. |
 | Fish art | `icon-fish` **redrawn** (G2, `src/ui/art/fish.ts`): a plump round body with the head at the **left**, facing left; a forked tail at the lower right; one eye dot; three small scale arcs; a highlight on the upper body; **no outline**. Body `--fish`, lower-body shade `--fish-deep`, highlight `--fish-hi`, eye `--ink-deep`. Not mirrored in RTL. `icon-fish-empty` keeps 2c's idea (the same silhouette as one outline in `--ink` at 40 %, a `--life-empty` wash). Every screen that shows a fish (victory, the win flight, O4's Continue badge, How to play) uses the same two symbols. |
 | RTL | the grid mirrors (heads at the right, fish at the left), as the 2c row did; the heads keep their order from the inline start. |
 
@@ -329,7 +329,7 @@ Home and the event screen keep their own top bars (2b layout), restyled only: th
 
 | Tool | Icon (new full-colour art, G2; drawn by us from these words) | Size at s = 1 |
 |---|---|---|
-| Kitty (`.tool--paw`, our existing kitty: places one correct cat) | `tool-kitty`: our **Tux** head, front view, **winking**: the left eye an open iris (Tux's light-green iris), the right eye a closed arc in `--cat-line`, an open smiling mouth with a small pink tongue, Tux's asymmetric white blaze and notched left ear | 34.7 × 34.3 |
+| Kitty (`.tool--paw`, our existing kitty: places one correct cat; as built the art boxes are 36 × 36, 21.9 × 34 and 36.2 × 32.4 s so the drawn art measures the sizes in this column, §9) | `tool-kitty`: our **Tux** head, front view, **winking**: the left eye an open iris (Tux's light-green iris), the right eye a closed arc in `--cat-line`, an open smiling mouth with a small pink tongue, Tux's asymmetric white blaze and notched left ear | 34.7 × 34.3 |
 | Bulb (`.tool--bulb`, the hint) | `tool-bulb`: a glossy round bulb in warm yellow (`--gold` with a lighter highlight ellipse and a soft orange lower shade), a narrow neck and a two-ring screw base in `--hard` violet with a lighter middle ring | 21.3 × 34.0 |
 | Mouse (`.tool--mouse`, §1.12) | `tool-mouse`: a grey mouse face, front view: a round head (`#B8B4BC` with a lighter muzzle `#D9D6DC`), two large round ears with pink insides (Tux's inner-ear pink `#F2A3B4`), black bead eyes with a catchlight, a small pink nose, two white front teeth, three thin whiskers per side | 35.0 × 31.3 |
 
@@ -556,7 +556,7 @@ Why this split: the board, its tokens and every drawing share one owner (G2), so
 
 ### 4.1 G2 → G3: layout (`src/ui/board/layout.ts`), lands in S0
 
-`LayoutInput` gains `banner?: boolean` (the band is reserved). `GameLayout` gains `s`, `top`, `bar`, `rules`, `gaps`, `band`, `gap`, `radius` and keeps the 2b names (`colW`, `compact`, `topBar` = `bar`, `pills`, `chips` = `rules`, `tools` = the disc diameter, `boardMax`, `pad`, `slot`, `board`). New `gapFor(slotPx, c?)`. `evenInsets(n, slotPx, c?)` keeps its signature (inset = `gapFor(slot) / 2`). `readViewport` unchanged (the override is CSS). `BoardView.setSlot(slotPx, frame?: { pad: number; radius: number })` (the card's padding and radius from the layout; absent = the old behaviour). `BoardInput.mouse?(): void` (the board's own key handler forwards M, as it forwards H and K through `bulb` and `paw`).
+`LayoutInput` gains `banner?: boolean` (the band is reserved). `GameLayout` gains `s`, `top`, `bar`, `rules`, `gaps`, `band`, `gap`, `radius` and keeps the 2b names (`colW`, `compact`, `topBar` = `bar`, `pills`, `chips` = `rules`, `tools` = the disc diameter, `boardMax`, `pad`, `slot`, `board`). New `gapFor(slotPx, c?)`. `evenInsets(n, slotPx, c?)` keeps its signature (inset = `gapFor(slot) / 2`). `readViewport` unchanged (the override is CSS). `BoardView.setSlot(slotPx, frame?: { pad: number; radius: number })` (the card's padding and radius from the layout; absent = the old behaviour). `BoardInput.mouse?(): void` (the board's own key handler forwards M, as it forwards H and K through `bulb` and `paw`). **At I-3** the frame and `mouse` became required and the 2b names `topBar` and `chips` were deleted ([CONTRACTS](CONTRACTS.md) final).
 
 ### 4.2 G2 → G3: art and palette
 
@@ -597,7 +597,7 @@ Every key of Appendix A with its final English value in S0; `a11y.mouse` (plural
 | Element | Selector |
 |---|---|
 | Game bar | `header.top-bar.top-bar--game`; back `.top-bar__btn--home.top-bar__btn--back`; gear `.top-bar__btn--settings` with `.top-bar__dot` while shown; Level column `h1.top-bar__text` (`aria-label` = title) > `.top-bar__name` + `.top-bar__suffix` (+ `.badge--hard`) |
-| Score | `.top-bar--game .points-pill` (`[data-final]`, `hidden`) > `.points-pill__label`, `.points-pill__n`, `.points-pill__chip` (the 2c.1 names, no longer inside `.pills`) |
+| Score | `.top-bar--game .points-pill` (`[data-final]`, `hidden`) > `.points-pill__name` (the label "Score"), `.points-pill__n` (the number), `.points-pill__label > .points-pill__chip` (the "+N" chip and its host, the 2c.1 counter builder shared with the period counter); no longer inside `.pills` (I-5: requests G1 R3 / G3 R5) |
 | Pills | `.pills > .pill.pill--heads[role=img] > svg.head[data-color][data-done]`; `.pills > .pill.pill--lives > .life[data-full]`; win flow `.pills > .period-pill[data-in-game]` (`.period-pill__n`) |
 | Rule cards | `ul.rule-chips[data-compact] > li.chip.chip--colours|lines|space[data-hl] > svg.chip__art, .chip__text, .sr-only` |
 | Board | `.board`, `.cell[data-s]`, `.cell__xg > rect.cell__xe ×2 (patterns on) + rect.cell__x ×2` |
@@ -818,6 +818,8 @@ Research facts that touch other phases are noted, not built: the leaderboard per
 
 ## Appendix B. Documents to update at integration (lead, I-5)
 
+Done at I-5 (2026-10-10) unless marked otherwise; [STATUS-2d](STATUS-2d.md) is a draft the final pass completes after 2d.1.
+
 - `docs/phase2d/STATUS-2d.md` (new): what a player sees, requests, verification, budgets and decisions, screenshots, open questions.
 - [01](../phase1/01-game-deconstruction.md): the first-hand rows are added at the spec stage (§8, §12, §6, §11.12, §19); mark them "built" at integration.
 - [parity-spec](../phase2b/parity-spec.md): §0.3 (done at the spec stage), a banner line, §0.7 rows (X edge, banners in play, our own values → measured), §0.8 banners row, §1.3–§1.5 pointers, §3.2 banner rule pointer.
@@ -886,3 +888,26 @@ Research facts that touch other phases are noted, not built: the leaderboard per
 - **C20** §5.3, §5.4, §7: e2e additions (hit areas, safe top 20, event label, coach, UX-12); by-design differences listed (head silhouette with rounded ears, darkened badge colours); new **Q12** on the badge colours.
 - **C21** §3.3 G2: rewrite the "R6: nothing sampled" source comments; the exact `.btn--icon` look; the X pop's keyframes live in `board.css` and G3 deletes `fx.css`'s `x-draw`. §4.2: `ruleDiagram`'s `RuleChip` import is type-only.
 - **C22** `src/app/config.ts` (comments only): the look-spec section numbers in the 2d docblocks were stale (§1.7 → §1.10, §1.9 → §1.11, …); `fx.markDrawMs` is marked `@deprecated phase2d`. `npx tsc --noEmit` is clean and `npx vitest run` passes **2 175 / 2 175 (110 files)** after the edit.
+
+## 9. Integration changes (lead, I-1 to I-5, 2026-10-10)
+
+What the integration changed against the spec above, with the measurements behind each change (`dev/look-compare.ts` at 402 × 874, DSF 3, safe 62 / 34, the band, our level 96 with five X's, against `measure.md` and the reference frames read from the scratchpad; the composites stay there). Before → after: **96 pass, 9 FAIL → 105 pass, 0 FAIL** (29 info rows).
+
+| # | Change | Why (measured, ours vs the original) | Where |
+|---|---|---|---|
+| 1 | The "Level" / "Score" labels are thinned by a text stroke in the page colour (0.04 em over Fredoka's one 600 face; the system stacks step down to their own 500); the numbers lose the 2d text stroke; the rule-card text is thinned the same way (0.03 em in the card's fill, `--accent-soft` on a highlighted card). D-2d-7 stands (one font file, one weight); §1.3's "+ .04em text stroke" on the numbers is dropped. | Stroke width (2 × ink area ÷ perimeter, the same method on both): labels 2.11 / 2.12 → **1.51 / 1.53** (original 1.40 / 1.33); numbers 3.40 / 3.43 → **2.64 / 2.77** (2.39 / 2.65); rule text 1.35–1.38 → **1.05–1.06** (0.97–1.00) | `hud.css` |
+| 2 | The display font's overlapping contours are removed (both Fredoka files; same glyphs and metrics; 16 468 → 16 668 B and 2 692 → 2 704 B; `dev/font-overlaps.py`; provenance §11.6). | A background-coloured stroke drew seams where two contours cross (`t`, `p`, `a`, `1`, `A`, `Ł`, …: 50 glyphs of 215 before, none visible after) | `src/assets/fonts/` |
+| 3 | The fish's art fills the 24.7-wide slot (`.life .icon` and the splash: 26.5 s square at −1.55 / −2.58 s). | Drawn fish 21.7 × 20.3 → **24.8 × 23.0** (the original 24.8 × 23.7; spec 24.7 × 23.3) | `hud.css` (§1.5) |
+| 4 | `cat-head-flat`'s viewBox is the silhouette's own box (`4 5.7 92 90.3`). | Heads 19.7 × 19.3 → **21.3 × 21.0** (21.5 × 21.7) | `sprite.ts` (§1.6) |
+| 5 | The helper art boxes: kitty 36 × 36 (raised 0.9 s: the head's art sits low in its box), bulb 21.9 × 34, mouse 36.2 × 32.4 (× s). | Drawn art kitty 33.3 × 32.3 → **35.3 × 34.0** (34.7 × 34.3), bulb 21.3 × 32.7 → **21.7 × 34.0** (21.3 × 34.0), mouse 33.7 × 30.7 → **34.7 × 31.7** (35.0 × 31.3) | `hud.css` (§1.11) |
+| 6 | `--shadow-btn` re-fitted: `0 3.5px 8px -2px rgba(var(--warm-rgb), .22)` (was `0 3px 7px -2px … .25`); one token for the bar's and the helpers' discs (requests G3 R1). | Shadow below the disc (summed deviation of the first 10 px; reach): helpers 470 → **510** (original 480–503), reach 6.3 → **7** (7); top discs 402 → **485** (538), reach 5.7 → **7** (7) | `tokens.css` (§1.2) |
+| 7 | Every round button's 44 × 44 hit area is square (Home and the event screen too; requests G3 R2); the `layout` e2e probe clamps its points into the viewport (G3 R3) and also checks Home. | §1.1 Touch targets | `base.css`, `layout.spec.ts` |
+| 8 | Budgets (§6.3): the event page patterns (3.3 KB) moved to the lazy `events-chunk.css`, 16 unused custom properties went (first-load CSS 48.3 → 44.7 KB, 44.8 on the final tree); then main JS 289 → 307, CSS 43.5 → 46, first load 350 → 370, + 1 locale 377 → 398, gzip 126.5 → 136.5, lazy CSS 31.2 → 34.6 KB (measured + about 3 %, 04 §9). Load time, the 2b method: FBIG first run on Slow 4G uncompressed **4.55 s** (2c.1 base 4.35 s; gate about 4.5 s), gzip 2.91 s; returning 3.37 / 2.09 s. | §6.3 expected these raises; [STATUS-2d](STATUS-2d.md) §4 | `scripts/size-check.ts` |
+| 9 | I-3: every S0 optional member is required (`GameView` 5 fields, `HomeView` / `EventScreenView.settingsDot`, `onMouse`, `playStartToast`, `ToolBarProps` / `ToolBarCallbacks`, `PillsProps`, `BoardInput.mouse`, `KeyboardCallbacks.mouse`, `setSlot`'s frame); deleted: `PillsProps.compact` and `points`, `GameLayout.topBar` / `chips`, the sprite ids `icon-rule-*` and `wrong-x`. `TopBarProps.settingsDot` stays optional (§4.3). | §3.2 step 4 | [CONTRACTS](CONTRACTS.md) |
+| 10 | The X box in `look-compare` is measured from the rects' geometry (21.5 px; their client boxes, 23.4, include the rounded-off corners) and from the white pixels (21.3). | §5.4 (X box 21.5 ± 0.6) | `dev/look-compare.ts` |
+
+**Deviations and choices the workstreams made in the build** (recorded at I-5 from their reports; none changes a measured number):
+
+- G1: the per-attempt mouse use counter restarts on mount and on Retry (`HelperFlows.newAttempt`), and `pickMouseCells` returns its cells in board order, so the X's pop in reading order. An "untouched" board for the `'auto'` pulse means every cell is Empty or Given. `pulse` is null under reduced motion in the view; when the chosen helper is disabled neither pulses. Banner persistence (§1.16) covers any move into an eligible game screen, from Home too (the same banner-to-banner rule); `screenGone()` is no longer a hide. The tutorial (a replay too) never reserves the band. A restored lost board (O4 open at mount) calls `screenShown('game')`. Settings marks `settingsSeen` from the shell on every `router.open('settings')`. Duplicate cells in `MOUSE` are marked once. The FB stub banner stays at the viewport's bottom edge (Meta's native banner); only the web mock sits at the band. e2e builds only: `?bannerPlay=0` turns `duringPlay` off.
+- G2: `tool-kitty` reuses our Tux head with its wink eyes and open mouth (about 80 B of code); its closed eye is drawn in ink because it sits on the white blaze. The filled gear is a thick stroked ring with six round-capped teeth (271 B; the even-odd outline came to 637 B), which shows the same hole. Each `tool-*` symbol's viewBox is fitted to its art. The comparison board uses our level 785 (the five top-left cells one Coral region); `dev/look-compare.ts` uses our level 96 (Sky there). `--shadow-btn` is re-declared on `.screen--game`. The event motifs' `a` colours were mixed 15 % toward white so the new ink keeps 4.5:1 on them. The retired-colour guard skips `#B2AAB4` (the FB rank overlay's own canvas colour).
+- G3: the game bar has `z-index: 1` so its discs' 44 px hit areas reach over the pills row at 320 (the win-flow scrim and the fx layer stay above it). When no slot keeps the coach card clear of the bar and the board, "Got it" moves beside the text (`[data-row]`). How to play's mini-board X covers the slot (tile + gap) and its tiles have an 11 % corner. `visual.spec` waits for the start toast to leave before the game shots (a separate shot keeps the toast mid-drift). In Arabic the heads pill mirrors: the first colour sits at the inline start (the right). The start-toast CSS stays first-load (a lazy toast could show unstyled at a level start).

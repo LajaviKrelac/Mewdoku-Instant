@@ -200,6 +200,9 @@ All screens are portrait. The wireframes show a 390×844 CSS-px phone. Legend: `
 
 ### S2 Game
 
+> **Phase 2d (2026-10-10, built):** the game screen's HUD is rebuilt to the user's recording ([look-spec](../phase2d/look-spec.md) §1.1–§1.16): a game bar (back disc · "Level / N" and "Score / points" columns · gear with a red dot), a heads pill and a fish pill, three rule cards with diagrams, the board, three helpers (kitty · bulb · mouse) with badges and an idle pulse, a level-start toast and (FBIG) a banner band; the measured top-down stack replaces the centred board. The text below keeps the Phase 2 description.
+
+
 > **Phase 2c** ([fish-lives-spec](../phase2c/fish-lives-spec.md) §1): the lives pill shows **3 fish** (our fish icon; a lost life is our empty fish outline), not hearts; a mistake plays our fish loss. In the win flow the fish still left fly from this pill to the period counter (§2). **Phase 2c.1** (§10.2): the pills row is a three-column grid with the **level-points counter** (our sparkle `icon-points` and the attempt's running total, "0" at the start) centred between the cat counter and the lives; each scoring cat rolls it up with a small rising "+N"; it is hidden in the tutorial. At the win the period counter takes the cat counter's place. Below, "hearts" means these fish.
 
 ```
@@ -811,6 +814,9 @@ Our expression of that character must be **visibly our own**: our own palette va
 
 ### 17.2 Tokens and region palette (validated in Phase 2)
 
+> **Phase 2d (2026-10-10, built):** the page, ink and region colours are now the ones measured on the user's screenshot (look-spec §1.2, §1.9: page `#F7F2EF`, ink `#935A5A`, ten measured region colours plus our Mint and Cocoa for 11 × 11 / 12 × 12; boards up to 10 × 10 use only the ten). The values below are history.
+
+
 | Token | Value | Use |
 |---|---|---|
 | `--page` | `#FBF6EE` | Page background (warm paper) |
@@ -867,6 +873,9 @@ Region colours (12, named for hint copy):
 
 ### 17.4 Board rendering
 
+> **Phase 2d (2026-10-10, built):** a borderless card without a shadow, 3 px gaps (7.9 % of the slot), an 11 % tile radius, and the X as two plain white rounded bars that pop in (look-spec §1.8, §1.10).
+
+
 - The board card has 12 px padding and 16 px corner radius. Tiles have a corner radius of 18 % of cell size.
 - **Region-aware gaps** (accessibility, §18). Each tile is inset from its grid slot by 1.5 px on sides that face the **same** region and 3.5 px on sides that face a **different** region. Region boundaries therefore read as wider channels, while the "tiles with gaps" look is kept.
 - Mark (X): two strokes in `--ink` at 70 % opacity, round caps, 52 % of cell size, stroke width 10 % of cell.
@@ -896,6 +905,9 @@ With reduced motion on: no shake, no confetti, no stagger. Fades are kept at ≤
 
 ## 18. Accessibility
 
+> **Phase 2d (2026-10-10, built):** the white X has no edge by default (the original's); **Colour patterns on** restores a dark edge (≥ 3.24:1 on every tile) along with the pattern glyphs. The parity exceptions to WCAG 1.4.11 (the plain white X, the head tints, the fish body, the decorative diagram tiles and toast border) each carry their information another way (look-spec §1.2, D-2d-6). New: the M key (the mouse), 44 × 44 square hit areas on every round button, the mouse's announcement.
+
+
 > **Phase 2b** (parity-spec §1.5, §7): even gutters and a **white X over a thin tinted edge** (the edge carries WCAG 1.4.11) replace the region-aware gaps and the ink X; the defaults look like the original (patterns off). Every extra below still works, also on the new screens (keyboard and screen reader complete).
 
 
@@ -911,6 +923,9 @@ With reduced motion on: no shake, no confetti, no stagger. Fades are kept at ≤
 | No time pressure | No visible timer and no time limits. |
 
 ## 19. Responsive portrait layout
+
+> **Phase 2d (2026-10-10, built):** the game screen is the measured stack of look-spec §1.1, scaled by one factor s (width- or height-bound, 0.6–1.2), with the spare height above the bar (≤ 62 s) and below; rule cards show diagrams only below s 0.85. The rules below still hold for the other screens.
+
 
 Layout reference: CSS px, `visualViewport` dimensions, safe-area insets included.
 

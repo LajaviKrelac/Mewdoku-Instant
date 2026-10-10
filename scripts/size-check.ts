@@ -53,7 +53,7 @@
 // properties went (first-load CSS 48.3 → 44.7 KB); the workstreams had already deleted the retired
 // 2c.1 HUD (cat counter, points pill, tight fallback, compact sizes, chips, X draw-in, icon-rule-*,
 // wrong-x) and no unused selector was left. Then every row still over was set to the largest build's
-// measured value + about 3 %: main JS 289 → 307 (298.2, FBIG), CSS 43.5 → 46 (44.7), first load
+// measured value + about 3 %: main JS 289 → 307 (298.2, FBIG), CSS 43.5 → 46 (44.8 on the final tree), first load
 // 350 → 370 (360.5; 2.6 %, below the sum of its rows' ceilings, 371, so it still binds), + 1 locale
 // 377 → 398 (387.9), gzip 126.5 → 136.5 (132.7), and the lazy CSS 31.2 → 34.6 (33.6, the patterns
 // moved in). Font (16.7 / 17, overlaps removed at 2d) and the lazy JS rows are within and unchanged.

@@ -51,3 +51,14 @@ Status: living list · Owner: G1 · Spec: [look-spec §3](look-spec.md#3-workstr
 
 - The four colour names changed in the English catalogue (`color.0` Coral, `color.2` Mustard, `color.7` Violet, `color.11` Pink; look-spec §1.9, Appendix A, critic C14). Tests updated to match: `tests/unit/app/points-session.spec.ts` ("Mustard done."). Comments updated: `saves.spec.ts`, `resilience.spec.ts`, `tutorial-session.spec.ts` and the doc comments in `src/game/tutorial.ts`. One test title updated: `tests/unit/game/tutorial.spec.ts`. No assertion changed otherwise.
 - Left for G1: the identifiers `TUTORIAL_CELLS.lavender` (`src/game/tutorial.ts`, asserted in `tutorial.spec.ts`) and the `LAVENDER` constant in `tutorial-session.spec.ts`. These are code names, not English text, so renaming them is up to G1. The `TUTORIAL_COLORS` comment now reads "Mint, Violet, Mustard, Coral" for today's `[4, 7, 2, 0]`. G1-2 changes both the value and the comment.
+
+## I-2 (lead, 2026-10-10): status of every request
+
+| # | Status |
+|---|---|
+| R1 | **Done by G3** (square 44 × 44 `::before` on the game bar's discs). At I-2 the square area moved into `base.css` `.btn--icon::before` for every round button (G3 R2), and the `layout` e2e probe clamps its corners into the viewport (G3 R3). |
+| R2 | **Done by G3** (`coach.ts` row layout, `[data-row]`). |
+| R3 | **Answered by the lead**: the DOM stays (`.points-pill__name` = the label; `.points-pill__label` = the "+N" chip's host, shared with the period counter). CONTRACTS §7 and look-spec §4.6 now say so (I-5). |
+| R4 | **Done**: `boot.spec.ts`'s fake implements `playStartToast`; `win-flow.spec.ts` fakes `WinScreen` (no `playStartToast` needed); `screens-2b.spec.ts` and `dev/b-harness.ts` use the real `createGameScreen`. `GameScreen.playStartToast` is required since I-3 and the session calls it without `?.`. |
+| R5 | **Done at I-5**: CONTRACTS §10 lists G1's members. |
+| R6 | **Done at I-5**: 05 §6 and the parity-spec banner lines point at the banner in play (D-2d-15) and fb-dashboard B7–B9. |

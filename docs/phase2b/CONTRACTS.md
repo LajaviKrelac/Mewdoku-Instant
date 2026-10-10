@@ -470,3 +470,7 @@ The exact Phase 2c.1 interfaces (G1 game + app, G2 UI) are **[fish-lives-spec §
 | Dev harness (lead, I-1) | `dev/shell-fixtures.ts gameView` derives `points` (as a restore would); `dev/b-harness.ts` has a `game-points` view (two scoring cats, a mistake, a 576 after it) and level totals on the victories; `dev/board-harness.ts` feeds the real reducer's `levelPoints`; `icon-points` in the art and board harness icon lists |
 | Config (lead) | 2c.1 keys per spec §10.6; `levelPoints.perSize / hardMultiplier / streakStep / streakCap` stay `@deprecated` and unread |
 | Budgets (lead, I-4) | `scripts/size-check.ts`: see STATUS-2c §10 and 04 §9 |
+
+## 14. Phase 2d (2026-10-10): the game screen from the user's recording — see [phase2d/CONTRACTS.md](../phase2d/CONTRACTS.md)
+
+The Phase 2d interfaces (the layout stack and `setSlot`'s frame, the palette tiers and `HEAD_ORDER`, the new symbols, the five `GameView` fields, `onMouse`, `playStartToast`, the `MOUSE` action, `MARKED.source`, `RewardedPlacement` `'mouse'`, `BannerScreen` `'game'`, `ext.settingsSeen`) and the DOM contract of the new game screen are in [phase2d/CONTRACTS.md](../phase2d/CONTRACTS.md) (final at the 2d integration, its §10 lists the members added beyond it). Deleted at 2d I-3: `PillsProps.compact` and `points`, `GameLayout.topBar` and `chips`, the sprite ids `icon-rule-*` and `wrong-x`.

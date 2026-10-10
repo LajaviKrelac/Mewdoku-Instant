@@ -501,6 +501,8 @@
    34.7 × 34.3, bulb 21.3 × 34, mouse 35 × 31.3 (the symbols' antialiased edges and whisker tips draw
    about 4 % inside their viewBox). */
 .tool--paw .tool__icon {
+  position: relative;
+  top: calc(var(--s) * -0.9px); /* the head's art sits low in its box: centred like the original's (+0.5) */
   width: calc(var(--s) * 36px);
   height: calc(var(--s) * 36px);
 }

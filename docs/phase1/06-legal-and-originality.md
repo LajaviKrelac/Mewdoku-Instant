@@ -124,6 +124,8 @@ Also avoid using others' marks in our name or listing: "Meowdoku", "LinkedIn Que
 
 ## 7. Look-and-feel differentiation checklist (Phase 2 design review)
 
+**Phase 2d note (2026-10-10, user decision D-2d-0, [look-spec §0.1](../phase2d/look-spec.md)).** For the game screen, "no value is sampled from the original" (parity-spec R6) is reversed for the **user's own recording and screenshot**: sizes, positions, timings and colours were measured from them; tracing, files and copy are still excluded, every drawing is ours (provenance §11), and the trade-dress risk of the closer match is accepted by the user and still gated by G-LEGAL.
+
 **Reversed by user decision 2026-10-08, see [phase2b/parity-spec §0.3](../phase2b/parity-spec.md#03-legal-risk-the-user-has-accepted-read-before-shipping).** The first five items below described the Phase 2 look; Phase 2b deliberately reverses them (one theme, the Classic look) and replaces them with the mitigations R1 and R3–R7 of the parity spec: every drawing, sound and string is ours with a provenance row; our cat keeps its own signature marks and poses; no value is sampled from the original; store art avoids the Classic board as its hero image next to orange captions; a distinct public name and a lawyer's review (G-NAME, G-LEGAL) gate the release. The last three items still hold.
 
 - [x] ~~Our cat is clearly not a tuxedo cat. Its silhouette and colours differ.~~ Reversed (2b): Tux is tuxedo-style, with our own signature marks.

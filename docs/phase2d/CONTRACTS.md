@@ -1,6 +1,8 @@
 # Phase 2d contracts (cross-workstream interfaces)
 
 Spec: [look-spec.md](look-spec.md) §4 (this file repeats it, copy-paste ready). Date 2026-10-10, base `ececec5`.
+
+**Final at integration (2d I-3 / I-5, 2026-10-10).** The S0 members marked "Optional until I-3" / "required at I-3" below are **required** now, and the members marked deleted are gone; the code blocks show the final shapes, and §10 lists the members the workstreams added beyond this file (requests-G1 R5, the G2 and G3 notes). The Score column's label is `.points-pill__name` (requests G1 R3 / G3 R5).
 Owners: **G1** logic, app, platform · **G2** art, board, base tokens · **G3** HUD, screens, overlays, fx, i18n, audio · **lead** config, dev, size-check, docs.
 
 Rules (as in 2b and 2c): S0 lands every interface **additively** before the build stage; a member another workstream uses is never deleted before integration step I-3; optional members marked "required at I-3" become required there. Config is lead-only and already done (`src/app/config.ts`, look-spec §0.6). `tsc` also checks the lead's `dev/**` harnesses, which call `computeLayout` and build `createTopBar`, `createPills`, `createRuleChips` and `createToolBar` directly: until I-1 / I-3 `GameLayout`, `TopBarProps`, `PillsProps`, `RuleChipsProps`, `ToolBarProps` and `ToolBarCallbacks` only gain **optional** members (look-spec §3.2 step 3). The four colour-name values and every test that names them change at L0 (lead), so no S0 turns another workstream's tests red.
@@ -87,9 +89,7 @@ export interface GameLayout {
   readonly gap: number;
   /** Board card corner radius: layout.game.cardRadius × s. */
   readonly radius: number;
-  /** 2b names kept until I-3, with 2d values from S0: topBar = bar, chips = rules (and `pills`, `tools` above). */
-  readonly topBar: number;
-  readonly chips: number;
+  // The 2b names `topBar` and `chips` were deleted at I-3 (`pills` and `tools` above carry the 2d rows).
 }
 
 export function computeLayout(input: LayoutInput, c?: GameConfig): GameLayout;
@@ -107,14 +107,14 @@ export interface BoardInput {
   paint(cells: CellIndex[], mode: PaintMode): void;
   bulb(): void;
   paw(): void;
-  /** Phase 2d: the M key on a focused cell. Optional until I-3. */
-  mouse?(): void;
+  /** Phase 2d: the M key on a focused cell (required since I-3; the screen ignores it while the mouse is not ready). */
+  mouse(): void;
 }
 
 export interface BoardView {
   /* … 2b members unchanged … */
-  /** Phase 2d: frame = the card padding and corner radius from computeLayout (absent: 2b behaviour). */
-  setSlot(slotPx: number, frame?: { readonly pad: number; readonly radius: number }): void;
+  /** Phase 2d: frame = the card padding and corner radius from computeLayout (required since I-3; BoardFrame). */
+  setSlot(slotPx: number, frame: { readonly pad: number; readonly radius: number }): void;
   /** MARKED with source 'mouse' pops the X's fx.mouseStaggerMs apart; every new Mark pops (fx.markPopMs). */
   playEvent(ev: GameEvent): void;
 }
@@ -148,7 +148,9 @@ export function ruleDiagram(kind: RuleChip): string;
 // src/ui/art/sprite.ts: IconSymbol gains
 //   'icon-back' | 'icon-play' | 'tool-kitty' | 'tool-bulb' | 'tool-mouse' | 'cat-head-flat' | 'art-flex'
 // redrawn in place (same ids): 'icon-gear', 'icon-fish', 'icon-fish-empty', 'mark-x'
-// deleted: 'icon-rule-colours', 'icon-rule-lines', 'icon-rule-space', 'wrong-x'
+// deleted: 'icon-rule-colours', 'icon-rule-lines', 'icon-rule-space', 'wrong-x' (their drawings in the build stage,
+//          their ids at I-3)
+// cat-head-flat's viewBox is the silhouette's own box, '4 5.7 92 90.3' (integration polish: heads draw 21.3 wide)
 ```
 
 Tokens (CSS custom properties in `src/styles/tokens.css`, values in look-spec §1.2): `--page #F7F2EF`, `--page-2 #F2EBE6`, `--ink #935A5A`, `--ink-2 #935A5A`, `--ink-3 #CDBAB6`, `--ink-deep #2F2A35`, `--ink-icon #996767` (the icons in the white round buttons; measured by the critic), `--ink-rgb 147, 90, 90`, `--line`, `--line-2`, `--page-rgb 247, 242, 239`, `--warm-rgb 239, 134, 39`, `--shadow-btn`, `--shadow-pill`, `--pulse-rgb 255, 165, 30`, `--badge #DC2F2F`, `--badge-video #03A84A`, `--dot #F34F4F`, `--toast-fill #FEF0C7`, `--toast-line #DD9045`, `--rule-card #FBF4EE`, `--rule-tile #DDBEAA`, `--rule-tile-2 #EEE1D7`, `--rule-mark #AF6D44`, `--fish #F1AA22`, `--fish-deep #D47E18`, `--fish-hi #FED95D`, `--wrong #6E0E25`, `--r0 … --r11` = `PALETTE`.
@@ -162,37 +164,43 @@ export type StartToastKind = 'level' | 'hard' | 'retry';
 
 export interface GameView {
   /* … 2c.1 members unchanged … */
+  // Required since I-3 (optional in S0).
   /** Which helper pulses now (fx.helperPulse.target; 'auto' = kitty on an untouched board, then the bulb); null = none. */
-  readonly pulse?: 'paw' | 'bulb' | null;
+  readonly pulse: 'paw' | 'bulb' | null;
   /** The third helper: shown (cfg.mouse.enabled, not the tutorial, the mode allows the kitty) and enabled (tools ready and ≥ 1 candidate cell). */
-  readonly mouse?: { readonly shown: boolean; readonly enabled: boolean };
+  readonly mouse: { readonly shown: boolean; readonly enabled: boolean };
   /** A rewarded video can refill a helper (capabilities().rewarded): the kitty and bulb show the video badge at 0, the mouse always. */
-  readonly videoRefill?: boolean;
+  readonly videoRefill: boolean;
   /** The banner band is reserved on this game screen (bannerGate with screen 'game' says a banner may show). */
-  readonly bannerBand?: boolean;
+  readonly bannerBand: boolean;
   /** The gear's red dot (save.ext.settingsSeen < cfg.settingsDot.version). */
-  readonly settingsDot?: boolean;
+  readonly settingsDot: boolean;
 }
 
 export interface GameScreenCallbacks {
   /* … onTap, onDoubleTap, onPaint, onBulb, onPaw, onHome, onSettings … */
-  /** Phase 2d: the mouse button or the M key. Optional until I-3. */
-  onMouse?(): void;
+  /** Phase 2d: the mouse button or the M key (required since I-3). */
+  onMouse(): void;
 }
 
 export interface GameScreen {
   /* … 2c.1 members … */
   toolRect(tool: HelperKind): DOMRect | null;
-  /** Phase 2d: the level-start toast (look-spec §1.14). Optional until I-3. */
-  playStartToast?(kind: StartToastKind): void;
+  /** Phase 2d: the level-start toast (look-spec §1.14; required since I-3). */
+  playStartToast(kind: StartToastKind): void;
 }
 
 // src/ui/screens/home-screen.ts
-export interface HomeView { /* … */ readonly settingsDot?: boolean }
+export interface HomeView { /* … */ readonly settingsDot: boolean }        // required since I-3
 // src/ui/screens/event-screen.ts
-export interface EventScreenView { /* … */ readonly settingsDot?: boolean }
+export interface EventScreenView { /* … */ readonly settingsDot: boolean } // required since I-3
 // src/ui/hud/top-bar.ts
-export interface TopBarProps { /* … */ readonly settingsDot?: boolean }
+export interface TopBarProps { /* … */ readonly settingsDot?: boolean }    // stays optional (look-spec §4.3)
+// src/ui/hud/tool-bar.ts (required since I-3)
+export interface ToolBarProps { /* … */ readonly mouse: { readonly shown: boolean; readonly enabled: boolean }; readonly videoRefill: boolean; readonly pulse: 'paw' | 'bulb' | null }
+export interface ToolBarCallbacks { onBulb(): void; onPaw(): void; onMouse(): void }
+// src/ui/hud/pills.ts (required since I-3; the deprecated `compact` and `points` were deleted)
+export interface PillsProps { /* … */ readonly colors: ArrayLike<number>; readonly regionsDone: number; readonly boardId: string }
 // src/ui/overlays/rewarded-prompt.ts
 export interface RewardedPromptProps { /* … */ readonly placement: 'hint' | 'kitty' | 'mouse' }
 ```
@@ -242,14 +250,14 @@ G1 calls: `tn('a11y.mouse', cells.length, { count: formatNumber(cells.length) })
 | Element | Selector |
 |---|---|
 | Game bar | `header.top-bar.top-bar--game`; back `button.top-bar__btn--home.top-bar__btn--back`; gear `button.top-bar__btn--settings` (+ `.top-bar__dot` while shown); Level column `h1.top-bar__text[aria-label]` > `.top-bar__name`, `.top-bar__suffix`, `.badge--hard` |
-| Score column | `.top-bar--game .points-pill` (`[data-final]`, `[hidden]`) > `.points-pill__label`, `.points-pill__n`, `.points-pill__chip` |
+| Score column | `.top-bar--game .points-pill` (`[data-final]`, `[hidden]`) > `.points-pill__name` (the label "Score"), `.points-pill__val.top-bar__val > .points-pill__count > .points-pill__n` (the number), `.points-pill__label > .points-pill__chip` (the "+N" chip's host and chip, the 2c.1 counter builder shared with the period counter) |
 | Pills row | `.pills > .pill.pill--heads[role=img][aria-label] > svg.head[data-color][data-done]`; `.pills > .pill.pill--lives > .life[data-full]`; win flow `.pills > .period-pill[data-in-game]` > `.period-pill__n` |
 | Rule cards | `ul.rule-chips[data-compact] > li.chip.chip--colours|lines|space[data-hl] > svg.chip__art, span.chip__text, span.sr-only` |
 | Board | `.board[data-patterns]`, `.cell[data-s=e|m|c|w|g]`, `.cell__xg > rect.cell__xe` ×2 (visible only under `[data-patterns]`) + `rect.cell__x` ×2 |
 | Tools | `.tool-bar > button.tool.tool--paw|bulb|mouse[data-pulse][data-empty][data-free][data-off]` (`data-off`: the mouse slot kept but invisible) > `.tool__disc > svg.tool__icon`, `.tool__badge.tool__badge--count|--video|--free` |
 | Start toast | `.start-toast[data-kind=level|hard|retry]` |
 | Banner | `.screen--game[data-banner]` (band reserved; its `padding-bottom` is reset to `var(--safe-bottom)`, the band is in `computeLayout`); mock `[data-testid=mock-banner]` (320 × 50, centred, `bottom: var(--play-band-bottom, 0px)`); FB stub `[data-testid=fb-stub-banner]` |
-| Gone | `.pill--cats`, `.pill__count`, `.pills > .points-pill`, `.pills[data-tight]`, `.points-pill__icon` in the game bar |
+| Gone | `.pill--cats`, `.pill__count`, `.pills > .points-pill`, `.pills[data-tight]`, `.points-pill__icon` in the game bar; the sprite ids `icon-rule-colours`, `icon-rule-lines`, `icon-rule-space`, `wrong-x` |
 
 ## 8. CSS custom properties set by the game screen (G3)
 
@@ -265,4 +273,29 @@ On `.screen--game`: `--s`, `--col-w`, `--y-top`, `--bar`, `--pills`, `--rules`, 
 | Filling the `GameView` fields, `onMouse`, the toast trigger | G1 | after G3's S0 | neutral values |
 | `MOUSE`, `MARKED.source`, `pickMouseCells`, `RewardedPlacement` + `'mouse'` | G1 | S0 | — |
 | English keys (Appendix A) | G3 | S0 (M1 copy freeze) | — |
-| Required members, deletions | lead | I-3 | — |
+| Required members, deletions | lead | I-3 (done 2026-10-10) | — |
+
+## 10. Members added beyond this file (recorded at I-5; all additive, all in the tree)
+
+From the workstreams' notes (requests-G1.md "Notes from G1" = R5, requests-G2.md and requests-G3.md "Notes"):
+
+| Owner | Module | Members |
+|---|---|---|
+| G1 | `src/game/mouse.ts` | `pickMouseCells(state, count, seed)` takes `Pick<GameState, 'puzzle' \| 'cells'>` and returns the picked cells in board order; `mouseCandidates(state)`, `hasMouseCandidate(state)`, `mouseSeed(puzzleId, uses)` (= `` `${id}:mouse:${uses}` ``) |
+| G1 | `src/game/modes.ts`, `tutorial.ts` | `GameMode.mouseAllowed` (= `kittyAllowed`); `tutorialAllowsTool(step, 'mouse')` is always false; `filterTutorialAction` ignores `MOUSE` |
+| G1 | `src/app/helper-flows.ts` | `HelperFlows.newAttempt()` (the session calls it on mount and on `RETRY`: the mouse's seed counter restarts with each attempt) |
+| G1 | `src/app/banner-flow.ts`, `session-types.ts` | `BannerFlow.eligible(screen, opts?)` (the gate without the 60 s window, no side effects); `SessionMeta.bannerBand?` (the band decided at mount; `GameView.bannerBand = bannerBand && !noAds`) |
+| G1 | `src/app/views.ts` | `selectPulse(state, ctx, enabled, c?)`, `untouchedBoard(game)` (Empty or Given everywhere); `selectGameView` / `selectEventView` take an optional config |
+| G1 | `src/game/save.ts`, `save-fields.ts` | `SETTINGS_SEEN_KEY`, `settingsSeenOf(save)`, `settingsDotOn(save, c?)`, `markSettingsSeen(save, c?)`, `readExt`, `mergeExt` |
+| G1 | `src/app/boot.ts` | `e2eBannerConfig(search)`: in e2e builds only, `?bannerPlay=0` turns `ads.banner.duringPlay` off (the fbig e2e's 2b "never in play" tests) |
+| G1 | `src/app/events.ts` | analytics `mouse_used { mode, cells }` |
+| G2 | `src/ui/art/palette.ts` | `paletteTier(n)` (the tier of look-spec §1.9) |
+| G2 | `src/ui/art/sprite.ts` | `markRects()`, `crossRects()` (the X geometry) |
+| G2 | `src/ui/board/board-types.ts` | `BoardFrame` (`{ pad, radius }`), re-exported by `board-view.ts` |
+| G3 | `src/ui/hud/game-bar.ts` (new) | `createGameBar`, `GameBarProps`, `GameBarCallbacks`, `GameBarView` (`playEvent`, `fit`), `barValue(suffix)` |
+| G3 | `src/ui/hud/top-bar.ts` | `iconButton`, `setSettingsDot(gear, on)` |
+| G3 | `src/ui/hud/pills.ts` | `buildCounter`, `CounterSpec`, `CounterMotion`, `Counter`, `wrapCount`, `pointsMotion`, `headScale(heads, fish)`, `headColors(colors, n)` |
+| G3 | `src/ui/fx/start-toast.ts` (new) | `createStartToast`, `startToastPlan`, `StartToastKind` |
+| G3 | `src/ui/overlays/coach.ts` | `badgeReach`, `softCover` |
+| G3 | `src/ui/screens/game-screen.ts` | `HelperKind`, `fbShift()`; on `<html>` while mounted also `--toast-bottom` and `data-play-band='1' \| '0'` (a newer screen's values are never cleared by an older screen's destroy); `--fb-s` / `--fb-e` on `.screen--game` (the FB safe-zone shift) |
+| lead | `dev/look-compare.ts` (new, dev only) | the §5.4 comparison: `npx tsx dev/look-compare.ts [--url …] [--out …] [--prefix INT] [--no-sizes] [--no-shots]`, reference from `MEWDOKU_ORIG_REF` / `MEWDOKU_ORIG_FRAMES`, composites to `LOOK_SCRATCH` (outside the repo) |

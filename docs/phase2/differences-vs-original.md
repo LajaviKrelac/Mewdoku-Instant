@@ -1,6 +1,6 @@
 # Mewdoku vs Meowdoku (Play Store): what is different
 
-Status: Phase 2 review (2026-10-07); §1 status updated after the Phase 2b "parity" integration (2026-10-09, §1.0); Phase 2c "fish are lives" (2026-10-09): §1.0 rows 2, 5 and 8, §2.5–§2.8, §3.4 and §6 #1–#2 updated from the user's first-hand report; Phase 2c.1 "level points per cat" (2026-10-10, **built and integrated the same day**, [STATUS-2c §10](../phase2c/STATUS-2c.md)): §1.0 row 2, §2.6, §3.3, §3.4, §5.3 and §6 #1 updated from the user's second first-hand report · Owner: game design
+Status: Phase 2 review (2026-10-07); §1 status updated after the Phase 2b "parity" integration (2026-10-09, §1.0); Phase 2c "fish are lives" (2026-10-09): §1.0 rows 2, 5 and 8, §2.5–§2.8, §3.4 and §6 #1–#2 updated from the user's first-hand report; Phase 2c.1 "level points per cat" (2026-10-10, **built and integrated the same day**, [STATUS-2c §10](../phase2c/STATUS-2c.md)): §1.0 row 2, §2.6, §3.3, §3.4, §5.3 and §6 #1 updated from the user's second first-hand report; Phase 2d "the game screen from the user's recording" (2026-10-10, **built and integrated**, [look-spec](../phase2d/look-spec.md), [STATUS-2d](../phase2d/STATUS-2d.md)): §1.0b added, §1.0 rows 1, 3 and 7 and the §3.1–§3.3 game-screen rows superseded by §1.0b · Owner: game design
 
 > **Phase 2c (2026-10-09).** The user, who plays the Play Store app, reported four facts first-hand that override our research ([01](../phase1/01-game-deconstruction.md) "First-hand update"; source tag **user, first-hand, 2026-10-09**): **fish are the lives** (the app shows fish, not hearts); **the fish left when a level is passed are added to the leaderboard points**, which are ranked **per period** (a total that resets); **level points** grow when you make no mistakes (streak-like); and our **fish currency was an invention** (wallet, swaps, fish packs, the fish pill "+"), now removed. The build implements them per [fish-lives-spec](../phase2c/fish-lives-spec.md) ([STATUS-2c](../phase2c/STATUS-2c.md)). Where the user gave no number (period length, points values, which modes count), our values are `[DECISION: default, user may change]`.
 
@@ -50,6 +50,25 @@ Phase 2b ([parity-spec](../phase2b/parity-spec.md)) set out to close all eight h
 The unverified rows further down moved too: the **motion** gap is mostly closed (a board-entry wave with its own soft cue, screen transitions, board-cat breathing and ear flicks, the win flow; Phase 2c replaced the heart break with our own **fish loss**), and group rewards added a small **helper economy** beside the starting stocks (Phase 2c removed the fish swaps). **Board sizes** of the campaign are unchanged and still unknown on the original's side.
 
 After the Phase 2b code review (2026-10-09; STATUS-2b §11) three smaller rows moved: the **daily** is 12×12 every second Sunday from 2026-10-18 (§2 "Daily"), **Settings** can show a Feedback link (web; FBIG once Meta's link rules are checked) and a Language row (§2 "Settings"), and the victory screen is **dark** like the original's overlays (parity-spec §2.5).
+
+### 1.0b Status after Phase 2d (2026-10-10): the game screen matched to the user's recording
+
+The user supplied **their own recording and screenshot** of the original's game screen (iOS, Level 96, 10 × 10) and asked: "Check the look and layout here in the original. Color palette is better also. Xs are better as well." Decision D-2d-0 allowed measuring and sampling colours from it (R6 reversed for this recording, no tracing, our own art and copy; G-LEGAL still blocks release). Phase 2d rebuilt the game screen to it; the integration's `dev/look-compare.ts` checks **105 measures, all within the spec tolerances** at 402 × 874 (positions ±2 px, tiles ±0.5 px, colours ΔE00 ≤ 1).
+
+| Gap (2b/2c wording) | Status | What the build does now | What remains different, and why |
+|---|---|---|---|
+| Layout: centred board with ~130 px empty above and below; title row, three tall pills, chips | **Closed** | The measured top-down stack (bar · pills · rule cards · board · helpers · banner) with the measured gaps, one scale s for every screen size | Other screen sizes follow our scale rule (the original was seen at one size) |
+| Top bar | **Closed** | A back disc, "Level / 96" and "Score / 0" columns, a gear disc with a red dot; warm shadows; the original's ink colours | The dot marks unseen Settings (its meaning in the original is unknown, D-2d-14); the labels are thinned from our one font weight (D-2d-7; measured within 8 % of the original's stroke) |
+| Pills | **Closed** | A heads pill (one cat-head silhouette per region colour at 50 %, in the original's hue order) and a fish pill | Our own pointed-ear silhouette (D-2d-18); a found colour's head fills and pops (unknown in the original, D-2d-9) |
+| Rule chips | **Closed** | Three rule cards with 3 × 3 diagrams on a white container | Our own diagram layouts and our own rule wording (06 §3) |
+| Region palette | **Closed** | The 10 colours sampled from the screenshot (ΔE00 0.00); Mint and Cocoa only on 11 × 11 / 12 × 12 boards | Our two extra colours (the original's beyond ten are unknown, D-2d-10) |
+| X marks | **Closed** | Plain white rounded bars (19.7 % of the tile, a 61.5 % box), no outline; a pop | The dark edge returns only with Colour patterns on (accessibility, D-2d-5) |
+| Tiles, gutters, board card | **Closed** | 3 px gaps, 11 % tile radius, a borderless card without a shadow | — |
+| Helpers | **Closed** (look), **provisional** (the mouse) | Three white discs (kitty, bulb, mouse) with full-colour art, red count badges, a green video badge, the 1.5 s idle pulse | Our own art; the mouse's behaviour is from one forum report (D-2d-12, asked); the badge colours are a shade darker for contrast (D-2d-17); 2d.1 replicates the three helpers from new recordings |
+| Banner during play (§1.0 row 3) | **Closed on FBIG** `[DECISION: default, user may change]` | A 320 × 50 banner band under the helpers after 10 completed levels (D-2d-15) | Meta's guidance says no banners during active gameplay: the risk is recorded and the user is asked (look-spec §7 Q5); production web still has no ads |
+| Level-start toast | **Closed** (look) | A cream pill drifting left at 100 px/s | Our own honest line instead of a players' statistic (we have no such data, D-2d-13) |
+
+Still different on this screen: our art (every icon drawn by us), our words, our level layouts, the darkened badge colours, and the open questions in look-spec §7.
 
 ### 1.1 The Phase 2 headline (2026-10-07, for reference)
 
@@ -210,6 +229,8 @@ The Google Play event card that ended on 9/23 ("Meowdoku Mode") belongs to *Bloc
 ## 3. Visual and animation differences
 
 ### 3.1 Art direction and character
+
+> **Phase 2d (2026-10-10):** the game-screen rows of §3.1–§3.3 (style, palette, X, tiles, level screen) are superseded by §1.0b; the tables below keep the 2026-10-07 comparison for history.
 
 | Aspect | Original (Play Store) | Ours | Type | Impact | Conf. |
 |---|---|---|---|---|---|
