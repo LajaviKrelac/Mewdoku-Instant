@@ -106,6 +106,7 @@
 /* ── The game bar (§1.4): back disc · Level / Score · gear disc ────────────── */
 .top-bar--game {
   position: relative;
+  z-index: 1;
   display: block;
   width: var(--col-w);
   height: var(--bar);

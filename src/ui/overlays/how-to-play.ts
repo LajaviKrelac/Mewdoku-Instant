@@ -47,11 +47,13 @@ function miniBoard(n: number, fills: readonly number[], marks: Readonly<Record<n
     const y = GAP + Math.floor(i / n) * (TILE + GAP);
     const p = fills[i] ?? -1;
     const fill = hi.includes(i) ? 'var(--accent)' : p >= 0 ? `var(--r${p})` : 'var(--tile-plain, var(--page-2))';
-    svg.appendChild(s('rect', { x, y, width: TILE, height: TILE, rx: 4, fill, 'fill-opacity': hi.includes(i) ? 0.35 : 1 }));
+    // Phase 2d (G2 R3): the board's tile corner (11 % of the tile).
+    svg.appendChild(s('rect', { x, y, width: TILE, height: TILE, rx: 2.2, fill, 'fill-opacity': hi.includes(i) ? 0.35 : 1 }));
     const mark = marks[i];
     if (mark) {
       // A bare <use> of the sprite symbol (an icon() <svg> would pick up the global .icon size).
-      const inset = mark === 'mark-x' ? 4 : 1;
+      // The 2d `mark-x` is drawn on the board's slot (tile + gap), so it covers the slot here too.
+      const inset = mark === 'mark-x' ? -GAP / 2 : 1;
       const size = TILE - 2 * inset;
       svg.appendChild(s('use', { href: `#${mark}`, class: `howto-rule__${mark}`, x: x + inset, y: y + inset, width: size, height: size }));
     }

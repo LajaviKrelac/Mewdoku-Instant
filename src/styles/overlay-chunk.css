@@ -189,6 +189,10 @@
   background: var(--card); box-shadow: var(--shadow-3); text-align: center; pointer-events: auto; animation: mw-pop-in 220ms var(--ease-out) both; }
 /* First appearance: the empty live region is shown first, its text a moment later (coach.ts). */
 .coach__card[data-pending] { opacity: 0; animation: none; }
+/* Phase 2d (G1 R2): no slot clears the top bar and the board, so "Got it" sits beside the text (coach.ts). */
+.coach__card[data-row] { display: flex; align-items: center; text-align: start; }
+.coach__card[data-row] .coach__text { flex: 1; }
+.coach__card[data-row] .coach__gotit { flex: none; min-width: 0; margin: 0; margin-inline-start: 12px; }
 .coach__text { color: var(--ink); font-size: var(--fs-l); font-weight: 500; line-height: 1.4; text-wrap: balance; }
 .coach__gotit { margin-top: 12px; min-width: 140px; }
 /* A modal above the coach (hint card in step 5, Settings, How to play): the router makes the coach

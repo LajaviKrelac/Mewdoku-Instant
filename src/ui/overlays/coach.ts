@@ -14,7 +14,7 @@
 // after the (empty) region is shown, so screen readers announce it (a region inserted together with
 // its text is often not read).
 //
-// Classes: .coach[data-step][data-hand] > .coach__dim .coach__ring .coach__hand .coach__card[data-pending]
+// Classes: .coach[data-step][data-hand] > .coach__dim .coach__ring .coach__hand .coach__card[data-pending][data-row]
 //          .coach__text .coach__gotit
 //
 // Review fixes: the step text prints its rule keywords in the accent colour and the colour it names
@@ -120,6 +120,11 @@ export function coverBadges(
   return next;
 }
 
+/** How much of the soft obstacles a card from `y` to `y + cardH` covers (px × weight). */
+export function softCover(y: number, cardH: number, soft: readonly SoftRect[]): number {
+  return soft.reduce((sum, r) => sum + (r.weight ?? 1) * Math.max(0, Math.min(y + cardH, r.bottom) - Math.max(y, r.top)), 0);
+}
+
 /**
  * Card top (CSS px). Candidates, in order of preference: the `preferred` slots (the gap between the
  * board and the tool row, UX-14), the bottom of the screen (over the tool row, like the wireframe),
@@ -151,8 +156,7 @@ export function placeCard(
   const edge = soft.length ? MIN_EDGE : EDGE;
   const fits = (y: number): boolean =>
     y >= edge - 0.5 && y + cardH <= vh - edge + 0.5 && targets.every((r) => y >= r.bottom + CARD_GAP || y + cardH <= r.top - CARD_GAP);
-  const cost = (y: number): number =>
-    soft.reduce((sum, r) => sum + (r.weight ?? 1) * Math.max(0, Math.min(y + cardH, r.bottom) - Math.max(y, r.top)), 0);
+  const cost = (y: number): number => softCover(y, cardH, soft);
   let best: number | null = null;
   let bestCost = Infinity;
   for (const y of candidates) {
@@ -343,13 +347,26 @@ export function createCoach(): OverlayView<CoachProps> {
       : rects;
     const soft = props.softRects ? props.softRects() : screenSoftRects(doc);
     card.style.minHeight = '';
-    const cardH = card.offsetHeight;
+    card.removeAttribute('data-row');
+    let cardH = card.offsetHeight;
     // UX-14: the gap between the board and the tool row (badges included) is the first choice when
     // the card fits there without covering anything; otherwise the bottom slot over the tools, as
     // before, reaching up past the count badges (never onto the board or a target).
     const tools = props.softRects ? null : toolRow(doc);
-    const gap = tools ? [tools.rect.top - SOFT_GAP - cardH] : [];
-    const top = placeCard(avoid, cardH, vh, soft, gap);
+    const place = (hh: number): number => placeCard(avoid, hh, vh, soft, tools ? [tools.rect.top - SOFT_GAP - hh] : []);
+    let top = place(cardH);
+    // Phase 2d (G1 R2): on a short screen a card with "Got it" may find no slot clear of the top bar
+    // and the board (step 2 at 320 × 568: the row and the column span the board). "Got it" then moves
+    // beside the text ([data-row], a shorter card), kept only when that covers less.
+    if (!gotIt.hidden && softCover(top, cardH, soft) > 0.5) {
+      card.setAttribute('data-row', '');
+      const rowH = card.offsetHeight;
+      const rowTop = place(rowH);
+      if (softCover(rowTop, rowH, soft) < softCover(top, cardH, soft) - 0.5) {
+        cardH = rowH;
+        top = rowTop;
+      } else card.removeAttribute('data-row');
+    }
     const board = doc.querySelector('.screen--game .board')?.getBoundingClientRect();
     const raised = coverBadges(top, cardH, tools?.rect ?? null, tools?.badgeTop ?? null, board ? board.bottom + 2 : -Infinity, avoid);
     card.style.top = `${raised}px`;

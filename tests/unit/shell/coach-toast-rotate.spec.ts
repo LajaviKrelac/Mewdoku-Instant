@@ -96,6 +96,34 @@ describe('O8 tutorial coach', () => {
     expect(placeCard([rect(0, 40, 50, 760)], 120, 844)).toBe(712);
     expect(coachText(6, null)).toBe('Place the last cat.');
   });
+
+  it('Phase 2d (G1 R2): with no slot clear of the top bar and the board, "Got it" moves beside the text', () => {
+    // 320 × 568, step 2: the row and the column span the 4 × 4 board (154.8–462.8); the bar ends at 46.6.
+    const inner = Object.getOwnPropertyDescriptor(window, 'innerHeight');
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 568 });
+    try {
+      const soft = [
+        { left: 6, top: 5.2, right: 314, bottom: 46.6, weight: 3 },
+        { left: 6, top: 154.8, right: 314, bottom: 462.8, weight: 3 },
+      ];
+      const coach = createCoach();
+      document.body.append(coach.el);
+      const card = q(coach.el, '.coach__card');
+      Object.defineProperty(card, 'offsetHeight', { configurable: true, get: () => (card.hasAttribute('data-row') ? 77 : 110) });
+      const targets = () => [rect(6, 154.8, 308, 77), rect(83, 154.8, 77, 308)];
+      coach.open(props({ step: 2, hand: 'none', showGotIt: true, colorParam: null, targetRects: targets, softRects: () => soft }));
+      window.dispatchEvent(new Event('resize'));
+      expect(card.hasAttribute('data-row')).toBe(true);
+      expect(parseFloat(card.style.top)).toBeCloseTo(568 - 12 - 77, 1); // the bottom slot, clear of both
+      // A card that fits somewhere clear keeps "Got it" below the text.
+      Object.defineProperty(card, 'offsetHeight', { configurable: true, get: () => (card.hasAttribute('data-row') ? 60 : 70) });
+      window.dispatchEvent(new Event('resize'));
+      expect(card.hasAttribute('data-row')).toBe(false);
+      expect(parseFloat(card.style.top)).toBeCloseTo(568 - 12 - 70, 1);
+    } finally {
+      if (inner) Object.defineProperty(window, 'innerHeight', inner);
+    }
+  });
 });
 
 describe('O8 coach, Phase 2d (critic C8)', () => {

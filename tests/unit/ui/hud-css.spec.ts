@@ -40,6 +40,8 @@ describe('Phase 2d: the stack (look-spec §1.1, §4.7)', () => {
     expect(ruleOf(hud, '.top-bar--game')).toContain('height: var(--bar)');
     expect(ruleOf(hud, '.top-bar--game')).toContain('margin-top: var(--y-top)');
     expect(ruleOf(hud, '.top-bar--game')).toContain('width: var(--col-w)');
+    // The 44 px hit areas of the discs reach below the bar; they paint over the pills row.
+    expect(ruleOf(hud, '.top-bar--game')).toContain('z-index: 1');
     expect(ruleOf(hud, '.pills')).toContain('height: var(--pills)');
     expect(ruleOf(hud, '.pills')).toContain('margin: var(--g-bp) calc(var(--s) * 12px) 0');
     expect(ruleOf(hud, '.rule-chips')).toContain('height: var(--rules)');

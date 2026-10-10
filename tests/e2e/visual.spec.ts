@@ -283,10 +283,15 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
         const r = el.getBoundingClientRect();
         const cx = r.left + r.width / 2;
         const cy = r.top + r.height / 2;
-        return [[-21.5, -21.5], [21.5, -21.5], [-21.5, 21.5], [21.5, 21.5]].every(([dx, dy]) => el.contains(document.elementFromPoint(cx + (dx as number), cy + (dy as number))));
+        // A corner past the screen's edge (a disc near the top at 320 × 568) is checked at the edge.
+        const at = (v: number, max: number): number => Math.min(max - 0.5, Math.max(0.5, v));
+        return [[-21.5, -21.5], [21.5, -21.5], [-21.5, 21.5], [21.5, 21.5]].every(([dx, dy]) =>
+          el.contains(document.elementFromPoint(at(cx + (dx as number), window.innerWidth), at(cy + (dy as number), window.innerHeight))),
+        );
       }, sel);
       expect(hit, `${sel} hit area`).toBe(true);
     }
+    await expect(page.locator('.start-toast')).toHaveCount(0, { timeout: 8000 }); // drifted off (§1.14)
     await shot(page, 'game');
     // The bulb at its pulse peak (32 % of the 1.5 s cycle, §1.11).
     await page.evaluate(() => {
@@ -317,6 +322,8 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
     await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
     await page.waitForTimeout(1200);
     await markRow0(page);
+    // The recording's frame is after the start toast has drifted off (§1.14).
+    await expect(page.locator('.start-toast')).toHaveCount(0, { timeout: 8000 });
     const g = await expectStack(page);
     const near = (got: number, want: number, what: string): void => expect(Math.abs(got - want), `${what}: ${got.toFixed(1)} vs ${want}`).toBeLessThanOrEqual(2);
     const b = (x: Box | null): Box => x as Box;
@@ -344,6 +351,29 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
     await page.screenshot({ path: join(OUT, 'G3-visual-recording-402.png') });
     await ctx.close();
   });
+
+  for (const lang of ['de', 'ar'] as const) {
+    test(`the game screen in ${lang} at 320 × 568: the stack fits, the bar's columns stay between the discs`, async ({ page }, info) => {
+      test.skip(info.project.name !== 'web-320', 'the small phone only (look-spec §5.3)');
+      const save = recordingSave();
+      await open(page, { ...save, settings: { ...save.settings, locale: lang } });
+      await expect(page.locator('html')).toHaveAttribute('lang', lang);
+      await page.locator('.home__play').click();
+      await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
+      await page.waitForTimeout(1200);
+      await markRow0(page);
+      await expect(page.locator('.start-toast')).toHaveCount(0, { timeout: 8000 });
+      const g = await expectStack(page);
+      // Arabic mirrors the bar: the back disc at the right, the gear at the left (§4.8).
+      const [start, end] = lang === 'ar' ? [g.gear, g.back] : [g.back, g.gear];
+      expect((start as Box).right).toBeLessThan((end as Box).left);
+      for (const col of [g.level, g.score] as Box[]) {
+        expect(col.left).toBeGreaterThanOrEqual((start as Box).right + 4 - 1);
+        expect(col.right).toBeLessThanOrEqual((end as Box).left - 4 + 1);
+      }
+      await shot(page, `game-${lang}`);
+    });
+  }
 
   test('the Score on a 12×12 level: 11 cats in a row, a "+N" mid-rise clear of the gear, and the win flow', async ({ page }) => {
     // Level 310 is 12×12; 11 cats in a row reach 11,616, the winning cat 13,248.
@@ -411,7 +441,7 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
     // Phase 2d: the helpers note names the kitty, the bulb and the mouse, next to their art.
     await expect(page.locator('.overlay[data-overlay="how_to_play"] .howto__helpers')).toContainText('The mouse crosses out a few tiles that have no cat.');
     await expect(page.locator('.overlay[data-overlay="how_to_play"] .howto__helper-art use')).toHaveCount(3);
-    await page.locator('.overlay[data-overlay="how_to_play"] .howto__points').scrollIntoViewIfNeeded();
+    await page.locator('.overlay[data-overlay="how_to_play"] .howto__helpers').scrollIntoViewIfNeeded();
     await page.waitForTimeout(300);
     await shot(page, 'howto');
   });
