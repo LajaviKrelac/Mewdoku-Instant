@@ -20,11 +20,18 @@
 // a resumed board, a revive or the tutorial), and the banner during play: the band is decided at
 // mount (BannerFlow.eligible('game') → SessionMeta.bannerBand), a banner already up stays into an
 // eligible board (no hide), and the board entry's end is the game screen's screenShown('game').
+// Phase 2d.1 (G1, docs/phase2d/helpers-spec.md §1.6, §2.5, §3.2, §4.1, §4.3, §4.6, §5): the two
+// level-start tickers (playTickers(pickTickerLines(…)) where 2d played the toast); the mouse's sounds
+// (`mouse` at each arrival, `mark` at each landing) and its deferred `unit_done`; the `points` sound
+// when the star lands (fx.points); the hint card's new props (cells, boardRect, cellRect); the banner
+// hidden while the hint is open and shown again after it (banner-flow hintOpened / hintClosed); the
+// per-attempt mouse count and the last board-change time for the pulse rule; HelperHost.reducedMotion.
 import type { CellIndex, HintStep, Puzzle } from '../engine/types';
 import { eventEnd, eventRules, type EventDef } from '../game/events';
 import { newGame, restoreGame, toInProgress } from '../game/factory';
 import { getMode, rulesFor } from '../game/modes';
-import { isHard } from '../game/progression';
+import { mouseLandMs, mouseVisitMs } from '../game/mouse';
+import { dailyCardState, isHard, localDateKey } from '../game/progression';
 import { reduce } from '../game/reducer';
 import { validateSlot } from '../game/save';
 import { encodeDailyScore, encodeEventScore, encodePeriodScore } from '../game/scoring';
@@ -33,11 +40,13 @@ import type { Action, BoardKey, GameEvent, GameState, ModeId, RuleFlags } from '
 import type { RankingListState, RankScoreView } from '../ui/overlays/ranking-panel';
 import { periodRankTitle } from '../ui/period-text';
 import type { GameScreen, GameScreenCallbacks, GameView, StartToastKind } from '../ui/screens/game-screen';
+import type { TickerLine } from '../ui/fx/tickers';
 import { t } from '../i18n';
 import type { TimerId } from './clock';
 import { cfg } from './config';
 import type { AnalyticsEvent, RankResult } from './events';
 import { createHelperFlows } from './helper-flows';
+import { pickTickerLines } from './tickers';
 import type { BoardScore } from './ranking-flow';
 import { feedbackFor, failEvent, levelParam, mistakeEvent, startEvents, winBookkeeping, type WinSummary } from './session-effects';
 import { createFeedbackPlayer, createSessionTimers, defaultColors, defaultPraise, overlayProps, withoutSlot, withSlot, type SaveSlot } from './session-parts';
@@ -73,7 +82,35 @@ export function createSession(deps: SessionDeps): Session {
     ...(deps.levelSize ? { levelSize: deps.levelSize } : {}),
     // §2.2: from WON until the ranking panel opens, Home and Gear render aria-disabled.
     ...(winFlow.blocking() ? { chromeLocked: true } : {}),
+    // Phase 2d.1 §4.6: the pulse's idle time and the per-attempt mouse count.
+    ...(lastChangeAt !== undefined ? { lastBoardChangeAt: lastChangeAt } : {}),
+    mouseUses: helpers.mouseUses(),
   });
+
+  /**
+   * Phase 2d.1 §4.6: clock time of the last board change (mark, unmark, cat, mistake), of the board
+   * entry's end (START), of a revive, or of the page becoming visible again; undefined until START.
+   */
+  let lastChangeAt: number | undefined;
+  /** Phase 2d.1 §5.4: attempts on this board in this session (0 at mount, +1 per Retry): the tickers' seed. */
+  let attempt = 0;
+  /**
+   * Phase 2d.1: sounds the session schedules for the board's and the fx layer's motion (the mouse's
+   * arrivals and landings, a mouse action's unit_done, the points star's landing). A props render of
+   * the board (a new board, a restore, a Retry) cancels them, like the motion they follow.
+   */
+  const fxTimers = new Set<TimerId>();
+  const fxLater = (ms: number, fn: () => void): void => {
+    const id: TimerId = clock.setTimeout(() => {
+      fxTimers.delete(id);
+      if (!disposed) fn();
+    }, ms);
+    fxTimers.add(id);
+  };
+  const clearFxTimers = (): void => {
+    for (const id of fxTimers) clock.clearTimeout(id);
+    fxTimers.clear();
+  };
 
   let gen = 0;
   let disposed = false;
@@ -137,6 +174,7 @@ export function createSession(deps: SessionDeps): Session {
     afterKitty: () => {
       if (game()?.status === 'kitty') timers.later(c.kitty.revealMs, () => dispatch({ type: 'KITTY_DONE' }));
     },
+    reducedMotion: () => store.get().ui.reducedMotion,
   });
 
   const winFlow = createWinFlow({
@@ -195,6 +233,14 @@ export function createSession(deps: SessionDeps): Session {
     const slot = slotFor(m);
     const writeSlot = slot !== null && changed && state.status !== 'won';
     const now = clock.now();
+    // Phase 2d.1 §4.6: the pulse's idle time restarts at every board change, at START (the entry's
+    // end) and at a revive; a Retry has none until its own START. Set before the store update, so the
+    // re-render it causes already sees it.
+    if (a.type === 'RETRY') {
+      lastChangeAt = undefined;
+      attempt++;
+      clearFxTimers();
+    } else if (state.cells !== prev.cells || a.type === 'START' || a.type === 'REVIVE') lastChangeAt = now;
     if (state !== prev || writeSlot) {
       store.update((app) => ({ ...app, game: state, save: writeSlot ? withSlot(app.save, slot, toInProgress(state, now)) : app.save }));
     }
@@ -205,11 +251,21 @@ export function createSession(deps: SessionDeps): Session {
     // phase2c.1 §10.4: the lines of one action are joined into ONE announcement (the POINTS line
     // follows its CAT_PLACED line: "Cat placed. 3 of 8. 2,016 points.").
     const lines: string[] = [];
+    const reduced = store.get().ui.reducedMotion;
+    const mouseEv = events.find((e) => e.type === 'MARKED' && e.source === 'mouse');
+    const mouseMarks: readonly CellIndex[] | null = mouseEv && mouseEv.type === 'MARKED' ? mouseEv.cells : null;
     for (const ev of events) {
       screen?.playEvent(ev);
-      const fb = feedbackFor(ev, state, m.colors, c);
-      fx.play(fb);
-      if (ev.type === 'MARKED' && ev.source === 'mouse') mouseTicks(ev.cells.length);
+      const fb = feedbackFor(ev, state, m.colors, c, events);
+      if (ev.type === 'MARKED' && ev.source === 'mouse') mouseSounds(ev.cells.length, reduced);
+      else if (ev.type === 'UNITS_DONE' && fb.sfx && mouseMarks && !reduced) {
+        // §4.1: a unit completed by a mouse X cheers when that X lands (the board's wave and label wait too).
+        const { sfx: id, sfxIndex } = fb;
+        const k = Math.min(...ev.units.map((u) => Math.max(0, mouseMarks.indexOf(u.anchor))));
+        fx.play({ ...fb, sfx: undefined });
+        fxLater(mouseLandMs(k, c), () => fx.play({ sfx: id, ...(sfxIndex === undefined ? {} : { sfxIndex }) }));
+      } else fx.play(fb);
+      if (ev.type === 'POINTS') pointsSound(reduced);
       if (fb.announce) lines.push(fb.announce);
       if (ev.type === 'MISTAKE') log(mistakeEvent(m, state));
       else if (ev.type === 'WON') onWon(state, m, false);
@@ -222,12 +278,30 @@ export function createSession(deps: SessionDeps): Session {
   }
 
   /**
-   * Phase 2d §1.12: the mark sound per X of the mouse, in step with the board's pops fx.mouseStaggerMs
-   * apart (the first one is the MARKED's own sound). Reduced motion: the X's appear at once, one sound.
+   * Phase 2d.1 §1.6: the mouse's sounds, in step with its visits (the board plays the motion): the
+   * `mouse` squeak as it arrives on tile k (k × mouseVisitMs) and the `mark` tick with the mark haptic
+   * as tile k's X lands (mouseLandMs(k)). Reduced motion: no sprite, the X's fade in together: one
+   * `mark` at once.
    */
-  function mouseTicks(count: number): void {
-    if (store.get().ui.reducedMotion) return;
-    for (let i = 1; i < count; i++) timers.later(i * c.fx.mouseStaggerMs, () => fx.play({ sfx: 'mark' }));
+  function mouseSounds(count: number, reduced: boolean): void {
+    if (reduced) {
+      fx.play({ sfx: 'mark', haptic: c.haptics.mark });
+      return;
+    }
+    for (let k = 0; k < count; k++) {
+      if (k === 0) fx.play({ sfx: 'mouse' });
+      else fxLater(k * mouseVisitMs(c), () => fx.play({ sfx: 'mouse' }));
+      fxLater(mouseLandMs(k, c), () => fx.play({ sfx: 'mark', haptic: c.haptics.mark }));
+    }
+  }
+
+  /**
+   * Phase 2d.1 §2.5: the `points` ting when the POINTS star lands on the Score (fx.points.starAtMs +
+   * 17 + flightMs after POINTS, 1 330 ms); at once with reduced motion (no star). One per POINTS.
+   */
+  function pointsSound(reduced: boolean): void {
+    if (reduced) fx.play({ sfx: 'points' });
+    else fxLater(c.fx.points.starAtMs + 17 + c.fx.points.flightMs, () => fx.play({ sfx: 'points' }));
   }
 
   // ─────────────────────────────── win (phase2b §2.2) ───────────────────────────────
@@ -469,7 +543,12 @@ export function createSession(deps: SessionDeps): Session {
       ...ctx,
       onApply: () => session.onHintApply(),
       onClose: () => session.onHintClose(),
-      avoidRect: () => screen?.boardRect() ?? null,
+      // Phase 2d.1 §3.2: the board when the hint opened (which effect tiles are Empty: the cut-outs and
+      // the ghosts), and the rects the card, Apply and the dim's tile holes are placed from.
+      cells: s.cells,
+      boardRect: () => screen?.boardRect() ?? null,
+      cellRect: (cell: CellIndex) => screen?.cellRect(cell) ?? null,
+      avoidRect: () => screen?.boardRect() ?? null, // @deprecated phase2d.1, removed at I-3
     });
     fx.play({ sfx: 'hint_open' });
     fx.announceHint(step, ctx);
@@ -520,6 +599,8 @@ export function createSession(deps: SessionDeps): Session {
   function teardown(): void {
     gen++;
     busy = false;
+    clearFxTimers();
+    lastChangeAt = undefined;
     winFlow.cancel();
     router.releaseModal?.();
     deps.rankings?.closeList();
@@ -600,6 +681,7 @@ export function createSession(deps: SessionDeps): Session {
     store.update((app) => ({ ...app, screen: 'game', game: state, session: m, save: current, ui: { ...app.ui, inputLocked: false } }));
     if (cleared) deps.saves.touch();
     helpers.newAttempt();
+    attempt = 0;
     screen = router.showGame(selectGameView(store.get(), viewCtx(), c) as GameView, callbacks);
     unbindView = store.select(
       // ext: the settings dot (§1.15); purchases: No Ads takes the banner band away (§1.16).
@@ -618,7 +700,8 @@ export function createSession(deps: SessionDeps): Session {
     if (mode === 'tutorial') showCoach();
     if (state.status === 'ready') {
       playBoardEntry(resumed || mode === 'tutorial' ? null : m.hard ? 'hard' : 'level');
-    } else if (state.status === 'won') onWon(state, m, true);
+    } else if (state.status === 'playing') lastChangeAt = clock.now();
+    else if (state.status === 'won') onWon(state, m, true);
     else if (state.status === 'lost') {
       openFail(0);
       // §1.16: O4 is a results screen that keeps the banner; a restored lost board has no entry.
@@ -635,17 +718,23 @@ export function createSession(deps: SessionDeps): Session {
   /**
    * The board-entry wave, its cue (review PAR-8: 'board_in', with the wave) and START when it ends.
    * Only a fresh or retried board enters; a restored won or lost board does not (no wave, no cue).
-   * Phase 2d §1.14: `toast` is the level-start toast's line for a fresh board ('level' / 'hard') or a
-   * Retry ('retry'); null for a resumed board and the tutorial (fx.startToast.enabled off: none).
+   * Phase 2d §1.14: `toast` is the level-start line's kind for a fresh board ('level' / 'hard') or a
+   * Retry ('retry'); null for a resumed board and the tutorial. Phase 2d.1 §5.5: the two level-start
+   * tickers (GameScreen.playTickers(pickTickerLines(…)), fx.tickers.enabled) replace 2d's toast; a
+   * screen without playTickers (until I-3) still gets the 2d toast.
    * §1.16: the entry's end is when the game screen may show its banner.
    */
   function playBoardEntry(toast: StartToastKind | null): void {
     if (screen) {
       screen.playEntry();
       fx.play({ sfx: 'board_in' });
-      if (toast !== null && c.fx.startToast.enabled) {
+      if (toast !== null) {
         const scr = screen;
-        fx.guard(() => scr.playStartToast(toast));
+        const lines = scr.playTickers && c.fx.tickers.enabled ? tickerLines(toast === 'retry') : null;
+        if (lines && scr.playTickers) {
+          const play = scr.playTickers.bind(scr);
+          fx.guard(() => play(lines));
+        } else if (!scr.playTickers && c.fx.startToast.enabled) fx.guard(() => scr.playStartToast(toast));
       }
     }
     timers.later(c.fx.boardEntryMs, () => {
@@ -653,6 +742,32 @@ export function createSession(deps: SessionDeps): Session {
       const m = meta();
       if (m) bannerScreenShown(m);
     });
+  }
+
+  /** Phase 2d.1 §5.4: the two ticker lines for this board entry (null without a board). */
+  function tickerLines(retry: boolean): readonly [TickerLine, TickerLine] | null {
+    const s = game();
+    const m = meta();
+    if (!s || !m) return null;
+    const sv = save();
+    const now = clock.now();
+    const today = localDateKey(now);
+    const daily = dailyCardState(sv, today, c);
+    return pickTickerLines(
+      {
+        save: sv,
+        mode: m.mode,
+        level: m.mode === 'level' ? m.level : null,
+        n: s.puzzle.n,
+        hard: m.hard,
+        retry,
+        dailyOpen: daily === 'not_played' || daily === 'in_progress',
+        todayKey: today,
+        seed: `${m.puzzleId}:${attempt}`,
+        now,
+      },
+      c,
+    );
   }
 
   const callbacks: GameScreenCallbacks = {
@@ -867,7 +982,21 @@ export function createSession(deps: SessionDeps): Session {
     bus.on('resume', ({ reason }) => {
       timers.resume(reason);
       // §2.2: back from a hidden page, every missed win-flow step runs once, at its end state.
-      if (reason === 'hidden' || reason === 'fb_pause') winFlow.catchUp();
+      if (reason === 'hidden' || reason === 'fb_pause') {
+        winFlow.catchUp();
+        // Phase 2d.1 §4.6: the page became visible again: the pulse's idle time restarts.
+        if (lastChangeAt !== undefined) {
+          lastChangeAt = clock.now();
+          refreshGameView();
+        }
+      }
+    }),
+    // Phase 2d.1 §3.2 (D-2d1-13): the banner hides while the hint card is open and shows again after it.
+    bus.on('overlay:open', ({ id }) => {
+      if (id === 'hint' && screen) void deps.banners?.hintOpened().catch(() => undefined);
+    }),
+    bus.on('overlay:close', ({ id }) => {
+      if (id === 'hint' && screen) void deps.banners?.hintClosed().catch(() => undefined);
     }),
     bus.on('overlay:open', syncModal),
     bus.on('overlay:close', syncModal),

@@ -1,0 +1,143 @@
+// Owner: G2 (Phase 2d.1)
+// The Phase 2d.1 drawings (helpers-spec §1.4, §2.4, §2.5, §5.2, Appendix C), each drawn by us as SVG from
+// the spec's words, never from a frame of the original (D-2d1-0; provenance-G2.md):
+// - the board mouse (board-mouse + its parts): our tool-mouse face split so the board can move the eyes
+//   and the mouth: the head (ears, muzzle, whiskers, nose, closed mouth, two teeth), the bead eyes with
+//   catchlights (they shift for a glance), a lid pair in the head's grey with a closed-eye line (scaled
+//   down for a blink, half way for the grin's narrowed eyes) and an open, grinning mouth (teeth, tongue);
+// - fx-star4: a four-point star with concave sides and a round soft core (the points star, G3);
+// - fx-shard, fx-shard-2, fx-shard-3: three chunky crystal bits, each a lit face in currentColor (the
+//   tile's colour), a shaded face (the same colour under 18 % black, i.e. × 0.82) and a small highlight;
+// - art-paw-cap: a ticker pill's inline-start end as a paw: four toe beans in an arc along the outer
+//   edge, each in its own scallop of the outline, a large main pad, the pill's fill and border following
+//   the scallops (it reads the ticker's --toast-fill and --toast-line);
+// - art-bolt: a chunky zig-zag lightning bolt, yellow with an orange shade; art-star: a plump
+//   five-point star with rounded tips, gold with a soft highlight (the tickers' end icons).
+// Every symbol is decorative (the sprite is aria-hidden; icon() adds aria-hidden). Colours: the HUD
+// tokens' values (one theme, look-spec §2.2) or custom properties that the using element sets.
+import { CAT } from './cat-parts';
+import { TOKENS } from './palette';
+
+const sym = (id: string, viewBox: string, body: string): string => `<symbol id="${id}" viewBox="${viewBox}">${body}</symbol>`;
+
+/** The mouse's greys (look-spec §1.11, shared with tool-mouse): head, muzzle, line work, eyes. */
+export const MOUSE = Object.freeze({ head: '#B8B4BC', muzzle: '#D9D6DC', line: '#8E8994', eye: '#1E1A22', mouth: '#5C2A3C' });
+
+/** The mouse art's box on its 100 grid (ears to chin): tool-mouse and the board mouse share it. */
+export const MOUSE_BOX = '1 4.5 98 88';
+
+/** The mouse's eye centres on the 100 grid. */
+const EYES: readonly (readonly [number, number])[] = [
+  [36, 55],
+  [64, 55],
+];
+
+/** The mouse's head without its eyes: ears with pink insides, head, muzzle, whiskers, nose, closed mouth and two teeth. */
+export function mouseHead(): string {
+  const ear = (cx: number): string => `<circle cx="${cx}" cy="27" r="20" fill="${MOUSE.head}"/><circle cx="${cx}" cy="28" r="12.5" fill="${CAT.earIn}"/>`;
+  return (
+    ear(23) +
+    ear(77) +
+    `<ellipse cx="50" cy="60" rx="36" ry="33" fill="${MOUSE.head}"/><ellipse cx="50" cy="75" rx="21" ry="15.5" fill="${MOUSE.muzzle}"/>` +
+    `<g fill="none" stroke="${MOUSE.line}" stroke-width="1.3" stroke-linecap="round"><path d="M32 70 8 64M31.5 74.5H6M32 79 9 85.5M68 70l24-6m-23.5 10.5H94M68 79l23 6.5"/>` +
+    `<path d="M50 69v4.5m-7 .8q7 4.6 14 0"/></g>` +
+    `<path d="M46 77.2h3.6v6.4a1 1 0 0 1-1 1H47a1 1 0 0 1-1-1Zm4.4 0H54v6.4a1 1 0 0 1-1 1h-1.6a1 1 0 0 1-1-1Z" fill="#fff" stroke="${MOUSE.line}" stroke-width=".9"/>` +
+    `<ellipse cx="50" cy="67.4" rx="4.8" ry="3.4" fill="${CAT.nose}"/>`
+  );
+}
+
+/** The bead eyes with their catchlights. */
+export function mouseEyes(): string {
+  return EYES.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="5.4" fill="${MOUSE.eye}"/><circle cx="${x + 1.8}" cy="${y - 1.8}" r="1.8" fill="#fff"/>`).join('');
+}
+
+/**
+ * The lids: the head's grey over each eye from its top (y 48.6) down, with the closed eye's line along
+ * the bottom; the board scales this part from the top edge (scaleY 0 = eyes open).
+ */
+function mouseLids(): string {
+  return (
+    EYES.map(([x]) => `<path d="M${x - 7} 48.6h14v6.6q-7 4.4-14 0Z" fill="${MOUSE.head}"/>`).join('') +
+    `<path d="M29.5 55.6q6.5 3.6 13 0M57.5 55.6q6.5 3.6 13 0" fill="none" stroke="${MOUSE.eye}" stroke-width="1.6" stroke-linecap="round"/>`
+  );
+}
+
+/** The grin: an open mouth below the nose (dark inside, a pink tongue, the two teeth at its top edge). */
+function mouseGrin(): string {
+  return (
+    `<path d="M39.5 72.6q10.5-2.4 21 0Q58.4 87 50 87T39.5 72.6Z" fill="${MOUSE.mouth}"/>` +
+    `<ellipse cx="50" cy="82.6" rx="6.2" ry="3.6" fill="${CAT.blush}"/>` +
+    `<path d="M45.8 72.3h3.8v5.2a1 1 0 0 1-1 1h-1.8a1 1 0 0 1-1-1Zm4.6 0h3.8v5.2a1 1 0 0 1-1 1h-1.8a1 1 0 0 1-1-1Z" fill="#fff"/>` +
+    `<ellipse cx="50" cy="67.4" rx="4.8" ry="3.4" fill="${CAT.nose}"/>`
+  );
+}
+
+/** A four-point star with concave sides and a round soft core (24 grid); the core reads --star-core. */
+function star4(): string {
+  return (
+    `<path d="M12 .8C12.9 8.4 15.6 11.1 23.2 12 15.6 12.9 12.9 15.6 12 23.2 11.1 15.6 8.4 12.9.8 12 8.4 11.1 11.1 8.4 12 .8Z" fill="currentColor"/>` +
+    `<circle cx="12" cy="12" r="4.2" style="fill:var(--star-core,#FFFD79)" opacity=".7"/><circle cx="12" cy="12" r="2.6" style="fill:var(--star-core,#FFFD79)"/>`
+  );
+}
+
+/** One crystal chunk: its outline (lit face, currentColor), the shaded face (black at .18 over it), a highlight. */
+function shard(outline: string, shade: string, hi: string): string {
+  return `<path d="${outline}" fill="currentColor"/><path d="${shade}" fill="#000" opacity=".18"/><path d="${hi}" fill="#fff" opacity=".45"/>`;
+}
+
+/**
+ * The paw cap (30 × 31, the pill's height): four toe beans in an arc along the outer edge, each inside a
+ * scallop of the outline (circles of r 4.3 at (12.4, 4.9), (7, 11.4), (7, 19.6), (12.4, 26.1), the first and
+ * last touching the pill's edges), the pill's fill and border following the scallops, a large main pad.
+ */
+function pawCap(): string {
+  const edge = 'M30 .6H12.4A4.3 4.3 0 0 0 9.09 7.64A4.3 4.3 0 1 0 5.7 15.5A4.3 4.3 0 1 0 9.09 23.36A4.3 4.3 0 0 0 12.4 30.4H30';
+  const bean = (cx: number, cy: number): string => `<circle cx="${cx}" cy="${cy}" r="2.8" fill="#FFCD9B"/>`;
+  return (
+    `<defs><radialGradient id="paw-pad" cx=".5" cy=".5" r=".5"><stop offset=".5" stop-color="#FFD4A5"/><stop offset="1" stop-color="#FFE1B5" stop-opacity="0"/></radialGradient></defs>` +
+    `<path d="${edge}" style="fill:var(--toast-fill)"/>` +
+    bean(12.8, 5.4) +
+    bean(7.6, 11.6) +
+    bean(7.6, 19.4) +
+    bean(12.8, 25.6) +
+    `<ellipse cx="20.4" cy="15.5" rx="7" ry="8.6" fill="url(#paw-pad)"/>` +
+    `<path d="${edge}" fill="none" style="stroke:var(--toast-line)" stroke-width="1.2" stroke-linejoin="round"/>`
+  );
+}
+
+/** A plump five-point star (24 grid): rounded tips from a round-joined stroke of its own colour. */
+function star5(): string {
+  const pts: string[] = [];
+  for (let k = 0; k < 10; k++) {
+    const r = k % 2 ? 4.6 : 9.4;
+    const a = ((-90 + k * 36) * Math.PI) / 180;
+    pts.push(`${(12 + r * Math.cos(a)).toFixed(1)} ${(13 + r * Math.sin(a)).toFixed(1)}`);
+  }
+  return (
+    `<path d="M${pts.join('L')}Z" fill="${TOKENS.gold}" stroke="${TOKENS.gold}" stroke-width="3" stroke-linejoin="round"/>` +
+    `<path d="M12 5.6 13.3 9.4 9.6 10Z" fill="#FFE9A6"/><ellipse cx="9.4" cy="11.6" rx="1.6" ry="1" transform="rotate(-30 9.4 11.6)" fill="#fff" opacity=".7"/>` +
+    `<path d="M16.3 18.8 12 16.5 7.7 18.8l.9-4.6" fill="none" stroke="${TOKENS.fish}" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" opacity=".55"/>`
+  );
+}
+
+/** Every Phase 2d.1 symbol, as sprite markup (art/sprite.ts adds it to the one sprite). */
+export function helperArtSymbols(): string {
+  return [
+    sym('board-mouse', MOUSE_BOX, mouseHead()),
+    sym('board-mouse-eyes', MOUSE_BOX, mouseEyes()),
+    sym('board-mouse-lids', MOUSE_BOX, mouseLids()),
+    sym('board-mouse-grin', MOUSE_BOX, mouseGrin()),
+    sym('fx-star4', '0 0 24 24', star4()),
+    sym('fx-shard', '0 0 24 24', shard('M7 3.4 16.6 2.2c2 0 3.4 1.2 3.8 3.1l1.4 8.2c.3 1.8-.5 3.4-2.1 4.2l-8 4.3c-1.6.8-3.4.5-4.6-.8L3.2 16.6C2 15.3 1.8 13.5 2.6 12L5 5.4c.4-1.1 1-1.8 2-2Z', 'M21.8 13.5c.3 1.8-.5 3.4-2.1 4.2l-8 4.3c-1.6.8-3.4.5-4.6-.8l5.2-6.4Z', 'M7.6 5.6 15 4.4l-2.6 3.4-5.6 1.2Z')),
+    sym('fx-shard-2', '0 0 24 24', shard('M11 2.4c1.1-.6 2.3-.5 3.2.3l6.6 6.2c1 .9 1.2 2.3.6 3.5l-4.8 8.4c-.6 1.1-1.8 1.7-3 1.5L5.8 21c-1.4-.2-2.4-1.3-2.5-2.7L2.6 9.6c-.1-1.2.5-2.3 1.5-2.9Z', 'M21.4 12.4l-4.8 8.4c-.6 1.1-1.8 1.7-3 1.5L5.8 21l7.4-7.6Z', 'M5.6 8.4 11.6 4.6l1.4 2.6-6.2 3.4Z')),
+    sym('fx-shard-3', '0 0 24 24', shard('M5.2 5.8C6 4.4 7.6 3.8 9.1 4.2l9.6 2.9c1.6.5 2.6 2 2.4 3.7l-.9 7.1c-.2 1.7-1.6 2.9-3.3 2.9H6.5c-1.6 0-3-1.2-3.2-2.8l-.8-6.4c-.1-.8.1-1.5.5-2.2Z', 'M21.1 10.8l-.9 7.1c-.2 1.7-1.6 2.9-3.3 2.9H9.2l3.4-8.6Z', 'M6.4 7.4 13.4 7.8l-3 2.6-4.6.4Z')),
+    sym('art-paw-cap', '0 0 30 31', pawCap()),
+    sym(
+      'art-bolt',
+      '0 0 24 24',
+      `<path d="M14.8 1.2 4.6 13.4h6.3L8.4 22.8 19.6 9.4h-6.4Z" fill="${TOKENS.gold}" stroke="${TOKENS.gold}" stroke-width="1.4" stroke-linejoin="round"/>` +
+        `<path d="M13.2 9.4h6.4L8.4 22.8l2.5-9.4Z" fill="${TOKENS.fish}"/><path d="M13.4 4 7.6 11.5h1.1Z" fill="#FFE9A6"/>`,
+    ),
+    sym('art-star', '0 0 24 24', star5()),
+  ].join('');
+}

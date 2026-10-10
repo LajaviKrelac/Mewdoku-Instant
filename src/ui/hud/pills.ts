@@ -17,7 +17,11 @@
 // The same period pill (icon-trophy + the period total, not a button) sits on Home (createPeriodPill).
 // Identifiers keep "hearts" where they cross into G1 or are stored (PillsProps.hearts / maxHearts,
 // spec §0.5): hearts = lives = fish.
-// Classes: .pills > .pill.pill--heads[data-out] > svg.head[data-color][data-done]
+// Phase 2d.1 (G3, helpers-spec §2.7, §6.5, D-2d1-5, D-2d1-17): a found colour's head is no longer the
+// full-colour silhouette: the silhouette gives way to our cat face (the board's Tux, cat-idle) with a
+// small dot in the colour's 50 % tint at its lower inline end, popping 0.56 → 1.20 at 83 ms → 1.0 at
+// fx.headFoundMs; the heads follow the hue ring HEAD_ORDER from a per-board start (headOrderFor).
+// Classes: .pills > .pill.pill--heads[data-out] > span.head[data-color][data-done] > svg.head__shape (+ while done: svg.head__face + span.head__dot)
 //            .period-pill[data-in-game]
 //            .pill.pill--lives[data-last] > .life[data-full][data-departed]
 //          .life > svg.life__empty (icon-fish-empty) svg.life__full (icon-fish)
@@ -30,7 +34,7 @@
 import { cfg, type PeriodKind } from '../../app/config';
 import type { GameEvent } from '../../game/types';
 import { formatNumber, onLocaleChanged, t } from '../../i18n';
-import { HEAD_ORDER } from '../art/palette';
+import { headOrderFor } from '../art/palette';
 import { icon } from '../art/sprite';
 import type { View } from '../dom';
 import { periodPillLabel } from '../period-text';
@@ -50,6 +54,11 @@ export interface PillsProps {
   readonly regionsDone: number;
   /** Phase 2d §1.6: the board's identity (BoardModel.puzzleId); a new one sets the heads without motion. */
   readonly boardId: string;
+  /**
+   * Phase 2d.1 §6.5: the id the heads ring starts from (headOrderFor); null = no rotation (the
+   * tutorial). Optional (absent: boardId).
+   */
+  readonly ringId?: string | null;
 }
 
 /** A full life slot and its icon's client rect (the win flight's source, §2.3). */
@@ -142,6 +151,12 @@ export interface Counter {
   setTotal(next: number, rollFrom?: number): void;
   /** The current total (−1 before the first set). */
   total(): number;
+  /** Phase 2d.1: the accessible name (and total()) only; the number on screen stays (the Score's star, §2.5). */
+  setLabel(total: number): void;
+  /** Phase 2d.1: the number on screen only (the Score's count-up frames, §2.5); no roll, no bump. */
+  show(n: number): void;
+  /** Phase 2d.1: the number's element (`.${cls}__n`; [data-counting] during the Score's count-up). */
+  numEl(): HTMLElement;
   /** The rising chip ("+3", "+576"); a newer chip replaces a running one. */
   chip(text: string): void;
   /** Client rect of the pill's icon (or of its number without one); null while hidden or detached. */
@@ -210,6 +225,17 @@ export function buildCounter(spec: CounterSpec): Counter {
     el,
     setTotal,
     total: () => total,
+    setLabel(next) {
+      total = next;
+      el.setAttribute('aria-label', spec.label(Math.max(0, next)));
+    },
+    show(n) {
+      for (const gone of Array.from(countBox.querySelectorAll('.is-out'))) gone.remove();
+      numEl.classList.remove('is-in');
+      const text = formatNumber(n);
+      if (numEl.textContent !== text) numEl.textContent = text;
+    },
+    numEl: () => numEl,
     chip(text) {
       const [, chipMs, risePx, inMs, outMs] = spec.motion();
       const rm = spec.reduced();
@@ -388,14 +414,18 @@ export function headScale(heads: number, fish: number): number {
   return natural > 0 ? Math.max(0.3, Math.min(1, room / natural)) : 1;
 }
 
-/** The colours on the board in heads order (HEAD_ORDER), each once; colours HEAD_ORDER lacks go last. */
-export function headColors(colors: ArrayLike<number>, n: number): number[] {
-  const present = new Set<number>();
-  for (let r = 0; r < n; r++) present.add(Number(colors[r] ?? r));
-  const out = HEAD_ORDER.filter((c) => present.has(c));
-  for (const c of present) if (out.indexOf(c) < 0) out.push(c);
-  return out;
+/**
+ * The colours on the board in heads order: the hue ring HEAD_ORDER rotated to the board's own start
+ * (palette.ts headOrderFor; helpers-spec §6.5), each once. `ringId` null: no rotation (the tutorial).
+ */
+export function headColors(colors: ArrayLike<number>, n: number, ringId: string | null = null): number[] {
+  const present: number[] = [];
+  for (let r = 0; r < n; r++) present.push(Number(colors[r] ?? r));
+  return headOrderFor(present, ringId);
 }
+
+/** Phase 2d.1 §2.7: the found head's dot (8 s, 1 s white rim) sits at the head centre + (7.8, 6.6) s. */
+export const HEAD_DOT: readonly [dx: number, dy: number, size: number] = [7.8, 6.6, 8];
 
 // ─────────────────────────────── pills row ───────────────────────────────
 
@@ -429,7 +459,7 @@ export function createPills(props: PillsProps): PillsView {
   /** Slots whose fish left for the win flight (§2.2): they stay empty whatever `hearts` says. */
   const departed = new Set<number>();
   /** Head per palette index, in heads order; rebuilt when the board's colour set changes. */
-  let headEls = new Map<number, SVGSVGElement>();
+  let headEls = new Map<number, HTMLElement>();
   let headsKey = '';
   let boardId: string | undefined;
   /** Palette index → region label of the current board (for REGION_DONE). */
@@ -451,7 +481,7 @@ export function createPills(props: PillsProps): PillsView {
   /** Rebuilds the heads for a new colour set; returns true when it did (a new board: no motion). */
   const ensureHeads = (p: PillsProps): boolean => {
     const colors = p.colors;
-    const order = headColors(colors, p.n);
+    const order = headColors(colors, p.n, p.ringId === undefined ? p.boardId : p.ringId);
     colorOf = (r) => Number(colors[r] ?? r);
     const key = order.join(',');
     if (key === headsKey) return false;
@@ -459,14 +489,30 @@ export function createPills(props: PillsProps): PillsView {
     while (heads.firstChild) heads.removeChild(heads.firstChild);
     headEls = new Map();
     for (const c of order) {
-      const head = icon('cat-head-flat', { class: 'head' });
+      const head = document.createElement('span');
+      head.className = 'head';
       head.dataset.color = String(c);
-      // The region colour itself (a token, not a literal); hud.css draws it at 50 % until found.
+      // The region colour itself (a token, not a literal); hud.css draws the silhouette and the dot at 50 %.
       head.style.color = `var(--r${c})`;
+      head.appendChild(icon('cat-head-flat', { class: 'head__shape' }));
       headEls.set(c, head);
       heads.appendChild(head);
     }
     return true;
+  };
+
+  /** §2.7: the found state: our cat face and the tint dot replace the silhouette (built on first use). */
+  const setFound = (head: HTMLElement, on: boolean): void => {
+    head.toggleAttribute('data-done', on);
+    const face = head.querySelector('.head__face');
+    if (on && !face) {
+      const dot = document.createElement('span');
+      dot.className = 'head__dot';
+      head.append(icon('cat-idle', { class: 'head__face' }), dot);
+    } else if (!on && face) {
+      face.remove();
+      head.querySelector('.head__dot')?.remove();
+    }
   };
 
   const isFull = (k: number, p: PillsProps): boolean => k < p.hearts && !departed.has(k);
@@ -503,11 +549,9 @@ export function createPills(props: PillsProps): PillsView {
       const was = head.hasAttribute('data-done');
       const now = done.has(c);
       if (was === now) continue;
-      if (now) head.setAttribute('data-done', '');
-      else {
-        head.removeAttribute('data-done');
-        if (!fresh && !reduced()) restart(head, 'head--out', cfg.fx.reducedMotionFadeMs, timers);
-      }
+      setFound(head, now);
+      // A cat taken back: the silhouette cross-fades back (150 ms, no pop).
+      if (!now && !fresh && !reduced()) restart(head, 'head--out', cfg.fx.reducedMotionFadeMs, timers);
     }
     heads.setAttribute('aria-label', t('game.cats.a11y', { placed: p.catsPlaced, n: p.n }));
     slots.forEach((s, k) => s.toggleAttribute('data-full', isFull(k, p)));
@@ -586,10 +630,10 @@ export function createPills(props: PillsProps): PillsView {
         const slot = full[full.length - 1];
         if (slot) popLife(slot);
       } else if (ev.type === 'REGION_DONE') {
-        // §1.6: the colour's head turns full (the props may already say so) and pops.
+        // 2d.1 §2.7: the colour's head becomes the face + dot (the props may already say so) and pops.
         const head = headEls.get(colorOf(ev.region));
         if (!head) return;
-        head.setAttribute('data-done', '');
+        setFound(head, true);
         head.classList.remove('head--out');
         if (!reduced()) restart(head, 'head--pop', cfg.fx.headFoundMs, timers);
       }

@@ -62,21 +62,40 @@
   padding-top: max(calc(16px + var(--safe-top)), var(--fb-safe));
 }
 
-/* O1 hint card: bottom sheet over the tool row; the board stays visible above (clear scrim). */
-.overlay[data-overlay='hint'] { justify-content: flex-end; padding-bottom: calc(12px + var(--safe-bottom)); }
-.hint-card__row { display: flex; align-items: flex-start; text-align: start; }
-.hint-card__icon { flex: none; width: 44px; height: 44px; margin-inline-end: 12px; padding: 8px; border-radius: 50%;
-  background: var(--gold-soft); color: var(--gold-deep); }
-.hint-card__desc { flex: 1 1 auto; min-width: 0; }
-.hint-card__text { padding-top: 2px; color: var(--ink); font-size: var(--fs-l); line-height: 1.4; }
-.hint-card__actions { margin-top: 14px; }
-.hint-card__apply { flex: 1; max-width: 260px; margin: 0 auto; }
-.hint-card__actions .overlay__close { margin-inline-start: 12px; }
-/* Flipped above the board when the bottom slot would cover it (HintCardProps.avoidRect): a full-width
-   sheet flush with the top edge, so the top bar's buttons never peek out around it. */
-.overlay[data-overlay='hint'][data-placement='top'] { justify-content: flex-start; padding: 0 0 calc(16px + var(--safe-bottom)); }
-.overlay[data-overlay='hint'][data-placement='top'] .hint-card { margin-top: 0; margin-bottom: auto; padding-top: calc(16px + var(--safe-top));
-  border-radius: 0 0 var(--radius-xl) var(--radius-xl); animation-name: mw-sheet-down; }
+/* O1 hint overlay (Phase 2d.1 §3.2, D-2d1-7; measured, ours): a 75 % black dim over the whole screen with
+   holes at the hint's tiles (hint-card.ts, even-odd), fading in linearly over --dim-ms; the card over the
+   rule cards and the Apply pill under the board, placed from the board's rect (× s via --hs); no
+   entrance or exit animation ([data-instant]); the panel shows once placed ([data-placed], one frame). */
+.overlay[data-overlay='hint'] { padding: 0; animation: none; }
+.hint-dim { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;
+  animation: hint-dim-in var(--dim-ms, 300ms) linear both; }
+.hint-dim > path { fill: rgba(0, 0, 0, 0.75); fill-rule: evenodd; }
+@keyframes hint-dim-in { from { opacity: 0; } }
+.overlay__panel.hint-sheet { position: absolute; top: 0; right: 0; bottom: 0; left: 0; max-height: none; overflow: visible;
+  pointer-events: none; }
+.overlay[data-overlay='hint']:not([data-placed]) .hint-sheet { visibility: hidden; }
+.hint-card { position: absolute; left: var(--hc-l, 16px); bottom: var(--hc-b, 50%); display: flex; flex-direction: column;
+  justify-content: center; box-sizing: border-box; width: var(--hc-w, calc(100% - 32px)); min-height: calc(var(--hs, 1) * 70.3px);
+  max-height: var(--hc-max, none); padding: calc(var(--hs, 1) * 12px) calc(var(--hs, 1) * 18.3px); border-radius: calc(var(--hs, 1) * 15px);
+  background: var(--hint-card); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25); text-align: start; pointer-events: auto; }
+.hint-card__text { min-height: 0; overflow-y: auto; color: var(--ink); font-weight: 500;
+  font-size: max(10px, calc(var(--hs, 1) * 14.5px)); line-height: max(12px, calc(var(--hs, 1) * 17px)); }
+/* Apply: 278.7 × 59.3 s, a full pill in --apply, a white 28 s label (Fredoka 600 + the 0.04 em stroke,
+   D-2d-7; never under 24 px, so white on --apply stays large text, 3.05:1), no shadow; pressed to 0.90
+   within 50 ms (§4.5), applied on release. */
+.btn.hint-apply { position: absolute; top: var(--ha-t, 60%); left: var(--ha-l, 16px); box-sizing: border-box;
+  width: calc(var(--hs, 1) * 278.7px); height: calc(var(--hs, 1) * 59.3px); min-height: 0; padding: 0;
+  border-radius: calc(var(--hs, 1) * 29.65px); background: var(--apply); box-shadow: none; text-shadow: none; color: #fff;
+  font-family: var(--font-display); font-weight: var(--display-weight); font-size: max(24px, calc(var(--hs, 1) * 28px));
+  -webkit-text-stroke: 0.04em #fff; pointer-events: auto; transition: transform 50ms ease-out; }
+.btn.hint-apply:active:not([aria-disabled='true']) { transform: scale(0.9); box-shadow: none; }
+[data-motion='reduced'] .btn.hint-apply:active { transform: none; }
+/* The close button for keyboards and screen readers: hidden until focused, then a 44 × 44 round button on
+   the card's top inline-end corner (below the top bar, so never in the FB top-left zone). */
+.hint-close.visually-hidden-focusable:not(:focus) { position: absolute; width: 1px; height: 1px; min-height: 0; margin: -1px;
+  padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.hint-close.visually-hidden-focusable:focus { position: absolute; top: -14px; inset-inline-end: -14px; width: 44px; height: 44px;
+  box-shadow: var(--shadow-2); }
 
 /* Teaching copy (review PAR-7, src/ui/rich-text.ts): rule keywords in the accent text colour (5.71:1
    on the card), a colour named "in its colour" with a swatch and an underline in the tile colour; the
@@ -200,13 +219,13 @@
 .coach[inert] { visibility: hidden; }
 
 /* Phase 2d §1.16 (critic C11): while a banner may show in play (game-screen.ts publishes the band on
-   <html>), the hint card, the rewarded prompt and the fail overlay keep their controls above it. */
-:root[data-play-band='1'] .overlay[data-overlay='hint'],
+   <html>), the rewarded prompt and the fail overlay keep their controls above it (2d.1: the hint hides
+   the banner and anchors to the board). */
 :root[data-play-band='1'] .overlay[data-overlay='rewarded'],
 :root[data-play-band='1'] .overlay[data-overlay='fail'] { padding-bottom: calc(12px + var(--play-band) + var(--play-band-bottom)); }
 
-/* FBIG (review UX-9): a card flipped to the top starts its content below the FB safe zone; the
-   flip decision counts the taller card (hint-card.ts fbTopInset). */
+/* Retired by Phase 2d.1 (the card is anchored to the board, no data-placement any more); kept until I-3
+   for review2b-css.spec's FB-safe check (requests-G3 H2). */
 :root[data-fb-safe] .overlay[data-overlay='hint'][data-placement='top'] .hint-card { padding-top: max(calc(16px + var(--safe-top)), var(--fb-safe)); }
 
 @keyframes mw-sheet-down { from { opacity: 0; transform: translateY(-24px); } to { opacity: 1; transform: none; } }
@@ -222,12 +241,6 @@
 @media (max-height: 639px) {
   .overlay__art > svg, .fail__art > svg { width: 120px; height: 120px; }
   .overlay[data-overlay='fail'] .overlay__title { font-size: var(--fs-xxl); }
-  .hint-card { padding: 12px; }
-  .hint-card__text { font-size: var(--fs-m); }
-  .hint-card__icon { width: 36px; height: 36px; padding: 6px; }
-  .hint-card__actions { margin-top: 10px; }
-  .overlay[data-overlay='hint'][data-placement='top'] .hint-card { padding-top: calc(12px + var(--safe-top)); }
-  :root[data-fb-safe] .overlay[data-overlay='hint'][data-placement='top'] .hint-card { padding-top: max(calc(12px + var(--safe-top)), var(--fb-safe)); }
   /* Compact coach card: it fits between the top bar and the board, or below the board (UX-06). */
   .coach__card { padding: 10px 14px; }
   .coach__text { font-size: var(--fs-m); line-height: 1.35; }

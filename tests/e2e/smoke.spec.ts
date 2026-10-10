@@ -13,9 +13,18 @@
 // [data-done] = the cats placed); the Score sits in the game bar (.top-bar--game .points-pill__n);
 // the mouse (a tap → O2 → 3 more X marks, none on a cat's tile; the M key); the level-start toast on a
 // fresh level, not on a resumed one.
+// Phase 2d.1 (G1, docs/phase2d/helpers-spec.md §7.7): the mouse visits its three tiles in pick order
+// (the X under it lands as it leaves: only the first at ≈ 1.2 s), the board locked for the run; the
+// kitty's cat goes on the fewest-candidates region's tile and its "+576" reaches the Score after the
+// star (0 at 1 s, 576 by 1.8 s) with the head's face; the hint's ghosts are exactly the open step's
+// Empty effect tiles, Apply closes it at once and crosses exactly those, and a completed line gets
+// one "Done!" label per anchor; the two tickers replace the start toast.
 import { expect, test, type Page } from '@playwright/test';
 import type { E2EHooks } from '../../src/app/boot';
+import type { Puzzle } from '../../src/engine/types';
+import { mouseSeed, pickMouseCells } from '../../src/game/mouse';
 import { defaults } from '../../src/game/save';
+import { pickKittyCell } from '../../src/workers/hint-chunk';
 import { periodKeyAt, pointsRuleFor, runTotal } from '../../src/game/scoring';
 import type { InProgressV2, SaveData } from '../../src/game/types';
 
@@ -509,30 +518,79 @@ test('20 · the heads pill: one head per colour, [data-done] follows the cats pl
 /** The X marks on the board now, by cell index. */
 const markCells = async (page: Page): Promise<number[]> => ((await game(page))?.cells ?? []).flatMap((v, i) => (v === 1 ? [i] : []));
 
-test('21 · the mouse (web, free): a tap → O2 → 3 more X marks, none on a cat\'s tile; then the shared countdown', async ({ page }) => {
+/** The puzzle and board of the page, as plain arrays (the picker's input). */
+const boardOf = (page: Page) =>
+  page.evaluate(() => {
+    const g = (window as TestWindow).__mewdoku?.state();
+    if (!g) return null;
+    return { id: g.puzzle.id, n: g.puzzle.n, regions: Array.from(g.puzzle.regions), solution: Array.from(g.puzzle.solution), cells: Array.from(g.cells) };
+  });
+type BoardSnap = NonNullable<Awaited<ReturnType<typeof boardOf>>>;
+const puzzleOf = (b: BoardSnap): Puzzle => ({
+  id: b.id,
+  n: b.n,
+  k: 1,
+  regions: Uint8Array.from(b.regions),
+  solution: Uint8Array.from(b.solution),
+  givens: [],
+  grade: 1,
+  effort: 1,
+  hard: false,
+});
+/** Cell indexes whose X is visible now (marked and no longer pending under the mouse). */
+const visibleX = (page: Page): Promise<number[]> =>
+  page.evaluate(() =>
+    Array.from(document.querySelectorAll<HTMLElement>('.board .cell')).flatMap((el, i) => (el.dataset.s === 'm' && !el.classList.contains('fx-pend') ? [i] : [])),
+  );
+
+test('21 · the mouse (web, free): O2 → 3 X marks off the solution, visited one by one in pick order, the board locked for the run; then the shared countdown', async ({ page }) => {
   await open(page, '?ads=unsupported', returning());
   await playLevel(page);
   const mouse = page.locator('.tool-bar .tool--mouse');
   await expect(mouse).toBeVisible();
   await expect(mouse).toBeEnabled();
   await expect(mouse).toHaveAttribute('aria-label', 'Mouse: crosses out 3 tiles that have no cat');
-  const before = await markCells(page);
-  expect(before).toEqual([]);
+  expect(await markCells(page)).toEqual([]);
+  const snap = (await boardOf(page)) as BoardSnap;
+  // 2d.1 §1.3: the pick order (the seeded shuffle of the first use in this attempt) is the visit order.
+  const order = pickMouseCells({ puzzle: puzzleOf(snap), cells: Uint8Array.from(snap.cells) }, 3, mouseSeed(snap.id, 0));
   await mouse.click();
   const prompt = page.locator('[data-overlay="rewarded"]');
   await expect(prompt).toBeVisible();
   await expect(prompt).toContainText('Call the mouse?');
   await prompt.getByRole('button', { name: 'Take it' }).click();
+  // The state holds the three marks at once (the board hides each X until the mouse leaves its tile).
+  await expect.poll(() => markCells(page), { timeout: 5_000 }).toEqual([...order].sort((a, b) => a - b));
+  const t0 = Date.now();
   await expect(page.locator('.cell[data-s="m"]')).toHaveCount(3);
-  const sol = await solution(page);
-  const n = sol.length;
-  for (const i of await markCells(page)) expect(sol[Math.floor(i / n)]).not.toBe(i % n);
+  for (const i of order) expect(snap.solution[Math.floor(i / snap.n)]).not.toBe(i % snap.n);
   expect((await app(page))?.save.stock).toEqual(returning().stock); // no stock spent or granted
+  // The board is busy for the run (mouseRunMs = 2 975 ms): a tap on a free tile is ignored.
+  await expect(page.locator('.board')).toHaveAttribute('aria-busy', 'true');
+  const free = snap.cells.findIndex((v, i) => v === 0 && !order.includes(i) && snap.solution[Math.floor(i / snap.n)] !== i % snap.n);
+  const at = await cell(page, free).boundingBox();
+  if (!at) throw new Error('no cell');
+  await page.mouse.click(at.x + at.width / 2, at.y + at.height / 2); // a raw tap (no actionability wait)
+  await page.waitForTimeout(100);
+  expect((await game(page))?.cells[free]).toBe(0);
+  // The mouse sits on the first picked tile; at ≈ 1.2 s only that tile's X has landed (850 ms; the
+  // second lands at 1 785 ms).
+  await expect(page.locator('.board > .board__mouse')).toHaveAttribute('data-cell', String(order[0]));
+  await page.waitForTimeout(Math.max(0, 1_250 - (Date.now() - t0)));
+  expect(await visibleX(page)).toEqual([order[0]]);
+  await expect(page.locator('.board > .board__mouse')).toHaveAttribute('data-cell', String(order[1]));
+  // After the run: every X shows, the board takes taps again.
+  await page.waitForTimeout(Math.max(0, 3_200 - (Date.now() - t0)));
+  expect((await visibleX(page)).sort((a, b) => a - b)).toEqual([...order].sort((a, b) => a - b));
+  await expect(page.locator('.board__mouse')).toHaveCount(0);
+  await expect(page.locator('.board')).not.toHaveAttribute('aria-busy', 'true');
+  await cell(page, free).click();
+  expect((await game(page))?.cells[free]).toBe(1);
   // The free grant started the shared cooldown: the next tap only shows the countdown.
   await mouse.click();
   await expect(page.getByText(/The mouse is back in \d+:\d\d/)).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(page.locator('.cell[data-s="m"]')).toHaveCount(3);
+  await expect(page.locator('.cell[data-s="m"]')).toHaveCount(4);
 });
 
 test('22 · the M key calls the mouse (a video with the mock ads); the X marks stay on a reload', async ({ page }) => {
@@ -553,12 +611,15 @@ test('22 · the M key calls the mouse (a video with the mock ads); the X marks s
   expect(await markCells(page)).toEqual(marks);
 });
 
-test('23 · the level-start toast shows on a fresh level and on Retry, never on a resumed board', async ({ page }) => {
+test('23 · the two level-start tickers on a fresh level and on Retry (line 1 = the Retry line), never on a resumed board', async ({ page }) => {
   await open(page, '?ads=unsupported', returning());
   await page.locator('.home__play').click();
-  const toast = page.locator('.start-toast');
-  await expect(toast).toHaveAttribute('data-kind', 'level', { timeout: 3000 });
-  await expect(toast).toHaveAttribute('aria-hidden', 'true');
+  const tickers = page.locator('.tickers > .ticker');
+  await expect(tickers).toHaveCount(2, { timeout: 3000 });
+  await expect(page.locator('.ticker[data-line="1"]')).toHaveAttribute('data-key', /^(ticker\.cats|toast\.start\.level)$/);
+  await expect(page.locator('.ticker[data-line="2"]')).toHaveAttribute('data-key', /^(ticker\.|period\.pill\.)/);
+  await expect(page.locator('.tickers')).toHaveAttribute('aria-hidden', 'true');
+  await expect(page.locator('.start-toast')).toHaveCount(0);
   await playing(page);
   await cell(page, (await wrongCells(page, 1))[0] as number).click(); // a mark: the board is saved
   await page.waitForTimeout(800);
@@ -566,14 +627,110 @@ test('23 · the level-start toast shows on a fresh level and on Retry, never on 
   await ready(page, 'home');
   await page.locator('.home__play').click();
   await playing(page);
-  await page.waitForTimeout(800); // past the toast's delay and entry
-  await expect(page.locator('.start-toast')).toHaveCount(0);
-  // Retry after a loss: 'retry'.
+  await page.waitForTimeout(800); // past line 2's delay
+  await expect(page.locator('.ticker')).toHaveCount(0);
+  // Retry after a loss: line 1 says so.
   for (const w of await wrongCells(page, 4)) {
     if ((await game(page))?.status !== 'playing') break;
     await dbl(page, w);
   }
   await expect(page.getByRole('button', { name: 'Retry level' })).toBeEnabled();
   await page.getByRole('button', { name: 'Retry level' }).click();
-  await expect(page.locator('.start-toast')).toHaveAttribute('data-kind', 'retry', { timeout: 3000 });
+  await expect(page.locator('.ticker[data-line="1"]')).toHaveAttribute('data-key', 'toast.start.retry', { timeout: 3000 });
+});
+
+// ── Phase 2d.1 (helpers-spec §7.7): the kitty, the hint ──
+
+/** The units complete in `after` and not in `before`, each with its anchor (the last changed tile in reading order). */
+function doneUnits(b: BoardSnap, before: number[], after: number[]): { kind: string; index: number; anchor: number }[] {
+  const n = b.n;
+  const units: { kind: string; index: number; cells: number[] }[] = [];
+  for (let r = 0; r < n; r++) units.push({ kind: 'row', index: r, cells: Array.from({ length: n }, (_, c) => r * n + c) });
+  for (let c = 0; c < n; c++) units.push({ kind: 'col', index: c, cells: Array.from({ length: n }, (_, r) => r * n + c) });
+  for (let g = 0; g < n; g++) units.push({ kind: 'region', index: g, cells: b.regions.flatMap((x, i) => (x === g ? [i] : [])) });
+  const complete = (cells: number[], board: number[]): boolean =>
+    cells.filter((i) => board[i] === 2 || board[i] === 4).length === 1 && cells.every((i) => board[i] !== 0);
+  const out: { kind: string; index: number; anchor: number }[] = [];
+  for (const u of units) {
+    if (!complete(u.cells, after) || complete(u.cells, before)) continue;
+    const changed = u.cells.filter((i) => before[i] !== after[i]);
+    out.push({ kind: u.kind, index: u.index, anchor: Math.max(...changed) });
+  }
+  return out;
+}
+
+test('24 · the kitty at run 0 on a fresh level: a cat on the fewest-candidates region\'s cell, "+576" lands in the Score after the star (0 at 1 s, 576 by 1.8 s), the head shows the face', async ({ page }) => {
+  await open(page, '?ads=unsupported', returning());
+  await playLevel(page);
+  // The lazy fx chunk (points, burst, labels) is prefetched after the game screen mounts.
+  await expect(page.locator('.game-fx[data-celebrate="ready"]')).toBeAttached({ timeout: 10_000 });
+  const snap = (await boardOf(page)) as BoardSnap;
+  const target = pickKittyCell(puzzleOf(snap), Uint8Array.from(snap.cells));
+  await expect(points(page)).toBeVisible();
+  await pointsShow(page, '0');
+  await page.locator('.tool-bar .tool--paw').click();
+  await expect.poll(async () => (await game(page))?.cells[target], { timeout: 5_000 }).toBe(2);
+  const t0 = Date.now();
+  expect(snap.solution[Math.floor(target / snap.n)]).toBe(target % snap.n);
+  await page.waitForTimeout(Math.max(0, 1_000 - (Date.now() - t0)));
+  await expect(page.locator('.top-bar--game .points-pill__n')).toHaveText('0'); // the star is still flying
+  await page.waitForTimeout(Math.max(0, 1_800 - (Date.now() - t0)));
+  await expect(page.locator('.top-bar--game .points-pill__n')).toHaveText('576');
+  const color = await page.evaluate((i) => {
+    const g = (window as TestWindow).__mewdoku?.app();
+    const region = (window as TestWindow).__mewdoku?.state()?.puzzle.regions[i] ?? -1;
+    return g?.session?.colors[region] ?? -1;
+  }, target);
+  await expect(page.locator(`.pill--heads .head[data-done][data-color="${color}"] .head__face`)).toBeAttached();
+  expect((await app(page))?.save.stock.kitties).toBe(returning().stock.kitties - 1);
+});
+
+test('25 · the hint: ghosts on exactly the open step\'s Empty effect tiles; Apply closes at once and crosses exactly those; a completed line gets one label per anchor', async ({ page }) => {
+  await open(page, '?ads=unsupported', returning());
+  await playLevel(page);
+  await expect(page.locator('.game-fx[data-celebrate="ready"]')).toBeAttached({ timeout: 10_000 });
+  const sol = await solution(page);
+  const n = sol.length;
+  // A cat on row 1: the first hint is its shadow (its row, column and neighbours), which completes the row.
+  await dbl(page, sol[0] as number);
+  await page.waitForTimeout(1_500); // the cat's own sequence is over
+  const before = ((await boardOf(page)) as BoardSnap).cells;
+  await hintTool(page).click();
+  await expect(page.locator('.overlay[data-overlay="hint"]')).toBeVisible();
+  const step = await page.evaluate(() => {
+    const h = (window as TestWindow).__mewdoku?.state()?.openHint;
+    return h ? { kind: h.kind, focus: h.focusCells, effects: h.effectCells, place: h.placeCell ?? null } : null;
+  });
+  expect(step?.kind).toBe('shadow');
+  const empties = (step?.effects ?? []).filter((i) => before[i] === 0).sort((a, b) => a - b);
+  // Cut-outs = the focus ∪ the Empty effects (no placeCell on a shadow step); the ghosts are the cut-outs minus the focus.
+  await expect.poll(async () => (await page.locator('.cell[data-ghost="x"][data-s="e"]').count()), { timeout: 3_000 }).toBe(empties.length);
+  const ghosts = await page.evaluate(() =>
+    Array.from(document.querySelectorAll<HTMLElement>('.board .cell')).flatMap((el, i) => (el.dataset.ghost === 'x' ? [i] : [])),
+  );
+  expect(ghosts).toEqual(empties);
+  // Apply: the overlay is gone in the next frame (no exit transition).
+  await page.getByRole('button', { name: 'Apply' }).click();
+  const goneNextFrame = await page.evaluate(
+    () =>
+      new Promise<boolean>((resolve) =>
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            const el = document.querySelector<HTMLElement>('.overlay[data-overlay="hint"]');
+            resolve(!el || el.getBoundingClientRect().height === 0 || getComputedStyle(el).visibility === 'hidden' || Number(getComputedStyle(el).opacity) === 0);
+          }),
+        ),
+      ),
+  );
+  expect(goneNextFrame).toBe(true);
+  const snap = (await boardOf(page)) as BoardSnap;
+  const added = snap.cells.flatMap((v, i) => (v === 1 && before[i] !== 1 ? [i] : []));
+  expect(added).toEqual(ghosts);
+  // One "Done!" label per anchor of the completed units (row 1 at least), within its 720 ms.
+  const units = doneUnits(snap, before, snap.cells);
+  expect(units.some((u) => u.kind === 'row' && u.index === 0)).toBe(true);
+  const anchors = [...new Set(units.map((u) => u.anchor))].sort((a, b) => a - b);
+  const labels = await page.locator('.game-fx .fx-done-label').evaluateAll((els) => els.map((e) => Number(e.getAttribute('data-anchor'))));
+  expect(labels.sort((a, b) => a - b)).toEqual(anchors);
+  expect(n).toBeGreaterThan(0);
 });

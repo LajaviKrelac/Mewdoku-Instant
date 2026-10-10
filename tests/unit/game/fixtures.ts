@@ -86,3 +86,24 @@ export function rec5(i?: number): LevelRecord {
 
 /** Event types only, for compact assertions. */
 export const types = (events: readonly GameEvent[]): string[] => events.map((e) => e.type);
+
+/**
+ * Phase 2d.1 (helpers-spec §7.6): OUR OWN 9×9 (random region growth, unique solution checked with
+ * engine/solver countSolutions), built to share the properties the helper recordings showed (a
+ * one-tile region in the top-right corner whose cat is forced at once); never the original's layout.
+ *
+ *   row 0: A A A A A A B B C      solution columns per row: 8 6 4 7 5 1 3 0 2
+ *   row 1: A A A A A A B B B      C = the one-tile region at (0,8)
+ *   row 2: D D A E A A F F F
+ *   row 3: D D E E A G G F F
+ *   row 4: D D E E A G G G G
+ *   row 5: D D E E E E G G G
+ *   row 6: H H E E E E G G G
+ *   row 7: I H H E E E E G G
+ *   row 8: I H H E E E E G G
+ */
+export const R9C = 'AAAAAABBCAAAAAABBBDDAEAAFFFDDEEAGGFFDDEEAGGGGDDEEEEGGGHHEEEEGGGIHHEEEEGGIHHEEEEGG';
+export const S9C = '864751302';
+export const P9C = makePuzzle('L90', R9C, S9C);
+/** Solution cells of P9C in row order ((0,8) first). */
+export const SOL9C = [...S9C].map((ch, r) => r * 9 + parseInt(ch, 36));

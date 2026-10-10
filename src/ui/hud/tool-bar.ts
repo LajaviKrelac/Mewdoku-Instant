@@ -10,7 +10,11 @@
 //   its slot with data-off: invisible, inert, out of the Tab order, so the kitty and the bulb never move.
 // [data-pulse] on the helper the game suggests (GameView.pulse): the disc and its art scale 1 → 1.08
 // with a warm glow on a 1.5 s cycle (hud.css; reduced motion: none). Disabled helpers never pulse.
-// Classes: .tool-bar > button.tool.tool--paw|bulb|mouse[data-pulse][data-empty][data-free][data-off]
+// Phase 2d.1 (helpers-spec §4.5, §1.2): the whole control presses to 0.90 (:active, hud.css) and fires
+// on release; a pointer release springs back via 1.04 (.tool--spring, 300 ms; not for a key press).
+// [data-busy] on the row during a helper run (the mouse, the kitty's reveal, the hint): the tools are
+// inert without the disabled fade.
+// Classes: .tool-bar[data-busy] > button.tool.tool--paw|bulb|mouse[data-pulse][data-empty][data-free][data-off]
 //            > .tool__disc > svg.tool__icon ; .tool__badge.tool__badge--count|--video|--free(.tool__badge--bump)
 import { cfg } from '../../app/config';
 import { formatNumber, onLocaleChanged, t } from '../../i18n';
@@ -30,6 +34,8 @@ export interface ToolBarProps {
   readonly videoRefill: boolean;
   /** Phase 2d §1.11: the helper that pulses now (GameView.pulse); null = none. */
   readonly pulse: 'paw' | 'bulb' | null;
+  /** Phase 2d.1 §1.2: a helper run is on (input locked, status kitty or hint): inert, no disabled fade. Optional (absent = false). */
+  readonly busy?: boolean;
 }
 
 export interface ToolBarCallbacks {
@@ -64,7 +70,18 @@ function tool(kind: ToolKind, onPress: () => void): ToolRefs {
   badge.className = 'tool__badge';
   badge.setAttribute('aria-hidden', 'true');
   btn.append(disc, badge);
-  btn.addEventListener('click', onPress);
+  btn.addEventListener('click', (e) => {
+    // A pointer release springs back (§4.5); a key press (detail 0) presses without it.
+    if (e.detail > 0) {
+      btn.classList.remove('tool--spring');
+      void btn.offsetWidth;
+      btn.classList.add('tool--spring');
+    }
+    onPress();
+  });
+  btn.addEventListener('animationend', (e) => {
+    if (e.animationName === 'tool-spring') btn.classList.remove('tool--spring');
+  });
   return { btn, badge };
 }
 
@@ -94,6 +111,7 @@ export function createToolBar(props: ToolBarProps, cb: ToolBarCallbacks): ToolBa
 
   let prev: ToolBarProps | null = null;
   const render = (p: ToolBarProps): void => {
+    el.toggleAttribute('data-busy', p.busy === true);
     if (
       prev &&
       prev.hints === p.hints &&

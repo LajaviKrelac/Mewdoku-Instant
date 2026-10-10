@@ -80,7 +80,7 @@
    not mirror either. The values are the source rules' values, mirrored. */
 
 /* hud.css (G3, Phase 2d): the gear's dot mirrors with the gear. The bar's discs, the span between them,
-   the "+N" chips, the cards' diagrams and the start toast sit at their static inline start moved by
+   the cards' diagrams and the start toast sit at their static inline start moved by
    margin-inline-start, so they mirror on their own. */
 [dir='rtl'] .top-bar--game .top-bar__dot {
   left: -6.1%;

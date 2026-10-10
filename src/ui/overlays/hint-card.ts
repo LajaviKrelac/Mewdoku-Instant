@@ -1,36 +1,47 @@
-// Owner: B (Phase 2b; was ui-shell)
-// O1 hint card (02 §5, §9.1): bottom sheet with the explanation, [Apply] and [×]. The board's dimming
-// and focus outline come from GameView.highlight. Renders the 02 §9.1 templates via i18n.
-// The root holds a CLEAR full-screen scrim, so the dimmed board stays visible while a tap on it
-// closes the card (HINT_CLOSE), as does × or Esc (dismiss()). In the tutorial (step 5 accepts Apply
-// only, 02 §11.5) the card is not closable: no ×, and Esc / scrim taps are not swallowed.
-// a11y: the dialog's description is the sentence plus a screen-reader-only line naming the tile it
-// points at ("Highlighted tile: row 4, column 4, Apricot."), since the board is inert behind it.
-// Placement is measured on the next animation frame (RP-3): reading the board's rect inside open()
-// forced a full style recalc right after the board's hint highlight changed.
+// Owner: B (Phase 2b; was ui-shell); G3 (Phase 2d.1: the hint as a modal walkthrough)
+// O1 hint overlay (02 §5, §9.1; Phase 2d.1 helpers-spec §3.2–§3.5, §3.7, D-2d1-7, measured on the user's
+// v3 recording and rebuilt in our own words): the overlay opens at once on the bulb's release:
+// - a black dim at 75 % over the whole screen (top bar and helper row included) that fades in linearly
+//   over fx.hint.dimMs, with a hole at every tile the hint is about (hintCutouts: the focus, the Empty
+//   tiles it will cross, the tile of its cat; the board's own tiles and ghost X's show through, no ring);
+// - a near-white card over the rule cards, its bottom cardGap above the board card, growing upward when
+//   the sentence needs more lines (never above the top bar; past that the text scrolls inside it), with
+//   our hint.* sentence (rich text with colour swatches, PAR-7) and no icon or visible title;
+// - our orange Apply pill (hint.apply), applyGap below the board card, centred on the column, over the
+//   helper discs; it presses to 0.90 and applies on release.
+// The banner hides meanwhile (the session's banner flow, D-2d1-13). Apply closes the overlay in its own
+// frame ([data-instant]: no entrance or exit animation; the board's ghosts go with it). A tap on the dim,
+// Esc and the system back close it (HINT_CLOSE); a visually hidden "Close hint" button stays for keyboard
+// and screen-reader users and shows, while focused, as a 44 × 44 round button on the card's top
+// inline-end corner. In the tutorial (step 5 accepts Apply only, 02 §11.5) nothing closes it.
+// a11y: the dialog keeps its name ("Hint") and its description (the sentence plus a screen-reader-only
+// line naming the tile it points at, A11Y-7); Apply has the first focus; the dim is aria-hidden.
+// Layout is measured on the next animation frame (RP-3: reading the board's rect inside open() forced a
+// full style recalc right after the board's hint highlight changed); the panel stays hidden until then,
+// and the dim's holes are measured again at fx.hint.dimMs (a tile still squishing from the last X).
 //
-// Classes: .overlay[data-overlay=hint][data-placement] > .overlay__scrim--clear + .overlay__panel--sheet.hint-card
-//          .hint-card__icon .hint-card__text .hint-card__where .hint-card__actions
-// Review fixes: the sentence names each colour with a swatch in its tile colour (PAR-7, rich text;
-// same words as hintText()); static labels follow the language (A11Y-I18N-1); on FBIG a top-placed
-// card keeps its content below the FB top-left safe zone (UX-9; :root[data-fb-safe], set by the top bar).
+// Classes: .overlay[data-overlay=hint][data-instant][data-placed] > svg.hint-dim + .overlay__scrim--clear
+//          + .overlay__panel.hint-sheet > (h2.visually-hidden) .hint-card > .hint-card__text + .hint-card__where
+//          + button.hint-close.visually-hidden-focusable ; button.hint-apply
+// Review fixes: static labels follow the language (A11Y-I18N-1).
 import { cfg } from '../../app/config';
-import type { HintStep } from '../../engine/types';
+import type { CellIndex, HintStep } from '../../engine/types';
 import { capitalizeFirst, t } from '../../i18n';
-import { icon } from '../art/sprite';
-import { readViewport } from '../board/layout';
 import { h, setText, type OverlayView } from '../dom';
 import { createLocaleText } from '../locale-text';
 import { setRichText } from '../rich-text';
-import { closeButton, createOverlayShell, makeButton } from './overlay-base';
-import { hintRichText, regionName, type HintTextContext } from './hint-text';
+import { closeButton, createOverlayShell, nextId } from './overlay-base';
+import { hintCutouts, hintRichText, regionName, type HintTextContext } from './hint-text';
 
-export { hintRichText, hintText, unitKindPlural, unitListName, unitName, type HintTextContext } from './hint-text';
+export { hintCutouts, hintRichText, hintText, unitKindPlural, unitListName, unitName, type HintTextContext } from './hint-text';
 
-/** Top padding of a compact top-placed card (overlay-chunk.css): the FB inset adds what exceeds it. */
+/** Top padding of a compact top-placed card (2b): the FB inset adds what exceeds it. */
 const TOP_PAD_COMPACT = 12;
 
-/** Extra height a top-placed card gets on FBIG, where its content starts below the safe zone (UX-9). */
+/**
+ * Extra height a top-placed card gets on FBIG (UX-9).
+ * @deprecated phase2d.1: the sheet placement is gone (the card is anchored to the board); removed at I-3.
+ */
 export function fbTopInset(doc: Document, safeTop: number): number {
   if (!doc.documentElement.hasAttribute('data-fb-safe')) return safeTop;
   return Math.max(safeTop, cfg.layout.fbSafeZonePx - TOP_PAD_COMPACT);
@@ -39,18 +50,24 @@ export function fbTopInset(doc: Document, safeTop: number): number {
 export interface HintCardProps extends HintTextContext {
   readonly step: HintStep;
   onApply(): void;
-  /** ×, Esc or a tap on the dimmed area (HINT_CLOSE). */
+  /** A tap on the dim, Esc, the system back or the hidden close button (HINT_CLOSE). */
   onClose(): void;
   /**
    * Optional (default: true, except while the tutorial coach is up, whose step 5 accepts Apply only,
-   * 02 §11.5): false hides the × and makes Esc / scrim taps do nothing.
+   * 02 §11.5): false makes the close button, Esc and dim taps do nothing.
    */
   readonly closable?: boolean;
   /**
-   * Optional: the board's client rect (GameScreen.boardRect). When the bottom sheet would cover it,
-   * the sheet moves to the top of the screen, over the top bar and HUD (small or wide screens).
+   * Optional: the board's client rect (GameScreen.boardRect).
+   * @deprecated phase2d.1: the sheet placement is gone; removed at I-3 (read as boardRect's fallback meanwhile).
    */
   avoidRect?(): DOMRect | null;
+  /** Phase 2d.1: the cell states when the hint opened (which effect cells are Empty). Optional until I-3. */
+  readonly cells?: Readonly<Uint8Array>;
+  /** Phase 2d.1: GameScreen.boardRect (the card and Apply are anchored to the board card). Optional until I-3. */
+  boardRect?(): DOMRect | null;
+  /** Phase 2d.1: GameScreen.cellRect (the dim's tile holes). Optional until I-3. */
+  cellRect?(cell: CellIndex): DOMRect | null;
 }
 
 /**
@@ -73,18 +90,15 @@ export function hintLocation(step: HintStep, ctx: HintTextContext): string | nul
   return label === undefined ? t('a11y.hintAt', { row, col }) : t('a11y.hintAtColor', { row, col, color: regionName(label, ctx) });
 }
 
-/** Gap between a top-placed sheet and the screen edge (CSS px): none, the top sheet is flush. */
-const TOP_MARGIN = 0;
-
 /**
- * 'top' when the bottom sheet (`sheet`, measured at the bottom) overlaps `avoid` and the top slot
- * overlaps it less. The top sheet is flush with the screen edge and grows by the safe-area inset.
+ * 'top' when the bottom sheet overlaps `avoid` and the top slot overlaps it less (2b).
+ * @deprecated phase2d.1: the sheet placement is gone; removed at I-3.
  */
 export function sheetPlacement(sheet: { top: number; height: number }, avoid: { top: number; bottom: number } | null, safeTop = 0): 'bottom' | 'top' {
   if (!avoid) return 'bottom';
   const bottomOverlap = Math.max(0, avoid.bottom - sheet.top);
   if (bottomOverlap <= 0) return 'bottom';
-  const topOverlap = Math.max(0, TOP_MARGIN + safeTop + sheet.height - avoid.top);
+  const topOverlap = Math.max(0, safeTop + sheet.height - avoid.top);
   return topOverlap < bottomOverlap ? 'top' : 'bottom';
 }
 
@@ -92,6 +106,63 @@ export function sheetPlacement(sheet: { top: number; height: number }, avoid: { 
 function coachShown(doc: Document): boolean {
   return doc.querySelector('.coach:not([hidden])') !== null;
 }
+
+/** A rect in client px. */
+interface Box {
+  readonly left: number;
+  readonly top: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/** Where the card and Apply go (helpers-spec §3.2; px, × s): anchored to the board card, centred on it. */
+export interface HintLayout {
+  /** The card: inline position (left), its bottom edge (from the viewport top), width, min and max height. */
+  readonly card: { readonly left: number; readonly bottom: number; readonly width: number; readonly minH: number; readonly maxH: number };
+  readonly apply: { readonly left: number; readonly top: number; readonly width: number; readonly height: number };
+}
+
+/**
+ * The card's bottom cardGap · s above the board, Apply's top applyGap · s below it, both centred on the
+ * board; the card may grow up to the top bar's bottom (`ceiling`), never less than its min height.
+ */
+export function hintLayout(board: Box, s: number, ceiling: number): HintLayout {
+  const L = cfg.layout.hint;
+  const cx = board.left + board.width / 2;
+  const cardW = L.cardW * s;
+  const bottom = board.top - L.cardGap * s;
+  const minH = L.cardMinH * s;
+  const applyW = L.applyW * s;
+  return {
+    card: { left: cx - cardW / 2, bottom, width: cardW, minH, maxH: Math.max(minH, bottom - ceiling) },
+    apply: { left: cx - applyW / 2, top: board.top + board.height + L.applyGap * s, width: applyW, height: L.applyH * s },
+  };
+}
+
+/** A rounded rect as path data (clockwise), for the dim's even-odd holes. */
+function roundRect(r: Box, rad: number): string {
+  const k = Math.max(0, Math.min(rad, r.width / 2, r.height / 2));
+  const x = r.left;
+  const y = r.top;
+  const w = r.width;
+  const hh = r.height;
+  const f = (v: number): string => String(Math.round(v * 100) / 100);
+  return (
+    `M${f(x + k)} ${f(y)}H${f(x + w - k)}A${f(k)} ${f(k)} 0 0 1 ${f(x + w)} ${f(y + k)}V${f(y + hh - k)}` +
+    `A${f(k)} ${f(k)} 0 0 1 ${f(x + w - k)} ${f(y + hh)}H${f(x + k)}A${f(k)} ${f(k)} 0 0 1 ${f(x)} ${f(y + hh - k)}` +
+    `V${f(y + k)}A${f(k)} ${f(k)} 0 0 1 ${f(x + k)} ${f(y)}Z`
+  );
+}
+
+/** The dim's path: the viewport with one rounded hole per cut-out tile (tile radius: layout.game.tileRadiusFraction). */
+export function dimPath(vw: number, vh: number, holes: readonly Box[]): string {
+  const f = (v: number): string => String(Math.round(v * 100) / 100);
+  let d = `M0 0H${f(vw)}V${f(vh)}H0Z`;
+  for (const r of holes) d += roundRect(r, r.width * cfg.layout.game.tileRadiusFraction);
+  return d;
+}
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
 
 export function createHintCard(): OverlayView<HintCardProps> {
   let props: HintCardProps | null = null;
@@ -102,51 +173,85 @@ export function createHintCard(): OverlayView<HintCardProps> {
     return true;
   };
   const shell = createOverlayShell({ id: 'hint', scrim: 'clear', panel: 'sheet', onScrimTap: () => void close() });
-  shell.panel.classList.add('hint-card');
+  shell.el.setAttribute('data-instant', '');
+  shell.panel.classList.remove('overlay__panel--sheet');
+  shell.panel.classList.add('hint-sheet');
+  const dim = document.createElementNS(SVG_NS, 'svg');
+  dim.setAttribute('class', 'hint-dim');
+  dim.setAttribute('aria-hidden', 'true');
+  dim.setAttribute('focusable', 'false');
+  const dimPathEl = document.createElementNS(SVG_NS, 'path');
+  dim.appendChild(dimPathEl);
+  shell.el.insertBefore(dim, shell.el.firstChild);
 
   const L = createLocaleText();
   const title = L.text(h('h2', { class: 'overlay__title visually-hidden', id: shell.titleId }), () => t('hint.title'));
-  const text = h('p', { class: 'hint-card__text' });
-  const where = h('span', { class: 'hint-card__where visually-hidden' });
-  const desc = h('div', { class: 'hint-card__desc', id: shell.descId }, text, where);
-  const apply = L.label(
-    makeButton({
-      variant: 'primary',
-      label: '',
-      autofocus: true,
-      className: 'hint-card__apply',
-      onPress: () => props?.onApply(),
-    }),
-    () => t('hint.apply'),
-  );
+  // The description: the sentence (the shell's desc id) and the screen-reader tile line.
+  const text = h('p', { class: 'hint-card__text', id: shell.descId });
+  const whereId = nextId('hint-where');
+  const where = h('span', { class: 'hint-card__where visually-hidden', id: whereId });
+  shell.panel.setAttribute('aria-describedby', `${shell.descId} ${whereId}`);
   const closeBtn = L.attr(closeButton(() => void close()), 'aria-label', () => t('hint.close'));
-  shell.panel.append(
-    h('div', { class: 'hint-card__row' }, icon('icon-bulb', { class: 'hint-card__icon' }), title, desc),
-    h('div', { class: 'overlay__actions hint-card__actions' }, apply, closeBtn),
-  );
+  closeBtn.classList.add('hint-close', 'visually-hidden-focusable');
+  const card = h('div', { class: 'hint-card' }, text, where, closeBtn);
+  // Our own pill, not a .btn--primary: white on --apply is large text at every scale (≥ 24 px, D-2d1-16).
+  const apply = L.label(h('button', { type: 'button', class: 'btn hint-apply', 'data-autofocus': true }, h('span', { class: 'btn__label' })), () => t('hint.apply'));
+  apply.addEventListener('click', () => props?.onApply());
+  shell.panel.append(title, card, apply);
 
   const win = (): Window | null => shell.el.ownerDocument.defaultView;
-  /** Measures at the bottom, then flips to the top if that covers the board less. Reads only. */
-  const measure = (): void => {
-    if (!props || !shell.isOpen()) return;
-    const avoid = props.avoidRect?.() ?? null;
-    if (!avoid) {
-      shell.el.dataset.placement = 'bottom';
-      return;
-    }
-    if (shell.el.dataset.placement !== 'bottom') {
-      // Measure the bottom slot; the flip below is applied before this frame paints.
-      shell.el.dataset.placement = 'bottom';
-    }
-    // offsetTop / offsetHeight ignore the sheet's entry animation (translateY), unlike a client rect;
-    // the overlay root is position:fixed at 0,0, so offsetTop is the client top.
-    const r = { top: shell.panel.offsetTop, height: shell.panel.offsetHeight };
+  const doc = (): Document => shell.el.ownerDocument;
+
+  /** The game screen's scale s and the top bar's bottom (the card's ceiling), read from the DOM. */
+  const screenMetrics = (): { s: number; ceiling: number } => {
+    const screen = doc().querySelector<HTMLElement>('.screen--game');
+    const s = parseFloat(screen?.style.getPropertyValue('--s') ?? '') || 1;
+    const bar = screen?.querySelector('.top-bar');
+    return { s, ceiling: bar ? bar.getBoundingClientRect().bottom : 0 };
+  };
+
+  /** The dim's holes, from the board's tile rects (re-read on resize and at dimMs). */
+  const drawDim = (): void => {
+    const p = props;
     const w = win();
-    const safeTop = fbTopInset(shell.el.ownerDocument, w ? readViewport(w).safeTop : 0);
-    const next = sheetPlacement(r, avoid, safeTop);
-    if (shell.el.dataset.placement !== next) shell.el.dataset.placement = next;
+    if (!p || !w || !shell.isOpen()) return;
+    const vw = w.innerWidth;
+    const vh = w.innerHeight;
+    dim.setAttribute('viewBox', `0 0 ${vw} ${vh}`);
+    const cells = p.cells ?? new Uint8Array(p.n * p.n);
+    const holes: Box[] = [];
+    if (p.cellRect) {
+      for (const c of hintCutouts(p.step, cells)) {
+        const r = p.cellRect(c);
+        if (r && r.width > 0) holes.push(r);
+      }
+    }
+    dimPathEl.setAttribute('d', dimPath(vw, vh, holes));
+  };
+
+  /** Places the card and Apply against the board card (reads layout once, then writes). */
+  const measure = (): void => {
+    const p = props;
+    if (!p || !shell.isOpen()) return;
+    const board = p.boardRect?.() ?? p.avoidRect?.() ?? null;
+    const st = shell.panel.style;
+    if (board && board.width > 0) {
+      const m = screenMetrics();
+      const lay = hintLayout(board, m.s, m.ceiling);
+      const vh = win()?.innerHeight ?? 0;
+      st.setProperty('--hs', String(m.s));
+      st.setProperty('--hc-l', `${lay.card.left}px`);
+      st.setProperty('--hc-b', `${vh - lay.card.bottom}px`);
+      st.setProperty('--hc-w', `${lay.card.width}px`);
+      st.setProperty('--hc-max', `${lay.card.maxH}px`);
+      st.setProperty('--ha-l', `${lay.apply.left}px`);
+      st.setProperty('--ha-t', `${lay.apply.top}px`);
+    }
+    drawDim();
+    shell.el.setAttribute('data-placed', '');
   };
   let raf = 0;
+  let redim: ReturnType<typeof setTimeout> | null = null;
   /** Placement runs on the next frame, after every DOM write of this open (one style recalc, RP-3). */
   const place = (): void => {
     const w = win();
@@ -163,6 +268,8 @@ export function createHintCard(): OverlayView<HintCardProps> {
   const stopPlace = (): void => {
     if (raf) win()?.cancelAnimationFrame(raf);
     raf = 0;
+    if (redim) clearTimeout(redim);
+    redim = null;
   };
 
   const render = (p: HintCardProps): void => {
@@ -178,7 +285,6 @@ export function createHintCard(): OverlayView<HintCardProps> {
     const loc = hintLocation(p.step, p);
     setText(where, loc ? ` ${loc}` : ''); // a space, so the description reads "…here. Highlighted tile…"
     shell.panel.dataset.kind = p.step.kind;
-    if (!shell.el.dataset.placement) shell.el.dataset.placement = 'bottom';
     place();
   };
 
@@ -191,10 +297,19 @@ export function createHintCard(): OverlayView<HintCardProps> {
     el: shell.el,
     modal: true,
     open(p) {
-      shell.el.dataset.placement = 'bottom';
+      shell.el.removeAttribute('data-placed');
+      shell.el.style.setProperty('--dim-ms', `${cfg.fx.hint.dimMs}ms`);
+      dimPathEl.removeAttribute('d');
+      // Un-hiding the root restarts the dim's CSS fade (overlay-chunk.css) on every open.
       shell.show();
       render(p);
       win()?.addEventListener('resize', place);
+      // The holes once more when the dim is complete: a tile still squishing from the last X at the
+      // bulb's release gave a transformed client rect (critic).
+      redim = setTimeout(() => {
+        redim = null;
+        drawDim();
+      }, cfg.fx.hint.dimMs);
     },
     update(p) {
       render(p);
@@ -202,6 +317,7 @@ export function createHintCard(): OverlayView<HintCardProps> {
     close() {
       win()?.removeEventListener('resize', place);
       stopPlace();
+      shell.el.removeAttribute('data-placed');
       shell.hide();
     },
     dismiss: close,

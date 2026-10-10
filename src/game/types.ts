@@ -5,6 +5,7 @@
 // catStreak / scoredRows, the POINTS event, the optional in-progress slot fields), fish-lives-spec
 // §3.1–§3.2, §10.10. The save stays v3; StreakRecord / SaveDataV3.streak are @deprecated (frozen).
 // Phase 2d (G1, docs/phase2d/look-spec.md §1.12): the mouse helper's MOUSE action and MARKED.source.
+// Phase 2d.1 (G1, docs/phase2d/helpers-spec.md §4.1): DoneUnit and the UNITS_DONE event.
 // Game state, actions, events (04 §4.2) and save data (04 §4.3, phase2b §9). PURE types.
 import type { LocaleId, ProductId } from '../app/config';
 import type { CellIndex, HintStep, Puzzle, PuzzleId } from '../engine/types';
@@ -112,8 +113,27 @@ export type Action =
 
 export type ActionType = Action['type'];
 
+/**
+ * Phase 2d.1 (helpers-spec §4.1, D-2d1-6): a row, column or colour region that became complete in
+ * this action: it holds its cat (Cat or Given) and every other tile is Mark or Wrong.
+ */
+export interface DoneUnit {
+  readonly kind: 'row' | 'col' | 'region';
+  /** Row or column, 0-based, or the region label. */
+  readonly index: number;
+  /**
+   * The unit's last tile among the tiles this action changed: the last in reading order (taps, paints,
+   * Apply, a cat, a mistake); for the mouse, the last in its visit order (MARKED.cells), i.e. the X
+   * that lands last. The label's anchor and the wave's reference.
+   */
+  readonly anchor: CellIndex;
+}
+
 export type GameEvent =
-  /** Phase 2d §1.12, §4.4: `source: 'mouse'` only on the MARKED of a MOUSE action (the board staggers its pops). */
+  /**
+   * Phase 2d §1.12, §4.4: `source: 'mouse'` only on the MARKED of a MOUSE action. Phase 2d.1 §1.3:
+   * the mouse's `cells` keep its pick order, which is the order the board visits them in.
+   */
   | { type: 'MARKED' | 'UNMARKED'; cells: CellIndex[]; source?: 'mouse' }
   | { type: 'CAT_PLACED'; cell: CellIndex; source: CatSource }
   | { type: 'CAT_REMOVED'; cell: CellIndex }
@@ -128,7 +148,15 @@ export type GameEvent =
    * Phase 2c.1 §3.2.2: right after the CAT_PLACED that scored, only when gained > 0: the increment,
    * the new running total (GameState.levelPoints) and the run s (GameState.catStreak).
    */
-  | { type: 'POINTS'; cell: CellIndex; gained: number; total: number; streak: number };
+  | { type: 'POINTS'; cell: CellIndex; gained: number; total: number; streak: number }
+  /**
+   * Phase 2d.1 §4.1: after MARKED / CAT_PLACED / POINTS / REGION_DONE and before WON. A unit is complete
+   * when it holds its cat (Cat or Given) and every other tile is Mark or Wrong; listed once per unit
+   * that was not complete before the action: rows (ascending), then columns, then regions. Never on an
+   * unmark, never in an action that ends in LOST (a mistake that completes a unit otherwise emits it).
+   * In HINT_APPLY, HINT_APPLIED stays the first event (2b order) and UNITS_DONE follows the marks and the cat.
+   */
+  | { type: 'UNITS_DONE'; units: readonly DoneUnit[] };
 
 export type GameEventType = GameEvent['type'];
 

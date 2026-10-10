@@ -1,4 +1,4 @@
-// Owner: B (Phase 2b)
+// Owner: B (Phase 2b); G3 (Phase 2d.1: mouse, points, unit_done)
 // Synthesised sound recipes (02 §16): oscillators + envelopes + filtered noise, no audio files.
 // Every sound is our own design: a list of tone and noise "voices" scheduled from ctx.currentTime.
 // Voice peaks stay ≤ 0.55 so overlapping sounds do not clip after the -12 dBFS master gain.
@@ -19,11 +19,14 @@ export type SfxId =
   | 'ui' // click
   | 'fish_pop' // phase2b §2.2: soft water-drop "bloop" as a fish pops at its cat
   | 'fish_plink' // phase2b §2.2: bright arrival "plink", +audio.fishPlinkStepSemitones per fish (opts.index)
-  | 'board_in'; // review PAR-8: a soft rising swell as a board enters (01 §13.1 lists a board-entry cue)
+  | 'board_in' // review PAR-8: a soft rising swell as a board enters (01 §13.1 lists a board-entry cue)
+  | 'mouse' // Phase 2d.1 §1.6: two short high squeaks as the mouse arrives on a tile (ours; the recordings are silent)
+  | 'points' // Phase 2d.1 §2.5: a soft bright "ting" as the star lands on the Score (ours)
+  | 'unit_done'; // Phase 2d.1 §4.3: a bright two-note rise when a row, column or colour completes; pitch steps up with opts.index
 
 export const SFX_IDS: readonly SfxId[] = [
   'mark', 'unmark', 'cat', 'region', 'mistake', 'heart_last', 'win', 'hint_open', 'hint_apply', 'kitty', 'ui', 'fish_pop', 'fish_plink',
-  'board_in',
+  'board_in', 'mouse', 'points', 'unit_done',
 ];
 
 export interface Sfx {
@@ -185,6 +188,33 @@ export function recipe(id: SfxId, opts: { index?: number } = {}, rand: () => num
         tone('sine', 587.33, 0.16, 0.4, 0.13, { attack: 0.08 }),
         tone('triangle', 1174.66, 0.18, 0.22, 0.03, { attack: 0.05 }),
       ];
+    // Phase 2d.1 §1.6, our own design (no sound was measured): two short squeaks ≈ 120 ms, each a sine
+    // that bends up then a touch down, the second a little higher; quiet (≤ 0.12), it plays per visit.
+    case 'mouse':
+      return [
+        tone('sine', 2350, 0, 0.045, 0.12, { f1: 3100, attack: 0.004 }),
+        tone('sine', 2650, 0.065, 0.055, 0.11, { f1: 3400, attack: 0.004 }),
+        tone('triangle', 4700, 0.07, 0.03, 0.02, { attack: 0.003 }),
+      ];
+    // Phase 2d.1 §2.5, ours: the star lands. A bell "ting" on A6 with an inharmonic partial and a soft
+    // high air click; shorter and brighter than the fish plink.
+    case 'points':
+      return [
+        tone('sine', 1760, 0, 0.32, 0.16, { attack: 0.002 }),
+        tone('sine', 1760 * 2.76, 0, 0.12, 0.035, { attack: 0.002 }),
+        noise('highpass', 7000, 0, 0.05, 0.03, { attack: 0.002 }),
+      ];
+    // Phase 2d.1 §4.3, ours: a bright two-note rise (a fourth) that steps up the pentatonic ladder with
+    // opts.index (units completed in the action − 1).
+    case 'unit_done': {
+      const step = CHIME_STEPS[Math.min(Math.max(0, opts.index ?? 0), CHIME_STEPS.length - 1)] ?? 0;
+      const f = semis(783.99, step); // G5
+      return [
+        tone('triangle', f, 0, 0.14, 0.17, { attack: 0.003 }),
+        tone('triangle', semis(f, 5), 0.085, 0.3, 0.18, { attack: 0.003 }),
+        tone('sine', semis(f, 17), 0.085, 0.18, 0.04, { attack: 0.003 }),
+      ];
+    }
   }
 }
 

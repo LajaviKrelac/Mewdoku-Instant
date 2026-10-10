@@ -1,5 +1,6 @@
 // Owner: B (Phase 2b); G2 (Phase 2d: the card frame and tile radius from the layout, the X pop and
-// the mouse's staggered X's, look-spec §1.8, §1.10, §1.12)
+// the mouse's staggered X's, look-spec §1.8, §1.10, §1.12; Phase 2d.1: the X draw-in, the mouse's
+// visits, the cat-placed sequence, the completion waves and the ghost X's, helpers-spec §1–§4)
 // The board card (04 §5.3): a role="grid" of <button class="cell"> built once per puzzle; state in
 // data-s (e|m|c|w|g); data-done for faded regions; diff-only updates. Owns gestures + keyboard wiring
 // and the board's transient FX.
@@ -12,6 +13,14 @@
 // entryEndMs(n), when START is due), the board-cat idle loops (CSS breathing with a per-cat phase,
 // JS-timed ear flicks every fx.earFlickMinMs…MaxMs; both only in the idle mood and never with reduced
 // motion) and the event accessory layered over every cat (§4.4, setAccessory).
+// Phase 2d.1 (G2; CONTRACTS-2d1 §8): MARKED from a tap, a paint or Apply draws every new X in at once
+// (.fx-mark: the tile squishes 0.90 → 1, "\\" grows from the X's centre, then "/" from its top-right tip,
+// the X overshoots to fx.markDraw.overshoot); the mouse's MARKED plays its visits (board-mouse.ts, its X's
+// pop 1.15 → 1); CAT_PLACED plays the cat sequence for every correct cat (board-cat.ts), cancelled by
+// CAT_REMOVED or a props render; UNITS_DONE bumps each completed unit's tiles in a wave (.fx-wave, inline
+// --wd = k × fx.unitDone.waveStepMs from the end nearer the anchor; waveOrder); setHighlight({ kind:
+// 'hint' }) gives the ghost X's their outline and delays (board-highlight.ts). Reduced motion: the X's
+// fade in (WAAPI, fx.reducedMotionFadeMs), no sprite, no cat sequence, no wave, the ghosts together.
 import { cfg } from '../../app/config';
 import type { CellIndex } from '../../engine/types';
 import { CellState, type GameEvent } from '../../game/types';
@@ -19,7 +28,9 @@ import { onLocaleChanged, t } from '../../i18n';
 import { shake } from '../fx/shake';
 import { buildCell, cellLabel, ensureCat, ensurePattern, setCatMood, STATE_CODE, type CellRefs } from './board-cells';
 import type { EventAccessory } from '../../game/events';
-import { cellNoise, createFxTimers, earFlickDelayMs, entryEndMs, entryTiming, flashClass, sparkle } from './board-fx';
+import { playCatSequence, type CatSequence } from './board-cat';
+import { cellNoise, createFxTimers, earFlickDelayMs, entryEndMs, entryTiming, flashClass, waveOrder } from './board-fx';
+import { playMouseRun, type MouseRun } from './board-mouse';
 import { attachGestures } from './gestures';
 import { attachKeyboard, type KeyboardHandle } from './keyboard';
 import { applyHighlight } from './board-highlight';
@@ -36,16 +47,40 @@ const sameBytes = (a: ArrayLike<number>, b: ArrayLike<number>): boolean => {
 
 const isCatState = (s: number): boolean => s === CellState.Cat || s === CellState.Given;
 
+/** One tile's wave bump (helpers-spec §4.2: 0.93 at +33, 1.10 at +67 held to +167, 1 by +270). */
+const WAVE_TILE_MS = 270;
+
+/** Reduced motion: an X fades in over fx.reducedMotionFadeMs (WAAPI: the universal reduced CSS rule cuts CSS animations to 1 ms). */
+function fadeIn(node: Element | null): void {
+  if (!node || typeof (node as Element & { animate?: unknown }).animate !== 'function') return;
+  try {
+    node.animate([{ opacity: 0 }, { opacity: 1 }], { duration: cfg.fx.reducedMotionFadeMs, easing: 'linear' });
+  } catch {
+    // shows at once
+  }
+}
+
 /** Publishes the cfg.layout render values (02 §17.4, §18) as CSS variables read by board.css. */
 function applyRenderVars(el: HTMLElement): void {
   const L = cfg.layout;
   const vars: Record<string, string> = {
     // The card radius at s = 1 until setSlot brings the layout's frame (look-spec §1.8).
     '--board-radius': `${L.game.cardRadius}px`,
-    // Phase 2d (look-spec §1.10): the X pop's length (board.css .fx-pop).
+    // Phase 2d.1 (helpers-spec §1.5): the mouse's X pop (board.css .fx-pop), 1.15 → 1.
     '--x-pop-ms': `${cfg.fx.markPopMs}ms`,
+    // Phase 2d.1 (helpers-spec §4.4): the draw-in of every other new X (board.css .fx-mark).
+    '--xd-squish': `${cfg.fx.markDraw.squishMs}ms`,
+    '--xd-s1': `${cfg.fx.markDraw.stroke1Ms}ms`,
+    '--xd-s2': `${cfg.fx.markDraw.stroke2Ms}ms`,
+    '--xd-over': String(cfg.fx.markDraw.overshoot),
+    '--xd-settle': `${cfg.fx.markDraw.settleMs}ms`,
+    // Phase 2d.1 (helpers-spec §1.5, §2.4, §3.3, §4.2): the mouse's visit, the cat sequence, the ghosts, the wave.
+    '--mouse-in': `${cfg.fx.mouse.appearMs}ms`,
+    '--mouse-dwell': `${cfg.fx.mouse.dwellMs}ms`,
+    '--mouse-out': `${cfg.fx.mouse.exitMs}ms`,
+    '--cat-seq': `${cfg.fx.catPlaced.settleMs}ms`,
+    '--ghost-pop': `${cfg.fx.hint.ghostPopMs}ms`,
     '--wrong-ring': `${L.wrongRingPx}px`,
-    '--hint-dim': String(1 - L.hintDim),
     '--pat-op': String(L.patternOpacity),
     '--pat-op-done': String(L.patternOpacityDone),
     // phase2b §2.9 idle loops (fx.css): breathing period and peak scale, ear-flick length.
@@ -99,7 +134,9 @@ export function createBoardView(model: BoardModel, input: BoardInput, opts: Boar
   let mood: CatMood = 'idle';
   let highlight: BoardHighlight | null = null;
   let keyboard: KeyboardHandle | null = null;
-  const cellMood = new Map<CellIndex, CatMood>(); // per-cell overrides (kitty: surprised)
+  const cellMood = new Map<CellIndex, CatMood>(); // per-cell overrides (the cat sequence: idle, wink)
+  const catSeqs = new Map<CellIndex, CatSequence>(); // Phase 2d.1: running cat sequences
+  let mouseRun: MouseRun | null = null; // Phase 2d.1: the mouse's visits
 
   const paletteOf = (cell: CellIndex): number => m.colors[m.regions[cell] as number] as number;
   /** Writes a board-level custom property only when it changes (an unchanged write still restyles). */
@@ -180,9 +217,26 @@ export function createBoardView(model: BoardModel, input: BoardInput, opts: Boar
     for (let i = 0; i < cells.length; i++) if (isCatState(m.cells[i] as number)) applyCatMood(i);
   };
 
+  /** Phase 2d.1: ends a cell's cat sequence (CAT_REMOVED, a state change, a props render). */
+  const cancelCat = (i: CellIndex): void => {
+    catSeqs.get(i)?.cancel();
+  };
+  /** Phase 2d.1: ends every running transient of 2d.1 at once (a rebuild, destroy). */
+  const endRuns = (): void => {
+    for (const seq of [...catSeqs.values()]) seq.cancel();
+    mouseRun?.finish();
+    mouseRun = null;
+  };
+
   const renderCell = (i: CellIndex, state: number): void => {
     const refs = cells[i];
     if (!refs) return;
+    if (!isCatState(state)) cancelCat(i);
+    if (state !== CellState.Mark && mouseRun?.cells.includes(i)) {
+      // a props render took a mark of the run away (Retry, restore): the run ends at once
+      mouseRun.finish();
+      mouseRun = null;
+    }
     refs.el.dataset.s = STATE_CODE[state] ?? 'e';
     refs.el.setAttribute('aria-label', label(i, state));
     if (isCatState(state)) {
@@ -213,6 +267,7 @@ export function createBoardView(model: BoardModel, input: BoardInput, opts: Boar
   };
 
   const build = (): void => {
+    endRuns();
     timers.clear();
     moodTimers.clear();
     idleTimers.clear();
@@ -269,7 +324,7 @@ export function createBoardView(model: BoardModel, input: BoardInput, opts: Boar
     prevDone = m.regionsDone;
     renderPatterns();
     keyboard = attachKeyboard(el, input, { n, cellElement: (i) => cells[i]?.el ?? null, isLocked: () => locked });
-    if (highlight) applyHighlight(el, cells, highlight);
+    if (highlight) applyHighlight(el, cells, highlight, m.cells, m.n);
   };
 
   const diff = (next: BoardModel): void => {
@@ -307,37 +362,82 @@ export function createBoardView(model: BoardModel, input: BoardInput, opts: Boar
     const rm = reduced();
     switch (ev.type) {
       case 'MARKED':
-        // Phase 2d (look-spec §1.10, §1.12): every new X pops (no stagger when painting several); the
-        // mouse's X's pop fx.mouseStaggerMs apart, each hidden (.fx-pend) until its turn. Reduced
-        // motion: all at once, no pop.
-        if (rm) break;
         if (ev.source === 'mouse') {
-          ev.cells.forEach((i, k) => {
-            const refs = cells[i];
-            if (!refs) return;
-            if (k > 0) refs.el.classList.add('fx-pend');
-            timers.later(k * cfg.fx.mouseStaggerMs, () => {
-              refs.el.classList.remove('fx-pend');
-              flashClass(refs.el, 'fx-pop', cfg.fx.markPopMs + 60, timers);
-            });
-          });
-        } else {
-          for (const i of ev.cells) if (cells[i]) flashClass(cells[i].el, 'fx-pop', cfg.fx.markPopMs + 60, timers);
+          // Phase 2d.1 (helpers-spec §1.5): the mouse visits its tiles in event order; each X waits
+          // (.fx-pend) until the mouse leaves its tile, then pops. Reduced motion: they fade in together.
+          mouseRun?.finish();
+          mouseRun = playMouseRun(
+            ev.cells,
+            { board: el, cellElement: (i) => cells[i]?.el ?? null, n: m.n, timers, flash: (node, cls, ms) => flashClass(node, cls, ms, timers) },
+            rm,
+          );
+          break;
         }
+        // Phase 2d.1 (helpers-spec §4.4): every new X of a tap, a paint or Apply draws in, all at once.
+        if (rm) {
+          for (const i of ev.cells) fadeIn(cells[i]?.el.querySelector('.cell__xg') ?? null);
+          break;
+        }
+        for (const i of ev.cells) if (cells[i]) flashClass(cells[i].el, 'fx-mark', cfg.fx.markDraw.settleMs + 60, timers);
         break;
       case 'CAT_PLACED': {
+        // Phase 2d.1 (helpers-spec §2.4, D-2d1-3): every correct cat (kitty, hint, player) pops,
+        // celebrates with a wink and settles; the tile flashes. Replaces 2b's drop, the kitty's
+        // surprised mood and its sparkle. Reduced motion: the cat appears at its size.
         const refs = cells[ev.cell];
-        if (!refs) break;
-        if (ev.source === 'kitty') {
-          cellMood.set(ev.cell, 'surprised');
-          applyCatMood(ev.cell);
-          timers.later(cfg.kitty.revealMs, () => {
-            cellMood.delete(ev.cell);
-            applyCatMood(ev.cell);
+        if (!refs || rm) break;
+        cancelCat(ev.cell);
+        ensureCat(refs, mood);
+        const cell = ev.cell;
+        const seq = playCatSequence(refs, {
+          mood: (own) => {
+            if (own) cellMood.set(cell, own);
+            else cellMood.delete(cell);
+            applyCatMood(cell);
+          },
+          ended: () => {
+            if (catSeqs.get(cell) === seq) catSeqs.delete(cell);
+          },
+        });
+        catSeqs.set(cell, seq);
+        break;
+      }
+      case 'CAT_REMOVED':
+        cancelCat(ev.cell);
+        break;
+      case 'UNITS_DONE': {
+        // Phase 2d.1 (helpers-spec §4.2): each completed unit's tiles bump in a wave from the end nearer
+        // its anchor, fx.unitDone.waveStepMs apart; a tile in two units bumps twice. Reduced motion: none.
+        if (rm) break;
+        const step = cfg.fx.unitDone.waveStepMs;
+        const starts = new Map<CellIndex, number[]>();
+        for (const u of ev.units) {
+          waveOrder(u, m.n, m.regions).forEach((group, k) => {
+            for (const i of group) {
+              const list = starts.get(i) ?? [];
+              if (!list.includes(k * step)) list.push(k * step);
+              starts.set(i, list);
+            }
           });
-          if (!rm) sparkle(refs.el, timers);
         }
-        if (!rm) flashClass(refs.el, 'fx-drop', cfg.fx.catDropMs + 40, timers);
+        for (const [i, list] of starts) {
+          const refs = cells[i];
+          if (!refs) continue;
+          list.sort((a, b) => a - b);
+          const [first, second] = list as [number, number | undefined];
+          refs.el.style.setProperty('--wd', `${first}ms`);
+          if (second !== undefined) {
+            refs.el.style.setProperty('--wd2', `${second}ms`);
+            flashClass(refs.el, 'fx-wave2', second + WAVE_TILE_MS + 40, timers);
+          }
+          const last = second ?? first;
+          flashClass(refs.el, 'fx-wave', last + WAVE_TILE_MS + 40, timers);
+          timers.later(last + WAVE_TILE_MS + 60, () => {
+            if (refs.el.classList.contains('fx-wave')) return; // a newer wave runs
+            refs.el.style.removeProperty('--wd');
+            refs.el.style.removeProperty('--wd2');
+          });
+        }
         break;
       }
       case 'MISTAKE': {
@@ -348,7 +448,9 @@ export function createBoardView(model: BoardModel, input: BoardInput, opts: Boar
         break;
       }
       case 'REGION_DONE':
-        if (!rm) for (const i of regionCells[ev.region] ?? []) if (cells[i]) flashClass(cells[i].el, 'fx-done', cfg.fx.regionFadeMs + 60, timers);
+        // the region's other tiles pop softly while their veil fades in; the cat's own tile keeps its
+        // colour and plays the cat sequence instead (helpers-spec §4.7)
+        if (!rm) for (const i of regionCells[ev.region] ?? []) if (cells[i] && !isCatState(m.cells[i] as number)) flashClass(cells[i].el, 'fx-done', cfg.fx.regionFadeMs + 60, timers);
         break;
       case 'PULSE': {
         const refs = cells[ev.cell];
@@ -426,7 +528,18 @@ export function createBoardView(model: BoardModel, input: BoardInput, opts: Boar
     cellRect: (i) => cells[i]?.tile.getBoundingClientRect() ?? null,
     setHighlight(h) {
       highlight = h;
-      applyHighlight(el, cells, h);
+      applyHighlight(el, cells, h, m.cells, m.n);
+      // Phase 2d.1 (helpers-spec §3.3): with reduced motion the ghosts appear together at ghostFirstMs
+      // (the universal reduced CSS rule drops their delays), so they wait under data-ghost-wait.
+      if (h?.kind === 'hint' && reduced()) {
+        el.setAttribute('data-ghost-wait', '');
+        const mine = h;
+        timers.later(cfg.fx.hint.ghostFirstMs, () => {
+          if (highlight === mine) el.removeAttribute('data-ghost-wait');
+        });
+      } else {
+        el.removeAttribute('data-ghost-wait');
+      }
     },
     setLocked(on) {
       locked = on;
@@ -469,6 +582,7 @@ export function createBoardView(model: BoardModel, input: BoardInput, opts: Boar
     },
     destroy() {
       offLocale();
+      endRuns();
       timers.clear();
       moodTimers.clear();
       idleTimers.clear();

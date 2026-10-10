@@ -1,4 +1,5 @@
-// Owner: A (Phase 2b; was ui-board); G2 (Phase 2d: the measured palette and tokens, look-spec §1.2, §2.3).
+// Owner: A (Phase 2b; was ui-board); G2 (Phase 2d: the measured palette and tokens, look-spec §1.2, §2.3;
+// Phase 2d.1: Denim, the dark-tile rules, the helpers' rows, helpers-spec §6.4).
 // scripts/palette-check.ts: CIEDE2000, CVD simulation, contrast, and the shipped palette passes.
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -24,7 +25,7 @@ import {
   whiteOnTiles,
 } from '../../../scripts/palette-check';
 import EVENTS from '../../../src/data/events/events.json';
-import { CAT_COLORS, EVENT_THEME_TOKENS, PALETTE, PALETTE_DE00, TOKENS, xEdgeColor } from '../../../src/ui/art/palette';
+import { CAT_COLORS, EVENT_THEME_TOKENS, isDarkTile, PALETTE, PALETTE_DE00, TOKENS, xEdgeColor } from '../../../src/ui/art/palette';
 
 describe('palette-check', () => {
   it('CIEDE2000 matches Sharma et al. (2005) reference pairs', () => {
@@ -56,19 +57,29 @@ describe('palette-check', () => {
     expect((min?.de ?? 0) >= MIN_DE00).toBe(true);
     expect(min?.de).toBeCloseTo(10.4, 2);
     expect([min?.i, min?.j]).toEqual([6, 10]);
-    // the two colours of ours sit far from every other: index 4 (named Denim at 2d.1 L0, still 2d's Mint
-    // value until helpers-spec §6.2) ≥ 13.5, Cocoa ≥ 16.5
-    const from = (i: number): number => Math.min(...pairwise(PALETTE).filter((p) => p.i === i || p.j === i).map((p) => p.de));
-    expect(from(4)).toBeGreaterThanOrEqual(13.5);
-    expect(from(9)).toBeGreaterThanOrEqual(16.5);
+    // helpers-spec §6.3: the measured Denim's nearest colour is Violet (14.19); Cocoa, ours, ≥ 16.5
+    const near = (i: number): { de: number; other: number } => {
+      const p = pairwise(PALETTE).filter((q) => q.i === i || q.j === i)[0] as { i: number; j: number; de: number };
+      return { de: p.de, other: p.i === i ? p.j : p.i };
+    };
+    expect(PALETTE[4]).toBe('#5B75B2');
+    expect(near(4).de).toBeCloseTo(14.19, 2);
+    expect(near(4).other).toBe(7);
+    expect(near(9).de).toBeGreaterThanOrEqual(16.5);
   });
 
   it('every glyph passes 3:1 on every tile, faded or not', () => {
     for (const row of glyphContrast()) expect(row.ratio, `${row.what} on ${row.tile}`).toBeGreaterThanOrEqual(MIN_CONTRAST);
   });
 
-  it('checks the colour-pattern glyph on every tile, normal and faded (02 §18 non-colour cue)', () => {
+  it('checks the colour-pattern glyph on every tile, normal and faded (02 §18 non-colour cue); white on a dark tile (helpers-spec §6.4)', () => {
     const rows = glyphContrast().filter((r) => r.what.startsWith('pattern glyph'));
+    // Denim is the one dark tile: its glyph is white at 0.85 (3.76) where --ink-deep gave 2.63; faded it stays --ink-deep (3.12)
+    expect(PALETTE.map((_, i) => i).filter(isDarkTile)).toEqual([4]);
+    const denim = rows.filter((r) => r.tile === 4);
+    expect((denim.find((r) => !r.faded) as { ratio: number }).ratio).toBeCloseTo(3.76, 2);
+    expect((denim.find((r) => r.faded) as { ratio: number }).ratio).toBeCloseTo(3.12, 2);
+    expect(isDarkTile(7)).toBe(false); // Violet: white only 3.00 at 0.85, --ink-deep 3.24
     expect(rows).toHaveLength(PALETTE.length * 2);
     for (const r of rows) expect(r.ratio, `pattern glyph on ${r.tile}${r.faded ? ' faded' : ''}`).toBeGreaterThanOrEqual(MIN_CONTRAST);
     // The old 0.5 / 0.32 opacities failed (2.1-2.6:1): the check must notice a regression.
@@ -120,7 +131,14 @@ describe('palette-check', () => {
     expect(r(TOKENS.ink, TOKENS['page-2'])).toBe(4.62);
     expect(r(TOKENS.ink, TOKENS['accent-soft'])).toBe(4.62);
     expect(r(TOKENS.ink, TOKENS['rule-card'])).toBe(5.01);
-    expect(r(TOKENS.ink, TOKENS['toast-fill'])).toBe(4.81);
+    expect(r(TOKENS.ink, TOKENS['toast-fill'])).toBe(4.85); // 2d.1 §5.2: the re-sampled ticker fill
+    // Phase 2d.1 (helpers-spec §6.4): the new uiContrast rows
+    expect(r(TOKENS.ink, TOKENS['hint-card'])).toBe(5.34);
+    expect(r('#FFFFFF', TOKENS.apply)).toBe(3.05);
+    expect(r(TOKENS['done-line'], TOKENS.page)).toBe(7.56);
+    expect(r(TOKENS['done-top'], TOKENS['done-line'])).toBeGreaterThanOrEqual(5.68);
+    expect(r(TOKENS['done-bottom'], TOKENS['done-line'])).toBe(5.68);
+    expect(r('#FFFFFF', PALETTE[4] as string)).toBe(4.53);
     expect(r('#FFFFFF', TOKENS.ink)).toBe(5.45);
     expect(TOKENS['ink-2']).toBe(TOKENS.ink);
     expect(r(TOKENS['ink-icon'], TOKENS.card)).toBe(4.68);
@@ -151,27 +169,34 @@ describe('palette-check', () => {
     expect(rows.filter((x) => x.what.startsWith('head tint'))).toHaveLength(PALETTE.length);
     const tints = rows.filter((x) => x.what.startsWith('head tint')).map((x) => x.ratio);
     expect(Math.min(...tints)).toBeCloseTo(1.25, 2);
-    expect(Math.max(...tints)).toBeCloseTo(1.76, 2);
+    expect(Math.max(...tints)).toBeCloseTo(1.94, 2); // Denim's tint (helpers-spec §6.4: 1.95 measured)
     expect(rows.find((x) => x.what.startsWith('fish body'))?.ratio).toBeCloseTo(2.0, 2);
-    expect(rows.find((x) => x.what.startsWith('toast border'))?.ratio).toBeCloseTo(2.32, 2);
+    expect(rows.find((x) => x.what.startsWith('ticker border'))?.ratio).toBeCloseTo(2.26, 2);
+    expect(rows.find((x) => x.what.startsWith('"+N"'))?.ratio).toBeCloseTo(2.23, 2); // D-2d1-16
     for (const x of rows) expect(x.min).toBe(0);
   });
 
-  it('the default white X is an informational row; with Colour patterns on its edge carries WCAG 1.4.11 on every tile, normal and faded (look-spec §1.10)', () => {
-    // the plain white X of the original: 1.60 (Lime) … 3.52 (Violet), faded 1.36–2.00 (D-2d-6)
+  it('the default white X is an informational row; with Colour patterns on the X passes WCAG 1.4.11 on every tile, normal and faded, by its white or through its edge (look-spec §1.10, helpers-spec §6.4)', () => {
+    // the plain white X of the original: 1.60 (Lime) … 4.53 (Denim), faded 1.36–2.24 (D-2d-6)
     const w = whiteOnTiles();
     expect(w.min).toBeCloseTo(1.6, 2);
-    expect(w.max).toBeCloseTo(3.52, 2);
+    expect(w.max).toBeCloseTo(4.53, 2);
     expect(w.fadedMin).toBeCloseTo(1.36, 2);
-    expect(w.fadedMax).toBeCloseTo(2.0, 2);
-    const rows = glyphContrast();
-    const edge = rows.filter((r) => r.what === 'X edge (--xe, patterns on) vs tile');
-    const white = rows.filter((r) => r.what === 'white X vs its edge (patterns on)');
+    expect(w.fadedMax).toBeCloseTo(2.24, 2);
+    const info: Parameters<typeof glyphContrast>[2] = [];
+    const rows = glyphContrast(TOKENS.page, undefined, info);
+    const x = rows.filter((r) => r.what.startsWith('X with patterns on'));
+    expect(x).toHaveLength(PALETTE.length * 2);
+    for (const r of x) expect(r.ratio, `X on ${r.tile}${r.faded ? ' faded' : ''}`).toBeGreaterThanOrEqual(MIN_CONTRAST);
+    expect(Math.min(...x.map((r) => r.ratio))).toBeCloseTo(3.41, 2); // worst: Cocoa (its edge)
+    // the edge rows are information now: on Denim the edge is 2.63 against the tile, but the white X alone has 4.53
+    const edge = info.filter((r) => r.what === 'X edge (--xe, patterns on) vs tile');
+    const white = info.filter((r) => r.what === 'white X vs its edge (patterns on)');
     expect(edge).toHaveLength(PALETTE.length * 2);
     expect(white).toHaveLength(PALETTE.length * 2);
-    for (const r of [...edge, ...white]) expect(r.ratio).toBeGreaterThanOrEqual(MIN_CONTRAST);
-    expect(Math.min(...edge.map((r) => r.ratio))).toBeCloseTo(3.24, 2); // worst: Violet
-    expect(Math.min(...edge.filter((r) => r.faded).map((r) => r.ratio))).toBeCloseTo(5.69, 2);
+    expect((edge.find((r) => r.tile === 4 && !r.faded) as { ratio: number }).ratio).toBeCloseTo(2.63, 2);
+    expect(contrastRatio('#FFFFFF', PALETTE[4] as string)).toBeGreaterThanOrEqual(MIN_CONTRAST);
+    for (const r of edge.filter((e) => e.tile !== 4)) expect(r.ratio, `edge on ${r.tile}`).toBeGreaterThanOrEqual(MIN_CONTRAST);
     expect(Math.min(...white.map((r) => r.ratio))).toBeCloseTo(9.82, 2);
     // a faded tile is lighter, so its edge contrast is higher than the normal tile's
     for (let t = 0; t < PALETTE.length; t++) {
@@ -179,20 +204,25 @@ describe('palette-check', () => {
       expect((f as { ratio: number }).ratio).toBeGreaterThan((n as { ratio: number }).ratio);
     }
     expect(xEdgeColor(10)).toMatch(/^#[0-9a-f]{6}$/);
-    // the wrong X in --wrong: ≥ 3.41 on every tile, 6.00 faded; the pattern glyph in --ink-deep ≥ 3.24 (faded 3.30)
+    // helpers-spec §6.4: --wrong #560A1C ≥ 3.18 on every tile (Denim the lowest), ≥ 6.4 faded; the
+    // pattern glyph ≥ 3.24 (Violet; white 3.76 on Denim), faded ≥ 3.12 (Denim)
     const min = (what: string, faded: boolean): number => Math.min(...rows.filter((r) => r.what === what && r.faded === faded).map((r) => r.ratio));
-    expect(min('wrong X (--wrong)', false)).toBeCloseTo(3.41, 2);
-    expect(min('wrong X (--wrong)', true)).toBeCloseTo(6.0, 2);
-    expect(min('pattern glyph (--ink-deep @ patternOpacity)', false)).toBeCloseTo(3.24, 2);
-    expect(min('pattern glyph (--ink-deep @ patternOpacity)', true)).toBeCloseTo(3.3, 2);
+    expect(TOKENS.wrong).toBe('#560A1C');
+    expect(min('wrong X (--wrong)', false)).toBeCloseTo(3.18, 2);
+    expect(min('wrong X (--wrong)', true)).toBeGreaterThanOrEqual(6.4);
+    const pat = 'pattern glyph (--ink-deep, white on a dark tile, @ patternOpacity)';
+    expect(min(pat, false)).toBeCloseTo(3.24, 2);
+    expect(min(pat, true)).toBeCloseTo(3.12, 2);
+    // 2d's --wrong failed on Denim (helpers-spec §6.4): the check must notice that regression
+    expect(contrastRatio('#6E0E25', PALETTE[4] as string)).toBeLessThan(MIN_CONTRAST);
   });
 
-  it("Tux reads as a dark shape on every tile: fur ≥ 4.00, outline ≥ 5.23 (phase2b §1.6, look-spec §2.3)", () => {
+  it("Tux reads as a dark shape on every tile: fur ≥ 3.10, outline ≥ 4.06, both on Denim (phase2b §1.6, helpers-spec §6.4)", () => {
     const rows = glyphContrast();
     const fur = rows.filter((r) => r.what === 'cat fur').map((r) => r.ratio);
     const outline = rows.filter((r) => r.what === 'cat outline').map((r) => r.ratio);
-    expect(Math.min(...fur)).toBeCloseTo(4.0, 2);
-    expect(Math.min(...outline)).toBeCloseTo(5.23, 2);
+    expect(Math.min(...fur)).toBeCloseTo(3.1, 2);
+    expect(Math.min(...outline)).toBeCloseTo(4.06, 2);
     expect(CAT_COLORS.fur).toBe('#2E2A33');
   });
 
@@ -201,7 +231,7 @@ describe('palette-check', () => {
     for (const r of [...ui, ...glyphs]) expect(r.ratio, 'what' in r ? r.what : '').toBeGreaterThanOrEqual('min' in r ? r.min : MIN_CONTRAST);
     for (const id of Object.keys(EVENT_THEME_TOKENS)) {
       expect(ui.some((r) => r.what === `--ink-2 on ${id} page`)).toBe(true);
-      expect(glyphs.filter((r) => r.page === id)).toHaveLength(PALETTE.length * 6);
+      expect(glyphs.filter((r) => r.page === id)).toHaveLength(PALETTE.length * 5);
     }
     const min = (pred: (w: string) => boolean): number => Math.min(...ui.filter((r) => pred(r.what)).map((r) => r.ratio));
     // the spec's numbers on the event pages (§1.12; look-spec §1.2: the new ink ≥ 4.97)
@@ -212,8 +242,8 @@ describe('palette-check', () => {
     // the motif colours were lightened (Phase 2d, look-spec §2.3) so --ink keeps 4.5 on them
     expect(min((w) => w.startsWith('--ink on') && w.includes('motif'))).toBeGreaterThanOrEqual(4.5);
     const g = (what: string): number => Math.min(...glyphs.filter((r) => r.what === what).map((r) => r.ratio));
-    expect(g('wrong X (--wrong)')).toBeGreaterThanOrEqual(6.0);
-    expect(g('pattern glyph (--ink-deep @ patternOpacity)')).toBeCloseTo(3.32, 2);
+    expect(g('wrong X (--wrong)')).toBeGreaterThanOrEqual(6.4);
+    expect(g('pattern glyph (--ink-deep, white on a dark tile, @ patternOpacity)')).toBeCloseTo(3.14, 2); // faded Denim on an event page
   });
 
   it('EVENT_THEME_TOKENS match the shipped event definitions (src/data/events/events.json)', () => {

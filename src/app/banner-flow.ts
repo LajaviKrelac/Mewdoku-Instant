@@ -20,7 +20,14 @@
 // screenGone + hide pair on a banner-to-banner transition: the session skips its hide). Over the game
 // screen the listed modals hide it and it is not re-shown on close: after a hide it shows again only
 // on the next eligible screen mount after the window. O4, O1, O2's prompt and the coach keep it.
+// Phase 2d.1 (G1, docs/phase2d/helpers-spec.md §3.2, D-2d1-13): with ads.banner.hideDuringHint the
+// hint overlay (O1) hides it (hintOpened) and is the only modal whose close shows it again on the game
+// screen (hintClosed): at once when ads.banner.minReloadSec has passed since the last load (a new
+// load), else ONE timer loads it when that window ends, if the same game screen is still up with no
+// modal open, no ad showing and the board not won. One timer per close, never a retry loop (Meta's
+// window is never hit early); a new hint, a screen change or another close replaces or cancels it.
 import { bannerGate } from '../game/ad-pacing';
+import type { TimerId } from './clock';
 import type { BannerScreen, GameConfig } from './config';
 import { cfg } from './config';
 import type { Clock } from './clock';
@@ -66,6 +73,16 @@ export interface BannerFlow {
   entitlementChanged(): Promise<void>;
   /** Whether a banner is currently shown (tests, analytics). */
   showing(): boolean;
+  /**
+   * Phase 2d.1 §3.2: the hint overlay (O1) opened over the game screen: hide the banner (with
+   * ads.banner.hideDuringHint; off: the 2d rule, O1 keeps it). Cancels a pending re-show timer.
+   */
+  hintOpened(): Promise<void>;
+  /**
+   * Phase 2d.1 §3.2: O1 closed. On the game screen that carries the band (no modal open, the board
+   * not won): a new load at once when the reload window has passed, else one timer when it ends.
+   */
+  hintClosed(): Promise<void>;
 }
 
 export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
@@ -84,6 +101,24 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
   /** The eligible screen on show now (null after screenGone). */
   let current: { screen: BannerScreen; firstRunTutorial: boolean } | null = null;
   let gen = 0;
+  /** Phase 2d.1: moves on every screenShown / screenGone (the re-show timer's "same game screen"). */
+  let screenGen = 0;
+  /** Phase 2d.1: the one pending re-show after the hint closed inside the reload window. */
+  let reshow: TimerId | null = null;
+  const cancelReshow = (): void => {
+    clock.clearTimeout(reshow);
+    reshow = null;
+  };
+
+  /** Phase 2d.1 §3.2: the game screen that carries the band is still up, no modal or ad is up, the board is not won. */
+  const gameScreenFree = (): boolean => {
+    const st = store.get();
+    if (current?.screen !== 'game' || st.screen !== 'game' || !st.game) return false;
+    if (st.game.status === 'won' || st.ui.adShowing) return false;
+    // The hint itself may still be listed when its close is reported (the store mirrors the router
+    // after the bus); a reopened hint cancels the timer anyway (hintOpened).
+    return !st.overlays.some((id) => id !== 'coach' && id !== 'hint');
+  };
 
   const setReserved = (on: boolean): void =>
     store.update((s) => (s.ui.bannerReserved === on ? s : { ...s, ui: { ...s.ui, bannerReserved: on } }));
@@ -149,6 +184,8 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
 
   const flow: BannerFlow = {
     async screenShown(screen, opts) {
+      screenGen++;
+      cancelReshow();
       current = { screen, firstRunTutorial: opts?.firstRunTutorial === true };
       await attempt();
     },
@@ -170,6 +207,8 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
     },
     screenGone() {
       // Not a hide (phase 2d): a banner screen that follows without a hide keeps a banner that is up.
+      screenGen++;
+      cancelReshow();
       current = null;
       setReserved(false);
     },
@@ -181,6 +220,27 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
       await flow.hide();
     },
     showing: () => shown,
+    async hintOpened() {
+      cancelReshow();
+      if (!c.ads.banner.hideDuringHint) return;
+      await flow.hide();
+    },
+    async hintClosed() {
+      cancelReshow();
+      if (!c.ads.banner.hideDuringHint || shown || pending || !gameScreenFree()) return;
+      const windowMs = c.ads.banner.minReloadSec * 1000;
+      const wait = lastLoadAt === null ? 0 : lastLoadAt + windowMs - clock.perf();
+      if (wait <= 0) {
+        await attempt();
+        return;
+      }
+      const mine = screenGen;
+      reshow = clock.setTimeout(() => {
+        reshow = null;
+        if (screenGen !== mine || shown || pending || !gameScreenFree()) return;
+        void attempt().catch((error: unknown) => deps.onError?.(error));
+      }, wait);
+    },
   };
   return flow;
 }

@@ -18,7 +18,8 @@ export interface BoardModel {
   readonly patterns: boolean;
 }
 
-export type CatMood = 'idle' | 'happy' | 'sad' | 'surprised';
+/** Phase 2d.1 (helpers-spec §2.4): 'wink', the celebrating cat of the cat-placed sequence. */
+export type CatMood = 'idle' | 'happy' | 'sad' | 'surprised' | 'wink';
 
 /** Dim everything except the focus (O1 hint, O8 coach). */
 export type BoardHighlight =

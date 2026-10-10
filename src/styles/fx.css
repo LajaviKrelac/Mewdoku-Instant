@@ -630,10 +630,25 @@
   }
 }
 
-/* ── The heads pill (Phase 2d §1.6): a found colour's head pops (1 → 1.25 → 1 over fx.headFoundMs);
-   a head whose cat was taken back fades to the tint (fx.reducedMotionFadeMs, pills.ts). ── */
+/* ── The heads pill (Phase 2d.1 §2.7, measured): a found colour's face pops 0.56 → 1.20 at 83 ms → 1.0
+   at fx.headFoundMs (280), about the head's centre, no fade; a head whose cat was taken back fades to
+   the tint (fx.reducedMotionFadeMs, pills.ts). ── */
 .head--pop {
-  animation: bump var(--head-ms, 300ms) ease-out;
+  animation: head-found var(--head-ms, 280ms) both;
+}
+
+@keyframes head-found {
+  0% {
+    transform: scale(0.56);
+    animation-timing-function: cubic-bezier(0.3, 0.6, 0.5, 1);
+  }
+  30% {
+    transform: scale(1.2);
+    animation-timing-function: cubic-bezier(0.4, 0, 0.4, 1);
+  }
+  100% {
+    transform: none;
+  }
 }
 
 .head--out {

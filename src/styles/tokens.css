@@ -1,4 +1,5 @@
-/* Owner: A (Phase 2b; was ui-board); G2 (Phase 2d: the measured page, ink and palette, look-spec §1.2)
+/* Owner: A (Phase 2b; was ui-board); G2 (Phase 2d: the measured page, ink and palette, look-spec §1.2;
+   Phase 2d.1: Denim, --wrong for dark tiles, the helpers' colours, helpers-spec §6)
    The one token set (phase2b §1.3, §1.4; look-spec §1.2, §1.9). Phase 2d (D-2d-0, user decision
    2026-10-10): the page, card, ink, icon ink, region, fish, badge, dot, toast and rule-card colours
    are sampled from the user's own screenshot of the original's game screen (darkened only where a
@@ -50,19 +51,30 @@
   /* ── Status ──────────────────────────────────────────────────────────── */
   --life-empty: #ede8e2; /* Phase 2c: the pale wash inside an empty life (icon-fish-empty) */
   --danger: #d33a4a; /* error flash */
-  --wrong: #6e0e25; /* wrong-X glyph + ring: ≥ 3.41:1 on every tile, 6.00 faded */
+  --wrong: #560a1c; /* wrong-X glyph + ring: ≥ 3.18:1 on every tile (Denim the lowest), ≥ 6.4 faded (2d.1 §6.4) */
   --hard: #6c3fb5; /* Hard badge: white on it 6.96 */
 
   /* ── Phase 2d HUD colours (look-spec §1.2; measured unless noted) ─────── */
   --badge: #dc2f2f; /* count badges: measured #e93636 darkened for white digits 4.68 */
   --badge-video: #03a84a; /* "watch a video" badge: measured #02be52 darkened, white mark 3.13 */
   --dot: #f34f4f; /* the gear's red dot */
-  --toast-fill: #fef0c7; /* level-start toast */
-  --toast-line: #dd9045;
+  --toast-fill: #fff1c8; /* level-start tickers (2d.1 §5.2: re-sampled from the PNG still) */
+  --toast-line: #e98e33;
   --rule-card: #fbf4ee; /* rule card fill: --ink on it 5.01 */
   --rule-tile: #ddbeaa; /* mini-diagram tile (decorative) */
   --rule-tile-2: #eee1d7; /* ours: the lighter "other region" tile */
   --rule-mark: #af6d44; /* mini-diagram X box: white X on it 4.12 */
+
+  /* ── Phase 2d.1 helpers (helpers-spec §2.5, §3.2, §4.3; measured unless noted) ── */
+  --plus: #fb8515; /* the "+N" over a placed cat (white outline; decorative, D-2d1-16) */
+  --done-top: #efda25; /* the completion label's fill, top … */
+  --done-bottom: #fecf3d; /* … to bottom */
+  --done-line: #813800; /* its dark-brown outline: 7.56 on --page */
+  --hint-card: #fffcfa; /* the hint card: --ink on it 5.34 */
+  --apply: #d38025; /* Apply: the measured #f0912a darkened for white 3.05 (large text, D-2d1-16) */
+  --twinkle-cyan: #c4f2ff; /* ours: the cat sequence's light-cyan twinkles (board.css) */
+  --halo-rgb: 254, 255, 234; /* measured (cc): the placed cat's halo in the gaps */
+  --wave-rgb: 255, 236, 150; /* the completion wave's pale yellow glow (edge measured #fff2c0–#fff6c7 cc) */
 
   /* ── RGB triplets for tinted shadows and glows ───────────────────────── */
   --ink-rgb: 147, 90, 90;
@@ -74,17 +86,17 @@
   --warm-rgb: 239, 134, 39; /* measured fit: the round buttons' warm shadow */
   --pulse-rgb: 255, 165, 30; /* measured fit: the helper pulse glow */
 
-  /* ── Region palette (look-spec §1.9), by palette index: 10 measured, index 4 and Cocoa ours ── */
+  /* ── Region palette (helpers-spec §6), by palette index: 11 measured, Cocoa ours (12 × 12 only) ── */
   --r0: #d57374; /* Coral */
   --r1: #ffaa6d; /* Apricot */
   --r2: #e4bb49; /* Mustard */
   --r3: #aed994; /* Lime */
-  --r4: #52a982; /* Denim (named at 2d.1 L0; still 2d's Mint value, ours, 12×12 only, until helpers-spec §6.2) */
+  --r4: #5b75b2; /* Denim (measured 2d.1; the one dark tile: white on it 4.53) */
   --r5: #48b5b2; /* Lagoon */
   --r6: #6bbce7; /* Sky */
   --r7: #9778d6; /* Violet */
   --r8: #eb85b7; /* Orchid */
-  --r9: #b0855a; /* Cocoa (ours, 11×11 and 12×12) */
+  --r9: #b0855a; /* Cocoa (ours, 12×12 only) */
   --r10: #a7bfd7; /* Slate */
   --r11: #fab4d0; /* Pink */
 
@@ -144,7 +156,6 @@
   --t-overlay: 200ms;
   --ease-drop: cubic-bezier(0.2, 1.4, 0.4, 1);
   --ease-out: cubic-bezier(0.22, 0.8, 0.3, 1);
-  --hint-dim: 0.45; /* 1 − layout.hintDim (dimmed 55 %) */
 }
 
 /* A custom property's var() resolves where it is declared: re-declared where the game screen sets

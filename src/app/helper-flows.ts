@@ -10,11 +10,15 @@
 // Phase 2d (G1, docs/phase2d/look-spec.md §1.12, D-2d-12): the mouse helper. No stock: every use is
 // O2 ('mouse') → one rewarded video, or the free fallback (sharing the hint / kitty cooldown, with
 // its countdown) → pickMouseCells (seeded per attempt and use) → MOUSE → mouse_used.
+// Phase 2d.1 (G1, docs/phase2d/helpers-spec.md §1.2, §1.5): the mouse visits its tiles one by one, so
+// onMouse keeps the board and the tools locked (runBusy) for mouseRunMs(cells, reduced motion) after
+// the dispatch; ending the session or leaving the board ends the run (alive() false). The per-attempt
+// use count is readable (mouseUses) for the pulse rule (§4.6).
 import type { RewardedVariant } from '../ui/overlays/rewarded-prompt';
 import { interstitialGate, type InterstitialTrigger } from '../game/ad-pacing';
 import { fallbackAvailable, fallbackReadyAt, grant, recordAdShown, recordFallbackGrant, spend } from '../game/economy';
 import { getMode } from '../game/modes';
-import { hasMouseCandidate, mouseSeed, pickMouseCells } from '../game/mouse';
+import { hasMouseCandidate, mouseRunMs, mouseSeed, pickMouseCells } from '../game/mouse';
 import { canRevive } from '../game/reducer';
 import { encodeCells } from '../game/save';
 import { tutorialAllowsTool } from '../game/tutorial';
@@ -61,6 +65,8 @@ export interface HelperHost {
   openHint(step: HintStep, charged: boolean): void;
   /** After KITTY: schedules KITTY_DONE in kitty.revealMs (unless the kitty's cat won). */
   afterKitty(): void;
+  /** Phase 2d.1 §1.5: reduced motion is on (the mouse run then lasts fx.reducedMotionFadeMs). */
+  reducedMotion(): boolean;
 }
 
 export interface HelperFlows {
@@ -74,6 +80,8 @@ export interface HelperFlows {
   onMouse(): Promise<void>;
   /** Phase 2d: a new attempt began (a new board or a Retry): the mouse's use counter (its seed) restarts. */
   newAttempt(): void;
+  /** Phase 2d.1 §4.6: uses of the mouse in this attempt (the pulse stops once a helper was used). */
+  mouseUses(): number;
   /** 'hint', 'kitty' and 'mouse' ask through O2 first; for 'revive' the O4 button is the prompt. */
   /** hint, kitty, revive and (phase 2d) mouse (02 §13.3). group_double has its own flow (group-flow.ts, phase2b §5.6). */
   rewardedOrFallback(p: HelperPlacement): Promise<boolean>;
@@ -303,6 +311,25 @@ export function createHelperFlows(host: HelperHost): HelperFlows {
       if (cells.length === 0) return;
       host.dispatch({ type: 'MOUSE', cells, t: host.clock.now() });
       host.log({ name: 'mouse_used', params: { mode: meta.mode, cells: cells.length } });
+      // Phase 2d.1 §1.2: the board stays locked while the mouse visits its tiles (its X's are hidden
+      // until it leaves each one); a session that ends or leaves the board ends the wait early.
+      await lockFor(mouseRunMs(cells.length, host.reducedMotion(), c), alive);
+    });
+  }
+
+  /** Waits `ms` on the session clock, or less once `alive()` turns false (checked every tick). */
+  function lockFor(ms: number, alive: () => boolean): Promise<void> {
+    return new Promise((resolve) => {
+      const end = host.clock.perf() + ms;
+      const step = (): void => {
+        const left = end - host.clock.perf();
+        if (!alive() || left <= 0) {
+          resolve();
+          return;
+        }
+        host.clock.setTimeout(step, Math.min(left, c.timer.tickMs));
+      };
+      step();
     });
   }
 
@@ -343,6 +370,7 @@ export function createHelperFlows(host: HelperHost): HelperFlows {
     newAttempt: () => {
       mouseUses = 0;
     },
+    mouseUses: () => mouseUses,
     rewardedOrFallback,
     continueOffer,
     interstitial,

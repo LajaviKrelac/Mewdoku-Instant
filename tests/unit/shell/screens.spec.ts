@@ -38,7 +38,13 @@ function fakeView(name: string, extra: Record<string, unknown> = {}) {
   };
 }
 vi.mock('../../../src/ui/hud/game-bar', () => ({
-  createGameBar: fakeView('topbar', { fit: () => rec.calls.push(['topbar', 'fit', null]) }),
+  createGameBar: fakeView('topbar', {
+    fit: () => rec.calls.push(['topbar', 'fit', null]),
+    // Phase 2d.1 §2.5: the Score's star target, count-up and sync.
+    scoreRect: () => null,
+    countTo: (n: number) => rec.calls.push(['topbar', 'countTo', n]),
+    syncPoints: () => rec.calls.push(['topbar', 'syncPoints', null]),
+  }),
 }));
 vi.mock('../../../src/ui/hud/pills', () => ({
   createPills: fakeView('pills'),
@@ -78,6 +84,7 @@ import { createBootScreen } from '../../../src/ui/screens/boot-screen';
 import { createGameScreen, gameTitle, sameHighlight, type GameScreenCallbacks, type GameView } from '../../../src/ui/screens/game-screen';
 import { createHomeScreen, type HomeCallbacks, type HomeView } from '../../../src/ui/screens/home-screen';
 import type { HintStep } from '../../../src/engine/types';
+import { mouseLandMs } from '../../../src/game/mouse';
 
 const q = <E extends Element = HTMLElement>(root: ParentNode, sel: string): E => {
   const el = root.querySelector<E>(sel);
@@ -318,6 +325,56 @@ describe('S2 game', () => {
     expect(callsOf('pills', 'playEvent')).toEqual([ev]);
     expect(callsOf('board', 'playEvent')).toEqual([ev]);
     game.destroy();
+  });
+
+  it('Phase 2d.1: the fixed fx layer; the tool row is busy while input is locked or the kitty or the hint runs; the heads ring id', () => {
+    const game = createGameScreen(view(), callbacks());
+    const fx = q(game.el, ':scope > .game-fx');
+    expect(fx.getAttribute('aria-hidden')).toBe('true');
+    expect(callsOf('tools', 'create')[0]).toMatchObject({ busy: false });
+    game.update(view({ inputLocked: true }));
+    expect(lastOf('tools', 'update')).toMatchObject({ busy: true });
+    game.update(view({ status: 'kitty' }));
+    expect(lastOf('tools', 'update')).toMatchObject({ busy: true });
+    game.update(view({ status: 'hint' }));
+    expect(lastOf('tools', 'update')).toMatchObject({ busy: true });
+    game.update(view());
+    expect(lastOf('tools', 'update')).toMatchObject({ busy: false });
+    expect(lastOf('pills', 'update')).toMatchObject({ ringId: 'L37' });
+    game.update(view({ mode: 'tutorial' }));
+    expect(lastOf('pills', 'update')).toMatchObject({ ringId: null });
+    // Before the fx chunk is in, the Score follows the props and POINTS rolls in the bar (2d's fallback).
+    expect(lastOf('topbar', 'update')).toMatchObject({ starPoints: false });
+    game.destroy();
+  });
+
+  it('Phase 2d.1 §4.1: a mouse action\'s UNITS_DONE waits for its anchor\'s X to land (mouseLandMs), then reaches the board', () => {
+    vi.useFakeTimers();
+    try {
+      const game = createGameScreen(view(), callbacks());
+      game.playEvent({ type: 'MARKED', cells: [3, 9, 14], source: 'mouse' });
+      const units = { type: 'UNITS_DONE', units: [{ kind: 'row', index: 1, anchor: 9 }, { kind: 'col', index: 4, anchor: 14 }] } as const;
+      game.playEvent(units);
+      const boardUnits = (): unknown[] => callsOf('board', 'playEvent').filter((e) => (e as { type: string }).type === 'UNITS_DONE');
+      expect(boardUnits()).toEqual([]);
+      vi.advanceTimersByTime(mouseLandMs(1) - 1);
+      expect(boardUnits()).toEqual([]);
+      vi.advanceTimersByTime(1);
+      expect(boardUnits()).toEqual([{ type: 'UNITS_DONE', units: [units.units[0]] }]);
+      vi.advanceTimersByTime(mouseLandMs(2) - mouseLandMs(1));
+      expect(boardUnits()).toHaveLength(2);
+      // Any other action's units play at once; a reset (a new board) drops what is still waiting.
+      game.playEvent({ type: 'UNITS_DONE', units: [{ kind: 'region', index: 2, anchor: 5 }] });
+      expect(boardUnits()).toHaveLength(3);
+      game.playEvent({ type: 'MARKED', cells: [3, 9], source: 'mouse' });
+      game.playEvent({ type: 'UNITS_DONE', units: [{ kind: 'row', index: 0, anchor: 3 }] });
+      game.update(view({ board: { ...view().board, puzzleId: 'L38' } }));
+      vi.advanceTimersByTime(5000);
+      expect(boardUnits()).toHaveLength(3);
+      game.destroy();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('Phase 2d §4.7: publishes the stack as CSS variables, the band on <html> while mounted (§1.16), the pulse and the dot', () => {

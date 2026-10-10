@@ -14,18 +14,32 @@
 // column's fx layer (playStartToast); --play-band / --play-band-bottom on <html> keep the overlays
 // above the banner while the screen is mounted (§1.16).
 //
+// Phase 2d.1 (G3, helpers-spec §2, §4, §5, D-2d1-3/4/6/12): the screen's fixed fx layer (.game-fx, above
+// the board and the HUD rows, below every overlay) holds what the lazy fx chunk plays (fx/celebrate.ts,
+// prefetched at idle after the first mount, [data-celebrate=ready] once loaded): the two level-start
+// tickers (playTickers; asked before the chunk is in, they join their crossing late), and per event the
+// shards (CAT_PLACED), the "+N", the star and the bar's count-up (POINTS; until the chunk is in: 2d's
+// roll) and one "Done!" label per anchor tile (UNITS_DONE). A mouse action's units (the board's waves
+// and the labels) wait for their anchor's X to land (mouseLandMs). A props render that resets the board
+// (a new board, Retry, fewer points, a language change) ends every running celebration and shows the
+// total at once. The tool row is busy (inert, no disabled fade) while input is locked or the kitty or
+// the hint runs.
+//
 // Keyboard (02 §6.3, §18): H / K / M work anywhere on the screen while no modal is open (the board's own
 // handler covers them when a cell has focus), and whenever focus falls to <body> (a level starts, a
 // tool button is disabled, the coach's "Got it" goes away) it is moved back to the board.
 //
 // Classes: .screen.screen--game[data-mode][data-status][data-compact][data-banner] > header.top-bar--game
-//          + main.game__col (.game__hud .game__stage .game__tools .game__fx) + .game__scrim; vars of §4.7
+//          + main.game__col (.game__hud .game__stage .game__tools .game__fx) + .game__scrim + .game-fx[data-celebrate]; vars of §4.7
 import type { CellIndex } from '../../engine/types';
 import type { EventDef } from '../../game/events';
 import type { FxHandle } from '../fx/fish-flight';
 import { playGlow } from '../fx/glow';
 import { createStartToast, type StartToastKind } from '../fx/start-toast';
-import type { GameEvent, ModeId, PaintMode, Status } from '../../game/types';
+import type { TickerLine, Tickers } from '../fx/tickers';
+import type { Celebrate } from '../fx/celebrate';
+import { mouseLandMs } from '../../game/mouse';
+import type { DoneUnit, GameEvent, ModeId, PaintMode, Status } from '../../game/types';
 import { cfg } from '../../app/config';
 import { formatShortDate, onLocaleChanged, t, translate } from '../../i18n';
 import { createBoardView, type BoardHighlight, type BoardModel } from '../board/board-view';
@@ -138,6 +152,8 @@ export interface GameScreen extends View<GameView> {
   showScrim?(): void;
   /** Phase 2d §1.14: the level-start toast (G1 calls it from playBoardEntry on a fresh board or a Retry). */
   playStartToast(kind: StartToastKind): void;
+  /** Phase 2d.1 §5: the two level-start tickers. Optional until I-3; replaces playStartToast (removed at I-3). */
+  playTickers?(lines: readonly [TickerLine, TickerLine]): void;
 }
 
 /** The top-bar title for a game view ("Level 37", "Daily · Tue 6 Oct", "Lantern Walk · 13"). */
@@ -181,6 +197,25 @@ function sharedViewport(w: Window, fresh: boolean): ViewportInfo {
   return v;
 }
 
+type CelebrateModule = typeof import('../fx/celebrate');
+let celebrateMod: CelebrateModule | null = null;
+let celebrateLoad: Promise<CelebrateModule | null> | null = null;
+
+/**
+ * Phase 2d.1 (helpers-spec §7.3 bundle note): the lazy fx chunk (points flight, cat burst, completion
+ * labels), loaded once per page; a failed load is retried on the next call. Never rejects.
+ */
+export function loadCelebrate(): Promise<CelebrateModule | null> {
+  celebrateLoad ??= import('../fx/celebrate').then(
+    (m) => (celebrateMod = m),
+    () => {
+      celebrateLoad = null;
+      return null;
+    },
+  );
+  return celebrateLoad;
+}
+
 /**
  * The game bar's discs in s-units (look-spec §1.4): the back disc's left edge (31.5 − 18.4) and the
  * gear's (370 − 18.4) at refWidth 402. On FBIG the physically-left one keeps the top-left safe zone
@@ -219,6 +254,7 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
     points: v.points,
     final: v.catsPlaced >= v.board.n && v.board.n > 0,
     reducedMotion: v.reducedMotion,
+    starPoints: starMode(v),
   });
   const pillsProps = (v: GameView): PillsProps => ({
     catsPlaced: v.catsPlaced,
@@ -229,6 +265,8 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
     colors: v.board.colors,
     regionsDone: v.board.regionsDone,
     boardId: String(v.board.puzzleId),
+    // §6.5: the heads ring starts at a per-board offset; the tutorial starts at its first colour.
+    ringId: v.mode === 'tutorial' ? null : String(v.board.puzzleId),
   });
   const chipsProps = (v: GameView): RuleChipsProps => ({ compact: layout.compact, highlight: v.chipHighlight });
   const toolProps = (v: GameView): ToolBarProps => ({
@@ -240,7 +278,13 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
     mouse: v.mouse,
     videoRefill: v.videoRefill,
     pulse: v.pulse,
+    busy: v.inputLocked || v.status === 'kitty' || v.status === 'hint',
   });
+
+  /** The lazy fx chunk's player for this screen (null until it has loaded). */
+  let celebrate: Celebrate | null = null;
+  /** §2.5: stars fly to the Score (the chunk is in and motion is on). */
+  const starMode = (v: GameView): boolean => celebrate !== null && !v.reducedMotion;
 
   const locked = (): boolean => current.chromeLocked === true;
   const mouseReady = (): boolean => current.mouse.shown && current.mouse.enabled;
@@ -276,6 +320,8 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
   const fx = h('div', { class: 'game__fx', 'aria-hidden': 'true' });
   /** The win flow's scrim (§2.2 t = 4 200), under the overlays. */
   const scrim = h('div', { class: 'game__scrim', 'aria-hidden': 'true', hidden: true });
+  /** Phase 2d.1: the fixed fx layer over the viewport (tickers, "+N", star, shards, labels). */
+  const gameFx = h('div', { class: 'game-fx', 'aria-hidden': 'true' });
   const el = h(
     'div',
     { class: 'screen screen--game' },
@@ -283,8 +329,75 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
     // The play area is the page's main landmark (Home uses <main> too).
     h('main', { class: 'game__col' }, h('div', { class: 'game__hud' }, pills.el, chips.el), stage, h('div', { class: 'game__tools' }, tools.el), fx),
     scrim,
+    gameFx,
   );
   const startToast = createStartToast({ host: fx, scale: () => layout.s, reduced: () => current.reducedMotion });
+  let tickers: Tickers | null = null;
+  /** Tickers asked for before the chunk loaded: the lines and when (performance.now). */
+  let tickersDue: { lines: readonly [TickerLine, TickerLine]; at: number } | null = null;
+  const nowMs = (): number => win()?.performance.now() ?? Date.now();
+
+  let destroyed = false;
+  const bindCelebrate = (m: CelebrateModule | null): void => {
+    if (!m || destroyed || celebrate) return;
+    celebrate = m.createCelebrate(gameFx, {
+      cellRect: (c) => board.cellRect(c),
+      color: (c) => {
+        const label = current.board.regions[c] ?? 0;
+        return `var(--r${current.board.colors[label] ?? label})`;
+      },
+      pitch: () => layout.slot,
+      s: () => layout.s,
+      reduced: () => current.reducedMotion,
+      scoreRect: () => topBar.scoreRect(),
+      countTo: (total) => topBar.countTo(total),
+    });
+    tickers = m.createTickers({ host: gameFx, reduced: () => current.reducedMotion });
+    gameFx.dataset.celebrate = 'ready';
+    topBar.update(barProps(current));
+    const due = tickersDue;
+    tickersDue = null;
+    if (due) tickers.play(due.lines, nowMs() - due.at);
+  };
+
+  // ── Phase 2d.1: the celebrations (§2.4, §2.5, §4.1, §4.3) ──
+  /** Deferred waves and labels of a mouse action (§4.1). */
+  const deferred = new Set<ReturnType<typeof setTimeout>>();
+  /** The MARKED { source: 'mouse' } cells of the action being played (cleared after the action). */
+  let mouseCells: readonly CellIndex[] | null = null;
+  /** A higher total came with the props; its POINTS (same action) clears this before the check runs. */
+  let awaitingPoints = false;
+  const cancelFx = (): void => {
+    celebrate?.cancel();
+    for (const id of deferred) clearTimeout(id);
+    deferred.clear();
+  };
+  /** UNITS_DONE: the board's waves and our labels; a mouse action's wait for their anchor's X (§4.1). */
+  const playUnits = (ev: Extract<GameEvent, { type: 'UNITS_DONE' }>): void => {
+    const cells = mouseCells;
+    const groups = new Map<number, DoneUnit[]>();
+    for (const u of ev.units) {
+      const k = cells && !current.reducedMotion ? cells.indexOf(u.anchor) : -1;
+      const at = k < 0 ? 0 : mouseLandMs(k);
+      groups.set(at, [...(groups.get(at) ?? []), u]);
+    }
+    for (const [at, units] of groups) {
+      const run = (): void => {
+        const e: GameEvent = { type: 'UNITS_DONE', units };
+        board.playEvent(e);
+        celebrate?.play(e);
+      };
+      if (at <= 0) {
+        run();
+        continue;
+      }
+      const id = setTimeout(() => {
+        deferred.delete(id);
+        run();
+      }, at);
+      deferred.add(id);
+    }
+  };
 
   const doc = el.ownerDocument;
   const root = doc.documentElement;
@@ -456,10 +569,21 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
   // (the cards and tools relabel themselves); the board and its state are untouched. The direction
   // may have changed too (RTL), so the layout re-runs (the FB shift and the bar's fit).
   const offLocale = onLocaleChanged(() => {
+    // §2.5: a language change ends the celebrations (their words were the old language's).
+    cancelFx();
     topBar.update(barProps(current));
     pills.update(pillsProps(current));
     relayout();
   });
+
+  // Prefetch the fx chunk at idle after the first mount (§7.3); a screen built after it loaded binds at once.
+  if (celebrateMod) bindCelebrate(celebrateMod);
+  else {
+    const w = win() as (Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }) | null;
+    const go = (): void => void loadCelebrate().then(bindCelebrate);
+    if (w?.requestIdleCallback) w.requestIdleCallback(go, { timeout: 2000 });
+    else setTimeout(go, 200);
+  }
 
   return {
     el,
@@ -467,17 +591,52 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
       const prev = current;
       current = v;
       if (v.board.n !== prev.board.n || v.bannerBand !== prev.bannerBand || v.fbSafeZone !== prev.fbSafeZone) relayout();
+      // A reset (a new board, Retry, fewer points, the motion setting): every celebration ends and the
+      // Score shows the total at once (§2.5 queue).
+      const reset =
+        v.board.puzzleId !== prev.board.puzzleId ||
+        v.points === null ||
+        prev.points === null ||
+        v.points < prev.points ||
+        v.reducedMotion !== prev.reducedMotion;
+      if (reset) cancelFx();
+      else if (v.points !== prev.points && starMode(v) && !awaitingPoints) {
+        // The POINTS of this action follows in the same task; if none does, show the total.
+        awaitingPoints = true;
+        queueMicrotask(() => {
+          if (!awaitingPoints) return;
+          awaitingPoints = false;
+          topBar.syncPoints();
+        });
+      }
       render(v, prev);
+      if (reset) topBar.syncPoints();
     },
     playEvent(ev) {
-      board.playEvent(ev);
+      if (ev.type === 'MARKED' && ev.source === 'mouse') {
+        // §4.1: this action's UNITS_DONE waits for its anchor's X; the action's events arrive together.
+        mouseCells = ev.cells;
+        queueMicrotask(() => {
+          mouseCells = null;
+        });
+      }
+      if (ev.type === 'UNITS_DONE') playUnits(ev);
+      else board.playEvent(ev);
       pills.playEvent(ev);
-      topBar.playEvent(ev);
+      if (ev.type === 'POINTS') {
+        awaitingPoints = false;
+        // The "+N" and the star (or, until the chunk is in, 2d's roll in the bar).
+        if (celebrate && current.points !== null) celebrate.play(ev);
+        else topBar.playEvent(ev);
+      } else if (ev.type === 'CAT_PLACED') celebrate?.play(ev);
     },
     playEntry() {
       // Re-apply the layout now that the screen is in the document (the viewport reading is cached
       // since creation; a resize re-reads it).
       relayout();
+      // A (re)started board (mount, Retry, revive): nothing of the last attempt keeps playing.
+      cancelFx();
+      topBar.syncPoints();
       const startInMs = board.playEntry();
       // A (re)started level (mount, Retry, revive): keyboard focus belongs on the board.
       recoverFocusSoon();
@@ -509,8 +668,21 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
     playStartToast(kind: StartToastKind) {
       startToast.play(kind);
     },
+    playTickers(lines) {
+      if (tickers) {
+        tickers.play(lines);
+        return;
+      }
+      // The chunk is not in yet: the pair plays when it is, where its crossing would be by then.
+      tickersDue = { lines, at: nowMs() };
+      void loadCelebrate().then(bindCelebrate);
+    },
     destroy() {
+      destroyed = true;
       offLocale();
+      cancelFx();
+      tickers?.destroy();
+      tickersDue = null;
       w0?.removeEventListener('resize', onResize);
       w0?.visualViewport?.removeEventListener('resize', onResize);
       doc.removeEventListener('keydown', onDocKey);

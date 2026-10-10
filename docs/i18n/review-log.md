@@ -105,6 +105,26 @@ Points a reviewer should check first:
 | `ja`, `ko`, `zh-Hans` | counters for tiles (マス, 칸, 个格子) in the mouse lines; the toast lines fit 32 display columns |
 | `id`, `vi` | the new colour names (Ungu, Merah muda; Tím, Hồng) are distinct from Orchid (Anggrek, Phong lan) |
 
+## Phase 2d.1 redraft: the helpers' cheer, the tickers, Denim (2026-10-10, workstream G3)
+
+The 16 catalogues were redrafted on 2026-10-10 by Claude (AI) for [`docs/phase2d/helpers-spec.md`](../phase2d/helpers-spec.md) Appendix A, again from our own English copy, `meta.ts` and the [glossary](glossary.md) only (its new "completion cheer" and "level-start tickers" rules and colour 4). Every change below is an **unreviewed AI draft**; the release still ships English only.
+
+- **New, in a block headed "Phase 2d.1" at the end of each catalogue:** `fx.done` (the cheer under a finished row, column or colour, ≤ 8 characters), `a11y.unitDone` (its screen-reader line, with `{unit}` kept in the nominative by a colon where the language has cases), `ticker.best`, `ticker.cats.*`, `ticker.solved.*`, `ticker.points.*` (every plural form the language needs; ru, pl and ar use a label + colon form so any number reads correctly), `ticker.daily`, `ticker.unique`, `ticker.tip.cat`, `ticker.tip.drag` (≤ 40 characters each; `npm run i18n:check` reports no width warning).
+- **Changed in place:** `color.4` Mint → Denim in every catalogue (a mid blue tile colour, glossary §3).
+- `docs/i18n/drafted-from.json` rewritten (`i18n-check --write-drafted-from`): no stale warning left.
+
+Points a reviewer should check first:
+
+| Locale | Check |
+|---|---|
+| all | the cheer is an exclamation, not a command; the ticker lines state only the player's own numbers, the board, a true fact or a tip |
+| `de`, `pt-BR`, `tr` | the tip prefix avoids the hint's word (*Trick:*, *Truque:*, *Tüyo:*) |
+| `fr` | narrow no-break spaces before `!` and `:` in `fx.done`, `ticker.best` and the tips |
+| `ru`, `pl`, `ar` | `ticker.solved.*` and `ticker.points.*` use one label + colon form for every plural category; `ticker.cats.*` agrees with the number |
+| `ja`, `ko`, `zh-Hans`, `th`, `vi`, `id` | only the `.other` forms (no plural distinction); `fx.done` within 8 display columns (できた！ = 8) |
+| `es`, `fr`, `it`, `pt-BR` | `a11y.unitDone` puts `{unit}` after a colon ("Completada: la fila 1.") because `{unit}` carries its article |
+| `vi` | *Chàm* (indigo, the dye of denim) for colour 4, distinct from *Tím* (Violet) and *Đá phiến* (Slate) |
+
 ## Known limits of the drafts
 
 - Event names, product names and praise words are our own and were translated for meaning and tone, not literally; reviewers may propose better local names (they must stay our own, never another game's).

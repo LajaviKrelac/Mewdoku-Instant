@@ -41,7 +41,7 @@ afterEach(() => {
 const step: HintStep = { kind: 'single', level: 1, focusUnits: [{ kind: 'row', index: 2 }], focusCells: [9], effectCells: [], placeCell: 9 };
 
 describe('O1 hint card', () => {
-  it('renders the explanation, applies and closes via ×, Esc and a scrim tap', () => {
+  it('renders the explanation, applies and closes via the (hidden until focused) close button, Esc and a dim tap', () => {
     const onApply = vi.fn();
     const onClose = vi.fn();
     const card = createHintCard();
@@ -53,9 +53,10 @@ describe('O1 hint card', () => {
     expect(q(card.el, '.hint-card__text').textContent).toBe('Row 3 has just one open tile left, so its cat goes here.');
     const dialog = q(card.el, '[role="dialog"]');
     expect(dialog.getAttribute('aria-modal')).toBe('true');
-    expect(document.getElementById(dialog.getAttribute('aria-describedby') ?? '')?.textContent).toContain('Row 3');
+    const desc = (dialog.getAttribute('aria-describedby') ?? '').split(' ').map((id) => document.getElementById(id)?.textContent ?? '');
+    expect(desc.join('')).toContain('Row 3');
 
-    press(q(card.el, '.hint-card__apply'));
+    press(q(card.el, '.hint-apply'));
     expect(onApply).toHaveBeenCalledTimes(1);
     press(q(card.el, '.overlay__close'));
     press(q(card.el, '.overlay__scrim'));
@@ -82,17 +83,17 @@ describe('O1 sheet placement', () => {
     expect(sheetPlacement({ top: 402, height: 150 }, { top: 150, bottom: 410 }, 40)).toBe('bottom');
   });
 
-  it('marks the overlay with its placement and re-checks via avoidRect', () => {
+  it('Phase 2d.1: no placement any more; the layout is measured on the next frame (RP-3), from boardRect or the deprecated avoidRect', () => {
     const card = createHintCard();
     document.body.append(card.el);
     const avoid = vi.fn(() => null);
     card.open({ step, n: 4, colors: Uint8Array.from([7, 4, 2, 0]), patterns: false, onApply: vi.fn(), onClose: vi.fn(), avoidRect: avoid });
-    expect(card.el.dataset.placement).toBe('bottom');
-    // Measured on the next frame, after every DOM write of the open (one style recalc, RP-3).
+    expect(card.el.hasAttribute('data-placement')).toBe(false);
+    expect(card.el.hasAttribute('data-placed')).toBe(false);
     expect(avoid).not.toHaveBeenCalled();
     vi.advanceTimersByTime(20);
     expect(avoid).toHaveBeenCalledTimes(1);
-    expect(card.el.dataset.placement).toBe('bottom');
+    expect(card.el.hasAttribute('data-placed')).toBe(true);
     card.close();
     vi.advanceTimersByTime(20);
     expect(avoid).toHaveBeenCalledTimes(1);

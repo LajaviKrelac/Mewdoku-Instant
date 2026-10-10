@@ -15,6 +15,8 @@
 // place (.pills .period-pill[data-in-game]); the fish still fly with the 2c times; Back and Gear are
 // aria-disabled until the panel; UX-12 becomes "the +N chip never covers the period total or the bar's
 // Level and Score columns".
+// Phase 2d.1 (G1, docs/phase2d/helpers-spec.md §2.5, §7.7): the last cat's star and the Score's
+// count-up end on the level's total with [data-final], and the period counter still appears at 1 000 ms.
 import { expect, test, type Page } from '@playwright/test';
 import type { E2EHooks } from '../../src/app/boot';
 import { defaults } from '../../src/game/save';
@@ -235,6 +237,45 @@ test('2c.1: the points counter stays visible with the level\'s total until the s
   expect((await stored(page))?.points.total).toBe(total);
   await tapPanel(page);
   await expect(page.locator('[data-overlay="victory"] .victory__points')).toHaveText(`${text} points`);
+});
+
+test('2d.1 §2.5: the last cat\'s star and count-up end on the level\'s total with [data-final]; the period counter still appears at t = 1 000', async ({ page }) => {
+  await open(page, atLevel(2));
+  await playNext(page);
+  await expect(page.locator('.game-fx[data-celebrate="ready"]')).toBeAttached({ timeout: 10_000 });
+  const sol = await page.evaluate(() => (window as TestWindow).__mewdoku?.solution() ?? []);
+  const n = sol.length;
+  // Every cat but the last by double clicks (each a scoring cat in one run), then the last one.
+  for (let r = 0; r < n - 1; r++) {
+    await page.locator('.cell').nth(r * n + (sol[r] as number)).dblclick();
+    await page.waitForTimeout(350);
+  }
+  await page.waitForTimeout(2_000); // the earlier stars have landed
+  const rule = pointsRuleFor('level');
+  const before = runTotal(n - 1, rule).toLocaleString('en-US');
+  const total = runTotal(n, rule).toLocaleString('en-US');
+  const num = page.locator('.top-bar--game .points-pill__n');
+  await expect(num).toHaveText(before);
+  const last = (n - 1) * n + (sol[n - 1] as number);
+  await page.locator('.cell').nth(last).dblclick();
+  const t0 = await page.evaluate(() => performance.now());
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'won');
+  // The period counter takes the heads pill's place at t = 1 000 (2c times, unchanged).
+  const shownAt = await page.waitForFunction(
+    (start) => {
+      const el = document.querySelector<HTMLElement>('.pills .period-pill[data-in-game]');
+      return el && !el.hidden && el.getBoundingClientRect().width > 0 ? performance.now() - start : false;
+    },
+    t0,
+    { polling: 'raf', timeout: 5_000 },
+  );
+  const dt = (await shownAt.jsonValue()) as number;
+  expect(dt).toBeGreaterThanOrEqual(900);
+  expect(dt).toBeLessThanOrEqual(1_300);
+  // The Score still shows the total before this cat until the star lands (1 330 ms), then counts up.
+  if (dt < 1_250) await expect(num).toHaveText(before);
+  await expect(num).toHaveText(total, { timeout: 3_000 });
+  await expect(page.locator('.top-bar--game .points-pill')).toHaveAttribute('data-final', '');
 });
 
 test('reduced motion: the panel at 1.2 s (≤ 1.4 s) with the counter already +3', async ({ page }) => {

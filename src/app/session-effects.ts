@@ -7,14 +7,19 @@
 // announcement; 02 §16, §18), analytics payloads (02 §20) and win bookkeeping (02 §10.1 + phase2b
 // §4.3 event wins + phase2c §3.7: all saved with the win, before any animation).
 // Phase 2d (G1, docs/phase2d/look-spec.md §1.12): the mouse's MARKED announces a11y.mouse.
+// Phase 2d.1 (G1, docs/phase2d/helpers-spec.md §1.6, §4.3): the mouse's MARKED carries no sound of its
+// own (the session plays `mouse` and `mark` with its visits); UNITS_DONE plays the `unit_done` chime
+// (pitch index = units − 1) unless the same action plays the region chime (REGION_DONE), and adds
+// "{units} complete." to the action's utterance, leaving out a region whose REGION_DONE is in it.
 import type { SfxId } from '../audio/sfx';
 import { applyEventWin, type EventDef, type Milestone } from '../game/events';
 import { popcount } from '../game/factory';
 import { getMode } from '../game/modes';
 import { addPeriodPoints, addPoints, keptPoints, periodKeyAt, periodTotal } from '../game/scoring';
 import { applyDailyWin, applyLevelWin, applyTutorialDone } from '../game/stats';
-import type { GameEvent, GameState, ModeId, SaveData } from '../game/types';
-import { colorName, formatNumber, t, tn } from '../i18n';
+import type { DoneUnit, GameEvent, GameState, ModeId, SaveData } from '../game/types';
+import { capitalizeFirst, colorName, formatNumber, joinList, t, tn } from '../i18n';
+import { unitName } from '../ui/overlays/hint-text';
 import { cfg, type GameConfig, type PeriodKind, type ScoredMode } from './config';
 import type { AnalyticsEvent } from './events';
 import type { SessionMeta } from './store';
@@ -30,16 +35,19 @@ export interface Feedback {
 /**
  * Sound, vibration and announcement for one reducer event, given the state AFTER the action.
  * WON's sound and vibration are played by the session after fx.winHappyDelayMs (02 §10.1).
+ * `events` (phase 2d.1): every event of the same action (UNITS_DONE looks for its REGION_DONE).
  */
-export function feedbackFor(ev: GameEvent, state: GameState, colors: Uint8Array, c: GameConfig = cfg): Feedback {
+export function feedbackFor(ev: GameEvent, state: GameState, colors: Uint8Array, c: GameConfig = cfg, events: readonly GameEvent[] = [ev]): Feedback {
   const n = state.puzzle.n;
   const placed = state.catsPlaced;
   switch (ev.type) {
     case 'MARKED':
       // Phase 2d §1.12: the mouse's X marks are the action's one line ("The mouse crossed out 3 tiles.").
+      // Phase 2d.1 §1.6: no sound here: the session plays `mouse` at each arrival and `mark` (with the
+      // mark haptic) as each X lands.
       if (ev.source === 'mouse') {
         const count = ev.cells.length;
-        return { sfx: 'mark', haptic: c.haptics.mark, announce: tn('a11y.mouse', count, { count: formatNumber(count) }) };
+        return { announce: tn('a11y.mouse', count, { count: formatNumber(count) }) };
       }
       return { sfx: 'mark', haptic: c.haptics.mark, announce: tn('a11y.marked', ev.cells.length) };
     case 'UNMARKED':
@@ -66,6 +74,8 @@ export function feedbackFor(ev: GameEvent, state: GameState, colors: Uint8Array,
       };
     case 'HINT_APPLIED':
       return { sfx: 'hint_apply', announce: t('a11y.hintApplied') };
+    case 'UNITS_DONE':
+      return unitsFeedback(ev.units, events, n, colors);
     case 'REVIVED':
       return { announce: t('a11y.revived') };
     case 'WON':
@@ -76,6 +86,24 @@ export function feedbackFor(ev: GameEvent, state: GameState, colors: Uint8Array,
     default:
       return {};
   }
+}
+
+/**
+ * Phase 2d.1 §4.3: the `unit_done` chime once per action (its pitch steps up with the number of units:
+ * sfxIndex = units − 1), skipped when the same action plays the region chime (a one-tile colour would
+ * stack kitty + region + unit_done in one frame); the utterance "Row 1 and column 9 complete." names
+ * every unit except a region whose REGION_DONE is in the same action ("Green done." already says it).
+ */
+function unitsFeedback(units: readonly DoneUnit[], events: readonly GameEvent[], n: number, colors: Uint8Array): Feedback {
+  const regionsDone = new Set<number>();
+  for (const e of events) if (e.type === 'REGION_DONE') regionsDone.add(e.region);
+  const named = units.filter((u) => !(u.kind === 'region' && regionsDone.has(u.index)));
+  const ctx = { n, colors, patterns: false };
+  const announce = named.length > 0 ? capitalizeFirst(t('a11y.unitDone', { unit: joinList(named.map((u) => unitName(u, ctx))) })) : undefined;
+  return {
+    ...(regionsDone.size === 0 && units.length > 0 ? { sfx: 'unit_done' as const, sfxIndex: units.length - 1 } : {}),
+    ...(announce ? { announce } : {}),
+  };
 }
 
 /** `level` analytics param: the level number, 0 for a daily or an event puzzle (02 §20). */

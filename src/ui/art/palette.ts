@@ -1,4 +1,5 @@
-// Owner: A (Phase 2b); G2 (Phase 2d: the measured palette and tokens, tiers, HEAD_ORDER)
+// Owner: A (Phase 2b); G2 (Phase 2d: the measured palette and tokens, tiers, HEAD_ORDER; Phase 2d.1: Denim,
+// the 11-colour tier, the heads ring and its per-board start, dark tiles, the helpers' tokens)
 // Region colours, glyphs and UI tokens (02 §17.2, §18; phase2b §1.3–§1.6; look-spec §1.2, §1.9).
 // Mirrors styles/tokens.css (--r0…--r11 etc.). Colour NAMES live in i18n (colorName(i)).
 // scripts/palette-check.ts validates these values. One token set (TOKENS), Tux's colours
@@ -7,52 +8,57 @@
 // Phase 2d (D-2d-0, user decision 2026-10-10): ten region colours and the page, ink and helper
 // colours are sampled from the user's own screenshot of the original's game screen; index 4 and Cocoa
 // (11 and 12) and every darkened or derived value are ours (look-spec §1.2, §1.9).
-// Phase 2d.1 L0 (helpers-spec §6.2): index 4 is named Denim (was Mint); it keeps 2d's own value here
-// until G2 sets the measured Denim (D-2d1-10).
+// Phase 2d.1 (helpers-spec §6, D-2d1-10, D-2d1-11, D-2d1-17; the user's recordings of 2026-10-10): index 4 is
+// the measured Denim #5B75B2 (was our Mint), the eleventh measured colour; boards up to 11 × 11 draw only
+// from the 11 measured colours and Cocoa (9, ours) appears only on 12 × 12. Denim is the first dark tile
+// (isDarkTile): the wrong X is darker, the pattern glyph turns white on it. The heads follow the
+// measured hue ring (HEAD_ORDER) from a per-board start (headOrderFor).
 import { cfg, type GameConfig } from '../../app/config';
 import { assignColors } from '../../engine/colors';
+import { cyrb128 } from '../../engine/rng';
 import type { DeltaMatrix, Puzzle } from '../../engine/types';
 
 export const PALETTE_SIZE = 12;
 
 /**
  * Region colours by palette index: Coral, Apricot, Mustard, Lime, Denim, Lagoon, Sky, Violet, Orchid,
- * Cocoa, Slate, Pink. Ten measured on the user's recording (PNG still, D-2d-2); index 4 (named Denim
- * since 2d.1 L0, still 2d's own value until helpers-spec §6.2) and Cocoa (9) are ours, used only by
- * boards that need more than ten colours (look-spec §1.9, D-2d-10).
+ * Cocoa, Slate, Pink. Eleven measured on the user's recordings (PNG stills, D-2d-2; Denim on the 2d.1
+ * stills, helpers-spec §6.1); Cocoa (9) is ours, used only by 12 × 12 boards (D-2d1-10).
  */
 export const PALETTE: readonly string[] = Object.freeze([
-  '#D57374', '#FFAA6D', '#E4BB49', '#AED994', '#52A982', '#48B5B2',
+  '#D57374', '#FFAA6D', '#E4BB49', '#AED994', '#5B75B2', '#48B5B2',
   '#6BBCE7', '#9778D6', '#EB85B7', '#B0855A', '#A7BFD7', '#FAB4D0',
 ]);
 
-/** The 10 colours measured on the user's recording (palette indices); n ≤ 10 boards use only these. */
-export const PALETTE_CORE: readonly number[] = Object.freeze([0, 1, 2, 3, 5, 6, 7, 8, 10, 11]);
+/** Phase 2d.1: the 11 measured colours (palette indices); boards with n ≤ 11 draw only from these, n = 12 adds 9 (Cocoa). */
+export const PALETTE_CORE: readonly number[] = Object.freeze([0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11]);
 
 /**
- * Heads-pill order (look-spec §1.6: around the colour wheel from green, as the recording shows):
- * Lime, Denim, Lagoon, Sky, Slate, Violet, Orchid, Pink, Coral, Apricot, Cocoa, Mustard.
+ * Phase 2d.1 (helpers-spec §6.5, D-2d1-17): the measured hue ring of the heads pill, in palette
+ * indices: Lime, Lagoon, Sky, Slate, Denim, Violet, Orchid, Pink, Coral, Apricot, Cocoa, Mustard
+ * (Cocoa, ours, sits between Apricot and Mustard by hue). A board lists its colours in this cyclic
+ * order from its own start (headOrderFor).
  */
-export const HEAD_ORDER: readonly number[] = Object.freeze([3, 4, 5, 6, 10, 7, 8, 11, 0, 1, 9, 2]);
+export const HEAD_ORDER: readonly number[] = Object.freeze([3, 5, 6, 10, 4, 7, 8, 11, 0, 1, 9, 2]);
 
 /**
  * CIEDE2000 between palette colours, integers ×100, row-major 12×12 (03 §8.5), from PALETTE (sRGB
- * D65; min pair Sky/Slate = 10.40). palette-check.ts recomputes it and fails (printing the fresh
- * matrix) if PALETTE changes without updating this one.
+ * D65; min pair Sky/Slate = 10.40; Denim's nearest is Violet, 14.19). palette-check.ts recomputes it and
+ * fails (printing the fresh matrix) if PALETTE changes without updating this one.
  */
 export const PALETTE_DE00: DeltaMatrix = Object.freeze([
-     0, 2387, 3906, 5201, 5416, 5064, 4793, 2965, 1623, 2116, 3619, 2040,
-  2387,    0, 1790, 3658, 4387, 4344, 4460, 4686, 3498, 1652, 3525, 2957,
-  3906, 1790,    0, 2354, 3357, 3813, 4891, 6028, 5150, 2025, 4125, 4365,
-  5201, 3658, 2354,    0, 1796, 2473, 4025, 5085, 5926, 3250, 3339, 4980,
-  5416, 4387, 3357, 1796,    0, 1352, 3088, 4182, 6139, 3346, 2878, 5430,
-  5064, 4344, 3813, 2473, 1352,    0, 1737, 3609, 5009, 3627, 2034, 5055,
-  4793, 4460, 4891, 4025, 3088, 1737,    0, 2779, 4655, 4083, 1040, 4284,
-  2965, 4686, 6028, 5085, 4182, 3609, 2779,    0, 2147, 4212, 1969, 2702,
-  1623, 3498, 5150, 5926, 6139, 5009, 4655, 2147,    0, 3469, 3101, 1113,
-  2116, 1652, 2025, 3250, 3346, 3627, 4083, 4212, 3469,    0, 3341, 3273,
-  3619, 3525, 4125, 3339, 2878, 2034, 1040, 1969, 3101, 3341,    0, 2896,
-  2040, 2957, 4365, 4980, 5430, 5055, 4284, 2702, 1113, 3273, 2896,    0,
+     0, 2387, 3906, 5201, 3521, 5064, 4793, 2965, 1623, 2116, 3619, 2040,
+  2387,    0, 1790, 3658, 4751, 4344, 4460, 4686, 3498, 1652, 3525, 2957,
+  3906, 1790,    0, 2354, 5482, 3813, 4891, 6028, 5150, 2025, 4125, 4365,
+  5201, 3658, 2354,    0, 5153, 2473, 4025, 5085, 5926, 3250, 3339, 4980,
+  3521, 4751, 5482, 5153,    0, 3122, 2416, 1419, 3341, 3906, 2385, 3646,
+  5064, 4344, 3813, 2473, 3122,    0, 1737, 3609, 5009, 3627, 2034, 5055,
+  4793, 4460, 4891, 4025, 2416, 1737,    0, 2779, 4655, 4083, 1040, 4284,
+  2965, 4686, 6028, 5085, 1419, 3609, 2779,    0, 2147, 4212, 1969, 2702,
+  1623, 3498, 5150, 5926, 3341, 5009, 4655, 2147,    0, 3469, 3101, 1113,
+  2116, 1652, 2025, 3250, 3906, 3627, 4083, 4212, 3469,    0, 3341, 3273,
+  3619, 3525, 4125, 3339, 2385, 2034, 1040, 1969, 3101, 3341,    0, 2896,
+  2040, 2957, 4365, 4980, 3646, 5055, 4284, 2702, 1113, 3273, 2896,    0,
 ]);
 
 export type TokenName =
@@ -96,7 +102,15 @@ export type TokenName =
   | 'rule-card'
   | 'rule-tile'
   | 'rule-tile-2'
-  | 'rule-mark';
+  | 'rule-mark'
+  // Phase 2d.1 (helpers-spec §2.5, §3.2, §4.3): the "+N" orange, the completion label's gradient and
+  // outline, the hint card and its Apply pill.
+  | 'plus'
+  | 'done-top'
+  | 'done-bottom'
+  | 'done-line'
+  | 'hint-card'
+  | 'apply';
 
 /**
  * The one token set (phase2b §1.3, §1.4; look-spec §1.2). Phase 2d (D-2d-0): the page, card, ink,
@@ -109,8 +123,12 @@ export type TokenName =
  *   that need a dark colour: the colour-pattern glyphs, the X edge with patterns on, "Free" on gold.
  * - `accent` carries white labels only at ≥ 24 px (WCAG large text, 3.15:1); smaller orange text
  *   uses `accent-text`, large titles `accent-title`, the focus ring `focus`.
- * - `wrong` (#6E0E25): the wrong X and its ring, ≥ 3.41:1 on every tile (the 2c.1 crimson failed 3:1 on
- *   the darker measured tiles); --danger stays the UI error colour.
+ * - `wrong` (#560A1C, Phase 2d.1 §6.4): the wrong X and its ring, ≥ 3.18:1 on every tile (Denim the
+ *   lowest; 2d's crimson gave 2.64 on Denim); --danger stays the UI error colour.
+ * - Phase 2d.1 (helpers-spec §2.5, §3.2, §4.3, §5.2): `plus` the "+N" (measured, a decorative parity
+ *   exception, D-2d1-16), `done-top` / `done-bottom` / `done-line` the completion label (measured),
+ *   `hint-card` the hint card (measured), `apply` Apply's pill (the measured #F0912A darkened until
+ *   white reaches 3:1 as large text, D-2d1-16); `toast-fill` / `toast-line` re-sampled from the PNG.
  * - `amber-text` stays the gold-family text colour (daily card "In progress").
  */
 export const TOKENS: Readonly<Record<TokenName, string>> = Object.freeze({
@@ -140,17 +158,23 @@ export const TOKENS: Readonly<Record<TokenName, string>> = Object.freeze({
   'life-empty': '#EDE8E2',
   scrim: 'rgba(28,23,32,.82)',
   glow: 'rgba(255,194,61,.65)',
-  wrong: '#6E0E25',
+  wrong: '#560A1C',
   hard: '#6C3FB5',
   badge: '#DC2F2F',
   'badge-video': '#03A84A',
   dot: '#F34F4F',
-  'toast-fill': '#FEF0C7',
-  'toast-line': '#DD9045',
+  'toast-fill': '#FFF1C8',
+  'toast-line': '#E98E33',
   'rule-card': '#FBF4EE',
   'rule-tile': '#DDBEAA',
   'rule-tile-2': '#EEE1D7',
   'rule-mark': '#AF6D44',
+  plus: '#FB8515',
+  'done-top': '#EFDA25',
+  'done-bottom': '#FECF3D',
+  'done-line': '#813800',
+  'hint-card': '#FFFCFA',
+  apply: '#D38025',
 });
 
 /**
@@ -207,18 +231,18 @@ export function regionColorVar(paletteIndex: number): string {
   return `var(--r${paletteIndex})`;
 }
 
-/** The palette indices an n×n board draws from (look-spec §1.9): n ≤ 10 the 10 core colours, 11 adds Cocoa (9), 12 uses all 12. */
+/** The palette indices an n×n board draws from (helpers-spec §6.2): n ≤ 11 the 11 measured colours, 12 adds Cocoa (9). */
 export function paletteTier(n: number): readonly number[] {
   if (n <= PALETTE_CORE.length) return PALETTE_CORE;
-  if (n === PALETTE_CORE.length + 1) return [...PALETTE_CORE, 9].sort((x, y) => x - y);
   return Array.from({ length: PALETTE_SIZE }, (_, i) => i);
 }
 
 /**
  * Palette index per region label: `fixed` (tutorial, game/modes fixedColors) or the engine's
- * assignColors on the board's tier (look-spec §1.9): the k × k sub-matrix of PALETTE_DE00 for the
- * tier's colours, mapped back to palette indices. So a 10×10 board shows exactly the 10 measured
- * colours, and Denim (4) / Cocoa (9) appear only on boards that need more than 10.
+ * assignColors on the board's tier (helpers-spec §6.2): the k × k sub-matrix of PALETTE_DE00 for the
+ * tier's colours, mapped back to palette indices (assignColors takes more colours than regions). So a
+ * 9 × 9 or 10 × 10 board may leave out any measured colour, as the original does, and only a 12 × 12
+ * board shows Cocoa (9), our one invented colour.
  */
 export function regionColorsFor(puzzle: Pick<Puzzle, 'id' | 'n' | 'regions'>, fixed: readonly number[] | null): Uint8Array {
   if (fixed && fixed.length >= puzzle.n && fixed.slice(0, puzzle.n).every(isPaletteIndex)) {
@@ -230,6 +254,40 @@ export function regionColorsFor(puzzle: Pick<Puzzle, 'id' | 'n' | 'regions'>, fi
   const sub: number[] = [];
   for (const a of tier) for (const b of tier) sub.push(PALETTE_DE00[a * PALETTE_SIZE + b] as number);
   return assignColors(puzzle, sub, k).map((j) => tier[j] as number);
+}
+
+/**
+ * Phase 2d.1 (helpers-spec §6.5, D-2d1-17): the board's colours (each once) in HEAD_ORDER's ring, rotated
+ * to start at cyrb128(puzzleId)[0] mod count (the id hash assignColors uses for its tie rotation);
+ * deterministic per board, varying between levels like the original's. A null id (the tutorial) starts
+ * at the ring's first colour. Colours the ring lacks (none today) go last.
+ */
+export function headOrderFor(colors: ArrayLike<number>, puzzleId: string | null): number[] {
+  const present = new Set(Array.from(colors));
+  const ring = HEAD_ORDER.filter((c) => present.has(c));
+  for (const c of present) if (!ring.includes(c)) ring.push(c);
+  if (!puzzleId || ring.length < 2) return ring;
+  const k = (cyrb128(puzzleId)[0] >>> 0) % ring.length;
+  return [...ring.slice(k), ...ring.slice(0, k)];
+}
+
+/** Relative luminance (WCAG) of a '#RRGGBB' colour. */
+function luminanceOf(hex: string): number {
+  const lin = hexToRgb(hex).map((v) => {
+    const c = v / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  }) as [number, number, number];
+  return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
+}
+
+/**
+ * Phase 2d.1 (helpers-spec §6.4, D-2d1-11): white on this tile reaches 4.0:1 (relative luminance ≤
+ * 0.2125). Today only Denim (4, white 4.53); Violet (3.52) is not dark. The board marks such a cell
+ * `data-dark`, and its colour-pattern glyph turns white (3.76 against --ink-deep's 2.63).
+ */
+export function isDarkTile(paletteIndex: number): boolean {
+  const hex = PALETTE[paletteIndex];
+  return hex !== undefined && luminanceOf(hex) <= 0.2125;
 }
 
 function isPaletteIndex(v: number): boolean {

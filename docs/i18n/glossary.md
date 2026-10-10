@@ -1,6 +1,6 @@
 # Translation glossary
 
-Status: Phase 2b AI-draft glossary, Phase 2c fish update, Phase 2c.1 level-points update, Phase 2d HUD update · Date: 2026-10-09 (2c.1 and 2d: 2026-10-10) · Owner: workstream E (localization); Phase 2c and 2c.1 rows: workstream G2; Phase 2d rows: workstream G3 · Used with [`src/i18n/meta.ts`](../../src/i18n/meta.ts) (per-key notes and max lengths) and the English catalogue [`src/i18n/en.ts`](../../src/i18n/en.ts)
+Status: Phase 2b AI-draft glossary, Phase 2c fish update, Phase 2c.1 level-points update, Phase 2d HUD update, Phase 2d.1 helpers update · Date: 2026-10-09 (2c.1, 2d and 2d.1: 2026-10-10) · Owner: workstream E (localization); Phase 2c and 2c.1 rows: workstream G2; Phase 2d and 2d.1 rows: workstream G3 · Used with [`src/i18n/meta.ts`](../../src/i18n/meta.ts) (per-key notes and max lengths) and the English catalogue [`src/i18n/en.ts`](../../src/i18n/en.ts)
 
 This glossary is part of the translation brief (phase2b §6.7 step 2). The brief contains **only our own English copy, `meta.ts` and this file**. It never names, quotes or describes any other game, and translators must not look at any other game's localized UI (06 §2 step 6).
 
@@ -24,6 +24,8 @@ This glossary is part of the translation brief (phase2b §6.7 step 2). The brief
 | Score (Phase 2d) | "Score" is the game screen's **label over the level points** (`game.score`, one short word, at most 10 characters). It is the same quantity as "points" above: never fish, never a currency. A language may use its word for points when that is how games label a score. |
 | The mouse (Phase 2d) | The third helper is a **small animal**: a little mouse that crosses out a few tiles that cannot hold a cat. Never the computer device. Use the same word in the button name, the pop-up title and the screen-reader lines; a diminutive is welcome where the kitty has one. |
 | Level-start toast (Phase 2d) | `toast.start.*` are short, **honest** encouragements (at most 32 characters): never a statistic, never a number, never "N % of players". Every level can be solved, so "you can solve this one" is true. |
+| The completion cheer (Phase 2d.1) | `fx.done` ("Done!") is a short **cheer** that pops for under a second under a row, column or colour the player just finished. An exclamation, never a button or a command; at most **8 characters** (CJK count 2). Use your language's natural "done!" / "finished!" word, never a word another game uses for this moment. |
+| Level-start tickers (Phase 2d.1) | `ticker.*` are one-line strips that slide across the top of the screen at a level start (at most **40 characters**). They state only the **player's own numbers** (their levels solved, their level points, their best time on this level), the board itself ("9 cats are hiding here"), a true fact or a tip. Never a statistic about other players, never "N players online", never a worldwide total. A "Tip:" prefix must not use your word for the hint (bulb) helper: de *Trick:*, pt-BR *Truque:*, tr *Tüyo:* because *Tipp*, *Dica* and *İpucu* are the hint. |
 | Length | Respect `maxLength` in `meta.ts` (chips 18, buttons 22, titles 28, badges 6–9). Abbreviate units ("h", "min") freely. |
 
 ## 2. Core terms
@@ -78,7 +80,7 @@ This glossary is part of the translation brief (phase2b §6.7 step 2). The brief
 
 ## 3. Colour names (palette index 0–11)
 
-Short proper names, each distinct from the other eleven in the same language. Where a word is ambiguous locally, another word for the same hue is used (pt-BR *Limão* for Lime, because Brazilian *limão* is green). Phase 2d (look-spec §1.9): four colours changed hue and name, so colours 0, 2, 7 and 11 are now **Coral** (a salmon red), **Mustard** (a deep yellow), **Violet** (a purple) and **Pink** (a light pink; distinct from Orchid, a magenta pink). "Coral" is also the Spanish and Portuguese word (listed in `SAME_AS_ENGLISH`).
+Short proper names, each distinct from the other eleven in the same language. Phase 2d.1 (helpers-spec §6.2): colour 4 is now **Denim**, a mid slate blue (`#5B75B2`), the darkest tile; it is a **tile colour, not the fabric**: the denim-blue colour word where a language has one (*Bleu jean*, *Kot mavisi*, *牛仔蓝*), the loanword elsewhere. "Denim" is also the Indonesian word (listed in `SAME_AS_ENGLISH`). Where a word is ambiguous locally, another word for the same hue is used (pt-BR *Limão* for Lime, because Brazilian *limão* is green). Phase 2d (look-spec §1.9): four colours changed hue and name, so colours 0, 2, 7 and 11 are now **Coral** (a salmon red), **Mustard** (a deep yellow), **Violet** (a purple) and **Pink** (a light pink; distinct from Orchid, a magenta pink). "Coral" is also the Spanish and Portuguese word (listed in `SAME_AS_ENGLISH`).
 
 | # | English | de | es | fr | it | pt-BR | id | tr | pl |
 |---|---|---|---|---|---|---|---|---|---|
@@ -86,7 +88,7 @@ Short proper names, each distinct from the other eleven in the same language. Wh
 | 1 | Apricot | Aprikose | Durazno | Abricot | Albicocca | Damasco | Aprikot | Kayısı | Morela |
 | 2 | Mustard | Senf | Mostaza | Moutarde | Senape | Mostarda | Mustar | Hardal | Musztarda |
 | 3 | Lime | Limette | Lima | Citron vert | Lime | Limão | Limau | Misket | Limonka |
-| 4 | Mint | Minze | Menta | Menthe | Menta | Hortelã | Mint | Nane | Mięta |
+| 4 | Denim | Jeansblau | Mezclilla | Bleu jean | Blu jeans | Jeans | Denim | Kot mavisi | Dżins |
 | 5 | Lagoon | Lagune | Laguna | Lagon | Laguna | Lagoa | Laguna | Lagün | Laguna |
 | 6 | Sky | Himmel | Cielo | Ciel | Cielo | Céu | Langit | Gök | Niebo |
 | 7 | Violet | Veilchen | Violeta | Violette | Viola | Violeta | Ungu | Menekşe | Fiołek |
@@ -101,7 +103,7 @@ Short proper names, each distinct from the other eleven in the same language. Wh
 | 1 | Apricot | Абрикос | Mơ | แอปริคอต | あんず | 살구 | 杏子 | खुबानी | مشمش |
 | 2 | Mustard | Горчица | Mù tạt | มัสตาร์ด | からし | 겨자 | 芥末 | सरसों | خردل |
 | 3 | Lime | Лайм | Chanh xanh | มะนาว | ライム | 라임 | 青柠 | लाइम | لايم |
-| 4 | Mint | Мята | Bạc hà | มินต์ | ミント | 민트 | 薄荷 | पुदीना | نعناع |
+| 4 | Denim | Деним | Chàm | ยีนส์ | デニム | 데님 | 牛仔蓝 | डेनिम | جينز |
 | 5 | Lagoon | Лагуна | Đầm phá | ลากูน | ラグーン | 라군 | 泻湖 | लैगून | بحيرة |
 | 6 | Sky | Небо | Bầu trời | ท้องฟ้า | そら | 하늘 | 天空 | आसमान | سماء |
 | 7 | Violet | Фиалка | Tím | ไวโอเล็ต | すみれ | 제비꽃 | 紫罗兰 | बैंगनी | بنفسج |

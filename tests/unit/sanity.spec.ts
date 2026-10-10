@@ -9,6 +9,7 @@ import { createStore } from '../../src/app/store';
 import { breatherBand, breatherPool, dailySlotFor, isHardLevel, pickWeighted, rampRowFor, RAMP } from '../../src/game/ramp';
 import { colorName, formatClock, formatDuration, formatNumber, formatShortDate, interpolate, joinList, setLocale, t, tn } from '../../src/i18n';
 import { COLOR_KEYS, en, EN_PARTS } from '../../src/i18n/en';
+import { displayWidth, META } from '../../src/i18n/meta';
 import { BANNED_PHRASES } from '../../scripts/i18n-check';
 
 /**
@@ -158,6 +159,41 @@ describe('Phase 2d English (look-spec Appendix A; G3)', () => {
       expect('game.cats' in (mod.catalog ?? {}), file).toBe(false);
       expect(mod.catalog?.['game.cats.a11y'], file).toBeTruthy();
       expect(mod.catalog?.['game.score'], file).toBeTruthy();
+    }
+  });
+});
+
+describe('Phase 2d.1 English (helpers-spec Appendix A; G3)', () => {
+  it('the new keys read as specified, in their own file', () => {
+    expect(t('fx.done')).toBe('Done!');
+    expect(t('a11y.unitDone', { unit: 'row 1' })).toBe('row 1 complete.');
+    expect(t('ticker.best', { time: '4:12' })).toBe('Your best time here: 4:12');
+    expect(tn('ticker.cats', 1, { count: '1' })).toBe('1 cat is hiding here');
+    expect(tn('ticker.cats', 9, { count: '9' })).toBe('9 cats are hiding here');
+    expect(tn('ticker.solved', 12, { count: '12' })).toBe("You've solved 12 levels");
+    expect(tn('ticker.points', 576, { count: '576' })).toBe('576 level points so far');
+    expect(t('ticker.daily')).toBe("Today's daily puzzle is waiting");
+    expect(t('ticker.unique')).toBe('Every puzzle has exactly one answer');
+    expect(t('ticker.tip.cat')).toBe('Tip: double-tap a tile to place a cat');
+    expect(t('ticker.tip.drag')).toBe('Tip: drag across tiles to cross out many');
+    expect(Object.keys(EN_PARTS.enUi2d1).sort()).toEqual(
+      ['a11y.unitDone', 'fx.done', 'ticker.best', 'ticker.cats.one', 'ticker.cats.other', 'ticker.daily', 'ticker.points.one', 'ticker.points.other', 'ticker.solved.one', 'ticker.solved.other', 'ticker.tip.cat', 'ticker.tip.drag', 'ticker.unique'].sort(),
+    );
+    expect(t('color.4')).toBe('Denim');
+  });
+
+  it('every catalogue has the Appendix A keys and its own colour 4; "Done!" fits 8 characters everywhere; meta notes the limits', () => {
+    expect(META['fx.done']?.maxLength).toBe(8);
+    for (const k of Object.keys(EN_PARTS.enUi2d1).filter((k) => k.startsWith('ticker.'))) expect(META[k as keyof typeof META]?.maxLength, k).toBe(40);
+    for (const [file, mod] of Object.entries(LOCALE_MODULES)) {
+      const cat = mod.catalog ?? {};
+      expect(cat['fx.done'], file).toBeTruthy();
+      expect(displayWidth(cat['fx.done'] ?? ''), file).toBeLessThanOrEqual(8);
+      for (const k of ['a11y.unitDone', 'ticker.best', 'ticker.daily', 'ticker.unique', 'ticker.tip.cat', 'ticker.tip.drag', 'ticker.cats.other', 'ticker.solved.other', 'ticker.points.other'] as const) {
+        expect(cat[k], `${file} ${k}`).toBeTruthy();
+      }
+      expect(cat['color.4'], file).toBeTruthy();
+      expect(cat['color.4'], file).not.toMatch(/^(Minze|Menta|Menthe|Hortelã|Mięta|Мята|Nane|Bạc hà|มินต์|ミント|민트|薄荷|पुदीना|نعناع|Mint)$/);
     }
   });
 });

@@ -1,7 +1,9 @@
 // Owner: A (Phase 2b); G2 (Phase 2c: icon-fish-empty; the heart icons and their clip paths went;
 // Phase 2c.1: icon-points, the level-points sparkle; Phase 2d: the back arrow, the filled gear, the play
 // mark, the three helpers' art, the heads' silhouette, the flexed arm and the X's rects, look-spec
-// Appendix C, each drawn by us from its written description)
+// Appendix C, each drawn by us from its written description; Phase 2d.1: the winking cat, the board
+// mouse's parts, the star, the shards, the ticker paw cap and icons, helpers-spec Appendix C, in
+// art/helper-art.ts)
 // One hidden inline SVG sprite of <symbol>s (04 §5.3): Tux's moods, the white X with its edge, the
 // wrong X, 12 pattern glyphs, our icon set (02 §17.6, phase2b §1.7), the fish and the board cats'
 // ear-flick overlay (phase2b §1.6, §2.9). All drawn by us: the cat on a 100-unit grid, icons and the
@@ -12,9 +14,16 @@
 import { CAT, catBlink, catEarFlick, catHead } from './cat-parts';
 import { fishMarkup, fishOutlineMarkup } from './fish';
 import { cfg, type GameConfig } from '../../app/config';
+import { helperArtSymbols, MOUSE_BOX, mouseEyes, mouseHead } from './helper-art';
 import { TOKENS } from './palette';
 
-export type CatSymbol = 'cat-idle' | 'cat-happy' | 'cat-sad' | 'cat-surprised';
+/** Phase 2d.1 (helpers-spec §2.4): `cat-wink`, the celebrating cat (the right eye a closed arc with a glint). */
+export type CatSymbol = 'cat-idle' | 'cat-happy' | 'cat-sad' | 'cat-surprised' | 'cat-wink';
+/**
+ * Phase 2d.1 (helpers-spec §1.4): the board mouse, our tool-mouse face in parts the board moves: the head
+ * (no eyes), the bead eyes (glance), the lids (blink, narrowed eyes) and the grinning mouth.
+ */
+export type MouseSymbol = 'board-mouse' | 'board-mouse-eyes' | 'board-mouse-lids' | 'board-mouse-grin';
 /** Phase 2b symbols (phase2b §1.7, §2.9, §4.4); Phase 2c: the empty life (fish-lives-spec §1.2). */
 export type FishSymbol = 'icon-fish' | 'icon-fish-empty';
 /** The board cats' ear-flick overlay (phase2b §2.9), shown only on `.cell.is-flick`. */
@@ -51,12 +60,22 @@ export type IconSymbol =
   | 'tool-bulb'
   | 'tool-mouse'
   | 'cat-head-flat'
-  | 'art-flex';
+  /** @deprecated phase2d.1: the start toast's arm; the tickers use art-bolt / art-star (deleted at I-3). */
+  | 'art-flex'
+  // Phase 2d.1 (helpers-spec §2.4, §2.5, §5.2, Appendix C): the points star, the cat's shards (three
+  // variants), the tickers' paw cap and end icons.
+  | 'fx-star4'
+  | 'fx-shard'
+  | 'fx-shard-2'
+  | 'fx-shard-3'
+  | 'art-paw-cap'
+  | 'art-bolt'
+  | 'art-star';
 export type GlyphIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
 /** Pattern glyphs by palette index: dot, ring, triangle, square, diamond, star, plus, bar, chevron, heart, drop, moon (02 §18). */
 export type GlyphSymbol = `glyph-${GlyphIndex}`;
 /** `cat-blink` is the eyelid overlay the board stacks on idle cats (02 §17.3 blink). */
-export type SymbolId = CatSymbol | IconSymbol | GlyphSymbol | 'mark-x' | 'cat-blink' | CatOverlaySymbol | AccessorySymbol;
+export type SymbolId = CatSymbol | IconSymbol | GlyphSymbol | 'mark-x' | 'cat-blink' | CatOverlaySymbol | AccessorySymbol | MouseSymbol;
 
 /** id of the sprite's <svg> element. */
 export const SPRITE_ID = 'mewdoku-sprite';
@@ -109,6 +128,9 @@ function catSymbols(): string {
     sym('cat-happy', '0 0 100 100', catHead({ eyes: 'happy', mouth: 'open', ears: 'happy', blush: true })) +
     sym('cat-sad', '0 0 100 100', catHead({ eyes: 'sad', mouth: 'frown', ears: 'droop' })) +
     sym('cat-surprised', '0 0 100 100', catHead({ eyes: 'round', mouth: 'o', ears: 'prick' })) +
+    // Phase 2d.1 (helpers-spec §2.4, Appendix C): the celebrating cat winks: the left eye open, the right
+    // a closed upward arc, a tiny white glint where the arc meets the fur, a smile.
+    sym('cat-wink', '0 0 100 100', catHead({ eyes: 'wink', mouth: 'smile' }) + WINK_GLINT) +
     sym('cat-blink', '0 0 100 100', catBlink('fixed')) +
     sym('cat-ear-flick', '0 0 100 100', catEarFlick('fixed'))
   );
@@ -209,8 +231,8 @@ function newIcons(): string {
   ].join('');
 }
 
-/** Grey of the mouse helper (look-spec §1.11): head, muzzle, ink of the whiskers and teeth edge. */
-const MOUSE = { head: '#B8B4BC', muzzle: '#D9D6DC', line: '#8E8994', eye: '#1E1A22' };
+/** The wink's glint: a tiny four-point white sparkle past the closed eye's outer end, over the fur. */
+const WINK_GLINT = '<path d="M75.4 40.6q.5 2.6 3 3.1-2.5.5-3 3.1-.5-2.6-3-3.1 2.5-.5 3-3.1Z" fill="#fff"/>';
 
 /**
  * Phase 2d art (look-spec §1.4, §1.6, §1.11, §1.14, Appendix C), each drawn by us as SVG from its
@@ -232,8 +254,6 @@ const MOUSE = { head: '#B8B4BC', muzzle: '#D9D6DC', line: '#8E8994', eye: '#1E1A
 function art2d(): string {
   // One theme (look-spec §2.2): the full-colour art takes the token values directly (no var()).
   const { gold, hard: violet, fish, 'fish-deep': deep, 'fish-hi': hi } = TOKENS;
-  const ear = (cx: number): string => `<circle cx="${cx}" cy="27" r="20" fill="${MOUSE.head}"/><circle cx="${cx}" cy="28" r="12.5" fill="${CAT.earIn}"/>`;
-  const eye = (cx: number): string => `<circle cx="${cx}" cy="55" r="5.4" fill="${MOUSE.eye}"/><circle cx="${cx + 1.8}" cy="53.2" r="1.8" fill="#fff"/>`;
   return [
     icon24('icon-back', `<path d="M20.5 12H3.6m6.9-7L3.6 12l6.9 7" fill="none" stroke="currentColor" stroke-width="3.1" stroke-linecap="round" stroke-linejoin="round"/>`),
     icon24('icon-play', `<path d="M8.6 6.2v11.6L18 12Z" fill="currentColor" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/>`),
@@ -247,17 +267,8 @@ function art2d(): string {
         `<rect x="35" y="69" width="30" height="10" rx="5" fill="${violet}"/><rect x="36.5" y="77.5" width="27" height="9" rx="4.5" fill="#A68BDF"/>` +
         `<rect x="38" y="85" width="24" height="9" rx="4.5" fill="${violet}"/><path d="M44 92h12c-.8 4.6-3 6.6-6 6.6S44.8 96.6 44 92Z" fill="${violet}"/>`,
     ),
-    sym(
-      'tool-mouse',
-      '1 4.5 98 88',
-      ear(23) + ear(77) +
-        `<ellipse cx="50" cy="60" rx="36" ry="33" fill="${MOUSE.head}"/><ellipse cx="50" cy="75" rx="21" ry="15.5" fill="${MOUSE.muzzle}"/>` +
-        eye(36) + eye(64) +
-        `<g fill="none" stroke="${MOUSE.line}" stroke-width="1.3" stroke-linecap="round"><path d="M32 70 8 64M31.5 74.5H6M32 79 9 85.5M68 70l24-6m-23.5 10.5H94M68 79l23 6.5"/>` +
-        `<path d="M50 69v4.5m-7 .8q7 4.6 14 0"/></g>` +
-        `<path d="M46 77.2h3.6v6.4a1 1 0 0 1-1 1H47a1 1 0 0 1-1-1Zm4.4 0H54v6.4a1 1 0 0 1-1 1h-1.6a1 1 0 0 1-1-1Z" fill="#fff" stroke="${MOUSE.line}" stroke-width=".9"/>` +
-        `<ellipse cx="50" cy="67.4" rx="4.8" ry="3.4" fill="${CAT.nose}"/>`,
-    ),
+    // the mouse face of art/helper-art.ts (its head and eyes, the board mouse's parts)
+    sym('tool-mouse', MOUSE_BOX, mouseHead() + mouseEyes()),
     sym(
       'cat-head-flat',
       '4 5.7 92 90.3',
@@ -283,7 +294,8 @@ export function spriteMarkup(): string {
     GLYPHS.map((g, i) => sym(`glyph-${i}`, '0 0 24 24', `<g fill="currentColor" transform="${GLYPH_FILL}">${g}</g>`)).join('') +
     iconSymbols() +
     newIcons() +
-    art2d();
+    art2d() +
+    helperArtSymbols();
   return cached;
 }
 

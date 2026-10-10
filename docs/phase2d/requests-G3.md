@@ -85,8 +85,8 @@ Spec: [helpers-spec §7](helpers-spec.md#7-workstreams-interfaces-tests-and-acce
 
 | # | From → to | What | Why |
 |---|---|---|---|
-
-*(none yet)*
+| H1 | G3 → G2 | `src/ui/board/board-mouse.ts` and `board.css` use the classes `is-in` / `is-out` on `.board__mouse`. Those two names are global: `fx.css` `.is-in` / `.is-out` (the counters' number roll animations) and `screens.css` `.is-out { position: absolute; top: 0; left: 0 }`. `.board__mouse.is-in/.is-out` win the `animation` by specificity, but `screens.css`' `top: 0; left: 0` (same specificity as `.board__mouse`'s `left` / `top`, later in the bundle) moves the leaving mouse to the board's corner for its 85 ms exit. Please rename them (e.g. `.board__mouse--in` / `--out`). `tests/unit/ui/hud-css.spec.ts` ("the counters share one roll…") checks that only `hud/pills.ts` uses `is-in` / `is-out` and fails until then. | helpers-spec §1.5; hud-css.spec |
+| H2 | G3 → lead | At I-3, with the 2b sheet placement (`sheetPlacement`, `fbTopInset`, `HintCardProps.avoidRect`): delete `tests/unit/ui/review2b-css.spec.ts` "a top-placed hint card keeps its content below the zone" (no owner in helpers-spec §7.1) and the dead rule it reads, `overlay-chunk.css` `:root[data-fb-safe] .overlay[data-overlay='hint'][data-placement='top'] .hint-card` (kept only so that test stays green). The new hint card never enters the FB zone: it sits below the top bar (§3.5). | helpers-spec §3.2 "Placement fallback", §7.2 I-3 |
 
 ### 2d.1 Done for other workstreams' requests
 
@@ -94,7 +94,13 @@ Spec: [helpers-spec §7](helpers-spec.md#7-workstreams-interfaces-tests-and-acce
 
 ### 2d.1 Notes from G3 for the others (no action needed)
 
-*(none yet)*
+- **S0 landed (2026-10-10; tsc clean, the i18n / audio / hint-text specs green):**
+  - `src/audio/sfx.ts`: `SfxId` + `'mouse' | 'points' | 'unit_done'` (in `SFX_IDS`; our recipes, final). `unit_done` takes `opts.index` (units − 1) for its pitch step.
+  - `src/ui/fx/tickers.ts` (new): `TickerKey`, `TickerLine` (CONTRACTS-2d1 §4).
+  - `src/ui/screens/game-screen.ts`: `GameScreen.playTickers?(lines)` (optional until I-3). Until the tickers view lands it plays line 1 as the 2d toast.
+  - `src/ui/overlays/hint-card.ts`: `HintCardProps.cells?`, `boardRect?()`, `cellRect?(cell)`; `avoidRect` marked `@deprecated phase2d.1`.
+  - `src/ui/overlays/hint-text.ts`: `hintCutouts(step, cells)` (ascending, each once; re-exported by `hint-card.ts`).
+  - Strings: `src/i18n/en/ui-2d1.ts` (new, wired into `en.ts` and `EN_PARTS`) with every Appendix A key at its final English value; translator notes in `meta.ts` (`fx.done` ≤ 8, `ticker.*` ≤ 40, new groups `fx.` and `ticker.`); the 16 drafts of the new keys and of `color.4` (Denim) are in; `docs/i18n/drafted-from.json` rewritten (`i18n:check`: OK, only the old `it` width warning).
 
 ### 2d.1 L0 (lead, 2026-10-10): what changed in G3's files
 

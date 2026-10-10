@@ -7,6 +7,9 @@
 // end, a banner up on the victory stays into the next board (no hide in between), the listed modals
 // hide it without a re-show there, O4 / O1 / O2 / the coach keep it, ads hide it first, and
 // duringPlay off restores every 2b case.
+// Phase 2d.1 (G1, helpers-spec §3.2, §7.6, D-2d1-13): the hint card hides it; after it closes it loads
+// again at once when ads.banner.minReloadSec has passed, else exactly one timer loads it when the
+// window ends (not when the screen has gone, a modal is open or the board is won); off: the 2d rule.
 import { describe, expect, it } from 'vitest';
 import { createAdFlow } from '../../../src/app/ad-flow';
 import { createBannerFlow, type BannerFlow } from '../../../src/app/banner-flow';
@@ -490,21 +493,21 @@ describe('phase 2d §1.16: the banner on the game screen (ads.banner.duringPlay,
     expect(banner(h)).toContain('banner:show');
   });
 
-  it('O4, the hint card, O2 and the coach keep it; the mouse\'s video hides it first', async () => {
+  it('O4, O2 and the coach keep it; the mouse\'s video hides it first (2d.1: the hint card hides it, see below)', async () => {
     const { h } = play();
     await startLevel(h, 15);
-    await h.session.onBulb(); // O1
-    h.session.onHintClose();
-    expect(banner(h)).toEqual(['banner:show']);
     h.router.rewardedAnswer = 'decline';
-    await h.session.onMouse(); // O2 opens and closes ("Not now")
+    await h.session.onMouse(); // O2 opens and closes ("Not now"): nothing to wait for
     expect(banner(h)).toEqual(['banner:show']);
     h.router.open('coach', {} as never);
     h.router.close('coach');
     expect(banner(h)).toEqual(['banner:show']);
     h.router.rewardedAnswer = 'accept';
     h.log.length = 0;
-    await h.session.onMouse();
+    let ran = false;
+    const run = h.session.onMouse().then(() => void (ran = true));
+    for (let i = 0; i < 80 && !ran; i++) await h.settle(i < 40 ? 0 : 100); // O2, the video, then the mouse's run (2d.1 §1.2)
+    await run;
     expect(h.log.filter((l) => l.startsWith('banner') || l.startsWith('ad:rewarded') || l === 'open:rewarded')).toEqual([
       'open:rewarded',
       'banner:hide',
@@ -516,6 +519,95 @@ describe('phase 2d §1.16: the banner on the game screen (ads.banner.duringPlay,
     await loseGame(h2);
     expect(h2.router.isOpen('fail')).toBe(true);
     expect(banner(h2)).toEqual(['banner:show']);
+  });
+
+  describe('phase 2d.1 §3.2 (D-2d1-13): hidden while the hint card is open, shown again after it', () => {
+    /** The level entered at t0 (its banner loaded then); the bulb opens the hint at t0 + `afterMs`. */
+    async function hintAt(afterMs: number, opts: Parameters<typeof play>[0] = {}) {
+      const p = play(opts);
+      await startLevel(p.h, 15);
+      expect(banner(p.h)).toEqual(['banner:show']);
+      await p.h.settle(afterMs);
+      await p.h.session.onBulb();
+      expect(p.h.router.isOpen('hint')).toBe(true);
+      return p;
+    }
+    const WINDOW = cfg.ads.banner.minReloadSec * 1000;
+
+    it('the hint hides it; closed inside the reload window: exactly one timer loads a new one when the window ends', async () => {
+      const { h } = await hintAt(10_000);
+      expect(cfg.ads.banner.hideDuringHint).toBe(true);
+      expect(banner(h)).toEqual(['banner:show', 'banner:hide']);
+      await h.settle(5_000);
+      h.session.onHintClose();
+      await h.settle(0);
+      expect(banner(h)).toEqual(['banner:show', 'banner:hide']); // not at once: inside Meta's window
+      await h.settle(WINDOW - 15_000 - 1);
+      expect(banner(h)).toEqual(['banner:show', 'banner:hide']);
+      await h.settle(1);
+      expect(banner(h)).toEqual(['banner:show', 'banner:hide', 'banner:show']);
+      await h.settle(5 * WINDOW);
+      expect(banner(h)).toEqual(['banner:show', 'banner:hide', 'banner:show']); // one timer, no retry loop
+      expect(h.store.get().ui.bannerReserved).toBe(true);
+    });
+
+    it('closed after the window (Apply too): a new banner at once', async () => {
+      const { h } = await hintAt(WINDOW + 1_000);
+      expect(banner(h)).toEqual(['banner:show', 'banner:hide']);
+      h.session.onHintApply();
+      await h.settle(0);
+      expect(h.router.isOpen('hint')).toBe(false);
+      expect(banner(h)).toEqual(['banner:show', 'banner:hide', 'banner:show']);
+    });
+
+    it('the timer does nothing when the screen has gone, a modal is open or the board is won; a reopened hint replaces it', async () => {
+      // Home before the window ends: Home's own mount is inside the window too; the timer adds nothing.
+      const a = await hintAt(1_000);
+      a.h.session.onHintClose();
+      a.h.session.onHome();
+      await a.h.settle(2 * WINDOW);
+      expect(banner(a.h).filter((l) => l === 'banner:show')).toHaveLength(1);
+      // Settings open when the window ends: nothing (and nothing later).
+      const b = await hintAt(1_000);
+      b.h.session.onHintClose();
+      b.h.router.game?.cb.onSettings();
+      await b.h.settle(2 * WINDOW);
+      expect(banner(b.h).filter((l) => l === 'banner:show')).toHaveLength(1);
+      // The board won before the window ends: nothing over the win flow.
+      const c = await hintAt(1_000);
+      c.h.session.onHintClose();
+      winGame(c.h);
+      await c.h.settle(WINDOW);
+      expect(c.h.log.filter((l) => l === 'banner:show')).toHaveLength(1);
+      // The hint reopened before the window ends: the first close's timer is gone; the second close sets one.
+      const d = await hintAt(1_000);
+      d.h.session.onHintClose();
+      await d.h.settle(20_000);
+      await d.h.session.onBulb(); // a free reopen on the same board
+      expect(d.h.router.isOpen('hint')).toBe(true);
+      await d.h.settle(WINDOW);
+      expect(banner(d.h).filter((l) => l === 'banner:show')).toHaveLength(1); // nothing under the open hint
+      d.h.session.onHintClose();
+      await d.h.settle(0);
+      expect(banner(d.h).filter((l) => l === 'banner:show')).toHaveLength(2); // the window had passed: at once
+    });
+
+    it('ads.banner.hideDuringHint off: the 2d rule (O1 keeps the banner, nothing re-shown)', async () => {
+      const { h } = await hintAt(10_000, { config: { ads: { banner: { hideDuringHint: false } } } });
+      expect(banner(h)).toEqual(['banner:show']);
+      h.session.onHintClose();
+      await h.settle(2 * WINDOW);
+      expect(banner(h)).toEqual(['banner:show']);
+    });
+
+    it('no band on this board (under 10 levels): the hint changes nothing', async () => {
+      const p = play({ save: (s) => ({ ...s, progress: { level: 6, completed: 5, best: {} } }) });
+      await startLevel(p.h, 6);
+      await p.h.session.onBulb();
+      p.h.session.onHintClose();
+      await p.h.settle(2 * WINDOW);
+      expect(banner(p.h)).toEqual([]);
+    });
   });
 
   it('leaving to Home or the event screen hides it', async () => {

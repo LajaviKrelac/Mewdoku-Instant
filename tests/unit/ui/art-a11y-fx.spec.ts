@@ -6,6 +6,9 @@
 // phase2b F0 split: the fx and a11y cases moved to fx-a11y.spec.ts (B).
 // Phase 2d (G2, look-spec §1.5–§1.11, Appendix C): the new and redrawn symbols, the X as two rounded
 // rects (its edge only with Colour patterns on), the measured palette's tiers and HEAD_ORDER, ruleDiagram.
+// Phase 2d.1 (G2, helpers-spec §6, Appendix C): Denim and the 11-colour tier, the heads ring and
+// headOrderFor, isDarkTile, the new symbols (the winking cat, the board mouse's parts, the star, the
+// shards, the paw cap, the bolt and the five-point star).
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cfg } from '../../../src/app/config';
 import type { EventDef } from '../../../src/game/events';
@@ -15,11 +18,11 @@ import { eventArt, eventPatternUrl } from '../../../src/ui/art/event-art';
 import { FISH_BODY, FISH_OUTLINE_OPACITY, fishMarkup, fishOutlineMarkup } from '../../../src/ui/art/fish';
 import { illustration, type IllustrationKind } from '../../../src/ui/art/illustrations';
 import { mascotIllustration, startHeadTilt } from '../../../src/ui/art/mascot';
-import { CAT_COLORS, HEAD_ORDER, mixHex, PALETTE, PALETTE_CORE, PALETTE_DE00, PALETTE_SIZE, paletteTier, regionColorsFor, regionColorVar, TOKENS, xEdgeColor } from '../../../src/ui/art/palette';
+import { CAT_COLORS, HEAD_ORDER, headOrderFor, isDarkTile, mixHex, PALETTE, PALETTE_CORE, PALETTE_DE00, PALETTE_SIZE, paletteTier, regionColorsFor, regionColorVar, TOKENS, xEdgeColor } from '../../../src/ui/art/palette';
 import { ruleDiagram } from '../../../src/ui/art/rule-art';
 import { icon, markRects, mountSprite, setIcon, spriteMarkup, SPRITE_ID, type SymbolId } from '../../../src/ui/art/sprite';
 import { regionAdjacency } from '../../../src/engine/colors';
-import { buildCell, ensureCat } from '../../../src/ui/board/board-cells';
+import { buildCell, CAT_BOX, ensureCat, ensureGhost } from '../../../src/ui/board/board-cells';
 import { evenInsets } from '../../../src/ui/board/layout';
 import EVENTS from '../../../src/data/events/events.json';
 
@@ -42,6 +45,9 @@ describe('sprite', () => {
     'icon-points',
     // Phase 2d (look-spec Appendix C)
     'icon-back', 'icon-play', 'tool-kitty', 'tool-bulb', 'tool-mouse', 'cat-head-flat', 'art-flex',
+    // Phase 2d.1 (helpers-spec Appendix C)
+    'cat-wink', 'board-mouse', 'board-mouse-eyes', 'board-mouse-lids', 'board-mouse-grin',
+    'fx-star4', 'fx-shard', 'fx-shard-2', 'fx-shard-3', 'art-paw-cap', 'art-bolt', 'art-star',
   ];
 
   it('mounts once and defines every symbol; the heart icons and clip paths are gone (Phase 2c)', () => {
@@ -176,10 +182,10 @@ describe('Tux in the sprite (phase2b §1.6)', () => {
     expect(flick.querySelector('clipPath')).not.toBeNull();
     expect(flick.querySelectorAll('path').length).toBeGreaterThanOrEqual(3);
     expect(EAR_FLICK_PIVOT).toEqual({ x: 27, y: 33.4 });
-    // board.css pivots the overlay there, mapped into the cell box at catScale
-    const k = cfg.layout.catScale;
-    const off = ((1 - k) / 2) * 100;
-    expect([+(off + EAR_FLICK_PIVOT.x * k).toFixed(1), +(off + EAR_FLICK_PIVOT.y * k).toFixed(1)]).toEqual([30.7, 36.1]);
+    // board.css pivots the overlay there, mapped into the cell box by CAT_BOX (helpers-spec §4.7)
+    const [x, y, size] = CAT_BOX;
+    const k = size / 100;
+    expect([+(x + EAR_FLICK_PIVOT.x * k).toFixed(1), +(y + EAR_FLICK_PIVOT.y * k).toFixed(1)]).toEqual([30.1, 35.8]);
   });
 
   it('the fish, the new icons and the accessories are final art, not placeholders (phase2b §1.7, §4.4)', () => {
@@ -362,31 +368,60 @@ describe('board cell: the X is two white rounded bars, its edge only with Colour
     expect(((len + w - 4 * r) / Math.SQRT2 + 2 * r) * k).toBeCloseTo(21.5, 1);
   });
 
-  it('every cell has g.cell__xg with two .cell__xe rects under two white .cell__x rects, and --xe = xEdgeColor(paletteIndex)', () => {
+  it('every cell has g.cell__xg with two bar groups (\\ at 45°, / at −45°), each an edge rect under a white bar; --xe = xEdgeColor(paletteIndex) (helpers-spec §4.4)', () => {
     const insets = evenInsets(1, 38)[0] as Parameters<typeof buildCell>[2];
     for (let p = 0; p < PALETTE.length; p++) {
       const refs = buildCell(p, p, insets, 0);
       expect(refs.el.style.getPropertyValue('--xe')).toBe(xEdgeColor(p));
       const g = refs.svg.querySelector('g.cell__xg') as SVGGElement;
-      const rects = Array.from(g.querySelectorAll('rect'));
-      expect(rects.map((e) => e.getAttribute('class'))).toEqual(['cell__xe', 'cell__xe', 'cell__x', 'cell__x']);
-      expect(rects.map((e) => e.getAttribute('transform'))).toEqual(['rotate(45 50 50)', 'rotate(-45 50 50)', 'rotate(45 50 50)', 'rotate(-45 50 50)']);
-      const box = (r: Element): string[] => ['x', 'y', 'width', 'height', 'rx'].map((a) => r.getAttribute(a) ?? '');
-      expect(box(rects[2] as Element)).toEqual(['15.5', '40.9', '69', '18.2', '6']);
-      expect(box(rects[0] as Element)).toEqual(['12', '37.4', '76', '25.2', '9.5']);
-      // no strokes left (the 2b stroke X and its dash draw-in are gone)
-      expect(refs.svg.querySelector('path.cell__x, path.cell__xe')).toBeNull();
+      const bars = Array.from(g.children);
+      expect(bars.map((e) => e.getAttribute('class'))).toEqual(['cell__xb cell__xb--a', 'cell__xb cell__xb--b']);
+      expect(bars.map((e) => e.getAttribute('transform'))).toEqual(['rotate(45 50 50)', 'rotate(-45 50 50)']);
+      for (const bar of bars) {
+        const rects = Array.from(bar.querySelectorAll('rect'));
+        expect(rects.map((e) => e.getAttribute('class'))).toEqual(['cell__xe', 'cell__x']);
+        // axis-aligned in the bar's own frame (no transform on the rects: CSS scales them there)
+        for (const r of rects) expect(r.hasAttribute('transform')).toBe(false);
+        const box = (r: Element): string[] => ['x', 'y', 'width', 'height', 'rx'].map((a) => r.getAttribute(a) ?? '');
+        expect(box(rects[1] as Element)).toEqual(['15.5', '40.9', '69', '18.2', '6']);
+        expect(box(rects[0] as Element)).toEqual(['12', '37.4', '76', '25.2', '9.5']);
+      }
+      // no strokes left (the 2b stroke X and its dash draw-in are gone); no ghost path until a ghost shows
+      expect(refs.svg.querySelector('path.cell__x, path.cell__xe, path.cell__xo')).toBeNull();
       expect(refs.el.querySelector('.cell__glow')).not.toBeNull();
+      // helpers-spec §6.4: only Denim is a dark tile
+      expect(refs.el.hasAttribute('data-dark')).toBe(p === 4);
     }
   });
 
-  it('a cat cell gets the cat, its blink lid and the ear-flick overlay', () => {
+  it('ensureGhost adds the X outline once: its --xe edge under the white outline, one shared path (helpers-spec §3.3)', () => {
+    const refs = buildCell(3, 7, evenInsets(1, 42)[0] as Parameters<typeof buildCell>[2], 0);
+    const g = ensureGhost(refs);
+    expect(ensureGhost(refs)).toBe(g);
+    expect(g.getAttribute('class')).toBe('cell__xog');
+    const paths = Array.from(g.querySelectorAll('path'));
+    expect(paths.map((p) => p.getAttribute('class'))).toEqual(['cell__xoe', 'cell__xo']);
+    expect(paths[0]?.getAttribute('d')).toBe(paths[1]?.getAttribute('d'));
+    for (const p of paths) expect(p.getAttribute('vector-effect')).toBe('non-scaling-stroke');
+    // after the X group, so it draws over the (hidden) X
+    expect(g.previousElementSibling?.getAttribute('class')).toBe('cell__xg');
+  });
+
+  it('a cat cell gets the cat, its blink lid and the ear-flick overlay, at the measured resting size (CAT_BOX, helpers-spec §4.7)', () => {
     const refs = buildCell(0, 3, evenInsets(1, 36)[0] as Parameters<typeof buildCell>[2], 0);
     ensureCat(refs, 'idle');
-    const uses = Array.from(refs.svg.querySelectorAll('.cell__catg use')).map((u) => u.getAttribute('href'));
-    expect(uses).toEqual(['#cat-idle', '#cat-blink', '#cat-ear-flick']);
-    const size = refs.svg.querySelector('.cell__cat')?.getAttribute('width');
-    expect(size).toBe(String(Math.round(cfg.layout.catScale * 100)));
+    const uses = Array.from(refs.svg.querySelectorAll('.cell__catg use'));
+    expect(uses.map((u) => u.getAttribute('href'))).toEqual(['#cat-idle', '#cat-blink', '#cat-ear-flick']);
+    for (const u of uses) expect(['x', 'y', 'width'].map((a) => u.getAttribute(a))).toEqual(['6.8', '6.9', '86.4']);
+    // our Tux's art spans 84.86 × 80.42 of its grid from y 7.58 (measured in Chromium): on a tile of
+    // 92.1 % of the slot it is 0.80 T wide and 0.75 T tall (measured 0.78 × 0.77), its centre 2 % T up
+    const [x, y, size] = CAT_BOX;
+    const k = size / 100;
+    const tile = 92.1;
+    expect((84.86 * k) / tile).toBeCloseTo(0.796, 2);
+    expect((80.42 * k) / tile).toBeCloseTo(0.754, 2);
+    expect(x + 50 * k).toBeCloseTo(50, 0);
+    expect((50 - (y + (7.58 + 80.42 / 2) * k)) / tile).toBeCloseTo(0.02, 2);
   });
 });
 
@@ -419,16 +454,17 @@ describe('Phase 2d palette (look-spec §1.6, §1.9)', () => {
     return out;
   };
 
-  it('the 10 measured colours are the core tier; Denim (4, still the 2d value until helpers-spec §6.2) and Cocoa (9) are the extras', () => {
-    expect(PALETTE).toEqual(['#D57374', '#FFAA6D', '#E4BB49', '#AED994', '#52A982', '#48B5B2', '#6BBCE7', '#9778D6', '#EB85B7', '#B0855A', '#A7BFD7', '#FAB4D0']);
-    expect([...PALETTE_CORE]).toEqual([0, 1, 2, 3, 5, 6, 7, 8, 10, 11]);
+  it('the 11 measured colours are the core tier (Denim #5B75B2 at 4, helpers-spec §6.2); Cocoa (9, ours) only at 12', () => {
+    expect(PALETTE).toEqual(['#D57374', '#FFAA6D', '#E4BB49', '#AED994', '#5B75B2', '#48B5B2', '#6BBCE7', '#9778D6', '#EB85B7', '#B0855A', '#A7BFD7', '#FAB4D0']);
+    expect([...PALETTE_CORE]).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11]);
     expect([...paletteTier(4)]).toEqual([...PALETTE_CORE]);
     expect([...paletteTier(10)]).toEqual([...PALETTE_CORE]);
-    expect([...paletteTier(11)]).toEqual([0, 1, 2, 3, 5, 6, 7, 8, 9, 10, 11]);
+    expect([...paletteTier(11)]).toEqual([...PALETTE_CORE]);
     expect([...paletteTier(12)]).toEqual(Array.from({ length: 12 }, (_, i) => i));
   });
 
-  it('regionColorsFor draws n ≤ 10 boards from the core only, adds Cocoa at 11, uses all 12 at 12; adjacent regions stay ≥ ΔE 10', () => {
+  it('regionColorsFor draws n ≤ 11 boards from the 11 measured colours only (any of them may be left out), uses all 12 at 12; adjacent regions stay ≥ ΔE 10', () => {
+    const used = new Set<number>();
     for (const n of [4, 5, 6, 7, 8, 9, 10, 11, 12]) {
       for (let k = 0; k < 12; k++) {
         const regions = stripes(n, k);
@@ -436,8 +472,9 @@ describe('Phase 2d palette (look-spec §1.6, §1.9)', () => {
         expect(new Set(colors).size, `n=${n}`).toBe(n);
         const tier = paletteTier(n);
         for (const c of colors) expect(tier, `n=${n}`).toContain(c);
-        if (n <= 10) for (const c of colors) expect([4, 9]).not.toContain(c);
-        if (n === 10) expect([...colors].sort((x, y) => x - y)).toEqual([...PALETTE_CORE]);
+        if (n <= 11) for (const c of colors) expect(c).not.toBe(9);
+        if (n === 11) expect([...colors].sort((x, y) => x - y)).toEqual([...PALETTE_CORE]);
+        if (n === 9 || n === 10) for (const c of colors) used.add(c);
         const adj = regionAdjacency(n, regions);
         for (let g = 0; g < n; g++) {
           for (let h = 0; h < n; h++) {
@@ -446,13 +483,41 @@ describe('Phase 2d palette (look-spec §1.6, §1.9)', () => {
         }
       }
     }
+    // 9 × 9 and 10 × 10 boards do use Denim (the measured Level 114 is a 9 × 9 with Denim)
+    expect(used.has(4)).toBe(true);
   });
 
-  it('HEAD_ORDER is a permutation of 0…11 around the wheel from green: Lime, Denim, Lagoon, Sky, Slate, Violet, Orchid, Pink, Coral, Apricot, Cocoa, Mustard', () => {
-    expect([...HEAD_ORDER]).toEqual([3, 4, 5, 6, 10, 7, 8, 11, 0, 1, 9, 2]);
+  it('HEAD_ORDER is the measured hue ring: Lime, Lagoon, Sky, Slate, Denim, Violet, Orchid, Pink, Coral, Apricot, Cocoa, Mustard (helpers-spec §6.5)', () => {
+    expect([...HEAD_ORDER]).toEqual([3, 5, 6, 10, 4, 7, 8, 11, 0, 1, 9, 2]);
     expect([...HEAD_ORDER].sort((a, b) => a - b)).toEqual(Array.from({ length: 12 }, (_, i) => i));
-    // filtered to the 10 core colours it is the recording's order
-    expect(HEAD_ORDER.filter((i) => PALETTE_CORE.includes(i))).toEqual([3, 5, 6, 10, 7, 8, 11, 0, 1, 2]);
+    // filtered to the first recording's ten colours it is that recording's order (Level 96)
+    expect(HEAD_ORDER.filter((i) => ![4, 9].includes(i))).toEqual([3, 5, 6, 10, 7, 8, 11, 0, 1, 2]);
+  });
+
+  it('headOrderFor: the board\'s colours in ring order, rotated to a start from the puzzle id; deterministic; the tutorial (null id) starts at the ring', () => {
+    // the measured Level 114 set (pink, orange, mustard, green, teal, grey-blue, navy, purple, magenta)
+    const colors = [2, 7, 3, 8, 1, 10, 5, 4, 11];
+    const ring = [3, 5, 10, 4, 7, 8, 11, 1, 2];
+    expect(headOrderFor(colors, null)).toEqual(ring);
+    const starts = new Set<number>();
+    for (let k = 0; k < 40; k++) {
+      const id = `L${k}`;
+      const out = headOrderFor(colors, id);
+      expect(out).toEqual(headOrderFor(Uint8Array.from(colors), id)); // ArrayLike, deterministic
+      expect([...out].sort((a, b) => a - b)).toEqual([...colors].sort((a, b) => a - b));
+      const at = ring.indexOf(out[0] as number);
+      expect(out).toEqual([...ring.slice(at), ...ring.slice(0, at)]); // a rotation of the ring
+      starts.add(at);
+    }
+    expect(starts.size).toBeGreaterThan(4); // the start varies between boards
+    expect(headOrderFor([7, 7, 3], 'L1')).toHaveLength(2); // each colour once
+    expect(headOrderFor([], 'L1')).toEqual([]);
+  });
+
+  it('isDarkTile: white reaches 4.0:1 only on Denim (helpers-spec §6.4)', () => {
+    expect(PALETTE.map((_, i) => i).filter(isDarkTile)).toEqual([4]);
+    expect(isDarkTile(7)).toBe(false);
+    expect(isDarkTile(99)).toBe(false);
   });
 
   it('xEdgeColor mixes each tile toward --ink-deep by layout.mark.edgeMix (look-spec §1.10)', () => {
@@ -526,6 +591,64 @@ describe('Phase 2d symbols (look-spec Appendix C)', () => {
 
   it('every new symbol is decorative through icon()', () => {
     for (const id of ['icon-back', 'icon-play', 'tool-kitty', 'tool-bulb', 'tool-mouse', 'cat-head-flat', 'art-flex'] as const) {
+      expect(icon(id).getAttribute('aria-hidden'), id).toBe('true');
+    }
+  });
+});
+
+describe('Phase 2d.1 symbols (helpers-spec Appendix C)', () => {
+  const sym = (id: string): Element => {
+    mountSprite();
+    return document.querySelector(`symbol[id="${id}"]`) as Element;
+  };
+
+  it('cat-wink: Tux with the left iris open, the right eye a closed upward arc and a tiny white glint', () => {
+    const w = sym('cat-wink');
+    expect(w.getAttribute('viewBox')).toBe('0 0 100 100');
+    expect(w.querySelectorAll(`ellipse[fill="${CAT_COLORS.iris}"]`)).toHaveLength(1);
+    expect(w.querySelector('path[d^="M58.6 56.6Q64 49.4"]')).not.toBeNull(); // the closed arc bulges upward
+    expect(w.querySelector('path[fill="#fff"]')).not.toBeNull();
+    expect(w.querySelector(`path[d="${MASK_PATH}"]`)).not.toBeNull();
+  });
+
+  it('the board mouse is tool-mouse in parts on the same box: head (no eyes), eyes, lids, grin; tool-mouse = head + eyes', () => {
+    for (const id of ['board-mouse', 'board-mouse-eyes', 'board-mouse-lids', 'board-mouse-grin', 'tool-mouse']) expect(sym(id).getAttribute('viewBox'), id).toBe('1 4.5 98 88');
+    expect(sym('board-mouse').querySelectorAll('circle[r="5.4"]')).toHaveLength(0);
+    expect(sym('board-mouse-eyes').querySelectorAll('circle[r="5.4"]')).toHaveLength(2);
+    expect(sym('tool-mouse').innerHTML).toBe(sym('board-mouse').innerHTML + sym('board-mouse-eyes').innerHTML);
+    // the lids are the head's grey; the grin is an open mouth with the tongue and two teeth
+    expect(sym('board-mouse-lids').innerHTML).toContain('#B8B4BC');
+    expect(sym('board-mouse-grin').innerHTML).toContain(CAT_COLORS.blush);
+    expect(sym('board-mouse-grin').querySelectorAll('path[fill="#fff"]')).toHaveLength(1);
+  });
+
+  it('fx-star4 has a concave four-point outline in currentColor and a round core; each fx-shard is a lit face, a shaded face and a highlight', () => {
+    const star = sym('fx-star4');
+    expect(star.querySelector('path')?.getAttribute('fill')).toBe('currentColor');
+    expect(star.querySelectorAll('circle').length).toBeGreaterThan(0);
+    for (const id of ['fx-shard', 'fx-shard-2', 'fx-shard-3']) {
+      const paths = Array.from(sym(id).querySelectorAll('path'));
+      expect(paths.map((p) => p.getAttribute('fill')), id).toEqual(['currentColor', '#000', '#fff']);
+      expect(paths[1]?.getAttribute('opacity'), id).toBe('.18'); // the shaded face = the colour × 0.82
+    }
+  });
+
+  it('art-paw-cap: four toe beans, a main pad, the ticker fill and border along the scallops; art-bolt and art-star in gold with an orange shade or highlight', () => {
+    const paw = sym('art-paw-cap');
+    expect(paw.querySelectorAll('circle[fill="#FFCD9B"]')).toHaveLength(4);
+    expect(paw.querySelector('radialGradient stop[stop-color="#FFD4A5"]')).not.toBeNull();
+    expect(paw.innerHTML).toContain('var(--toast-fill)');
+    expect(paw.innerHTML).toContain('var(--toast-line)');
+    expect(sym('art-bolt').innerHTML).toContain(TOKENS.gold);
+    expect(sym('art-bolt').innerHTML).toContain(TOKENS.fish);
+    expect(sym('art-bolt').querySelector('[stroke-width="1.4"]')?.getAttribute('stroke')).toBe(TOKENS.gold); // no outline colour
+    const star = sym('art-star').querySelector('path') as Element;
+    expect(star.getAttribute('stroke-linejoin')).toBe('round');
+    expect(star.getAttribute('fill')).toBe(TOKENS.gold);
+  });
+
+  it('every 2d.1 symbol is decorative through icon()', () => {
+    for (const id of ['cat-wink', 'board-mouse', 'fx-star4', 'fx-shard', 'art-paw-cap', 'art-bolt', 'art-star'] as const) {
       expect(icon(id).getAttribute('aria-hidden'), id).toBe('true');
     }
   });

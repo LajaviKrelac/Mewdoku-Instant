@@ -24,6 +24,11 @@
 // screen's back disc sits where the original's is (top left): the FB safe zone is checked on Home here
 // and on the game screen in the FBIG build (fbig.spec.ts). The 2c.1 pills test now checks the heads
 // pill, the fish pill and the bar's Score column.
+// Phase 2d.1 (G1, docs/phase2d/helpers-spec.md §3.2, §4.8, §7.7): the hint card covers the rules row
+// below the bar and above the board, Apply sits under the board fully on screen and above the band
+// (320 × 568, 390 × 844, 1280 × 800, with and without the band); the "+N" and the "Done!" labels stay
+// inside the viewport for a cat in each corner tile; in German at 320 × 568 with the band (and with 2×
+// text) the card stays below the bar and off the board, scrolling inside when its text cannot fit.
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -203,8 +208,9 @@ test('the tutorial coach never covers the board or the top bar, and steps aside 
   expect(ring && vp ? ring.bottom : Infinity).toBeLessThanOrEqual((vp?.height ?? 0) - 4);
   // Step 5 accepts Apply only: the hint card has no ×, and the stale coach card, hand and ring hide.
   await page.locator('.tool--bulb').click();
-  await expect(page.locator('.overlay[data-overlay=hint] .hint-card__apply')).toBeVisible();
-  await expect(page.locator('.overlay[data-overlay=hint] .overlay__close')).toBeHidden();
+  // 2d.1 §3.2, §3.5: the Apply pill; no visible close control (in the tutorial none at all).
+  await expect(page.locator('.overlay[data-overlay=hint] button.hint-apply')).toBeVisible();
+  await expect(page.locator('.overlay[data-overlay=hint] .overlay__close, .overlay[data-overlay=hint] .hint-close')).toBeHidden();
   for (const sel of ['.coach__card', '.coach__hand', '.coach__ring']) expect((await box(page, sel))?.visible, sel).toBe(false);
   await page.getByRole('button', { name: 'Apply' }).click();
   await expect(page.locator('.coach__card')).toBeVisible(); // step 6
@@ -240,7 +246,7 @@ test('keyboard play starts without a click: focus lands on the board, H opens a 
   await expect(page.locator('.cell[data-i="1"]')).toBeFocused();
   await page.locator('.top-bar__btn--settings').focus();
   await page.keyboard.press('h');
-  await expect(page.locator('.overlay[data-overlay=hint] .hint-card__apply')).toBeVisible();
+  await expect(page.locator('.overlay[data-overlay=hint] button.hint-apply')).toBeVisible(); // 2d.1: the Apply pill
 });
 
 test('a phone starting the tutorial: the board has focus but shows no ring until a key is pressed', async ({ page }, info) => {
@@ -712,4 +718,175 @@ test('2d keyboard order: back → gear → board → kitty → bulb → mouse', 
     order.push(await which());
   }
   expect(order).toEqual(['back', 'gear', 'board', 'kitty', 'bulb', 'mouse']);
+});
+
+// ─────────────────────────── Phase 2d.1 (helpers-spec §3.2, §4.8, §7.7) ───────────────────────────
+
+/** Client rects of the first match of each selector (null when absent or not rendered). */
+async function rectsOf<K extends string>(page: Page, sels: Record<K, string>): Promise<Record<K, Rect | null>> {
+  return page.evaluate((map) => {
+    const out: Record<string, Rect | null> = {};
+    for (const [k, q] of Object.entries(map)) {
+      const e = document.querySelector(q);
+      const r = e?.getBoundingClientRect();
+      out[k] = r && r.width > 0 && r.height > 0 ? { left: r.left, top: r.top, right: r.right, bottom: r.bottom } : null;
+    }
+    return out;
+  }, sels as Record<string, string>) as Promise<Record<K, Rect | null>>;
+}
+
+const HINT = {
+  card: '.overlay[data-overlay="hint"] .hint-card',
+  apply: '.overlay[data-overlay="hint"] button.hint-apply',
+  bar: '.screen--game header.top-bar--game',
+  rules: '.screen--game .rule-chips',
+  board: '.screen--game .board',
+  banner: '[data-testid="mock-banner"]',
+};
+
+/** Opens the hint on the playing board and checks the card and Apply against the stack (§3.2). */
+async function hintPlacedOk(page: Page, label: string): Promise<void> {
+  await page.locator('.tool--bulb').click();
+  await expect(page.locator(HINT.card)).toBeVisible();
+  await page.waitForTimeout(400); // past the dim's fade and its rebuild at dimMs
+  const r = await rectsOf(page, HINT);
+  const vw = page.viewportSize()?.width ?? 0;
+  const vh = page.viewportSize()?.height ?? 0;
+  const { card, apply, bar, rules, board, banner } = r;
+  if (!card || !apply || !bar || !rules || !board) throw new Error(`${label}: missing ${JSON.stringify(r)}`);
+  // The card: inside the viewport, below the bar, above the board, over the rule cards.
+  expect(card.left, `${label}: card left`).toBeGreaterThanOrEqual(-0.5);
+  expect(card.right, `${label}: card right`).toBeLessThanOrEqual(vw + 0.5);
+  expect(card.top, `${label}: card below the bar`).toBeGreaterThanOrEqual(bar.bottom - 0.5);
+  expect(card.bottom, `${label}: card off the board`).toBeLessThanOrEqual(board.top + 0.5);
+  const vOverlap = Math.min(card.bottom, rules.bottom) - Math.max(card.top, rules.top);
+  const hOverlap = Math.min(card.right, rules.right) - Math.max(card.left, rules.left);
+  expect(vOverlap, `${label}: card over the rules row (height)`).toBeGreaterThanOrEqual(0.75 * (rules.bottom - rules.top));
+  expect(hOverlap, `${label}: card over the rules row (width)`).toBeGreaterThanOrEqual(0.75 * Math.min(rules.right - rules.left, card.right - card.left));
+  // Apply: fully on screen, under the board, above the banner band.
+  expect(apply.left, `${label}: Apply left`).toBeGreaterThanOrEqual(-0.5);
+  expect(apply.right, `${label}: Apply right`).toBeLessThanOrEqual(vw + 0.5);
+  expect(apply.top, `${label}: Apply under the board`).toBeGreaterThanOrEqual(board.bottom - 0.5);
+  expect(apply.bottom, `${label}: Apply on screen`).toBeLessThanOrEqual(vh + 0.5);
+  if (banner) expect(apply.bottom, `${label}: Apply above the band`).toBeLessThanOrEqual(banner.top + 0.5);
+  await page.keyboard.press('Escape');
+  await expect(page.locator(HINT.card)).toBeHidden();
+  await page.waitForFunction(() => !(window as TestWindow).__mewdoku?.app().overlays.includes('hint'));
+}
+
+test('2d.1: the hint card covers the rules row below the bar; Apply sits under the board, on screen, above the band', async ({ page }, info) => {
+  await playAt(page, 15, '?ads=unsupported');
+  await hintPlacedOk(page, `${info.project.name} no band`);
+  await playAt(page, 15);
+  await expect(page.locator('.screen--game')).toHaveAttribute('data-banner', '');
+  await hintPlacedOk(page, `${info.project.name} band`);
+});
+
+test('2d.1: in German at 320 × 568 with the band (also 2× text) the card stays below the bar and off the board, scrolling inside if needed', async ({ page }, info) => {
+  test.skip(info.project.name !== 'web-320', 'the small phone');
+  const german = (): SaveData => {
+    const s = veteranSave(15);
+    return { ...s, settings: { ...s.settings, locale: 'de' } };
+  };
+  for (const big of [false, true]) {
+    if (big) {
+      await page.addInitScript(() => {
+        document.addEventListener('DOMContentLoaded', () => {
+          const st = document.createElement('style');
+          st.textContent = 'html { font-size: 200% !important; }';
+          document.head.appendChild(st);
+        });
+      });
+    }
+    await page.goto('/');
+    await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen !== 'boot');
+    await page.evaluate((json) => (window as TestWindow).__mewdoku?.seedSave(json), JSON.stringify(german()));
+    await page.reload();
+    await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');
+    await expect(page.locator('html')).toHaveAttribute('lang', /^de/);
+    await page.locator('.home__play').click();
+    await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
+    await page.waitForTimeout(250);
+    await page.locator('.tool--bulb').click();
+    await expect(page.locator(HINT.card)).toBeVisible();
+    await page.waitForTimeout(400);
+    const r = await rectsOf(page, HINT);
+    if (!r.card || !r.bar || !r.board) throw new Error('missing rects');
+    expect(r.card.top, `de${big ? ' 2×' : ''}: card below the bar`).toBeGreaterThanOrEqual(r.bar.bottom - 0.5);
+    expect(r.card.bottom, `de${big ? ' 2×' : ''}: card off the board`).toBeLessThanOrEqual(r.board.top + 0.5);
+    // The card and its text block (§3.2: text that does not fit scrolls inside the card).
+    const scroll = await page.evaluate((q) => {
+      const el = document.querySelector<HTMLElement>(q);
+      if (!el) return null;
+      const parts = [el, el.querySelector<HTMLElement>('.hint-card__text')].filter((x): x is HTMLElement => !!x);
+      const over = parts.filter((x) => x.scrollHeight > x.clientHeight + 1);
+      return { overflows: over.length > 0, scrollable: over.every((x) => /auto|scroll/.test(getComputedStyle(x).overflowY) || parts.some((p) => p !== x && /auto|scroll/.test(getComputedStyle(p).overflowY) && p.contains(x))) };
+    }, HINT.card);
+    expect(scroll?.scrollable, `de${big ? ' 2×' : ''}: overflowing text scrolls inside the card`).toBe(true);
+    await page.keyboard.press('Escape');
+  }
+});
+
+/** Shipped levels (packs 000–009) whose solution puts cats in the corners, covering all four. */
+function cornerLevels(): { level: number; n: number; corners: { row: number; col: number }[] }[] {
+  const out: { level: number; n: number; corners: { row: number; col: number }[] }[] = [];
+  const need = new Set(['tl', 'tr', 'bl', 'br']);
+  for (let k = 0; k <= 9 && need.size > 0; k++) {
+    const pack = JSON.parse(readFileSync(resolve(LEVELS_DIR, `pack-${String(k).padStart(3, '0')}.json`), 'utf8')) as LevelPack;
+    pack.levels.forEach((rec, j) => {
+      const level = rec.i ?? pack.first + j;
+      if (level < 11 || rec.n > 9 || need.size === 0 || (rec.gv ?? '') !== '') return;
+      const n = rec.n;
+      const top = parseInt(rec.s[0] as string, 36);
+      const bottom = parseInt(rec.s[n - 1] as string, 36);
+      const corners: { row: number; col: number }[] = [];
+      const tag = (row: number, col: number): string => `${row === 0 ? 't' : 'b'}${col === 0 ? 'l' : 'r'}`;
+      for (const [row, col] of [[0, top], [n - 1, bottom]] as const) {
+        if ((col === 0 || col === n - 1) && need.has(tag(row, col))) corners.push({ row, col });
+      }
+      if (corners.length === 0) return;
+      for (const c of corners) need.delete(tag(c.row, c.col));
+      out.push({ level, n, corners });
+    });
+  }
+  return out;
+}
+
+test('2d.1: the "+N" and the "Done!" labels stay inside the viewport for a cat in each corner tile', async ({ page }, info) => {
+  test.setTimeout(120_000);
+  const levels = cornerLevels();
+  const seen = new Set(levels.flatMap((l) => l.corners.map((c) => `${c.row === 0 ? 't' : 'b'}${c.col === 0 ? 'l' : 'r'}`)));
+  expect([...seen].sort(), 'a shipped level for every corner').toEqual(['bl', 'br', 'tl', 'tr']);
+  for (const { level, n, corners } of levels) {
+    await playAt(page, level, '?ads=unsupported');
+    await expect(page.locator('.game-fx[data-celebrate="ready"]')).toBeAttached({ timeout: 10_000 });
+    const vw = page.viewportSize()?.width ?? 0;
+    const vh = page.viewportSize()?.height ?? 0;
+    for (const { row, col } of corners) {
+      const label = `${info.project.name} level ${level} (${row},${col})`;
+      // Cross the rest of the row, then the corner cat completes it: "+N" over it, "Done!" under it.
+      for (let c = 0; c < n; c++) if (c !== col) await page.locator('.cell').nth(row * n + c).click();
+      await page.locator('.cell').nth(row * n + col).dblclick();
+      const found = await page.waitForFunction(
+        (anchor) => {
+          const plus = document.querySelector('.game-fx .fx-plus');
+          const done = document.querySelector(`.game-fx .fx-done-label[data-anchor="${anchor}"]`);
+          if (!plus || !done) return false;
+          const a = plus.getBoundingClientRect();
+          const b = done.getBoundingClientRect();
+          return { plus: { left: a.left, top: a.top, right: a.right, bottom: a.bottom }, done: { left: b.left, top: b.top, right: b.right, bottom: b.bottom } };
+        },
+        row * n + col,
+        { polling: 'raf', timeout: 3_000 },
+      );
+      const r = (await found.jsonValue()) as { plus: Rect; done: Rect };
+      expect(r.plus.left, `${label}: +N left`).toBeGreaterThanOrEqual(3 - 0.5);
+      expect(r.plus.right, `${label}: +N right`).toBeLessThanOrEqual(vw - 3 + 0.5);
+      expect(r.plus.top, `${label}: +N top`).toBeGreaterThanOrEqual(0);
+      expect(r.done.left, `${label}: label left`).toBeGreaterThanOrEqual(2 - 0.5);
+      expect(r.done.right, `${label}: label right`).toBeLessThanOrEqual(vw - 2 + 0.5);
+      expect(r.done.bottom, `${label}: label bottom`).toBeLessThanOrEqual(vh);
+      await page.waitForTimeout(1_500); // the sequence ends before the next corner
+    }
+  }
 });

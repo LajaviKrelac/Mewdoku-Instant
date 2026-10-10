@@ -88,9 +88,11 @@ describe('colour literals live only in tokens.css (phase2b §1.3, §1.12)', () =
       'ink-icon': '#996767', 'ink-deep': '#2f2a35',
       accent: '#e57010', 'accent-deep': '#b4560a', 'accent-title': '#d2620c', 'accent-text': '#a84b08', 'accent-soft': '#fde9d6',
       focus: '#b9520a', 'title-on-dark': '#e57010', 'tap-text': '#ffd45c', stage: '#2a2430', gold: '#ffc23d',
-      fish: '#f1aa22', 'fish-deep': '#d47e18', 'fish-hi': '#fed95d', 'life-empty': '#ede8e2', danger: '#d33a4a', wrong: '#6e0e25', hard: '#6c3fb5',
-      badge: '#dc2f2f', 'badge-video': '#03a84a', dot: '#f34f4f', 'toast-fill': '#fef0c7', 'toast-line': '#dd9045',
+      fish: '#f1aa22', 'fish-deep': '#d47e18', 'fish-hi': '#fed95d', 'life-empty': '#ede8e2', danger: '#d33a4a', wrong: '#560a1c', hard: '#6c3fb5',
+      badge: '#dc2f2f', 'badge-video': '#03a84a', dot: '#f34f4f', 'toast-fill': '#fff1c8', 'toast-line': '#e98e33',
       'rule-card': '#fbf4ee', 'rule-tile': '#ddbeaa', 'rule-tile-2': '#eee1d7', 'rule-mark': '#af6d44',
+      // Phase 2d.1 (helpers-spec §2.5, §3.2, §4.3, §6.4)
+      plus: '#fb8515', 'done-top': '#efda25', 'done-bottom': '#fecf3d', 'done-line': '#813800', 'hint-card': '#fffcfa', apply: '#d38025',
     };
     for (const [name, hex] of Object.entries(want)) expect(new RegExp(`--${name}:\\s*${hex};`, 'i').test(css), `--${name}`).toBe(true);
     expect(css).toMatch(/--scrim:\s*rgba\(28, 23, 32, 0\.82\);/);
@@ -218,6 +220,9 @@ const RETIRED_2D = [
   '#FAF6F0', '#F1EADF', '#665E6C', '#A3193A', '#FFB81F', '#C98200', '#FFE08A',
   '#F49AAE', '#F7B98B', '#F2DC7C', '#BFDB86', '#8FD6B8', '#7CC6D6', '#9BBDF0', '#B9A7EC', '#E3A6DF', '#C7A58C', '#9AA9BC', '#A3B57F',
   'rgba(47,42,53', '#FCE3CA', '#E0E8F3', '#FCE0E6',
+  // Phase 2d.1 (helpers-spec §5.2, §6.2, §6.4): our Mint (index 4 is the measured Denim now), 2d's
+  // --wrong (2.64 on Denim) and the video-sampled toast fill and border (re-sampled from the PNG)
+  '#52A982', '#6E0E25', '#FEF0C7', '#DD9045',
 ];
 
 describe('retired-look guard (phase2b §1.8, §1.12)', () => {
@@ -281,11 +286,73 @@ describe('retired-look guard (phase2b §1.8, §1.12)', () => {
       for (const sel of (m[1] ?? '').split(',').filter((x) => x.includes('.cell__xe'))) expect(sel, sel.trim()).toContain('[data-patterns]');
     }
     for (const gone of ['stroke-dasharray', 'xe-draw', '--x-len', 'fx-draw']) expect(board, gone).not.toContain(gone);
-    // the pop (fx.markPopMs) and the wrong X filled in --wrong
-    expect(board).toMatch(/\.cell\.fx-pop \.cell__xg\s*\{[^}]*animation:\s*x-pop var\(--x-pop-ms, 140ms\)/);
-    expect(cfg.fx.markPopMs).toBe(170); // helpers-spec §0.6, §1.5: 140 → 170 at 2d.1 L0 (the CSS fallback above is G2's)
+    // the mouse's pop (fx.markPopMs, 1.15 → 1) and the wrong X filled in --wrong
+    expect(board).toMatch(/\.cell\.fx-pop \.cell__xg\s*\{[^}]*animation:\s*x-pop var\(--x-pop-ms, 170ms\)/);
+    expect(cfg.fx.markPopMs).toBe(170); // helpers-spec §0.6, §1.5: 140 → 170 at 2d.1 L0
+    expect(/@keyframes x-pop\s*\{\s*from\s*\{\s*transform:\s*scale\(1\.15\)/.test(board)).toBe(true);
     expect(/\.cell\[data-s='w'\] \.cell__x\s*\{([^}]*)\}/.exec(board)?.[1]).toMatch(/fill:\s*var\(--wrong\)/);
     expect(/\.cell__pat\s*\{([^}]*)\}/.exec(board)?.[1]).toMatch(/color:\s*var\(--ink-deep\)/);
+  });
+
+  it('Phase 2d.1 draw-in (helpers-spec §4.4): the tile squishes; "\\" scales about the X centre, then "/" grows from its top-right tip; the X overshoots', () => {
+    const board = stripComments(read(join(STYLES, 'board.css')));
+    const rule = (sel: string): string => {
+      const esc = sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return new RegExp(`(?:^|\\})\\s*${esc}\\s*\\{([^}]*)\\}`).exec(board)?.[1] ?? '';
+    };
+    expect(rule('.cell.fx-mark .cell__tile')).toMatch(/animation:\s*tile-squish var\(--xd-squish, 80ms\)/);
+    expect(rule('.cell.fx-mark .cell__xb--a rect')).toMatch(/animation:\s*x-grow var\(--xd-s1, 70ms\)/);
+    const b = rule('.cell.fx-mark .cell__xb--b rect');
+    expect(b).toMatch(/transform-origin:\s*84\.5px 50px/); // the bar's top-right tip in its own frame
+    expect(b).toMatch(/animation:\s*x-reveal var\(--xd-s2, 130ms\) ease-out var\(--xd-s1, 70ms\) both/);
+    expect(rule('.cell.fx-mark .cell__xg')).toMatch(/animation:\s*x-over var\(--xd-settle, 250ms\)/);
+    expect(/@keyframes x-grow\s*\{\s*from\s*\{\s*transform:\s*scale\(0\.3\)/.test(board)).toBe(true);
+    expect(/@keyframes x-reveal\s*\{\s*from\s*\{\s*transform:\s*scaleX\(0\)/.test(board)).toBe(true);
+    expect(/@keyframes x-over\s*\{[^@]*28%,\s*48%\s*\{\s*transform:\s*scale\(var\(--xd-over, 1\.1\)\)/.test(board)).toBe(true);
+    expect(/@keyframes tile-squish\s*\{\s*from\s*\{\s*transform:\s*scale\(var\(--squish, 0\.9\)\)/.test(board)).toBe(true);
+    // the cell's X group scales about the cell centre; each bar's rects in the bar's frame (view-box)
+    expect(rule('.cell__xg,\n.cell__xg rect')).toMatch(/transform-origin:\s*50px 50px/);
+    // config feeds the timings (board-view applyRenderVars)
+    expect(cfg.fx.markDraw).toEqual({ squishMs: 80, stroke1Ms: 70, stroke2Ms: 130, overshoot: 1.1, settleMs: 250 });
+  });
+
+  it('Phase 2d.1 hint (helpers-spec §3.3): no board dim, no focus ring for a hint; the ghost is the outline popping at --gd; the 2b ghost pulse is gone', () => {
+    const board = stripComments(read(join(STYLES, 'board.css')));
+    expect(board).not.toMatch(/\.board\[data-hl='hint'\]/);
+    expect(board).not.toMatch(/\.board\[data-hl\] \.cell\[data-f\]/);
+    expect(board).not.toContain('ghost-pulse');
+    expect(board).not.toContain('--hint-dim');
+    expect(/\.cell\[data-ghost='x'\]\[data-s='e'\] \.cell__xog\s*\{[^}]*animation:\s*ghost-pop var\(--ghost-pop, 500ms\) linear var\(--gd, 0ms\) forwards/.test(board)).toBe(true);
+    expect(/\.cell__xo\s*\{[^}]*fill:\s*rgba\(255, 255, 255, 0\.1\);[^}]*stroke:\s*#fff;[^}]*stroke-width:\s*1\.5px/.test(board)).toBe(true);
+    // the keyframes of the measured pop: .25 → 1 (13 %) → 1.22 (27 %) → 1 (47 %) → .92 (60 %) → 1
+    const kf = /@keyframes ghost-pop\s*\{([\s\S]*?)\n\}/.exec(board)?.[1] ?? '';
+    for (const stop of ['0% {\n    opacity: 0.3;\n    transform: scale(0.25)', '12% {\n    opacity: 1', '13% {\n    transform: none', '27% {\n    transform: scale(1.22)', '47% {\n    transform: none', '60% {\n    transform: scale(0.92)']) {
+      expect(kf, stop).toContain(stop);
+    }
+    // the coach keeps its ring
+    expect(board).toMatch(/\.board\[data-hl='coach'\] \.cell\[data-f\] \.cell__tile\s*\{[^}]*coach-ring/);
+  });
+
+  it('Phase 2d.1 veil and dark tiles (helpers-spec §4.7, §6.4): the found cat keeps its tile colour; a dark tile\'s glyph is white unless faded', () => {
+    const board = stripComments(read(join(STYLES, 'board.css')));
+    expect(board).toMatch(/\.cell\[data-done\]:not\(\[data-s='c'\]\):not\(\[data-s='g'\]\) \.cell__tile::after\s*\{\s*opacity:\s*0\.45;/);
+    expect(board).not.toMatch(/(?:^|\})\s*\.cell\[data-done\] \.cell__tile::after\s*\{/);
+    expect(board).toMatch(/\.cell\[data-dark\]:not\(\[data-done\]\) \.cell__pat,\s*\.cell\[data-dark\]\[data-s='c'\] \.cell__pat,\s*\.cell\[data-dark\]\[data-s='g'\] \.cell__pat\s*\{\s*color:\s*#fff;/);
+  });
+
+  it('Phase 2d.1 mouse, cat and wave (helpers-spec §1.5, §2.4, §4.2): the sprite\'s state classes are its own (no global .is-in / .is-out), the cat sequence and the wave read their config', () => {
+    const board = stripComments(read(join(STYLES, 'board.css')));
+    expect(board).toMatch(/\.board__mouse--in\s*\{\s*animation:\s*mouse-in var\(--mouse-in, 115ms\)/);
+    expect(board).toMatch(/\.board__mouse--out\s*\{\s*animation:\s*mouse-out var\(--mouse-out, 85ms\)/);
+    expect(board).not.toMatch(/\.board__mouse\.is-(in|out)/);
+    expect(board).toMatch(/\.cell\.fx-cat \.cell__catg\s*\{[^}]*transform-origin:\s*50% 80%;[^}]*animation:\s*cat-placed var\(--cat-seq, 1400ms\)/);
+    const kf = /@keyframes cat-placed\s*\{([\s\S]*?)\n\}/.exec(board)?.[1] ?? '';
+    for (const v of ['scale(0.3)', 'scale(1.56)', 'scale(1.25)', 'scale(0.89)']) expect(kf, v).toContain(v);
+    expect(board).toMatch(/\.cell\.fx-wave\s*\{[^}]*animation:\s*wave-bump 270ms linear var\(--wd, 0ms\)/);
+    const wave = /@keyframes wave-bump\s*\{([\s\S]*?)\n\}/.exec(board)?.[1] ?? '';
+    for (const v of ['12.2% {\n    transform: scale(0.93)', '24.8%,\n  61.9% {\n    transform: scale(1.1)']) expect(wave, v).toContain(v);
+    expect(cfg.fx.unitDone.waveStepMs).toBe(33);
+    expect(cfg.fx.mouse).toEqual({ appearMs: 115, dwellMs: 850, exitMs: 85 });
   });
 
   it('the board card has no shadow and no border (look-spec §1.8)', () => {

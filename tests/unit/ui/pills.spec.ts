@@ -8,7 +8,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cfg } from '../../../src/app/config';
 import * as pillsModule from '../../../src/ui/hud/pills';
-import { HEAD_ORDER } from '../../../src/ui/art/palette';
+import { HEAD_ORDER, headOrderFor } from '../../../src/ui/art/palette';
 import { createPeriodPill, createPills, headColors, headScale, LOSS_DROP_FLY, LOSS_DROPS, POP_DROPS, type PillsProps } from '../../../src/ui/hud/pills';
 
 afterEach(() => {
@@ -326,27 +326,31 @@ describe('createPeriodPill (§2.8, Home)', () => {
 
 /** A 3 × 3-region board: region r has palette colour colors[r]. */
 const board3 = { n: 3, colors: [7, 0, 3] } as const;
-const heads = (p: { el: HTMLElement }): SVGElement[] => Array.from(p.el.querySelectorAll<SVGElement>('.pill--heads > svg.head'));
+const heads = (p: { el: HTMLElement }): HTMLElement[] => Array.from(p.el.querySelectorAll<HTMLElement>('.pill--heads > span.head'));
 const done = (p: { el: HTMLElement }): string[] => heads(p).filter((h) => h.hasAttribute('data-done')).map((h) => h.dataset.color ?? '');
 
-describe('the heads pill (look-spec §1.6)', () => {
-  it('holds one flat head per colour on the board, in HEAD_ORDER, each in its region colour', () => {
-    const p = createPills({ ...base, ...board3, colors: [...board3.colors] });
+describe('the heads pill (look-spec §1.6; Phase 2d.1 §2.7, §6.5)', () => {
+  it('holds one flat head per colour on the board, on the hue ring from the board\'s own start, each in its region colour', () => {
+    const p = createPills({ ...base, ...board3, colors: [...board3.colors], ringId: null });
     const hs = heads(p);
-    // Violet (7), Coral (0), Lime (3) in heads order: Lime, Violet, Coral.
+    // Violet (7), Coral (0), Lime (3) on the ring from its start (the tutorial: no rotation): Lime, Violet, Coral.
     expect(hs.map((h) => h.dataset.color)).toEqual(['3', '7', '0']);
-    expect(hs.map((h) => uses(h)[0])).toEqual(['#cat-head-flat', '#cat-head-flat', '#cat-head-flat']);
+    expect(hs.map((h) => uses(h.querySelector('svg.head__shape'))[0])).toEqual(['#cat-head-flat', '#cat-head-flat', '#cat-head-flat']);
     expect(hs.map((h) => h.style.color)).toEqual(['var(--r3)', 'var(--r7)', 'var(--r0)']);
-    for (const h of hs) expect(h.getAttribute('aria-hidden')).toBe('true');
+    for (const h of hs) expect(h.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
     expect(done(p)).toEqual([]);
     const pill = p.el.querySelector('.pill--heads') as HTMLElement;
     expect(pill.getAttribute('role')).toBe('img');
     expect(pill.getAttribute('aria-label')).toBe('0 of 3 cats placed');
-    // The measured order of the recording's 10 colours (§1.6), and a 12 × 12 board's.
-    expect(headColors([0, 1, 2, 3, 5, 6, 7, 8, 10, 11], 10)).toEqual([3, 5, 6, 10, 7, 8, 11, 0, 1, 2]);
+    // The measured ring of the 11 colours (§6.5), unrotated, and a 12 × 12 board's.
+    expect(headColors([0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11], 11)).toEqual([3, 5, 6, 10, 4, 7, 8, 11, 0, 1, 2]);
     expect(headColors(Array.from({ length: 12 }, (_, i) => i), 12)).toEqual([...HEAD_ORDER]);
+    // A board's id rotates the ring (headOrderFor); the boardId is the default ring id.
+    const ring = headOrderFor([7, 0, 3], 'L77');
+    expect(heads(createPills({ ...base, ...board3, colors: [...board3.colors], boardId: 'L77' })).map((h) => Number(h.dataset.color))).toEqual(ring);
+    expect([...ring].sort()).toEqual([0, 3, 7]);
     // Without colours (a dev harness): region r is colour r.
-    expect(heads(createPills(base)).map((h) => h.dataset.color)).toEqual(HEAD_ORDER.filter((c) => c < 8).map(String));
+    expect(heads(createPills({ ...base, ringId: null })).map((h) => h.dataset.color)).toEqual(HEAD_ORDER.filter((c) => c < 8).map(String));
   });
 
   it('sizes: 10 heads next to 3 fish fit at full size; 11 and 12 shrink together (12 heads: 17.7 s)', () => {
@@ -359,29 +363,39 @@ describe('the heads pill (look-spec §1.6)', () => {
     expect((p.el.querySelector('.pill--heads') as HTMLElement).style.getPropertyValue('--hk')).toBe(String(Math.round(headScale(12, 3) * 1000) / 1000));
   });
 
-  it('a found colour turns full from the props without motion; REGION_DONE pops its head (fx.headFoundMs)', () => {
+  it('2d.1 §2.7: a found colour shows our cat face and a tint dot from the props without motion; REGION_DONE pops it (fx.headFoundMs)', () => {
     vi.useFakeTimers();
-    const p = createPills({ ...base, ...board3, colors: [...board3.colors], boardId: 'L1' });
+    const p = createPills({ ...base, ...board3, colors: [...board3.colors], boardId: 'L1', ringId: null });
     expect(p.el.style.getPropertyValue('--head-ms')).toBe(`${cfg.fx.headFoundMs}ms`);
+    expect(cfg.fx.headFoundMs).toBe(280);
     // The session updates the props, then plays REGION_DONE for region 1 (Coral).
-    p.update({ ...base, ...board3, colors: [...board3.colors], boardId: 'L1', catsPlaced: 1, regionsDone: 0b010 });
+    p.update({ ...base, ...board3, colors: [...board3.colors], boardId: 'L1', ringId: null, catsPlaced: 1, regionsDone: 0b010 });
     expect(done(p)).toEqual(['0']);
-    const coral = heads(p)[2] as SVGElement;
+    const coral = heads(p)[2] as HTMLElement;
+    expect(uses(coral.querySelector('svg.head__face'))).toEqual(['#cat-idle']);
+    expect(coral.querySelector('svg.head__face')?.getAttribute('aria-hidden')).toBe('true');
+    expect(coral.querySelector('span.head__dot')).not.toBeNull();
+    // The silhouette stays (hidden by hud.css while done) for the way back.
+    expect(coral.querySelector('svg.head__shape')).not.toBeNull();
     expect(coral.classList.contains('head--pop')).toBe(false);
     p.playEvent({ type: 'REGION_DONE', region: 1 });
     expect(coral.classList.contains('head--pop')).toBe(true);
+    expect(coral.querySelectorAll('.head__face').length).toBe(1);
     vi.advanceTimersByTime(cfg.fx.headFoundMs);
     expect(coral.classList.contains('head--pop')).toBe(false);
     // The event before the props works the same.
     p.playEvent({ type: 'REGION_DONE', region: 0 });
     expect(done(p)).toEqual(['7', '0']);
-    expect((heads(p)[1] as SVGElement).classList.contains('head--pop')).toBe(true);
+    expect((heads(p)[1] as HTMLElement).classList.contains('head--pop')).toBe(true);
+    expect((heads(p)[1] as HTMLElement).querySelector('.head__face')).not.toBeNull();
+    // Only the found heads changed (the others never move).
+    expect((heads(p)[0] as HTMLElement).querySelector('.head__face, .head__dot')).toBeNull();
     p.destroy();
   });
 
-  it('a cat taken back fades its head to the tint (fx.reducedMotionFadeMs), no pop; restores and new boards set it without motion', () => {
+  it('a cat taken back returns the silhouette with a fade (fx.reducedMotionFadeMs), no pop; restores and new boards set it without motion', () => {
     vi.useFakeTimers();
-    const v = { ...base, ...board3, colors: [...board3.colors], boardId: 'L1' };
+    const v = { ...base, ...board3, colors: [...board3.colors], boardId: 'L1', ringId: null };
     // A restore with two colours found: no motion.
     const p = createPills({ ...v, catsPlaced: 2, regionsDone: 0b011 });
     expect(done(p)).toEqual(['7', '0']);
@@ -389,25 +403,27 @@ describe('the heads pill (look-spec §1.6)', () => {
     // CAT_REMOVED in region 1: the view diffs regionsDone.
     p.update({ ...v, catsPlaced: 1, regionsDone: 0b001 });
     expect(done(p)).toEqual(['7']);
-    const coral = heads(p)[2] as SVGElement;
+    const coral = heads(p)[2] as HTMLElement;
+    expect(coral.querySelector('.head__face, .head__dot')).toBeNull();
     expect(coral.classList.contains('head--out')).toBe(true);
     vi.advanceTimersByTime(cfg.fx.reducedMotionFadeMs);
     expect(coral.classList.contains('head--out')).toBe(false);
     // A new board with the same colours (the next level): every head back to the tint, without motion.
     p.update({ ...v, boardId: 'L2', catsPlaced: 0, regionsDone: 0 });
     expect(done(p)).toEqual([]);
-    expect(p.el.querySelector('.head--out')).toBeNull();
+    expect(p.el.querySelector('.head--out, .head__face')).toBeNull();
     // A board with other colours rebuilds the heads.
-    p.update({ ...base, n: 2, colors: [1, 2], boardId: 'L3' });
+    p.update({ ...base, n: 2, colors: [1, 2], boardId: 'L3', ringId: null });
     expect(heads(p).map((h) => h.dataset.color)).toEqual(['1', '2']);
   });
 
-  it('reduced motion: the colour changes in place (no pop, no fade)', () => {
-    const v = { ...base, ...board3, colors: [...board3.colors], reducedMotion: true };
+  it('reduced motion: the face swaps in place (no pop, no fade)', () => {
+    const v = { ...base, ...board3, colors: [...board3.colors], reducedMotion: true, ringId: null };
     const p = createPills(v);
     p.update({ ...v, regionsDone: 0b100 });
     p.playEvent({ type: 'REGION_DONE', region: 2 });
     expect(done(p)).toEqual(['3']);
+    expect(p.el.querySelector('.head[data-done] .head__face')).not.toBeNull();
     p.update({ ...v, regionsDone: 0 });
     expect(done(p)).toEqual([]);
     expect(p.el.querySelector('.head--pop, .head--out')).toBeNull();

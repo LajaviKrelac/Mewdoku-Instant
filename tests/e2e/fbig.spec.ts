@@ -33,6 +33,9 @@
 // The 2b "never in play" tests (incl. FB2B-1) run with ?bannerPlay=0 (an e2e-only switch that turns
 // duringPlay off), which restores that rule. On FBIG the game screen keeps every control out of the
 // top-left 64 × 64 (the back disc moves; in Arabic the gear does) and the Level column clear of it.
+// Phase 2d.1 (G1, docs/phase2d/helpers-spec.md §3.2, §7.7, D-2d1-13): the hint card hides the banner;
+// after it closes a new banner loads at once when ads.banner.minReloadSec has passed, else once when
+// the window ends (the stub's clock), never by a second load inside the window.
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -779,7 +782,7 @@ for (const locale of ['en_US', 'ar_AR'] as const) {
   test.describe(`FBIG dialogs clear the safe zone at 320 × 568 (${locale}; reviews UX-3, UX-9)`, () => {
     test.use({ viewport: { width: 320, height: 568 } });
 
-    test('Settings, About, How to play, the shop, in-game Settings and a top-placed hint card', async ({ page }) => {
+    test('Settings, About, How to play, the shop, in-game Settings and the board-anchored hint card (2d.1)', async ({ page }) => {
       test.setTimeout(60_000);
       await openGame(page, { locale, persist: false, data: { save: seededSave(12, 11) } });
       await expect(page.locator('.home__play')).toBeVisible();
@@ -845,16 +848,17 @@ for (const locale of ['en_US', 'ar_AR'] as const) {
       expect(await zoneHits(), 'in-game Settings').toEqual([]);
       await page.keyboard.press('Escape');
       await expect(page.locator('[data-overlay="settings"]')).toBeHidden();
-      // The hint card: on the small phone it flips above the board (the bottom slot would cover it).
+      // 2d.1 §3.2, §3.5, §4.8: the hint card is anchored to the board (over the rule cards), so it starts
+      // below the top bar and the zone at 320 × 568 with the band (card y ≈ 80–130); the 2b sheet
+      // placement ([data-placement]) is retired.
       await page.locator('.screen--game .tool--bulb').click();
-      const card = page.locator('[data-overlay="hint"]');
-      await expect(card).toBeVisible();
+      const hint = page.locator('[data-overlay="hint"]');
+      await expect(hint.locator('.hint-card')).toBeVisible();
       await settle();
-      const placement = await card.getAttribute('data-placement');
-      expect(placement).toBe('top');
-      const rowTop = await card.locator('.hint-card__row').evaluate((el) => el.getBoundingClientRect().top);
-      expect(rowTop, 'top-placed hint card row').toBeGreaterThanOrEqual(64);
-      expect(await zoneHits(), `hint card (${placement})`).toEqual([]);
+      expect(await hint.getAttribute('data-placement')).toBeNull();
+      const cardTop = await hint.locator('.hint-card').evaluate((el) => el.getBoundingClientRect().top);
+      expect(cardTop, 'the hint card below the zone').toBeGreaterThanOrEqual(64);
+      expect(await zoneHits(), 'hint card').toEqual([]);
     });
   });
 }
@@ -930,6 +934,54 @@ test.describe('FBIG banner during play (phase 2d §1.16, D-2d-15)', () => {
     expect(shows.length).toBe(1);
     expect(hides.some((h) => h < (shows[0] ?? 0))).toBe(true);
     await expect(stubBanner(page)).toHaveCount(0);
+  });
+
+  // Phase 2d.1 §3.2 (D-2d1-13): the banner hides while the hint card is open; after it closes it loads
+  // again at once when ads.banner.minReloadSec has passed, else once when the window ends.
+  test('2d.1: the hint hides the banner; closed inside the window, one new load when the window ends (the stub clock), never a second', async ({ page }) => {
+    test.setTimeout(90_000);
+    const t0 = Date.UTC(2026, 9, 7, 10, 0, 0);
+    await openGame(page, { persist: false, data: { save: seededSave(12, 11) } }, { clockAt: t0 });
+    await expect.poll(() => count(page, 'loadBannerAdAsync')).toBe(1); // Home, at t0
+    await startLevel(page); // banner to banner: it stays, no reload inside the window
+    await expect(stubBanner(page)).toBeVisible();
+    await stub(page, (s) => s.clearCalls());
+    await page.locator('.screen--game .tool--bulb').click();
+    await expect(page.locator('.overlay[data-overlay="hint"]')).toBeVisible();
+    await expect.poll(() => count(page, 'hideBannerAdAsync')).toBeGreaterThanOrEqual(1);
+    await expect(stubBanner(page)).toHaveCount(0);
+    await page.clock.fastForward(10_000);
+    await page.keyboard.press('Escape'); // closes the hint (the 2b close paths stay)
+    await expect(page.locator('.overlay[data-overlay="hint"] .hint-card')).toBeHidden();
+    await expect.poll(async () => (await appState(page)).overlays.includes('hint')).toBe(false);
+    await page.waitForTimeout(300);
+    expect(await count(page, 'loadBannerAdAsync')).toBe(0); // inside Meta's 60 s window: not yet
+    await expect(stubBanner(page)).toHaveCount(0);
+    await page.clock.fastForward(60_000); // past the window that started at t0
+    await expect.poll(() => count(page, 'loadBannerAdAsync')).toBe(1);
+    await expect(stubBanner(page)).toBeVisible();
+    await helpersClearOfStubBanner(page);
+    await page.clock.fastForward(180_000);
+    await page.waitForTimeout(300);
+    expect(await count(page, 'loadBannerAdAsync')).toBe(1); // one timer per close, no retry loop
+  });
+
+  test('2d.1: the hint closed (Apply) after the reload window: a new banner at once', async ({ page }) => {
+    test.setTimeout(90_000);
+    const t0 = Date.UTC(2026, 9, 7, 10, 0, 0);
+    await openGame(page, { persist: false, data: { save: seededSave(12, 11) } }, { clockAt: t0 });
+    await expect.poll(() => count(page, 'loadBannerAdAsync')).toBe(1);
+    await startLevel(page);
+    await page.clock.fastForward(61_000);
+    await stub(page, (s) => s.clearCalls());
+    await page.locator('.screen--game .tool--bulb').click();
+    await expect(page.locator('.overlay[data-overlay="hint"]')).toBeVisible();
+    await expect.poll(() => count(page, 'hideBannerAdAsync')).toBeGreaterThanOrEqual(1);
+    expect(await count(page, 'loadBannerAdAsync')).toBe(0);
+    await page.getByRole('button', { name: 'Apply' }).click();
+    await expect.poll(() => count(page, 'loadBannerAdAsync')).toBe(1);
+    await expect(stubBanner(page)).toBeVisible();
+    expect((await stub(page, (s) => s.find('loadBannerAdAsync')[0]?.args)) ?? []).toEqual(['e2e-banner', 'bottom']);
   });
 
   test('persistence from the victory into the next board (the interstitial gated by its cooldown): no hide, no reload', async ({ page }) => {

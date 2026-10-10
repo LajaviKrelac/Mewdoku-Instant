@@ -1,9 +1,11 @@
 // Owner: A (Phase 2b; was ui-board); G2 (Phase 2c.1: the level-points counter rows; Phase 2d: the
-// measured palette and tokens, look-spec §2.3)
+// measured palette and tokens, look-spec §2.3; Phase 2d.1: Denim, the dark-tile rules and the helpers'
+// rows, helpers-spec §6.4)
 // Palette validation for the one token set (02 §17.2, §18; phase2b §1.4, §1.5, §1.12; look-spec §1.2,
 // §1.9, §2.3): pairwise CIEDE2000 ≥ 10, simulated deuteranopia/protanopia/tritanopia ΔE report; on every
-// tile, normal and faded: the X's edge (drawn with Colour patterns on) vs the tile ≥ 3 AND white vs
-// that edge ≥ 3, Tux's outline and fur ≥ 3, the wrong X ≥ 3, the colour-pattern glyph (--ink-deep) ≥ 3;
+// tile, normal and faded: the X with Colour patterns on (white vs the tile ≥ 3, OR its edge vs the tile
+// ≥ 3 and white vs that edge ≥ 3; helpers-spec §6.4), Tux's outline and fur ≥ 3, the wrong X ≥ 3, the
+// colour-pattern glyph ≥ 3 (--ink-deep, or white on a normal dark tile, isDarkTile);
 // the plain white X of the default look is an informational row (a recorded parity exception, D-2d-6);
 // the UI pairs of §1.2 at 4.5:1 (WCAG 1.4.3) or 3:1 for the listed large-text and graphic pairs, plus
 // the informational parity exceptions; every event theme (§4.3): the text pairs on its page and on its
@@ -15,6 +17,7 @@ import {
   CAT_COLORS,
   EVENT_PATTERN_COLORS,
   EVENT_THEME_TOKENS,
+  isDarkTile,
   mixHex,
   PALETTE,
   PALETTE_DE00,
@@ -34,7 +37,7 @@ export const MIN_TEXT_CONTRAST = 4.5;
 /** PALETTE_DE00 entries are ΔE × 100 rounded; allow one unit of rounding drift. */
 const MATRIX_TOLERANCE = 1;
 
-const NAMES = ['Coral', 'Apricot', 'Mustard', 'Lime', 'Mint', 'Lagoon', 'Sky', 'Violet', 'Orchid', 'Cocoa', 'Slate', 'Pink'];
+const NAMES = ['Coral', 'Apricot', 'Mustard', 'Lime', 'Denim', 'Lagoon', 'Sky', 'Violet', 'Orchid', 'Cocoa', 'Slate', 'Pink'];
 
 function parseHex(hex: string): [number, number, number] {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
@@ -212,13 +215,16 @@ export interface ContrastRow {
 
 /**
  * Glyph-vs-tile contrast on every tile, normal and faded (faded = mixed toward `page` by
- * fx.regionFadeMix, as the board's veil does): with Colour patterns on, the white X carries WCAG
- * 1.4.11 through its edge, so both the edge vs the tile and the white vs the edge must reach 3:1
- * (look-spec §1.10, D-2d-5); Tux's outline and fur, the wrong X (its ring stays outside the veil,
- * board.css) and the colour-pattern glyph in --ink-deep (02 §18). The default plain white X is
- * reported by whiteOnTiles() (informational: a recorded parity exception, D-2d-6).
+ * fx.regionFadeMix, as the board's veil does): with Colour patterns on, the X carries WCAG 1.4.11
+ * either by its white alone (white vs the tile ≥ 3: the dark Denim tile) or through its edge (the edge
+ * vs the tile and the white vs the edge both ≥ 3; look-spec §1.10, D-2d-5; helpers-spec §6.4): the
+ * "X with patterns on" row takes the better of the two, and the two edge rows stay as information;
+ * Tux's outline and fur, the wrong X (its ring stays outside the veil, board.css) and the
+ * colour-pattern glyph (02 §18): --ink-deep, or white on a dark tile that is not faded (isDarkTile,
+ * board.css [data-dark]). The default plain white X is reported by whiteOnTiles() (informational: a
+ * recorded parity exception, D-2d-6).
  */
-export function glyphContrast(page: string = TOKENS.page, pageName?: string): ContrastRow[] {
+export function glyphContrast(page: string = TOKENS.page, pageName?: string, info: ContrastRow[] = []): ContrastRow[] {
   const rows: ContrastRow[] = [];
   const L = cfg.layout;
   PALETTE.forEach((tileHex, tile) => {
@@ -228,13 +234,17 @@ export function glyphContrast(page: string = TOKENS.page, pageName?: string): Co
       const row = (what: string, ratio: number): void => {
         rows.push(pageName ? { what, tile, faded, ratio, page: pageName } : { what, tile, faded, ratio });
       };
-      row('X edge (--xe, patterns on) vs tile', contrastRatio(edge, bg));
-      row('white X vs its edge (patterns on)', contrastRatio('#FFFFFF', edge));
+      const edgeOnTile = contrastRatio(edge, bg);
+      const whiteOnEdge = contrastRatio('#FFFFFF', edge);
+      row('X with patterns on (white vs tile, or edge vs tile and white vs edge)', Math.max(contrastRatio('#FFFFFF', bg), Math.min(edgeOnTile, whiteOnEdge)));
       row('cat outline', contrastRatio(CAT_COLORS.outline, bg));
       row('cat fur', contrastRatio(CAT_COLORS.fur, bg));
       row('wrong X (--wrong)', contrastRatio(TOKENS.wrong, bg));
       const patOp = faded ? L.patternOpacityDone : L.patternOpacity;
-      row('pattern glyph (--ink-deep @ patternOpacity)', contrastRatio(over(TOKENS['ink-deep'], bg, patOp), bg));
+      const glyph = !faded && isDarkTile(tile) ? '#FFFFFF' : TOKENS['ink-deep'];
+      row('pattern glyph (--ink-deep, white on a dark tile, @ patternOpacity)', contrastRatio(over(glyph, bg, patOp), bg));
+      info.push(pageName ? { what: 'X edge (--xe, patterns on) vs tile', tile, faded, ratio: edgeOnTile, page: pageName } : { what: 'X edge (--xe, patterns on) vs tile', tile, faded, ratio: edgeOnTile });
+      info.push(pageName ? { what: 'white X vs its edge (patterns on)', tile, faded, ratio: whiteOnEdge, page: pageName } : { what: 'white X vs its edge (patterns on)', tile, faded, ratio: whiteOnEdge });
     }
   });
   return rows;
@@ -311,6 +321,13 @@ export function uiContrast(): UiContrastRow[] {
     ['mini-diagram X (white on --rule-mark)', white, T['rule-mark'], MIN_CONTRAST],
     ['mini-diagram X box (--rule-mark on --rule-card)', T['rule-mark'], T['rule-card'], MIN_CONTRAST],
     ['fish shade (--fish-deep on --card)', T['fish-deep'], T.card, MIN_CONTRAST],
+    // Phase 2d.1 (helpers-spec §6.4): the hint card, the tickers, Apply, the completion label.
+    ['hint card text (--ink on --hint-card)', T.ink, T['hint-card'], MIN_TEXT_CONTRAST],
+    ['ticker text (--ink on --toast-fill)', T.ink, T['toast-fill'], MIN_TEXT_CONTRAST],
+    ['Apply label, large text (white on --apply)', white, T.apply, MIN_CONTRAST],
+    ['completion label outline (--done-line on --page)', T['done-line'], T.page, MIN_CONTRAST],
+    ['completion label fill on its outline (--done-top on --done-line)', T['done-top'], T['done-line'], MIN_CONTRAST],
+    ['completion label fill on its outline (--done-bottom on --done-line)', T['done-bottom'], T['done-line'], MIN_CONTRAST],
     // The dark victory screen (review PAR-3): light text on opaque --stage, like the fail card.
     ['victory praise, large text (--title-on-dark on --stage)', T['title-on-dark'], T.stage, MIN_CONTRAST],
     ['victory lines (white .82 on --stage)', over(white, T.stage, 0.82), T.stage, MIN_TEXT_CONTRAST],
@@ -338,7 +355,9 @@ export function parityExceptions(): UiContrastRow[] {
   for (let i = 0; i < PALETTE.length; i++) add(`head tint (${NAMES[i]} at 50 % on --card)`, over(PALETTE[i] as string, T.card, 0.5), T.card);
   add('fish body on the white pill (--fish on --card)', T.fish, T.card);
   add('mini-diagram tile (--rule-tile on --rule-card)', T['rule-tile'], T['rule-card']);
-  add('toast border (--toast-line on --page)', T['toast-line'], T.page);
+  add('ticker border (--toast-line on --page)', T['toast-line'], T.page);
+  // Phase 2d.1 (helpers-spec §2.5, D-2d1-16): the "+N" in the original's orange (white outline; the Score shows the number).
+  add('"+N" (--plus on --page)', T.plus, T.page);
   return rows;
 }
 
@@ -418,7 +437,12 @@ export function main(argv: readonly string[]): void {
       '(informational: parity exception D-2d-6; Colour patterns on adds the edge)',
   );
   const events = eventContrast();
-  const rows = [...glyphContrast(), ...events.glyphs];
+  const info: ContrastRow[] = [];
+  const rows = [...glyphContrast(TOKENS.page, undefined, info), ...events.glyphs];
+  for (const what of new Set(info.map((r) => r.what))) {
+    const r = info.filter((x) => x.what === what).sort((a, b) => a.ratio - b.ratio)[0] as ContrastRow;
+    log(`${what.padEnd(40)} min ${fmt(r.ratio)}:1 on ${NAMES[r.tile]}${r.faded ? ' (faded)' : ''} (informational; the "X with patterns on" row is the check, helpers-spec §6.4)`);
+  }
   const byWhat = new Map<string, ContrastRow>();
   for (const r of rows) {
     const cur = byWhat.get(r.what);

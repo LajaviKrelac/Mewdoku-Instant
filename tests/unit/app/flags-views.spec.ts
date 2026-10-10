@@ -1,7 +1,8 @@
 // Owner: C (Phase 2b; was app). Feature flags (02 §22) and the AppState → view-model selectors.
 // Phase 2d (G1, docs/phase2d/look-spec.md §4.3, §5.1): the game view's pulse (rule 'auto' and the
 // pinned targets), the mouse (shown / enabled), videoRefill, bannerBand and the gear's dot (game,
-// Home, event screen).
+// Home, event screen). Phase 2d.1 (helpers-spec §4.6, §7.6): the 'auto' pulse's idle time, stock and
+// helper-use conditions (the session-side idle resets are in session-2d1.spec).
 import { afterEach, describe, expect, it } from 'vitest';
 import { mergeConfig } from '../../../src/app/config';
 import { DEFAULT_FLAGS, isFlagOn, parseFlagParam, setFlagOverrides } from '../../../src/app/flags';
@@ -227,60 +228,104 @@ describe('phase 2d §4.3: pulse, mouse, videoRefill, bannerBand, settingsDot', (
   const view = (st: AppState, c = ctx, config = mergeConfig({})) => selectGameView(st, c, config);
   const rewardCtx: ViewContext = { ...ctx, capabilities: { ...caps, rewarded: true } };
 
-  describe("pulse (§1.11, D-2d-11): rule 'auto'", () => {
-    it('the kitty while the board is untouched; the bulb after a mark, a cat or a wrong cell', () => {
+  describe("pulse (§1.11; 2d.1 §4.6, D-2d1-9): rule 'auto'", () => {
+    /** Idle long enough: the last board change fx.helperPulse.idleMs (5 000) ago. */
+    const idle: ViewContext = { ...ctx, lastBoardChangeAt: NOW - 5000 };
+
+    it('the kitty while the board is untouched; the bulb after a mark, a cat or a wrong cell (idle, with stock)', () => {
       const g = playingGame();
       expect(untouchedBoard(g)).toBe(true);
-      expect(view(base({ game: g, session: meta() }))?.pulse).toBe('paw');
-      expect(view(base({ game: marked(g, 1), session: meta() }))?.pulse).toBe('bulb');
-      expect(view(base({ game: marked(g, 0, CellState.Cat), session: meta() }))?.pulse).toBe('bulb');
-      expect(view(base({ game: marked(g, 1, CellState.Wrong), session: meta() }))?.pulse).toBe('bulb');
+      expect(view(base({ game: g, session: meta() }), idle)?.pulse).toBe('paw');
+      expect(view(base({ game: marked(g, 1), session: meta() }), idle)?.pulse).toBe('bulb');
+      expect(view(base({ game: marked(g, 0, CellState.Cat), session: meta() }), idle)?.pulse).toBe('bulb');
+      expect(view(base({ game: marked(g, 1, CellState.Wrong), session: meta() }), idle)?.pulse).toBe('bulb');
       // A given cat is part of the puzzle, not a move: the board is still untouched.
       expect(untouchedBoard(marked(g, 0, CellState.Given))).toBe(true);
       // Clearing every mark makes it untouched again (the rule reads the board, not the move log).
-      expect(view(base({ game: { ...marked(g, 1), cells: g.cells }, session: meta() }))?.pulse).toBe('paw');
+      expect(view(base({ game: { ...marked(g, 1), cells: g.cells }, session: meta() }), idle)?.pulse).toBe('paw');
+    });
+
+    it('none before fx.helperPulse.idleMs without a board change; none without a known last change', () => {
+      const g = playingGame();
+      const st = base({ game: g, session: meta() });
+      expect(view(st, { ...ctx, lastBoardChangeAt: NOW - 4999 })?.pulse).toBeNull();
+      expect(view(st, { ...ctx, lastBoardChangeAt: NOW })?.pulse).toBeNull();
+      expect(view(st, { ...ctx, lastBoardChangeAt: NOW - 5000 })?.pulse).toBe('paw');
+      expect(view(st, { ...ctx, lastBoardChangeAt: NOW - 60_000 })?.pulse).toBe('paw');
+      expect(view(st, ctx)?.pulse).toBeNull();
+      // idleMs via mergeConfig.
+      const c = mergeConfig({ fx: { helperPulse: { idleMs: 1000 } } });
+      expect(view(st, { ...ctx, lastBoardChangeAt: NOW - 1000 }, c)?.pulse).toBe('paw');
+      expect(view(st, { ...ctx, lastBoardChangeAt: NOW - 999 }, c)?.pulse).toBeNull();
+    });
+
+    it('needsStock: none with the kitty at 0 (and not the bulb instead); none with the bulb at 0 on a marked board', () => {
+      const g = playingGame();
+      const noKitty = (patch: Partial<AppState>) => ({ ...base(patch), save: { ...base().save, stock: { hints: 3, kitties: 0 } } });
+      const noHint = (patch: Partial<AppState>) => ({ ...base(patch), save: { ...base().save, stock: { hints: 0, kitties: 3 } } });
+      expect(view(noKitty({ game: g, session: meta() }), idle)?.pulse).toBeNull();
+      expect(view(noKitty({ game: marked(g, 1), session: meta() }), idle)?.pulse).toBe('bulb');
+      expect(view(noHint({ game: marked(g, 1), session: meta() }), idle)?.pulse).toBeNull();
+      expect(view(noHint({ game: g, session: meta() }), idle)?.pulse).toBe('paw');
+      // needsStock off: the suggested helper pulses at 0 too.
+      const off = mergeConfig({ fx: { helperPulse: { needsStock: false } } });
+      expect(view(noKitty({ game: g, session: meta() }), idle, off)?.pulse).toBe('paw');
+      expect(view(noHint({ game: marked(g, 1), session: meta() }), idle, off)?.pulse).toBe('bulb');
+    });
+
+    it('untilHelperUsed: none once a hint, the kitty or the mouse was used in the attempt; off: pulses again', () => {
+      const g = marked(playingGame(), 1);
+      const st = (game: GameState) => base({ game, session: meta() });
+      expect(view(st(g), idle)?.pulse).toBe('bulb');
+      expect(view(st({ ...g, hintsUsed: 1 }), idle)?.pulse).toBeNull();
+      expect(view(st({ ...g, kittiesUsed: 1 }), idle)?.pulse).toBeNull();
+      expect(view(st(g), { ...idle, mouseUses: 1 })?.pulse).toBeNull();
+      expect(view(st(g), { ...idle, mouseUses: 0 })?.pulse).toBe('bulb');
+      const off = mergeConfig({ fx: { helperPulse: { untilHelperUsed: false } } });
+      expect(view(st({ ...g, hintsUsed: 1, kittiesUsed: 2 }), { ...idle, mouseUses: 3 }, off)?.pulse).toBe('bulb');
     });
 
     it('null outside PLAYING, under any overlay (modal, hint card, O2, coach), in the tutorial and in the win flow', () => {
       const g = playingGame();
       for (const status of ['ready', 'hint', 'kitty', 'won', 'lost'] as const) {
-        expect(view(base({ game: { ...g, status }, session: meta() }))?.pulse).toBeNull();
+        expect(view(base({ game: { ...g, status }, session: meta() }), idle)?.pulse).toBeNull();
       }
       for (const id of ['settings', 'hint', 'rewarded', 'coach', 'fail', 'ranking', 'victory'] as const) {
-        expect(view(base({ game: g, session: meta(), overlays: [id] }))?.pulse).toBeNull();
+        expect(view(base({ game: g, session: meta(), overlays: [id] }), idle)?.pulse).toBeNull();
       }
       const tut = { ...newGame(tutorialPuzzle(), 'tutorial'), status: 'playing' as const };
       const tutMeta = meta({ request: { mode: 'tutorial', replay: false }, mode: 'tutorial', puzzleId: 'T1', level: 1, tutorialStep: 5 });
-      expect(view(base({ game: tut, session: tutMeta }))?.pulse).toBeNull();
-      expect(view(base({ game: tut, session: { ...tutMeta, tutorialStep: null, request: { mode: 'tutorial', replay: true } } }))?.pulse).toBeNull();
+      expect(view(base({ game: tut, session: tutMeta }), idle)?.pulse).toBeNull();
+      expect(view(base({ game: tut, session: { ...tutMeta, tutorialStep: null, request: { mode: 'tutorial', replay: true } } }), idle)?.pulse).toBeNull();
       // From WON until the ranking panel the chrome is locked: no pulse either.
-      expect(view(base({ game: g, session: meta() }), { ...ctx, chromeLocked: true })?.pulse).toBeNull();
+      expect(view(base({ game: g, session: meta() }), { ...idle, chromeLocked: true })?.pulse).toBeNull();
     });
 
     it('only while the target is enabled: an ad, a helper flow (input lock) or the kitty not allowed → none', () => {
       const g = playingGame();
-      expect(view(base({ game: g, session: meta(), ui: { ...base().ui, adShowing: true } }))?.pulse).toBeNull();
-      expect(view(base({ game: g, session: meta(), ui: { ...base().ui, inputLocked: true } }))?.pulse).toBeNull();
+      expect(view(base({ game: g, session: meta(), ui: { ...base().ui, adShowing: true } }), idle)?.pulse).toBeNull();
+      expect(view(base({ game: g, session: meta(), ui: { ...base().ui, inputLocked: true } }), idle)?.pulse).toBeNull();
       // The chosen helper disabled: no fallback to the other one.
-      expect(selectPulse(base({ game: g, session: meta() }), {}, { paw: false, bulb: true })).toBeNull();
-      expect(selectPulse(base({ game: marked(g, 1), session: meta() }), {}, { paw: true, bulb: false })).toBeNull();
-      expect(selectPulse(base({ game: marked(g, 1), session: meta() }), {}, { paw: true, bulb: true })).toBe('bulb');
+      expect(selectPulse(base({ game: g, session: meta() }), idle, { paw: false, bulb: true })).toBeNull();
+      expect(selectPulse(base({ game: marked(g, 1), session: meta() }), idle, { paw: true, bulb: false })).toBeNull();
+      expect(selectPulse(base({ game: marked(g, 1), session: meta() }), idle, { paw: true, bulb: true })).toBe('bulb');
     });
 
     it('reduced motion: no pulse', () => {
       const g = playingGame();
-      expect(view(base({ game: g, session: meta(), ui: { ...base().ui, reducedMotion: true } }))?.pulse).toBeNull();
+      expect(view(base({ game: g, session: meta(), ui: { ...base().ui, reducedMotion: true } }), idle)?.pulse).toBeNull();
     });
 
-    it("'kitty', 'bulb' pin one helper and 'off' stops it (fx.helperPulse.target via mergeConfig)", () => {
+    it("'kitty', 'bulb' pin one helper (2d: no idle, stock or use condition) and 'off' stops it (fx.helperPulse.target via mergeConfig)", () => {
       const g = playingGame();
-      const m = marked(g, 1);
-      const at = (target: 'kitty' | 'bulb' | 'off' | 'auto', game: GameState) =>
-        view(base({ game, session: meta() }), ctx, mergeConfig({ fx: { helperPulse: { target } } }))?.pulse;
+      const m = { ...marked(g, 1), hintsUsed: 1 };
+      const at = (target: 'kitty' | 'bulb' | 'off' | 'auto', game: GameState, c: ViewContext = ctx) =>
+        view(base({ game, session: meta() }), c, mergeConfig({ fx: { helperPulse: { target } } }))?.pulse;
       expect([at('kitty', g), at('kitty', m)]).toEqual(['paw', 'paw']);
       expect([at('bulb', g), at('bulb', m)]).toEqual(['bulb', 'bulb']);
-      expect([at('off', g), at('off', m)]).toEqual([null, null]);
-      expect([at('auto', g), at('auto', m)]).toEqual(['paw', 'bulb']);
+      expect([at('off', g, idle), at('off', m, idle)]).toEqual([null, null]);
+      expect([at('auto', g, idle), at('auto', { ...m, hintsUsed: 0 }, idle)]).toEqual(['paw', 'bulb']);
+      expect([at('auto', g), at('auto', m, idle)]).toEqual([null, null]);
     });
   });
 

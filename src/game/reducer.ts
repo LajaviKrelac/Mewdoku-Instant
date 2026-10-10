@@ -6,8 +6,13 @@
 // right after its CAT_PLACED; a MISTAKE (with the penalty) resets the run; RETRY starts at 0.
 // Phase 2d (G1, docs/phase2d/look-spec.md §1.12): MOUSE marks the mouse helper's cells (only Empty
 // non-solution cells) and emits MARKED with source 'mouse'; no points, mistake, heart or stat.
+// Phase 2d.1 (G1, docs/phase2d/helpers-spec.md §4.1): every board action (TAP, DOUBLE_TAP, PAINT,
+// HINT_APPLY, KITTY, MOUSE) that completes a row, column or colour region emits UNITS_DONE after its
+// MARKED / CAT_PLACED / POINTS / REGION_DONE and before WON; never in an action that ends in LOST. The
+// mouse's MARKED keeps its pick order (the visit order).
 import { newGame } from './factory';
 import { catIncrement } from './scoring';
+import { changedCells, completedUnits } from './units';
 import {
   CellState,
   type Action,
@@ -55,22 +60,22 @@ export function reduce(s: GameState, a: Action): ReduceResult {
     case 'START':
       return { state: { ...s, status: 'playing' }, events: [] };
     case 'TAP':
-      return tap(s, a.cell, a.t);
+      return withUnits(s, tap(s, a.cell, a.t));
     case 'DOUBLE_TAP':
-      return doubleTap(s, a.cell, a.t);
+      return withUnits(s, doubleTap(s, a.cell, a.t));
     case 'PAINT':
-      return paint(s, a.cells, a.mode, a.t);
+      return withUnits(s, paint(s, a.cells, a.mode, a.t));
     case 'HINT_OPEN':
       return {
         state: { ...s, status: 'hint', openHint: a.step, hintsUsed: s.hintsUsed + (a.charged ? 1 : 0) },
         events: [],
       };
     case 'HINT_APPLY':
-      return applyHint(s, a.t);
+      return withUnits(s, applyHint(s, a.t));
     case 'HINT_CLOSE':
       return { state: { ...s, status: 'playing', openHint: null }, events: [] };
     case 'KITTY':
-      return kitty(s, a.cell, a.t);
+      return withUnits(s, kitty(s, a.cell, a.t));
     case 'KITTY_DONE':
       return { state: { ...s, status: 'playing' }, events: [] };
     case 'REVIVE':
@@ -80,8 +85,29 @@ export function reduce(s: GameState, a: Action): ReduceResult {
     case 'TICK':
       return tick(s, a.dtMs);
     case 'MOUSE':
-      return mouse(s, a.cells, a.t);
+      return withUnits(s, mouse(s, a.cells, a.t));
   }
+}
+
+/**
+ * Phase 2d.1 §4.1: appends UNITS_DONE for the units the action completed (complete after it, not
+ * before), before WON (which withCat pushes last) or at the end. The anchor of each unit is its last
+ * changed cell in reading order; for the mouse, in its visit order (MARKED.cells), so the anchor is
+ * the X that lands last. Nothing when the action ends in LOST (no cheer under the fail card).
+ */
+function withUnits(prev: GameState, r: ReduceResult): ReduceResult {
+  if (r.state.cells === prev.cells || r.events.length === 0) return r;
+  if (r.events.some((e) => e.type === 'LOST')) return r;
+  const mouseMarks = r.events.find((e) => e.type === 'MARKED' && e.source === 'mouse');
+  const changed = mouseMarks && mouseMarks.type === 'MARKED' ? mouseMarks.cells : changedCells(prev.cells, r.state.cells);
+  const units = completedUnits(prev, r.state, changed);
+  if (units.length === 0) return r;
+  const events = [...r.events];
+  const won = events.findIndex((e) => e.type === 'WON');
+  const ev: GameEvent = { type: 'UNITS_DONE', units };
+  if (won >= 0) events.splice(won, 0, ev);
+  else events.push(ev);
+  return { state: r.state, events };
 }
 
 // ─────────────────────────────── helpers ───────────────────────────────

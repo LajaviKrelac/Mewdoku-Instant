@@ -12,6 +12,9 @@
 // failure (lazy-chunk.ts); when the hint chunk still cannot load, hints and kitty cells come from the
 // worker (its own module graph). The worker's start-up and every call have a deadline
 // (worker.callTimeoutMs): on expiry the worker is dropped and the work runs on the main thread.
+// Phase 2d.1 (G1, docs/phase2d/helpers-spec.md §2.3): the lazy hint engine is ./hint-chunk (the
+// engine's getHintStep + the kitty's fewest-candidates picker), not ../engine/hint directly; the
+// worker imports the same module.
 import { cfg, type GameConfig } from '../app/config';
 import type { CellIndex, GenResult, GenSpec, HintStep, Puzzle } from '../engine/types';
 import type { EngineWorkerApi } from './engine.worker';
@@ -22,15 +25,18 @@ export interface EngineClient {
   generate(spec: GenSpec): Promise<GenResult>;
   /** Rejects when the engine throws (the session shows "Hint unavailable" and charges nothing). */
   getHint(puzzle: Puzzle, cells: Readonly<Uint8Array>): Promise<HintStep>;
-  /** pickKittyCell on the main thread (O(N²)); async only because the hint engine is a lazy chunk. */
+  /**
+   * pickKittyCell on the main thread (O(N²)); async only because the hint engine is a lazy chunk.
+   * Phase 2d.1: the cat-less region with the FEWEST candidates (workers/hint-chunk.ts).
+   */
   pickKittyCell(puzzle: Puzzle, cells: Readonly<Uint8Array>): Promise<CellIndex>;
   /** Starts loading the hint engine chunk (never rejects; boot calls it after the first route). */
   preload(): void;
   dispose(): void;
 }
 
-/** The main-thread hint engine (a lazy chunk). */
-export type HintEngine = Pick<typeof import('../engine/hint'), 'getHintStep' | 'pickKittyCell'>;
+/** The main-thread hint engine (a lazy chunk; phase 2d.1: workers/hint-chunk.ts). */
+export type HintEngine = Pick<typeof import('./hint-chunk'), 'getHintStep' | 'pickKittyCell'>;
 
 export interface EngineClientOptions {
   /** Test seam: replaces the Worker constructor. Return null to simulate "no Worker support". */
@@ -41,7 +47,7 @@ export interface EngineClientOptions {
   readonly generateOnMain?: (spec: GenSpec) => Promise<GenResult>;
   /** Test seam: monotonic ms for the hint budget. */
   readonly perf?: () => number;
-  /** Test seam: loads the main-thread hint engine (default: dynamic import of engine/hint). */
+  /** Test seam: loads the main-thread hint engine (default: dynamic import of ./hint-chunk). */
   readonly loadHintEngine?: () => Promise<HintEngine>;
   readonly config?: GameConfig;
 }
@@ -61,7 +67,7 @@ async function defaultGenerateOnMain(spec: GenSpec): Promise<GenResult> {
 }
 
 function defaultLoadHintEngine(): Promise<HintEngine> {
-  return loadChunk(() => import('../engine/hint'));
+  return loadChunk(() => import('./hint-chunk'));
 }
 
 export function createEngineClient(opts: EngineClientOptions = {}): EngineClient {

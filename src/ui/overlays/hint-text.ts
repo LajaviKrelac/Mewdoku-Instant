@@ -1,10 +1,10 @@
-// Owner: B (Phase 2b; was ui-shell)
+// Owner: B (Phase 2b; was ui-shell); G3 (Phase 2d.1: hintCutouts)
 // 02 §9.1 hint explanation templates and unit names, rendered with i18n. Split from hint-card.ts so
 // the session's live announcements (02 §18) can use them while the O1 card itself stays in the lazy
 // overlay chunk (04 §9 budget). hint-card.ts re-exports everything here.
 // Review PAR-7: hintRichText() renders the same sentence with each colour as a token, so the card can
 // show the colour name with a swatch in its tile colour (src/ui/rich-text.ts); the words are identical.
-import type { HintStep, Unit, UnitKind } from '../../engine/types';
+import { CellState, type CellIndex, type HintStep, type Unit, type UnitKind } from '../../engine/types';
 import { capitalizeFirst, colorName, glyphName, joinList, t } from '../../i18n';
 import { CAP, colorToken } from '../rich-tokens';
 
@@ -137,4 +137,20 @@ function compose(step: HintStep, ctx: HintTextContext, nm: Namer): string {
       );
     }
   }
+}
+
+/**
+ * Phase 2d.1 §3.2: the tiles the hint overlay's dim leaves bright: the step's focus cells, its effect
+ * cells that are Empty on the board at open (an X already there stays dim, as measured), and its
+ * placeCell; for `mistaken_mark` the mark to clear. Ascending, each once, inside the board.
+ */
+export function hintCutouts(step: HintStep, cells: Readonly<Uint8Array>): CellIndex[] {
+  const out = new Set<CellIndex>();
+  const add = (c: CellIndex | undefined): void => {
+    if (c !== undefined && c >= 0 && c < cells.length) out.add(c);
+  };
+  for (const c of step.focusCells) add(c);
+  for (const c of step.effectCells) if (step.kind === 'mistaken_mark' || cells[c] === CellState.Empty) add(c);
+  add(step.placeCell);
+  return [...out].sort((a, b) => a - b);
 }

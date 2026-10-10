@@ -224,28 +224,8 @@
   color: var(--accent-text);
 }
 
-/* The "+576" chip (§1.13): at the number's inline end (its static inline start + the box's width),
-   vertically centred on it; game-bar.ts moves it back (--chip-dx < 0) when it would reach the gear
-   (critic C9). Mirrors in RTL on its own. */
-.points-pill__label {
-  position: absolute;
-  top: 50%;
-  z-index: 2;
-  margin-top: calc(var(--s) * -9px);
-  margin-inline-start: calc(100% + var(--s) * 4px + var(--chip-dx, 0px));
-  pointer-events: none;
-}
-
-.points-pill__chip {
-  display: block;
-  padding: calc(var(--s) * 2px) calc(var(--s) * 6px);
-  border-radius: var(--radius-pill);
-  background: var(--accent-text);
-  color: #fff;
-  font-weight: 600;
-  font-size: max(10px, calc(var(--s) * 0.8125rem));
-  line-height: 1.1;
-}
+/* Phase 2d.1 §2.5: the Score counts up when the star lands ([data-counting], game-bar.ts countTo): no
+   bump, no colour change, the number stays centred; the "+N" pops over the cat's tile (fx chunk). */
 
 /* ── Pills row (§1.5): heads pill · fish pill ──────────────────────────────
    A two-column grid (1fr auto) 12 s in from the column's edges; the period counter takes the heads
@@ -277,21 +257,56 @@
 }
 
 /* One head per colour (§1.6): 21.3 × 21.7, 4 apart, shrunk together by --hk when n heads do not fit
-   (pills.ts headScale); the colour at 50 % on the white pill until its cat is found. */
+   (pills.ts headScale); the colour at 50 % on the white pill until its cat is found. Phase 2d.1 §2.7:
+   then our cat face replaces the silhouette, with a dot in the 50 % tint (an 8 s circle, 1 s white rim)
+   at the head centre + (7.8, 6.6) s, toward the inline end. */
 .pill--heads {
   justify-content: center;
   box-shadow: var(--shadow-pill);
 }
 
 .head {
-  width: calc(var(--s) * 21.33px * var(--hk, 1));
-  height: calc(var(--s) * 21.67px * var(--hk, 1));
-  margin: 0 calc(var(--s) * 2px * var(--hk, 1));
+  --hs: calc(var(--s) * var(--hk, 1));
+  position: relative;
+  flex: none;
+  width: calc(var(--hs) * 21.33px);
+  height: calc(var(--hs) * 21.67px);
+  margin: 0 calc(var(--hs) * 2px);
+}
+
+.head > svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.head__shape {
   opacity: 0.5;
 }
 
-.head[data-done] {
-  opacity: 1;
+.head[data-done] > .head__shape {
+  visibility: hidden;
+}
+
+/* The face's black fur ≈ 19.7 × 16.7 s, its box a little wider than the head's. */
+.head > .head__face {
+  top: calc(var(--hs) * -1.3px);
+  left: calc(var(--hs) * -1.6px);
+  width: calc(var(--hs) * 24.5px);
+  height: calc(var(--hs) * 24.5px);
+}
+
+.head__dot {
+  position: absolute;
+  top: calc(50% + var(--hs) * 2.6px);
+  inset-inline-start: calc(50% + var(--hs) * 3.8px);
+  width: calc(var(--hs) * 8px);
+  height: calc(var(--hs) * 8px);
+  border-radius: 50%;
+  background: linear-gradient(rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.5)) currentColor;
+  box-shadow: 0 0 0 calc(var(--hs) * 1px) #fff;
 }
 
 /* ── Lives (Phase 2c §1.1; 2d §1.5): three fish, 24.7 × 23.3 at a 25.3 pitch, no shadow ──
@@ -476,7 +491,6 @@
   border-radius: 50%;
   background: var(--card);
   box-shadow: var(--shadow-btn);
-  transition: transform 90ms ease;
 }
 
 /* The pulse's warm glow: its own layer whose opacity follows the scale (no box-shadow animation). */
@@ -493,8 +507,44 @@
   pointer-events: none;
 }
 
-.tool:active:not(:disabled) .tool__disc {
-  transform: scale(0.94);
+/* Phase 2d.1 §4.5 (measured): the whole control (disc, art and badge) presses to 0.90 within 50 ms and
+   fires on release; a pointer release springs back via 1.04 (tool-bar.ts .tool--spring, 300 ms). */
+.tool {
+  transition: transform 50ms ease-out;
+}
+
+.tool:active:not(:disabled) {
+  transform: scale(0.9);
+}
+
+.tool--spring {
+  animation: tool-spring 300ms ease-in-out;
+}
+
+@keyframes tool-spring {
+  0% {
+    transform: scale(0.9);
+  }
+  6% {
+    transform: scale(1);
+  }
+  28%,
+  45% {
+    transform: scale(1.04);
+  }
+  62% {
+    transform: scale(1.02);
+  }
+  80% {
+    transform: scale(1.005);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+[data-motion='reduced'] .tool:active {
+  transform: none;
 }
 
 /* The art boxes (2d I-polish c): sized so the drawn art measures like the original's at s = 1, kitty
@@ -520,6 +570,16 @@
 .tool:disabled {
   cursor: default;
   opacity: 0.45;
+}
+
+/* Phase 2d.1 §1.2 (critic): during a helper run (the mouse, the kitty's reveal, the hint) the tools are
+   inert but keep their look: no disabled fade. */
+.tool-bar[data-busy] .tool {
+  pointer-events: none;
+}
+
+.tool-bar[data-busy] .tool:disabled {
+  opacity: 1;
 }
 
 /* A mouse that is not shown keeps its slot (the kitty and bulb never move) but is invisible and inert. */

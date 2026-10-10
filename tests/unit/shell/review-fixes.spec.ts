@@ -57,7 +57,7 @@ describe('O1 hint card in the tutorial (SPEC-04)', () => {
     ...over,
   });
 
-  it('closable: false hides the × and lets Esc / scrim taps through', () => {
+  it('closable: false hides the close button and lets Esc / dim taps through', () => {
     const card = createHintCard();
     document.body.append(card.el);
     const p = props({ closable: false });
@@ -66,7 +66,7 @@ describe('O1 hint card in the tutorial (SPEC-04)', () => {
     expect(card.dismiss()).toBe(false); // Esc is not swallowed
     q(card.el, '.overlay__scrim').click();
     expect(p.onClose).not.toHaveBeenCalled();
-    q(card.el, '.hint-card__apply').click();
+    q(card.el, '.hint-apply').click();
     expect(p.onApply).toHaveBeenCalledTimes(1);
     card.update(props({ closable: true }));
     expect(q(card.el, '.overlay__close').hidden).toBe(false);
@@ -115,9 +115,12 @@ describe('hint location for screen readers (A11Y-7)', () => {
     card.open({ step, ...ctx, onApply: vi.fn(), onClose: vi.fn() });
     expect(q(card.el, '.hint-card__text').textContent).toBe('Row 3 has just one open tile left, so its cat goes here.');
     const dialog = q(card.el, '[role="dialog"]');
-    const desc = document.getElementById(dialog.getAttribute('aria-describedby') ?? '');
-    expect(desc?.textContent).toContain('Row 3 has just one open tile left');
-    expect(desc?.textContent).toContain('Highlighted tile: row 3, column 2.');
+    // Phase 2d.1: the description is the sentence and the tile line (two ids, in this order).
+    const ids = (dialog.getAttribute('aria-describedby') ?? '').split(' ');
+    expect(ids).toHaveLength(2);
+    const desc = ids.map((id) => document.getElementById(id)?.textContent ?? '').join('');
+    expect(desc).toContain('Row 3 has just one open tile left');
+    expect(desc).toContain('Highlighted tile: row 3, column 2.');
     expect(q(card.el, '.hint-card__where').classList.contains('visually-hidden')).toBe(true);
   });
 });

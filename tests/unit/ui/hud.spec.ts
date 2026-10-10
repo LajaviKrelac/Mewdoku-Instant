@@ -1,13 +1,13 @@
 // Owner: A (Phase 2b); G3 (Phase 2d). HUD components: Home's top bar (with the phase2b lead slot and the
 // Phase 2d settings dot), the game bar (look-spec §1.4, §1.13: back · Level / Score · gear; the fit
-// steps; the Score roll and its "+N" chip kept clear of the gear), the rule cards (§1.7) and the helper
+// steps; Phase 2d.1 §2.5: the Score waits for its star and counts up, the 2d roll as the fallback), the rule cards (§1.7) and the helper
 // row (§1.11, §1.12: kitty · bulb · mouse, the count / Free / video / muted-0 badges, the pulse, the
 // hidden mouse). phase2b F0 split: the pills cases live in pills.spec.ts.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cfg } from '../../../src/app/config';
 import type { GameEvent } from '../../../src/game/types';
 import { en } from '../../../src/i18n/en';
-import { barValue, createGameBar, type GameBarProps } from '../../../src/ui/hud/game-bar';
+import { barValue, countValue, createGameBar, type GameBarProps } from '../../../src/ui/hud/game-bar';
 import { createRuleChips } from '../../../src/ui/hud/rule-chips';
 import { createToolBar, type ToolBarProps } from '../../../src/ui/hud/tool-bar';
 import { createTopBar, splitTitle, type TopBarProps } from '../../../src/ui/hud/top-bar';
@@ -168,7 +168,7 @@ describe('the game bar: back · Level / Score · gear (§1.4)', () => {
     bar.destroy();
   });
 
-  it('POINTS rolls from total − gained to total, bumps the number and raises one "+576" at the number\'s inline end', () => {
+  it('2d.1 fallback (the fx chunk not loaded): POINTS rolls from total − gained to total; no chip (D-2d1-4)', () => {
     vi.useFakeTimers();
     const P = cfg.fx.levelPoints;
     const bar = createGameBar(barProps, { onBack: vi.fn(), onSettings: vi.fn() });
@@ -179,65 +179,109 @@ describe('the game bar: back · Level / Score · gear (§1.4)', () => {
     bar.playEvent(pts(576, 576));
     expect(score.querySelector('.points-pill__n.is-out')?.textContent).toBe('0');
     expect(score.querySelector('.points-pill__n.is-in')?.textContent).toBe('576');
-    expect(score.classList.contains('points-pill--bump')).toBe(true);
-    const label = score.querySelector('.points-pill__label') as HTMLElement;
-    expect(label.textContent).toBe('+576');
-    expect(label.getAttribute('aria-hidden')).toBe('true');
-    // Inside the number's own box (hud.css places it at its inline end).
-    expect(label.parentElement?.classList.contains('points-pill__val')).toBe(true);
-    expect(label.style.getPropertyValue('--label-ms')).toBe(`${P.plusMs}ms`);
+    expect(score.querySelector('.points-pill__chip, .points-pill__label')).toBeNull();
     vi.advanceTimersByTime(P.rollMs);
     expect(nums(score)).toEqual(['576']);
-    expect(score.classList.contains('points-pill--bump')).toBe(false);
-    // A newer event keeps one chip and never more than two numbers.
-    bar.playEvent(pts(672, 1248, 2));
-    bar.playEvent(pts(768, 2016, 3));
-    expect(Array.from(score.querySelectorAll('.points-pill__chip')).map((e) => e.textContent)).toEqual(['+768']);
-    expect(score.querySelectorAll('.points-pill__n').length).toBeLessThanOrEqual(2);
-    vi.advanceTimersByTime(P.plusMs);
-    expect(score.querySelector('.points-pill__label')).toBeNull();
-    // A mistake shows nothing on the counter (D23).
     bar.playEvent({ type: 'MISTAKE', cell: 1, heartsLeft: 2 });
-    expect(score.querySelector('.points-pill__chip')).toBeNull();
+    expect(nums(score)).toEqual(['576']);
     bar.destroy();
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('reduced motion: the number changes in place; the chip fades in and out on WAAPI', () => {
-    vi.useFakeTimers();
-    const animate = vi.fn();
-    Object.defineProperty(HTMLElement.prototype, 'animate', { value: animate, configurable: true, writable: true });
-    try {
-      const bar = createGameBar({ ...barProps, points: 576, reducedMotion: true }, { onBack: vi.fn(), onSettings: vi.fn() });
-      bar.playEvent(pts(672, 1248, 2));
-      const score = bar.el.querySelector('.points-pill') as HTMLElement;
-      expect(nums(score)).toEqual(['1,248']);
-      expect(score.querySelector('.is-in, .is-out')).toBeNull();
-      expect(score.querySelector('.points-pill__label')?.hasAttribute('data-reduced')).toBe(true);
-      expect(animate).toHaveBeenCalledTimes(1);
-    } finally {
-      delete (HTMLElement.prototype as { animate?: unknown }).animate;
-    }
-  });
+  describe('2d.1 §2.5: the star mode and the count-up', () => {
+    /** A manual rAF clock: frame(ts) runs the queued callbacks at ts. */
+    const rafClock = () => {
+      let q: FrameRequestCallback[] = [];
+      vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb: FrameRequestCallback) => {
+        q.push(cb);
+        return q.length;
+      });
+      vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {
+        q = [];
+      });
+      return (ts: number): void => {
+        const run = q;
+        q = [];
+        for (const cb of run) cb(ts);
+      };
+    };
 
-  it('critic C9: a "+N" that would reach the gear\'s inner edge − 4 px moves back toward the inline start', () => {
-    const bar = createGameBar(barProps, { onBack: vi.fn(), onSettings: vi.fn() });
-    document.body.appendChild(bar.el);
-    const gear = bar.el.querySelector('.top-bar__btn--settings') as HTMLElement;
-    const val = bar.el.querySelector('.points-pill__val') as HTMLElement;
-    const rect = (left: number, width: number) => ({ left, right: left + width, top: 0, bottom: 20, width, height: 20, x: left, y: 0, toJSON: () => ({}) }) as DOMRect;
-    gear.getBoundingClientRect = () => rect(300, 37);
-    val.getBoundingClientRect = () => rect(250, 30);
-    vi.spyOn(HTMLElement.prototype, 'offsetLeft', 'get').mockReturnValue(34);
-    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(40);
-    bar.playEvent(pts(576, 576));
-    // The chip would end at 250 + 34 + 40 = 324; it must end by 300 − 4 = 296: 28 px back.
-    expect((bar.el.querySelector('.points-pill__label') as HTMLElement).style.getPropertyValue('--chip-dx')).toBe('-28px');
-    // Clear of the gear: no shift.
-    gear.getBoundingClientRect = () => rect(340, 37);
-    bar.playEvent(pts(96, 672, 2));
-    expect((bar.el.querySelector('.points-pill__label') as HTMLElement).style.getPropertyValue('--chip-dx')).toBe('');
-    bar.destroy();
+    it('countValue is round(from + (to − from)(1 − (1 − u)²)): for 0 → 576 at 60 fps exactly the measured frames', () => {
+      const measured = [0, 54, 104, 153, 199, 242, 282, 320, 355, 388, 418, 445, 470, 492, 512, 529, 543, 555, 564, 571, 575, 576];
+      expect(measured.map((_, k) => countValue(0, 576, (k * 350) / 21, 350))).toEqual(measured);
+      expect(countValue(576, 1248, 0, 350)).toBe(576);
+      expect(countValue(576, 1248, 9999, 350)).toBe(1248);
+      expect(countValue(0, 10, 50, 0)).toBe(10);
+    });
+
+    it('a higher total waits for its star; the name takes it at once; countTo counts every frame, no bump, [data-counting]', () => {
+      const frame = rafClock();
+      const bar = createGameBar({ ...barProps, starPoints: true }, { onBack: vi.fn(), onSettings: vi.fn() });
+      document.body.appendChild(bar.el);
+      const score = bar.el.querySelector('.points-pill') as HTMLElement;
+      const n = (): HTMLElement => score.querySelector('.points-pill__n') as HTMLElement;
+      bar.update({ ...barProps, starPoints: true, points: 576 });
+      expect(nums(score)).toEqual(['0']);
+      expect(score.getAttribute('aria-label')).toBe('Level points: 576');
+      bar.countTo(576);
+      expect(n().hasAttribute('data-counting')).toBe(true);
+      const seen: string[] = [];
+      for (let k = 0; k <= 21; k++) {
+        frame(1000 + (k * 350) / 21);
+        seen.push(nums(score)[0] ?? '');
+      }
+      expect(seen.slice(0, 4)).toEqual(['0', '54', '104', '153']);
+      expect(seen[seen.length - 1]).toBe('576');
+      expect(n().hasAttribute('data-counting')).toBe(false);
+      expect(score.classList.contains('points-pill--bump')).toBe(false);
+      expect(score.querySelector('.is-in, .is-out')).toBeNull();
+      // The props catching up change nothing; countTo never lowers the number.
+      bar.update({ ...barProps, starPoints: true, points: 576 });
+      bar.countTo(100);
+      expect(nums(score)).toEqual(['576']);
+      bar.destroy();
+    });
+
+    it('a landing during a count-up restarts it from the number on screen; a lower total (Retry) shows at once and ends it', () => {
+      const frame = rafClock();
+      const bar = createGameBar({ ...barProps, starPoints: true }, { onBack: vi.fn(), onSettings: vi.fn() });
+      const score = bar.el.querySelector('.points-pill') as HTMLElement;
+      bar.update({ ...barProps, starPoints: true, points: 1248 });
+      bar.countTo(576);
+      frame(0);
+      frame(175); // u = 0.5: 576 × 0.75 = 432
+      expect(nums(score)).toEqual(['432']);
+      bar.countTo(1248);
+      frame(200);
+      expect(nums(score)).toEqual(['432']);
+      frame(550);
+      expect(nums(score)).toEqual(['1,248']);
+      bar.countTo(2016);
+      frame(600);
+      bar.update({ ...barProps, starPoints: true, points: 0 });
+      expect(nums(score)).toEqual(['0']);
+      expect((score.querySelector('.points-pill__n') as HTMLElement).hasAttribute('data-counting')).toBe(false);
+      frame(2000);
+      expect(nums(score)).toEqual(['0']);
+      bar.destroy();
+    });
+
+    it('without the star (starPoints off, reduced motion) the number follows the props; syncPoints and scoreRect', () => {
+      const bar = createGameBar({ ...barProps, points: 0 }, { onBack: vi.fn(), onSettings: vi.fn() });
+      const score = bar.el.querySelector('.points-pill') as HTMLElement;
+      bar.update({ ...barProps, points: 576 });
+      expect(nums(score)).toEqual(['576']);
+      bar.update({ ...barProps, points: 1248, starPoints: true });
+      expect(nums(score)).toEqual(['576']);
+      bar.syncPoints();
+      expect(nums(score)).toEqual(['1,248']);
+      expect(bar.scoreRect()).toBeNull(); // detached
+      document.body.appendChild(bar.el);
+      expect(bar.scoreRect()).not.toBeNull();
+      bar.update({ ...barProps, points: null });
+      expect(bar.scoreRect()).toBeNull();
+      bar.destroy();
+    });
   });
 
   it('critic C5: the values step to data-fit 1, then 2, when the pair is wider than the span between the discs', () => {
@@ -397,5 +441,27 @@ describe('tool row: kitty · bulb · mouse', () => {
     expect(mouse.disabled).toBe(true);
     tb.update(tools);
     expect(mouse.disabled).toBe(false);
+  });
+
+  it('2d.1 §4.5, §1.2: a pointer release springs back (.tool--spring), a key press does not; [data-busy] while a helper runs', () => {
+    const cb = { onBulb: vi.fn(), onPaw: vi.fn(), onMouse: vi.fn() };
+    const tb = createToolBar(tools, cb);
+    const paw = tb.el.querySelector('.tool--paw') as HTMLButtonElement;
+    paw.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    expect(paw.classList.contains('tool--spring')).toBe(true);
+    expect(cb.onPaw).toHaveBeenCalledTimes(1);
+    const end = new Event('animationend') as Event & { animationName: string };
+    Object.defineProperty(end, 'animationName', { value: 'tool-spring' });
+    paw.dispatchEvent(end);
+    expect(paw.classList.contains('tool--spring')).toBe(false);
+    paw.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 0 })); // Enter / Space
+    expect(paw.classList.contains('tool--spring')).toBe(false);
+    expect(cb.onPaw).toHaveBeenCalledTimes(2);
+    expect(tb.el.hasAttribute('data-busy')).toBe(false);
+    tb.update({ ...tools, busy: true, pawEnabled: false });
+    expect(tb.el.hasAttribute('data-busy')).toBe(true);
+    tb.update({ ...tools, busy: false });
+    expect(tb.el.hasAttribute('data-busy')).toBe(false);
+    tb.destroy();
   });
 });

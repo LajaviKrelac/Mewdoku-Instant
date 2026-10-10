@@ -6,9 +6,14 @@
 //   ("Level", "Daily", "Lantern Walk"); value = the suffix without its separator ("96", "Tue 6 Oct",
 //   "13"), then the Hard badge. A title with no suffix (zh "第96关") shows whole as the value.
 // - Score column: the level points of this attempt (GameView.points) on the shared counter builder
-//   (pills.ts buildCounter): a POINTS event rolls and bumps the number and raises "+576" at the
-//   number's inline end, kept clear of the gear (critic C9). Hidden when points is null (the
-//   tutorial); [data-final] at the win.
+//   (pills.ts buildCounter). Hidden when points is null (the tutorial); [data-final] at the win.
+//   Phase 2d.1 (helpers-spec §2.5, D-2d1-4): while the game screen's star flight is on
+//   (GameBarProps.starPoints) a higher total waits for its star: countTo() counts up from the number on
+//   screen over fx.points.countMs, every frame round(from + (to − from)(1 − (1 − u)²)), no bump, no
+//   colour change ([data-counting] on the number); a lower total (Retry, a new board) shows at once and
+//   ends a count-up. The accessible name takes every new total at once. Without the star (the lazy fx
+//   chunk not loaded yet, reduced motion) the number changes with the props, and POINTS rolls it as in
+//   2d (playEvent; no chip, D-2d1-4).
 // - Fit (critic C5): the pair is centred between the discs (hud.css); when it is wider than that span,
 //   the values step to 0.86 × and 0.74 × (data-fit 1, 2), then the labels ellipsize. Checked a frame
 //   after a render that can widen it, on resize and on a language change (fit()).
@@ -17,8 +22,9 @@
 // Classes: header.top-bar.top-bar--game[data-fb-safe][data-fit]
 //            > button.top-bar__btn--home.top-bar__btn--back
 //              .top-bar__mid > h1.top-bar__text > .top-bar__name + .top-bar__val > .top-bar__suffix .badge--hard
-//                              .points-pill[data-final] > .points-pill__name + .points-pill__val.top-bar__val > .points-pill__count > .points-pill__n ; .points-pill__label > .points-pill__chip
+//                              .points-pill[data-final] > .points-pill__name + .points-pill__val.top-bar__val > .points-pill__count > .points-pill__n[data-counting]
 //              button.top-bar__btn--settings > .top-bar__dot
+import { cfg } from '../../app/config';
 import type { GameEvent } from '../../game/types';
 import { formatNumber, onLocaleChanged, t } from '../../i18n';
 import type { View } from '../dom';
@@ -40,6 +46,11 @@ export interface GameBarProps {
   /** §1.13: the board is complete (catsPlaced ≥ n): the number turns --accent-text until the board changes. */
   readonly final: boolean;
   readonly reducedMotion: boolean;
+  /**
+   * Phase 2d.1 §2.5: the game screen flies a star to the Score for every POINTS, so a higher total
+   * waits for countTo(). Optional (absent = false: the number follows the props at once).
+   */
+  readonly starPoints?: boolean;
 }
 
 export interface GameBarCallbacks {
@@ -48,19 +59,28 @@ export interface GameBarCallbacks {
 }
 
 export interface GameBarView extends View<GameBarProps> {
-  /** POINTS → the Score number rolls from total − gained to total, bumps and raises "+gained". */
+  /** POINTS without the star (2d.1: the fallback): the number rolls from total − gained to total. No chip. */
   playEvent(ev: GameEvent): void;
   /** Re-checks the fit steps (resize, language change); reads layout, so it is called on a frame. */
   fit(): void;
+  /** Phase 2d.1: the Score number's client rect (the star's target); null while hidden or detached. */
+  scoreRect(): DOMRect | null;
+  /** Phase 2d.1 §2.5: count up from the number on screen to `total` over fx.points.countMs (quadratic ease-out, every frame, no bump). Never lowers it. */
+  countTo(total: number): void;
+  /** Phase 2d.1: shows the props' total at once and ends a count-up (a star that will not land). */
+  syncPoints(): void;
+}
+
+/** The count-up's value `elapsed` ms in (helpers-spec §2.5): round(from + (to − from) · (1 − (1 − u)²)), u = elapsed / ms. */
+export function countValue(from: number, to: number, elapsed: number, ms: number): number {
+  const u = ms > 0 ? Math.min(1, Math.max(0, elapsed / ms)) : 1;
+  return Math.round(from + (to - from) * (1 - (1 - u) * (1 - u)));
 }
 
 /** The value without the title's separator (" · 13" → "13", " 96" → "96"). */
 export function barValue(suffix: string): string {
   return suffix.replace(/^[\s·]+/, '');
 }
-
-/** Clearance kept between the "+N" chip and the gear disc (critic C9), px. */
-const GEAR_CLEAR = 4;
 
 export function createGameBar(props: GameBarProps, cb: GameBarCallbacks): GameBarView {
   const el = document.createElement('header');
@@ -95,7 +115,6 @@ export function createGameBar(props: GameBarProps, cb: GameBarCallbacks): GameBa
     reduced: () => current.reducedMotion,
     // The number's box: .points-pill__val (the contract's name) and .top-bar__val (the value line's look).
     chipHost: wrapCount('points-pill__val top-bar__val'),
-    placed: (chip) => clampChip(chip),
   });
   const scoreName = L.text(document.createElement('span'), () => t('game.score'));
   scoreName.className = 'points-pill__name';
@@ -108,25 +127,48 @@ export function createGameBar(props: GameBarProps, cb: GameBarCallbacks): GameBa
   el.append(back, mid, gear);
   L.watch();
 
-  /**
-   * Critic C9: a chip whose inline end would pass the gear's inner edge − 4 px shifts toward the inline
-   * start until it ends there (it may then overlap the number's last digits for its 700 ms).
-   */
-  const clampChip = (chip: HTMLElement): void => {
-    const host = chip.parentElement;
-    if (!chip.isConnected || !host || gear.hidden) return;
-    const g = gear.getBoundingClientRect();
-    if (g.width === 0) return;
-    // Layout offsets, not client rects: the chip's own keyframes scale and move it.
-    const left = host.getBoundingClientRect().left + chip.offsetLeft;
-    const rtl = getComputedStyle(el).direction === 'rtl';
-    const over = rtl ? g.right + GEAR_CLEAR - left : left + chip.offsetWidth - (g.left - GEAR_CLEAR);
-    // --chip-dx is an inline offset (hud.css margin-inline-start): negative moves it toward the start.
-    if (over > 0) chip.style.setProperty('--chip-dx', `${-over}px`);
+  // ── the number on screen and the count-up (Phase 2d.1 §2.5) ──
+  const win = el.ownerDocument.defaultView;
+  /** The number on screen (−1 before the first render). */
+  let shown = -1;
+  let countRaf = 0;
+  const stopCount = (): void => {
+    if (countRaf) win?.cancelAnimationFrame(countRaf);
+    countRaf = 0;
+    score.numEl().removeAttribute('data-counting');
+  };
+  const showNow = (n: number): void => {
+    stopCount();
+    shown = n;
+    score.show(n);
+  };
+  const countTo = (total: number): void => {
+    if (score.el.hidden || !(total > shown)) return;
+    if (!win?.requestAnimationFrame || current.reducedMotion) {
+      showNow(total);
+      return;
+    }
+    stopCount();
+    const from = Math.max(0, shown);
+    const ms = cfg.fx.points.countMs;
+    let t0 = -1;
+    score.numEl().setAttribute('data-counting', '');
+    const frame = (ts: number): void => {
+      if (t0 < 0) t0 = ts;
+      const v = countValue(from, total, ts - t0, ms);
+      shown = v;
+      score.show(v);
+      if (ts - t0 >= ms) {
+        countRaf = 0;
+        score.numEl().removeAttribute('data-counting');
+        return;
+      }
+      countRaf = win.requestAnimationFrame(frame);
+    };
+    countRaf = win.requestAnimationFrame(frame);
   };
 
   // ── fit (critic C5) ──
-  const win = el.ownerDocument.defaultView;
   let fitRaf = 0;
   let fitQueued = false;
   const measureFit = (): void => {
@@ -177,10 +219,14 @@ export function createGameBar(props: GameBarProps, cb: GameBarCallbacks): GameBa
     const pts = typeof p.points === 'number' && p.points >= 0 ? Math.floor(p.points) : null;
     if (score.el.hidden !== (pts === null)) widen = true;
     score.el.hidden = pts === null;
-    // setTotal only writes a number that changed; it also relabels after a language change.
     if (pts !== null) {
       if (prev?.points !== pts) widen = true;
-      score.setTotal(pts);
+      // The name takes the total at once (2c.1, §2.5); it also relabels after a language change.
+      score.setLabel(pts);
+      // A higher total waits for its star (countTo); anything else shows at once.
+      if (!prev || !(p.starPoints === true && pts > shown)) {
+        if (pts !== shown || !prev) showNow(pts);
+      }
     }
     score.el.toggleAttribute('data-final', pts !== null && p.final);
     prev = p;
@@ -200,15 +246,23 @@ export function createGameBar(props: GameBarProps, cb: GameBarCallbacks): GameBa
     el,
     update: render,
     playEvent(ev) {
-      // §1.13 (2c.1 §10.2): roll from total − gained to total, bump, "+576". No sound of its own (D23).
+      // The fallback (2d.1: the fx chunk not loaded): roll from total − gained to total. No sound of its own (D23).
       if (ev.type !== 'POINTS' || score.el.hidden || !(ev.gained > 0)) return;
+      stopCount();
+      shown = ev.total;
       score.setTotal(ev.total, ev.total - ev.gained);
-      score.chip(t('fish.plus', { count: formatNumber(ev.gained) }));
     },
     fit,
+    scoreRect: () => (el.isConnected && !score.el.hidden ? score.numEl().getBoundingClientRect() : null),
+    countTo,
+    syncPoints() {
+      const pts = current.points;
+      if (typeof pts === 'number' && pts >= 0 && !score.el.hidden) showNow(Math.floor(pts));
+    },
     destroy() {
       offLocale();
       L.dispose();
+      stopCount();
       if (fitQueued) win?.cancelAnimationFrame(fitRaf);
       score.destroy();
       el.parentNode?.removeChild(el);

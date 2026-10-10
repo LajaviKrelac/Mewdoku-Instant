@@ -4,10 +4,13 @@
 // of them, deterministically per seed, [] when there are none; the reducer's MOUSE marks them, skips a
 // cell that is no longer Empty, emits MARKED { source: 'mouse' }, changes no points, hearts or stats,
 // and does nothing outside PLAYING.
+// Phase 2d.1 (helpers-spec §1.3, §1.5, §7.6): the cells come back in PICK order (the shuffle order,
+// not sorted: the visit order), a permutation-prefix of the candidates; mouseVisitMs / mouseLandMs /
+// mouseRunMs; the reducer keeps that order in MARKED.cells.
 import { describe, expect, it } from 'vitest';
-import { cfg } from '../../../src/app/config';
+import { cfg, mergeConfig } from '../../../src/app/config';
 import { makeRng } from '../../../src/engine/rng';
-import { hasMouseCandidate, mouseCandidates, mouseSeed, pickMouseCells } from '../../../src/game/mouse';
+import { hasMouseCandidate, mouseCandidates, mouseLandMs, mouseRunMs, mouseSeed, mouseVisitMs, pickMouseCells } from '../../../src/game/mouse';
 import { reduce } from '../../../src/game/reducer';
 import { CellState, type GameState } from '../../../src/game/types';
 import { cell, dbl, lostState, P5, P5G, paintA, playing, run, SOL5, step, tap, wonState, WRONG5 } from './fixtures';
@@ -56,7 +59,7 @@ describe('pickMouseCells (§1.12)', () => {
     const marks: Record<number, number> = {};
     for (const c of empties) if (!keep.has(c)) marks[c] = CellState.Mark;
     const two = withCells(s, marks);
-    expect(pickMouseCells(two, 3, 'x')).toEqual([...keep]);
+    expect([...pickMouseCells(two, 3, 'x')].sort((a, b) => a - b)).toEqual([...keep]);
     expect(pickMouseCells(two, 1, 'x')).toHaveLength(1);
     // None left: every non-solution cell marked (the solution cells stay Empty).
     const none = withCells(two, Object.fromEntries([...keep].map((c) => [c, CellState.Mark])));
@@ -64,24 +67,36 @@ describe('pickMouseCells (§1.12)', () => {
     expect(hasMouseCandidate(none)).toBe(false);
     expect(pickMouseCells(none, 3, 'x')).toEqual([]);
     for (const bad of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) expect(pickMouseCells(s, bad, 'x')).toEqual([]);
-    expect(pickMouseCells(s, 100, 'x')).toEqual(empties);
+    // All of them, in the shuffle's order: a permutation of the candidates.
+    const all = pickMouseCells(s, 100, 'x');
+    expect([...all].sort((a, b) => a - b)).toEqual(empties);
     expect(pickMouseCells(s, cfg.mouse.cells, 'x')).toHaveLength(cfg.mouse.cells);
   });
 
-  it('deterministic per seed (the session seed `${puzzleId}:mouse:${uses}`), returned in board order', () => {
+  it('deterministic per seed (the session seed `${puzzleId}:mouse:${uses}`), returned in PICK order (2d.1)', () => {
     const s = playing();
     expect(mouseSeed('L2', 0)).toBe('L2:mouse:0');
     const a = pickMouseCells(s, 3, mouseSeed('L2', 0));
     expect(pickMouseCells(s, 3, mouseSeed('L2', 0))).toEqual(a);
-    expect(a).toEqual([...a].sort((x, y) => x - y));
-    // The same partial Fisher–Yates over the engine's seeded RNG (cyrb128 → sfc32).
+    // The same partial Fisher–Yates over the engine's seeded RNG (cyrb128 → sfc32), NOT sorted: the
+    // shuffle's prefix is the visit order (helpers-spec §1.3).
     const pool = mouseCandidates(s);
     const rng = makeRng(mouseSeed('L2', 0));
     for (let i = 0; i < 3; i++) {
       const j = i + rng.int(pool.length - i);
       [pool[i], pool[j]] = [pool[j] as number, pool[i] as number];
     }
-    expect(a).toEqual(pool.slice(0, 3).sort((x, y) => x - y));
+    expect(a).toEqual(pool.slice(0, 3));
+    // A permutation-prefix of the candidates: k distinct candidates; with k = all, a permutation.
+    expect(new Set(a).size).toBe(3);
+    for (const c of a) expect(mouseCandidates(s)).toContain(c);
+    // Over many seeds some draws are not in board order (the order is not sorted away).
+    let unsorted = 0;
+    for (let u = 0; u < 50; u++) {
+      const d = pickMouseCells(s, 3, mouseSeed('L2', u));
+      if (d.join(',') !== [...d].sort((x, y) => x - y).join(',')) unsorted++;
+    }
+    expect(unsorted).toBeGreaterThan(10);
     // Other uses give other draws (not all equal over a few seeds).
     const draws = new Set([0, 1, 2, 3, 4].map((u) => pickMouseCells(s, 3, mouseSeed('L2', u)).join(',')));
     expect(draws.size).toBeGreaterThan(1);
@@ -104,12 +119,40 @@ describe('pickMouseCells (§1.12)', () => {
   });
 });
 
+describe('mouse timings (2d.1 §1.5)', () => {
+  it('mouseVisitMs = dwellMs + exitMs (935); mouseLandMs(k) = k × 935 + 850', () => {
+    expect(cfg.fx.mouse).toEqual({ appearMs: 115, dwellMs: 850, exitMs: 85 });
+    expect(mouseVisitMs()).toBe(935);
+    expect([0, 1, 2].map((k) => mouseLandMs(k))).toEqual([850, 1785, 2720]);
+  });
+
+  it('mouseRunMs(3, false) = 3 × 935 + 170; reduced motion = fx.reducedMotionFadeMs (150)', () => {
+    expect(cfg.fx.markPopMs).toBe(170);
+    expect(mouseRunMs(3, false)).toBe(3 * 935 + 170);
+    expect(mouseRunMs(3, false)).toBe(2975);
+    expect(mouseRunMs(1, false)).toBe(935 + 170);
+    expect(mouseRunMs(3, true)).toBe(150);
+    expect(mouseRunMs(3, true)).toBe(cfg.fx.reducedMotionFadeMs);
+  });
+
+  it('follow the config (mergeConfig)', () => {
+    const c = mergeConfig({ fx: { mouse: { appearMs: 100, dwellMs: 500, exitMs: 100 }, markPopMs: 200, reducedMotionFadeMs: 90 } });
+    expect(mouseVisitMs(c)).toBe(600);
+    expect(mouseLandMs(2, c)).toBe(1700);
+    expect(mouseRunMs(2, false, c)).toBe(1400);
+    expect(mouseRunMs(2, true, c)).toBe(90);
+  });
+});
+
 describe('reducer MOUSE (§1.12)', () => {
-  it('marks the listed cells as one move and one MARKED { source: mouse }', () => {
+  it('marks the listed cells as one move and one MARKED { source: mouse }, in pick order (2d.1)', () => {
     const s = playing();
     const cells = pickMouseCells(s, 3, 'L2:mouse:0');
     const r = reduce(s, { type: 'MOUSE', cells, t: 42 });
     expect(r.events).toEqual([{ type: 'MARKED', cells, source: 'mouse' }]);
+    // An unsorted list keeps its order in the event (the board visits in event order).
+    const back = [...cells].sort((a, b) => b - a);
+    expect(reduce(s, { type: 'MOUSE', cells: back, t: 42 }).events).toEqual([{ type: 'MARKED', cells: back, source: 'mouse' }]);
     for (const c of cells) expect(r.state.cells[c]).toBe(CellState.Mark);
     expect(r.state.moves).toEqual([{ t: 42, kind: 'mark', cells }]);
     expect(r.state.status).toBe('playing');

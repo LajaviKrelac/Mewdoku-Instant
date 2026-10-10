@@ -16,6 +16,7 @@ import { tutorialPuzzle } from '../../../src/game/tutorial';
 import type { SaveData } from '../../../src/game/types';
 import type { AdResult, Capabilities, PlatformAdapter, RawSave } from '../../../src/platform/types';
 import type { GameScreen, GameScreenCallbacks, GameView, StartToastKind } from '../../../src/ui/screens/game-screen';
+import type { TickerLine } from '../../../src/ui/fx/tickers';
 import type { EventScreenCallbacks, EventScreenView } from '../../../src/ui/screens/event-screen';
 import type { HomeCallbacks, HomeView } from '../../../src/ui/screens/home-screen';
 import { createEngineClient, type EngineClient } from '../../../src/workers/engine-client';
@@ -147,8 +148,10 @@ export interface FakeGameScreen extends GameScreen {
   readonly departed: number[];
   /** phase2c §2.2: showPeriodCounter(total) calls, in order. */
   readonly counters: number[];
-  /** Phase 2d §1.14: playStartToast(kind) calls, in order. */
+  /** Phase 2d §1.14: playStartToast(kind) calls, in order (a screen without playTickers). */
   readonly startToasts: StartToastKind[];
+  /** Phase 2d.1 §5.5: playTickers(lines) calls, in order. */
+  readonly tickers: (readonly [TickerLine, TickerLine])[];
 }
 
 export interface FakeRouter extends Router {
@@ -249,6 +252,11 @@ export function createFakeRouter(bus: AppBus, log: Log): FakeRouter {
         playStartToast: (kind) => {
           g.startToasts.push(kind);
           log.push(`startToast:${kind}`);
+        },
+        tickers: [],
+        playTickers: (lines) => {
+          g.tickers.push(lines);
+          log.push(`tickers:${lines[0].key}|${lines[1].key}`);
         },
       };
       r.game = g;

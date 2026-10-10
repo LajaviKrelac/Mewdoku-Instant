@@ -1,16 +1,22 @@
-/* Owner: A (Phase 2b); G2 (Phase 2d: the measured card, tiles and X, look-spec §1.8, §1.10)
+/* Owner: A (Phase 2b); G2 (Phase 2d: the measured card, tiles and X, look-spec §1.8, §1.10; Phase 2d.1: the
+   X draw-in, the ghost outline, the mouse's visits, the cat sequence, the waves, the veil, dark tiles,
+   helpers-spec §1–§4, §6.4)
    The board (look-spec §1.8): a white card with NO shadow and no border (padding --pad and radius
    --board-radius from computeLayout × s), flat tiles with even white gutters (every tile inset
    gap / 2, gap = 7.9 % of the slot) and a corner radius of 11 % of the tile, no grid lines or region
    strokes; the X as two plain white rounded bars (its dark edge only with Colour patterns on); Tux at
-   0.84 × slot; the solved-board glow. Glyph states (data-s), region fade (data-done) (02 §17.4,
-   04 §5.3). Tokens only.
+   its measured size (helpers-spec §4.7: CAT_BOX); the solved-board glow. Glyph states (data-s), region
+   fade (data-done, not on the cat's own tile) (02 §17.4, 04 §5.3). Tokens only.
    DOM (ui/board/board-view.ts, board-cells.ts):
-     .board[role=grid][data-mood][data-hl][data-patterns][aria-disabled]
-         (--n --slot --pad --gap --cell-r --board-radius --it --ir --ib --il --entry-*; ::after = the input-lock layer)
-       > .board__row[role=row] > button.cell[data-i][data-s=e|m|c|w|g][data-done][data-f][data-ghost][data-mood] (--xe)
-           > .cell__tile (--c --diag) + .cell__glow + svg.cell__g (--diag --breathe-delay)
-               > .cell__pat? g.cell__xg(rect.cell__xe ×2, rect.cell__x ×2) .cell__catg?(.cell__cat .cell__blink (--blink-dur --blink-delay) .cell__ear)
+     .board[role=grid][data-mood][data-hl][data-patterns][aria-disabled][aria-busy][data-ghost-wait]
+         (--n --slot --pad --gap --cell-r --board-radius --it --ir --ib --il --entry-* --x-pop-ms --xd-* --mouse-* --cat-seq
+          --ghost-pop; ::after = the input-lock layer)
+       > .board__row[role=row] > button.cell[data-i][data-s=e|m|c|w|g][data-dark][data-done][data-f][data-ghost][data-mood]
+             (--xe; transient --gd --wd --wd2; .fx-mark .fx-pend .fx-pop .fx-press .fx-cat .fx-wave .fx-wave2)
+           > .cell__tile (--c --diag) + .cell__glow + (.cell__flash .cell__light > i ×6, during .fx-cat) + svg.cell__g (--diag --breathe-delay)
+               > .cell__pat? g.cell__xg(g.cell__xb--a(rect.cell__xe, rect.cell__x), g.cell__xb--b(…)) g.cell__xog?(path.cell__xoe, path.cell__xo)
+                 .cell__catg?(.cell__cat .cell__blink (--blink-dur --blink-delay) .cell__ear)
+       > .board__mouse[data-cell][data-face] (--mr --mc; during the mouse's visits) > svg > use ×4
    Custom properties sit on the element that uses them (review PERF-1): the even insets and the entry
    timing once on .board; --diag, --breathe-delay, --blink-dur and --blink-delay are registered as
    non-inherited (board-cells.ts registerCellProperties: 0 / 0ms / 5s / 0ms), and their var()
@@ -97,7 +103,8 @@
   transition: opacity var(--t-fade) ease;
 }
 
-.cell[data-done] .cell__tile::after {
+/* Phase 2d.1 (helpers-spec §4.7, D-2d1-15): the found cat's own tile keeps its full colour. */
+.cell[data-done]:not([data-s='c']):not([data-s='g']) .cell__tile::after {
   opacity: 0.45;
 }
 
@@ -144,31 +151,95 @@
   display: inline;
 }
 
-/* The pop (look-spec §1.10): a new X scales 0.6 → 1.06 → 1 over fx.markPopMs about the cell centre
-   (board-view.ts adds .fx-pop; the mouse's X's are staggered there, waiting under .fx-pend). Reduced
-   motion: no pop. */
-.cell__xg {
+/* The X's motion (helpers-spec §4.4, D-2d1-8, measured): each bar's rects scale in their bar's own
+   frame (g.cell__xb--a / --b carry the ±45° rotation), the group overshoots about the cell centre.
+   - .fx-mark (every new X of a tap, a paint or Apply, all at once): the tile squishes 0.90 → 1 over
+     --xd-squish; "\" scales 0.3 → 1 about the X's centre over --xd-s1; then "/" is revealed from its
+     top-right tip (84.5, 50 in its frame) over --xd-s2; the X grows to --xd-over by --xd-s1, holds,
+     and is back to 1 at --xd-settle. The rounded end of "/" is flattened while it grows (accepted).
+   - .fx-pop (the mouse's X, revealed under the leaving mouse): 1.15 → 1 over --x-pop-ms, opaque at once.
+   - .fx-pend: an X the mouse has not left yet stays hidden (board-mouse.ts). Reduced motion: a WAAPI
+     fade (board-view.ts). The wrong X never draws in. */
+.cell__xg,
+.cell__xg rect {
   transform-box: view-box;
   transform-origin: 50px 50px;
 }
 
+.cell.fx-mark .cell__tile {
+  animation: tile-squish var(--xd-squish, 80ms) ease-out both;
+}
+
+.cell.fx-mark .cell__xg {
+  animation: x-over var(--xd-settle, 250ms) linear both;
+}
+
+.cell.fx-mark .cell__xb--a rect {
+  animation: x-grow var(--xd-s1, 70ms) ease-out both;
+}
+
+.cell.fx-mark .cell__xb--b rect {
+  transform-origin: 84.5px 50px;
+  animation: x-reveal var(--xd-s2, 130ms) ease-out var(--xd-s1, 70ms) both;
+}
+
 .cell.fx-pop .cell__xg {
-  animation: x-pop var(--x-pop-ms, 140ms) ease-out both;
+  animation: x-pop var(--x-pop-ms, 170ms) ease-out both;
 }
 
 .cell.fx-pend .cell__xg {
   visibility: hidden;
 }
 
-@keyframes x-pop {
-  0% {
-    transform: scale(0.6);
+@keyframes tile-squish {
+  from {
+    transform: scale(var(--squish, 0.9));
   }
-  60% {
-    transform: scale(1.06);
+  to {
+    transform: none;
+  }
+}
+
+@keyframes x-grow {
+  from {
+    transform: scale(0.3);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes x-reveal {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: none;
+  }
+}
+
+/* 28 % = stroke1 (70 of 250 ms), 48 % = 120 ms (helpers-spec §4.4). */
+@keyframes x-over {
+  0% {
+    transform: none;
+    animation-timing-function: ease-out;
+  }
+  28%,
+  48% {
+    transform: scale(var(--xd-over, 1.1));
+    animation-timing-function: ease-in-out;
   }
   100% {
-    transform: scale(1);
+    transform: none;
+  }
+}
+
+@keyframes x-pop {
+  from {
+    transform: scale(1.15);
+  }
+  to {
+    transform: none;
   }
 }
 
@@ -187,7 +258,7 @@
   cursor: default;
 }
 
-/* Cats (0.84 × cell, phase2b §1.5) and the idle blink lid. */
+/* Cats (CAT_BOX, helpers-spec §4.7) and the idle blink lid. */
 .cell__catg {
   display: none;
   transform-box: fill-box;
@@ -215,7 +286,8 @@
 
 /* Colour patterns (02 §18): a 22 % glyph in the tile's top-left corner, ≥ 3:1 against every tile,
    faded or not (WCAG 1.4.11; --ink-deep at the opacities from cfg.layout via --pat-op / --pat-op-done,
-   checked by scripts/palette-check.ts). On small slots (11×11, 12×12 on a phone) --pat-k scales the glyph up
+   checked by scripts/palette-check.ts; Phase 2d.1 §6.4: white on a dark tile, data-dark, unless faded).
+   On small slots (11×11, 12×12 on a phone) --pat-k scales the glyph up
    to cfg.layout.patternMinPx so the shapes stay tellable apart (board-view.ts setSlot). */
 .cell__pat {
   display: none;
@@ -230,8 +302,14 @@
   display: inline;
 }
 
-.cell[data-done] .cell__pat {
+.cell[data-done]:not([data-s='c']):not([data-s='g']) .cell__pat {
   opacity: var(--pat-op-done, 0.65);
+}
+
+.cell[data-dark]:not([data-done]) .cell__pat,
+.cell[data-dark][data-s='c'] .cell__pat,
+.cell[data-dark][data-s='g'] .cell__pat {
+  color: #fff;
 }
 
 /* Keyboard focus (02 §18): 3 px --focus ring, lifted above the neighbours. */
@@ -286,25 +364,12 @@
   cursor: default;
 }
 
-/* ── Highlights: hint (O1) and coach (O8) dim everything but the focus ── */
-/* The hint dims the board itself; the coach overlay (O8) dims the screen with an SVG mask, so the
-   board only outlines the coach's focus cells. */
-.board[data-hl='hint'] .cell {
-  opacity: var(--hint-dim);
-}
-
-.board[data-hl] .cell[data-f],
-.board[data-hl] .cell[data-ghost] {
-  opacity: 1;
+/* ── Highlights: hint (O1) and coach (O8) ──
+   Phase 2d.1 (helpers-spec §3.3): the hint overlay dims the whole screen with tile cut-outs, so the
+   board neither dims nor rings anything for a hint (the focus tile shows unchanged, as measured). The
+   coach overlay (O8) dims the screen with an SVG mask; the board outlines the coach's focus cells. */
+.board[data-hl='coach'] .cell[data-f] {
   z-index: 3;
-}
-
-.board[data-hl] .cell[data-ghost]:not([data-f]) {
-  opacity: 0.9;
-}
-
-.board[data-hl] .cell[data-f] .cell__tile {
-  box-shadow: 0 0 0 2px var(--card), 0 0 0 4.5px var(--accent), 0 6px 14px rgba(var(--accent-rgb), 0.35);
 }
 
 .board[data-hl='coach'] .cell[data-f] .cell__tile {
@@ -312,13 +377,69 @@
   animation: coach-ring 1.3s ease-in-out infinite;
 }
 
-/* Ghost X on Empty effect cells: what Apply would cross out (the white bars, faint; their edge too
-   with Colour patterns on). */
-.cell[data-ghost='x'][data-s='e'] .cell__x,
-.board[data-patterns] .cell[data-ghost='x'][data-s='e'] .cell__xe {
+/* Ghost X on Empty effect cells (helpers-spec §3.3, measured): the X's outline only (xOutlinePath, the
+   union of the two bars), a 1.5 px white stroke over 10 % white, its --xe edge under it with Colour
+   patterns on. Each pops in at --gd (ghostFirstMs + i × ghostStaggerMs, ghostOrder) over --ghost-pop:
+   .25 → 1 (13 %) → 1.22 (27 %) → 1 (47 %) → .92 (60 %) → 1, opacity .3 → 1 by 12 %; then still. */
+.cell__xog {
+  display: none;
+  transform-box: view-box;
+  transform-origin: 50px 50px;
+  opacity: 0;
+}
+
+.cell__xo {
+  fill: rgba(255, 255, 255, 0.1);
+  stroke: #fff;
+  stroke-width: 1.5px;
+  stroke-linejoin: round;
+}
+
+.cell__xoe {
+  display: none;
+  fill: none;
+  stroke: var(--xe, var(--ink-deep));
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+.board[data-patterns] .cell__xoe {
   display: inline;
-  opacity: 0.4;
-  animation: ghost-pulse 1.2s ease-in-out infinite;
+}
+
+.cell[data-ghost='x'][data-s='e'] .cell__xog {
+  display: inline;
+  animation: ghost-pop var(--ghost-pop, 500ms) linear var(--gd, 0ms) forwards;
+}
+
+.board[data-ghost-wait] .cell__xog {
+  visibility: hidden;
+}
+
+@keyframes ghost-pop {
+  0% {
+    opacity: 0.3;
+    transform: scale(0.25);
+  }
+  12% {
+    opacity: 1;
+  }
+  13% {
+    transform: none;
+  }
+  27% {
+    transform: scale(1.22);
+  }
+  47% {
+    transform: none;
+  }
+  60% {
+    transform: scale(0.92);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* Ghost clear: the mistaken X that Apply would remove fades in and out. */
@@ -326,11 +447,11 @@
   animation: ghost-clear 1.2s ease-in-out infinite;
 }
 
-/* Ghost cat: the forced cat Apply would place. */
+/* Ghost cat: the forced cat Apply would place, popping in at --gd like the ghosts, then bobbing. */
 .cell[data-ghost='cat'] .cell__catg {
   display: inline;
   opacity: 0.6;
-  animation: ghost-bob 1.4s ease-in-out infinite;
+  animation: ghost-pop var(--ghost-pop, 500ms) linear var(--gd, 0ms) backwards, ghost-bob 1.4s ease-in-out calc(var(--gd, 0ms) + var(--ghost-pop, 500ms)) infinite;
 }
 
 /* Kitty sparkle burst (fx: board-fx.ts sparkle()). */
@@ -376,14 +497,14 @@
 /* Board cats' ear flick (phase2b §2.9): B adds .is-flick and rotates the overlay (fx.css); while it
    shows, the idle head's own left (notched) ear hides (the cat-idle symbol reads --flick-hide). The
    pivot is that ear's base, (27, 33.4) on the head grid (cat-parts EAR_FLICK_PIVOT), mapped into the
-   cell's 100-unit box at catScale 0.84: 8 + 27 × 0.84, 8 + 33.4 × 0.84. */
+   cell's 100-unit box by CAT_BOX (board-cells.ts: x 6.8, y 6.9, size 86.4): 6.8 + 27 × 0.864, 6.9 + 33.4 × 0.864. */
 .cell__ear {
   display: none;
 }
 
 .board .cell.is-flick .cell__ear {
   transform-box: view-box;
-  transform-origin: 30.7px 36.1px;
+  transform-origin: 30.1px 35.8px;
 }
 
 .cell.is-flick {
@@ -392,4 +513,475 @@
 
 .cell.is-flick .cell__ear {
   display: inline;
+}
+
+/* ── Phase 2d.1: the mouse's visits (helpers-spec §1.4–§1.5, board-mouse.ts) ──
+   Our board mouse sits over the visited tile: the art's box 0.86 × 0.79 T (measured 0.88 × 0.77, the same
+   size as the helper disc's mouse), centred, 1 % T above the tile centre; above the tiles and X's, below
+   the lock layer's pointer box (pointer-events none). It grows in 0.5 → 1 over --mouse-in (opacity by
+   50 ms), plays its face while it sits, and shrinks to 0.77 and fades over --mouse-out when its X pops.
+   The tile it lands on presses 0.88 → 1 over 70 ms. Face timings ours (visit-relative, of --mouse-dwell). */
+.board__mouse {
+  --mt: calc(var(--slot) - var(--gap, 3px));
+  position: absolute;
+  z-index: 4;
+  left: calc(var(--pad) + (var(--mc, 0) + 0.5) * var(--slot));
+  top: calc(var(--pad) + (var(--mr, 0) + 0.5) * var(--slot));
+  width: calc(var(--mt) * 0.861);
+  height: calc(var(--mt) * 0.787);
+  margin: calc(var(--mt) * -0.4035) 0 0 calc(var(--mt) * -0.4305);
+  pointer-events: none;
+}
+
+.board__mouse svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.board__mouse-part {
+  transform-box: view-box;
+}
+
+.board__mouse--in {
+  animation: mouse-in var(--mouse-in, 115ms) linear both;
+}
+
+.board__mouse--out {
+  animation: mouse-out var(--mouse-out, 85ms) linear forwards;
+}
+
+.board__mouse-lids {
+  transform-origin: 50px 48.6px;
+  transform: scaleY(0);
+}
+
+.board__mouse-eyes {
+  transform-origin: 50px 55px;
+}
+
+.board__mouse-grin {
+  transform-origin: 50px 72px;
+  opacity: 0;
+}
+
+.board__mouse[data-face='blink'] .board__mouse-lids {
+  animation: mouse-blink var(--mouse-dwell, 850ms) linear both;
+}
+
+.board__mouse[data-face='glance'] .board__mouse-eyes {
+  animation: mouse-glance var(--mouse-dwell, 850ms) linear both;
+}
+
+.board__mouse[data-face='grin'] svg {
+  transform-box: view-box;
+  transform-origin: 50px 80px;
+  animation: mouse-tilt var(--mouse-dwell, 850ms) ease-in-out both;
+}
+
+.board__mouse[data-face='grin'] .board__mouse-grin {
+  animation: mouse-grin var(--mouse-dwell, 850ms) linear both;
+}
+
+.board__mouse[data-face='grin'] .board__mouse-lids {
+  animation: mouse-narrow var(--mouse-dwell, 850ms) linear both;
+}
+
+.cell.fx-press .cell__tile {
+  --squish: 0.88;
+  animation: tile-squish 70ms ease-out both;
+}
+
+/* measured (v1, arrival on B): 0.5 and faint at +16, then about linear to 1 by +116; opaque by +66 */
+@keyframes mouse-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  14% {
+    opacity: 0.15;
+    transform: scale(0.5);
+    animation-timing-function: linear;
+  }
+  29% {
+    opacity: 0.48;
+  }
+  43% {
+    opacity: 0.85;
+  }
+  57% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* measured (v1, leaving A): opaque for 35 ms, 0.93 at +50, 0.5 at +67, gone by +85; 1 → 0.77, ease-in */
+@keyframes mouse-out {
+  0%,
+  41% {
+    opacity: 1;
+  }
+  59% {
+    opacity: 0.93;
+  }
+  79% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.77);
+  }
+}
+
+/* blink: closing from +130 (15 %), closed +180 to +280 (21–33 %), open by +420 (49 %) */
+@keyframes mouse-blink {
+  0%,
+  15% {
+    transform: scaleY(0);
+  }
+  21%,
+  33% {
+    transform: none;
+  }
+  49%,
+  100% {
+    transform: scaleY(0);
+  }
+}
+
+/* glance: left at +450 (53 %), right at +620 (73 %), back by +780 (92 %) */
+@keyframes mouse-glance {
+  0%,
+  47% {
+    transform: none;
+  }
+  53%,
+  67% {
+    transform: translateX(-3.4px);
+  }
+  73%,
+  86% {
+    transform: translateX(3.4px);
+  }
+  92%,
+  100% {
+    transform: none;
+  }
+}
+
+/* grin: the mouth opens at +200 (24 %), the eyes narrow, a 2° tilt; back by +760 (89 %) */
+@keyframes mouse-grin {
+  0%,
+  20% {
+    opacity: 0;
+    transform: scaleY(0.4);
+  }
+  27%,
+  84% {
+    opacity: 1;
+    transform: none;
+  }
+  89%,
+  100% {
+    opacity: 0;
+    transform: scaleY(0.4);
+  }
+}
+
+@keyframes mouse-narrow {
+  0%,
+  20% {
+    transform: scaleY(0);
+  }
+  27%,
+  84% {
+    transform: scaleY(0.42);
+  }
+  89%,
+  100% {
+    transform: scaleY(0);
+  }
+}
+
+@keyframes mouse-tilt {
+  0%,
+  20% {
+    transform: none;
+  }
+  30%,
+  82% {
+    transform: rotate(2deg);
+  }
+  92%,
+  100% {
+    transform: none;
+  }
+}
+
+/* ── Phase 2d.1: the cat-placed sequence (helpers-spec §2.4, board-cat.ts) ──
+   The cat (origin 50 % 80 % of its box, near the chin) scales in units of its resting size F over
+   --cat-seq (1 400 ms; stops in ms): 0.30 at 16, 1.56 at 116–133, 1.25 at 300, held to 816 (the wink,
+   board-cat.ts), 0.89 at 950, held to 1 000, 1 at 1 400. Each segment's easing is fitted to the measured
+   scales (v2: 0.42 / 0.75 / 1.18 / 1.42 / 1.53 at +33 … +100; 1.51 / 1.43 / 1.35 / 1.28 at +166 … +266;
+   1.17 / 1.06 / 0.94 at +850 / +883 / +916). The cell is lifted above its neighbours while the cat
+   overflows its tile. */
+.cell.fx-cat {
+  z-index: 4;
+}
+
+.cell.fx-cat .cell__catg {
+  transform-box: fill-box;
+  transform-origin: 50% 80%;
+  animation: cat-placed var(--cat-seq, 1400ms) linear both;
+}
+
+@keyframes cat-placed {
+  0%,
+  1.1% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  1.2% {
+    opacity: 1;
+    transform: scale(0.3);
+    animation-timing-function: cubic-bezier(0.45, 0.1, 0.35, 1);
+  }
+  8.3%,
+  9.5% {
+    opacity: 1;
+    transform: scale(1.56);
+    animation-timing-function: cubic-bezier(0.35, 0.2, 0.7, 1);
+  }
+  21.4%,
+  58.3% {
+    opacity: 1;
+    transform: scale(1.25);
+    animation-timing-function: cubic-bezier(0.5, 0.35, 0.7, 1);
+  }
+  67.9%,
+  71.4% {
+    opacity: 1;
+    transform: scale(0.89);
+    animation-timing-function: cubic-bezier(0.4, 0, 0.4, 1);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* The flash on the tile, under the cat: white rays from the centre (::before, our drawing: twelve
+   soft rays) and a white wash (the tile lightens strongly by 50 ms, holds a pale tint ≈ 65 % toward
+   white from 200 to 366, its own colour again by 733); the halo spills into the gaps (::after, 33 → 83). */
+.cell__flash {
+  position: absolute;
+  z-index: 1;
+  top: var(--it);
+  right: var(--ir);
+  bottom: var(--ib);
+  left: var(--il);
+  border-radius: calc(var(--slot) * var(--cell-r, 0.1));
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+  animation: cat-wash 733ms linear both;
+}
+
+.cell__flash::before,
+.cell__flash::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.cell__flash::before {
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 70%),
+    repeating-conic-gradient(rgba(255, 255, 255, 0.95) 0deg 9deg, rgba(255, 255, 255, 0) 13deg 30deg);
+  -webkit-mask: radial-gradient(closest-side, rgba(0, 0, 0, 1) 55%, rgba(0, 0, 0, 0) 100%);
+  mask: radial-gradient(closest-side, rgba(0, 0, 0, 1) 55%, rgba(0, 0, 0, 0) 100%);
+  animation: cat-rays 200ms ease-out both;
+}
+
+.cell__flash::after {
+  box-shadow: 0 0 calc(var(--slot) * 0.14) calc(var(--slot) * 0.11) rgba(var(--halo-rgb), 0.95);
+  /* the halo takes the tile's colour toward the measured pale yellow (--c: board-cat.ts copies the tile's) */
+  box-shadow: 0 0 calc(var(--slot) * 0.14) calc(var(--slot) * 0.11) color-mix(in srgb, var(--c) 50%, rgb(var(--halo-rgb)));
+  animation: cat-halo 200ms linear both;
+}
+
+@keyframes cat-wash {
+  0% {
+    opacity: 0;
+  }
+  6.8% {
+    opacity: 0.55;
+  }
+  27.3%,
+  49.9% {
+    opacity: 0.65;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes cat-rays {
+  0% {
+    opacity: 0.8;
+    transform: scale(0.7) rotate(0deg);
+  }
+  15% {
+    opacity: 1;
+  }
+  40% {
+    opacity: 0.55;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.3) rotate(18deg);
+  }
+}
+
+@keyframes cat-halo {
+  0% {
+    opacity: 0.4;
+  }
+  16.5%,
+  41.5% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* The light on the neighbours (133 → 600, peak 300: up to 25 % white within 1.5 T) and six four-point
+   twinkles (133 → 733; white, pink, light cyan; 3–7 px at T = 39) — requests-G2 H1. */
+.cell__light {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: 50%;
+  width: calc(var(--slot) * 3);
+  height: calc(var(--slot) * 3);
+  margin: calc(var(--slot) * -1.5) 0 0 calc(var(--slot) * -1.5);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.25) 45%, rgba(255, 255, 255, 0) 100%);
+  opacity: 0;
+  pointer-events: none;
+  animation: cat-light 600ms linear both;
+}
+
+.cell__light i {
+  position: absolute;
+  top: calc(50% + var(--ty) * var(--slot) - var(--tz) * var(--slot) / 2);
+  left: calc(50% + var(--tx) * var(--slot) - var(--tz) * var(--slot) / 2);
+  width: calc(var(--tz) * var(--slot));
+  height: calc(var(--tz) * var(--slot));
+  background: #fff;
+  -webkit-clip-path: polygon(50% 0, 60% 40%, 100% 50%, 60% 60%, 50% 100%, 40% 60%, 0 50%, 40% 40%);
+  clip-path: polygon(50% 0, 60% 40%, 100% 50%, 60% 60%, 50% 100%, 40% 60%, 0 50%, 40% 40%);
+  opacity: 0;
+  animation: cat-twinkle 360ms ease-in-out var(--td, 133ms) both;
+}
+
+.cell__light i[data-tone='pink'] {
+  background: var(--r11);
+}
+
+.cell__light i[data-tone='cyan'] {
+  background: var(--twinkle-cyan);
+}
+
+@keyframes cat-light {
+  0%,
+  22% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes cat-twinkle {
+  0% {
+    opacity: 0;
+    transform: scale(0.2) rotate(0deg);
+  }
+  45% {
+    opacity: 1;
+    transform: scale(1) rotate(30deg);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.3) rotate(60deg);
+  }
+}
+
+/* ── Phase 2d.1: the completion wave (helpers-spec §4.2) ──
+   Each tile of a completed unit (its cat and X's scale with it) from --wd: 0.93 at +33, 1.10 at +67,
+   held to +167, 1 by +270 (ease-out); a pale yellow glow around the tile from 0 to +100 (peak +50).
+   A tile in two units bumps again from --wd2 (.fx-wave2). */
+.cell.fx-wave {
+  z-index: 3;
+  animation: wave-bump 270ms linear var(--wd, 0ms);
+}
+
+.cell.fx-wave.fx-wave2 {
+  animation: wave-bump 270ms linear var(--wd, 0ms), wave-bump 270ms linear var(--wd2, 0ms);
+}
+
+.cell.fx-wave::before {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  top: var(--it);
+  right: var(--ir);
+  bottom: var(--ib);
+  left: var(--il);
+  border-radius: calc(var(--slot) * var(--cell-r, 0.1));
+  box-shadow: 0 0 calc(var(--slot) * 0.15) calc(var(--slot) * 0.075) rgba(var(--wave-rgb), 0.85), inset 0 0 calc(var(--slot) * 0.15) rgba(255, 255, 255, 0.55);
+  opacity: 0;
+  pointer-events: none;
+  animation: wave-glow 100ms linear var(--wd, 0ms);
+}
+
+.cell.fx-wave.fx-wave2::before {
+  animation: wave-glow 100ms linear var(--wd, 0ms), wave-glow 100ms linear var(--wd2, 0ms);
+}
+
+/* stops: 33 / 67 / 167 of 270 ms */
+@keyframes wave-bump {
+  0% {
+    transform: none;
+  }
+  12.2% {
+    transform: scale(0.93);
+  }
+  24.8%,
+  61.9% {
+    transform: scale(1.1);
+    animation-timing-function: ease-out;
+  }
+  100% {
+    transform: none;
+  }
+}
+
+@keyframes wave-glow {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
 }

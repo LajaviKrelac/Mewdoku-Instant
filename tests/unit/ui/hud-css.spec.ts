@@ -4,6 +4,8 @@
 // .tool__badge check out of tests/unit/ui/css-rules.spec.ts (G2; critic C13); rewritten for 2d
 // (look-spec §1.1–§1.16, §5.2): the stack variables drive the rows, the measured sizes, the badges and
 // their RTL offsets, the pulse keyframes, the retired 2c.1 rules, the band clearance of the overlays.
+// Phase 2d.1 (helpers-spec §1.2, §2.5, §2.7, §4.5, §5.2): the found head's face and dot and its pop, the
+// press and release spring, the busy row, the Score without its chip, the fx layer and the tickers.
 // The helpers are copies of css-rules.spec.ts's (no cross-owner imports).
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -34,6 +36,8 @@ const screens = read(join(STYLES, 'screens.css'));
 const overlays = read(join(STYLES, 'overlays.css'));
 const chunk = read(join(STYLES, 'overlay-chunk.css'));
 const i18n = read(join(STYLES, 'i18n.css'));
+/** Phase 2d.1: the lazy fx chunk's own stylesheet (the fx layer, the tickers). */
+const celebrate = read(join(ROOT, 'src/ui/fx/celebrate.css'));
 
 describe('Phase 2d: the stack (look-spec §1.1, §4.7)', () => {
   it('the rows take their heights and gaps from the screen\'s variables, top-down from --y-top', () => {
@@ -65,7 +69,8 @@ describe('Phase 2d: the stack (look-spec §1.1, §4.7)', () => {
     expect(ruleOf(hud, '.chip')).toContain('font-size: max(10px, calc(var(--s) * 0.725rem))');
     expect(ruleOf(hud, '.tool__badge')).toContain('font-size: max(10px, calc(var(--s) * 1.1rem))');
     expect(ruleOf(hud, '.top-bar--game .badge--hard')).toContain('font-size: max(10px, calc(var(--s) * 0.6875rem))');
-    expect(ruleOf(hud, '.points-pill__chip')).toContain('font-size: max(10px, calc(var(--s) * 0.8125rem))');
+    // Phase 2d.1 §2.5: the Score's "+N" chip is gone (the "+N" pops over the cat's tile).
+    expect(ruleOf(hud, '.points-pill__chip')).toBeNull();
     // 2d I-polish a: the labels and the rule text are thinned by a stroke in their background's colour
     // (Fredoka's one 600 face; 0 on the 700 system stacks, which step down to 500); the numbers carry
     // no stroke any more (measured no heavier than Fredoka 600).
@@ -103,8 +108,8 @@ describe('Phase 2d: the game bar (§1.4, §1.13, §1.15)', () => {
     expect(ruleOf(hud, "[data-fit='2']")).toContain('--vf: 0.74');
     const dot = ruleOf(hud, '.top-bar__dot') ?? '';
     for (const d of ['background: var(--dot)', 'width: 30.7%', 'left: 75.4%', 'top: -5.3%', 'margin: 0']) expect(dot, d).toContain(d);
-    // The Score's "+N" sits at the number's inline end, moved back by --chip-dx (critic C9).
-    expect(ruleOf(hud, '.points-pill__label')).toContain('margin-inline-start: calc(100% + var(--s) * 4px + var(--chip-dx, 0px))');
+    expect(ruleOf(hud, '.points-pill__label')).toBeNull();
+    expect(stripComments(hud)).not.toContain('--chip-dx');
     expect(ruleOf(hud, '.points-pill[data-final] .points-pill__count')).toContain('color: var(--accent-text)');
   });
 
@@ -133,13 +138,33 @@ describe('Phase 2d: the pills row (§1.5, §1.6)', () => {
     expect(ruleOf(hud, '.pill')).not.toContain('box-shadow');
   });
 
-  it('heads 21.33 × 21.67 s, 4 s apart, scaled by --hk; 50 % until found; the pop and the fade are in fx.css', () => {
+  it('heads 21.33 × 21.67 s, 4 s apart, scaled by --hk; the silhouette at 50 % until found; the pop and the fade are in fx.css', () => {
     const head = ruleOf(hud, '.head') ?? '';
-    expect(head).toContain('width: calc(var(--s) * 21.33px * var(--hk, 1))');
-    expect(head).toContain('height: calc(var(--s) * 21.67px * var(--hk, 1))');
-    expect(head).toContain('opacity: 0.5');
-    expect(ruleOf(hud, '.head[data-done]')).toContain('opacity: 1');
-    expect(ruleOf(fx, '.head--pop')).toContain('animation: bump var(--head-ms, 300ms) ease-out');
+    expect(head).toContain('--hs: calc(var(--s) * var(--hk, 1))');
+    expect(head).toContain('width: calc(var(--hs) * 21.33px)');
+    expect(head).toContain('height: calc(var(--hs) * 21.67px)');
+    expect(head).toContain('margin: 0 calc(var(--hs) * 2px)');
+    expect(ruleOf(hud, '.head__shape')).toContain('opacity: 0.5');
+    // 2d.1 §2.7: found, our face replaces the silhouette; the dot: 8 s, the 50 % tint, a 1 s white rim,
+    // its centre at + (7.8, 6.6) s toward the inline end.
+    expect(ruleOf(hud, '.head[data-done] > .head__shape')).toContain('visibility: hidden');
+    const dot = ruleOf(hud, '.head__dot') ?? '';
+    for (const d of [
+      'width: calc(var(--hs) * 8px)',
+      'height: calc(var(--hs) * 8px)',
+      'top: calc(50% + var(--hs) * 2.6px)',
+      'inset-inline-start: calc(50% + var(--hs) * 3.8px)',
+      'background: linear-gradient(rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.5)) currentColor',
+      'box-shadow: 0 0 0 calc(var(--hs) * 1px) #fff',
+      'border-radius: 50%',
+    ])
+      expect(dot, d).toContain(d);
+    // The pop: 0.56 → 1.20 at 30 % (83 of 280 ms) → 1.
+    expect(ruleOf(fx, '.head--pop')).toContain('animation: head-found var(--head-ms, 280ms) both');
+    const pop = /@keyframes head-found\s*\{([\s\S]*?)\n\}/.exec(stripComments(fx))?.[1] ?? '';
+    expect(pop).toMatch(/0%\s*\{\s*transform: scale\(0\.56\)/);
+    expect(pop).toMatch(/30%\s*\{\s*transform: scale\(1\.2\)/);
+    expect(pop).toMatch(/100%\s*\{\s*transform: none/);
     expect(ruleOf(fx, '.head--out')).toContain('animation: head-out 150ms');
     expect(ruleOf(fx, '.pill--heads[data-out]')).toContain('animation: pill-fade-out var(--fade-ms, 200ms)');
   });
@@ -173,6 +198,7 @@ describe('Phase 2d: the pills row (§1.5, §1.6)', () => {
   it('the counters share one roll (is-in / is-out) and one bump; the Score bumps its number at 1.12', () => {
     expect(ruleOf(fx, '.is-in')).toContain('animation: period-roll-in var(--bump-ms, 360ms)');
     expect(ruleOf(screens, '.is-out')).toContain('position: absolute');
+    // The bump stays for the 2d fallback roll (the fx chunk not loaded yet).
     expect(ruleOf(fx, '.points-pill--bump .points-pill__count')).toContain('animation: bump var(--bump-ms, 360ms)');
     expect(ruleOf(hud, '.points-pill')).toContain('--bump-scale: 1.12');
     expect(fx).toContain('scale(var(--bump-scale, 1.25))');
@@ -224,6 +250,25 @@ describe('Phase 2d: the helper row (§1.11)', () => {
     expect(ruleOf(hud, '.tool[data-off]')).toContain('visibility: hidden');
   });
 
+  it('2d.1 §4.5: the whole control presses to 0.90 within 50 ms; the release spring via 1.04 over 300 ms; none with reduced motion', () => {
+    expect(ruleOf(hud, '.tool')).toContain('transition: transform 50ms ease-out');
+    expect(ruleOf(hud, '.tool:active:not(:disabled)')).toBe('transform: scale(0.9);');
+    expect(ruleOf(hud, '.tool:active:not(:disabled) .tool__disc')).toBeNull();
+    expect(ruleOf(hud, '.tool--spring')).toContain('animation: tool-spring 300ms');
+    const kf = /@keyframes tool-spring\s*\{([\s\S]*?)\n\}/.exec(stripComments(hud))?.[1] ?? '';
+    expect(kf).toMatch(/0%\s*\{\s*transform: scale\(0\.9\)/);
+    expect(kf).toMatch(/28%,\s*45%\s*\{\s*transform: scale\(1\.04\)/);
+    expect(kf).toMatch(/100%\s*\{\s*transform: none/);
+    expect(ruleOf(hud, "[data-motion='reduced'] .tool:active")).toContain('transform: none');
+    // Apply presses the same way (overlay-chunk.css).
+    expect(ruleOf(chunk, ".btn.hint-apply:active:not([aria-disabled='true'])")).toContain('transform: scale(0.9)');
+  });
+
+  it('2d.1 §1.2 (critic): a busy row is inert and keeps its look: no disabled fade', () => {
+    expect(ruleOf(hud, '.tool-bar[data-busy] .tool')).toContain('pointer-events: none');
+    expect(ruleOf(hud, '.tool-bar[data-busy] .tool:disabled')).toContain('opacity: 1');
+  });
+
   it('the idle pulse: 1.5 s, peak at 32–36 %, rest from 69 %; the glow is a pseudo-element\'s opacity', () => {
     expect(ruleOf(hud, '.tool[data-pulse]:not(:disabled) .tool__disc')).toContain('animation: tool-pulse var(--pulse-ms, 1500ms)');
     expect(ruleOf(hud, '.tool[data-pulse]:not(:disabled) .tool__disc::after')).toContain('animation: tool-glow var(--pulse-ms, 1500ms)');
@@ -263,10 +308,10 @@ describe('Phase 2d: the start toast and the band (§1.14, §1.16)', () => {
     expect(ruleOf(fx, '.game__fx')).toContain('pointer-events: none');
   });
 
-  it('O1, O2 and O4 keep their controls above the band; the O9 toast sits above the helper badges', () => {
+  it('O2 and O4 keep their controls above the band (2d.1: O1 hides the banner and anchors to the board); the O9 toast sits above the helper badges', () => {
     const r = ruleOf(chunk, ":root[data-play-band='1'] .overlay[data-overlay='rewarded']") ?? '';
     expect(r).toContain('padding-bottom: calc(12px + var(--play-band) + var(--play-band-bottom))');
-    expect(ruleOf(chunk, ":root[data-play-band='1'] .overlay[data-overlay='hint']")).toBe(r);
+    expect(ruleOf(chunk, ":root[data-play-band='1'] .overlay[data-overlay='hint']")).toBeNull();
     expect(ruleOf(chunk, ":root[data-play-band='1'] .overlay[data-overlay='fail']")).toBe(r);
     expect(ruleOf(overlays, '.toast-layer')).toContain('bottom: var(--toast-bottom, calc(104px + var(--safe-bottom)))');
   });
@@ -274,5 +319,64 @@ describe('Phase 2d: the start toast and the band (§1.14, §1.16)', () => {
   it('the X draw-in is gone from fx.css (the pop is G2\'s, board.css): no rule targets .cell__x', () => {
     const f = stripComments(fx);
     for (const gone of ['.cell__x', 'x-draw', 'xe-draw', '--x-len', 'stroke-dashoffset']) expect(f, gone).not.toContain(gone);
+  });
+});
+
+describe('Phase 2d.1: the fx layer and the tickers (§2.5, §5.2)', () => {
+  it('their CSS is out of the first load: only the lazy fx chunk imports celebrate.css; no ticker rule in src/styles', () => {
+    for (const css of [hud, fx, screens, overlays, chunk, i18n]) expect(stripComments(css)).not.toMatch(/\.ticker|\.game-fx/);
+    const importers = readdirSync(join(ROOT, 'src'), { recursive: true })
+      .map(String)
+      .filter((f) => f.endsWith('.ts') && read(join(ROOT, 'src', f)).includes("celebrate.css'"));
+    expect(importers).toEqual([join('ui', 'fx', 'celebrate.ts')]);
+    // Tokens only, as in src/styles.
+    expect(stripComments(celebrate)).not.toMatch(/#(?!fff\b)[0-9a-f]{3,8}\b/i);
+  });
+
+  it('.game-fx: fixed over the viewport, above the HUD and the win scrim (5), below the overlays (40), no pointer events', () => {
+    const l = ruleOf(celebrate, '.game-fx') ?? '';
+    for (const d of ['position: fixed', 'z-index: 6', 'overflow: hidden', 'pointer-events: none']) expect(l, d).toContain(d);
+    expect(ruleOf(screens, '.game__scrim')).toContain('z-index: 5');
+  });
+
+  it('a ticker: the slots y0 + 89.2 / 130 s, 29.3 s tall, the 1.2 s --toast-line border, the semicircle end, the text 20 s in', () => {
+    const t = ruleOf(celebrate, '.ticker') ?? '';
+    for (const d of [
+      'top: calc(var(--y-top) + var(--s) * 89.2px)',
+      'height: calc(var(--s) * 29.3px)',
+      'border: calc(var(--s) * 1.2px) solid var(--toast-line)',
+      'border-inline-start: 0',
+      'border-start-end-radius: calc(var(--s) * 14.65px)',
+      'border-end-end-radius: calc(var(--s) * 14.65px)',
+      'background: var(--toast-fill)',
+      'padding-inline-start: calc(var(--s) * 20px)',
+      'max-width: calc(var(--col-w) - var(--s) * 24px)',
+      'white-space: nowrap',
+      'color: var(--ink)',
+    ])
+      expect(t, d).toContain(d);
+    expect(ruleOf(celebrate, ".ticker[data-line='2']")).toContain('top: calc(var(--y-top) + var(--s) * 130px)');
+    const text = ruleOf(celebrate, '.ticker__text') ?? '';
+    for (const d of ['font-size: max(10px, calc(var(--s) * 16.5px))', 'text-overflow: ellipsis', 'overflow: hidden']) expect(text, d).toContain(d);
+    expect(ruleOf(celebrate, '.ticker__paw')).toContain('height: calc(var(--s) * 29.3px)');
+  });
+
+  it('RTL: the tickers are anchored at the right and the paw turns (they move left → right, tickers.ts)', () => {
+    expect(ruleOf(celebrate, "[dir='rtl'] .ticker")).toContain('right: 0');
+    expect(ruleOf(celebrate, "[dir='rtl'] .ticker__paw")).toContain('transform: scaleX(-1)');
+  });
+
+  it('the hint overlay (O1, §3.2): the 75 % dim fades in linearly, the card and Apply sizes × s, no entrance animation', () => {
+    expect(ruleOf(chunk, ".overlay[data-overlay='hint']")).toContain('animation: none');
+    expect(ruleOf(chunk, '.hint-dim')).toContain('animation: hint-dim-in var(--dim-ms, 300ms) linear both');
+    expect(ruleOf(chunk, '.hint-dim > path')).toContain('fill: rgba(0, 0, 0, 0.75)');
+    expect(ruleOf(chunk, '.hint-dim > path')).toContain('fill-rule: evenodd');
+    const card = ruleOf(chunk, '.hint-card') ?? '';
+    for (const d of ['background: var(--hint-card)', 'border-radius: calc(var(--hs, 1) * 15px)', 'min-height: calc(var(--hs, 1) * 70.3px)', 'box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25)', 'max-height: var(--hc-max, none)']) expect(card, d).toContain(d);
+    const text = ruleOf(chunk, '.hint-card__text') ?? '';
+    for (const d of ['overflow-y: auto', 'font-size: max(10px, calc(var(--hs, 1) * 14.5px))', 'color: var(--ink)']) expect(text, d).toContain(d);
+    const apply = ruleOf(chunk, '.btn.hint-apply') ?? '';
+    for (const d of ['background: var(--apply)', 'width: calc(var(--hs, 1) * 278.7px)', 'height: calc(var(--hs, 1) * 59.3px)', 'font-size: max(24px, calc(var(--hs, 1) * 28px))', 'box-shadow: none']) expect(apply, d).toContain(d);
+    expect(ruleOf(chunk, '.hint-close.visually-hidden-focusable:focus')).toContain('width: 44px');
   });
 });

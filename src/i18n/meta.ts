@@ -1,6 +1,7 @@
 // Owner: E (Phase 2b); G2 (Phase 2c: lives are fish, the period and streak keys, the fish currency went;
 // Phase 2c.1: the level points per cat, the perfect-streak keys went); G3 (Phase 2d: the Score column,
-// the mouse, the video badge's name, the level-start toast, the gear's dot)
+// the mouse, the video badge's name, the level-start toast, the gear's dot; Phase 2d.1: the completion
+// label, the level-start tickers)
 // Translator notes per key (phase2b §6.7 step 1): a description, a max length where the layout needs
 // one (chips ≤ 18 chars, buttons ≤ 22, titles ≤ 28) and placeholder notes. The AI-draft brief carries
 // only our English, this file and docs/i18n/glossary.md (never the original game or its strings).
@@ -132,6 +133,9 @@ const GROUPS: readonly (readonly [prefix: string, description: string, maxLength
   ['event.', 'Limited-time events: names, taglines, the Home card and the event screen'],
   ['event.card.', 'Event card on Home: one short status line', 24],
   ['locale.name.', "The language's own name (endonym) in the Language list; identical in every catalogue"],
+  // Phase 2d.1 (helpers-spec §4.3, §5.4).
+  ['fx.', 'Game screen: a short animated word over the board (decorative; the same news is also read to screen readers)'],
+  ['ticker.', 'Game screen: a level-start ticker, a one-line cream strip that slides across the top of the screen once. Only the player\'s own numbers, the board, a true fact or a tip; never a statistic about other players', 40],
 ];
 
 /** Per-key notes on top of the group text (description suffix, max length, non-translatable). */
@@ -162,6 +166,23 @@ const NOTES: Readonly<Partial<Record<I18nKey, Partial<KeyMeta>>>> = {
   'toast.start.level': { description: 'Level-start toast: a short honest encouragement (never a statistic, never "N % of players")', maxLength: 32 },
   'toast.start.hard': { description: 'Level-start toast on a Hard level: a short honest encouragement (never a statistic)', maxLength: 32 },
   'toast.start.retry': { description: 'Level-start toast after Retry: a short honest encouragement (never a statistic)', maxLength: 32 },
+  // Phase 2d.1 (helpers-spec Appendix A).
+  'fx.done': {
+    description: 'A short cheer that pops under a row, column or colour the player just finished (every other tile crossed out, its cat in place). One exclamation, not a button; it shows for under a second in big outlined letters',
+    maxLength: 8,
+  },
+  'a11y.unitDone': { description: 'Read after a move that finishes a row, column or colour; several are joined into one list' },
+  'ticker.best': { description: 'Level-start ticker (a one-line strip sliding across the top): the player\'s own best time on this level; {time} is a clock ("4:12")', maxLength: 40 },
+  'ticker.cats.one': { description: 'Level-start ticker: how many cats this board hides ({count} = the board size, 5 to 12). Never a statistic', maxLength: 40 },
+  'ticker.cats.other': { description: 'Level-start ticker: how many cats this board hides ({count} = the board size, 5 to 12). Never a statistic', maxLength: 40 },
+  'ticker.solved.one': { description: 'Level-start ticker: the number of levels THIS player has solved (their own count, never a worldwide number)', maxLength: 40 },
+  'ticker.solved.other': { description: 'Level-start ticker: the number of levels THIS player has solved (their own count, never a worldwide number)', maxLength: 40 },
+  'ticker.points.one': { description: 'Level-start ticker: the level points THIS player has earned so far (their own total)', maxLength: 40 },
+  'ticker.points.other': { description: 'Level-start ticker: the level points THIS player has earned so far (their own total)', maxLength: 40 },
+  'ticker.daily': { description: "Level-start ticker: today's daily puzzle is open and not solved yet", maxLength: 40 },
+  'ticker.unique': { description: 'Level-start ticker: a true fact, every puzzle has exactly one solution', maxLength: 40 },
+  'ticker.tip.cat': { description: 'Level-start ticker: a short tip, a double tap on a tile places a cat ("Tip:" prefix in your usual form)', maxLength: 40 },
+  'ticker.tip.drag': { description: 'Level-start ticker: a short tip, dragging over tiles crosses many out at once', maxLength: 40 },
   'game.tool.hint': { description: 'Name of the bulb button (screen reader, settings)', maxLength: 14 },
   'game.tool.kitty': { description: 'Name of the paw booster that places one correct cat. Always the same cute word for a little cat, distinct from "cat"', maxLength: 14 },
   'game.tool.free': { description: 'Tiny badge on the bulb when a free hint is available', maxLength: 7 },

@@ -12,6 +12,11 @@
 // Phase 2d (G1, docs/phase2d/look-spec.md §4.3): the game view's helper pulse (§1.11, rule 'auto'),
 // the mouse (§1.12), the video badge (videoRefill), the banner band (§1.16) and the gear's dot
 // (§1.15, also on Home and the event screen).
+// Phase 2d.1 (G1, docs/phase2d/helpers-spec.md §4.6, D-2d1-9): the 'auto' pulse waits for
+// fx.helperPulse.idleMs without a board change (ViewContext.lastBoardChangeAt, kept by the session:
+// the last mark, unmark, cat or mistake, the end of the board entry, a revive, the page becoming
+// visible again), needs stock (needsStock) and stops for the attempt once a helper was used
+// (untilHelperUsed: hintsUsed, kittiesUsed, ViewContext.mouseUses).
 import { activeEvent, eventEnd, eventRecord, eventStart, sumRewards, teaserEvent, type EventDef } from '../game/events';
 import { getMode } from '../game/modes';
 import { hasMouseCandidate } from '../game/mouse';
@@ -47,6 +52,14 @@ export interface ViewContext {
   readonly chromeLocked?: boolean;
   /** phase2b §4.4: the events chunk's eventArt once that chunk has loaded (the Home event card's art). */
   readonly eventArt?: HomeEventCardView['art'];
+  /**
+   * Phase 2d.1 §4.6: clock time of the last board change (mark, unmark, cat, mistake), of the end of
+   * the board entry (START), of a revive, or of the page becoming visible again, whichever is latest.
+   * Absent: the board has not been idle yet (no 'auto' pulse).
+   */
+  readonly lastBoardChangeAt?: number;
+  /** Phase 2d.1 §4.6: uses of the mouse in this attempt (HelperFlows' per-attempt counter). */
+  readonly mouseUses?: number;
 }
 
 /** A SessionMeta.tutorialStep as the tutorial module's step type (null outside 1..6). */
@@ -140,25 +153,41 @@ export function untouchedBoard(game: Pick<GameState, 'cells'>): boolean {
 }
 
 /**
- * Phase 2d §1.11 (D-2d-11): which helper pulses, from fx.helperPulse.target. Never while the attempt
- * is not playing, an overlay (a modal, the hint card, O2, the coach) is open, in the tutorial, from
- * the win flow on (status won, chromeLocked), or with reduced motion. 'auto': the kitty while the
- * board is untouched, otherwise the bulb; 'kitty' / 'bulb' pin one; 'off' none. The chosen helper
- * pulses only while it is enabled (no fallback to the other one).
+ * Phase 2d §1.11: which helper pulses, from fx.helperPulse.target. Never while the attempt is not
+ * playing, an overlay (a modal, the hint card, O2, the coach) is open, in the tutorial, from the win
+ * flow on (status won, chromeLocked), or with reduced motion. 'kitty' / 'bulb' pin one (2d: whenever
+ * it is enabled); 'off' none. The chosen helper pulses only while it is enabled (no fallback).
+ * Phase 2d.1 §4.6 (D-2d1-9), 'auto': the kitty while every tile is empty, else the bulb, and only
+ * when (a) the board has not changed for fx.helperPulse.idleMs (ctx.lastBoardChangeAt: the last
+ * mark, unmark, cat or mistake, the end of the board entry, a revive, the page's return), (b) with
+ * needsStock, that helper has stock (a helper showing the video badge never pulses and the other one
+ * does not take its place), and (c) with untilHelperUsed, no hint, kitty or mouse was used in this
+ * attempt (hintsUsed, kittiesUsed, ctx.mouseUses).
  */
 export function selectPulse(
   state: AppState,
-  ctx: Pick<ViewContext, 'chromeLocked'>,
+  ctx: Pick<ViewContext, 'chromeLocked' | 'now' | 'lastBoardChangeAt' | 'mouseUses'>,
   enabled: { readonly paw: boolean; readonly bulb: boolean },
   c: GameConfig = cfg,
 ): 'paw' | 'bulb' | null {
   const { game, session, ui } = state;
-  const target = c.fx.helperPulse.target;
+  const rule = c.fx.helperPulse;
+  const target = rule.target;
   if (!game || !session || target === 'off') return null;
   if (game.status !== 'playing' || state.overlays.length > 0 || session.mode === 'tutorial') return null;
   if (ctx.chromeLocked === true || ui.reducedMotion) return null;
-  const pick: 'paw' | 'bulb' = target === 'kitty' ? 'paw' : target === 'bulb' ? 'bulb' : untouchedBoard(game) ? 'paw' : 'bulb';
-  return enabled[pick] ? pick : null;
+  if (target === 'kitty') return enabled.paw ? 'paw' : null;
+  if (target === 'bulb') return enabled.bulb ? 'bulb' : null;
+  const pick: 'paw' | 'bulb' = untouchedBoard(game) ? 'paw' : 'bulb';
+  if (!enabled[pick]) return null;
+  const since = ctx.lastBoardChangeAt;
+  if (since === undefined || !(ctx.now - since >= rule.idleMs)) return null;
+  if (rule.needsStock && getMode(session.mode).chargesHelpers) {
+    const stock = pick === 'paw' ? state.save.stock.kitties : state.save.stock.hints;
+    if (!(stock > 0)) return null;
+  }
+  if (rule.untilHelperUsed && (game.hintsUsed > 0 || game.kittiesUsed > 0 || (ctx.mouseUses ?? 0) > 0)) return null;
+  return pick;
 }
 
 /** null when no game is mounted. */

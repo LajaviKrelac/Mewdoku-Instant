@@ -60,8 +60,7 @@ Spec: [helpers-spec §7](helpers-spec.md#7-workstreams-interfaces-tests-and-acce
 
 | # | From → to | What | Why |
 |---|---|---|---|
-
-*(none yet)*
+| H1 | G2 → G3 | `src/ui/fx/cat-burst.ts`: draw the **shards only**. The board draws the cat sequence's **light on the neighbours and the six twinkles** inside the cat's cell (`.cell.fx-cat > .cell__light`, which overflows the tile, z-index lifted), together with the flash and the halo. So please do not draw a second light or twinkles in the fx layer. | helpers-spec §7.3 G2 item 3 gives the light and twinkles to the board, while CONTRACTS-2d1 §8 lists them under G3. One owner avoids a double glow. The light and twinkles are tile-relative (1.5 T) and end by 733 ms, inside the board. The shards leave the board, so they stay in the fx layer (§2.4). |
 
 ### 2d.1 Done for other workstreams' requests
 
@@ -69,7 +68,7 @@ Spec: [helpers-spec §7](helpers-spec.md#7-workstreams-interfaces-tests-and-acce
 
 ### 2d.1 Notes from G2 for the others (no action needed)
 
-*(none yet)*
+- **S0 landed (2026-10-10).** `palette.ts`: `PALETTE[4]` = Denim `#5B75B2`, `PALETTE_CORE` (11), `paletteTier` (n ≤ 11 the core, 12 all), `HEAD_ORDER` (the ring), `headOrderFor(colors, puzzleId)`, `isDarkTile(i)`, the tokens `plus`, `done-top`, `done-bottom`, `done-line`, `hint-card`, `apply` and the new `wrong`, `toast-fill`, `toast-line` values (also in `tokens.css`). `board-fx.ts`: `ghostOrder`, `waveOrder`, `xOutlinePath`. `sprite.ts`: `cat-wink`, `board-mouse` + `board-mouse-eyes | -lids | -grin`, `fx-star4`, `fx-shard` (+ two variants `fx-shard-2`, `fx-shard-3`), `art-paw-cap`, `art-bolt`, `art-star` (drawn in `art/helper-art.ts`); `CatMood` gains `'wink'`. The art is the build's first pass, not a placeholder; the ids stay.
 
 ### 2d.1 L0 (lead, 2026-10-10): what changed in G2's files
 

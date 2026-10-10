@@ -1,0 +1,99 @@
+/* Owner: G3 (Phase 2d.1)
+   The lazy fx chunk's stylesheet (helpers-spec §7.3 "Bundle note"): imported by src/ui/fx/celebrate.ts, so
+   Vite emits it as that chunk's own CSS file, loaded before the chunk's code runs and never in the first
+   load (the first run's tutorial shows no ticker and no celebration). The celebrations themselves are
+   placed with inline styles; this file holds the fx layer and the level-start tickers. Tokens only
+   (as src/styles/*.css: #fff and rgba(0,0,0,α) / rgba(255,255,255,α) aside); logical properties, RTL
+   overrides at the end. */
+
+/* ── The game screen's fixed fx layer (game-screen.ts creates it empty; the chunk fills it) ──
+   Over the viewport, above the board and the HUD rows (and the win scrim), below every overlay; no
+   pointer events. It holds the level-start tickers and the lazy chunk's celebrations (inline styles). */
+.game-fx {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 6;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* ── The level-start tickers (Phase 2d.1 §5.2; tickers.ts moves them on WAAPI) ──
+   Two cream pills, 29.3 s tall, at y0 + 89.2 s and y0 + 130 s; our paw cap at the inline start (it
+   draws the scalloped border), the text 20 s from its outer edge, the end icon, a semicircle at the
+   inline end. Content width, at most the column − 24 s (the text ellipsizes). */
+.ticker {
+  position: absolute;
+  top: calc(var(--y-top) + var(--s) * 89.2px);
+  left: 0;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  max-width: calc(var(--col-w) - var(--s) * 24px);
+  height: calc(var(--s) * 29.3px);
+  padding-inline-start: calc(var(--s) * 20px);
+  border: calc(var(--s) * 1.2px) solid var(--toast-line);
+  border-inline-start: 0;
+  border-start-end-radius: calc(var(--s) * 14.65px);
+  border-end-end-radius: calc(var(--s) * 14.65px);
+  background: var(--toast-fill);
+  color: var(--ink);
+  white-space: nowrap;
+  will-change: transform;
+}
+
+.ticker[data-line='2'] {
+  top: calc(var(--y-top) + var(--s) * 130px);
+}
+
+.ticker__paw {
+  position: absolute;
+  top: calc(var(--s) * -1.2px);
+  left: 0;
+  width: calc(var(--s) * 28.4px);
+  height: calc(var(--s) * 29.3px);
+}
+
+.ticker__text {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  font-size: max(10px, calc(var(--s) * 16.5px));
+  line-height: 1.2;
+}
+
+/* The bolt (≈ 20 × 22 drawn) 6 after the text and 3 from the border; the star (≈ 26 × 22) 4 after the
+   text, touching the border; the margins allow for the art's own inset in its 24-unit box. */
+.ticker__icon {
+  position: relative;
+  flex: none;
+  width: calc(var(--s) * 24px);
+  height: calc(var(--s) * 24px);
+  margin-inline-start: calc(var(--s) * 1.4px);
+  margin-inline-end: calc(var(--s) * -1.4px);
+}
+
+.ticker[data-line='2'] .ticker__icon {
+  width: calc(var(--s) * 25px);
+  height: calc(var(--s) * 25px);
+  margin-inline-start: calc(var(--s) * 2.3px);
+  margin-inline-end: calc(var(--s) * -1.2px);
+}
+
+/* RTL (§5.3): the tickers mirror: anchored at the right edge (they enter at the
+   left and move right, tickers.ts), the paw cap at their inline start, turned to face the other way. */
+[dir='rtl'] .ticker {
+  right: 0;
+  left: auto;
+}
+
+[dir='rtl'] .ticker__paw {
+  right: 0;
+  left: auto;
+  transform: scaleX(-1);
+}
