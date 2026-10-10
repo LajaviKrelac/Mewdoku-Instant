@@ -401,6 +401,8 @@ const FISH_PITCH = 25.3;
 const HEAD_W = 21.33;
 const HEAD_GAP = 4;
 const HEAD_END = 10.5;
+/** The heads pill's width beyond its heads' pitch (2 × 10.3 inset − the 4 gap): n × 25.33 + 16.6 (measured). */
+const HEADS_PILL_PAD = 16.6;
 
 /**
  * The heads' scale (≤ 1) so `heads` heads fit in the heads pill next to a fish pill of `fish` fish:
@@ -412,6 +414,18 @@ export function headScale(heads: number, fish: number): number {
   const room = ROW_W - ROW_GAP - fishPill - 2 * HEAD_END;
   const natural = heads * HEAD_W + Math.max(0, heads - 1) * HEAD_GAP;
   return natural > 0 ? Math.max(0.3, Math.min(1, room / natural)) : 1;
+}
+
+/**
+ * Audit B1 (01 row 12.23; measured on 9 × 9 in the user's helper recordings, mouse-cat §1.2, hint-stills §2.1):
+ * the heads pill is as wide as its heads, n × 25.33 + 16.6 (s-units; 270 for 10 heads, 244.6 for 9), never
+ * wider than the room next to the fish pill (11 and 12 heads fill that room and shrink, headScale). The row
+ * (heads pill, the 11.3 gap, the fish pill) is centred in the column (hud.css .pills).
+ */
+export function headsPillWidth(heads: number, fish: number): number {
+  const fishPill = FISH_INSETS + FISH_W + Math.max(0, fish - 1) * FISH_PITCH;
+  const room = ROW_W - ROW_GAP - fishPill;
+  return heads > 0 ? Math.min(room, heads * (HEAD_W + HEAD_GAP) + HEADS_PILL_PAD) : room;
 }
 
 /**
@@ -541,6 +555,8 @@ export function createPills(props: PillsProps): PillsView {
     const fresh = ensureHeads(p) || p.boardId !== boardId;
     boardId = p.boardId;
     heads.style.setProperty('--hk', String(Math.round(headScale(headEls.size, Math.max(1, p.maxHearts)) * 1000) / 1000));
+    // The heads pill (and the win flow's period counter in its place) as wide as its heads (audit B1).
+    el.style.setProperty('--hpw', String(Math.round(headsPillWidth(headEls.size, Math.max(1, p.maxHearts)) * 100) / 100));
     // Found colours (§1.6): full colour; a head that lost its cat fades back to the tint (150 ms).
     const done = new Set<number>();
     const bits = p.regionsDone;

@@ -93,8 +93,8 @@ describe('the tickers\' motion (helpers-spec §5.3)', () => {
     expect(els[1]?.querySelector('svg.ticker__icon use')?.getAttribute('href')).toBe('#art-star');
     expect(els[0]?.querySelector('.ticker__text')?.textContent).toBe('Your best time here: 4:12');
     expect(calls).toHaveLength(2);
-    const vw = document.documentElement.clientWidth || window.innerWidth;
-    expect(calls[0]?.frames).toEqual([{ transform: `translateX(${vw}px)` }, { transform: 'translateX(-300px)' }]);
+    // audit B14: across the game column (.tickers' own width, here the mocked 300), not the viewport
+    expect(calls[0]?.frames).toEqual([{ transform: 'translateX(300px)' }, { transform: 'translateX(-300px)' }]);
     expect(calls[0]?.opts).toMatchObject({ duration: cfg.fx.tickers.crossMs, easing: 'linear', fill: 'both' });
     expect((calls[0]?.opts.delay as number) - (calls[1]?.opts.delay as number)).toBe(774);
     calls[1]?.anim.onfinish?.();
@@ -117,8 +117,8 @@ describe('the tickers\' motion (helpers-spec §5.3)', () => {
     document.body.appendChild(host);
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ width: 250, height: 29, left: 0, top: 0, right: 250, bottom: 29, x: 0, y: 0, toJSON: () => ({}) } as DOMRect);
     createTickers({ host, reduced: () => false }).play(lines);
-    const vw = document.documentElement.clientWidth || window.innerWidth;
-    expect(calls[0]?.frames).toEqual([{ transform: `translateX(${-vw}px)` }, { transform: 'translateX(250px)' }]);
+    // the column (the mocked 250 wide): enters at its left edge, leaves past its right one
+    expect(calls[0]?.frames).toEqual([{ transform: 'translateX(-250px)' }, { transform: 'translateX(250px)' }]);
   });
 
   it('reduced motion: no movement; both fade in at the column\'s inline start (12 s), hold reducedHoldMs, fade out', () => {
@@ -134,7 +134,7 @@ describe('the tickers\' motion (helpers-spec §5.3)', () => {
       expect(c.opts.duration).toBe(2 * cfg.fx.reducedMotionFadeMs + cfg.fx.tickers.reducedHoldMs);
     }
     const el = host.querySelector('.ticker') as HTMLElement;
-    expect(el.style.transform).toMatch(/^translateX\(/);
+    expect(el.style.transform).toBe('translateX(12px)'); // 12 s from the column's inline start (.tickers is the column)
   });
 
   it('off when fx.tickers.enabled is false is the session\'s call (G1); play() with the host detached shows nothing', () => {

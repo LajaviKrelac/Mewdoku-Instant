@@ -1,6 +1,6 @@
 # Phase 2d spec: match the original's game screen (look, layout, palette, X marks)
 
-Status: **built and integrated** (G1–G3, integration I-1 to I-5 on 2026-10-10; the deviations the integration made are listed in §9 and marked "as built" where they apply; the acceptance pass runs after 2d.1, [STATUS-2d](STATUS-2d.md)) · Spec date: 2026-10-10 · Owner: game design + tech lead · Branch `claude/mewdoku-instant`, base `ececec5` (Phase 2c.1 integrated: `tsc` clean, 2 175 unit tests in 110 files, 172 e2e)
+Status: **built and integrated** (G1–G3, integration I-1 to I-5 on 2026-10-10; the deviations the integration made are listed in §9 and marked "as built" where they apply; the acceptance pass ran with 2d.1 on 2026-10-10, [STATUS-2d](STATUS-2d.md); **Phase 2d.1** ([helpers-spec](helpers-spec.md), built and integrated the same day) replaces §1.6 (found head), §1.9 (Denim), §1.10 (the draw-in), §1.11 (press, pulse), §1.12 (the mouse's motion), §1.13 (the "+N"), §1.14 (the toast → two tickers) and adds to §1.16; D-2d-9 … D-2d-13 are marked "replaced by 2d.1") · Spec date: 2026-10-10 · Owner: game design + tech lead · Branch `claude/mewdoku-instant`, base `ececec5` (Phase 2c.1 integrated: `tsc` clean, 2 175 unit tests in 110 files, 172 e2e)
 
 **Config is already done.** The spec stage added every 2d key to `src/app/config.ts` (§0.6) and marked the game-screen keys 2d stops reading `@deprecated`. No value an existing reader uses changed, so the tree is still green: `npx tsc --noEmit` clean and `npx vitest run` **2 175 / 2 175 (110 files)** after the edit (2026-10-10). Workstreams G1–G3 do not edit `config.ts`.
 
@@ -242,6 +242,8 @@ Home and the event screen keep their own top bars (2b layout), restyled only: th
 
 ### 1.6 The cat-heads tracker
 
+> **Phase 2d.1 (built, integrated 2026-10-10):** a found colour's head becomes our cat face with a tint dot and pops 0.56 → 1.2 → 1 (D-2d1-5 replaces D-2d-9), and the heads follow the measured hue ring from a per-level start: [helpers-spec](helpers-spec.md) §2.7, §6.5.
+
 | Item | Spec |
 |---|---|
 | What it shows | **measured**: one head per region colour on the board (n heads for n × n), a flat cat-head silhouette in a **50 % tint** of that colour on the white pill (the measured heads are the region colours mixed 50 % with white within 1 unit). Ours: the head is the region colour (`var(--rN)`) at **opacity 0.5** over the white pill, which is exactly that mix and needs no `color-mix()` (iOS 14 / Chrome 80 baseline). |
@@ -285,6 +287,8 @@ Home and the event screen keep their own top bars (2b layout), restyled only: th
 
 ### 1.9 Region palette
 
+> **Phase 2d.1 (built, integrated 2026-10-10):** an 11th measured colour, Denim `#5B75B2`, replaces Mint at index 4; boards up to 11 × 11 draw only from the 11 measured colours, Cocoa only on 12 × 12 (D-2d1-10 replaces D-2d-10): [helpers-spec](helpers-spec.md) §6.
+
 **Measured**: the 10 colours of the recording (PNG values); **ours**: Mint and Cocoa for 11 × 11 and 12 × 12 (the biggest board is 12 × 12: 79 levels, 58 dailies, the Yarn Hearts event). Index meanings are kept where the hue still fits, so the tutorial's indices, the How to play mini boards and most colour names stay (the name changes are four keys, Appendix A).
 
 | Index | Name (`color.N`) | 2d hex | L* C* h° | Source | Tier | White X on it |
@@ -310,6 +314,8 @@ Home and the event screen keep their own top bars (2b layout), restyled only: th
 
 ### 1.10 The X glyph
 
+> **Phase 2d.1 (built, integrated 2026-10-10):** new X's from taps, paints and Apply draw in stroke by stroke with a tile squish; only the mouse's X pops (D-2d1-8); the hint's ghost X is the X's outline: [helpers-spec](helpers-spec.md) §4.4, §3.3.
+
 **Measured** (tile 35.0): pure white `#FFFFFF`, opaque, **no outline and no shadow**; each bar 6.9 thick (**19.7 % of the tile**); the X's box 21.5 square (**61.5 %**), centred; tip to tip along a bar 26.3 (**75 %**); ends **rounded squares** (the width profile from the tip fits two rounded rectangles with corner radius ≈ 6.5 % of the tile); inner crossing corners only slightly soft.
 
 | Item | 2d spec (G2) |
@@ -324,6 +330,8 @@ Home and the event screen keep their own top bars (2b layout), restyled only: th
 | Rule-card mini X | §1.7 (15 % bars, 65 % span, on `--rule-mark`). |
 
 ### 1.11 Helper row, badges and the idle pulse
+
+> **Phase 2d.1 (built, integrated 2026-10-10):** the discs press to 0.90 and fire on release (D-2d1-14); the pulse needs 5 s idle, stock and no helper used in the attempt (D-2d1-9 replaces D-2d-11); a busy tool row keeps full opacity: [helpers-spec](helpers-spec.md) §4.5, §4.6, §1.2.
 
 **Measured**: three white discs Ø 60.3 at y0 + 632 [694.0–754.3], centres x 98.8 / 202.0 / 305.0 → **201 s − 103.1 s, 201 s, 201 s + 103.1 s** (pitch 103.1), `--shadow-btn`, **no hard bottom edge** (the 2b 4 px grey edge is removed). Order: **kitty · bulb · mouse**.
 
@@ -355,6 +363,8 @@ Home and the event screen keep their own top bars (2b layout), restyled only: th
 
 ### 1.12 The mouse helper `[DECISION-PENDING-USER]` D-2d-12
 
+> **Phase 2d.1 (built, integrated 2026-10-10):** the mouse is now measured: it visits its three tiles one by one and leaves an X on each, with the board locked (D-2d1-1 replaces the 90 ms stagger of D-2d-12): [helpers-spec](helpers-spec.md) §1.
+
 **What we know**: the recording shows a grey mouse button with a green "play" badge (watch a video). Research (one forum post, 3 Sep 2026, likely): the mouse **puts X's on 3 random cells that cannot hold a cat**; a staged rollout; how it is earned is unknown (`research.md` Q1.5).
 
 **What we build** (behind `cfg.mouse.enabled`; `cfg.mouse.cells` = 3; cheap to change or switch off):
@@ -374,6 +384,8 @@ Home and the event screen keep their own top bars (2b layout), restyled only: th
 
 ### 1.13 Score, the "+N" chip and the win flow
 
+> **Phase 2d.1 (built, integrated 2026-10-10):** the "+N" pops over the cat's tile and a star carries it to the Score, which counts up without a bump; the roll, the bump and the inline chip are retired (D-2d1-4): [helpers-spec](helpers-spec.md) §2.5.
+
 The 2c.1 level points (576 + 96 per cat in a run) move from the pills row into the top bar's **Score** column (§1.4). Every rule, time and announcement of fish-lives-spec §3 and §10 stays; only the place and the look change.
 
 | Item | 2d |
@@ -388,6 +400,8 @@ The 2c.1 level points (576 + 96 per cat in a run) move from the pills row into t
 | Victory, ranking panel | unchanged layout (2c.1); they follow the tokens and the redrawn fish. |
 
 ### 1.14 Level-start toast `[DECISION]` D-2d-13
+
+> **Phase 2d.1 (built, integrated 2026-10-10):** replaced by the two level-start tickers with our own honest lines (D-2d1-12 replaces D-2d-13; `start-toast.ts` deleted at I-3): [helpers-spec](helpers-spec.md) §5.
 
 **Measured**: a cream pill **29.0 tall**, centre y0 + 103.8 (over the heads pill's bottom and the rules container's top), fill `#FEF0C7`, a ≈ 1.5 orange border `#DD9045`, ink text ≈ 16.3 px, a flexed-arm emoji ≈ 24 × 24 at its end; it **drifts left at a constant 100 px/s** and is gone 1.37 s into the recording. Not seen: its entry, its full text ("…ared this level!") and its trigger.
 
@@ -413,6 +427,8 @@ The 2c.1 level points (576 + 96 per cat in a run) move from the pills row into t
 - No schema bump: `SaveData.ext` is the "new data without a schema bump" hook (04 §4.3). G1 adds the merge rule (max) and the validation (a finite number ≥ 0, else dropped).
 
 ### 1.16 Banner during play `[DECISION: default, user may change]` D-2d-15
+
+> **Phase 2d.1 (built, integrated 2026-10-10):** the banner hides while the hint overlay is open and returns after it (D-2d1-13): [helpers-spec](helpers-spec.md) §3.2.
 
 **Measured**: a standard 320 × 50 banner centred at y 777.7–827.7, 23.4 under the helper discs, 12.3 above the safe area. Research: confirmed for the app (reviews describe a permanent bottom banner in play; `research.md` Q5).
 
@@ -763,11 +779,11 @@ Research facts that touch other phases are noted, not built: the leaderboard per
 | D-2d-6 | Contrast exceptions for parity: white X, head tints, fish body, decorative diagram tiles and toast border | ours, recorded |
 | D-2d-7 | One font weight; numbers emboldened with a text stroke | ours (budget) |
 | D-2d-8 | Home and the event screen take tokens, buttons and the dot, not a new layout | ours, asked (Q8) |
-| D-2d-9 | A found head fills with the full colour and pops | ours, asked (Q6) |
-| D-2d-10 | Mint and Cocoa as colours 11 and 12; n ≤ 10 boards use only the 10 measured colours; four colour names change | ours, asked (Q2) |
-| D-2d-11 | Pulse rule 'auto' (kitty on an untouched board, then the bulb) | ours, asked (Q9) |
-| D-2d-12 | The mouse: 3 X's on cells without a cat, one video per use, no stock, behind `cfg.mouse` | research (likely, one source) + ours, asked (Q3) |
-| D-2d-13 | Level-start toast with our honest copy on new levels and Retry | ours, asked (Q7) |
+| D-2d-9 | A found head fills with the full colour and pops | ours, asked (Q6); **replaced by 2d.1** (D-2d1-5: the cat face with a tint dot, measured) |
+| D-2d-10 | Mint and Cocoa as colours 11 and 12; n ≤ 10 boards use only the 10 measured colours; four colour names change | ours, asked (Q2); **replaced by 2d.1** (D-2d1-10: Denim measured, 11 colours up to 11 × 11) |
+| D-2d-11 | Pulse rule 'auto' (kitty on an untouched board, then the bulb) | ours, asked (Q9); **replaced by 2d.1** (D-2d1-9: idle 5 s, stock, no helper used yet) |
+| D-2d-12 | The mouse: 3 X's on cells without a cat, one video per use, no stock, behind `cfg.mouse` | research (likely, one source) + ours, asked (Q3); **motion replaced by 2d.1** (D-2d1-1: the measured visits; the rule confirmed by the recording) |
+| D-2d-13 | Level-start toast with our honest copy on new levels and Retry | ours, asked (Q7); **replaced by 2d.1** (D-2d1-12: two tickers) |
 | D-2d-14 | The settings dot marks unseen Settings (`ext.settingsSeen` vs `settingsDot.version`) | ours, asked (Q4) |
 | D-2d-15 | Banner during play on FBIG, band reserved from mount, persisting across banner screens | default, user may change (Q5) |
 | D-2d-16 | The score's level points move into the top bar as "Score"; the period counter takes the heads pill's place at a win | ours (the task's direction; 2c.1 times unchanged) |

@@ -383,6 +383,23 @@ describe('retired-look guard (phase2b §1.8, §1.12)', () => {
     expect(cfg.fx.mouse).toEqual({ appearMs: 115, dwellMs: 850, exitMs: 85 });
   });
 
+  it('audit B3 (helpers-spec §2.4, measured: white rays and a near-white halo from 0 ms): the flash container never fades, so its rays and halo show at their own opacity; the wash is its own layer under the rays; the halo has no tile colour', () => {
+    const board = stripComments(read(join(STYLES, 'board-mouse.css')));
+    const rule = (sel: string): string => new RegExp(`(?:^|\\})\\s*${sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([^}]*)\\}`).exec(board)?.[1] ?? '';
+    const flash = rule('.cell__flash');
+    expect(flash).toMatch(/isolation:\s*isolate/);
+    expect(flash).not.toMatch(/animation|opacity|background/);
+    expect(rule('.cell__wash')).toMatch(/animation:\s*cat-wash 733ms linear both/);
+    expect(rule('.cell__wash')).toMatch(/z-index:\s*0/);
+    expect(rule('.cell__flash::before')).toMatch(/z-index:\s*1;[\s\S]*animation:\s*cat-rays 200ms/);
+    const halo = rule('.cell__flash::after');
+    expect(halo).toMatch(/rgba\(var\(--halo-rgb\), 0\.95\)/);
+    expect(halo).not.toMatch(/color-mix|var\(--c\)/);
+    // the rays start bright: at least 0.8 at 0 ms (they were a child of the wash at opacity 0 then)
+    const rays = /@keyframes cat-rays\s*\{([\s\S]*?)\n\}/.exec(board)?.[1] ?? '';
+    expect(rays).toMatch(/0% \{\s*opacity: (0\.[89]|1)/);
+  });
+
   it('the board card has no shadow and no border (look-spec §1.8)', () => {
     const board = stripComments(read(join(STYLES, 'board.css')));
     for (const m of board.matchAll(/([^{}]*)\{([^{}]*)\}/g)) {

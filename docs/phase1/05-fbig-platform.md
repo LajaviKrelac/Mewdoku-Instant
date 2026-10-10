@@ -189,6 +189,8 @@ The NAV_FLOATING platform menu overlays a corner of the game. We **reserve the t
 
 > **Phase 2d** ([look-spec §1.16](../phase2d/look-spec.md), D-2d-15; fb-dashboard B7–B9): the game screen also qualifies for a banner while `ads.banner.duringPlay` is on (default **on**, `[DECISION: default, user may change]`; the user's recording of the original shows a 320 × 50 banner in play). The band (`toolsToBanner` 23.4 s + `bannerPx` 50) is reserved from the board's mount when the gate says a banner may show, so the board never jumps; the banner shows when the board entry ends (60 s reload window), persists from the victory or a previous board into the next one, and hides before any interstitial or rewarded ad (the mouse's video included), under Settings, How to play, the shop, the hub and the ranking panel, and on leaving to Home or the event screen; never on the tutorial. Meta's guidance against banners during active gameplay is recorded as a review and monetisation risk (look-spec §7 Q5); gate G4 re-checks it before production. Rewarded placement `'mouse'` uses the same rewarded placement ID.
 
+> **Phase 2d.1** ([helpers-spec §3.2](../phase2d/helpers-spec.md), D-2d1-13, `ads.banner.hideDuringHint`, default on): the banner also hides while the hint overlay is open, as the user's recording shows; after the hint closes it reloads at once when `minReloadSec` has passed since the last load, else one timer reloads it when that window ends (not when the game screen has gone, a modal or an ad is up, or the board is won), so no second load ever happens inside Meta's reload window (`banner-flow.ts` `hintOpened` / `hintClosed`; the `fbig` e2e checks it with the stub's clock).
+
 
 ### 6.1 Formats used
 

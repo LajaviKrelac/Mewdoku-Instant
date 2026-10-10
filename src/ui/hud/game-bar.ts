@@ -22,7 +22,7 @@
 // Classes: header.top-bar.top-bar--game[data-fb-safe][data-fit]
 //            > button.top-bar__btn--home.top-bar__btn--back
 //              .top-bar__mid > h1.top-bar__text > .top-bar__name + .top-bar__val > .top-bar__suffix .badge--hard
-//                              .points-pill[data-final] > .points-pill__name + .points-pill__val.top-bar__val > .points-pill__count > .points-pill__n[data-counting]
+//                              .points-pill[data-final][data-counting] > .points-pill__name + .points-pill__val.top-bar__val > .points-pill__count > .points-pill__n[data-counting]
 //              button.top-bar__btn--settings > .top-bar__dot
 import { cfg } from '../../app/config';
 import type { GameEvent } from '../../game/types';
@@ -136,6 +136,7 @@ export function createGameBar(props: GameBarProps, cb: GameBarCallbacks): GameBa
     if (countRaf) win?.cancelAnimationFrame(countRaf);
     countRaf = 0;
     score.numEl().removeAttribute('data-counting');
+    score.el.removeAttribute('data-counting');
   };
   const showNow = (n: number): void => {
     stopCount();
@@ -155,6 +156,9 @@ export function createGameBar(props: GameBarProps, cb: GameBarCallbacks): GameBa
     // starts at the call, and every later frame shows the value at its own timestamp (same origin).
     const t0 = win.performance.now();
     score.numEl().setAttribute('data-counting', '');
+    // the column too: its halo behind the digits while they count (hud.css; audit B6)
+    score.el.style.setProperty('--count-ms', `${ms}ms`);
+    score.el.setAttribute('data-counting', '');
     shown = from;
     score.show(from);
     const frame = (ts: number): void => {
@@ -165,6 +169,7 @@ export function createGameBar(props: GameBarProps, cb: GameBarCallbacks): GameBa
       if (el >= ms) {
         countRaf = 0;
         score.numEl().removeAttribute('data-counting');
+        score.el.removeAttribute('data-counting');
         return;
       }
       countRaf = win.requestAnimationFrame(frame);

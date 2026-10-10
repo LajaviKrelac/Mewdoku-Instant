@@ -22,8 +22,22 @@
 
 /* ── The level-start tickers (Phase 2d.1 §5.2; tickers.ts moves them on WAAPI) ──
    Two cream pills, 29.3 s tall, at y0 + 89.2 s and y0 + 130 s; our paw cap at the inline start (it
-   draws the scalloped border), the text 20 s from its outer edge, the end icon, a semicircle at the
-   inline end. Content width, at most the column − 24 s (the text ellipsizes). */
+   draws the scalloped end and its border), the text 20 s from its outer edge, the end icon, a semicircle
+   at the inline end. Content width, at most the column − 24 s (the text ellipsizes).
+   Audit B14: they cross the game column (.tickers is the column, clipped), not the whole viewport, so on a
+   wide desktop window they stay over the HUD and move as fast as on a phone.
+   Audit B8: the pill's body (::before: fill, border, round end) starts under the paw (14 s in), so its
+   straight top and bottom never run past the scallops; the paw draws the end. */
+.tickers {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(50% - var(--col-w) / 2);
+  width: var(--col-w);
+  overflow: hidden;
+  pointer-events: none;
+}
+
 .ticker {
   position: absolute;
   top: calc(var(--y-top) + var(--s) * 89.2px);
@@ -34,26 +48,40 @@
   max-width: calc(var(--col-w) - var(--s) * 24px);
   height: calc(var(--s) * 29.3px);
   padding-inline-start: calc(var(--s) * 20px);
+  padding-inline-end: calc(var(--s) * 1.2px);
+  color: var(--ink);
+  white-space: nowrap;
+  will-change: transform;
+}
+
+.ticker::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: 0;
+  bottom: 0;
+  inset-inline-start: calc(var(--s) * 14px);
+  inset-inline-end: 0;
+  box-sizing: border-box;
   border: calc(var(--s) * 1.2px) solid var(--toast-line);
   border-inline-start: 0;
   border-start-end-radius: calc(var(--s) * 14.65px);
   border-end-end-radius: calc(var(--s) * 14.65px);
   background: var(--toast-fill);
-  color: var(--ink);
-  white-space: nowrap;
-  will-change: transform;
 }
 
 .ticker[data-line='2'] {
   top: calc(var(--y-top) + var(--s) * 130px);
 }
 
+/* The paw cap (art-paw-cap, 28.4 × 33.5 s): its scallops overhang the pill 2.1 s above and below (measured:
+   the beans ≈ 7.8 px across, the top one 2.2 px above the pill, the bottom one 2.1 below; audit B8). */
 .ticker__paw {
   position: absolute;
-  top: calc(var(--s) * -1.2px);
+  top: calc(var(--s) * -2.1px);
   left: 0;
   width: calc(var(--s) * 28.4px);
-  height: calc(var(--s) * 29.3px);
+  height: calc(var(--s) * 33.5px);
 }
 
 .ticker__text {
@@ -65,6 +93,9 @@
   font-weight: var(--display-weight);
   font-size: max(10px, calc(var(--s) * 16.5px));
   line-height: 1.2;
+  /* Audit B7 (measured stroke 1.40 px vs our 1.87): thinned like the labels and the rule text (D-2d-7: one
+     face), by a text stroke in the pill's fill (0.04 em on Fredoka 600, as the labels; the system stacks step down instead). */
+  -webkit-text-stroke: calc((700 - var(--display-weight)) * 0.0004em) var(--toast-fill);
 }
 
 /* The bolt (≈ 20 × 22 drawn) 6 after the text and 3 from the border; the star (≈ 26 × 22) 4 after the

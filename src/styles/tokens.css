@@ -75,6 +75,7 @@
   --twinkle-cyan: #c4f2ff; /* ours: the cat sequence's light-cyan twinkles (board.css) */
   --halo-rgb: 254, 255, 234; /* measured (cc): the placed cat's halo in the gaps */
   --wave-rgb: 255, 236, 150; /* the completion wave's pale yellow glow (edge measured #fff2c0–#fff6c7 cc) */
+  --score-halo-rgb: 255, 246, 242; /* audit B6: the Score's halo while it counts (measured #fff6f4 / #fff2ee 22 px out) */
 
   /* ── RGB triplets for tinted shadows and glows ───────────────────────── */
   --ink-rgb: 147, 90, 90;

@@ -10,8 +10,8 @@
 //   its slot with data-off: invisible, inert, out of the Tab order, so the kitty and the bulb never move.
 // [data-pulse] on the helper the game suggests (GameView.pulse): the disc and its art scale 1 → 1.08
 // with a warm glow on a 1.5 s cycle (hud.css; reduced motion: none). Disabled helpers never pulse.
-// Phase 2d.1 (helpers-spec §4.5, §1.2): the whole control presses to 0.90 (:active, hud.css) and fires
-// on release; a pointer release springs back via 1.04 (.tool--spring, 300 ms; not for a key press).
+// Phase 2d.1 (helpers-spec §4.5, §1.2): the whole control presses to 0.90 (:active or [data-pressed] while
+// a pointer is down, which touch needs: audit B12; hud.css) and fires on release; a pointer release springs back via 1.04 (.tool--spring, 300 ms; not for a key press).
 // [data-busy] on the row during a helper run (the mouse, the kitty's reveal, the hint): the tools are
 // inert without the disabled fade.
 // Classes: .tool-bar[data-busy] > button.tool.tool--paw|bulb|mouse[data-pulse][data-empty][data-free][data-off]
@@ -19,7 +19,7 @@
 import { cfg } from '../../app/config';
 import { formatNumber, onLocaleChanged, t } from '../../i18n';
 import { icon } from '../art/sprite';
-import type { View } from '../dom';
+import { trackPress, type View } from '../dom';
 
 export interface ToolBarProps {
   readonly hints: number;
@@ -70,6 +70,7 @@ function tool(kind: ToolKind, onPress: () => void): ToolRefs {
   badge.className = 'tool__badge';
   badge.setAttribute('aria-hidden', 'true');
   btn.append(disc, badge);
+  trackPress(btn); // the press shows on touch too ([data-pressed]; audit B12)
   btn.addEventListener('click', (e) => {
     // A pointer release springs back (§4.5); a key press (detail 0) presses without it.
     if (e.detail > 0) {

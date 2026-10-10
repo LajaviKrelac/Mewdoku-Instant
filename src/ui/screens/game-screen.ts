@@ -347,6 +347,7 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
       reduced: () => current.reducedMotion,
       scoreRect: () => topBar.scoreRect(),
       countTo: (total) => topBar.countTo(total),
+      cellHost: (c) => board.cellElement(c),
     });
     tickers = m.createTickers({ host: gameFx, reduced: () => current.reducedMotion });
     // I-4: ready once the board's lazy motion (the cat sequence, the mouse, the wave) is in too (or failed).

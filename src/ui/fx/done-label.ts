@@ -3,8 +3,9 @@
 // never used) in the display face with a lemon-to-gold vertical gradient and a dark-brown outline that
 // is a little heavier at the bottom, popping under the last changed tile of a finished row, column or
 // colour, then fading. One label per anchor tile (units with the same anchor share it); centred 0.82
-// pitch below the anchor's centre and clamped 2 px inside the viewport; above the tiles, X's and
-// shards, never clipped by the board. aria-hidden (the action's announcement says it).
+// pitch below the anchor's centre and clamped 2 px inside the viewport; a label that would overlap one
+// the same action already placed is left out (audit A-1); above the tiles, X's and shards, never
+// clipped by the board. aria-hidden (the action's announcement says it).
 // Reduced motion: it fades in and out in place (150 ms each, the same hold), no scale.
 // Lazy fx chunk (fx/celebrate.ts). Class: .game-fx > svg.fx-done-label[data-anchor].
 import { cfg, type GameConfig } from '../../app/config';
@@ -20,6 +21,10 @@ export const LABEL_FONT = 24.5;
 export const LABEL_STROKE = 4.4;
 /** The label keeps this far inside the viewport (both measured labels: 2.3 px from the edge). */
 export const LABEL_MARGIN = 2;
+/** The label's box height at s = 1 (≈ 67 × 21.4 s for six glyphs, §4.3); its width is measured. */
+export const LABEL_BOX_H = 21.4;
+/** The pop's peak scale (SCALE below): two labels must not touch even then. */
+const LABEL_PEAK = 1.07;
 
 const SCALE: readonly (readonly [number, number])[] = [
   [0, 0.78],
@@ -56,12 +61,27 @@ export interface DoneLabelFx {
 let gradId = 0;
 const px = (v: number): string => `${Math.round(v * 100) / 100}px`;
 
+/**
+ * Two label boxes (centre, half width) of one action overlap at the pop's peak. Audit A-1: a colour lying
+ * inside one row, completed with that row, has its anchor next to the row's, so two labels about 67 s wide
+ * sat 1 pitch apart and garbled each other ("Donē!one!").
+ */
+export function labelsOverlap(a: { x: number; y: number; half: number }, b: { x: number; y: number; half: number }, s: number): boolean {
+  return Math.abs(a.x - b.x) < (a.half + b.half) * LABEL_PEAK && Math.abs(a.y - b.y) < LABEL_BOX_H * s * LABEL_PEAK;
+}
+
+/**
+ * One label per anchor tile, in the units' order (rows, columns, regions; §4.1). A label whose box would
+ * overlap one already placed by the same action is left out: the one placed first says "Done!" for both
+ * (audit A-1; the recordings only showed far-apart labels).
+ */
 export function playDoneLabels(o: DoneLabelFx): void {
   const doc = o.layer.ownerDocument;
   const vw = doc.documentElement.clientWidth || doc.defaultView?.innerWidth || 0;
   const s = o.s;
   const word = t('fx.done');
   const seen = new Set<number>();
+  const placed: { x: number; y: number; half: number }[] = [];
   for (const a of o.anchors) {
     if (seen.has(a.cell)) continue;
     seen.add(a.cell);
@@ -81,8 +101,9 @@ export function playDoneLabels(o: DoneLabelFx): void {
     defs.innerHTML = `<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--done-top)"/><stop offset="1" style="stop-color:var(--done-bottom)"/></linearGradient>`;
     svg.insertBefore(defs, text);
     svg.dataset.anchor = String(a.cell);
-    // The heavier bottom of the outline: a 1 s drop of the same brown.
-    svg.style.filter = `drop-shadow(0 ${px(s)} 0 var(--done-line))`;
+    // The heavier bottom of the outline: a 1 s drop of the same brown; then a soft warm-grey shadow ≈ 4 px
+    // under it (audit B10, measured under the column-8 label: #E1CBC3 → #E9DDD8 → #EDE7E3 → #F2ECEA → the page).
+    svg.style.filter = `drop-shadow(0 ${px(s)} 0 var(--done-line)) drop-shadow(0 ${px(2 * s)} ${px(2 * s)} rgba(150, 90, 70, 0.5))`;
     svg.style.zIndex = '5';
     svg.style.opacity = '0';
     o.layer.appendChild(svg);
@@ -94,6 +115,12 @@ export function playDoneLabels(o: DoneLabelFx): void {
     }
     const c = labelCenter(a.tile, o.pitch);
     const x = clampCenterX(c.x, half, vw, LABEL_MARGIN);
+    const box = { x, y: c.y, half };
+    if (placed.some((p) => labelsOverlap(p, box, s))) {
+      svg.remove();
+      continue;
+    }
+    placed.push(box);
     o.loop.add({
       delay: 0,
       dur: cfg.fx.unitDone.labelMs,

@@ -24,9 +24,9 @@ import type { E2EHooks } from '../../src/app/boot';
 import type { Puzzle } from '../../src/engine/types';
 import { mouseSeed, pickMouseCells } from '../../src/game/mouse';
 import { defaults } from '../../src/game/save';
-import { pickKittyCell } from '../../src/workers/hint-chunk';
 import { periodKeyAt, pointsRuleFor, runTotal } from '../../src/game/scoring';
 import type { InProgressV2, SaveData } from '../../src/game/types';
+import { kittyReference } from '../fixtures/kitty-reference';
 
 type TestWindow = Window & { __mewdoku?: E2EHooks };
 
@@ -665,7 +665,12 @@ test('24 · the kitty at run 0 on a fresh level: a cat on the fewest-candidates 
   // The lazy fx chunk (points, burst, labels) is prefetched after the game screen mounts.
   await expect(page.locator('.game-fx[data-celebrate="ready"]')).toBeAttached({ timeout: 10_000 });
   const snap = (await boardOf(page)) as BoardSnap;
-  const target = pickKittyCell(puzzleOf(snap), Uint8Array.from(snap.cells));
+  // The expected tile from the rule's independent reference, never the shipped picker (audit A-4): on this
+  // untouched board, the solution cell of the smallest region (ties: the earlier solution cell).
+  expect(snap.cells.every((v) => v === 0)).toBe(true);
+  const target = kittyReference(snap, snap.cells);
+  const sizes = Array.from({ length: snap.n }, (_, g) => snap.regions.filter((x) => x === g).length);
+  expect(sizes[snap.regions[target] as number]).toBe(Math.min(...sizes));
   await expect(points(page)).toBeVisible();
   await pointsShow(page, '0');
   await page.locator('.tool-bar .tool--paw').click();
@@ -726,11 +731,29 @@ test('25 · the hint: ghosts on exactly the open step\'s Empty effect tiles; App
   const snap = (await boardOf(page)) as BoardSnap;
   const added = snap.cells.flatMap((v, i) => (v === 1 && before[i] !== 1 ? [i] : []));
   expect(added).toEqual(ghosts);
-  // One "Done!" label per anchor of the completed units (row 1 at least), within its 720 ms.
+  // One "Done!" label per anchor of the completed units (row 1 at least), within its 720 ms; a label that
+  // would overlap one already placed (an anchor next to another in its row) is left out (audit A-1).
   const units = doneUnits(snap, before, snap.cells);
   expect(units.some((u) => u.kind === 'row' && u.index === 0)).toBe(true);
   const anchors = [...new Set(units.map((u) => u.anchor))].sort((a, b) => a - b);
-  const labels = await page.locator('.game-fx .fx-done-label').evaluateAll((els) => els.map((e) => Number(e.getAttribute('data-anchor'))));
-  expect(labels.sort((a, b) => a - b)).toEqual(anchors);
+  const shown = await page.locator('.game-fx .fx-done-label').evaluateAll((els) =>
+    els.map((e) => {
+      const b = (e.querySelector('text') ?? e).getBoundingClientRect();
+      return { anchor: Number(e.getAttribute('data-anchor')), l: b.left, t: b.top, r: b.right, b: b.bottom };
+    }),
+  );
+  const labels = shown.map((x) => x.anchor).sort((a, b) => a - b);
+  expect(labels.length).toBeGreaterThanOrEqual(1);
+  for (const a of labels) expect(anchors).toContain(a);
+  for (const a of anchors) {
+    if (labels.includes(a)) continue;
+    // left out: a shown label's anchor sits in the same row, at most two tiles away
+    expect(labels.some((b) => Math.floor(b / n) === Math.floor(a / n) && Math.abs((b % n) - (a % n)) <= 2), `anchor ${a} has a label nearby`).toBe(true);
+  }
+  for (let i = 0; i < shown.length; i++)
+    for (let j = i + 1; j < shown.length; j++) {
+      const [p, q] = [shown[i], shown[j]] as [(typeof shown)[number], (typeof shown)[number]];
+      expect(p.r <= q.l || q.r <= p.l || p.b <= q.t || q.b <= p.t, `labels ${p.anchor} and ${q.anchor} do not overlap`).toBe(true);
+    }
   expect(n).toBeGreaterThan(0);
 });

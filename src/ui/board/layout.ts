@@ -52,11 +52,14 @@ export interface GameLayout {
   /** The banner itself: ads.banner.bannerPx with the band, else 0. */
   readonly band: number;
   readonly boardMax: number;
-  /** Card edge → first slot edge, whole px ≥ 3. */
+  /**
+   * Card edge → first slot edge: at least max(3, round(cardPad·s)), plus half of what the whole-px slots leave
+   * of the card (audit B11: the card keeps its width; may be fractional).
+   */
   readonly pad: number;
-  /** Whole px: floor((boardMax − 2·pad) / n), at least 1. */
+  /** Whole px: floor((boardMax − 2·max(3, round(cardPad·s))) / n), at least 1. */
   readonly slot: number;
-  /** slot × n + 2 × pad. */
+  /** slot × n + 2 × pad = boardMax (the card's full width or height), or more on a degenerate viewport. */
   readonly board: number;
   /** gapFor(slot). */
   readonly gap: number;
@@ -72,8 +75,12 @@ const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.m
  *   fixed = every row and gap but the board (toolsToBanner only with the band); card = refWidth − 2·cardMargin
  *   s = clamp(min(min(vw, refWidth·maxScale) / refWidth, (A − B) / (fixed + card)), minScale, maxScale)
  *   boardMax = min(colW − 2·cardMargin·s, A − B − rest·s − barH − rulesH)
- *   pad = max(3, round(cardPad·s)); slot = max(1, floor((boardMax − 2·pad) / n)); gap = gapFor(slot)
+ *   pad0 = max(3, round(cardPad·s)); slot = max(1, floor((boardMax − 2·pad0) / n)); gap = gapFor(slot)
+ *   board = max(boardMax, slot·n + 2·pad0); pad = (board − slot·n) / 2
  *   y0 = safeTop + min(max(0, spare) / 2, topSpareMax·s)
+ * Audit B11 (measured on 9 × 9 in the user's helper recordings): the original keeps the card at its full
+ * 390.67 s and puts what the whole-px slots leave into the padding (7.33–7.7 to the first tile on 9 × 9);
+ * the card no longer shrinks to whole slots (it was 388 on 9 × 9 and 390 on 10 × 10).
  * Degenerate viewports clamp the slot to ≥ 1 px so callers never see 0 or negative sizes.
  */
 export function computeLayout(input: LayoutInput, c: GameConfig = cfg): GameLayout {
@@ -100,9 +107,10 @@ export function computeLayout(input: LayoutInput, c: GameConfig = cfg): GameLayo
   const bar = G.bar * s * (big ? Math.min(G.rulesGrowMax, textScale) : 1);
   const rest = (fixed - G.rules - G.bar) * s; // the rows and gaps that never grow
   const boardMax = Math.max(0, Math.min(colW - 2 * G.cardMargin * s, A - B - rest - bar - rules));
-  const pad = Math.max(3, Math.round(G.cardPad * s));
-  const slot = Math.max(1, Math.floor((boardMax - 2 * pad) / n));
-  const board = slot * n + 2 * pad;
+  const pad0 = Math.max(3, Math.round(G.cardPad * s));
+  const slot = Math.max(1, Math.floor((boardMax - 2 * pad0) / n));
+  const board = Math.max(boardMax, slot * n + 2 * pad0);
+  const pad = (board - slot * n) / 2;
   const spare = A - rest - bar - rules - board - B;
   const top = safeTop + Math.min(Math.max(0, spare) / 2, G.topSpareMax * s);
   const pills = G.pills * s;

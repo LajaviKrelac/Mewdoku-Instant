@@ -642,6 +642,13 @@ describe('Phase 2d.1 symbols (helpers-spec Appendix C)', () => {
     const star = sym('fx-star4');
     expect(star.querySelector('path')?.getAttribute('fill')).toBe('currentColor');
     expect(star.querySelectorAll('circle').length).toBeGreaterThan(0);
+    // audit B5 (helpers-spec §2.5): the body is the lemon core, gold (currentColor) only on the points' outer part
+    const layers = Array.from(star.querySelectorAll('path'));
+    expect(layers).toHaveLength(3);
+    expect(layers[1]?.getAttribute('transform')).toMatch(/^matrix\(0\.82 0 0 0\.82 /);
+    expect(layers[2]?.getAttribute('transform')).toMatch(/^matrix\(0\.64 0 0 0\.64 /);
+    expect(layers[2]?.getAttribute('style')).toBe('fill:var(--star-core,#FFFD79)');
+    expect(layers.every((l) => l.getAttribute('d') === layers[0]?.getAttribute('d'))).toBe(true);
     for (const id of ['fx-shard', 'fx-shard-2', 'fx-shard-3']) {
       const paths = Array.from(sym(id).querySelectorAll('path'));
       expect(paths.map((p) => p.getAttribute('fill')), id).toEqual(['currentColor', '#000', '#fff']);
@@ -652,6 +659,15 @@ describe('Phase 2d.1 symbols (helpers-spec Appendix C)', () => {
   it('art-paw-cap: four toe beans, a main pad, the ticker fill and border along the scallops; art-bolt and art-star in gold with an orange shade or highlight', () => {
     const paw = sym('art-paw-cap');
     expect(paw.querySelectorAll('circle[fill="#FFCD9B"]')).toHaveLength(4);
+    // audit B8 (measured: beans ≈ 7.8 px across, the scallops overhanging the pill ≈ 2 px): the box spans
+    // 2.1 above and below the 29.3 pill; the beans r 3.5 (7 across) inside scallops reaching the box's edges
+    expect(paw.getAttribute('viewBox')).toBe('0 -2.1 28.4 33.5');
+    for (const b of paw.querySelectorAll('circle[fill="#FFCD9B"]')) expect(b.getAttribute('r')).toBe('3.5');
+    const rings = Array.from(paw.querySelectorAll('circle[stroke-width="2.4"]')).map((c) => [Number(c.getAttribute('cx')), Number(c.getAttribute('cy')), Number(c.getAttribute('r')) + 1.2]);
+    expect(rings).toHaveLength(4);
+    expect(Math.min(...rings.map(([, y, r]) => (y as number) - (r as number)))).toBeCloseTo(-2.1, 6); // the top scallop's outer edge
+    expect(Math.max(...rings.map(([, y, r]) => (y as number) + (r as number)))).toBeCloseTo(31.4, 6); // 2.1 below the pill
+    expect(Math.min(...rings.map(([x, , r]) => (x as number) - (r as number)))).toBeCloseTo(0, 6); // the outer edge
     expect(paw.querySelector('radialGradient stop[stop-color="#FFD4A5"]')).not.toBeNull();
     expect(paw.innerHTML).toContain('var(--toast-fill)');
     expect(paw.innerHTML).toContain('var(--toast-line)');

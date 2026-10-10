@@ -285,8 +285,11 @@
 }
 
 /* The flash on the tile, under the cat: white rays from the centre (::before, our drawing: twelve
-   soft rays) and a white wash (the tile lightens strongly by 50 ms, holds a pale tint ≈ 65 % toward
-   white from 200 to 366, its own colour again by 733); the halo spills into the gaps (::after, 33 → 83). */
+   soft rays), a white wash (.cell__wash: the tile lightens strongly by 50 ms, holds a pale tint ≈ 65 %
+   toward white from 200 to 366, its own colour again by 733) and the measured pale-yellow halo in the
+   gaps (::after, 33 → 83). Audit B3: the container itself stays opaque, so the rays (0 → 60 ms) and the
+   halo show at their own opacity (they were children of the fading wash and rendered at ≈ 0–0.18); the
+   rays draw over the wash; the halo is the measured #FEFFEA (no tile colour in it). */
 .cell__flash {
   position: absolute;
   z-index: 1;
@@ -295,9 +298,17 @@
   bottom: var(--ib);
   left: var(--il);
   border-radius: calc(var(--slot) * var(--cell-r, 0.1));
+  isolation: isolate;
+  pointer-events: none;
+}
+
+.cell__wash {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  border-radius: inherit;
   background: #fff;
   opacity: 0;
-  pointer-events: none;
   animation: cat-wash 733ms linear both;
 }
 
@@ -310,6 +321,7 @@
 }
 
 .cell__flash::before {
+  z-index: 1;
   background: radial-gradient(closest-side, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 70%),
     repeating-conic-gradient(rgba(255, 255, 255, 0.95) 0deg 9deg, rgba(255, 255, 255, 0) 13deg 30deg);
   -webkit-mask: radial-gradient(closest-side, rgba(0, 0, 0, 1) 55%, rgba(0, 0, 0, 0) 100%);
@@ -318,9 +330,8 @@
 }
 
 .cell__flash::after {
+  z-index: 0;
   box-shadow: 0 0 calc(var(--slot) * 0.14) calc(var(--slot) * 0.11) rgba(var(--halo-rgb), 0.95);
-  /* the halo takes the tile's colour toward the measured pale yellow (--c: board-cat.ts copies the tile's) */
-  box-shadow: 0 0 calc(var(--slot) * 0.14) calc(var(--slot) * 0.11) color-mix(in srgb, var(--c) 50%, rgb(var(--halo-rgb)));
   animation: cat-halo 200ms linear both;
 }
 

@@ -9,8 +9,9 @@
 //   already compressed, so they count as they are).
 //   Lazy: the engine worker; the core lazy JS (overlays incl. the poses, hint engine, sound recipes,
 //   RPC, generator, win flow UI, ranking, victory, shop UI); the optional lazy JS (the `events`,
-//   `fb-social` and `social-flows` chunks); the lazy CSS (the overlay and events chunks' stylesheets,
-//   loaded with their chunk); each locale chunk. Lazy fonts (latin-ext), event packs, level packs and
+//   `fb-social` and `social-flows` chunks); since 2d.1 the fx chunk (`celebrate`), the board's lazy motion
+//   (`board-mouse`) and the lazy art (`lazy-art`), each its own row, JS and CSS; the lazy CSS (the overlay and
+//   events chunks' stylesheets, loaded with their chunk); each locale chunk. Lazy fonts (latin-ext), event packs, level packs and
 //   daily months are listed, not budgeted. FB builds: ≤ 100 files.
 // Budget history: integration (2026-10-07): CSS 20 → 36 KB; main JS 140 → 170 KB, worker out of the
 // first-load sum. Phase 2 hardening (lead decision, 2026-10-07): main JS 170 → 190 KB, CSS 36 → 40 KB,
@@ -57,6 +58,23 @@
 // 350 → 370 (360.5; 2.6 %, below the sum of its rows' ceilings, 371, so it still binds), + 1 locale
 // 377 → 398 (387.9), gzip 126.5 → 136.5 (132.7), and the lazy CSS 31.2 → 34.6 (33.6, the patterns
 // moved in). Font (16.7 / 17, overlaps removed at 2d) and the lazy JS rows are within and unchanged.
+// Phase 2d.1 (lead decision at integration I-4, 2026-10-10; helpers-spec §7.9, 04 §9, STATUS-2d §11): the three
+// helpers, the tickers and the palette from the user's recordings. The LOAD TIME came first (the FB first run on
+// Slow 4G, uncompressed, STATUS-2b §4 method): everything the first screen does not need went lazy — the fx chunk
+// (celebrate-*: the "+N", the star, the count-up's fx, shards, labels, tickers), the board's lazy motion
+// (board-mouse-*: the mouse, the cat sequence, the wave, with its own stylesheet), the art only those draw
+// (lazy-art-*), the ghost rules into the overlay chunk's stylesheet; and the tutorial coach became its own small
+// chunk (coach-chunk-*, + rich-text-*) that index.html preloads, so a first run no longer waits for the whole
+// overlay chunk (the first run 4.52 → 3.73 s on one machine; STATUS-2d §11). That preload and the 2d.1
+// code in the main bundle (the units, the draw-in, the hint wiring, the pulse rule, the ticker lines, the
+// found head, the count-up, the strings) grew the first load, and the 2d.1 strings the Hindi locale chunk.
+// Every row over was set to the largest build's measured value + about 3 %: main JS 307 → 332 (322.5,
+// FBIG e2e), CSS 46 → 49.3 (47.9, the coach's stylesheet now preloaded), index.html 1 → 1.14 (1.108 FBIG, the
+// coach preload links), first load 370 → 398 (388.2; 2.5 %, below the sum of its rows' ceilings, 399.4, so it
+// still binds), + 1 locale 398 → 429 (416.7), gzip 136.5 → 148.5 (144.3), each locale chunk 28 → 29.3 (28.5,
+// hi). New rows for the new lazy chunks (measured + about 3 %): the fx chunk JS 14.8 (14.4) and CSS 2.73 (2.65),
+// the board's lazy motion JS 3.8 (3.7) and CSS 6.4 (6.2), the lazy art 4.2 (4.06). The core lazy JS (66.7 / 74)
+// and the lazy CSS (33.5 / 34.6) are within and unchanged.
 //
 // Usage: tsx scripts/size-check.ts [distDir …] [--json]
 //   No dirs → every existing one of dist/web, dist/fbig, dist/release-web and dist/release-fbig. A dir
@@ -106,30 +124,43 @@ export const LOCALE_CHUNK = /^assets\/locale-[A-Za-z-]+-[^/]*\.js$/;
  * In matching order: a file is counted by the first budget it matches. Ceilings (2b integration,
  * 2026-10-09, re-set after the review fixes; main JS and the two first-load totals re-set at 2c.1,
  * 2026-10-10; main JS, CSS, the three first-load totals and the lazy CSS re-set at 2d I-4,
- * 2026-10-10): the largest measured build (FBIG for JS) plus about 3 % (04 §9).
+ * 2026-10-10; main JS, CSS, index.html, the three first-load totals and the locale chunk re-set, and the
+ * fx-chunk, board-motion and lazy-art rows added at 2d.1 I-4, 2026-10-10): the largest measured build (FBIG
+ * for JS) plus about 3 % (04 §9).
  */
 export const BUDGETS: readonly SizeBudget[] = [
-  { label: 'Main JS', pattern: /^assets\/index-[^/]*\.js$/, maxBytes: 307 * KB, fromHtml: 'js', firstLoad: true },
-  // Only the stylesheet index.html links; the lazy chunks' stylesheets are the 'Lazy CSS' row.
-  { label: 'CSS', pattern: /^$/, maxBytes: 46 * KB, fromHtml: 'css', firstLoad: true },
+  // The entry and the modulepreload chunks index.html links (since 2d.1 I-4: core-*, and the tutorial coach's
+  // coach-chunk-* and rich-text-*, preloaded for a first run).
+  { label: 'Main JS', pattern: /^assets\/index-[^/]*\.js$/, maxBytes: 332 * KB, fromHtml: 'js', firstLoad: true },
+  // Only the stylesheets index.html links (the first-load sheet and, since 2d.1 I-4, the coach chunk's); the lazy
+  // chunks' stylesheets are the lazy CSS rows.
+  { label: 'CSS', pattern: /^$/, maxBytes: 49.3 * KB, fromHtml: 'css', firstLoad: true },
   // The latin-ext face (tr, pl) is fetched only when such glyphs appear (unicode-range, phase2b §6.6).
   { label: 'Font (lazy)', pattern: /-ext-[^/]*\.woff2$/, maxBytes: LISTED },
   { label: 'Font', pattern: /\.woff2$/, maxBytes: 17 * KB, firstLoad: true },
-  { label: 'index.html', pattern: /^index\.html$/, maxBytes: 1 * KB, firstLoad: true },
+  { label: 'index.html', pattern: /^index\.html$/, maxBytes: 1.14 * KB, firstLoad: true },
   { label: 'Worker JS (lazy)', pattern: /^assets\/[^/]*worker[^/]*\.js$/, maxBytes: 18.5 * KB },
-  { label: 'Locale chunk (each)', pattern: LOCALE_CHUNK, maxBytes: 28 * KB, perFile: true },
+  { label: 'Locale chunk (each)', pattern: LOCALE_CHUNK, maxBytes: 29.3 * KB, perFile: true },
   { label: 'Lazy JS (optional)', pattern: /^assets\/(?:events|fb-social|social-flows)-[^/]*\.js$/, maxBytes: 29.3 * KB },
+  // Phase 2d.1 (I-4): the fx chunk (src/ui/fx/celebrate.ts), prefetched at idle after the first game screen mounts.
+  { label: 'Lazy JS (fx chunk)', pattern: /^assets\/celebrate-[^/]*\.js$/, maxBytes: 14.8 * KB },
+  // Phase 2d.1 (I-4): the board's lazy motion (src/ui/board/board-mouse.ts: the mouse, the cat sequence, the wave).
+  { label: 'Lazy JS (board motion)', pattern: /^assets\/board-mouse-[^/]*\.js$/, maxBytes: 3.8 * KB },
+  // Phase 2d.1: the symbols only those two chunks draw (src/ui/art/lazy-art.ts), split out because both import it.
+  { label: 'Lazy JS (lazy art)', pattern: /^assets\/lazy-art-[^/]*\.js$/, maxBytes: 4.2 * KB },
   { label: 'Lazy JS (core)', pattern: /^assets\/[^/]*\.js$/, maxBytes: 74 * KB },
+  { label: 'Lazy CSS (fx chunk)', pattern: /^assets\/celebrate-[^/]*\.css$/, maxBytes: 2.73 * KB },
+  { label: 'Lazy CSS (board motion)', pattern: /^assets\/board-mouse-[^/]*\.css$/, maxBytes: 6.4 * KB },
   { label: 'Lazy CSS', pattern: /^assets\/[^/]*\.css$/, maxBytes: 34.6 * KB },
   { label: 'Event packs', pattern: /^assets\/[a-z][a-z-]*-\d{4}-[^/]*\.json$/, maxBytes: LISTED },
 ];
 
 /** Everything index.html loads before the first screen, English (the firstLoad rows). */
-export const FIRST_LOAD_MAX = 370 * KB;
+export const FIRST_LOAD_MAX = 398 * KB;
 /** The first load plus the largest non-English locale chunk (phase2b §11). */
-export const FIRST_LOAD_LOCALE_MAX = 398 * KB;
+export const FIRST_LOAD_LOCALE_MAX = 429 * KB;
 /** The first load gzipped (woff2 as is): what players download from a compressing host. */
-export const FIRST_LOAD_GZIP_MAX = 136.5 * KB;
+export const FIRST_LOAD_GZIP_MAX = 148.5 * KB;
 export const FB_MAX_FILES = 100;
 
 interface FileEntry {

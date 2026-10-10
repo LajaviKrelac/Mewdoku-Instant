@@ -13,45 +13,16 @@ import { CellState, type Puzzle } from '../../../src/engine/types';
 import * as chunk from '../../../src/workers/hint-chunk';
 import { pickKittyCell } from '../../../src/workers/hint-chunk';
 import { P5, P9C, SOL5, SOL9C } from '../game/fixtures';
+import { kittyReference } from '../../fixtures/kitty-reference';
 
 const isSolution = (p: Puzzle, i: number): boolean => p.solution[Math.floor(i / p.n)] === i % p.n;
-const isCat = (v: number | undefined): boolean => v === CellState.Cat || v === CellState.Given;
-
 /**
- * An independent reference of the rule: a cell is a candidate when it is not a cat, not Wrong, and not
- * attacked by any cat on the board (same row, column or region, or touching, diagonals included).
+ * An independent reference of the rule (tests/fixtures/kitty-reference.ts, shared with the e2e since audit A-4):
+ * a cell is a candidate when it is not a cat, not Wrong, and not attacked by any cat on the board (same row,
+ * column or region, or touching, diagonals included).
  */
-function reference(p: Puzzle, cells: Readonly<Uint8Array>): number {
-  const n = p.n;
-  const cats: number[] = [];
-  for (let i = 0; i < n * n; i++) if (isCat(cells[i])) cats.push(i);
-  const attacked = (i: number): boolean =>
-    cats.some((c) => {
-      const [r1, c1, r2, c2] = [Math.floor(i / n), i % n, Math.floor(c / n), c % n];
-      return r1 === r2 || c1 === c2 || p.regions[i] === p.regions[c] || (Math.abs(r1 - r2) <= 1 && Math.abs(c1 - c2) <= 1);
-    });
-  const count = new Map<number, number>();
-  const done = new Set(cats.map((c) => p.regions[c]));
-  for (let i = 0; i < n * n; i++) {
-    const g = p.regions[i] as number;
-    if (done.has(g) || isCat(cells[i]) || cells[i] === CellState.Wrong || attacked(i)) continue;
-    count.set(g, (count.get(g) ?? 0) + 1);
-  }
-  let best = -1;
-  let bestCount = Infinity;
-  for (let r = 0; r < n; r++) {
-    const cell = r * n + (p.solution[r] as number);
-    const g = p.regions[cell] as number;
-    if (done.has(g)) continue;
-    const c = count.get(g) ?? 0;
-    if (c < bestCount) {
-      best = cell;
-      bestCount = c;
-    }
-  }
-  if (best < 0) throw new Error('no cat-less region');
-  return best;
-}
+const reference = (p: Puzzle, cells: Readonly<Uint8Array>): number => kittyReference(p, cells);
+const isCat = (v: number | undefined): boolean => v === CellState.Cat || v === CellState.Given;
 
 describe('pickKittyCell (2d.1 §2.3): fewest candidates', () => {
   it('our 9 × 9 with a one-tile region in the top-right corner: that tile (forced at once)', () => {

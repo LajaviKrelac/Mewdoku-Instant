@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cfg } from '../../../src/app/config';
 import { createCelebrate, type CelebrateContext } from '../../../src/ui/fx/celebrate';
 import { SPRITE_ID } from '../../../src/ui/art/sprite';
-import { SHARD_GRAVITY, shardAt, shardPlan } from '../../../src/ui/fx/cat-burst';
+import { SHARD_GRAVITY, SHARD_UNDER_MS, shardAt, shardPlan } from '../../../src/ui/fx/cat-burst';
 import { createFxLoop, keyed, seeded } from '../../../src/ui/fx/fx-loop';
 import {
   bezierAt,
@@ -219,6 +219,14 @@ describe('playing POINTS (celebrate.play)', () => {
     expect(trail[0]?.querySelector('path')?.getAttribute('d')).toBe(SPARK_PATH);
     expect(trail[0]?.getAttribute('aria-hidden')).toBe('true');
     expect((layer.querySelector('.fx-star__tail') as HTMLElement).style.transform).toMatch(/rotate\(-?\d+deg\) scaleX\(1(\.\d+)?\)/);
+    // audit B5: the trail's sparkles (4–8 s px, cream) sit over the streak (its own layer, z 2) and under the star (z 4)
+    const tailEl = layer.querySelector('.fx-star__tail') as HTMLElement;
+    expect(tailEl.parentElement).toBe(layer);
+    expect(tailEl.style.zIndex).toBe('2');
+    expect((trail[0] as SVGSVGElement).style.zIndex).toBe('3');
+    expect((layer.querySelector('.fx-star') as HTMLElement).style.zIndex).toBe('4');
+    expect(parseFloat((trail[0] as SVGSVGElement).style.width)).toBeGreaterThanOrEqual(4);
+    expect(trail[0]?.querySelector('path')?.getAttribute('fill')).toBe('#fff6c8');
     vi.advanceTimersByTime(1330 - 840 - 20);
     expect(onLand).not.toHaveBeenCalled();
     vi.advanceTimersByTime(40);
@@ -229,6 +237,27 @@ describe('playing POINTS (celebrate.play)', () => {
     expect(layer.querySelector('.fx-star__tail')).not.toBeNull();
     expect(layer.querySelector('.fx-burst')).not.toBeNull();
     expect(layer.querySelectorAll('.fx-burst svg.fx-spark')).toHaveLength(10);
+    // audit B6: no glow over the digits in the fx layer (the bar's halo sits behind them); the sparkles all round
+    expect(layer.querySelector('.fx-burst__glow')).toBeNull();
+    const pos = Array.from(layer.querySelectorAll<SVGSVGElement>('.fx-burst svg.fx-spark')).map((el) => {
+      const m = /translate\(([-\d.]+)px,\s*([-\d.]+)px\)/.exec(el.style.transform);
+      return m ? [Number(m[1]), Number(m[2])] : [NaN, NaN];
+    });
+    vi.advanceTimersByTime(250); // every sparkle is out by now
+    const placed = Array.from(layer.querySelectorAll<SVGSVGElement>('.fx-burst svg.fx-spark')).slice(3).map((el) => {
+      const m = /translate\(([-\d.]+)px,\s*([-\d.]+)px\)/.exec(el.style.transform);
+      return m ? [Number(m[1]), Number(m[2])] : [NaN, NaN];
+    });
+    expect(pos).toHaveLength(10);
+    expect(placed.filter(([x]) => (x as number) < 0).length).toBeGreaterThanOrEqual(2); // left of the number
+    expect(placed.filter(([x]) => (x as number) > 0).length).toBeGreaterThanOrEqual(2); // right
+    // the seven outer ones: no 90° quadrant holds more than three of them
+    const quad = [0, 0, 0, 0];
+    for (const [x, y] of placed) {
+      const q = ((x as number) >= 0 ? 0 : 1) + ((y as number) >= -9 ? 0 : 2);
+      quad[q] = (quad[q] ?? 0) + 1;
+    }
+    expect(Math.max(...quad)).toBeLessThanOrEqual(3);
     vi.advanceTimersByTime(100);
     expect(layer.querySelector('.fx-star')).toBeNull();
     expect(layer.querySelector('svg.fx-plus')).toBeNull(); // removed at 916
@@ -267,9 +296,20 @@ describe('the cat burst (celebrate.play(CAT_PLACED), §2.4 screen layer)', () =>
       const v = Math.hypot(sh.vx, sh.vy);
       expect(v).toBeGreaterThanOrEqual(0.3 - 1e-9);
       expect(v).toBeLessThanOrEqual(0.5 + 1e-9);
-      expect(sh.size).toBeGreaterThanOrEqual(9);
-      expect(sh.size).toBeLessThanOrEqual(22);
+      // audit B4: drawn 9–22 px (the art fills ≈ 0.83 of its box, so the box is 1.2 × that)
+      expect(sh.size).toBeGreaterThanOrEqual(9 * 1.2 - 1e-9);
+      expect(sh.size).toBeLessThanOrEqual(22 * 1.2 + 1e-9);
+      // audit B4: they start 0.25–0.5 T out from the centre, along their way (measured: past the tile's edge by +16)
+      const r0 = Math.hypot(sh.x, sh.y);
+      expect(r0).toBeGreaterThanOrEqual(0.25 * 39 - 1e-9);
+      expect(r0).toBeLessThanOrEqual(0.5 * 39 + 1e-9);
+      expect(sh.x * sh.vx + sh.y * sh.vy).toBeGreaterThan(0);
+      expect(Math.hypot(shardAt(sh, 16, 1).x, shardAt(sh, 16, 1).y)).toBeGreaterThan(0.25 * 39 + 0.3 * 16 - 1);
+      // near full size from the first frame (≥ 0.9), full by 50 ms
+      expect(shardAt(sh, 0, 1).scale).toBeGreaterThanOrEqual(0.9);
+      expect(shardAt(sh, 50, 1).scale).toBe(1);
     }
+    expect(Math.max(...plan.slice(0, 3).map((sh) => sh.size))).toBeGreaterThan(16 * 1.2); // the first few are the big ones
     expect(plan.filter((sh) => sh.vy < 0).length).toBeGreaterThanOrEqual(7);
     const sh = { x: 0, y: 0, vx: 0, vy: 0, size: 10, rot: 0, spin: 0, art: 'fx-shard' as const };
     expect(shardAt(sh, 1000, 1).y).toBeCloseTo(0.5 * SHARD_GRAVITY * 1000 * 1000, 6); // 450 px after 1 s
@@ -294,6 +334,39 @@ describe('the cat burst (celebrate.play(CAT_PLACED), §2.4 screen layer)', () =>
     expect(layer.querySelector('.fx-light, .fx-twinkle')).toBeNull();
     expect(layer.children.length).toBe(cfg.fx.catPlaced.shards);
     vi.advanceTimersByTime(cfg.fx.catPlaced.shardLifeMs + 20);
+    expect(layer.children.length).toBe(0);
+  });
+
+  it('audit B4: with the cat\'s cell, the shards start in it, under the cat (before its SVG) and over the flash, then move to the fx layer at SHARD_UNDER_MS', () => {
+    const layer = document.createElement('div');
+    document.body.appendChild(layer);
+    const cell = document.createElement('button');
+    const flash = document.createElement('span');
+    flash.className = 'cell__flash';
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    cell.append(flash, svg);
+    document.body.appendChild(cell);
+    const fx = createCelebrate(layer, ctx({ cellHost: () => cell }));
+    fx.play({ type: 'CAT_PLACED', cell: 8, source: 'kitty' });
+    const under = cell.querySelector(':scope > .fx-shards-under') as HTMLElement;
+    expect(under).not.toBeNull();
+    expect(under.getAttribute('aria-hidden')).toBe('true');
+    expect(under.nextElementSibling).toBe(svg); // the cat (the cell's SVG) paints after the shards
+    expect(under.previousElementSibling).toBe(flash); // the flash under them
+    expect(under.style.zIndex).toBe('2');
+    expect(under.querySelectorAll('svg.fx-shard')).toHaveLength(cfg.fx.catPlaced.shards);
+    expect(layer.querySelectorAll('svg.fx-shard')).toHaveLength(0);
+    expect(SHARD_UNDER_MS).toBe(150);
+    vi.advanceTimersByTime(SHARD_UNDER_MS + 20);
+    expect(cell.querySelector('.fx-shards-under, svg.fx-shard')).toBeNull();
+    expect(layer.querySelectorAll('svg.fx-shard')).toHaveLength(cfg.fx.catPlaced.shards);
+    vi.advanceTimersByTime(cfg.fx.catPlaced.shardLifeMs);
+    expect(layer.children.length).toBe(0);
+    // cancelled early (a props render): nothing is left in the cell
+    fx.play({ type: 'CAT_PLACED', cell: 8, source: 'player' });
+    expect(cell.querySelector('.fx-shards-under')).not.toBeNull();
+    fx.cancel();
+    expect(cell.querySelector('.fx-shards-under, svg.fx-shard')).toBeNull();
     expect(layer.children.length).toBe(0);
   });
 });

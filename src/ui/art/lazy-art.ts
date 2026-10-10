@@ -5,7 +5,8 @@
 //   move the eyes and the mouth: the head, the bead eyes (they shift for a glance), a lid pair in the
 //   head's grey with a closed-eye line (scaled down for a blink, part way for the grin's narrowed eyes) and
 //   an open, grinning mouth (teeth, tongue);
-// - fx-star4: a four-point star with concave sides and a round soft core (the points star, G3);
+// - fx-star4: a plump four-point star with concave sides, a lemon body, gold tips and a round soft core
+//   (the points star, G3; audit B5);
 // - fx-shard, fx-shard-2, fx-shard-3: three chunky crystal bits, each a lit face in currentColor (the
 //   tile's colour), a shaded face (the same colour under 18 % black, i.e. × 0.82) and a small highlight;
 // - (integration I-4, moved from helper-art.ts) the tickers' art: art-paw-cap, a ticker pill's
@@ -42,11 +43,23 @@ function mouseGrin(): string {
   );
 }
 
-/** A four-point star with concave sides and a round soft core (24 grid); the core reads --star-core. */
+/** The star's outline (24 grid): four points with gently concave sides, plump arms (audit B5). */
+const STAR4 = 'M12 .8C13.6 7.4 16.6 10.4 23.2 12 16.6 13.6 13.6 16.6 12 23.2 10.4 16.6 7.4 13.6.8 12 7.4 10.4 10.4 7.4 12 .8Z';
+/** The same outline scaled by k about the centre (12, 12). */
+const star4At = (k: number, fill: string, extra = ''): string =>
+  `<path d="${STAR4}" transform="matrix(${k} 0 0 ${k} ${Math.round(12 * (1 - k) * 100) / 100} ${Math.round(12 * (1 - k) * 100) / 100})" ${fill}${extra}/>`;
+
+/**
+ * A plump four-point star with concave sides and a round soft core (24 grid). Audit B5 (helpers-spec §2.5,
+ * measured: a lemon body #FFFD78 with #EBD969–#FFF674 6 px out along an arm): the body is --star-core, a
+ * lighter lemon ring toward the tips, and currentColor (gold) only on the outer fifth of each point.
+ */
 function star4(): string {
   return (
-    `<path d="M12 .8C12.9 8.4 15.6 11.1 23.2 12 15.6 12.9 12.9 15.6 12 23.2 11.1 15.6 8.4 12.9.8 12 8.4 11.1 11.1 8.4 12 .8Z" fill="currentColor"/>` +
-    `<circle cx="12" cy="12" r="4.2" style="fill:var(--star-core,#FFFD79)" opacity=".7"/><circle cx="12" cy="12" r="2.6" style="fill:var(--star-core,#FFFD79)"/>`
+    `<path d="${STAR4}" fill="currentColor"/>` +
+    star4At(0.82, 'fill="#FFF35C"') +
+    star4At(0.64, 'style="fill:var(--star-core,#FFFD79)"') +
+    `<circle cx="12" cy="12" r="4.2" style="fill:var(--star-core,#FFFD79)" opacity=".7"/><circle cx="12" cy="12" r="2.6" fill="#FFFFE6"/>`
   );
 }
 
@@ -56,22 +69,29 @@ function shard(outline: string, shade: string, hi: string): string {
 }
 
 /**
- * The paw cap (30 × 31, the pill's height): four toe beans in an arc along the outer edge, each inside a
- * scallop of the outline (circles of r 4.3 at (12.4, 4.9), (7, 11.4), (7, 19.6), (12.4, 26.1), the first and
- * last touching the pill's edges), the pill's fill and border following the scallops, a large main pad.
+ * The paw cap (28.4 × 33.5 in s units, the pill 29.3 tall from y 0, overhanging 2.1 above and below; audit B8,
+ * measured on still-a: the toe beans ≈ 7.8 px across form the pill's outer edge and overhang it ≈ 2 px): four
+ * toe beans (r 3.5) in an arc, each in a scallop of the outline (outer radius 5.4: the first and last 2.1
+ * past the pill, the middle two on the outer edge), the pill's fill behind them up to the box's end, the
+ * 1.2 border along the union of the scallops and the pill's top and bottom (y 0–1.2, 28.1–29.3, as the CSS
+ * body's border it meets), and a large main pad. Our drawing, from those words and numbers.
  */
 function pawCap(): string {
-  const edge = 'M30 .6H12.4A4.3 4.3 0 0 0 9.09 7.64A4.3 4.3 0 1 0 5.7 15.5A4.3 4.3 0 1 0 9.09 23.36A4.3 4.3 0 0 0 12.4 30.4H30';
-  const bean = (cx: number, cy: number): string => `<circle cx="${cx}" cy="${cy}" r="2.8" fill="#FFCD9B"/>`;
+  const scallops: readonly (readonly [number, number])[] = [
+    [9.5, 3.3],
+    [5.4, 10.87],
+    [5.4, 18.43],
+    [9.5, 26],
+  ];
+  // the border: every shape stroked 2.4 wide, then the same shapes filled over the inner half
+  const shapes = (paint: string): string =>
+    scallops.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="4.2" ${paint}/>`).join('') + `<rect x="8" y="1.2" width="21" height="26.9" ${paint}/>`;
   return (
     `<defs><radialGradient id="paw-pad" cx=".5" cy=".5" r=".5"><stop offset=".5" stop-color="#FFD4A5"/><stop offset="1" stop-color="#FFE1B5" stop-opacity="0"/></radialGradient></defs>` +
-    `<path d="${edge}" style="fill:var(--toast-fill)"/>` +
-    bean(12.8, 5.4) +
-    bean(7.6, 11.6) +
-    bean(7.6, 19.4) +
-    bean(12.8, 25.6) +
-    `<ellipse cx="20.4" cy="15.5" rx="7" ry="8.6" fill="url(#paw-pad)"/>` +
-    `<path d="${edge}" fill="none" style="stroke:var(--toast-line)" stroke-width="1.2" stroke-linejoin="round"/>`
+    shapes('fill="none" style="stroke:var(--toast-line)" stroke-width="2.4"') +
+    shapes('style="fill:var(--toast-fill)"') +
+    scallops.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="3.5" fill="#FFCD9B"/>`).join('') +
+    `<ellipse cx="19.4" cy="14.65" rx="7" ry="8.6" fill="url(#paw-pad)"/>`
   );
 }
 
@@ -93,7 +113,7 @@ function star5(): string {
 /** The tickers' art (moved here from helper-art.ts at I-4: only the lazy fx chunk's tickers draw it). */
 function tickerArt(): string[] {
   return [
-    sym('art-paw-cap', '0 0 30 31', pawCap()),
+    sym('art-paw-cap', '0 -2.1 28.4 33.5', pawCap()),
     sym(
       'art-bolt',
       '0 0 24 24',

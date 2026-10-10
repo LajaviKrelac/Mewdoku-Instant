@@ -3,16 +3,16 @@
 // us): an orange "+N" with a white outline pops one pitch above the cat's tile; at fx.points.starAtMs a
 // yellow four-point star (G2's fx-star4) is born on its baseline, then flies to the Score on a quadratic
 // Bézier (parameter linear in time over fx.points.flightMs) leaving a trail of small sparkles; it lands
-// as a burst of sparkles with a warm glow around the number, and the game bar counts up (onLand). All
+// as a burst of sparkles around the number, and the game bar counts up (onLand) with its halo. All
 // of it is aria-hidden; the number and its announcement take the total at once elsewhere.
 // Our drawing of the look: the star's soft glow trails it as a tapering comet streak along the path
 // (stretched up to 1.6× while fast, anchored at the star so it reads as a tail); the trail and the burst
-// and the burst are plump four-point sparkles of ours (a lemon body with a cream heart and a soft glow);
-// the burst's glow is a bright white-to-yellow disc over the digits that peaks while they count.
+// are plump four-point sparkles of ours (a lemon or cream body with a light heart and a soft
+// glow); the burst's halo is the game bar's, a near-white disc behind the digits while they count (audit B6).
 // Reduced motion: the "+N" fades in and out in place (fx.levelPoints.reducedPlusInMs / OutMs), nothing
 // else; the Score changed at once.
-// Lazy fx chunk (fx/celebrate.ts). Classes: .game-fx > svg.fx-plus, .fx-star (> .fx-star__glow +
-// .fx-star__tail + svg), .fx-spark (trail), .fx-burst (> .fx-burst__glow, .fx-spark).
+// Lazy fx chunk (fx/celebrate.ts). Classes: .game-fx > svg.fx-plus, .fx-star__tail, .fx-star (> .fx-star__glow
+// + svg), .fx-spark (trail), .fx-burst (> .fx-spark).
 import { cfg, type GameConfig } from '../../app/config';
 import { fxEl, fxText, fxUse, keyed, seeded, SVG_NS, type FxLoop } from './fx-loop';
 
@@ -193,17 +193,19 @@ function playStar(o: PointsFx, plus: Pt): void {
     `left:50%;top:50%;width:${px(size * 1.5)};height:${px(size * 1.5)};margin:${px(-size * 0.75)} 0 0 ${px(-size * 0.75)};border-radius:50%;` +
       'background:radial-gradient(closest-side,rgba(255,252,170,.95),rgba(255,226,70,.55) 50%,rgba(255,214,80,0))',
   );
-  // The comet tail: the glow's length 1.5 × size, half as thick, its head at the star's centre and its
-  // body behind it along the path (rotate + scaleX from the head); bright at the star, clear at the end.
-  const tl = size * 1.5;
+  // The comet tail: 2.2 × the star's size long (audit B5: the measured streak is long), 0.7 × as thick, its
+  // head at the star's centre and its body behind it along the path (rotate + scaleX from the head); bright
+  // at the star, clear at the end. Its own element under the trail's sparkles (z 2 < 3), which sit under the
+  // star (z 4): the sparkles show over the streak, as measured, not hidden under it.
+  const tl = size * 2.2;
   const tail = fxEl(
     doc,
     'fx-star__tail',
-    `left:50%;top:50%;width:${px(tl)};height:${px(size * 0.7)};margin:${px(-size * 0.35)} 0 0 ${px(-tl)};border-radius:50%;` +
+    `z-index:2;width:${px(tl)};height:${px(size * 0.7)};margin:${px(-size * 0.35)} 0 0 ${px(-tl)};border-radius:50%;` +
       `transform-origin:100% 50%;opacity:0;background:linear-gradient(to left,#fffbb0,rgba(255,236,90,.9) 45%,rgba(255,220,80,0))`,
   );
   const art = fxUse(doc, 'fx-star__art', 'fx-star4', 'width:100%;height:100%;color:var(--gold);--star-core:#fffd79');
-  star.append(tail, glow, art);
+  star.append(glow, art);
   let p2: Pt = p0;
   let box: DOMRect | null = null;
   let ctl: Pt = p0;
@@ -213,14 +215,14 @@ function playStar(o: PointsFx, plus: Pt): void {
   const place = (p: Pt, scale: number, angle: number, stretch: number): void => {
     star.style.transform = `translate(${px(p.x)},${px(p.y)}) scale(${Math.round(scale * 1000) / 1000})`;
     tail.style.opacity = stretch > 1 ? '1' : '0';
-    tail.style.transform = `rotate(${Math.round(angle)}deg) scaleX(${Math.round(stretch * 100) / 100})`;
+    tail.style.transform = `translate(${px(p.x)},${px(p.y)}) rotate(${Math.round(angle)}deg) scaleX(${Math.round(stretch * 100) / 100})`;
   };
   let landed = false;
   o.loop.add({
     delay: T.born,
     dur: T.land - T.born,
     frame: (t) => {
-      if (!star.isConnected) o.layer.appendChild(star);
+      if (!star.isConnected) o.layer.append(tail, star);
       star.style.opacity = '1';
       if (t < T.fly - T.born) {
         // Born on the "+N": 5 → 22 s px by +67 ms.
@@ -252,12 +254,12 @@ function playStar(o: PointsFx, plus: Pt): void {
     end: (cancelled) => {
       if (cancelled || landed) {
         star.remove();
+        tail.remove();
         return;
       }
       landed = true;
       // The star goes into the number: its tail runs on into it and fades over ≈ 5 frames.
-      art.remove();
-      glow.remove();
+      star.remove();
       const from = tail.style.transform.replace(/scaleX\([^)]*\)/, '');
       o.loop.add({
         delay: 0,
@@ -267,7 +269,7 @@ function playStar(o: PointsFx, plus: Pt): void {
           tail.style.opacity = String(Math.round((1 - k) * 1000) / 1000);
           tail.style.transform = `${from}scaleX(${Math.round((STREAK_MAX - 0.9 * k) * 100) / 100})`;
         },
-        end: () => star.remove(),
+        end: () => tail.remove(),
       });
       playBurst(o, p2, box, rand);
       o.onLand();
@@ -280,8 +282,8 @@ export const SPARK_PATH = 'M12 0Q14.9 9.1 24 12Q14.9 14.9 12 24Q9.1 14.9 0 12Q9.
 /** Its heart: the same shape at 0.5 around the centre. */
 const SPARK_CORE = 'M12 6Q13.45 10.55 18 12Q13.45 13.45 12 18Q10.55 13.45 6 12Q10.55 10.55 12 6Z';
 
-/** A four-point sparkle (lemon body, `core` heart, a soft glow), centred on its translate point. */
-function spark(doc: Document, size: number, core: string, glow: number): SVGSVGElement {
+/** A four-point sparkle (`body`, a `core` heart, a soft glow), centred on its translate point. */
+function spark(doc: Document, size: number, core: string, glow: number, bodyFill = '#ffe54a'): SVGSVGElement {
   const svg = doc.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('class', 'fx-spark');
   svg.setAttribute('aria-hidden', 'true');
@@ -291,7 +293,7 @@ function spark(doc: Document, size: number, core: string, glow: number): SVGSVGE
     `margin:${px(-size / 2)} 0 0 ${px(-size / 2)};opacity:0;filter:drop-shadow(0 0 ${px(glow)} rgba(255,226,60,.85))`;
   const body = doc.createElementNS(SVG_NS, 'path');
   body.setAttribute('d', SPARK_PATH);
-  body.setAttribute('fill', '#ffe54a');
+  body.setAttribute('fill', bodyFill);
   const heart = doc.createElementNS(SVG_NS, 'path');
   heart.setAttribute('d', SPARK_CORE);
   heart.setAttribute('fill', core);
@@ -299,13 +301,17 @@ function spark(doc: Document, size: number, core: string, glow: number): SVGSVGE
   return svg;
 }
 
-/** A trail sparkle (3–7 s px) left behind the star: it holds a moment, then shrinks and fades by ≈ 150 ms. */
+/**
+ * A trail sparkle left behind the star (measured 3–7 px; audit B5: 4–8 s px, a pale cream body with a white
+ * heart, so it reads over the yellow streak as the recording's distinct sparkles do): it holds a moment,
+ * then shrinks and fades by ≈ 150 ms. Above the tail (z 3 > 2), under the star (z 4).
+ */
 function trailDot(o: PointsFx, p: Pt, rand: () => number): void {
   const doc = o.layer.ownerDocument;
-  const size = (3 + rand() * 4) * o.s;
+  const size = (4 + rand() * 4) * o.s;
   const jx = (rand() - 0.5) * 7 * o.s;
   const jy = (rand() - 0.5) * 7 * o.s;
-  const dot = spark(doc, size, '#fff', 1.2 * o.s);
+  const dot = spark(doc, size, '#fff', 1.6 * o.s, '#fff6c8');
   dot.style.zIndex = '3';
   o.layer.appendChild(dot);
   o.loop.add({
@@ -322,23 +328,17 @@ function trailDot(o: PointsFx, p: Pt, rand: () => number): void {
 
 /**
  * The landing burst around the Score: 10 four-point sparkles (4–15 s px; the first three, the big ones,
- * over the digits) spread up to 30 s px outside the number and its "Score" label, drifting outward; a
- * bright warm glow over the digits.
+ * over the digits and the label) spread evenly all round the number and its "Score" label, up to 30 s px
+ * outside them, drifting outward. Audit B6 (measured: a near-white halo behind the number and the label,
+ * sparkles left, right and below as well as above): the halo is the game bar's own ([data-counting] on the
+ * Score, hud.css), behind the digits, so it no longer washes them yellow; the sparkles' angles are spaced
+ * round the box instead of drawn at random.
  */
 function playBurst(o: PointsFx, at: Pt, num: DOMRect | null, rand: () => number): void {
   const doc = o.layer.ownerDocument;
   const s = o.s;
   const dur = cfg.fx.points.burstMs;
   const burst = fxEl(doc, 'fx-burst', `z-index:4;transform:translate(${px(at.x)},${px(at.y)})`);
-  // A bright disc over the digits: white at its heart, warm yellow, clear at its edge.
-  const g = 52 * s;
-  const glow = fxEl(
-    doc,
-    'fx-burst__glow',
-    `width:${px(g)};height:${px(g * 0.8)};margin:${px(-g * 0.4)} 0 0 ${px(-g / 2)};border-radius:50%;` +
-      'background:radial-gradient(closest-side,#fff,rgba(255,250,190,.95) 30%,rgba(255,228,90,.65) 62%,rgba(255,214,80,0))',
-  );
-  burst.appendChild(glow);
   // The number and the label above it, relative to the number's centre (s units when unmeasured).
   const hw = Math.max(num ? num.width / 2 : 0, 26 * s); // at least the label's half width
   const top = -(num ? num.height / 2 : 12 * s) - 18 * s;
@@ -354,13 +354,16 @@ function playBurst(o: PointsFx, at: Pt, num: DOMRect | null, rand: () => number)
   const sparks: Spark[] = [];
   const midY = (top + bottom) / 2;
   const hh = (bottom - top) / 2;
+  const turn = rand() * Math.PI * 2;
   for (let i = 0; i < 10; i++) {
-    // The first three are the big ones over the digits and the label (13–15 s px), the rest 7–12 s px
-    // up to 30 s px outside the box, all around it.
+    // The first three are the big ones (13–15 s px) over the digits and the label, a third of a turn apart;
+    // the other seven (8–14 s px) one seventh of a turn apart (± a quarter step) all round, 4–28 s px
+    // outside the box.
     const big = i < 3;
-    const size = (big ? 13 + rand() * 2 : 7 + rand() * 5) * s;
-    const a = rand() * Math.PI * 2;
-    const d = big ? 0 : (2 + rand() * 28) * s;
+    const size = (big ? 13 + rand() * 2 : 8 + rand() * 6) * s;
+    const step = big ? (Math.PI * 2) / 3 : (Math.PI * 2) / 7;
+    const a = turn + (big ? i : i - 3) * step + (rand() - 0.5) * step * 0.5 + (big ? 0 : step / 2);
+    const d = big ? 0 : (4 + rand() * 24) * s;
     const k = big ? 0.3 + rand() * 0.5 : 1;
     const x = Math.cos(a) * (hw * k + d);
     const y = midY + Math.sin(a) * (hh * k + d * 0.8);
@@ -374,8 +377,6 @@ function playBurst(o: PointsFx, at: Pt, num: DOMRect | null, rand: () => number)
     delay: 0,
     dur,
     frame: (t) => {
-      // The glow peaks at +70…+170 (measured 1 400–1 500), mild by +250 and gone by +350.
-      glow.style.opacity = String(Math.round(keyed([[0, 0.6], [70, 1], [170, 1], [250, 0.35], [350, 0]], t) * 1000) / 1000);
       for (const sp of sparks) {
         const k = Math.max(0, t - sp.t0) / Math.max(1, dur - sp.t0);
         const grow = Math.min(1, Math.max(0, t - sp.t0) / 50);

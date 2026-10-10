@@ -188,7 +188,7 @@ const FX_INIT = `(() => {
   const births = new WeakMap();
   let on = false;
   let watchSel = null;
-  const fx = { t0: null };
+  const fx = { t0: null, frameAt: 0 };
   const stamp = () => {
     if (on) {
       const now = performance.now();
@@ -204,16 +204,27 @@ const FX_INIT = `(() => {
   const st = window.setTimeout.bind(window);
   window.setTimeout = (f, ms, ...args) => st(() => { if (typeof f === 'function') f(...args); stamp(); }, ms);
   const raf = window.requestAnimationFrame.bind(window);
-  window.requestAnimationFrame = (f) => raf((t) => { f(t); stamp(); });
+  window.requestAnimationFrame = (f) => raf((t) => { fx.frameAt = performance.now(); f(t); stamp(); });
   const observe = () => new MutationObserver(stamp).observe(document.documentElement, { subtree: true, childList: true, attributes: true });
   if (document.documentElement) observe(); else document.addEventListener('DOMContentLoaded', observe);
   fx.start = () => { for (const a of document.getAnimations()) births.set(a, -1e12); on = true; };
   fx.stamp = stamp;
   fx.watch = (sel) => { watchSel = sel; fx.t0 = null; stamp(); };
+  // A CSS animation the script has paused or finished outlives its class (it is no longer cancelled when its
+  // name leaves the element's animation-name, and it then composites above the element's live CSS animations,
+  // e.g. a finished entry wave over a tile's press). Without the script the browser cancels it, so do the same.
+  const orphan = (a) => {
+    const name = a.animationName;
+    const t = a.effect && a.effect.target;
+    if (!name || !t) return false;
+    const names = getComputedStyle(t, a.effect.pseudoElement || null).animationName.split(',').map((n) => n.trim());
+    return !names.includes(name);
+  };
   fx.seek = () => {
     stamp();
     const now = performance.now();
     for (const a of document.getAnimations()) {
+      if (orphan(a)) { try { a.cancel(); } catch (e) { /* gone */ } continue; }
       const b = births.get(a);
       if (b === undefined || b < -1e11) continue;
       const age = Math.max(0, now - b);
@@ -232,7 +243,7 @@ const FX_INIT = `(() => {
 })();`;
 
 type FxWindow = Window & {
-  __fx: { t0: number | null; start(): void; stamp(): void; watch(sel: string): void; seek(): void };
+  __fx: { t0: number | null; frameAt: number; start(): void; stamp(): void; watch(sel: string): void; seek(): void };
   __mewdoku?: { app(): { screen: string }; state(): { status: string; cells: Uint8Array; levelPoints?: number } | null; seedSave(json: string): void; solution(): number[] | null; solve(): boolean };
 };
 
@@ -459,7 +470,8 @@ async function tickers(page: Page): Promise<void> {
   num(g, 'line 2 ahead of line 1 (share of the crossing)', at.p2 - at.p1, REF.tickers.lead, 0.01);
   const cols = await page.evaluate(() => {
     const t = document.querySelector('.tickers .ticker') as HTMLElement;
-    const cs = getComputedStyle(t);
+    // the pill's body is the ticker's ::before since the audit fix B8 (it starts under the paw)
+    const cs = getComputedStyle(t, '::before');
     return { fill: cs.backgroundColor, line: cs.borderTopColor, ink: getComputedStyle(t.querySelector('.ticker__text') as Element).color };
   });
   colour(g, 'pill fill (PNG)', rgbHex(cols.fill), REF.colours.tickerFill, 1);
@@ -509,7 +521,19 @@ async function mouse(page: Page): Promise<void> {
     const ours: Box = { left: cxOf(tb) - 40, top: cyOf(tb) - 40, right: cxOf(tb) + 40, bottom: cyOf(tb) + 40 };
     await capture(page, g, String(t).padStart(4, '0'), ours, { video: 'v1', ms: T0.v1Visit + (t >= 850 ? REF.mouse.dwell[0] - 850 + t : t), box: refBox });
     if (t > 0 && t <= 117 && p.mouse) num(g, `sprite scale at +${t}`, p.mouse.scale, interp(REF.mouse.scaleIn, t), 0.05);
-    if (t > 0 && t <= 67) num(g, `tile bump at +${t}`, p.tileScale, interp(REF.mouse.bump, t), 0.05);
+    if (t > 0 && t <= 67) {
+      num(g, `tile bump at +${t}`, p.tileScale, interp(REF.mouse.bump, t), 0.05);
+      if (Math.abs(p.tileScale - interp(REF.mouse.bump, t)) > 0.05) {
+        // diagnostics for a miss: the tile's classes and animations at this moment
+        const why = await page.evaluate((i) => {
+          const c = document.querySelectorAll('.cell')[i] as HTMLElement | undefined;
+          const tile = c?.querySelector('.cell__tile');
+          const anims = tile ? tile.getAnimations().map((a) => `${(a as CSSAnimation).animationName ?? 'waapi'}@${Math.round(Number(a.currentTime ?? -1))}/${a.playState}`) : [];
+          return `${c?.className ?? '?'} | ${anims.join(', ') || 'no animation'}`;
+        }, cell);
+        note(g, `tile bump at +${t}: why`, why, '', 'info');
+      }
+    }
     if (t === 17 || t === 33 || t === 50) note(g, `sprite opacity at +${t}`, f2(p.mouse?.opacity ?? NaN), f2(interp([[16, 0.15], [33, 0.48], [50, 0.85], [66, 1]], t)), 'info', 'B 258–308');
     if (t === 450 && p.mouse) {
       num(g, 'sprite width at rest (× T)', (p.mouse.box.right - p.mouse.box.left) / p.T, REF.mouse.size.w, 0.05);
@@ -571,9 +595,12 @@ async function kitty(page: Page): Promise<void> {
     // the cat
     if (t >= 16 && t <= 1400 && t !== 280) num(g, `cat scale (× F) at +${t}`, p.cat, interp(REF.cat.scale, t), 0.05);
     if (t === 2400) rest = p.cat;
-    // "+N"
+    // "+N" (drawn by the fx chunk's requestAnimationFrame loop, so on screen is its last frame's state: on
+    // Playwright's clock frames fall every 16 ms, not on the capture's ms; compared at that frame's time,
+    // which is within one frame of the capture — the onset tolerance of §7.8)
     if (p.plus && t <= 350) {
-      num(g, `"+N" scale at +${t}`, p.plus.scale, interp(REF.cat.plusScale, t), 0.05);
+      const tf = t === 0 ? 0 : Math.min(t, (await page.evaluate(() => (window as unknown as FxWindow).__fx.frameAt)) - t0);
+      num(g, `"+N" scale at +${t} (its frame: +${f1(tf)})`, p.plus.scale, interp(REF.cat.plusScale, tf), 0.05);
       if (t === 83) {
         plusAt = { x: cxOf(p.plus.box), y: cyOf(p.plus.box) };
         num(g, '"+N" centre above the tile centre (px)', cyOf(p.plus.box) - cyOf(tile), REF.cat.plusDy * p.pitch, 2);
@@ -583,7 +610,8 @@ async function kitty(page: Page): Promise<void> {
     // the label (the colour is complete: one open tile and its cat)
     const lab = p.labels[0];
     if (lab && t <= 166) {
-      num(g, `label scale at +${t}`, lab.scale, interp(REF.cat.labelScale, t), 0.05);
+      const tf = t === 0 ? 0 : Math.min(t, (await page.evaluate(() => (window as unknown as FxWindow).__fx.frameAt)) - t0);
+      num(g, `label scale at +${t} (its frame: +${f1(tf)})`, lab.scale, interp(REF.cat.labelScale, tf), 0.05);
       if (t === 83) num(g, 'label centre below the tile centre (px)', cyOf(lab.box) - cyOf(tile), REF.cat.labelDy * p.pitch, 2);
     }
     if (t === 0) note(g, 'label shows with the cat', String(p.labels.length), '1', p.labels.length === 1 ? 'pass' : 'FAIL');
@@ -625,6 +653,10 @@ async function kitty(page: Page): Promise<void> {
         const want = Math.round(576 * (1 - (1 - Math.min(1, Math.max(0, at / 350))) ** 2));
         const k = Math.min(REF.cat.count.length - 1, Math.max(0, Math.round((t - REF.cat.countFrom) / (1000 / 60))));
         note('score', `Score at +${t}`, String(got), `${want} (the measured curve ${f1(at)} ms after the onset; the recording's frame at +${t}: ${REF.cat.count[k]})`, Math.abs(got - want) <= 1 ? 'pass' : 'FAIL');
+      } else {
+        // the star's landing frame falls just after this ms on the 16 ms test clock: the number still shows
+        // the total before this cat, as the recording's frame at the onset does (0)
+        note('score', `Score at +${t}`, String(got), '0 (the count-up has not started: its landing frame is the next one)', got === 0 ? 'pass' : 'FAIL');
       }
       if (t === 1450) note('score', 'no bump while counting (the number\'s box height)', f1(p.score.box ? p.score.box.bottom - p.score.box.top : NaN), 'constant', 'info');
     }
@@ -754,7 +786,8 @@ async function bulb(page: Page): Promise<void> {
       }
     }
     if (t === 560 || t === 720) {
-      const op = p.labels[0]?.opacity ?? NaN;
+      // at +720 (fx.unitDone.labelMs) the label has faded out and may already be removed: gone reads as 0
+      const op = p.labels[0]?.opacity ?? (t === 720 ? 0 : NaN);
       num(ga, `label opacity at +${t}`, op, t === 560 ? 1 : 0, t === 560 ? 0.05 : 0.15);
     }
   }

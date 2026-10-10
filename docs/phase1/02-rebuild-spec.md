@@ -472,6 +472,8 @@ Other rules:
 
 ### 9.1 Lightbulb hint
 
+> **Phase 2d.1 (2026-10-10, built):** the hint's presentation follows the user's recording ([helpers-spec](../phase2d/helpers-spec.md) §3, D-2d1-7): a full-screen 75 % dim with the relevant tiles cut out, our explanation card over the rule cards, outline ghost X's popping in 60 ms apart (the cat's row, its column, then the rest), an orange Apply pill under the board (ours a shade darker for contrast, D-2d1-16); Apply closes everything in one frame and the X's draw in; the banner hides while it is open (D-2d1-13). Charged on open; a tap outside, Esc or back closes it (§8 Q6, provisional). The flow below still holds.
+
 Basis: the app's hint **teaches** one step and can auto-place X's (confirmed and likely, 01 §6.4–6.5). The stock starts at 5 and is topped up by rewarded ads (likely, 01 §6.6).
 
 **Flow:**
@@ -509,6 +511,8 @@ Basis: the app's hint **teaches** one step and can auto-place X's (confirmed and
 Unit names: rows are "row 3", columns are "column 5", and regions use their palette colour name (§17.2). Lists of two are joined with "and", and longer lists with commas and a final "and".
 
 ### 9.2 Kitty (paw)
+
+> **Phase 2d.1 (2026-10-10, built):** the kitty now targets the cat-less colour with the **fewest** candidate tiles (ties: the earlier solution cell; `workers/hint-chunk.ts` `pickKittyCell`, D-2d1-2, measured on one sample), replacing "most candidates" below; a `reveal_fallback` hint keeps the engine's picker. Every correct cat (kitty, hint or player) plays the measured celebration: the cat pops to 1.56× and winks at 1.25×, the tile flashes, shards burst, a "+N" pops above the tile and a star carries it to the Score, which counts up (D-2d1-3, D-2d1-4; helpers-spec §2). The sparkle of KITTY_REVEAL is retired.
 
 Basis: the app's "kitty button … pinpoint[s] exactly where you'll find a cat" (confirmed, 01 §6.1). Its exact behaviour is unknown.
 
@@ -814,7 +818,7 @@ Our expression of that character must be **visibly our own**: our own palette va
 
 ### 17.2 Tokens and region palette (validated in Phase 2)
 
-> **Phase 2d (2026-10-10, built):** the page, ink and region colours are now the ones measured on the user's screenshot (look-spec §1.2, §1.9: page `#F7F2EF`, ink `#935A5A`, ten measured region colours plus our Mint and Cocoa for 11 × 11 / 12 × 12; boards up to 10 × 10 use only the ten). The values below are history.
+> **Phase 2d (2026-10-10, built):** the page, ink and region colours are now the ones measured on the user's screenshot (look-spec §1.2, §1.9: page `#F7F2EF`, ink `#935A5A`, ten measured region colours plus our Mint and Cocoa for 11 × 11 / 12 × 12; boards up to 10 × 10 use only the ten). The values below are history. **Phase 2d.1 (built):** an 11th measured colour, Denim `#5B75B2`, replaces Mint at index 4; boards up to 11 × 11 use only the 11 measured colours and Cocoa only 12 × 12; `--wrong` darkened to `#560A1C` for 3:1 on Denim, with a white pattern glyph on that dark tile (helpers-spec §6, D-2d1-10, D-2d1-11).
 
 
 | Token | Value | Use |
@@ -873,7 +877,7 @@ Region colours (12, named for hint copy):
 
 ### 17.4 Board rendering
 
-> **Phase 2d (2026-10-10, built):** a borderless card without a shadow, 3 px gaps (7.9 % of the slot), an 11 % tile radius, and the X as two plain white rounded bars that pop in (look-spec §1.8, §1.10).
+> **Phase 2d (2026-10-10, built):** a borderless card without a shadow, 3 px gaps (7.9 % of the slot), an 11 % tile radius, and the X as two plain white rounded bars that pop in (look-spec §1.8, §1.10). **Phase 2d.1 (built):** an X from a tap, a paint or Apply draws in stroke by stroke with a tile squish ("\\" from the centre, "/" from its top-right tip, an overshoot to 1.1, 250 ms); the mouse's X pops; the hint's ghost is the X's outline; a completed row, column or colour waves (33 ms per tile) and shows our "Done!" label; the idle pulse needs 5 s without a move, a helper with stock and no helper used in the attempt (helpers-spec §4, D-2d1-6, D-2d1-8, D-2d1-9).
 
 
 - The board card has 12 px padding and 16 px corner radius. Tiles have a corner radius of 18 % of cell size.

@@ -1,6 +1,8 @@
 # Phase 2d.1 contracts (cross-workstream interfaces)
 
 Spec: [helpers-spec.md](helpers-spec.md) §7 (this file repeats it, copy-paste ready). Date 2026-10-10. Built **on top of the 2d build** ([CONTRACTS.md](CONTRACTS.md) stays in force; this file only adds or changes).
+
+**Status: final (integration I-5, 2026-10-10).** Built and integrated ([STATUS-2d](STATUS-2d.md) §9–§14). Every "optional until I-3" member below is **required** since I-3 and every "removed at I-3" member is gone; the code blocks keep their S0 wording for the record, and §11 lists what changed at integration and the members the workstreams added beyond this file.
 Owners: **G1** logic, app, platform, workers · **G2** art, board, tokens · **G3** HUD, overlays, fx, i18n, audio · **lead** config, the colour-name change, dev, size-check, docs.
 
 Rules (as in 2b–2d): S0 lands every interface **additively**; a member another workstream uses is never deleted before integration step I-3; members marked "optional until I-3" become required there. Config is lead-only (L0). `tsc` covers `dev/**`, so props and callbacks the harnesses use only gain optional members until I-1 / I-3. Clean room: no test fixture, harness or capture uses the original's level layouts; tests build their own boards.
@@ -68,7 +70,11 @@ export interface DoneUnit {
   readonly kind: 'row' | 'col' | 'region';
   /** Row or column, 0-based, or the region label. */
   readonly index: number;
-  /** The unit's last tile in reading order among the tiles this action changed: the label's anchor and the wave's reference. */
+  /**
+   * The unit's last tile in reading order among the tiles this action changed: the label's anchor and the wave's reference.
+   * For the mouse (MARKED { source: 'mouse' }), the last in its visit order (MARKED.cells order): the X that lands last
+   * (integration I-5, requests-G1 H3 a).
+   */
   readonly anchor: CellIndex;
 }
 
@@ -309,3 +315,56 @@ CSS custom properties: tokens `--plus`, `--done-top`, `--done-bottom`, `--done-l
 4. §6, §10: `SfxId` additions land at G3's S0; sounds are played by G1 (`points` at the star's landing, `unit_done` skipped with `REGION_DONE`).
 5. §8: `HINT_APPLIED` is the first event of `HINT_APPLY` (the reducer's order), not the last; the `POINTS` and `UNITS_DONE` rows gain the sound rules and the star's start point.
 6. §9: `.game-fx[data-celebrate=ready]`, `.tool-bar[data-busy]`, `.board[aria-busy]`.
+
+---
+
+## 11. Integration (lead, I-1 to I-5, 2026-10-10): final shapes and the members added beyond this file
+
+### 11.1 Required since I-3; deleted at I-3
+
+| Member | Now |
+|---|---|
+| `GameScreen.playTickers(lines)` | **required**; `GameScreen.playStartToast`, `StartToastKind` and `src/ui/fx/start-toast.ts` deleted; the session's 2d fallback (`fx.startToast.enabled`) deleted with its test (requests-G1 H4) |
+| `HintCardProps.cells`, `boardRect()`, `cellRect(cell)` | **required**; `HintCardProps.avoidRect` deleted, with 2b's `sheetPlacement`, `fbTopInset` and the top-placed card rule (requests-G3 H2) |
+| `GameBarProps.starPoints`, `PillsProps.ringId`, `ToolBarProps.busy` (G3's S0 additions) | **required** (every caller passes them; the fakes too) |
+| `SymbolId` `'art-flex'`, `board-fx.ts` `sparkle()`, `.cell__spark`, `.cell.fx-drop`, `@keyframes cat-drop / ghost-pulse / spark`, `.points-pill__label[data-reduced]` | deleted (requests-G2 H6, requests-G3 H3) |
+| Config `fx.mouseStaggerMs`, `fx.startToast`, `fx.levelPoints.plusMs / plusRisePx`, `layout.catScale`, `layout.hintDim` | kept and `@deprecated phase2d.1`, without effect (the config rule never removes a key; requests-G2 H4). `fx.levelPoints.rollMs` is **not** deprecated: the Score's no-flash fallback roll (a POINTS before the lazy fx chunk is in) still uses it |
+
+### 11.2 `DoneUnit.anchor` (requests-G1 H3 a)
+
+The anchor is the unit's last changed tile in reading order, **except for the mouse**: there it is the last in its visit order (`MARKED.cells` order), the X that lands last. With the reading-order anchor, `mouseLandMs(indexOf(anchor))` could fire the wave and the label before the unit's other X has landed. The game screen defers a mouse action's `UNITS_DONE` effects to `mouseLandMs(ev.cells.indexOf(anchor))`.
+
+### 11.3 G1 members beyond this file (requests-G1 "2d.1 Notes", H3 b)
+
+- `src/workers/hint-chunk.ts` (new): `pickKittyCell` and `getHintStep` (re-exported); loaded by `engine-client.ts`'s lazy import and `engine.worker.ts` (chunk `hint-chunk-*.js`, ≈ 2.1 KB, core lazy JS). `engine/hint.ts` is unchanged; a `reveal_fallback` hint still uses its most-candidates picker (§2.3, accepted).
+- `src/app/tickers.ts`: `pickTickerLines(input, c?)` and `eligibleLine2(input, c?)`; `TickerInput.now` (clock ms, for this period's total; a rolled-over period shows no fish line).
+- `src/app/views.ts`: `ViewContext.lastBoardChangeAt?`, `mouseUses?`; `selectPulse(state, ctx, enabled, c?)` reads `ctx.now`. Pinned pulse targets (`'kitty'`, `'bulb'`) keep the 2d behaviour; only `'auto'` has the §4.6 conditions.
+- `src/app/helper-flows.ts`: `HelperHost.reducedMotion()`, `HelperFlows.mouseUses()`; `onMouse` resolves when the run lock ends (`mouseRunMs` after the dispatch).
+- `src/app/banner-flow.ts`: `BannerFlow.hintOpened()` / `hintClosed()` (the session calls them on the router's `overlay:open` / `overlay:close` of `'hint'`; one re-show timer, cancelled by a new hint, a screen change or another close).
+- `src/app/session-effects.ts`: `feedbackFor(ev, state, colors, c?, events?)` (the action's whole event list, so `UNITS_DONE` sees its `REGION_DONE`); the mouse's `MARKED` has no sound of its own.
+- `src/game/units.ts` also exports `unitCells(puzzle, kind, index)` and `changedCells(prev, next)`.
+- The per-attempt mouse count is in memory only (hints and kitties used are saved with the slot): after a reload the pulse may come back on a board where only the mouse was used (accepted; STATUS-2d §15).
+
+### 11.4 G2 members beyond this file
+
+- `src/ui/board/board-view.ts`: `loadMouseRun()` and `MOUSE_PREFETCH_MS` (the board's lazy motion chunk, `board-mouse.ts`, prefetched 1.5 s after a board entry; the game screen asks for it earlier, with its fx chunk). A mouse `MARKED` before it has loaded hides its X's at once and the run starts when it lands, timed from the `MARKED`.
+- `src/ui/board/board-cat.ts`: `playCatSequence(refs, opts)` → `CatSequence` (re-exported by `board-mouse.ts` since I-4: the cat sequence is part of the lazy board chunk; a `CAT_PLACED` before it has loaded shows the cat at rest and asks for the chunk).
+- `src/ui/art/lazy-art.ts`: `mountLazyArt(doc?)` (idempotent; the board mouse's parts, `fx-star4`, the shards and, since I-4, the ticker art `art-paw-cap`, `art-bolt`, `art-star`), `lazyArtSymbols()`.
+- `src/ui/art/helper-art.ts`: `MOUSE_BOX`, `mouseHead()`, `mouseEyes()` (shared by the first-load `tool-mouse` and the lazy parts).
+- The X's edge rects sit in their own pair of bar groups under the white pair (four `g.cell__xb` per cell); `.cell__xg rect.cell__x` still finds the two white bars.
+
+### 11.5 G3 members beyond this file
+
+- `GameBarProps.starPoints`; `GameBarView.scoreRect()`, `countTo(total)`, `syncPoints()`; `countValue()` (exported).
+- `PillsProps.ringId` (the board id; `null` in the tutorial); `ToolBarProps.busy` (→ `.tool-bar[data-busy]`); `Counter.setLabel` / `show` / `numEl`.
+- `game-screen.ts`: `loadCelebrate()` (the cached dynamic import); `.game-fx[data-celebrate=ready]` once the fx chunk **and** the board's lazy motion chunk are in (I-4).
+- `src/ui/fx/celebrate.ts`: `CelebrateContext`, `createCelebrate(layer, ctx)` → `{ play(ev), cancel(), running() }`, the re-exported `createTickers`; it calls `mountLazyArt()` before any star or shard (requests-G2 H2).
+- `hint-card.ts`: `hintLayout(board, s, ceiling)`, `dimPath(vw, vh, holes)`; `Tickers.play(lines, sinceMs = 0)` (a late start joins mid-crossing); `points-flight.ts` `SPARK_PATH`, `STREAK_MAX`, `streakFor`.
+- `fx-loop.ts` keeps one requestAnimationFrame chain (requests-G1 H5: piled-up chains delayed the win flow under a busy main thread).
+
+### 11.6 Lead (I-4, load time)
+
+- `src/app/coach-chunk.ts` (new lazy chunk `coach-chunk-*.js` + `coach-chunk-*.css`): the tutorial coach (O8) and the rich-text styles it shares with the hint card and How to play. `index.html` preloads it (`vite.config.ts` `preloadFirstRun`), so a first run's boot no longer waits for the whole overlay chunk.
+- `Router.coachReady(): Promise<boolean>` (boot waits for it on a first run instead of `overlaysReady()`); `RouterFactories.loadCoach?()`; `router.ts` `loadCoachChunk()`; `loadOverlayChunk()` loads both chunks together. O8 left `overlay-chunk.ts`.
+- `vite.config.ts`: one `core` chunk for the first-load modules that lazy chunks share (`codeSplitting.groups`, `$initial` only), preloaded next to the entry.
+- `src/styles/board-mouse.css` (requests-G2 H3): the board's lazy motion (the mouse, the cat sequence, the wave) left the first-load `board.css`; the ghost rules moved to `overlay-chunk.css`.

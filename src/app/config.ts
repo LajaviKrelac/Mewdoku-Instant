@@ -34,7 +34,8 @@
 // Phase 2d.1 integration (lead, I-3, 2026-10-10): the readers of fx.mouseStaggerMs and fx.startToast
 // are gone (2d's start toast was deleted); layout.catScale (the resting cat is board-cells.ts CAT_BOX,
 // helpers-spec §4.7) and layout.hintDim (the board's hint dim is gone, §3.3) are @deprecated phase2d.1
-// and unread (requests-G2 H4). As always no key is removed.
+// and unread (requests-G2 H4). fx.levelPoints.rollMs is NOT deprecated after all: the Score's fallback roll
+// (before the lazy fx chunk is in) still reads it; plusMs and plusRisePx stay @deprecated. As always no key is removed.
 
 /** The 17 locales of phase2b §6.2 (BCP 47 ids; FB `ll_CC` codes are mapped onto them by i18n/locale.ts, §6.3). */
 export type LocaleId =
@@ -393,11 +394,16 @@ export interface GameConfig {
      * the number changes in place, no bump, and the chip fades in (reducedPlusInMs) and out
      * (reducedPlusOutMs) without rising.
      * Phase 2d.1 (helpers-spec §2.5, D-2d1-4): the Score column shows the "+N" over the tile, the star's
-     * flight and a count-up (fx.points); it no longer reads rollMs, plusMs or plusRisePx. With reduced
-     * motion the "+N" over the tile still fades in and out with reducedPlusInMs / reducedPlusOutMs.
+     * flight and a count-up (fx.points); it no longer reads plusMs or plusRisePx, and rollMs only for the
+     * fallback roll before the lazy fx chunk is in (integration I-3). With reduced motion the "+N" over the
+     * tile still fades in and out with reducedPlusInMs / reducedPlusOutMs.
      */
     readonly levelPoints: {
-      /** @deprecated phase2d.1 (helpers-spec §2.5): not read by the Score column, which counts up over fx.points.countMs. */
+      /**
+       * Phase 2d.1 (helpers-spec §2.5; integration I-3): the Score counts up over fx.points.countMs once the lazy fx
+       * chunk is in; until then a POINTS rolls the number over rollMs (2d's roll, the no-flash fallback,
+       * game-bar.ts playEvent). Still read, so not deprecated.
+       */
       readonly rollMs: number;
       /** @deprecated phase2d.1 (helpers-spec §2.5): not read by the Score column (the "+N" pops over the tile, fx.points). */
       readonly plusMs: number;

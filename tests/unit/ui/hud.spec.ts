@@ -234,6 +234,9 @@ describe('the game bar: back · Level / Score · gear (§1.4)', () => {
       at(1000);
       bar.countTo(576);
       expect(n().hasAttribute('data-counting')).toBe(true);
+      // audit B6: the column carries it too (its near-white halo behind the digits, hud.css), over countMs
+      expect(score.hasAttribute('data-counting')).toBe(true);
+      expect(score.style.getPropertyValue('--count-ms')).toBe(`${cfg.fx.points.countMs}ms`);
       const seen: string[] = [nums(score)[0] ?? ''];
       for (let k = 1; k <= 21; k++) {
         frame(1000 + (k * 350) / 21);
@@ -242,6 +245,7 @@ describe('the game bar: back · Level / Score · gear (§1.4)', () => {
       expect(seen.slice(0, 4)).toEqual(['0', '54', '104', '153']);
       expect(seen[seen.length - 1]).toBe('576');
       expect(n().hasAttribute('data-counting')).toBe(false);
+      expect(score.hasAttribute('data-counting')).toBe(false);
       expect(score.classList.contains('points-pill--bump')).toBe(false);
       expect(score.querySelector('.is-in, .is-out')).toBeNull();
       // The props catching up change nothing; countTo never lowers the number.
@@ -472,6 +476,29 @@ describe('tool row: kitty · bulb · mouse', () => {
     expect(tb.el.hasAttribute('data-busy')).toBe(true);
     tb.update({ ...tools, busy: false });
     expect(tb.el.hasAttribute('data-busy')).toBe(false);
+    tb.destroy();
+  });
+
+  it('audit B12: a touch press shows while the finger is down ([data-pressed], as :active does for a mouse), cleared on release, cancel or leave; a disabled tool does not press', () => {
+    const tb = createToolBar(tools, { onBulb: vi.fn(), onPaw: vi.fn(), onMouse: vi.fn() });
+    const bulb = tb.el.querySelector('.tool--bulb') as HTMLButtonElement;
+    const touch = (type: string, el: Element = bulb): boolean => el.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerType: 'touch', button: 0 }));
+    touch('pointerdown');
+    expect(bulb.hasAttribute('data-pressed')).toBe(true);
+    touch('pointerup');
+    expect(bulb.hasAttribute('data-pressed')).toBe(false);
+    touch('pointerdown');
+    touch('pointercancel');
+    expect(bulb.hasAttribute('data-pressed')).toBe(false);
+    touch('pointerdown');
+    touch('pointerleave');
+    expect(bulb.hasAttribute('data-pressed')).toBe(false);
+    // a secondary mouse button does not press
+    bulb.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'mouse', button: 2 }));
+    expect(bulb.hasAttribute('data-pressed')).toBe(false);
+    tb.update({ ...tools, bulbEnabled: false });
+    touch('pointerdown');
+    expect(bulb.hasAttribute('data-pressed')).toBe(false);
     tb.destroy();
   });
 });

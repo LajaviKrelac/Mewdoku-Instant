@@ -225,15 +225,55 @@
 }
 
 /* Phase 2d.1 §2.5: the Score counts up when the star lands ([data-counting], game-bar.ts countTo): no
-   bump, no colour change, the number stays centred; the "+N" pops over the cat's tile (fx chunk). */
+   bump, no colour change, the number stays centred; the "+N" pops over the cat's tile (fx chunk).
+   Audit B6 (measured: #FFFFFD at the number, #FFF6F4 / #FFF2EE 22 px either side at the peak): a near-white
+   halo behind the number and its label while they count, peaking at +70…+170 (1 400–1 500 in the
+   recording), mild by +250, gone by the end of fx.points.countMs; behind the digits, so they stay dark. */
+.points-pill {
+  isolation: isolate;
+}
+
+.points-pill[data-counting]::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: 50%;
+  left: 50%;
+  width: calc(var(--s) * 84px);
+  height: calc(var(--s) * 72px);
+  margin: calc(var(--s) * -32px) 0 0 calc(var(--s) * -42px);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, #fff 0%, rgba(var(--score-halo-rgb), 0.95) 40%, rgba(var(--score-halo-rgb), 0.6) 72%, rgba(var(--score-halo-rgb), 0));
+  pointer-events: none;
+  animation: score-halo var(--count-ms, 350ms) linear both;
+}
+
+@keyframes score-halo {
+  0% {
+    opacity: 0.6;
+  }
+  20%,
+  48.6% {
+    opacity: 1;
+  }
+  71.4% {
+    opacity: 0.35;
+  }
+  100% {
+    opacity: 0;
+  }
+}
 
 /* ── Pills row (§1.5): heads pill · fish pill ──────────────────────────────
-   A two-column grid (1fr auto) 12 s in from the column's edges; the period counter takes the heads
-   pill's cell in the win flow (§1.13). RTL mirrors with the grid. */
+   A two-column grid 12 s in from the column's edges, centred: the heads pill is as wide as its heads
+   (--hpw = n × 25.33 + 16.6 s, at most the room next to the fish pill; pills.ts headsPillWidth; audit B1,
+   measured on 9 × 9: 244.6 wide at x 24.7, the fish pill at 280.7), the fish pill as wide as its fish; the
+   period counter takes the heads pill's cell and width in the win flow (§1.13). RTL mirrors with the grid. */
 .pills {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: auto auto;
   grid-template-rows: 100%;
+  justify-content: center;
   column-gap: calc(var(--s) * 11.3px);
   height: var(--pills);
   margin: var(--g-bp) calc(var(--s) * 12px) 0;
@@ -242,6 +282,7 @@
 .pill--heads,
 .pills > .period-pill {
   grid-area: 1 / 1;
+  width: calc(var(--s) * var(--hpw, 270) * 1px);
 }
 
 .pill--lives {
@@ -513,7 +554,9 @@
   transition: transform 50ms ease-out;
 }
 
-.tool:active:not(:disabled) {
+/* [data-pressed]: the same press while a touch is down (dom.ts trackPress; :active does not hold on touch). */
+.tool:active:not(:disabled),
+.tool[data-pressed]:not(:disabled) {
   transform: scale(0.9);
 }
 
@@ -543,7 +586,8 @@
   }
 }
 
-[data-motion='reduced'] .tool:active {
+[data-motion='reduced'] .tool:active,
+[data-motion='reduced'] .tool[data-pressed] {
   transform: none;
 }
 
@@ -619,6 +663,26 @@
   32%,
   36% {
     opacity: 1;
+  }
+}
+
+/* Audit B2 (measured on the first recording, t 2.4 s at rest vs 3.2 s at the peak): the icon swells more than
+   its disc, 1.25 × in all (the bulb 21.3 → 26.7 wide) while the disc reaches 1.08; so the icon adds
+   --pulse-icon on top of the disc's scale, at the same stops (1.08 × 1.15 ≈ 1.24). The kitty follows the
+   same rule. */
+.tool[data-pulse]:not(:disabled) .tool__icon {
+  animation: tool-icon-pulse var(--pulse-ms, 1500ms) ease-in-out infinite;
+}
+
+@keyframes tool-icon-pulse {
+  0%,
+  69%,
+  100% {
+    transform: none;
+  }
+  32%,
+  36% {
+    transform: scale(var(--pulse-icon, 1.15));
   }
 }
 

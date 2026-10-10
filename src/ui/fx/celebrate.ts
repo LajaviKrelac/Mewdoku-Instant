@@ -36,6 +36,8 @@ export interface CelebrateContext {
   scoreRect(): DOMRect | null;
   /** The star landed: the bar counts up to this total. */
   countTo(total: number): void;
+  /** Audit B4: the cell element on the board (the shards start in it, under the cat); absent or null: the fx layer only. */
+  cellHost?(cell: number): HTMLElement | null;
 }
 
 export interface Celebrate {
@@ -70,7 +72,7 @@ export function createCelebrate(layer: HTMLElement, ctx: CelebrateContext): Cele
         });
       } else if (ev.type === 'CAT_PLACED') {
         const tile = ctx.cellRect(ev.cell);
-        if (tile && !ctx.reduced()) playCatBurst({ loop, layer, tile, s: ctx.s(), color: ctx.color(ev.cell), seed: ev.cell });
+        if (tile && !ctx.reduced()) playCatBurst({ loop, layer, tile, s: ctx.s(), color: ctx.color(ev.cell), seed: ev.cell, host: ctx.cellHost?.(ev.cell) ?? null });
       } else if (ev.type === 'UNITS_DONE') {
         const anchors: { cell: number; tile: DOMRect }[] = [];
         for (const u of ev.units) {

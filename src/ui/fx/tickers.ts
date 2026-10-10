@@ -1,9 +1,9 @@
 // Owner: G3 (Phase 2d.1)
 // The two level-start tickers (helpers-spec §5, D-2d1-12; replaces start-toast.ts at I-3): cream pills
 // with our paw cap (G2's art-paw-cap) at the inline start and an end icon (line 1 art-bolt, line 2
-// art-star), stacked over the top of the HUD, each crossing the screen from the inline-end edge to past
-// the inline-start edge, linearly, in the same time T = fx.tickers.crossMs (so a longer line moves
-// faster). Line 2 starts fx.tickers.delayMs after the board entry starts, line 1 lead × T later. The
+// art-star), stacked over the top of the HUD, each crossing the game column (audit B14: not the whole
+// viewport; .tickers is the column, clipped) from its inline-end edge to past its inline-start edge,
+// linearly, in the same time T = fx.tickers.crossMs (so a longer line moves faster). Line 2 starts fx.tickers.delayMs after the board entry starts, line 1 lead × T later. The
 // lines are honest (G1's pickTickerLines: the player's own numbers, the board, a true fact or a tip).
 // Reduced motion: both fade in at the column's inline start (12 s), hold reducedHoldMs, fade out.
 // Decorative: aria-hidden, no pointer events, no sound; in the game screen's fx layer (.game-fx).
@@ -51,7 +51,7 @@ export function tickerText(line: TickerLine): string {
 
 /**
  * When each line starts and how far it moves (ms from the call; px): both cross in T, line 2 first
- * (delayMs), line 1 lead × T later; each travels the viewport width plus its own width.
+ * (delayMs), line 1 lead × T later; each travels the column's width `vw` plus its own width.
  */
 export function tickerPlan(widths: readonly [number, number], vw: number): readonly { readonly delay: number; readonly dur: number; readonly from: number; readonly to: number }[] {
   const T = cfg.fx.tickers;
@@ -129,7 +129,8 @@ export function createTickers(opts: TickersOptions): Tickers {
       const win = doc.defaultView;
       const rtl = win?.getComputedStyle(root).direction === 'rtl';
       const sign = rtl ? -1 : 1;
-      const vw = doc.documentElement.clientWidth || win?.innerWidth || 0;
+      // Audit B14: they cross the game column (.tickers is the column, celebrate.css), not the viewport.
+      const vw = root.getBoundingClientRect().width || doc.documentElement.clientWidth || win?.innerWidth || 0;
       const widths = [els[0].getBoundingClientRect().width, els[1].getBoundingClientRect().width] as const;
       const T = cfg.fx.tickers;
       let left = 2;
@@ -142,8 +143,7 @@ export function createTickers(opts: TickersOptions): Tickers {
         // In place at the column's inline start (12 s), fading in and out.
         const st = win?.getComputedStyle(host);
         const s = parseFloat(st?.getPropertyValue('--s') ?? '') || 1;
-        const colW = parseFloat(st?.getPropertyValue('--col-w') ?? '') || vw;
-        const x = Math.max(0, (vw - colW) / 2) + 12 * s;
+        const x = 12 * s;
         const f = cfg.fx.reducedMotionFadeMs;
         const total = f + T.reducedHoldMs + f;
         for (const el of els) {

@@ -83,8 +83,14 @@
   justify-content: center; box-sizing: border-box; width: var(--hc-w, calc(100% - 32px)); min-height: calc(var(--hs, 1) * 70.3px);
   max-height: var(--hc-max, none); padding: calc(var(--hs, 1) * 12px) calc(var(--hs, 1) * 18.3px); border-radius: calc(var(--hs, 1) * 15px);
   background: var(--hint-card); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25); text-align: start; pointer-events: auto; }
-.hint-card__text { min-height: 0; overflow-y: auto; color: var(--ink); font-weight: 500;
+/* Audit B9 (measured: the card's sentence is in the game's rounded face, cap 10.0, stroke 1.00 px; ours was the
+   body face, 10.67 / 1.18): the display face, thinned like the rule text by a stroke in the card's colour
+   (0.05 em on Fredoka 600; the system stacks step down to their own weight). Audit B13 (ours-only text): the
+   colour name's underline scales with the text, so on three lines at 320 px it clears the next line. */
+.hint-card__text { min-height: 0; overflow-y: auto; color: var(--ink); font-family: var(--font-display); font-weight: var(--display-weight);
+  -webkit-text-stroke: calc((700 - var(--display-weight)) * 0.0005em) var(--hint-card);
   font-size: max(10px, calc(var(--hs, 1) * 14.5px)); line-height: max(12px, calc(var(--hs, 1) * 17px)); }
+.hint-card__text .color-name { text-decoration-thickness: max(1.5px, 0.16em); text-underline-offset: max(1.5px, 0.14em); }
 /* Apply: 278.7 × 59.3 s, a full pill in --apply, a white 28 s label (Fredoka 600 + the 0.04 em stroke,
    D-2d-7; never under 24 px, so white on --apply stays large text, 3.05:1), no shadow; pressed to 0.90
    within 50 ms (§4.5), applied on release. */
@@ -93,8 +99,8 @@
   border-radius: calc(var(--hs, 1) * 29.65px); background: var(--apply); box-shadow: none; text-shadow: none; color: #fff;
   font-family: var(--font-display); font-weight: var(--display-weight); font-size: max(24px, calc(var(--hs, 1) * 28px));
   -webkit-text-stroke: 0.04em #fff; pointer-events: auto; transition: transform 50ms ease-out; }
-.btn.hint-apply:active:not([aria-disabled='true']) { transform: scale(0.9); box-shadow: none; }
-[data-motion='reduced'] .btn.hint-apply:active { transform: none; }
+.btn.hint-apply:active:not([aria-disabled='true']), .btn.hint-apply[data-pressed]:not([aria-disabled='true']) { transform: scale(0.9); box-shadow: none; }
+[data-motion='reduced'] .btn.hint-apply:active, [data-motion='reduced'] .btn.hint-apply[data-pressed] { transform: none; }
 /* The close button for keyboards and screen readers: hidden until focused, then a 44 × 44 round button on
    the card's top inline-end corner (below the top bar, so never in the FB top-left zone). */
 .hint-close.visually-hidden-focusable:not(:focus) { position: absolute; width: 1px; height: 1px; min-height: 0; margin: -1px;

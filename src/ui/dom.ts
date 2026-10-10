@@ -206,3 +206,18 @@ export function playClass(el: Element, cls: string, fallbackMs = 1000): void {
 export function detach(el: Node | null | undefined): void {
   el?.parentNode?.removeChild(el);
 }
+
+/**
+ * Audit B12 (helpers-spec §4.5): the 0.90 press while the pointer is down must show on touch too, where
+ * :active does not hold during the touch (Chromium) or needs a touchstart listener (iOS WebKit). Mirrors
+ * the press into [data-pressed] from pointerdown until pointerup / cancel / leave; the stylesheet presses
+ * `:active` and `[data-pressed]` alike. Disabled controls (disabled or aria-disabled) do not press.
+ */
+export function trackPress(btn: HTMLElement): void {
+  const off = (): void => btn.removeAttribute('data-pressed');
+  btn.addEventListener('pointerdown', (e) => {
+    if (e.button > 0 || (btn as HTMLButtonElement).disabled || btn.getAttribute('aria-disabled') === 'true') return;
+    btn.setAttribute('data-pressed', '');
+  });
+  for (const type of ['pointerup', 'pointercancel', 'pointerleave', 'lostpointercapture'] as const) btn.addEventListener(type, off);
+}

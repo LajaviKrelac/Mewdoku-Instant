@@ -27,7 +27,7 @@
 import { cfg } from '../../app/config';
 import type { CellIndex, HintStep } from '../../engine/types';
 import { capitalizeFirst, t } from '../../i18n';
-import { h, setText, type OverlayView } from '../dom';
+import { h, setText, trackPress, type OverlayView } from '../dom';
 import { createLocaleText } from '../locale-text';
 import { setRichText } from '../rich-text';
 import { closeButton, createOverlayShell, nextId } from './overlay-base';
@@ -167,6 +167,7 @@ export function createHintCard(): OverlayView<HintCardProps> {
   const card = h('div', { class: 'hint-card' }, text, where, closeBtn);
   // Our own pill, not a .btn--primary: white on --apply is large text at every scale (≥ 24 px, D-2d1-16).
   const apply = L.label(h('button', { type: 'button', class: 'btn hint-apply', 'data-autofocus': true }, h('span', { class: 'btn__label' })), () => t('hint.apply'));
+  trackPress(apply); // the 0.90 press shows on touch too (audit B12)
   apply.addEventListener('click', () => props?.onApply());
   shell.panel.append(title, card, apply);
 

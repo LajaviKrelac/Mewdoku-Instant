@@ -584,8 +584,10 @@ async function syncAnims(page: Page): Promise<void> {
 }
 
 async function pauseClock(page: Page): Promise<void> {
+  // The installed clock keeps running between the read and the pause, so pause a little ahead of it (a
+  // target already passed throws "Cannot fast-forward to the past"; +1 ms raced under load at I-6).
   const now = await page.evaluate(() => Date.now());
-  await page.clock.pauseAt(new Date(now + 1));
+  await page.clock.pauseAt(new Date(now + 100));
   await syncAnims(page);
 }
 

@@ -1,6 +1,6 @@
 # Mewdoku vs Meowdoku (Play Store): what is different
 
-Status: Phase 2 review (2026-10-07); §1 status updated after the Phase 2b "parity" integration (2026-10-09, §1.0); Phase 2c "fish are lives" (2026-10-09): §1.0 rows 2, 5 and 8, §2.5–§2.8, §3.4 and §6 #1–#2 updated from the user's first-hand report; Phase 2c.1 "level points per cat" (2026-10-10, **built and integrated the same day**, [STATUS-2c §10](../phase2c/STATUS-2c.md)): §1.0 row 2, §2.6, §3.3, §3.4, §5.3 and §6 #1 updated from the user's second first-hand report; Phase 2d "the game screen from the user's recording" (2026-10-10, **built and integrated**, [look-spec](../phase2d/look-spec.md), [STATUS-2d](../phase2d/STATUS-2d.md)): §1.0b added, §1.0 rows 1, 3 and 7 and the §3.1–§3.3 game-screen rows superseded by §1.0b · Owner: game design
+Status: Phase 2 review (2026-10-07); §1 status updated after the Phase 2b "parity" integration (2026-10-09, §1.0); Phase 2c "fish are lives" (2026-10-09): §1.0 rows 2, 5 and 8, §2.5–§2.8, §3.4 and §6 #1–#2 updated from the user's first-hand report; Phase 2c.1 "level points per cat" (2026-10-10, **built and integrated the same day**, [STATUS-2c §10](../phase2c/STATUS-2c.md)): §1.0 row 2, §2.6, §3.3, §3.4, §5.3 and §6 #1 updated from the user's second first-hand report; Phase 2d "the game screen from the user's recording" (2026-10-10, **built and integrated**, [look-spec](../phase2d/look-spec.md), [STATUS-2d](../phase2d/STATUS-2d.md)): §1.0b added, §1.0 rows 1, 3 and 7 and the §3.1–§3.3 game-screen rows superseded by §1.0b; Phase 2d.1 "the three helpers, the tickers and the palette from the user's recordings" (2026-10-10, **built and integrated**, [helpers-spec](../phase2d/helpers-spec.md), STATUS-2d Part 2): §1.0c added, the §1.0b helper, toast and palette rows and the §3.4 helper animations superseded by §1.0c · Owner: game design
 
 > **Phase 2c (2026-10-09).** The user, who plays the Play Store app, reported four facts first-hand that override our research ([01](../phase1/01-game-deconstruction.md) "First-hand update"; source tag **user, first-hand, 2026-10-09**): **fish are the lives** (the app shows fish, not hearts); **the fish left when a level is passed are added to the leaderboard points**, which are ranked **per period** (a total that resets); **level points** grow when you make no mistakes (streak-like); and our **fish currency was an invention** (wallet, swaps, fish packs, the fish pill "+"), now removed. The build implements them per [fish-lives-spec](../phase2c/fish-lives-spec.md) ([STATUS-2c](../phase2c/STATUS-2c.md)). Where the user gave no number (period length, points values, which modes count), our values are `[DECISION: default, user may change]`.
 
@@ -69,6 +69,25 @@ The user supplied **their own recording and screenshot** of the original's game 
 | Level-start toast | **Closed** (look) | A cream pill drifting left at 100 px/s | Our own honest line instead of a players' statistic (we have no such data, D-2d-13) |
 
 Still different on this screen: our art (every icon drawn by us), our words, our level layouts, the darkened badge colours, and the open questions in look-spec §7.
+
+### 1.0c Status after Phase 2d.1 (2026-10-10): the three helpers, the tickers and the palette matched to the user's recordings
+
+The user sent three more recordings (the mouse, the cat and the bulb in use on Level 114, 9 × 9) and two level-start stills, asking us "to see and replicate 3 in game helpers - cat, hint, mouse". Under the same terms (D-2d1-0: measure and sample, no tracing, our art and words) Phase 2d.1 rebuilt the helpers to them; `dev/helpers-compare.ts` checks **105 measures, all within helpers-spec §7.8's tolerances** (positions ±2 px, scales ±0.05, onsets ±1 frame, the star within 4 px of its curve, the count-up equal to the measured sequence, colours ΔE00 ≤ 1 / ≤ 3), and the first recording's 105 game-screen measures still pass.
+
+| Gap (2d wording) | Status | What the build does now | What remains different, and why |
+|---|---|---|---|
+| The mouse (provisional, one forum report) | **Closed** | Three empty tiles outside the solution, visited one by one in pick order (pop in, a face, the X pops under it as it leaves, 935 ms per tile), the board locked | Our mouse art and one face per visit (blink, glance, grin); the dwell is the mean of the two measured (850 ms); a daily limit is unknown |
+| The kitty's target and its celebration | **Closed** | The cat-less colour with the fewest open tiles; every correct cat pops to 1.56×, winks at 1.25× and settles, the tile flashes, shards burst | Our Tux cat, our shards; "every correct cat" (the player's and the hint's too) is our reading (helpers-spec §8 Q4) |
+| Points feedback (2c.1's roll and chip) | **Closed** | "+N" one tile above the cat, a star on a curve to the Score, a 0.35 s count-up without a bump, a sparkle burst | Our star and sparkle drawings; the "+N" orange is the original's (2.23:1, decorative, Q13) |
+| The found head (D-2d-9, ours) | **Closed** | The cat's face with a tint dot, popping 0.56 → 1.2 → 1 | Our cat face |
+| Completion | **Closed** (lines), **ours** (colours) | A wave over a completed row or column and a gold label under its last tile | Our word "Done!" (theirs not copied); the wave on colour regions is ours (not recorded) |
+| The hint's presentation (2b's sheet) | **Closed** | The 75 % dim with tile cut-outs, the card over the rule cards, ghost X outlines 60 ms apart, Apply under the board, the banner hidden; Apply closes in one frame and the X's draw in | Our sentences and Apply label; Apply a shade darker (`#D38025` vs `#F0912A`, contrast, Q12) and centred (theirs 6.9 px right); charged on open (Q6, unknown) |
+| X's appearing | **Closed** (hint, mouse), **ours** (player) | The stroke draw-in with a tile squish for taps, drags and Apply; the mouse's X pops | How a player's own X appears was not recorded (Q3) |
+| Helper buttons and the pulse (D-2d-11) | **Closed** (press), **provisional** (pulse rule) | Press to 0.90, fire on release, spring back; the pulse after 5 s idle with stock and before any helper use | The pulse rule fits every observation but rests on few (Q7) |
+| Level-start toast (D-2d-13) | **Closed** (look and motion) | Two cream tickers with a paw cap crossing right to left, line 2 slightly ahead | Our honest lines from the player's own numbers instead of player statistics (we have no such data); the speed is unresolved (9 s, Q1) |
+| Palette (Mint, ours) | **Closed** for 11 colours | Denim `#5B75B2` measured as the 11th; boards up to 11 × 11 use only measured colours; the heads follow the measured hue ring | Cocoa (ours) for the 12th, unseen (Q10); the ring's start per level is ours (Q9) |
+
+Still different: our art and words, our levels, Apply's shade, the sounds (all recordings are silent; ours are soft and our own), and helpers-spec §8's open questions (STATUS-2d §14).
 
 ### 1.1 The Phase 2 headline (2026-10-07, for reference)
 
@@ -262,6 +281,8 @@ The Google Play event card that ended on 9/23 ("Meowdoku Mode") belongs to *Bloc
 | Boot | Not documented (native app) | Web loading screen with the sleeping cat and a progress bar | **[different-by-design]** (platform) | low | unknown |
 
 ### 3.4 Animation by event
+
+> **Phase 2d.1 (2026-10-10):** the helper rows of this table (the hint, the kitty's reveal, the mouse, a placed cat, the points, a completed unit, an X appearing) are superseded by §1.0c: those motions are now measured on the user's recordings. The table keeps the 2026-10-07 comparison for history.
 
 Original times are not measured; our times come from `GameConfig` and the CSS.
 

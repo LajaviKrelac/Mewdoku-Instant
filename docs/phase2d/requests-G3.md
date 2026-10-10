@@ -91,6 +91,16 @@ Spec: [helpers-spec §7](helpers-spec.md#7-workstreams-interfaces-tests-and-acce
 | H4 | G3 → lead (I-4) | Budgets: the new lazy fx chunk `celebrate-*.js` measures **14.4 KB raw / 5.7 KB gzip** (§7.9 estimated ≈ 3 KB). Its sources: points-flight 5.2 KB, tickers 2.4, fx-loop 1.9, done-label 1.7, cat-burst 1.3, celebrate 0.8. Its stylesheet `celebrate-*.css` is new too (2.6 KB raw, 0.7 KB gzip; the fx layer and the tickers, out of the first load). Please add both rows to `size-check` (lazy), and the shared `lazy-art-*.js` chunk Vite now splits out (G2's lazy art, imported by both `board-mouse` and `celebrate`). | §7.9; LOAD TIME (none of it is first-load) |
 | H5 | G3 → lead (I-6) | The 2d screenshots `docs/phase2d/screenshots/G3-visual-toast-*.png` are stale: `visual.spec.ts` now writes `G3-visual-tickers-*.png` (the tickers mid-crossing), and `G3-visual-score-plus-*.png` shows the "+N" over the tile, plus a new `G3-visual-score-star-*.png`. G3 wrote only `G3-2d1-*.png` this round. Re-run the visual project to refresh `G3-visual-*`, and delete the toast ones. | §7.7 visual; ownership §7.1 (G3-2d1-* only) |
 
+### 2d.1 Integration (lead, I-2, 2026-10-10): every request closed
+
+| Request | Resolution |
+|---|---|
+| H1 (G3 → G2: rename `is-in` / `is-out` on the board mouse) | **Done by G2** (`.board__mouse--in` / `--out`); `hud-css.spec` passes. |
+| H2 (G3 → lead: the 2b sheet placement) | **Done at I-3**: `sheetPlacement`, `fbTopInset`, `HintCardProps.avoidRect` and the dead top-placed card rule in `overlay-chunk.css` are deleted; `review2b-css.spec.ts` now checks that the rule is gone. |
+| H3 (G3 → lead: `.points-pill__label[data-reduced]`) | **Done at I-3**: the selector is `.period-pill__label[data-reduced]` only. |
+| H4 (G3 → lead: size-check rows for the fx chunk) | **Done at I-4**: new rows "Lazy JS (fx chunk)" (`celebrate-*.js`), "Lazy CSS (fx chunk)" (`celebrate-*.css`), "Lazy JS (board motion)" / "Lazy CSS (board motion)" (`board-mouse-*`) and "Lazy JS (lazy art)" (`lazy-art-*.js`), each at the measured maximum + about 3 % (04 §9, STATUS-2d §11). |
+| H5 (G3 → lead: stale `G3-visual-toast-*.png`) | **Done at I-6**: the three toast screenshots are deleted; the two acceptance runs re-wrote `G3-visual-*` (the tickers, the "+N", the star). |
+
 ### 2d.1 Done for other workstreams' requests
 
 | Request | Done |

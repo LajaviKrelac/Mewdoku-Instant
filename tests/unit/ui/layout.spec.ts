@@ -21,20 +21,22 @@ describe('computeLayout (look-spec §1.1)', () => {
   // [label, vw, vh, safeTop, safeBottom, band, n] → [s, colW, compact, slot, gap, board, y0, pills y, board y, discs y, banner y | null]
   type Row = [string, number, number, number, number, boolean, number, [number, number, boolean, number, number, number, number, number, number, number, number | null]];
   const TABLE: Row[] = [
-    ['402 × 874 (62/34, band): the recording', 402, 874, 62, 34, true, 10, [1.0, 402, false, 38, 3, 390, 62.6, 124.9, 250.5, 693.5, 777.2]],
-    ['402 × 874 web', 402, 874, 0, 0, false, 10, [1.0, 402, false, 38, 3, 390, 62.0, 124.3, 249.9, 692.9, null]],
-    ['390 × 844 (47/34, band)', 390, 844, 47, 34, true, 10, [0.97, 390, false, 36, 3, 370, 55.1, 115.5, 237.4, 658.8, 740.0]],
-    ['390 × 844 web', 390, 844, 0, 0, false, 10, [0.97, 390, false, 36, 3, 370, 60.1, 120.6, 242.4, 663.9, null]],
-    ['360 × 640 web', 360, 640, 0, 0, false, 10, [0.896, 360, false, 33, 3, 340, 9.6, 65.4, 177.9, 565.4, null]],
-    ['360 × 640 FBIG (band)', 360, 640, 0, 0, true, 10, [0.811, 326, true, 30, 2, 308, 4.4, 54.9, 156.8, 507.8, 575.6]],
-    ['320 × 568 web', 320, 568, 0, 0, false, 10, [0.796, 320, true, 30, 2, 308, 5.2, 54.8, 154.8, 505.0, null]],
-    ['320 × 568 web, 12 × 12', 320, 568, 0, 0, false, 12, [0.796, 320, true, 25, 2, 308, 5.2, 54.8, 154.8, 505.0, null]],
-    ['320 × 568 FBIG (band)', 320, 568, 0, 0, true, 10, [0.712, 286, true, 27, 2, 278, 0.1, 44.4, 133.8, 449.6, 509.2]],
-    ['320 × 568 FBIG (band), 12 × 12', 320, 568, 0, 0, true, 12, [0.712, 286, true, 22, 2, 272, 3.1, 47.4, 136.8, 446.6, 506.2]],
-    ['1280 × 800 desktop web', 1280, 800, 0, 0, false, 10, [1.136, 457, false, 43, 3, 442, 0.9, 71.7, 214.4, 716.6, null]],
-    ['1280 × 800 desktop web, 12 × 12', 1280, 800, 0, 0, false, 12, [1.136, 457, false, 35, 3, 432, 5.9, 76.7, 219.4, 711.6, null]],
-    ['320 × 568 FBIG (band), 12 × 12, safe top 20', 320, 568, 20, 0, true, 12, [0.684, 275, true, 21, 2, 260, 23.7, 66.3, 152.3, 448.6, 505.9]],
-    ['375 × 667 FBIG (band), 12 × 12, safe top 20', 375, 667, 20, 0, true, 12, [0.821, 330, true, 26, 2, 320, 20.3, 71.4, 174.5, 537.9, 606.6]],
+    ['402 × 874 (62/34, band): the recording', 402, 874, 62, 34, true, 10, [1.0, 402, false, 38, 3, 390.66, 62.2, 124.5, 250.1, 693.8, 777.5]],
+    ['402 × 874 web', 402, 874, 0, 0, false, 10, [1.0, 402, false, 38, 3, 390.66, 62.0, 124.3, 249.9, 693.6, null]],
+    ['390 × 844 (47/34, band)', 390, 844, 47, 34, true, 10, [0.97, 390, false, 36, 3, 379, 50.6, 111.0, 232.9, 663.3, 744.5]],
+    ['390 × 844 web', 390, 844, 0, 0, false, 10, [0.97, 390, false, 36, 3, 379, 60.1, 120.6, 242.4, 672.9, null]],
+    ['360 × 640 web', 360, 640, 0, 0, false, 10, [0.896, 360, false, 33, 3, 349.84, 4.7, 60.5, 173.0, 570.3, null]],
+    ['360 × 640 FBIG (band)', 360, 640, 0, 0, true, 10, [0.811, 326, true, 30, 2, 316.8, 0.0, 50.5, 152.4, 512.2, 580.0]],
+    ['320 × 568 web', 320, 568, 0, 0, false, 10, [0.796, 320, true, 30, 2, 310.97, 3.7, 53.3, 153.3, 506.5, null]],
+    ['320 × 568 web, 12 × 12', 320, 568, 0, 0, false, 12, [0.796, 320, true, 25, 2, 310.97, 3.7, 53.3, 153.3, 506.5, null]],
+    ['320 × 568 FBIG (band)', 320, 568, 0, 0, true, 10, [0.712, 286, true, 27, 2, 278.14, 0.0, 44.4, 133.8, 449.7, 509.2]],
+    ['320 × 568 FBIG (band), 12 × 12', 320, 568, 0, 0, true, 12, [0.712, 286, true, 22, 2, 278.14, 0.0, 44.4, 133.8, 449.7, 509.2]],
+    ['1280 × 800 desktop web', 1280, 800, 0, 0, false, 10, [1.136, 457, false, 43, 3, 443.83, 0.0, 70.8, 213.5, 717.5, null]],
+    ['1280 × 800 desktop web, 12 × 12', 1280, 800, 0, 0, false, 12, [1.136, 457, false, 35, 3, 443.83, 0.0, 70.8, 213.5, 717.5, null]],
+    ['320 × 568 FBIG (band), 12 × 12, safe top 20', 320, 568, 20, 0, true, 12, [0.684, 275, true, 21, 2, 267.4, 20.0, 62.6, 148.6, 452.3, 509.6]],
+    ['375 × 667 FBIG (band), 12 × 12, safe top 20', 375, 667, 20, 0, true, 12, [0.821, 330, true, 26, 2, 320.56, 20.0, 71.1, 174.2, 538.2, 606.9]],
+    // Audit B11: the recording's device on a 9 × 9 board keeps the card (the helper recordings: card 390.67, the stack as on 10 × 10)
+    ['402 × 874 (62/34, band), 9 × 9', 402, 874, 62, 34, true, 9, [1.0, 402, false, 42, 3, 390.66, 62.2, 124.5, 250.1, 693.8, 777.5]],
   ];
 
   it.each(TABLE)('%s matches the look-spec §1.1 table', (_label, vw, vh, safeTop, safeBottom, banner, n, want) => {
@@ -45,7 +47,7 @@ describe('computeLayout (look-spec §1.1)', () => {
     expect(g.compact).toBe(compact);
     expect(g.slot).toBe(slot);
     expect(g.gap).toBe(gap);
-    expect(g.board).toBe(board);
+    expect(g.board).toBeCloseTo(board, 1);
     const r = rows(g);
     for (const [got, exp] of [[g.top, y0], [r.pills, pillsY], [r.board, boardY], [r.discs, discsY]] as const) expect(Math.abs(got - exp)).toBeLessThanOrEqual(0.5);
     if (bannerY === null) expect(g.band).toBe(0);
@@ -55,9 +57,16 @@ describe('computeLayout (look-spec §1.1)', () => {
     }
   });
 
-  it('at the recording\'s size the measured boxes come out: card 390, tile 35, gap 3, radius 11.6, pad 5, discs 60.3', () => {
+  it('at the recording\'s size the measured boxes come out: card 390.66 (audit B11: the card keeps its width), tile 35, gap 3, radius 11.6, pad 5.33, discs 60.3', () => {
     const g = computeLayout({ vw: 402, vh: 874, safeTop: 62, safeBottom: 34, n: 10, banner: true });
-    expect(g).toMatchObject({ s: 1, pad: 5, slot: 38, gap: 3, board: 390, radius: G.cardRadius });
+    expect(g).toMatchObject({ s: 1, slot: 38, gap: 3, radius: G.cardRadius });
+    expect(g.board).toBeCloseTo(402 - 2 * G.cardMargin, 9); // measured 390.67
+    expect(g.pad).toBeCloseTo((402 - 2 * G.cardMargin - 380) / 2, 9);
+    // 9 × 9 (the helper recordings): the same card, the 2.66 px the whole slots leave in the padding (7.83 to the first tile; measured 7.33–7.7)
+    const g9 = computeLayout({ vw: 402, vh: 874, safeTop: 62, safeBottom: 34, n: 9, banner: true });
+    expect(g9.board).toBeCloseTo(402 - 2 * G.cardMargin, 9);
+    expect(g9.slot).toBe(42);
+    expect(g9.pad + g9.gap / 2).toBeCloseTo(7.83, 2);
     expect(g.slot - g.gap).toBe(35);
     expect(g.tools).toBeCloseTo(60.3, 5);
     expect(g.bar).toBe(52);
@@ -79,7 +88,10 @@ describe('computeLayout (look-spec §1.1)', () => {
     expect(g.tools).toBeCloseTo(G.tools * g.s, 6);
     expect(g.gaps.boardToTools).toBeCloseTo(G.boardToTools * g.s, 6);
     expect(g.radius).toBeCloseTo(G.cardRadius * g.s, 6);
-    expect(g.pad).toBe(Math.max(3, Math.round(G.cardPad * g.s)));
+    // the padding: at least round(cardPad × s), plus half of what the whole slots leave of the card (audit B11)
+    expect(g.pad).toBeGreaterThanOrEqual(Math.max(3, Math.round(G.cardPad * g.s)));
+    expect(g.pad).toBeCloseTo((g.board - g.slot * 10) / 2, 9);
+    expect(g.pad - Math.max(3, Math.round(G.cardPad * g.s))).toBeLessThan(10 / 2);
     expect(g.compact).toBe(true);
     expect(computeLayout({ vw: 402, vh: 874, safeTop: 0, safeBottom: 0, n: 10 }).compact).toBe(false);
     // s is clamped to [minScale, maxScale]
@@ -113,8 +125,11 @@ describe('computeLayout (look-spec §1.1)', () => {
               const ctx = `${vw}×${vh} n=${n} safe=${safe} band=${banner}`;
               expect(g.compact, ctx).toBe(g.s < G.compactScale);
               expect(g.slot, ctx).toBeGreaterThanOrEqual(1);
-              expect(g.board, ctx).toBe(g.slot * n + 2 * g.pad);
-              expect(g.board, ctx).toBeLessThanOrEqual(g.boardMax);
+              expect(g.board, ctx).toBeCloseTo(g.slot * n + 2 * g.pad, 9);
+              // audit B11: the card keeps its full size (the whole slots' remainder is padding, < n px)
+              expect(g.board, ctx).toBeCloseTo(g.boardMax, 9);
+              expect(g.pad, ctx).toBeGreaterThanOrEqual(Math.max(3, Math.round(G.cardPad * g.s)));
+              expect(2 * g.pad - 2 * Math.max(3, Math.round(G.cardPad * g.s)), ctx).toBeLessThan(n);
               expect(g.board, ctx).toBeLessThanOrEqual(g.colW);
               expect(g.colW, ctx).toBeLessThanOrEqual(vw + 1e-9);
               const g2 = g.gaps;
@@ -143,7 +158,8 @@ describe('computeLayout (look-spec §1.1)', () => {
   it('reads every value from layout.game (a config variant moves the stack)', () => {
     const c = mergeConfig({ layout: { game: { cardPad: 10, gapFraction: 0.2 } } } as never);
     const g = computeLayout({ vw: 402, vh: 874, safeTop: 0, safeBottom: 0, n: 10 }, c);
-    expect(g.pad).toBe(10);
+    expect(g.slot).toBe(Math.floor((402 - 2 * G.cardMargin - 20) / 10));
+    expect(g.pad).toBeCloseTo((402 - 2 * G.cardMargin - g.slot * 10) / 2, 9); // 10 + the remainder
     expect(g.gap).toBe(Math.round(g.slot * 0.2));
   });
 });

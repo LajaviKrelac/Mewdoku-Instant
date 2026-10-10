@@ -67,6 +67,17 @@ Spec: [helpers-spec §7](helpers-spec.md#7-workstreams-interfaces-tests-and-acce
 | H5 | G2 → lead | `dev/look-compare.ts`: our level 96 now draws **Denim** in place of **Pink**. Its colours are 0–8 and 10, because n ≤ 11 boards draw from the 11 measured colours (§6.2). The "10 tile colours at ΔE00 ≤ 1" check and any letter → palette map built on 2d's colours may need updating. The board e2e capture moved from level 785 to **794** for the same reason: 785's top-left region is Denim now. | helpers-spec §6.2 (D-2d1-10) |
 | H6 | G2 → G3 (I-3) | `src/styles/fx.css`: the board no longer uses `.cell.fx-drop` / `@keyframes cat-drop` (every correct cat plays the 2d.1 sequence), `@keyframes ghost-pulse` (the ghost is the outline pop), or `.cell__spark` / `@keyframes spark` (the kitty's 2b sparkle). They can go at I-3. `fx.css`'s `ghost-bob` and `ghost-clear` are still used by `board.css`. | Dead CSS in the first load (§7.9) |
 
+### 2d.1 Integration (lead, I-2, 2026-10-10): every request closed
+
+| Request | Resolution |
+|---|---|
+| H1 (G2 → G3: shards only in the fx layer) | **Done by G3**: `cat-burst.ts` draws only the shards; the board draws the light and the twinkles. |
+| H2 (G2 → G3: `mountLazyArt()` in the fx chunk) | **Done by G3**: `createCelebrate()` calls it before any star or shard (test in `points-flight.spec`). Since I-4 the lazy art also holds the ticker art. |
+| H3 (G2 → lead: `src/styles/board-mouse.css`, optionally the cat sequence) | **Done at I-4, with the option**: `board-mouse.css` (imported by the lazy `board-mouse.ts`) holds the mouse's visits and X pop, the whole cat-placed sequence (`board-cat.ts` joined the chunk, re-exported by `board-mouse.ts`) and the completion wave; the ghost rules moved to the lazy `overlay-chunk.css` (ghosts show only under the hint overlay). A cat placed before the chunk is in shows at rest (no flash) and asks for the chunk; the game screen prefetches it at idle with the fx chunk, and `.game-fx[data-celebrate=ready]` waits for both. First-load CSS 53.4 → 45.0 KB on FBIG (STATUS-2d §11). |
+| H4 (G2 → lead: `layout.catScale`, `layout.hintDim`) | **Done at I-3**: both `@deprecated phase2d.1` and unread (the config rule never removes a key); the resting cat's box is `board-cells.ts` `CAT_BOX`. |
+| H5 (G2 → lead: look-compare's level 96 colours) | **Done at I-1**: `dev/look-compare.ts` maps palette index → the measured PNG colour for the 11 measured colours and compares the ten our level 96 draws (0–8 and 10, Denim in place of Pink). |
+| H6 (G2 → G3: dead `fx.css` rules) | **Done by G3** (the `fx.css` rules); at I-3 the lead deleted `sparkle()` (`board-fx.ts`) and `.cell__spark`. |
+
 ### 2d.1 Done for other workstreams' requests
 
 *(none yet)*

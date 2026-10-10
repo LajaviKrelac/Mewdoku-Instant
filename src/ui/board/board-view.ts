@@ -417,7 +417,8 @@ export function createBoardView(model: BoardModel, input: BoardInput, opts: Boar
             break;
           }
           // not loaded yet: hide the X's now; the run starts (catching up) when the chunk lands, and a
-          // failed load, or one later than the whole run, shows them at once
+          // failed load, or one later than the whole run, shows them at once (a chunk landing after that
+          // plays nothing: the X's are already shown; audit A-2)
           for (const i of list) cells[i]?.el.classList.add('fx-pend');
           el.setAttribute('aria-busy', 'true');
           const reveal = (): void => {
@@ -426,7 +427,9 @@ export function createBoardView(model: BoardModel, input: BoardInput, opts: Boar
           };
           const gen = ++mouseGen;
           timers.later(mouseRunMs(list.length, false), () => {
-            if (gen === mouseGen && !mouseRun) reveal();
+            if (gen !== mouseGen || mouseRun) return;
+            mouseGen++;
+            reveal();
           });
           loadMouseRun().then(
             (mod) => {

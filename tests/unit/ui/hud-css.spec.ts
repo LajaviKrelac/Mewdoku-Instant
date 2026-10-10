@@ -124,13 +124,16 @@ describe('Phase 2d: the game bar (§1.4, §1.13, §1.15)', () => {
 });
 
 describe('Phase 2d: the pills row (§1.5, §1.6)', () => {
-  it('a 1fr auto grid 12 s in: heads pill (and the win-flow period counter) then the fish pill; no flex gap', () => {
+  it('a centred auto auto grid 12 s in: heads pill (and the win-flow period counter) as wide as its heads (--hpw, audit B1), then the fish pill; no flex gap', () => {
     const row = ruleOf(hud, '.pills') ?? '';
-    expect(row).toContain('grid-template-columns: 1fr auto');
+    expect(row).toContain('grid-template-columns: auto auto');
+    expect(row).toContain('justify-content: center');
     expect(row).toContain('column-gap: calc(var(--s) * 11.3px)');
     expect(row).not.toMatch(/(^|[^-])gap:/);
     expect(ruleOf(hud, '.pill--heads')).toContain('grid-area: 1 / 1');
     expect(ruleOf(hud, '.pills > .period-pill')).toContain('grid-area: 1 / 1');
+    expect(ruleOf(hud, '.pill--heads')).toContain('width: calc(var(--s) * var(--hpw, 270) * 1px)');
+    expect(ruleOf(hud, '.pills > .period-pill')).toContain('width: calc(var(--s) * var(--hpw, 270) * 1px)');
     expect(ruleOf(hud, '.pill--lives')).toContain('grid-column: 2');
     // The heads pill has the faint pill shadow; the fish pill none.
     expect(ruleOf(hud, '.pill--heads')).toContain('box-shadow: var(--shadow-pill)');
@@ -262,6 +265,23 @@ describe('Phase 2d: the helper row (§1.11)', () => {
     expect(ruleOf(hud, "[data-motion='reduced'] .tool:active")).toContain('transform: none');
     // Apply presses the same way (overlay-chunk.css).
     expect(ruleOf(chunk, ".btn.hint-apply:active:not([aria-disabled='true'])")).toContain('transform: scale(0.9)');
+    // audit B12: on touch, :active does not hold while the finger is down; [data-pressed] (dom.ts trackPress) presses the same.
+    expect(ruleOf(hud, '.tool[data-pressed]:not(:disabled)')).toBe('transform: scale(0.9);');
+    expect(ruleOf(hud, "[data-motion='reduced'] .tool[data-pressed]")).toContain('transform: none');
+    expect(ruleOf(chunk, ".btn.hint-apply[data-pressed]:not([aria-disabled='true'])")).toContain('transform: scale(0.9)');
+    expect(ruleOf(chunk, "[data-motion='reduced'] .btn.hint-apply[data-pressed]")).toContain('transform: none');
+  });
+
+  it('audit B6 (measured: a near-white halo behind the number and its label at the count-up): the Score column\'s own halo while [data-counting], behind the digits (z −1 in an isolated column), over --count-ms', () => {
+    expect(ruleOf(hud, '.points-pill')).toContain('isolation: isolate');
+    const halo = ruleOf(hud, '.points-pill[data-counting]::before') ?? '';
+    expect(halo).toContain('z-index: -1');
+    expect(halo).toContain('animation: score-halo var(--count-ms, 350ms) linear both');
+    expect(halo).toMatch(/radial-gradient\(closest-side, #fff 0%, rgba\(var\(--score-halo-rgb\), 0\.95\) 40%/);
+    expect(read(join(STYLES, 'tokens.css'))).toContain('--score-halo-rgb: 255, 246, 242;'); // near-white, no saturated yellow
+    const kf = /@keyframes score-halo\s*\{([\s\S]*?)\n\}/.exec(stripComments(hud))?.[1] ?? '';
+    expect(kf).toMatch(/20%,\s*48\.6%\s*\{\s*opacity: 1/);
+    expect(kf).toMatch(/100%\s*\{\s*opacity: 0/);
   });
 
   it('2d.1 §1.2 (critic): a busy row is inert and keeps its look: no disabled fade', () => {
@@ -280,6 +300,11 @@ describe('Phase 2d: the helper row (§1.11)', () => {
     }
     expect(pulseKf).toContain('scale(var(--pulse-scale, 1.08))');
     expect(glowKf).toContain('opacity: 1');
+    // audit B2 (measured): the icon swells 1.25 × in all while its disc reaches 1.08: it adds 1.15 at the same stops.
+    expect(ruleOf(hud, '.tool[data-pulse]:not(:disabled) .tool__icon')).toContain('animation: tool-icon-pulse var(--pulse-ms, 1500ms) ease-in-out infinite');
+    const iconKf = /@keyframes tool-icon-pulse\s*\{([\s\S]*?)\n\}/.exec(stripComments(hud))?.[1] ?? '';
+    expect(iconKf).toMatch(/0%,\s*69%,\s*100%\s*\{\s*transform: none/);
+    expect(iconKf).toMatch(/32%,\s*36%\s*\{\s*transform: scale\(var\(--pulse-icon, 1\.15\)\)/);
     expect(ruleOf(hud, '.tool__disc::after')).toMatch(/rgba\(var\(--pulse-rgb\), 0\.9\)/);
   });
 
@@ -343,21 +368,39 @@ describe('Phase 2d.1: the fx layer and the tickers (§2.5, §5.2)', () => {
     for (const d of [
       'top: calc(var(--y-top) + var(--s) * 89.2px)',
       'height: calc(var(--s) * 29.3px)',
-      'border: calc(var(--s) * 1.2px) solid var(--toast-line)',
-      'border-inline-start: 0',
-      'border-start-end-radius: calc(var(--s) * 14.65px)',
-      'border-end-end-radius: calc(var(--s) * 14.65px)',
-      'background: var(--toast-fill)',
       'padding-inline-start: calc(var(--s) * 20px)',
       'max-width: calc(var(--col-w) - var(--s) * 24px)',
       'white-space: nowrap',
       'color: var(--ink)',
     ])
       expect(t, d).toContain(d);
+    // audit B8: the body (fill, border, round end) is the ::before, starting under the paw (14 s in), so its
+    // straight top and bottom never run past the scallops; the ticker box itself has none
+    expect(t).not.toMatch(/(?:^|[;\s])(?:border(?:-[a-z]+)*|background)\s*:/);
+    const body = ruleOf(celebrate, '.ticker::before') ?? '';
+    for (const d of [
+      'z-index: -1',
+      'inset-inline-start: calc(var(--s) * 14px)',
+      'border: calc(var(--s) * 1.2px) solid var(--toast-line)',
+      'border-inline-start: 0',
+      'border-start-end-radius: calc(var(--s) * 14.65px)',
+      'border-end-end-radius: calc(var(--s) * 14.65px)',
+      'background: var(--toast-fill)',
+    ])
+      expect(body, d).toContain(d);
     expect(ruleOf(celebrate, ".ticker[data-line='2']")).toContain('top: calc(var(--y-top) + var(--s) * 130px)');
     const text = ruleOf(celebrate, '.ticker__text') ?? '';
     for (const d of ['font-size: max(10px, calc(var(--s) * 16.5px))', 'text-overflow: ellipsis', 'overflow: hidden']) expect(text, d).toContain(d);
-    expect(ruleOf(celebrate, '.ticker__paw')).toContain('height: calc(var(--s) * 29.3px)');
+    // audit B7: thinned like the labels (measured stroke 1.40 vs 1.87 px), in the pill's own fill
+    expect(text).toContain('-webkit-text-stroke: calc((700 - var(--display-weight)) * 0.0004em) var(--toast-fill)');
+    // audit B8: the paw's scallops overhang the pill 2.1 s above and below
+    expect(ruleOf(celebrate, '.ticker__paw')).toContain('height: calc(var(--s) * 33.5px)');
+    expect(ruleOf(celebrate, '.ticker__paw')).toContain('top: calc(var(--s) * -2.1px)');
+  });
+
+  it('audit B14: the tickers cross the game column, clipped to it (not the whole desktop viewport)', () => {
+    const box = ruleOf(celebrate, '.tickers') ?? '';
+    for (const d of ['position: absolute', 'left: calc(50% - var(--col-w) / 2)', 'width: var(--col-w)', 'overflow: hidden', 'pointer-events: none']) expect(box, d).toContain(d);
   });
 
   it('RTL: the tickers are anchored at the right and the paw turns (they move left → right, tickers.ts)', () => {
@@ -375,6 +418,13 @@ describe('Phase 2d.1: the fx layer and the tickers (§2.5, §5.2)', () => {
     for (const d of ['background: var(--hint-card)', 'border-radius: calc(var(--hs, 1) * 15px)', 'min-height: calc(var(--hs, 1) * 70.3px)', 'box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25)', 'max-height: var(--hc-max, none)']) expect(card, d).toContain(d);
     const text = ruleOf(chunk, '.hint-card__text') ?? '';
     for (const d of ['overflow-y: auto', 'font-size: max(10px, calc(var(--hs, 1) * 14.5px))', 'color: var(--ink)']) expect(text, d).toContain(d);
+    // audit B9 (measured: the card's sentence is in the rounded display face, stroke 1.0 px): the display face, thinned
+    for (const d of ['font-family: var(--font-display)', 'font-weight: var(--display-weight)', '-webkit-text-stroke: calc((700 - var(--display-weight)) * 0.0005em) var(--hint-card)'])
+      expect(text, d).toContain(d);
+    // audit B13: the colour name's underline scales with the card's text (at 320 px in German it cleared line 3 by too little)
+    const under = ruleOf(chunk, '.hint-card__text .color-name') ?? '';
+    expect(under).toContain('text-decoration-thickness: max(1.5px, 0.16em)');
+    expect(under).toContain('text-underline-offset: max(1.5px, 0.14em)');
     const apply = ruleOf(chunk, '.btn.hint-apply') ?? '';
     for (const d of ['background: var(--apply)', 'width: calc(var(--hs, 1) * 278.7px)', 'height: calc(var(--hs, 1) * 59.3px)', 'font-size: max(24px, calc(var(--hs, 1) * 28px))', 'box-shadow: none']) expect(apply, d).toContain(d);
     expect(ruleOf(chunk, '.hint-close.visually-hidden-focusable:focus')).toContain('width: 44px');

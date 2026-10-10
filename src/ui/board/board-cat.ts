@@ -1,8 +1,8 @@
 // Owner: G2 (Phase 2d.1)
 // The cat-placed sequence on the board (helpers-spec §2.4, D-2d1-3; measured on the user's recording v2),
 // for every correct cat (the kitty's, a hint's, the player's). t from CAT_PLACED:
-//   0       the tile flashes: white rays from its centre and a strong lightening (.cell__flash), a pale
-//           yellow-green halo spills into the gaps (33 → 83 ms);
+//   0       the tile flashes: white rays from its centre (.cell__flash) over a strong lightening (its
+//           .cell__wash), a pale yellow halo spills into the gaps (33 → 83 ms);
 //   16      the cat appears at 0.30 × its resting size F (origin 50 % 80 %, near the chin) …
 //   116–133 … peaks at 1.56 F (it overflows its tile: the cell is lifted above its neighbours) …
 //   300     … and is held at 1.25 F; it winks from 350 to 780 (mood 'wink');
@@ -53,8 +53,10 @@ export function playCatSequence(refs: CellRefs, deps: CatSequenceDeps, c: GameCo
   const flash = doc.createElement('span');
   flash.className = 'cell__flash';
   flash.setAttribute('aria-hidden', 'true');
-  // the halo mixes the tile's own colour (board.css); the tile keeps --c on itself (PERF-1)
-  flash.style.setProperty('--c', refs.tile.style.getPropertyValue('--c'));
+  // the white wash in its own layer: the rays and the halo on the flash itself keep their own opacity (audit B3)
+  const wash = doc.createElement('i');
+  wash.className = 'cell__wash';
+  flash.appendChild(wash);
   const light = doc.createElement('span');
   light.className = 'cell__light';
   light.setAttribute('aria-hidden', 'true');

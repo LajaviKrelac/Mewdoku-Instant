@@ -79,6 +79,16 @@ Spec: [helpers-spec §7](helpers-spec.md#7-workstreams-interfaces-tests-and-acce
 | H4 | G1 → lead (I-3) | When `GameScreen.playTickers` becomes required and `playStartToast` goes: delete the fallback branch in `session.ts` `playBoardEntry` (the 2d toast for a screen without `playTickers`, still gated by `fx.startToast.enabled`) and the test "a screen without playTickers (until I-3) still gets the 2d toast" in `tests/unit/app/session-2d.spec.ts`. The fake game screen in `tests/unit/app/harness.ts` already implements `playTickers`; drop its `playStartToast` and `startToasts` then. `boot.spec.ts`'s fake needs `playTickers` too. `fx.mouseStaggerMs` has no G1 reader any more. | helpers-spec §7.2 I-3 |
 | H5 | G1 → G3 (and G2) | With `page.clock.setFixedTime` (Date.now frozen; timers and `performance.now` keep running), `__mewdoku.solve()` on level 15 at 1280 × 800 now opens the ranking panel at ≈ 10 s instead of ≈ 4 s. The `layout` e2e "keyboard only: focus moves into every new screen" then fails: `.ranking__tap` is not enabled within 10 s. HEAD (`7048674`) and HEAD + only the G1 changes open it at ≈ 4 s; probe in `scratchpad/2d1-G1/tools/probe-win.mjs`. So the delay comes from the in-progress celebration fx on the board or the fx layer: something that measures Date.now, or a loop that starves the timers while n cats celebrate at once. Please check it. A real player does not freeze Date, but a busy main thread at the win would delay the panel the same way. | win flow §2.2 times; helpers-spec §2.4–§2.5 |
 
+### 2d.1 Integration (lead, I-2, 2026-10-10): every request closed
+
+| Request | Resolution |
+|---|---|
+| H1 (G1 → G3: `visual.spec.ts` pulse wait, tickers) | **Done by G3** (requests-G3 "2d.1 Done"): the recording-state test waits for `.tool--bulb[data-pulse]` after the marks and captures the tickers mid-crossing; every `.start-toast` wait became "the tickers have crossed". |
+| H2 (G1 → lead: `dev/look-compare.ts`) | **Done at I-1**: `openRecording` waits for the two tickers to leave the DOM, then for the bulb's pulse (`fx.helperPulse.idleMs` + the 1 s TICK) before the "pulse peak" capture. |
+| H3 (G1 → lead: CONTRACTS-2d1) | **Done at I-5**: (a) the `DoneUnit.anchor` doc comment says "for the mouse, the last in its visit order" (CONTRACTS-2d1 §2, §11.2); (b) the G1 members are listed in CONTRACTS-2d1 §11.3. |
+| H4 (G1 → lead: I-3 deletions) | **Done at I-3**: `playTickers` is required; `playStartToast`, `StartToastKind` and `start-toast.ts` are gone; the session's fallback to the 2d toast and its test ("a screen without playTickers …") are deleted; `tests/unit/app/harness.ts` dropped `playStartToast` / `startToasts`; `boot.spec.ts`'s fake implements `playTickers`; `fx.mouseStaggerMs` and `fx.startToast` have no reader (`@deprecated phase2d.1`, kept by the config rule). |
+| H5 (G1 → G3: the ranking panel ≈ 10 s after `solve()` under a fixed clock) | **Done by G3**: `fx-loop.ts` keeps one requestAnimationFrame chain (the trail sparkles had piled up chains); `layout` "keyboard only …" passes in both acceptance runs (STATUS-2d §12). |
+
 ### 2d.1 Done for other workstreams' requests
 
 *(none yet)*

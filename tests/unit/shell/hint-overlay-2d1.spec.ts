@@ -119,6 +119,11 @@ describe('the overlay (§3.2–§3.5, §3.7)', () => {
     // One hole per cut-out tile.
     const path = dim.querySelector('path')?.getAttribute('d') ?? '';
     expect(path.match(/M/g)).toHaveLength(1 + hintCutouts(shadow, cells()).length);
+    // audit B12: the 0.90 press shows on touch too, while the finger is down
+    apply.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch', button: 0 }));
+    expect(apply.hasAttribute('data-pressed')).toBe(true);
+    apply.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerType: 'touch', button: 0 }));
+    expect(apply.hasAttribute('data-pressed')).toBe(false);
     apply.click();
     expect(p.onApply).toHaveBeenCalledTimes(1);
     card.close();

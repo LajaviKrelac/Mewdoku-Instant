@@ -254,8 +254,10 @@ describe('createBoardView', () => {
       expect(c.classList.contains('fx-cat'), source).toBe(true);
       expect(c.querySelector('.cell__flash')).not.toBeNull();
       expect(c.querySelectorAll('.cell__light > i')).toHaveLength(6);
-      // the flash takes the tile's colour for its halo
-      expect((c.querySelector('.cell__flash') as HTMLElement).style.getPropertyValue('--c')).toBe('var(--r7)');
+      // audit B3: the white wash is its own layer inside the flash (the rays and the halo keep their own
+      // opacity), and the halo is the measured near-white: no tile colour on the flash
+      expect(c.querySelectorAll('.cell__flash > .cell__wash')).toHaveLength(1);
+      expect((c.querySelector('.cell__flash') as HTMLElement).style.getPropertyValue('--c')).toBe('');
       expect(c.dataset.mood).toBe('idle'); // no blink lid and no breathing while it pops
       expect(c.querySelector('.cell__spark')).toBeNull(); // the 2b kitty sparkle is gone
       vi.advanceTimersByTime(WINK_FROM_MS);

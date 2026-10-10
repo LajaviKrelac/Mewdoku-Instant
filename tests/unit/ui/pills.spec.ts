@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cfg } from '../../../src/app/config';
 import * as pillsModule from '../../../src/ui/hud/pills';
 import { HEAD_ORDER, headOrderFor } from '../../../src/ui/art/palette';
-import { createPeriodPill, createPills, headColors, headScale, LOSS_DROP_FLY, LOSS_DROPS, POP_DROPS, type PillsProps } from '../../../src/ui/hud/pills';
+import { createPeriodPill, createPills, headColors, headScale, headsPillWidth, LOSS_DROP_FLY, LOSS_DROPS, POP_DROPS, type PillsProps } from '../../../src/ui/hud/pills';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -361,6 +361,22 @@ describe('the heads pill (look-spec §1.6; Phase 2d.1 §2.7, §6.5)', () => {
     expect(headScale(10, 4)).toBeLessThan(1);
     const p = createPills({ ...base, n: 12, colors: Array.from({ length: 12 }, (_, i) => i) });
     expect((p.el.querySelector('.pill--heads') as HTMLElement).style.getPropertyValue('--hk')).toBe(String(Math.round(headScale(12, 3) * 1000) / 1000));
+  });
+
+  it('audit B1 (measured on 9 × 9): the heads pill is as wide as its heads, n × 25.33 + 16.6 s, at most the room next to the fish pill (--hpw on the row, which hud.css centres)', () => {
+    expect(headsPillWidth(9, 3)).toBeCloseTo(244.6, 1); // the recordings' 9 × 9: 244.6 wide
+    expect(headsPillWidth(10, 3)).toBeCloseTo(270, 0); // the first recording's 10 × 10: 270
+    expect(headsPillWidth(5, 3)).toBeCloseTo(143.25, 2);
+    expect(headsPillWidth(4, 3)).toBeCloseTo(117.92, 2);
+    // 11 and 12 heads fill the room next to 3 fish (378 − 11.3 − 96.3) and shrink (headScale).
+    expect(headsPillWidth(11, 3)).toBeCloseTo(270.4, 1);
+    expect(headsPillWidth(12, 3)).toBe(headsPillWidth(11, 3));
+    expect(headsPillWidth(10, 4)).toBeLessThan(headsPillWidth(10, 3)); // one more fish takes the room
+    // The row: a 9-colour board, centred (row 24.9 … 377.1 at s = 1, the fish pill 96.3 wide).
+    const p = createPills({ ...base, n: 9, colors: Array.from({ length: 9 }, (_, i) => i) });
+    expect(p.el.style.getPropertyValue('--hpw')).toBe('244.57');
+    const big = createPills({ ...base, n: 12, colors: Array.from({ length: 12 }, (_, i) => i) });
+    expect(big.el.style.getPropertyValue('--hpw')).toBe(String(Math.round(headsPillWidth(12, 3) * 100) / 100));
   });
 
   it('2d.1 §2.7: a found colour shows our cat face and a tint dot from the props without motion; REGION_DONE pops it (fx.headFoundMs)', () => {
