@@ -17,6 +17,8 @@ import '../src/styles/art.css';
 import '../src/styles/screens.css';
 // 2b integration: the overlays' and the event screen's rules load with their lazy chunks in the app.
 import '../src/styles/overlay-chunk.css';
+// Phase 2d.1 I-4: the coach (and the rich-text styles) are their own lazy stylesheet now (coach-chunk.css).
+import '../src/styles/coach-chunk.css';
 import '../src/styles/events-chunk.css';
 import { recordToPuzzle } from '../src/engine/codec';
 import type { CellIndex, LevelPack, Puzzle } from '../src/engine/types';
@@ -31,6 +33,7 @@ import { illustration, type IllustrationKind } from '../src/ui/art/illustrations
 import { mascotIllustration } from '../src/ui/art/mascot';
 import { PALETTE, regionColorsFor, xEdgeColor } from '../src/ui/art/palette';
 import { icon, mountSprite, type SymbolId } from '../src/ui/art/sprite';
+import { mountLazyArt } from '../src/ui/art/lazy-art';
 import { createBoardView, type BoardModel, type CatMood } from '../src/ui/board/board-view';
 import { computeLayout, gapFor, readViewport } from '../src/ui/board/layout';
 import { applyMotion } from '../src/ui/fx/motion';
@@ -42,6 +45,7 @@ import EVENTS from '../src/data/events/events.json';
 const q = new URLSearchParams(location.search);
 const root = document.getElementById('app') as HTMLElement;
 mountSprite();
+mountLazyArt(); // Phase 2d.1: the symbols the lazy chunks mount (board mouse, star, shards, the tickers' art)
 mountAccessories(); // the events chunk does this in the game
 applyMotion(root, q.get('rm') === '1');
 
@@ -128,8 +132,9 @@ function galleryScene(): void {
       return px === 32 ? fig(id.slice(5), s) : s;
     }), 'ax-tight');
   }
-  // Phase 2d §1.6, §1.11, §1.14: the helpers' full-colour art, the tracker head and the toast's arm.
-  section(wrap, 'Phase 2d art (64 px)', (['tool-kitty', 'tool-bulb', 'tool-mouse', 'cat-head-flat', 'art-flex'] as SymbolId[]).map((id) => {
+  // Phase 2d §1.6, §1.11: the helpers' full-colour art and the tracker head; Phase 2d.1 (Appendix C): the
+  // tickers' paw cap and end icons (2d's toast arm, art-flex, was retired at I-3).
+  section(wrap, 'Phase 2d / 2d.1 art (64 px)', (['tool-kitty', 'tool-bulb', 'tool-mouse', 'cat-head-flat', 'art-paw-cap', 'art-bolt', 'art-star'] as SymbolId[]).map((id) => {
     const s = icon(id, { class: 'ax-icon' });
     s.style.width = s.style.height = '64px';
     if (id === 'cat-head-flat') s.style.color = 'var(--r7)';
@@ -269,7 +274,7 @@ function uiScene(): void {
   // Phase 2d §1.11: the three helpers at s = 1 (count, video and no badge; the bulb pulses).
   const toolRow = el('div', 'ax-tools');
   toolRow.append(createToolBar(
-    { hints: 5, kitties: 0, bulbEnabled: true, pawEnabled: true, hintsFree: false, mouse: { shown: true, enabled: true }, videoRefill: true, pulse: 'bulb' },
+    { hints: 5, kitties: 0, bulbEnabled: true, pawEnabled: true, hintsFree: false, mouse: { shown: true, enabled: true }, videoRefill: true, pulse: 'bulb', busy: false },
     { onBulb: () => undefined, onPaw: () => undefined, onMouse: () => undefined },
   ).el);
   section(wrap, 'Tools', [toolRow], 'ax-col-full');

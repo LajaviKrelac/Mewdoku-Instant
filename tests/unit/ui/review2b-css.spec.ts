@@ -59,8 +59,8 @@ describe('FB safe zone (UX-3, UX-9)', () => {
     );
   });
 
-  it('a top-placed hint card keeps its content below the zone', () => {
-    expect(decls('overlay-chunk.css', ":root[data-fb-safe] .overlay[data-overlay='hint'][data-placement='top'] .hint-card")).toMatch(/var\(--fb-safe\)/);
+  it('Phase 2d.1 (I-3, requests-G3 H2): the 2b top-placed hint card rule is gone (the card is anchored below the top bar)', () => {
+    expect(decls('overlay-chunk.css', ":root[data-fb-safe] .overlay[data-overlay='hint'][data-placement='top'] .hint-card")).toBe('');
   });
 });
 
@@ -113,9 +113,11 @@ describe('sizes and text (A11Y-HUB-1, I18N-TEXT-1, UX-2, PAR-7)', () => {
   });
 
   it('keywords in the accent text colour; colour names keep ink with a swatch in the tile colour', () => {
-    expect(decls('overlay-chunk.css', '.kw')).toMatch(/color:\s*var\(--accent-text\)/);
-    expect(decls('overlay-chunk.css', '.color-name__sw')).toMatch(/background:\s*var\(--sw\)/);
-    expect(decls('overlay-chunk.css', '.color-name')).not.toMatch(/(^|[;\s])color:/);
+    // 2d.1 I-4: the rich-text styles moved with the coach to coach-chunk.css (loaded with every overlay).
+    expect(decls('coach-chunk.css', '.kw')).toMatch(/color:\s*var\(--accent-text\)/);
+    expect(decls('coach-chunk.css', '.color-name__sw')).toMatch(/background:\s*var\(--sw\)/);
+    expect(decls('coach-chunk.css', '.color-name')).not.toMatch(/(^|[;\s])color:/);
+    expect(decls('overlay-chunk.css', '.kw')).toBe('');
   });
 });
 

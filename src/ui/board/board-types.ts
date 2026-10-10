@@ -69,9 +69,10 @@ export interface BoardView {
   /** Event mode (phase2b §4.4): layer the accessory symbol acc-<name> over every cat; null removes it. */
   setAccessory(accessory: EventAccessory | null): void;
   /**
-   * Transient FX for reducer events: MARKED pop (Phase 2d: every new Mark pops over fx.markPopMs; the
-   * mouse's MARKED pops its cells fx.mouseStaggerMs apart), CAT_PLACED drop, MISTAKE flash + shake + sad
-   * cats for fx.sadCatsMs, REGION_DONE fade, PULSE, WON happy cats after fx.winHappyDelayMs, KITTY sparkle.
+   * Transient FX for reducer events (Phase 2d.1, CONTRACTS-2d1 §8): MARKED draws every new X in (the
+   * mouse's MARKED plays its visits, board-mouse.ts), CAT_PLACED plays the cat sequence (board-cat.ts;
+   * CAT_REMOVED cancels it), UNITS_DONE bumps the completed units in a wave, MISTAKE flash + shake + sad
+   * cats for fx.sadCatsMs, REGION_DONE fade, PULSE, WON happy cats after fx.winHappyDelayMs.
    */
   playEvent(ev: GameEvent): void;
   /**

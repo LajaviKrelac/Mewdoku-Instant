@@ -11,9 +11,12 @@ import '../src/styles/overlays.css';
 import '../src/styles/fx.css';
 // 2b integration: the overlays' rules load with the lazy overlay chunk in the app.
 import '../src/styles/overlay-chunk.css';
+// Phase 2d.1 I-4: the coach (and the rich-text styles) are their own lazy stylesheet now (coach-chunk.css).
+import '../src/styles/coach-chunk.css';
 import type { Settings } from '../src/game/types';
 import { setInert, trapFocus } from '../src/ui/a11y/focus-trap';
 import { mountSprite } from '../src/ui/art/sprite';
+import { mountLazyArt } from '../src/ui/art/lazy-art';
 import type { OverlayView } from '../src/ui/dom';
 import { applyMotion } from '../src/ui/fx/motion';
 import { createCoach } from '../src/ui/overlays/coach';
@@ -42,6 +45,7 @@ if (params.get('css') === 'proposed') {
 }
 
 mountSprite();
+mountLazyArt(); // Phase 2d.1: the symbols the lazy chunks mount (board mouse, star, shards, the tickers' art)
 const app = document.getElementById('app') as HTMLElement;
 applyMotion(app, params.get('motion') === 'reduced');
 const toasts = createToastLayer();
@@ -173,7 +177,11 @@ const VIEWS: Record<string, () => void> = {
       patterns: params.get('patterns') === '1',
       onApply: log('onApply'),
       onClose: log('onClose'),
-      avoidRect: () => g.boardRect(),
+      // Phase 2d.1 (required since I-3): the board when the hint opened, its rects (the card and Apply are
+      // anchored to the board, the dim has a hole per cut-out tile).
+      cells: b.cells,
+      boardRect: () => g.boardRect(),
+      cellRect: (c) => g.cellRect(c),
     });
   },
   'rewarded-video': () => rewarded('video', 'hint'),

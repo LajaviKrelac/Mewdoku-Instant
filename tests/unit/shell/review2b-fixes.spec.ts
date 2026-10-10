@@ -17,7 +17,7 @@ import { RLI } from '../../../src/i18n/format';
 import { catalog as de } from '../../../src/i18n/locales/de';
 import { createTopBar, splitTitle } from '../../../src/ui/hud/top-bar';
 import { coachText, coverBadges, createCoach, placeCard, type CoachProps } from '../../../src/ui/overlays/coach';
-import { createHintCard, fbTopInset, hintText, type HintCardProps } from '../../../src/ui/overlays/hint-card';
+import { createHintCard, hintText, type HintCardProps } from '../../../src/ui/overlays/hint-card';
 import { createHowToPlay } from '../../../src/ui/overlays/how-to-play';
 import { arrowStep } from '../../../src/ui/overlays/overlay-base';
 import { createRankHub, type RankHubProps } from '../../../src/ui/overlays/rank-hub';
@@ -166,6 +166,8 @@ function victoryProps(over: Partial<VictoryProps> = {}): VictoryProps {
 }
 
 const ctxColors = { n: 4, colors: Uint8Array.from([7, 1, 2, 0]), patterns: false };
+/** Phase 2d.1 (required since I-3): the board when the hint opened and its rects (none in jsdom). */
+const noBoard = { cells: new Uint8Array(16), boardRect: () => null, cellRect: () => null };
 const reg = (index: number): Unit => ({ kind: 'region', index });
 const col = (index: number): Unit => ({ kind: 'col', index });
 const hstep = (kind: HintKind, focusUnits: Unit[]): HintStep => ({ kind, level: 2, focusUnits, focusCells: [0], effectCells: [] });
@@ -272,7 +274,7 @@ describe('rule keywords and colour names styled in teaching copy (PAR-7)', () =>
   it('the hint card names the colour with a swatch in its tile colour; the words equal hintText()', () => {
     const card = createHintCard();
     document.body.appendChild(card.el);
-    const props: HintCardProps = { ...ctxColors, step: hstep('confine_region_line', [reg(1), col(0)]), onApply: vi.fn(), onClose: vi.fn() };
+    const props: HintCardProps = { ...ctxColors, step: hstep('confine_region_line', [reg(1), col(0)]), onApply: vi.fn(), onClose: vi.fn(), ...noBoard };
     card.open(props);
     const p = q(card.el, '.hint-card__text');
     expect(p.textContent).toBe(hintText(props.step, props));
@@ -284,7 +286,7 @@ describe('rule keywords and colour names styled in teaching copy (PAR-7)', () =>
 
   it('a hint sentence that starts with a colour keeps its capital in the rich rendering', () => {
     const card = createHintCard();
-    const props: HintCardProps = { ...ctxColors, step: hstep('single', [reg(0)]), onApply: vi.fn(), onClose: vi.fn() };
+    const props: HintCardProps = { ...ctxColors, step: hstep('single', [reg(0)]), onApply: vi.fn(), onClose: vi.fn(), ...noBoard };
     card.open(props);
     expect(q(card.el, '.hint-card__text').textContent).toBe(hintText(props.step, props));
     expect(q(card.el, '.hint-card__text .color-name').textContent?.startsWith('Violet')).toBe(true);
@@ -503,13 +505,6 @@ describe('the FB safe zone reaches the overlays (UX-3, UX-9)', () => {
     const web = createTopBar({ title: null, hard: false, showHome: false, showSettings: true, showTrophy: false, fbSafeZone: false }, { onHome: vi.fn(), onSettings: vi.fn(), onTrophy: vi.fn() });
     void web;
     expect(document.documentElement.hasAttribute('data-fb-safe')).toBe(false);
-  });
-
-  it('a top-placed hint card on FBIG counts its taller inset in the flip decision', () => {
-    expect(fbTopInset(document, 0)).toBe(0);
-    document.documentElement.setAttribute('data-fb-safe', '');
-    expect(fbTopInset(document, 0)).toBe(cfg.layout.fbSafeZonePx - 12);
-    expect(fbTopInset(document, 80)).toBe(80);
   });
 });
 

@@ -34,7 +34,7 @@ describe('level-start trigger (2d §1.14; 2d.1 §5.5: the two tickers replace th
     await startLevel(h, 5);
     expect(starts(h)).toHaveLength(1);
     expect(FRESH).toContain(starts(h)[0]);
-    expect(slice(h.log, /^(tickers:|startToast:|status:playing|sfx:board_in)/).map((l) => l.replace(/^tickers:.*/, 'tickers'))).toEqual([
+    expect(slice(h.log, /^(tickers:|status:playing|sfx:board_in)/).map((l) => l.replace(/^tickers:.*/, 'tickers'))).toEqual([
       'sfx:board_in',
       'tickers',
       'status:playing',
@@ -112,8 +112,8 @@ describe('level-start trigger (2d §1.14; 2d.1 §5.5: the two tickers replace th
     expect(starts(replay)).toEqual([]);
   });
 
-  it('fx.tickers.enabled off: never (and no 2d toast either)', async () => {
-    const h = createHarness({ config: { fx: { tickers: { enabled: false } } } });
+  it('fx.tickers.enabled off: never (2d\'s toast is gone: the @deprecated fx.startToast is not read)', async () => {
+    const h = createHarness({ config: { fx: { tickers: { enabled: false }, startToast: { enabled: true } } } });
     await startLevel(h, 5);
     await loseGame(h);
     await h.session.onContinue();
@@ -121,26 +121,7 @@ describe('level-start trigger (2d §1.14; 2d.1 §5.5: the two tickers replace th
     await h.session.onRetry();
     expect(h.game().status).toBe('ready');
     expect(starts(h)).toEqual([]);
-    expect(h.router.game?.startToasts).toEqual([]);
-  });
-
-  it('a screen without playTickers (until I-3) still gets the 2d toast; fx.startToast.enabled off: none', async () => {
-    const drop = (h: Harness): void => {
-      const orig = h.router.showGame.bind(h.router);
-      h.router.showGame = (v, cb) => {
-        const g = orig(v, cb);
-        delete (g as { playTickers?: unknown }).playTickers;
-        return g;
-      };
-    };
-    const h = createHarness();
-    drop(h);
-    await startLevel(h, 5);
-    expect(h.router.game?.startToasts).toEqual(['level']);
-    const off = createHarness({ config: { fx: { startToast: { enabled: false } } } });
-    drop(off);
-    await startLevel(off, 5);
-    expect(off.router.game?.startToasts).toEqual([]);
+    expect(h.log.filter((l) => l.startsWith('startToast'))).toEqual([]);
   });
 
   it('the tickers do not hold the board entry: the board plays after fx.boardEntryMs', async () => {

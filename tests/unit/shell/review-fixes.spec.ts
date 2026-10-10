@@ -54,6 +54,9 @@ describe('O1 hint card in the tutorial (SPEC-04)', () => {
     patterns: false,
     onApply: vi.fn(),
     onClose: vi.fn(),
+    cells: new Uint8Array(16),
+    boardRect: () => null,
+    cellRect: () => null,
     ...over,
   });
 
@@ -112,7 +115,7 @@ describe('hint location for screen readers (A11Y-7)', () => {
     const card = createHintCard();
     document.body.append(card.el);
     const step: HintStep = { kind: 'single', level: 1, focusUnits: [{ kind: 'row', index: 2 }], focusCells: [9], effectCells: [], placeCell: 9 };
-    card.open({ step, ...ctx, onApply: vi.fn(), onClose: vi.fn() });
+    card.open({ step, ...ctx, onApply: vi.fn(), onClose: vi.fn(), cells: new Uint8Array(ctx.n * ctx.n), boardRect: () => null, cellRect: () => null });
     expect(q(card.el, '.hint-card__text').textContent).toBe('Row 3 has just one open tile left, so its cat goes here.');
     const dialog = q(card.el, '[role="dialog"]');
     // Phase 2d.1: the description is the sentence and the tile line (two ids, in this order).

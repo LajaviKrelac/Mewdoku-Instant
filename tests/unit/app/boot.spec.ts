@@ -77,7 +77,7 @@ function fakeUi(log: string[]): Ui {
         periodRect: () => null,
         periodLabel: () => undefined,
         glow: () => ({ done: Promise.resolve(), cancel: () => undefined, finish: () => undefined }),
-        playStartToast: (kind) => void log.push(`startToast:${kind}`),
+        playTickers: (lines) => void log.push(`tickers:${lines[0].key}`),
       };
     },
     toastLayer: () => ({ el: document.createElement('div'), show: (m) => void log.push(`toast:${m}`), clear: () => undefined, destroy: () => undefined }),
@@ -93,6 +93,11 @@ interface StartOpts {
   realSfx?: boolean;
   /** Stands in for the lazy overlay chunk (default: the real one); gets boot's log. */
   loadOverlays?: (log: string[]) => RouterFactories['loadOverlays'];
+  /**
+   * Phase 2d.1 I-4: stands in for the coach's own lazy chunk; gets boot's log. With it the fake UI gives
+   * no coach factory up front (the coach must come from this loader).
+   */
+  loadCoach?: (log: string[]) => NonNullable<RouterFactories['loadCoach']>;
   levels?: Partial<LevelsRepo>;
   /** Adjusts the fake platform before boot (failures, storage hooks). */
   prepare?: (platform: FakePlatform) => void;
@@ -117,7 +122,11 @@ function begin(local: SaveData | null, opts: StartOpts = {}) {
     clock,
     doc: document,
     search: '',
-    routerFactories: opts.loadOverlays ? { ...ui.factories, loadOverlays: opts.loadOverlays(log) } : ui.factories,
+    routerFactories: {
+      ...ui.factories,
+      ...(opts.loadOverlays ? { loadOverlays: opts.loadOverlays(log) } : {}),
+      ...(opts.loadCoach ? { loadCoach: opts.loadCoach(log), overlays: { ...ui.factories.overlays, coach: undefined } } : {}),
+    },
     levels: createFakeLevels(opts.levels),
     engine: createLoggedEngine(log),
     audio: fa.audio,
@@ -287,25 +296,32 @@ describe('boot: lazy chunks (RP-2, 04 §9)', () => {
   };
   const order = (log: string[]): string[] => log.filter((x) => /^(chunk:|progress:100|platform:start|screen:)/.test(x));
 
-  it('first run: the overlay chunk (it holds the coach) is fetched behind the loading screen', async () => {
-    const s = await start(null, { loadOverlays: logged });
-    expect(order(s.log)).toEqual(['chunk:overlays', 'progress:100', 'platform:start', 'screen:game:T1']);
+  /** The coach's own chunk (Phase 2d.1 I-4): logs, then brings the fake coach. */
+  const coachLogged = (log: string[]): NonNullable<RouterFactories['loadCoach']> => () => {
+    log.push('chunk:coach');
+    return Promise.resolve({ coach: fakeUi(log).factories.overlays?.coach });
+  };
+
+  it('first run (2d.1 I-4): only the coach\'s own chunk is fetched behind the loading screen; the overlay chunk after the first route', async () => {
+    const s = await start(null, { loadOverlays: logged, loadCoach: coachLogged });
+    expect(order(s.log)).toEqual(['chunk:coach', 'progress:100', 'platform:start', 'screen:game:T1', 'chunk:overlays']);
+    expect(s.log).toContain('open:coach'); // the tutorial board shows with its coach
     s.app.dispose();
   });
 
-  it('first run: a chunk that never arrives holds the start no longer than boot.overlayTimeoutMs', async () => {
-    const b = begin(null, { loadOverlays: (log) => () => (log.push('chunk:overlays'), new Promise(() => undefined)) });
+  it('first run: a coach chunk that never arrives holds the start no longer than boot.overlayTimeoutMs', async () => {
+    const b = begin(null, { loadOverlays: logged, loadCoach: (log) => () => (log.push('chunk:coach'), new Promise(() => undefined)) });
     await settle();
-    expect(b.log).toContain('chunk:overlays');
+    expect(b.log).toContain('chunk:coach');
     expect(b.log).not.toContain('platform:start');
     await b.clock.advanceAsync(cfg.boot.overlayTimeoutMs);
     await settle();
-    expect(order(b.log)).toEqual(['chunk:overlays', 'progress:100', 'platform:start', 'screen:game:T1']); // its coach opens when the chunk lands
+    expect(order(b.log)).toEqual(['chunk:coach', 'progress:100', 'platform:start', 'screen:game:T1', 'chunk:overlays']); // its coach opens when a chunk with it lands
     (await b.done).dispose();
   });
 
-  it('returning player: the overlay chunk waits until after the first route', async () => {
-    const s = await start(returning(), { loadOverlays: logged });
+  it('returning player: the overlay chunk waits until after the first route (and the coach\'s is not asked for)', async () => {
+    const s = await start(returning(), { loadOverlays: logged, loadCoach: coachLogged });
     expect(order(s.log)).toEqual(['progress:100', 'platform:start', 'screen:home', 'chunk:overlays']);
     s.app.dispose();
   });

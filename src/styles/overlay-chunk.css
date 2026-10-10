@@ -3,7 +3,10 @@
    it as its own CSS file that loads with the lazy overlay chunk (preloaded after the first screen)
    instead of in the first-load stylesheet. Every rule here styles an element that only a lazy
    overlay builds (O1 hint card, O2 rewarded, O4 fail, O5 settings + the language list, O6 how to
-   play, O7 daily result, O8 coach, ranking panel, victory, shop, rankings hub, group result).
+   play, O7 daily result, ranking panel, victory, shop, rankings hub, group result). Phase 2d.1 I-4:
+   the coach (O8) and the rich-text styles moved to coach-chunk.css (the coach's own chunk, which the
+   router's overlay loader always loads with this one); the board's hint ghosts moved in here (they
+   only show while the hint card is open, and the hint opens only once this chunk is in).
    Order matters: this file loads after the main stylesheet, so it keeps the source order of its
    parts (overlays.css, then fx.css, then screens.css) and the reduced-motion and media-query rules
    that override them come after them here. Tokens only (css-rules.spec.ts); logical properties
@@ -97,15 +100,6 @@
 .hint-close.visually-hidden-focusable:focus { position: absolute; top: -14px; inset-inline-end: -14px; width: 44px; height: 44px;
   box-shadow: var(--shadow-2); }
 
-/* Teaching copy (review PAR-7, src/ui/rich-text.ts): rule keywords in the accent text colour (5.71:1
-   on the card), a colour named "in its colour" with a swatch and an underline in the tile colour; the
-   name itself stays ink, since pastel text on white would fail WCAG 1.4.3. */
-.kw { color: var(--accent-text); font-weight: 700; }
-.color-name { white-space: nowrap; text-decoration-line: underline; text-decoration-color: var(--sw); text-decoration-thickness: 3px;
-  text-underline-offset: 3px; }
-.color-name__sw { display: inline-block; width: 0.8em; height: 0.8em; margin-inline-end: 0.25em; border-radius: 3px; background: var(--sw);
-  box-shadow: inset 0 0 0 1px rgba(var(--ink-rgb), 0.3); vertical-align: -0.06em; }
-
 /* O2 rewarded prompt */
 /* Phase 2d: the helper's full-colour art on a white disc with the round buttons' warm shadow. */
 .rewarded__icon { display: flex; align-items: center; justify-content: center; width: 72px; height: 72px; margin: 0 auto 12px;
@@ -194,67 +188,113 @@
 .daily-result__next { display: inline-block; margin-top: 14px; padding: 6px 14px; border-radius: var(--radius-pill); background: var(--accent-soft);
   color: var(--accent-deep); font-weight: 600; font-size: var(--fs-s); }
 
-/* O8 tutorial coach (non-modal: only the card takes pointer events) */
-.coach { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 30; pointer-events: none; animation: mw-fade-in var(--t-overlay) ease both; }
-.coach__dim { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-.coach__dim-fill { fill: rgba(var(--ink-rgb), 0.4); }
-.coach__rings, .coach__ring { position: absolute; }
-.coach__ring { border-radius: 50%; animation: mw-coach-pulse 1.3s ease-in-out infinite; }
-.coach__hand { position: absolute; width: 48px; height: 48px; filter: drop-shadow(0 3px 4px rgba(var(--ink-rgb), 0.35));
-  animation: mw-hand-tap 1.3s ease-in-out infinite; }
-.coach[data-hand='double_tap'] .coach__hand { animation-name: mw-hand-double; }
-.coach[data-hand='swipe'] .coach__hand { animation: mw-hand-swipe 1.9s ease-in-out infinite; }
-.coach__card { position: absolute; left: 16px; right: 16px; max-width: 440px; margin: 0 auto; padding: 16px 18px; border-radius: var(--radius-xl);
-  background: var(--card); box-shadow: var(--shadow-3); text-align: center; pointer-events: auto; animation: mw-pop-in 220ms var(--ease-out) both; }
-/* First appearance: the empty live region is shown first, its text a moment later (coach.ts). */
-.coach__card[data-pending] { opacity: 0; animation: none; }
-/* Phase 2d (G1 R2): no slot clears the top bar and the board, so "Got it" sits beside the text (coach.ts). */
-.coach__card[data-row] { display: flex; align-items: center; text-align: start; }
-.coach__card[data-row] .coach__text { flex: 1; }
-.coach__card[data-row] .coach__gotit { flex: none; min-width: 0; margin: 0; margin-inline-start: 12px; }
-.coach__text { color: var(--ink); font-size: var(--fs-l); font-weight: 500; line-height: 1.4; text-wrap: balance; }
-.coach__gotit { margin-top: 12px; min-width: 140px; }
-/* A modal above the coach (hint card in step 5, Settings, How to play): the router makes the coach
-   inert; its card, hand, rings and dim disappear until the modal closes (UX-01, UX-07, SPEC-04). */
-.coach[inert] { visibility: hidden; }
-
 /* Phase 2d §1.16 (critic C11): while a banner may show in play (game-screen.ts publishes the band on
    <html>), the rewarded prompt and the fail overlay keep their controls above it (2d.1: the hint hides
    the banner and anchors to the board). */
 :root[data-play-band='1'] .overlay[data-overlay='rewarded'],
 :root[data-play-band='1'] .overlay[data-overlay='fail'] { padding-bottom: calc(12px + var(--play-band) + var(--play-band-bottom)); }
 
-/* Retired by Phase 2d.1 (the card is anchored to the board, no data-placement any more); kept until I-3
-   for review2b-css.spec's FB-safe check (requests-G3 H2). */
-:root[data-fb-safe] .overlay[data-overlay='hint'][data-placement='top'] .hint-card { padding-top: max(calc(16px + var(--safe-top)), var(--fb-safe)); }
-
-@keyframes mw-sheet-down { from { opacity: 0; transform: translateY(-24px); } to { opacity: 1; transform: none; } }
 @keyframes mw-sheet-in { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
-@keyframes mw-coach-pulse { 0%, 100% { box-shadow: 0 0 0 3px var(--gold), 0 0 0 6px rgba(var(--gold-rgb), 0.45); }
-  50% { box-shadow: 0 0 0 3px var(--gold), 0 0 0 14px rgba(var(--gold-rgb), 0); } }
-@keyframes mw-hand-tap { 0%, 100% { transform: translate(8px, 12px); } 45%, 60% { transform: translate(0, 0) scale(0.9); } }
-@keyframes mw-hand-double { 0%, 100% { transform: translate(8px, 12px); } 22% { transform: translate(0, 0) scale(0.9); }
-  34% { transform: translate(3px, 5px); } 46% { transform: translate(0, 0) scale(0.9); } 62% { transform: translate(8px, 12px); } }
-@keyframes mw-hand-swipe { 0% { opacity: 0; transform: translate(0, 0); } 12% { opacity: 1; transform: translate(0, 0); }
-  70% { opacity: 1; transform: translate(var(--dx, 0), var(--dy, 0)); } 85%, 100% { opacity: 0; transform: translate(var(--dx, 0), var(--dy, 0)); } }
 
 @media (max-height: 639px) {
   .overlay__art > svg, .fail__art > svg { width: 120px; height: 120px; }
   .overlay[data-overlay='fail'] .overlay__title { font-size: var(--fs-xxl); }
-  /* Compact coach card: it fits between the top bar and the board, or below the board (UX-06). */
-  .coach__card { padding: 10px 14px; }
-  .coach__text { font-size: var(--fs-m); line-height: 1.35; }
-  .coach__gotit { margin-top: 8px; min-height: 44px; }
   .overlay__panel--stage { padding: 14px 16px 10px; }
 }
-@media (max-height: 599px) {
-  /* 320 × 568: the longest coach lines fit between the board and the screen edge. */
-  .coach__text { font-size: var(--fs-s); }
+
+/* ═══════════════════════ from board.css (G2, Phase 2d.1; moved at I-4) ═══════════════════════ */
+/* The board's hint ghosts (helpers-spec §3.3, measured): they only show while the hint card is open,
+   and the hint opens only once this chunk and its stylesheet are in (helper-flows: overlaysReady), so
+   they load with it. board.css keeps the hidden default (.cell__xog). Ghost X on Empty effect cells:
+   the X's outline only (xOutlinePath, the union of the two bars), a 1.5 px white stroke over 10 %
+   white, its --xe edge under it with Colour patterns on. Each pops in at --gd (ghostFirstMs + i ×
+   ghostStaggerMs, ghostOrder) over --ghost-pop: .25 → 1 (13 %) → 1.22 (27 %) → 1 (47 %) → .92 (60 %)
+   → 1, opacity .3 → 1 by 12 %; then still. The clear and cat ghosts' keyframes came from fx.css. */
+.cell__xo {
+  fill: rgba(255, 255, 255, 0.1);
+  stroke: #fff;
+  stroke-width: 1.5px;
+  stroke-linejoin: round;
 }
 
-/* Reduced motion (02 §17.5): fades only, ≤ 150 ms; the coach hand stays still. */
-[data-motion='reduced'] .coach__hand, [data-motion='reduced'] .coach__ring { animation: none; }
-[data-motion='reduced'] .coach__ring { box-shadow: 0 0 0 3px var(--gold); }
+.cell__xoe {
+  display: none;
+  fill: none;
+  stroke: var(--xe, var(--ink-deep));
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+.board[data-patterns] .cell__xoe {
+  display: inline;
+}
+
+.cell[data-ghost='x'][data-s='e'] .cell__xog {
+  display: inline;
+  animation: ghost-pop var(--ghost-pop, 500ms) linear var(--gd, 0ms) forwards;
+}
+
+.board[data-ghost-wait] .cell__xog {
+  visibility: hidden;
+}
+
+@keyframes ghost-pop {
+  0% {
+    opacity: 0.3;
+    transform: scale(0.25);
+  }
+  12% {
+    opacity: 1;
+  }
+  13% {
+    transform: none;
+  }
+  27% {
+    transform: scale(1.22);
+  }
+  47% {
+    transform: none;
+  }
+  60% {
+    transform: scale(0.92);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Ghost clear: the mistaken X that Apply would remove fades in and out. */
+.cell[data-ghost='clear'] .cell__x {
+  animation: ghost-clear 1.2s ease-in-out infinite;
+}
+
+/* Ghost cat: the forced cat Apply would place, popping in at --gd like the ghosts, then bobbing. */
+.cell[data-ghost='cat'] .cell__catg {
+  display: inline;
+  opacity: 0.6;
+  animation: ghost-pop var(--ghost-pop, 500ms) linear var(--gd, 0ms) backwards, ghost-bob 1.4s ease-in-out calc(var(--gd, 0ms) + var(--ghost-pop, 500ms)) infinite;
+}
+
+@keyframes ghost-clear {
+  0%,
+  100% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 0.12;
+  }
+}
+
+@keyframes ghost-bob {
+  0%,
+  100% {
+    transform: none;
+  }
+  50% {
+    transform: translateY(-6%);
+  }
+}
 
 /* ═══════════════════════ from fx.css (B) ═══════════════════════ */
 /* ── Ranking panel (phase2b §2.4): pop, tap pulse, fade-out ── */

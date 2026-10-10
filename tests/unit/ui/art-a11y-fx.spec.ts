@@ -45,9 +45,10 @@ describe('sprite', () => {
     // Phase 2c.1 §10.2
     'icon-points',
     // Phase 2d (look-spec Appendix C)
-    'icon-back', 'icon-play', 'tool-kitty', 'tool-bulb', 'tool-mouse', 'cat-head-flat', 'art-flex',
-    // Phase 2d.1 (helpers-spec Appendix C; the mouse's parts, the star and the shards are lazy-art.ts's)
-    'cat-wink', 'art-paw-cap', 'art-bolt', 'art-star',
+    'icon-back', 'icon-play', 'tool-kitty', 'tool-bulb', 'tool-mouse', 'cat-head-flat',
+    // Phase 2d.1 (helpers-spec Appendix C; the mouse's parts, the star, the shards and, since I-4, the
+    // tickers' paw cap and icons are lazy-art.ts's)
+    'cat-wink',
   ];
 
   it('mounts once and defines every symbol; the heart icons and clip paths are gone (Phase 2c)', () => {
@@ -586,13 +587,12 @@ describe('Phase 2d symbols (look-spec Appendix C)', () => {
     expect(head.children).toHaveLength(1);
     expect(head.querySelector('path')?.getAttribute('fill')).toBe('currentColor');
     expect(head.innerHTML).not.toContain('stroke');
-    expect(sym('art-flex').innerHTML).toContain(TOKENS.fish);
-    expect(sym('art-flex').innerHTML).toContain(TOKENS['fish-deep']);
-    expect(sym('art-flex').querySelector('[stroke-width]')).toBeNull();
+    // 2d.1 I-3: the start toast's arm (art-flex) went with the toast.
+    expect(document.getElementById('art-flex')).toBeNull();
   });
 
   it('every new symbol is decorative through icon()', () => {
-    for (const id of ['icon-back', 'icon-play', 'tool-kitty', 'tool-bulb', 'tool-mouse', 'cat-head-flat', 'art-flex'] as const) {
+    for (const id of ['icon-back', 'icon-play', 'tool-kitty', 'tool-bulb', 'tool-mouse', 'cat-head-flat'] as const) {
       expect(icon(id).getAttribute('aria-hidden'), id).toBe('true');
     }
   });
@@ -605,8 +605,8 @@ describe('Phase 2d.1 symbols (helpers-spec Appendix C)', () => {
     return document.querySelector(`symbol[id="${id}"]`) as Element;
   };
 
-  it('the mouse\'s parts, the star and the shards are not in the first-load sprite; mountLazyArt adds them once (the mouse and fx chunks)', () => {
-    const lazy = ['board-mouse', 'board-mouse-eyes', 'board-mouse-lids', 'board-mouse-grin', 'fx-star4', 'fx-shard', 'fx-shard-2', 'fx-shard-3'];
+  it('the mouse\'s parts, the star, the shards and the tickers\' art (I-4) are not in the first-load sprite; mountLazyArt adds them once (the mouse and fx chunks)', () => {
+    const lazy = ['board-mouse', 'board-mouse-eyes', 'board-mouse-lids', 'board-mouse-grin', 'fx-star4', 'fx-shard', 'fx-shard-2', 'fx-shard-3', 'art-paw-cap', 'art-bolt', 'art-star'];
     for (const id of lazy) expect(spriteMarkup(), id).not.toContain(`id="${id}"`);
     mountLazyArt(); // before the sprite: a no-op
     expect(document.querySelector('symbol[id="fx-star4"]')).toBeNull();

@@ -286,10 +286,12 @@ describe('retired-look guard (phase2b §1.8, §1.12)', () => {
       for (const sel of (m[1] ?? '').split(',').filter((x) => x.includes('.cell__xe'))) expect(sel, sel.trim()).toContain('[data-patterns]');
     }
     for (const gone of ['stroke-dasharray', 'xe-draw', '--x-len', 'fx-draw']) expect(board, gone).not.toContain(gone);
-    // the mouse's pop (fx.markPopMs, 1.15 → 1) and the wrong X filled in --wrong
-    expect(board).toMatch(/\.cell\.fx-pop \.cell__xg\s*\{[^}]*animation:\s*x-pop var\(--x-pop-ms, 170ms\)/);
+    // the mouse's pop (fx.markPopMs, 1.15 → 1; in the lazy board-mouse.css since 2d.1 I-4) and the wrong X filled in --wrong
+    const lazy = stripComments(read(join(STYLES, 'board-mouse.css')));
+    expect(lazy).toMatch(/\.cell\.fx-pop \.cell__xg\s*\{[^}]*animation:\s*x-pop var\(--x-pop-ms, 170ms\)/);
+    expect(board).not.toContain('fx-pop');
     expect(cfg.fx.markPopMs).toBe(170); // helpers-spec §0.6, §1.5: 140 → 170 at 2d.1 L0
-    expect(/@keyframes x-pop\s*\{\s*from\s*\{\s*transform:\s*scale\(1\.15\)/.test(board)).toBe(true);
+    expect(/@keyframes x-pop\s*\{\s*from\s*\{\s*transform:\s*scale\(1\.15\)/.test(lazy)).toBe(true);
     expect(/\.cell\[data-s='w'\] \.cell__x\s*\{([^}]*)\}/.exec(board)?.[1]).toMatch(/fill:\s*var\(--wrong\)/);
     expect(/\.cell__pat\s*\{([^}]*)\}/.exec(board)?.[1]).toMatch(/color:\s*var\(--ink-deep\)/);
   });
@@ -318,14 +320,18 @@ describe('retired-look guard (phase2b §1.8, §1.12)', () => {
 
   it('Phase 2d.1 hint (helpers-spec §3.3): no board dim, no focus ring for a hint; the ghost is the outline popping at --gd; the 2b ghost pulse is gone', () => {
     const board = stripComments(read(join(STYLES, 'board.css')));
+    // 2d.1 I-4: the rules that show the ghosts load with the hint card (overlay-chunk.css); board.css keeps them hidden
+    const chunk = stripComments(read(join(STYLES, 'overlay-chunk.css')));
     expect(board).not.toMatch(/\.board\[data-hl='hint'\]/);
     expect(board).not.toMatch(/\.board\[data-hl\] \.cell\[data-f\]/);
-    expect(board).not.toContain('ghost-pulse');
+    for (const css of [board, chunk]) expect(css).not.toContain('ghost-pulse');
     expect(board).not.toContain('--hint-dim');
-    expect(/\.cell\[data-ghost='x'\]\[data-s='e'\] \.cell__xog\s*\{[^}]*animation:\s*ghost-pop var\(--ghost-pop, 500ms\) linear var\(--gd, 0ms\) forwards/.test(board)).toBe(true);
-    expect(/\.cell__xo\s*\{[^}]*fill:\s*rgba\(255, 255, 255, 0\.1\);[^}]*stroke:\s*#fff;[^}]*stroke-width:\s*1\.5px/.test(board)).toBe(true);
+    expect(board).toMatch(/\.cell__xog\s*\{\s*display:\s*none;/);
+    expect(board).not.toContain('ghost-pop');
+    expect(/\.cell\[data-ghost='x'\]\[data-s='e'\] \.cell__xog\s*\{[^}]*animation:\s*ghost-pop var\(--ghost-pop, 500ms\) linear var\(--gd, 0ms\) forwards/.test(chunk)).toBe(true);
+    expect(/\.cell__xo\s*\{[^}]*fill:\s*rgba\(255, 255, 255, 0\.1\);[^}]*stroke:\s*#fff;[^}]*stroke-width:\s*1\.5px/.test(chunk)).toBe(true);
     // the keyframes of the measured pop: .25 → 1 (13 %) → 1.22 (27 %) → 1 (47 %) → .92 (60 %) → 1
-    const kf = /@keyframes ghost-pop\s*\{([\s\S]*?)\n\}/.exec(board)?.[1] ?? '';
+    const kf = /@keyframes ghost-pop\s*\{([\s\S]*?)\n\}/.exec(chunk)?.[1] ?? '';
     for (const stop of ['0% {\n    opacity: 0.3;\n    transform: scale(0.25)', '12% {\n    opacity: 1', '13% {\n    transform: none', '27% {\n    transform: scale(1.22)', '47% {\n    transform: none', '60% {\n    transform: scale(0.92)']) {
       expect(kf, stop).toContain(stop);
     }
@@ -341,7 +347,9 @@ describe('retired-look guard (phase2b §1.8, §1.12)', () => {
   });
 
   it('Phase 2d.1 mouse, cat and wave (helpers-spec §1.5, §2.4, §4.2): the sprite\'s state classes are its own (no global .is-in / .is-out), the cat sequence and the wave read their config', () => {
-    const board = stripComments(read(join(STYLES, 'board.css')));
+    // 2d.1 I-4 (requests-G2 H3): all three left the first-load board.css for the lazy board-mouse.css
+    expect(stripComments(read(join(STYLES, 'board.css')))).not.toMatch(/board__mouse|fx-cat|fx-wave|cat-placed|wave-bump/);
+    const board = stripComments(read(join(STYLES, 'board-mouse.css')));
     expect(board).toMatch(/\.board__mouse--in\s*\{\s*animation:\s*mouse-in var\(--mouse-in, 115ms\)/);
     expect(board).toMatch(/\.board__mouse--out\s*\{\s*animation:\s*mouse-out var\(--mouse-out, 85ms\)/);
     expect(board).not.toMatch(/\.board__mouse\.is-(in|out)/);

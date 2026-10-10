@@ -2,7 +2,7 @@
 // Dev harness (not shipped): renders the board, HUD and art in isolation. Run
 // `npx vite --port 5174 --strictPort` and open /dev/board-harness.html?scene=…
 //   scene=game&n=5|9|12[&patterns=1][&hint=1][&coach=1][&hard=1][&fb=1][&rm=1][&fresh=1][&entry=1]
-//     [&video=1][&band=1][&dot=0][&toast=level|hard|retry]   (Phase 2d: the real game screen; M = mouse)
+//     [&video=1][&band=1][&dot=0][&tickers=1]   (Phase 2d: the real game screen; M = mouse)
 //   scene=gallery (cat moods, icons, glyphs, marks)   scene=illus (illustrations)
 // The game scene is playable with the real reducer (tap, double-tap, drag; H = hint, M = mouse).
 import '../src/styles/tokens.css';
@@ -13,6 +13,10 @@ import '../src/styles/overlays.css';
 import '../src/styles/fx.css';
 // 2b integration: the overlays' rules load with the lazy overlay chunk in the app.
 import '../src/styles/overlay-chunk.css';
+// Phase 2d.1 I-4: the coach (and the rich-text styles) are their own lazy stylesheet now (coach-chunk.css).
+import '../src/styles/coach-chunk.css';
+// Phase 2d.1 I-4: the board's lazy motion (mouse visits, cat sequence, waves) comes with the board-mouse chunk.
+import '../src/styles/board-mouse.css';
 import { cfg } from '../src/app/config';
 import { recordToPuzzle } from '../src/engine/codec';
 import { getHintStep } from '../src/engine/hint';
@@ -25,14 +29,16 @@ import { t } from '../src/i18n';
 import { illustration, type IllustrationKind } from '../src/ui/art/illustrations';
 import { regionColorsFor } from '../src/ui/art/palette';
 import { icon, mountSprite, type SymbolId } from '../src/ui/art/sprite';
+import { mountLazyArt } from '../src/ui/art/lazy-art';
 import type { BoardModel } from '../src/ui/board/board-view';
 import { createAnnouncer } from '../src/ui/a11y/announcer';
 import { applyMotion } from '../src/ui/fx/motion';
-import { createGameScreen, type GameView, type StartToastKind } from '../src/ui/screens/game-screen';
+import { createGameScreen, type GameView } from '../src/ui/screens/game-screen';
 
 const q = new URLSearchParams(location.search);
 const root = document.getElementById('app') as HTMLElement;
 mountSprite();
+mountLazyArt(); // Phase 2d.1: the symbols the lazy chunks mount (board mouse, star, shards, the tickers' art)
 applyMotion(root, q.get('rm') === '1');
 
 /** Every shipped level pack (dev only: the harness may load them all eagerly). */
@@ -150,7 +156,8 @@ function gameScene(): void {
   root.appendChild(screen.el);
   if (q.get('hint') === '1') hint();
   if (q.get('entry') === '1') screen.playEntry();
-  if (q.get('toast')) screen.playStartToast(q.get('toast') as StartToastKind);
+  // Phase 2d.1 §5: ?tickers=1 plays the two level-start tickers (2d's ?toast= and its toast were retired at I-3).
+  if (q.get('tickers') === '1') screen.playTickers([{ key: 'toast.start.level' }, { key: 'ticker.unique' }]);
   (window as unknown as { __harness: unknown }).__harness = { dispatch, state: () => state, screen, puzzle, CellState };
 }
 
@@ -196,7 +203,7 @@ function galleryScene(): void {
     tile.appendChild(icon(`glyph-${i}` as SymbolId, { class: 'hx-glyph' }));
     return swatch(String(i), tile);
   }));
-  section('Phase 2d art', (['tool-kitty', 'tool-bulb', 'tool-mouse', 'cat-head-flat', 'art-flex'] as SymbolId[]).map((id) => swatch(id, icon(id, { class: 'hx-cat' }))));
+  section('Phase 2d / 2d.1 art', (['tool-kitty', 'tool-bulb', 'tool-mouse', 'cat-head-flat', 'art-paw-cap', 'art-bolt', 'art-star'] as SymbolId[]).map((id) => swatch(id, icon(id, { class: 'hx-cat' }))));
   section('Marks', (['mark-x'] as SymbolId[]).map((id) => {
     const tile = document.createElement('div');
     tile.className = 'hx-tile';

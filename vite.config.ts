@@ -10,12 +10,19 @@
 // Release builds bundle only cfg.i18n.releaseLocales; every other mode bundles all of cfg.i18n.locales
 // that have a catalogue (scripts/locale-loaders.ts, the `virtual:mewdoku-locales` module).
 //
+// First load: assets/index-*.js (the entry) + assets/core-*.js (2d.1 I-4: the first-load modules that lazy
+// chunks share, preloaded by index.html; see codeSplitting below) + the first-load stylesheet.
 // Lazy chunks (phase2b §11) keep stable names for scripts/size-check.ts:
-//   assets/overlay-chunk-*.js   core overlays (O1–O8 + ranking, victory, shop, rank hub, group result)
+//   assets/overlay-chunk-*.js   core overlays (O1–O7 + ranking, victory, shop, rank hub, group result)
+//   assets/coach-chunk-*.js     O8, the tutorial coach (2d.1 I-4: a first run waits for this one only)
+//   assets/celebrate-*.js       the fx chunk (points flight, cat burst, labels, tickers; 2d.1) + its .css
+//   assets/board-mouse-*.js     the board's lazy motion (mouse visits, cat sequence, wave; 2d.1) + its .css
+//   assets/lazy-art-*.js        the symbols only those two draw (2d.1)
 //   assets/events-*.js          src/app/events-chunk.ts: the event screen + event art (C/B/A)
 //   assets/fb-social-*.js       src/platform/fb/fb-social.ts: ranking, overlay views, groups, payments (D)
 //   assets/social-flows-*.js    src/app/social-flows.ts: rankings hub, event top list, group flows (C)
-//   assets/overlay-chunk-*.css, assets/events-chunk-*.css: those chunks' own stylesheets (cssCodeSplit)
+//   assets/overlay-chunk-*.css, assets/events-chunk-*.css, assets/coach-chunk-*.css, assets/celebrate-*.css,
+//   assets/board-mouse-*.css: those chunks' own stylesheets (cssCodeSplit)
 //   assets/locale-<id>-*.js     one per bundled non-English catalogue (E)
 // Each is reached through ONE dynamic import of its barrel module; nothing in the main bundle may
 // import those modules statically (that would pull them into the first load).
@@ -85,7 +92,16 @@ export default defineConfig(({ mode, command, isPreview }) => {
       cssCodeSplit: true,
       modulePreload: { polyfill: false },
       rolldownOptions: {
-        output: { chunkFileNames: (chunk) => chunkFileName(chunk.facadeModuleId) },
+        output: {
+          chunkFileNames: (chunk) => chunkFileName(chunk.facadeModuleId),
+          // Phase 2d.1 integration I-4 (lead): the first-load modules that lazy chunks share (config, i18n,
+          // the sprite, the engine's bit and rng helpers) go into ONE chunk, assets/core-*.js, that
+          // index.html preloads next to the entry. Without this group rolldown split them into six small
+          // modulepreload chunks (a lazy chunk that needs only i18n or config must not import the whole
+          // entry), which cost five extra first-load requests and pushed index.html over its 1 KB row.
+          // Only modules of the first load ($initial) are captured, so no lazy code moves into it.
+          codeSplitting: { groups: [{ name: 'core', tags: ['$initial'], minShareCount: 2 }] },
+        },
       },
     },
     preview: { host: '127.0.0.1' },

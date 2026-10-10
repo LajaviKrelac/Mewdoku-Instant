@@ -34,18 +34,8 @@ export const SHELL_CSS = String.raw`
 .overlay__art { display: flex; justify-content: center; margin: 8px auto; }
 .overlay__art > svg { width: 168px; height: 168px; }
 
-/* O1 hint card: bottom sheet over the tool row; the board stays visible above (clear scrim). */
-.overlay[data-overlay='hint'] { justify-content: flex-end; padding-bottom: calc(12px + var(--safe-bottom)); }
-.hint-card__row { display: flex; align-items: flex-start; text-align: left; }
-.hint-card__icon { flex: none; width: 44px; height: 44px; margin-right: 12px; padding: 8px; border-radius: 50%;
-  background: #fff6d6; color: var(--gold-deep); }
-.hint-card__text { padding-top: 2px; color: var(--ink); font-size: var(--fs-l); line-height: 1.4; }
-.hint-card__actions { margin-top: 14px; }
-.hint-card__apply { flex: 1; max-width: 260px; margin: 0 auto; }
-.hint-card__actions .overlay__close { margin-left: 12px; }
-/* Flipped above the board when the bottom slot would cover it (HintCardProps.avoidRect). */
-.overlay[data-overlay='hint'][data-placement='top'] { justify-content: flex-start; padding-top: calc(12px + var(--safe-top)); }
-.overlay[data-overlay='hint'][data-placement='top'] .hint-card { margin-top: 0; margin-bottom: auto; animation-name: mw-sheet-down; }
+/* O1 hint card: none here. Phase 2d.1 rebuilt O1 as a modal walkthrough anchored to the board (overlay-chunk.css);
+   the Phase 2 bottom-sheet proposal and its 2b top placement were retired at 2d.1 I-3. */
 
 /* O2 rewarded prompt */
 .rewarded__icon { display: flex; align-items: center; justify-content: center; width: 72px; height: 72px; margin: 0 auto 12px;
@@ -197,7 +187,6 @@ export const SHELL_CSS = String.raw`
 
 @keyframes mw-fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes mw-pop-in { from { opacity: 0; transform: translateY(10px) scale(0.97); } to { opacity: 1; transform: none; } }
-@keyframes mw-sheet-down { from { opacity: 0; transform: translateY(-24px); } to { opacity: 1; transform: none; } }
 @keyframes mw-sheet-in { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
 @keyframes mw-coach-pulse { 0%, 100% { box-shadow: 0 0 0 3px var(--gold), 0 0 0 6px rgba(255, 212, 92, 0.45); }
   50% { box-shadow: 0 0 0 3px var(--gold), 0 0 0 14px rgba(255, 212, 92, 0); } }

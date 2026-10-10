@@ -2,8 +2,9 @@
 // Phase 2c.1: icon-points, the level-points sparkle; Phase 2d: the back arrow, the filled gear, the play
 // mark, the three helpers' art, the heads' silhouette, the flexed arm and the X's rects, look-spec
 // Appendix C, each drawn by us from its written description; Phase 2d.1: the winking cat, the board
-// mouse's parts, the star, the shards, the ticker paw cap and icons, helpers-spec Appendix C, in
-// art/helper-art.ts)
+// mouse's parts, the star, the shards, the ticker paw cap and icons, helpers-spec Appendix C; the mouse
+// face in art/helper-art.ts, everything only the lazy chunks draw in art/lazy-art.ts, mounted with them;
+// 2d's flexed arm, art-flex, was retired at 2d.1 I-3)
 // One hidden inline SVG sprite of <symbol>s (04 §5.3): Tux's moods, the white X with its edge, the
 // wrong X, 12 pattern glyphs, our icon set (02 §17.6, phase2b §1.7), the fish and the board cats'
 // ear-flick overlay (phase2b §1.6, §2.9). All drawn by us: the cat on a 100-unit grid, icons and the
@@ -14,7 +15,7 @@
 import { CAT, catBlink, catEarFlick, catHead } from './cat-parts';
 import { fishMarkup, fishOutlineMarkup } from './fish';
 import { cfg, type GameConfig } from '../../app/config';
-import { helperArtSymbols, MOUSE_BOX, mouseEyes, mouseHead } from './helper-art';
+import { MOUSE_BOX, mouseEyes, mouseHead } from './helper-art';
 import { TOKENS } from './palette';
 
 /** Phase 2d.1 (helpers-spec §2.4): `cat-wink`, the celebrating cat (the right eye a closed arc with a glint). */
@@ -53,17 +54,16 @@ export type IconSymbol =
   | 'icon-crown'
   | 'icon-users'
   // Phase 2d (look-spec §1.4, §1.6, §1.11, §1.14, Appendix C): the back arrow, the video badge's play
-  // mark, the three helpers' full-colour art, the heads pill's head and the start toast's arm.
+  // mark, the three helpers' full-colour art and the heads pill's head (the start toast's arm, art-flex,
+  // was retired at 2d.1 I-3 with the toast).
   | 'icon-back'
   | 'icon-play'
   | 'tool-kitty'
   | 'tool-bulb'
   | 'tool-mouse'
   | 'cat-head-flat'
-  /** @deprecated phase2d.1: the start toast's arm; the tickers use art-bolt / art-star (deleted at I-3). */
-  | 'art-flex'
   // Phase 2d.1 (helpers-spec §2.4, §2.5, §5.2, Appendix C): the points star, the cat's shards (three
-  // variants), the tickers' paw cap and end icons.
+  // variants), the tickers' paw cap and end icons (all in art/lazy-art.ts: mountLazyArt adds them).
   | 'fx-star4'
   | 'fx-shard'
   | 'fx-shard-2'
@@ -246,14 +246,13 @@ const WINK_GLINT = '<path d="M75.4 40.6q.5 2.6 3 3.1-2.5.5-3 3.1-.5-2.6-3-3.1 2.
  * - tool-mouse: a grey mouse face: big round ears with pink insides, a lighter muzzle, bead eyes with
  *   catchlights, a pink nose, two white teeth, three whiskers a side;
  * - cat-head-flat: a plain cat-head silhouette, wide and soft, two pointed ears with softly rounded
- *   tips set a little outward, no notch, no face (D-2d-18), one shape in currentColor;
- * - art-flex: a flexed arm, a rounded upper arm and a raised fist, gold with a darker shade.
+ *   tips set a little outward, no notch, no face (D-2d-18), one shape in currentColor.
  * Each tool-* symbol's viewBox is its art's box, so the tool row draws it at the measured size
  * (look-spec §1.11: kitty 34.7 × 34.3, bulb 21.3 × 34, mouse 35 × 31.3 at s = 1).
  */
 function art2d(): string {
   // One theme (look-spec §2.2): the full-colour art takes the token values directly (no var()).
-  const { gold, hard: violet, fish, 'fish-deep': deep, 'fish-hi': hi } = TOKENS;
+  const { gold, hard: violet, fish } = TOKENS;
   return [
     icon24('icon-back', `<path d="M20.5 12H3.6m6.9-7L3.6 12l6.9 7" fill="none" stroke="currentColor" stroke-width="3.1" stroke-linecap="round" stroke-linejoin="round"/>`),
     icon24('icon-play', `<path d="M8.6 6.2v11.6L18 12Z" fill="currentColor" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/>`),
@@ -274,13 +273,6 @@ function art2d(): string {
       '4 5.7 92 90.3',
       `<path d="M50 26c-6 0-11 .4-15 1.3L21 7.6Q17 3 15.2 9.4L10 39.5C6 46 4 54 4 62c0 21 20 34 46 34s46-13 46-34c0-8-2-16-6-22.5L84.8 9.4Q83 3 79 7.6L65 27.3c-4-.9-9-1.3-15-1.3Z" fill="currentColor"/>`,
     ),
-    icon24(
-      'art-flex',
-      `<path d="M1.5 22v-5.8c0-3.8 2.9-6.2 6.3-5.6 1.9.3 3.3 1.5 4 3.1l1.8-4.2c-1.2-.9-1.8-2.4-1.4-4 .5-2.1 2.6-3.4 4.7-2.9l1.5.4c2.1.5 3.4 2.6 2.9 4.7-.3 1.2-1.1 2.2-2.2 2.7l-1.2 9c-.3 1.4-1.5 2.4-2.9 2.4Z" fill="${fish}"/>` +
-        `<path d="M1.5 22v-3c3.6 1.4 8.4 1.6 13 .6 1.5-.3 2.8-1 3.7-2l-.4 2.4c-.3 1.2-1.5 2-2.8 2Zm11.8-12.8c1.4.8 3 1.1 4.6.8l-.3 1.4c-1.6.3-3.2 0-4.8-.7Z" fill="${deep}"/>` +
-        `<ellipse cx="6.4" cy="13.2" rx="2.5" ry="1.1" transform="rotate(-24 6.4 13.2)" fill="${hi}"/>` +
-        `<path d="M14.2 4.2c.8-.7 1.9-.9 2.9-.7" fill="none" stroke="${hi}" stroke-linecap="round"/>`,
-    ),
   ].join('');
 }
 
@@ -294,8 +286,7 @@ export function spriteMarkup(): string {
     GLYPHS.map((g, i) => sym(`glyph-${i}`, '0 0 24 24', `<g fill="currentColor" transform="${GLYPH_FILL}">${g}</g>`)).join('') +
     iconSymbols() +
     newIcons() +
-    art2d() +
-    helperArtSymbols();
+    art2d();
   return cached;
 }
 

@@ -214,9 +214,10 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
   const pack = within(clock, cfg.boot.packTimeoutMs, Promise.resolve().then(() => levels.ensurePackFor(first.progress.level)), undefined);
   const fonts = (doc as Document & { fonts?: { ready?: Promise<unknown> } }).fonts?.ready;
   const font = fonts ? within(clock, cfg.boot.fontTimeoutMs, fonts.then(() => undefined), undefined) : undefined;
-  // First run: the tutorial coach (O8) is in the lazy overlay chunk; fetch it now, while the loading
-  // screen still shows, so the first board appears with its coach. Returning players get it at step 8.
-  const overlays = first.tutorialDone ? undefined : within(clock, cfg.boot.overlayTimeoutMs, router.overlaysReady(), false);
+  // First run: the tutorial coach (O8) is lazy; fetch it now, while the loading screen still shows, so
+  // the first board appears with its coach. Phase 2d.1 I-4: only the coach's own small chunk
+  // (app/coach-chunk.ts), not the whole overlay chunk, which every player gets at step 8.
+  const overlays = first.tutorialDone ? undefined : within(clock, cfg.boot.overlayTimeoutMs, router.coachReady(), false);
   // phase2b §6.3: guess the locale from navigator.language and prefetch its chunk inside the bounded wait.
   const nav = win?.navigator;
   const guess = attempt(() => prefetchGuess(nav), 'en' as const);
@@ -539,8 +540,8 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
   else await live.start({ mode: 'tutorial', replay: false });
 
   // 8. The lazy chunks (04 §9: overlays, sound recipes, hint engine; none is needed for the first
-  //    screen but the coach, fetched at step 3 on a first run), then preload ads (never during play
-  //    start-up).
+  //    screen but the coach, whose own chunk was fetched at step 3 on a first run), then preload ads
+  //    (never during play start-up).
   void router.preloadOverlays();
   void lazySfx?.load();
   // PERF-1: the AudioContext is created at an idle moment (suspended until a gesture), so the first

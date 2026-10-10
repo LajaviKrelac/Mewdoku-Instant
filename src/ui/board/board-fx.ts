@@ -1,7 +1,7 @@
 // Owner: B (Phase 2b; was ui-board); G2 (Phase 2d.1: ghostOrder, waveOrder, xOutlinePath, helpers-spec §3.3, §4.2)
-// Transient board effects (02 §17.5): class-triggered CSS keyframes with timed cleanup, the kitty
-// sparkle burst, the board-entry wave timing (phase2b §2.9: entryEndMs) and the idle-loop helpers
-// (per-cat noise, ear-flick delays). Keyframes live in styles/fx.css (2b) and styles/board.css (2d, 2d.1).
+// Transient board effects (02 §17.5): class-triggered CSS keyframes with timed cleanup, the board-entry
+// wave timing (phase2b §2.9: entryEndMs) and the idle-loop helpers (per-cat noise, ear-flick delays).
+// (2b's kitty sparkle burst, sparkle(), retired at 2d.1 I-3: every correct cat plays the cat sequence.) Keyframes live in styles/fx.css (2b) and styles/board.css (2d, 2d.1).
 // Phase 2d.1 (pure helpers): the hint's ghost order (ghostOrder), the completion wave's steps
 // (waveOrder) and the ghost X's outline path (xOutlinePath).
 import { cfg, type GameConfig } from '../../app/config';
@@ -64,24 +64,6 @@ export function flashClass(el: Element, cls: string, ms: number, timers: FxTimer
   if (win && typeof win.requestAnimationFrame === 'function') win.requestAnimationFrame(() => win.requestAnimationFrame(readd));
   else timers.later(0, readd);
   timers.later(ms, finish);
-}
-
-/** A small burst of star sparkles around a cell (kitty reveal, 02 §9.2). */
-export function sparkle(cellEl: HTMLElement, timers: FxTimers, count = 6): void {
-  const doc = cellEl.ownerDocument;
-  const host = doc.createElement('span');
-  host.className = 'cell__spark';
-  host.setAttribute('aria-hidden', 'true');
-  for (let k = 0; k < count; k++) {
-    const i = doc.createElement('i');
-    const a = (k / count) * Math.PI * 2 + 0.4;
-    i.style.setProperty('--sx', `${Math.cos(a).toFixed(3)}`);
-    i.style.setProperty('--sy', `${Math.sin(a).toFixed(3)}`);
-    i.style.setProperty('--sd', `${(k % 3) * 40}ms`);
-    host.appendChild(i);
-  }
-  cellEl.appendChild(host);
-  timers.later(cfg.kitty.revealMs + 200, () => host.parentNode?.removeChild(host));
 }
 
 /**

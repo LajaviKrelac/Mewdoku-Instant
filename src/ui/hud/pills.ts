@@ -56,9 +56,9 @@ export interface PillsProps {
   readonly boardId: string;
   /**
    * Phase 2d.1 §6.5: the id the heads ring starts from (headOrderFor); null = no rotation (the
-   * tutorial). Optional (absent: boardId).
+   * tutorial). Required since I-3.
    */
-  readonly ringId?: string | null;
+  readonly ringId: string | null;
 }
 
 /** A full life slot and its icon's client rect (the win flight's source, §2.3). */
@@ -481,7 +481,7 @@ export function createPills(props: PillsProps): PillsView {
   /** Rebuilds the heads for a new colour set; returns true when it did (a new board: no motion). */
   const ensureHeads = (p: PillsProps): boolean => {
     const colors = p.colors;
-    const order = headColors(colors, p.n, p.ringId === undefined ? p.boardId : p.ringId);
+    const order = headColors(colors, p.n, p.ringId);
     colorOf = (r) => Number(colors[r] ?? r);
     const key = order.join(',');
     if (key === headsKey) return false;

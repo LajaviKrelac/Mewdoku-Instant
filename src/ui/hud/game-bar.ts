@@ -48,9 +48,9 @@ export interface GameBarProps {
   readonly reducedMotion: boolean;
   /**
    * Phase 2d.1 §2.5: the game screen flies a star to the Score for every POINTS, so a higher total
-   * waits for countTo(). Optional (absent = false: the number follows the props at once).
+   * waits for countTo(); false: the number follows the props at once. Required since I-3.
    */
-  readonly starPoints?: boolean;
+  readonly starPoints: boolean;
 }
 
 export interface GameBarCallbacks {
@@ -228,7 +228,7 @@ export function createGameBar(props: GameBarProps, cb: GameBarCallbacks): GameBa
       // The name takes the total at once (2c.1, §2.5); it also relabels after a language change.
       score.setLabel(pts);
       // A higher total waits for its star (countTo); anything else shows at once.
-      if (!prev || !(p.starPoints === true && pts > shown)) {
+      if (!prev || !(p.starPoints && pts > shown)) {
         if (pts !== shown || !prev) showNow(pts);
       }
     }

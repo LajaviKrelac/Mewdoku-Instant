@@ -35,18 +35,6 @@ import { hintCutouts, hintRichText, regionName, type HintTextContext } from './h
 
 export { hintCutouts, hintRichText, hintText, unitKindPlural, unitListName, unitName, type HintTextContext } from './hint-text';
 
-/** Top padding of a compact top-placed card (2b): the FB inset adds what exceeds it. */
-const TOP_PAD_COMPACT = 12;
-
-/**
- * Extra height a top-placed card gets on FBIG (UX-9).
- * @deprecated phase2d.1: the sheet placement is gone (the card is anchored to the board); removed at I-3.
- */
-export function fbTopInset(doc: Document, safeTop: number): number {
-  if (!doc.documentElement.hasAttribute('data-fb-safe')) return safeTop;
-  return Math.max(safeTop, cfg.layout.fbSafeZonePx - TOP_PAD_COMPACT);
-}
-
 export interface HintCardProps extends HintTextContext {
   readonly step: HintStep;
   onApply(): void;
@@ -57,17 +45,12 @@ export interface HintCardProps extends HintTextContext {
    * 02 §11.5): false makes the close button, Esc and dim taps do nothing.
    */
   readonly closable?: boolean;
-  /**
-   * Optional: the board's client rect (GameScreen.boardRect).
-   * @deprecated phase2d.1: the sheet placement is gone; removed at I-3 (read as boardRect's fallback meanwhile).
-   */
-  avoidRect?(): DOMRect | null;
-  /** Phase 2d.1: the cell states when the hint opened (which effect cells are Empty). Optional until I-3. */
-  readonly cells?: Readonly<Uint8Array>;
-  /** Phase 2d.1: GameScreen.boardRect (the card and Apply are anchored to the board card). Optional until I-3. */
-  boardRect?(): DOMRect | null;
-  /** Phase 2d.1: GameScreen.cellRect (the dim's tile holes). Optional until I-3. */
-  cellRect?(cell: CellIndex): DOMRect | null;
+  /** Phase 2d.1: the cell states when the hint opened (which effect cells are Empty). Required since I-3. */
+  readonly cells: Readonly<Uint8Array>;
+  /** Phase 2d.1: GameScreen.boardRect (the card and Apply are anchored to the board card). Required since I-3 (2b's avoidRect is gone). */
+  boardRect(): DOMRect | null;
+  /** Phase 2d.1: GameScreen.cellRect (the dim's tile holes). Required since I-3. */
+  cellRect(cell: CellIndex): DOMRect | null;
 }
 
 /**
@@ -88,18 +71,6 @@ export function hintLocation(step: HintStep, ctx: HintTextContext): string | nul
   const unit = step.focusUnits.length === 1 && step.focusUnits[0]?.kind === 'region' ? step.focusUnits[0].index : undefined;
   const label = ctx.regions ? ctx.regions[cell] : k === 'single' ? unit : undefined;
   return label === undefined ? t('a11y.hintAt', { row, col }) : t('a11y.hintAtColor', { row, col, color: regionName(label, ctx) });
-}
-
-/**
- * 'top' when the bottom sheet overlaps `avoid` and the top slot overlaps it less (2b).
- * @deprecated phase2d.1: the sheet placement is gone; removed at I-3.
- */
-export function sheetPlacement(sheet: { top: number; height: number }, avoid: { top: number; bottom: number } | null, safeTop = 0): 'bottom' | 'top' {
-  if (!avoid) return 'bottom';
-  const bottomOverlap = Math.max(0, avoid.bottom - sheet.top);
-  if (bottomOverlap <= 0) return 'bottom';
-  const topOverlap = Math.max(0, safeTop + sheet.height - avoid.top);
-  return topOverlap < bottomOverlap ? 'top' : 'bottom';
 }
 
 /** Whether the tutorial coach (O8) is up in this document: its step 5 accepts Apply only. */
@@ -218,13 +189,10 @@ export function createHintCard(): OverlayView<HintCardProps> {
     const vw = w.innerWidth;
     const vh = w.innerHeight;
     dim.setAttribute('viewBox', `0 0 ${vw} ${vh}`);
-    const cells = p.cells ?? new Uint8Array(p.n * p.n);
     const holes: Box[] = [];
-    if (p.cellRect) {
-      for (const c of hintCutouts(p.step, cells)) {
-        const r = p.cellRect(c);
-        if (r && r.width > 0) holes.push(r);
-      }
+    for (const c of hintCutouts(p.step, p.cells)) {
+      const r = p.cellRect(c);
+      if (r && r.width > 0) holes.push(r);
     }
     dimPathEl.setAttribute('d', dimPath(vw, vh, holes));
   };
@@ -233,7 +201,7 @@ export function createHintCard(): OverlayView<HintCardProps> {
   const measure = (): void => {
     const p = props;
     if (!p || !shell.isOpen()) return;
-    const board = p.boardRect?.() ?? p.avoidRect?.() ?? null;
+    const board = p.boardRect();
     const st = shell.panel.style;
     if (board && board.width > 0) {
       const m = screenMetrics();

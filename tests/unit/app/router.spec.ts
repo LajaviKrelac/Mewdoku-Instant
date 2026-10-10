@@ -367,6 +367,57 @@ describe('router: lazy overlay chunk (04 §9)', () => {
     await expect(retry).resolves.toBe(true);
   });
 
+  it('Phase 2d.1 I-4: coachReady() loads only the coach (loadCoach), flushes a queued coach, and never rejects', async () => {
+    document.body.innerHTML = '<div id="app"></div>';
+    const root = document.getElementById('app') as HTMLElement;
+    let coachLoads = 0;
+    let overlayLoads = 0;
+    let gate = deferred<Partial<OverlayFactories>>();
+    const opened: string[] = [];
+    const coach = () =>
+      ({ el: document.createElement('div'), modal: false, open: () => void opened.push('coach'), update: () => undefined, close: () => undefined, dismiss: () => true, destroy: () => undefined }) as never;
+    const router = createRouter(root, {
+      factories: {
+        loadCoach: () => {
+          coachLoads++;
+          return gate.promise;
+        },
+        loadOverlays: () => {
+          overlayLoads++;
+          return new Promise(() => undefined); // the overlay chunk never lands here
+        },
+        gameScreen: () => ({ el: document.createElement('section'), update: () => undefined, destroy: () => undefined }) as never,
+      },
+    });
+    const first = router.coachReady();
+    gate.reject(new Error('offline'));
+    await expect(first).resolves.toBe(false);
+    gate = deferred<Partial<OverlayFactories>>();
+    const ready = router.coachReady(); // a later call retries
+    expect(coachLoads).toBe(2);
+    router.open('coach', {} as never); // queued: no factory yet, so the router asks for the overlay chunk too
+    gate.resolve({ coach });
+    await expect(ready).resolves.toBe(true);
+    expect(opened).toEqual(['coach']); // flushed by the coach chunk alone
+    await expect(router.coachReady()).resolves.toBe(true);
+    expect(coachLoads).toBe(2);
+    expect(overlayLoads).toBe(1);
+  });
+
+  it('Phase 2d.1 I-4: a router with only loadOverlays (tests) finds the coach in that set', async () => {
+    const s = lazySetup(); // its coach factory is given up front
+    await expect(s.router.coachReady()).resolves.toBe(true);
+    expect(s.loads()).toBe(0);
+    document.body.innerHTML = '<div id="app"></div>';
+    let resolveSet: (v: Partial<OverlayFactories>) => void = () => undefined;
+    const r = createRouter(document.getElementById('app') as HTMLElement, {
+      factories: { loadOverlays: () => new Promise((res) => (resolveSet = res)) },
+    });
+    const ready = r.coachReady();
+    resolveSet({ coach: (() => ({ el: document.createElement('div'), modal: false, open: () => undefined, update: () => undefined, close: () => undefined, dismiss: () => true, destroy: () => undefined })) as never });
+    await expect(ready).resolves.toBe(true);
+  });
+
   it('preloadOverlays() starts the download once and never rejects', async () => {
     const s = lazySetup();
     const p = s.router.preloadOverlays();

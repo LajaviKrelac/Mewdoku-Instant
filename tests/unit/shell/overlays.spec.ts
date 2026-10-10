@@ -17,7 +17,7 @@ import type { HintStep } from '../../../src/engine/types';
 import { focusableElements, setInert, trapFocus } from '../../../src/ui/a11y/focus-trap';
 import { createDailyResult } from '../../../src/ui/overlays/daily-result';
 import { createFailOverlay, type FailOverlayProps } from '../../../src/ui/overlays/fail-overlay';
-import { createHintCard, sheetPlacement } from '../../../src/ui/overlays/hint-card';
+import { createHintCard } from '../../../src/ui/overlays/hint-card';
 import { createHowToPlay } from '../../../src/ui/overlays/how-to-play';
 
 const q = <E extends Element = HTMLElement>(root: ParentNode, sel: string): E => {
@@ -39,6 +39,8 @@ afterEach(() => {
 });
 
 const step: HintStep = { kind: 'single', level: 1, focusUnits: [{ kind: 'row', index: 2 }], focusCells: [9], effectCells: [], placeCell: 9 };
+/** Phase 2d.1 (required since I-3): the board when the hint opened and its rects (none in jsdom). */
+const board4 = { cells: new Uint8Array(16), boardRect: () => null, cellRect: () => null };
 
 describe('O1 hint card', () => {
   it('renders the explanation, applies and closes via the (hidden until focused) close button, Esc and a dim tap', () => {
@@ -48,7 +50,7 @@ describe('O1 hint card', () => {
     document.body.append(card.el);
     expect(card.modal).toBe(true);
     expect(card.el.hidden).toBe(true);
-    card.open({ step, n: 4, colors: Uint8Array.from([7, 4, 2, 0]), patterns: false, onApply, onClose });
+    card.open({ step, n: 4, colors: Uint8Array.from([7, 4, 2, 0]), patterns: false, onApply, onClose, ...board4 });
     expect(card.el.hidden).toBe(false);
     expect(q(card.el, '.hint-card__text').textContent).toBe('Row 3 has just one open tile left, so its cat goes here.');
     const dialog = q(card.el, '[role="dialog"]');
@@ -64,7 +66,7 @@ describe('O1 hint card', () => {
     expect(onClose).toHaveBeenCalledTimes(3);
     expect(card.el.hidden).toBe(false); // overlays never close themselves
 
-    card.update({ step: { ...step, kind: 'mistaken_mark', focusUnits: [] }, n: 4, colors: Uint8Array.from([7, 4, 2, 0]), patterns: false, onApply, onClose });
+    card.update({ step: { ...step, kind: 'mistaken_mark', focusUnits: [] }, n: 4, colors: Uint8Array.from([7, 4, 2, 0]), patterns: false, onApply, onClose, ...board4 });
     expect(q(card.el, '.hint-card__text').textContent).toBe("This X rules out a tile that can't be ruled out yet.");
     card.close();
     expect(card.el.hidden).toBe(true);
@@ -72,22 +74,12 @@ describe('O1 hint card', () => {
   });
 });
 
-describe('O1 sheet placement', () => {
-  it('stays at the bottom unless it would cover the board and the top slot covers it less', () => {
-    // 390×844: the sheet (top 660) clears the board (bottom 645).
-    expect(sheetPlacement({ top: 660, height: 172 }, { top: 290, bottom: 645 })).toBe('bottom');
-    expect(sheetPlacement({ top: 660, height: 172 }, null)).toBe('bottom');
-    // 320×568: the bottom sheet would cover the board's lower rows; the top slot clears it.
-    expect(sheetPlacement({ top: 402, height: 150 }, { top: 176, bottom: 470 })).toBe('top');
-    // The top slot respects the safe area, and is only used when it covers less.
-    expect(sheetPlacement({ top: 402, height: 150 }, { top: 150, bottom: 410 }, 40)).toBe('bottom');
-  });
-
-  it('Phase 2d.1: no placement any more; the layout is measured on the next frame (RP-3), from boardRect or the deprecated avoidRect', () => {
+describe('O1 placement (Phase 2d.1: anchored to the board; 2b\'s sheetPlacement / avoidRect retired at I-3)', () => {
+  it('Phase 2d.1: no placement any more; the layout is measured on the next frame (RP-3), from boardRect', () => {
     const card = createHintCard();
     document.body.append(card.el);
     const avoid = vi.fn(() => null);
-    card.open({ step, n: 4, colors: Uint8Array.from([7, 4, 2, 0]), patterns: false, onApply: vi.fn(), onClose: vi.fn(), avoidRect: avoid });
+    card.open({ step, n: 4, colors: Uint8Array.from([7, 4, 2, 0]), patterns: false, onApply: vi.fn(), onClose: vi.fn(), ...board4, boardRect: avoid });
     expect(card.el.hasAttribute('data-placement')).toBe(false);
     expect(card.el.hasAttribute('data-placed')).toBe(false);
     expect(avoid).not.toHaveBeenCalled();

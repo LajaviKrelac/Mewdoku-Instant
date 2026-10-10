@@ -145,7 +145,7 @@ describe('Phase 2d English (look-spec Appendix A; G3)', () => {
     expect(EN_PARTS.enUi2d['game.score']).toBe('Score');
   });
 
-  it('the start-toast lines are honest: no number, no percentage, ≤ 32 characters', () => {
+  it('the toast.start.* lines (2d\'s toast; since 2d.1 ticker line 1) are honest: no number, no percentage, ≤ 32 characters', () => {
     for (const k of ['toast.start.level', 'toast.start.hard', 'toast.start.retry'] as const) {
       expect(en[k], k).not.toMatch(/\d|%|players?/i);
       expect(en[k].length, k).toBeLessThanOrEqual(32);

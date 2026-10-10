@@ -124,6 +124,12 @@ export interface Router {
    * cannot be loaded. Flows that charge for an overlay (a hint) check it first. Never rejects.
    */
   overlaysReady(): Promise<boolean>;
+  /**
+   * Phase 2d.1 I-4: resolves true once the coach (O8) can open — its own small chunk (app/coach-chunk.ts)
+   * is in, without waiting for the overlay chunk — false when it cannot be loaded. A first run's boot
+   * waits for this one only. Never rejects.
+   */
+  coachReady(): Promise<boolean>;
   destroy(): void;
 }
 
@@ -132,8 +138,13 @@ export type OverlayFactories = { readonly [K in OverlayId]: () => OverlayView<Ov
 /** UI constructors used by the router (test seam; defaults are the real ui/ modules). */
 export interface RouterFactories {
   readonly overlays: Partial<OverlayFactories>;
-  /** Loads the factories missing from `overlays` (default: the lazy ./overlay-chunk). */
+  /** Loads the factories missing from `overlays` (default: the lazy ./overlay-chunk and ./coach-chunk). */
   loadOverlays(): Promise<Partial<OverlayFactories>>;
+  /**
+   * Phase 2d.1 I-4: loads the coach's factory alone (default: the lazy ./coach-chunk; when a test router
+   * gives only loadOverlays, coachReady() waits for that instead).
+   */
+  loadCoach?(): Promise<Partial<OverlayFactories>>;
   bootScreen(): BootScreen;
   homeScreen(view: HomeView, cb: HomeCallbacks): View<HomeView>;
   gameScreen(view: GameView, cb: GameScreenCallbacks): GameScreen;
@@ -181,12 +192,25 @@ export function transitionKind(from: ScreenId, to: ScreenId): ScreenTransitionKi
 /** Whether an overlay is modal before its view exists (only the coach is not, CONTRACTS §4). */
 const isModalId = (id: OverlayId): boolean => id !== 'coach';
 
-/** The lazy overlay chunk (one request; 04 §9), re-fetched with a cache-busting URL after a failure. */
+/**
+ * The coach's own lazy chunk (Phase 2d.1 I-4: a first run waits for it, not for the overlay chunk),
+ * re-fetched with a cache-busting URL after a failure; its stylesheet is part of the load (ROB-1).
+ */
+export async function loadCoachChunk(): Promise<Partial<OverlayFactories>> {
+  const m = await loadChunk(() => import('./coach-chunk'), { css: /coach-chunk-[\w-]+\.css/ });
+  return { coach: m.createCoach };
+}
+
+/**
+ * The lazy overlay chunk (04 §9), re-fetched with a cache-busting URL after a failure, together with
+ * the coach's chunk (Phase 2d.1 I-4: its stylesheet holds the rich-text styles the hint card and How to
+ * play print with; both chunks load in parallel and an already loaded one costs nothing).
+ */
 export async function loadOverlayChunk(): Promise<Partial<OverlayFactories>> {
   // ROB-1: the chunk's stylesheet is part of the load (re-fetched when it fails).
-  const m = await loadChunk(() => import('./overlay-chunk'), { css: /overlay-chunk-[\w-]+\.css/ });
+  const [m, coach] = await Promise.all([loadChunk(() => import('./overlay-chunk'), { css: /overlay-chunk-[\w-]+\.css/ }), loadCoachChunk()]);
   return {
-    coach: m.createCoach,
+    ...coach,
     hint: m.createHintCard,
     rewarded: m.createRewardedPrompt,
     fail: m.createFailOverlay,
@@ -365,6 +389,27 @@ export function createRouter(root: HTMLElement, deps: RouterDeps = {}): Router {
     restack();
     applyInert();
     syncFocus();
+  }
+
+  /** Phase 2d.1 I-4: the coach's factory alone (see Router.coachReady). */
+  let coachLoading: Promise<boolean> | null = null;
+  function coachReady(): Promise<boolean> {
+    if (factories.coach) return Promise.resolve(true);
+    const load = f.loadCoach ?? (f.loadOverlays ? null : loadCoachChunk);
+    // A test router with only its own loadOverlays: the coach comes with that set.
+    if (!load) return loaded ? Promise.resolve(false) : ensureLoaded().then(() => factories.coach !== undefined, () => false);
+    coachLoading ??= load().then(
+      (chunk) => {
+        if (!factories.coach && chunk.coach) (factories as Record<OverlayId, unknown>).coach = chunk.coach;
+        flushPending();
+        return factories.coach !== undefined;
+      },
+      () => {
+        coachLoading = null; // a later call retries
+        return false;
+      },
+    );
+    return coachLoading;
   }
 
   function ensureLoaded(): Promise<void> {
@@ -735,6 +780,7 @@ export function createRouter(root: HTMLElement, deps: RouterDeps = {}): Router {
     },
     preloadOverlays: () => ensureLoaded().catch(() => undefined),
     overlaysReady: () => (loaded ? Promise.resolve(true) : ensureLoaded().then(() => loaded, () => false)),
+    coachReady,
     destroy() {
       destroyed = true;
       early = null;

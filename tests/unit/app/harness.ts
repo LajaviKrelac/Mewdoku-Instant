@@ -15,7 +15,7 @@ import { defaults } from '../../../src/game/save';
 import { tutorialPuzzle } from '../../../src/game/tutorial';
 import type { SaveData } from '../../../src/game/types';
 import type { AdResult, Capabilities, PlatformAdapter, RawSave } from '../../../src/platform/types';
-import type { GameScreen, GameScreenCallbacks, GameView, StartToastKind } from '../../../src/ui/screens/game-screen';
+import type { GameScreen, GameScreenCallbacks, GameView } from '../../../src/ui/screens/game-screen';
 import type { TickerLine } from '../../../src/ui/fx/tickers';
 import type { EventScreenCallbacks, EventScreenView } from '../../../src/ui/screens/event-screen';
 import type { HomeCallbacks, HomeView } from '../../../src/ui/screens/home-screen';
@@ -148,8 +148,6 @@ export interface FakeGameScreen extends GameScreen {
   readonly departed: number[];
   /** phase2c §2.2: showPeriodCounter(total) calls, in order. */
   readonly counters: number[];
-  /** Phase 2d §1.14: playStartToast(kind) calls, in order (a screen without playTickers). */
-  readonly startToasts: StartToastKind[];
   /** Phase 2d.1 §5.5: playTickers(lines) calls, in order. */
   readonly tickers: (readonly [TickerLine, TickerLine])[];
 }
@@ -232,7 +230,6 @@ export function createFakeRouter(bus: AppBus, log: Log): FakeRouter {
         scrims: 0,
         departed: [],
         counters: [],
-        startToasts: [],
         update: (v) => void (g.last = v),
         destroy: () => undefined,
         playEvent: (ev) => void g.played.push(ev.type),
@@ -249,10 +246,6 @@ export function createFakeRouter(bus: AppBus, log: Log): FakeRouter {
         periodLabel: () => undefined,
         glow: () => ({ done: Promise.resolve(), cancel: () => undefined, finish: () => undefined }),
         showScrim: () => void g.scrims++,
-        playStartToast: (kind) => {
-          g.startToasts.push(kind);
-          log.push(`startToast:${kind}`);
-        },
         tickers: [],
         playTickers: (lines) => {
           g.tickers.push(lines);
@@ -303,6 +296,7 @@ export function createFakeRouter(bus: AppBus, log: Log): FakeRouter {
     escape: () => false,
     preloadOverlays: () => Promise.resolve(),
     overlaysReady: () => Promise.resolve(r.chunkOk),
+    coachReady: () => Promise.resolve(r.chunkOk),
     destroy: () => undefined,
   };
   return r;

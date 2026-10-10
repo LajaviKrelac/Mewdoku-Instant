@@ -119,7 +119,7 @@ describe('Phase 2d: the game bar (§1.4, §1.13, §1.15)', () => {
     expect(ruleOf(i18n, "[dir='rtl'] .top-bar--game .top-bar__dot")).toContain('left: -6.1%');
     expect(ruleOf(i18n, "[dir='rtl'] .top-bar__btn--back .btn__icon")).toContain('transform: scaleX(-1)');
     // No physical overrides are needed for what uses margin-inline-start.
-    for (const sel of ['.top-bar__mid', '.points-pill__label', '.chip__art', '.start-toast']) expect(ruleOf(i18n, `[dir='rtl'] ${sel}`), sel).toBeNull();
+    for (const sel of ['.top-bar__mid', '.points-pill__label', '.chip__art']) expect(ruleOf(i18n, `[dir='rtl'] ${sel}`), sel).toBeNull();
   });
 });
 
@@ -301,11 +301,10 @@ describe('Phase 2d: the helper row (§1.11)', () => {
   });
 });
 
-describe('Phase 2d: the start toast and the band (§1.14, §1.16)', () => {
-  it('the toast: --toast-fill, a 1.5 s --toast-line border, 29 s tall, 12 s from the inline start, no pointer events', () => {
-    const t = ruleOf(fx, '.start-toast') ?? '';
-    for (const d of ['background: var(--toast-fill)', 'border: calc(var(--s) * 1.5px) solid var(--toast-line)', 'height: calc(var(--s) * 29px)', 'margin-inline-start: calc(var(--s) * 12px)', 'color: var(--ink)']) expect(t, d).toContain(d);
-    expect(ruleOf(fx, '.game__fx')).toContain('pointer-events: none');
+describe('Phase 2d: the band (§1.16); the start toast retired at 2d.1 I-3', () => {
+  it('2d.1 I-3: the start toast and its column fx layer are gone (the tickers replace them)', () => {
+    expect(ruleOf(fx, '.start-toast')).toBeNull();
+    expect(ruleOf(fx, '.game__fx')).toBeNull();
   });
 
   it('O2 and O4 keep their controls above the band (2d.1: O1 hides the banner and anchors to the board); the O9 toast sits above the helper badges', () => {

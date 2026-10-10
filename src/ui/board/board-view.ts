@@ -28,7 +28,7 @@ import { onLocaleChanged, t } from '../../i18n';
 import { shake } from '../fx/shake';
 import { buildCell, cellLabel, ensureCat, ensurePattern, setCatMood, STATE_CODE, type CellRefs } from './board-cells';
 import type { EventAccessory } from '../../game/events';
-import { playCatSequence, type CatSequence } from './board-cat';
+import type { CatSequence } from './board-cat';
 import { cellNoise, createFxTimers, earFlickDelayMs, entryEndMs, entryTiming, flashClass, waveOrder } from './board-fx';
 import type { MouseRun } from './board-mouse';
 import { attachGestures } from './gestures';
@@ -51,8 +51,13 @@ const isCatState = (s: number): boolean => s === CellState.Cat || s === CellStat
 /**
  * Phase 2d.1: the mouse's visits live in a lazy chunk (board-mouse.ts with the lazy art): the first screen
  * never needs them, and the mouse can only run after its O2 card. loadMouseRun() starts the import once;
- * a board prefetches it at idle after its entry (MOUSE_PREFETCH_MS), and a MARKED that arrives before it
- * has loaded hides its X's at once and starts the run, timed from the MARKED, when it lands.
+ * a board prefetches it at idle after its entry (MOUSE_PREFETCH_MS; the game screen asks for it earlier,
+ * with its fx chunk), and a MARKED that arrives before it has loaded hides its X's at once and starts the
+ * run, timed from the MARKED, when it lands.
+ * Integration I-4 (requests-G2 H3): the chunk also brings the cat-placed sequence (playCatSequence) and the
+ * stylesheet of the board's lazy motion (mouse, cat sequence, wave). A CAT_PLACED before it has loaded
+ * shows the cat at rest (no sequence) and starts the load; a UNITS_DONE then sets its classes, which do
+ * nothing until the stylesheet is in.
  */
 type MouseModule = typeof import('./board-mouse');
 let mouseModule: MouseModule | null = null;
@@ -442,13 +447,18 @@ export function createBoardView(model: BoardModel, input: BoardInput, opts: Boar
       case 'CAT_PLACED': {
         // Phase 2d.1 (helpers-spec §2.4, D-2d1-3): every correct cat (kitty, hint, player) pops,
         // celebrates with a wink and settles; the tile flashes. Replaces 2b's drop, the kitty's
-        // surprised mood and its sparkle. Reduced motion: the cat appears at its size.
+        // surprised mood and its sparkle. Reduced motion: the cat appears at its size. Before the lazy
+        // chunk is in (I-4), the cat appears at rest too, and the chunk is asked for.
         const refs = cells[ev.cell];
         if (!refs || rm) break;
         cancelCat(ev.cell);
         ensureCat(refs, mood);
+        if (!mouseModule) {
+          void loadMouseRun().catch(() => undefined);
+          break;
+        }
         const cell = ev.cell;
-        const seq = playCatSequence(refs, {
+        const seq = mouseModule.playCatSequence(refs, {
           mood: (own) => {
             if (own) cellMood.set(cell, own);
             else cellMood.delete(cell);

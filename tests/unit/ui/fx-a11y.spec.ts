@@ -1,4 +1,4 @@
-// Owner: B; G3 (Phase 2d: the level-start toast, look-spec §1.14). fx and a11y utilities (shake, motion; announcer, focus trap, inert). The O3 confetti was
+// Owner: B; G3 (Phase 2d: the level-start toast, look-spec §1.14, retired at 2d.1 I-3 with start-toast.ts). fx and a11y utilities (shake, motion; announcer, focus trap, inert). The O3 confetti was
 // removed with the Phase 2 win overlay at 2b integration (the victory screen replaced it).
 // phase2b F0 split: moved from art-a11y-fx.spec.ts (A). B adds fx-fish, board-entry and the
 // transitions/glow cases in their own files (phase2b §2.13).
@@ -9,7 +9,6 @@ import { focusableElements, setInert, trapFocus } from '../../../src/ui/a11y/foc
 import { applyMotion, resolveReducedMotion, systemPrefersReducedMotion, watchSystemReducedMotion } from '../../../src/ui/fx/motion';
 import { playGlow } from '../../../src/ui/fx/glow';
 import { shake, shakeOffsets } from '../../../src/ui/fx/shake';
-import { createStartToast, startToastPlan } from '../../../src/ui/fx/start-toast';
 import { MASCOT_POP_MS, playScreenTransition, transitionMs } from '../../../src/ui/fx/transitions';
 
 afterEach(() => {
@@ -316,93 +315,3 @@ describe('playScreenTransition (phase2b §2.9)', () => {
   });
 });
 
-describe('the level-start toast (Phase 2d §1.14)', () => {
-  const T = cfg.fx.startToast;
-  const host = (): HTMLElement => {
-    const el = document.createElement('div');
-    document.body.appendChild(el);
-    return el;
-  };
-
-  it('the plan: delay, in, hold, then a linear drift at exitPxPerSec × s until it has fully left; reduced: fade, hold, fade', () => {
-    const p = startToastPlan({ reduced: false, width: 250, offsetToEdge: 12, scale: 1 });
-    expect([p.delay, p.inMs, p.hold]).toEqual([T.delayMs, T.inMs, T.holdMs]);
-    // 262 px at 100 px/s: 2.62 s (a 250 px toast takes about 2.6 s, §1.14).
-    expect(p.exit).toBe(262);
-    expect(p.enter).toBe(262);
-    expect(p.out).toBe(2620);
-    // At s = 0.712 the drift is slower in px/s and the distance is the same toast's.
-    expect(startToastPlan({ reduced: false, width: 178, offsetToEdge: 8.5, scale: 0.712 }).out).toBe(Math.round((186.5 / (T.exitPxPerSec * 0.712)) * 1000));
-    const r = startToastPlan({ reduced: true, width: 250, offsetToEdge: 12, scale: 1 });
-    expect([r.inMs, r.hold, r.out, r.exit]).toEqual([cfg.fx.reducedMotionFadeMs, T.reducedHoldMs, cfg.fx.reducedMotionFadeMs, 0]);
-  });
-
-  it('shows our honest line and our arm, aria-hidden, one at a time; removed after its time (no WAAPI)', () => {
-    vi.useFakeTimers();
-    const h = host();
-    const toast = createStartToast({ host: h, scale: () => 1, reduced: () => false });
-    toast.play('level');
-    const el = h.querySelector('.start-toast') as HTMLElement;
-    expect(el.dataset.kind).toBe('level');
-    expect(el.getAttribute('aria-hidden')).toBe('true');
-    expect(el.querySelector('.start-toast__text')?.textContent).toBe('You can solve this one!');
-    expect(el.querySelector('use')?.getAttribute('href')).toBe('#art-flex');
-    // Never a statistic.
-    expect(el.textContent).not.toMatch(/%|\d/);
-    toast.play('retry');
-    expect(h.querySelectorAll('.start-toast')).toHaveLength(1);
-    expect(toast.current()?.dataset.kind).toBe('retry');
-    vi.advanceTimersByTime(T.delayMs + T.inMs + T.holdMs + 60_000);
-    expect(h.querySelector('.start-toast')).toBeNull();
-    expect(toast.current()).toBeNull();
-    toast.destroy();
-  });
-
-  it('WAAPI: slides in from beyond the inline start, holds, drifts out the same way (RTL: from and to the right); reduced: opacity only', () => {
-    const calls: [Keyframe[], KeyframeAnimationOptions][] = [];
-    const animate = vi.fn((frames: Keyframe[], opts: KeyframeAnimationOptions) => {
-      calls.push([frames, opts]);
-      return { cancel: vi.fn(), onfinish: null } as unknown as Animation;
-    });
-    Object.defineProperty(HTMLElement.prototype, 'animate', { value: animate, configurable: true, writable: true });
-    // A 200 px toast 12 px from the left edge of a 402 px viewport.
-    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ left: 12, right: 212, width: 200, top: 0, bottom: 29, height: 29, x: 12, y: 0, toJSON: () => ({}) } as DOMRect);
-    vi.spyOn(document.documentElement, 'clientWidth', 'get').mockReturnValue(402);
-    try {
-      const h = host();
-      const toast = createStartToast({ host: h, scale: () => 1, reduced: () => false });
-      toast.play('hard');
-      const [frames, opts] = calls[0] as [Keyframe[], KeyframeAnimationOptions];
-      expect(opts.delay).toBe(T.delayMs);
-      expect(opts.duration).toBe(T.inMs + T.holdMs + 2120);
-      expect(frames.map((f) => f.transform)).toEqual(['translateX(-212px)', 'none', 'none', 'translateX(-212px)']);
-      expect(frames[0]?.easing).toBe('ease-out');
-      expect(frames[2]?.easing).toBe('linear');
-      document.documentElement.dir = 'rtl';
-      toast.play('hard');
-      // RTL: its inline start is the right edge, 190 px from the viewport's (402 − 212) and 200 wide.
-      expect((calls[1]?.[0] ?? []).map((f) => f.transform)).toEqual(['translateX(390px)', 'none', 'none', 'translateX(390px)']);
-      document.documentElement.dir = 'ltr';
-      const reduced = createStartToast({ host: h, scale: () => 1, reduced: () => true });
-      reduced.play('level');
-      const rf = calls[2]?.[0] ?? [];
-      expect(rf.map((f) => f.opacity)).toEqual([0, 1, 1, 0]);
-      expect(rf.some((f) => f.transform)).toBe(false);
-      toast.destroy();
-      reduced.destroy();
-    } finally {
-      delete (HTMLElement.prototype as { animate?: unknown }).animate;
-      document.documentElement.removeAttribute('dir');
-      vi.restoreAllMocks();
-    }
-  });
-
-  it('nothing while the host is not in the document (fx.startToast.enabled is checked by the caller and here)', () => {
-    expect(T.enabled).toBe(true);
-    const detached = document.createElement('div');
-    const t = createStartToast({ host: detached, scale: () => 1, reduced: () => false });
-    t.play('level');
-    expect(detached.querySelector('.start-toast')).toBeNull();
-    expect(t.current()).toBeNull();
-  });
-});

@@ -78,10 +78,12 @@ vi.mock('../../../src/ui/board/board-view', () => ({
       destroy: () => el.remove(),
     };
   },
+  // 2d.1 I-4: the game screen prefetches the board's lazy motion chunk with its fx chunk.
+  loadMouseRun: () => Promise.resolve({}),
 }));
 
 import { createBootScreen } from '../../../src/ui/screens/boot-screen';
-import { createGameScreen, gameTitle, sameHighlight, type GameScreenCallbacks, type GameView } from '../../../src/ui/screens/game-screen';
+import { createGameScreen, gameTitle, loadCelebrate, sameHighlight, type GameScreenCallbacks, type GameView } from '../../../src/ui/screens/game-screen';
 import { createHomeScreen, type HomeCallbacks, type HomeView } from '../../../src/ui/screens/home-screen';
 import type { HintStep } from '../../../src/engine/types';
 import { mouseLandMs } from '../../../src/game/mouse';
@@ -424,19 +426,19 @@ describe('S2 game', () => {
     game.destroy();
   });
 
-  it('Phase 2d §1.14: playStartToast shows the toast in the column\'s fx layer, one at a time', () => {
+  it('Phase 2d.1 §5 (I-3): no start toast and no column fx layer; playTickers plays the two tickers in the fixed fx layer once its chunk is in', async () => {
     const game = createGameScreen(view(), callbacks());
     document.body.append(game.el);
-    game.playStartToast('hard');
-    const toast = q(game.el, '.game__col .game__fx .start-toast');
-    expect(toast.dataset.kind).toBe('hard');
-    expect(toast.getAttribute('aria-hidden')).toBe('true');
-    expect(toast.textContent).toBe("A hard one. You've got this!");
-    game.playStartToast('retry');
-    expect(game.el.querySelectorAll('.start-toast')).toHaveLength(1);
-    expect(q(game.el, '.start-toast').textContent).toBe('Fresh start. You can do it!');
+    expect(game.el.querySelector('.game__fx, .start-toast')).toBeNull();
+    expect('playStartToast' in game).toBe(false);
+    game.playTickers([{ key: 'toast.start.hard' }, { key: 'ticker.unique' }]);
+    await loadCelebrate();
+    await Promise.resolve();
+    const lines = game.el.querySelectorAll<HTMLElement>('.game-fx .tickers .ticker');
+    expect([...lines].map((l) => l.dataset.line)).toEqual(['1', '2']);
+    expect(lines[0]?.textContent).toContain("A hard one. You've got this!");
     game.destroy();
-    expect(game.el.querySelector('.start-toast')).toBeNull();
+    expect(document.querySelector('.ticker')).toBeNull();
   });
 
   it('H / K work anywhere on the screen while no modal is open; never twice, never from an overlay (SPEC-01, A11Y-8)', () => {

@@ -84,7 +84,7 @@ describe('top bar (Home, event screen)', () => {
 
 // ─────────────────────────── the game bar (look-spec §1.4, §1.13) ───────────────────────────
 
-const barProps: GameBarProps = { title: 'Level 96', hard: false, showBack: true, fbSafeZone: false, settingsDot: false, points: 0, final: false, reducedMotion: false };
+const barProps: GameBarProps = { title: 'Level 96', hard: false, showBack: true, fbSafeZone: false, settingsDot: false, points: 0, final: false, reducedMotion: false, starPoints: false };
 const pts = (gained: number, total: number, streak = 1): GameEvent => ({ type: 'POINTS', cell: 0, gained, total, streak });
 const nums = (el: HTMLElement): string[] => Array.from(el.querySelectorAll('.points-pill__n')).map((e) => e.textContent ?? '');
 
@@ -354,7 +354,7 @@ describe('rule cards', () => {
 
 // ─────────────────────────── the helper row (§1.11, §1.12) ───────────────────────────
 
-const tools: ToolBarProps = { hints: 2, kitties: 2, bulbEnabled: true, pawEnabled: true, hintsFree: false, mouse: { shown: true, enabled: true }, videoRefill: true, pulse: null };
+const tools: ToolBarProps = { hints: 2, kitties: 2, bulbEnabled: true, pawEnabled: true, hintsFree: false, mouse: { shown: true, enabled: true }, videoRefill: true, pulse: null, busy: false };
 const badgeOf = (tb: { el: HTMLElement }, k: string): HTMLElement => tb.el.querySelector(`.tool--${k} .tool__badge`) as HTMLElement;
 const kindOf = (b: HTMLElement): string => (b.hidden ? 'none' : ['count', 'free', 'video'].find((k) => b.classList.contains(`tool__badge--${k}`)) ?? '?');
 

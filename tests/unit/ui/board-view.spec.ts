@@ -243,7 +243,8 @@ describe('createBoardView', () => {
     expect(board.el.dataset.mood).toBe('idle');
   });
 
-  it('every correct cat (kitty, hint, player) plays the cat sequence: .fx-cat, the flash and the light; it winks from 350 to 780, then follows the board mood (helpers-spec §2.4)', () => {
+  it('every correct cat (kitty, hint, player) plays the cat sequence: .fx-cat, the flash and the light; it winks from 350 to 780, then follows the board mood (helpers-spec §2.4)', async () => {
+    await loadMouseRun(); // 2d.1 I-4: the sequence comes with the board's lazy motion chunk
     vi.useFakeTimers();
     for (const source of ['kitty', 'player', 'hint'] as const) {
       board.update(model({ cells: withCells({ 1: CellState.Cat }) }));
@@ -272,7 +273,8 @@ describe('createBoardView', () => {
     expect(WINK_TO_MS).toBe(780);
   });
 
-  it('CAT_REMOVED during the sequence cancels it on that cell at once; so does a props render that empties the cell', () => {
+  it('CAT_REMOVED during the sequence cancels it on that cell at once; so does a props render that empties the cell', async () => {
+    await loadMouseRun();
     vi.useFakeTimers();
     board.update(model({ cells: withCells({ 1: CellState.Cat, 6: CellState.Cat }) }));
     board.playEvent({ type: 'CAT_PLACED', cell: 1, source: 'player' });
@@ -601,3 +603,27 @@ describe('board keyboard (02 §6.3)', () => {
     expect(input.tap).toHaveBeenCalledWith(10);
   });
 });
+
+describe('Phase 2d.1 I-4: before the board\'s lazy motion chunk is in', () => {
+  it('a correct cat shows at rest (no sequence, no flash) and the chunk is asked for; once it is in, the next cat plays its sequence', async () => {
+    vi.resetModules();
+    const fresh = await import('../../../src/ui/board/board-view');
+    mountSprite();
+    const input = { tap: vi.fn(), doubleTap: vi.fn(), paint: vi.fn(), bulb: vi.fn(), paw: vi.fn(), mouse: vi.fn() };
+    const b = fresh.createBoardView(model(), input as unknown as BoardInput, { reducedMotion: () => false });
+    document.body.appendChild(b.el);
+    b.update(model({ cells: withCells({ 1: CellState.Cat }) }));
+    b.playEvent({ type: 'CAT_PLACED', cell: 1, source: 'kitty' });
+    const c1 = b.cellElement(1) as HTMLElement;
+    expect(c1.dataset.s).toBe('c');
+    expect(c1.querySelector('use.cell__cat')).not.toBeNull(); // the cat at rest
+    expect(c1.classList.contains('fx-cat')).toBe(false);
+    expect(c1.querySelector('.cell__flash, .cell__light')).toBeNull();
+    await fresh.loadMouseRun(); // the CAT_PLACED started it; this resolves with the same load
+    b.update(model({ cells: withCells({ 1: CellState.Cat, 6: CellState.Cat }) }));
+    b.playEvent({ type: 'CAT_PLACED', cell: 6, source: 'player' });
+    expect((b.cellElement(6) as HTMLElement).classList.contains('fx-cat')).toBe(true);
+    b.destroy();
+  });
+});
+

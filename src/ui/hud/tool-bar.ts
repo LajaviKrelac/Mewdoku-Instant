@@ -34,8 +34,8 @@ export interface ToolBarProps {
   readonly videoRefill: boolean;
   /** Phase 2d §1.11: the helper that pulses now (GameView.pulse); null = none. */
   readonly pulse: 'paw' | 'bulb' | null;
-  /** Phase 2d.1 §1.2: a helper run is on (input locked, status kitty or hint): inert, no disabled fade. Optional (absent = false). */
-  readonly busy?: boolean;
+  /** Phase 2d.1 §1.2: a helper run is on (input locked, status kitty or hint): inert, no disabled fade. Required since I-3. */
+  readonly busy: boolean;
 }
 
 export interface ToolBarCallbacks {
@@ -111,7 +111,7 @@ export function createToolBar(props: ToolBarProps, cb: ToolBarCallbacks): ToolBa
 
   let prev: ToolBarProps | null = null;
   const render = (p: ToolBarProps): void => {
-    el.toggleAttribute('data-busy', p.busy === true);
+    el.toggleAttribute('data-busy', p.busy);
     if (
       prev &&
       prev.hints === p.hints &&

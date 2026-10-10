@@ -1,10 +1,12 @@
 // Owner: C (Phase 2b)
 // The overlays that are never needed before the first screen shows, bundled as ONE lazy chunk
 // (04 §9 first-load budget): O1 hint card, O2 rewarded prompt, O4 fail, O5 settings, O6 how to
-// play, O7 daily result, and O8 the tutorial coach. The router imports this module dynamically and
-// queues any open() that arrives before it lands. Returning players get it right after the first
-// route (boot step 8); on a first run boot fetches it alongside the pack and font waits
-// (boot.overlayTimeoutMs), so the tutorial's first board shows with its coach.
+// play, O7 daily result. The router imports this module dynamically and queues any open() that
+// arrives before it lands. Every player gets it right after the first route (boot step 8).
+// Phase 2d.1 I-4: O8, the tutorial coach, is its own small chunk (app/coach-chunk.ts): a first run
+// waits only for that one (boot.overlayTimeoutMs) before the tutorial board shows, not for this chunk;
+// the router's default loader loads both together (the coach chunk's stylesheet has the rich-text
+// styles the hint card and How to play share).
 // The toast layer (O9) and the loading indicator (O10) stay in the main bundle.
 // Phase 2b adds the win-flow UI and the shop (phase2b §2.11, §11 "core overlay chunk"): ranking,
 // victory, shop, rank_hub and group_result. The victory screen replaced the Phase 2 O3 win overlay,
@@ -13,7 +15,6 @@
 // CSS file and loads it before the chunk resolves), so the first-load stylesheet carries none of it.
 import '../styles/overlay-chunk.css';
 
-export { createCoach } from '../ui/overlays/coach';
 export { createDailyResult } from '../ui/overlays/daily-result';
 export { createFailOverlay } from '../ui/overlays/fail-overlay';
 export { createHintCard } from '../ui/overlays/hint-card';

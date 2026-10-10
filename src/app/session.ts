@@ -39,7 +39,7 @@ import { advance, filterTutorialAction, tutorialStep } from '../game/tutorial';
 import type { Action, BoardKey, GameEvent, GameState, ModeId, RuleFlags } from '../game/types';
 import type { RankingListState, RankScoreView } from '../ui/overlays/ranking-panel';
 import { periodRankTitle } from '../ui/period-text';
-import type { GameScreen, GameScreenCallbacks, GameView, StartToastKind } from '../ui/screens/game-screen';
+import type { GameScreen, GameScreenCallbacks, GameView } from '../ui/screens/game-screen';
 import type { TickerLine } from '../ui/fx/tickers';
 import { t } from '../i18n';
 import type { TimerId } from './clock';
@@ -548,7 +548,6 @@ export function createSession(deps: SessionDeps): Session {
       cells: s.cells,
       boardRect: () => screen?.boardRect() ?? null,
       cellRect: (cell: CellIndex) => screen?.cellRect(cell) ?? null,
-      avoidRect: () => screen?.boardRect() ?? null, // @deprecated phase2d.1, removed at I-3
     });
     fx.play({ sfx: 'hint_open' });
     fx.announceHint(step, ctx);
@@ -718,23 +717,19 @@ export function createSession(deps: SessionDeps): Session {
   /**
    * The board-entry wave, its cue (review PAR-8: 'board_in', with the wave) and START when it ends.
    * Only a fresh or retried board enters; a restored won or lost board does not (no wave, no cue).
-   * Phase 2d §1.14: `toast` is the level-start line's kind for a fresh board ('level' / 'hard') or a
-   * Retry ('retry'); null for a resumed board and the tutorial. Phase 2d.1 §5.5: the two level-start
-   * tickers (GameScreen.playTickers(pickTickerLines(…)), fx.tickers.enabled) replace 2d's toast; a
-   * screen without playTickers (until I-3) still gets the 2d toast.
+   * Phase 2d §1.14: `start` is the level-start kind for a fresh board ('level' / 'hard') or a Retry
+   * ('retry'); null for a resumed board and the tutorial. Phase 2d.1 §5.5: it plays the two level-start
+   * tickers (GameScreen.playTickers(pickTickerLines(…)), fx.tickers.enabled; 2d's toast is gone).
    * §1.16: the entry's end is when the game screen may show its banner.
    */
-  function playBoardEntry(toast: StartToastKind | null): void {
+  function playBoardEntry(start: 'level' | 'hard' | 'retry' | null): void {
     if (screen) {
       screen.playEntry();
       fx.play({ sfx: 'board_in' });
-      if (toast !== null) {
+      const lines = start !== null && c.fx.tickers.enabled ? tickerLines(start === 'retry') : null;
+      if (lines) {
         const scr = screen;
-        const lines = scr.playTickers && c.fx.tickers.enabled ? tickerLines(toast === 'retry') : null;
-        if (lines && scr.playTickers) {
-          const play = scr.playTickers.bind(scr);
-          fx.guard(() => play(lines));
-        } else if (!scr.playTickers && c.fx.startToast.enabled) fx.guard(() => scr.playStartToast(toast));
+        fx.guard(() => scr.playTickers(lines));
       }
     }
     timers.later(c.fx.boardEntryMs, () => {

@@ -18,7 +18,7 @@ afterEach(() => {
 });
 
 /** Region r has palette colour r (the 2d props are required since I-3). */
-const base: PillsProps = { catsPlaced: 0, n: 8, hearts: 3, maxHearts: 3, colors: [0, 1, 2, 3, 4, 5, 6, 7], regionsDone: 0, boardId: 'L0' };
+const base: PillsProps = { catsPlaced: 0, n: 8, hearts: 3, maxHearts: 3, colors: [0, 1, 2, 3, 4, 5, 6, 7], regionsDone: 0, boardId: 'L0', ringId: 'L0' };
 
 const uses = (el: Element | null | undefined): string[] => Array.from(el?.querySelectorAll('use') ?? []).map((u) => u.getAttribute('href') ?? '');
 
@@ -345,9 +345,9 @@ describe('the heads pill (look-spec §1.6; Phase 2d.1 §2.7, §6.5)', () => {
     // The measured ring of the 11 colours (§6.5), unrotated, and a 12 × 12 board's.
     expect(headColors([0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11], 11)).toEqual([3, 5, 6, 10, 4, 7, 8, 11, 0, 1, 2]);
     expect(headColors(Array.from({ length: 12 }, (_, i) => i), 12)).toEqual([...HEAD_ORDER]);
-    // A board's id rotates the ring (headOrderFor); the boardId is the default ring id.
+    // The ring id rotates the ring (headOrderFor; the game screen passes the board's id, required since I-3).
     const ring = headOrderFor([7, 0, 3], 'L77');
-    expect(heads(createPills({ ...base, ...board3, colors: [...board3.colors], boardId: 'L77' })).map((h) => Number(h.dataset.color))).toEqual(ring);
+    expect(heads(createPills({ ...base, ...board3, colors: [...board3.colors], boardId: 'L77', ringId: 'L77' })).map((h) => Number(h.dataset.color))).toEqual(ring);
     expect([...ring].sort()).toEqual([0, 3, 7]);
     // Without colours (a dev harness): region r is colour r.
     expect(heads(createPills({ ...base, ringId: null })).map((h) => h.dataset.color)).toEqual(HEAD_ORDER.filter((c) => c < 8).map(String));

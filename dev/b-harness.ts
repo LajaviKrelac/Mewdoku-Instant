@@ -19,6 +19,10 @@ import '../src/styles/art.css';
 import '../src/styles/screens.css';
 // 2b integration: the overlays' and the event screen's rules load with their lazy chunks in the app.
 import '../src/styles/overlay-chunk.css';
+// Phase 2d.1 I-4: the coach (and the rich-text styles) are their own lazy stylesheet now (coach-chunk.css).
+import '../src/styles/coach-chunk.css';
+// Phase 2d.1 I-4: the board's lazy motion (mouse visits, cat sequence, waves) comes with the board-mouse chunk.
+import '../src/styles/board-mouse.css';
 import '../src/styles/events-chunk.css';
 import eventsJson from '../src/data/events/events.json';
 import { cfg } from '../src/app/config';
@@ -28,6 +32,7 @@ import { pointsRuleFor, runTotal } from '../src/game/scoring';
 import { CellState } from '../src/game/types';
 import { setInert, trapFocus } from '../src/ui/a11y/focus-trap';
 import { mountSprite } from '../src/ui/art/sprite';
+import { mountLazyArt } from '../src/ui/art/lazy-art';
 import type { OverlayView } from '../src/ui/dom';
 import { ensureFxLayer, fishSizeFromRect, flyFish } from '../src/ui/fx/fish-flight';
 import { applyMotion } from '../src/ui/fx/motion';
@@ -54,6 +59,7 @@ const fb = q.get('fb') === '1';
 const banner = q.get('banner') === '1';
 
 mountSprite();
+mountLazyArt(); // Phase 2d.1: the symbols the lazy chunks mount (board mouse, star, shards, the tickers' art)
 const app = document.getElementById('app') as HTMLElement;
 applyMotion(app, reduced);
 const toasts = createToastLayer();

@@ -10,13 +10,14 @@
 // factor s (computeLayout): the game bar (back · Level / Score · gear with the settings dot), the
 // pills row (heads, fish), the rule cards, the board card, the helper row (kitty · bulb · mouse with
 // the idle pulse) and, on FBIG with a banner, the band. Every row height and gap is a CSS variable on
-// the root (§4.7); the level points are the bar's Score column; the start toast plays in the
-// column's fx layer (playStartToast); --play-band / --play-band-bottom on <html> keep the overlays
-// above the banner while the screen is mounted (§1.16).
+// the root (§4.7); the level points are the bar's Score column; --play-band / --play-band-bottom on
+// <html> keep the overlays above the banner while the screen is mounted (§1.16). (2d's start toast and
+// its column fx layer were retired at 2d.1 I-3: the tickers replace them.)
 //
 // Phase 2d.1 (G3, helpers-spec §2, §4, §5, D-2d1-3/4/6/12): the screen's fixed fx layer (.game-fx, above
 // the board and the HUD rows, below every overlay) holds what the lazy fx chunk plays (fx/celebrate.ts,
-// prefetched at idle after the first mount, [data-celebrate=ready] once loaded): the two level-start
+// prefetched at idle after the first mount together with the board's lazy motion chunk, board-mouse.ts:
+// [data-celebrate=ready] once both are in; integration I-4): the two level-start
 // tickers (playTickers; asked before the chunk is in, they join their crossing late), and per event the
 // shards (CAT_PLACED), the "+N", the star and the bar's count-up (POINTS; until the chunk is in: 2d's
 // roll) and one "Done!" label per anchor tile (UNITS_DONE). A mouse action's units (the board's waves
@@ -30,27 +31,24 @@
 // tool button is disabled, the coach's "Got it" goes away) it is moved back to the board.
 //
 // Classes: .screen.screen--game[data-mode][data-status][data-compact][data-banner] > header.top-bar--game
-//          + main.game__col (.game__hud .game__stage .game__tools .game__fx) + .game__scrim + .game-fx[data-celebrate]; vars of §4.7
+//          + main.game__col (.game__hud .game__stage .game__tools) + .game__scrim + .game-fx[data-celebrate]; vars of §4.7
 import type { CellIndex } from '../../engine/types';
 import type { EventDef } from '../../game/events';
 import type { FxHandle } from '../fx/fish-flight';
 import { playGlow } from '../fx/glow';
-import { createStartToast, type StartToastKind } from '../fx/start-toast';
 import type { TickerLine, Tickers } from '../fx/tickers';
 import type { Celebrate } from '../fx/celebrate';
 import { mouseLandMs } from '../../game/mouse';
 import type { DoneUnit, GameEvent, ModeId, PaintMode, Status } from '../../game/types';
 import { cfg } from '../../app/config';
 import { formatShortDate, onLocaleChanged, t, translate } from '../../i18n';
-import { createBoardView, type BoardHighlight, type BoardModel } from '../board/board-view';
+import { createBoardView, loadMouseRun, type BoardHighlight, type BoardModel } from '../board/board-view';
 import { computeLayout, readViewport, type GameLayout, type ViewportInfo } from '../board/layout';
 import { createGameBar, type GameBarProps } from '../hud/game-bar';
 import { createPills, type LifeSlotRect, type PillsProps } from '../hud/pills';
 import { createRuleChips, type RuleChip, type RuleChipsProps } from '../hud/rule-chips';
 import { createToolBar, type ToolBarProps } from '../hud/tool-bar';
 import { h, type View } from '../dom';
-
-export type { StartToastKind } from '../fx/start-toast';
 
 export interface GameView {
   readonly mode: ModeId;
@@ -129,7 +127,7 @@ export interface GameScreen extends View<GameView> {
   playEntry(): number;
   cellRect(cell: CellIndex): DOMRect | null;
   toolRect(tool: HelperKind): DOMRect | null;
-  /** Client rect of the board card (O1 hint card placement: HintCardProps.avoidRect). */
+  /** Client rect of the board card (O1: HintCardProps.boardRect anchors the card and Apply to it). */
   boardRect(): DOMRect | null;
   focusBoard(): void;
   /** Phase 2c §2.3: full life slots in departure order (highest slot first), with their icon's client rect; [] while hidden. */
@@ -150,10 +148,11 @@ export interface GameScreen extends View<GameView> {
    * overlay is open (the overlay brings its own scrim). Optional (phase2b B addition).
    */
   showScrim?(): void;
-  /** Phase 2d §1.14: the level-start toast (G1 calls it from playBoardEntry on a fresh board or a Retry). */
-  playStartToast(kind: StartToastKind): void;
-  /** Phase 2d.1 §5: the two level-start tickers. Optional until I-3; replaces playStartToast (removed at I-3). */
-  playTickers?(lines: readonly [TickerLine, TickerLine]): void;
+  /**
+   * Phase 2d.1 §5: the two level-start tickers (the session calls it from playBoardEntry on a fresh
+   * board or a Retry; replaced 2d's playStartToast at I-3).
+   */
+  playTickers(lines: readonly [TickerLine, TickerLine]): void;
 }
 
 /** The top-bar title for a game view ("Level 37", "Daily · Tue 6 Oct", "Lantern Walk · 13"). */
@@ -316,8 +315,6 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
   const tools = createToolBar(toolProps(view), { onBulb: () => cb.onBulb(), onPaw: () => cb.onPaw(), onMouse });
 
   const stage = h('div', { class: 'game__stage' }, board.el);
-  /** The start toast's layer (§1.14): above the HUD rows, below every overlay. */
-  const fx = h('div', { class: 'game__fx', 'aria-hidden': 'true' });
   /** The win flow's scrim (§2.2 t = 4 200), under the overlays. */
   const scrim = h('div', { class: 'game__scrim', 'aria-hidden': 'true', hidden: true });
   /** Phase 2d.1: the fixed fx layer over the viewport (tickers, "+N", star, shards, labels). */
@@ -327,11 +324,10 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
     { class: 'screen screen--game' },
     topBar.el,
     // The play area is the page's main landmark (Home uses <main> too).
-    h('main', { class: 'game__col' }, h('div', { class: 'game__hud' }, pills.el, chips.el), stage, h('div', { class: 'game__tools' }, tools.el), fx),
+    h('main', { class: 'game__col' }, h('div', { class: 'game__hud' }, pills.el, chips.el), stage, h('div', { class: 'game__tools' }, tools.el)),
     scrim,
     gameFx,
   );
-  const startToast = createStartToast({ host: fx, scale: () => layout.s, reduced: () => current.reducedMotion });
   let tickers: Tickers | null = null;
   /** Tickers asked for before the chunk loaded: the lines and when (performance.now). */
   let tickersDue: { lines: readonly [TickerLine, TickerLine]; at: number } | null = null;
@@ -353,7 +349,12 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
       countTo: (total) => topBar.countTo(total),
     });
     tickers = m.createTickers({ host: gameFx, reduced: () => current.reducedMotion });
-    gameFx.dataset.celebrate = 'ready';
+    // I-4: ready once the board's lazy motion (the cat sequence, the mouse, the wave) is in too (or failed).
+    void loadMouseRun()
+      .catch(() => undefined)
+      .then(() => {
+        if (!destroyed) gameFx.dataset.celebrate = 'ready';
+      });
     topBar.update(barProps(current));
     const due = tickersDue;
     tickersDue = null;
@@ -576,11 +577,15 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
     relayout();
   });
 
-  // Prefetch the fx chunk at idle after the first mount (§7.3); a screen built after it loaded binds at once.
+  // Prefetch the fx chunk at idle after the first mount (§7.3), and with it the board's lazy motion chunk
+  // (I-4: the cat sequence, the mouse, the wave); a screen built after they loaded binds at once.
   if (celebrateMod) bindCelebrate(celebrateMod);
   else {
     const w = win() as (Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }) | null;
-    const go = (): void => void loadCelebrate().then(bindCelebrate);
+    const go = (): void => {
+      void loadMouseRun().catch(() => undefined);
+      void loadCelebrate().then(bindCelebrate);
+    };
     if (w?.requestIdleCallback) w.requestIdleCallback(go, { timeout: 2000 });
     else setTimeout(go, 200);
   }
@@ -665,9 +670,6 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
         }
       }
     },
-    playStartToast(kind: StartToastKind) {
-      startToast.play(kind);
-    },
     playTickers(lines) {
       if (tickers) {
         tickers.play(lines);
@@ -689,7 +691,6 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
       doc.removeEventListener('focusout', onFocusOut, true);
       if (focusRaf) win()?.cancelAnimationFrame(focusRaf);
       focusRaf = 0;
-      startToast.destroy();
       if (bandOwner.get(doc) === owner) {
         bandOwner.delete(doc);
         for (const k of ['--play-band', '--play-band-bottom', '--toast-bottom']) root.style.removeProperty(k);

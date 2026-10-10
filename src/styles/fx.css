@@ -104,8 +104,10 @@
   display: inline;
 }
 
-/* Happy hop on WON. */
-.cell.fx-hop .cell__catg {
+/* Happy hop on WON. (2d.1 I-4: the cat sequence's rule now loads later, in the lazy board-mouse.css; the
+   second selector keeps the hop winning on a cat whose sequence still runs, as before the move.) */
+.cell.fx-hop .cell__catg,
+.cell.fx-hop.fx-cat .cell__catg {
   animation: cat-hop 520ms ease-out;
 }
 
@@ -142,8 +144,10 @@
   }
 }
 
-/* PULSE: a locked or filtered cell squeezes. */
-.cell.fx-pulse {
+/* PULSE: a locked or filtered cell squeezes. (2d.1 I-4: the second selector keeps it over a running wave,
+   whose rule now loads later in the lazy board-mouse.css, as before the move.) */
+.cell.fx-pulse,
+.cell.fx-pulse.fx-wave {
   animation: cell-pulse 240ms ease;
 }
 
@@ -194,26 +198,6 @@
   }
   50% {
     box-shadow: 0 0 0 2px var(--card), 0 0 0 5px var(--gold), 0 0 0 13px rgba(var(--gold-rgb), 0);
-  }
-}
-
-@keyframes ghost-clear {
-  0%,
-  100% {
-    opacity: 0.7;
-  }
-  50% {
-    opacity: 0.12;
-  }
-}
-
-@keyframes ghost-bob {
-  0%,
-  100% {
-    transform: none;
-  }
-  50% {
-    transform: translateY(-6%);
   }
 }
 
@@ -615,46 +599,6 @@
   from {
     opacity: 1;
   }
-}
-
-/* ── The level-start toast (Phase 2d §1.14; start-toast.ts moves it on WAAPI) ──
-   A cream pill 29 s tall over the pills row's lower edge and the rules container's top, 12 s from the
-   column's inline start (its static position + margin: mirrors in RTL); our text, then our flexed
-   arm. Decorative: no pointer events. */
-.game__fx {
-  position: absolute;
-  top: calc(var(--g-bp) + var(--pills) + var(--g-pr) - var(--s) * 12.6px);
-  left: 0;
-  right: 0;
-  z-index: 4;
-  height: 0;
-  pointer-events: none;
-}
-
-.start-toast {
-  position: absolute;
-  top: 0;
-  display: flex;
-  align-items: center;
-  height: calc(var(--s) * 29px);
-  margin-inline-start: calc(var(--s) * 12px);
-  padding-inline-start: calc(var(--s) * 12px);
-  padding-inline-end: calc(var(--s) * 4px);
-  border: calc(var(--s) * 1.5px) solid var(--toast-line);
-  border-radius: var(--radius-pill);
-  background: var(--toast-fill);
-  color: var(--ink);
-  font-family: var(--font-display);
-  font-weight: var(--display-weight);
-  font-size: calc(var(--s) * 1.019rem);
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.start-toast__art {
-  width: calc(var(--s) * 24px);
-  height: calc(var(--s) * 24px);
-  margin-inline-start: calc(var(--s) * 4px);
 }
 
 /* ── Reduced motion (02 §17.5): no shake, stagger or loops; fades ≤ 150 ms ──

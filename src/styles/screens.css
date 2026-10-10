@@ -79,9 +79,9 @@
   pointer-events: none;
 }
 
-/* Reduced motion: no rise; the chip fades in and out above the pill, clear of the count. */
-.period-pill__label[data-reduced],
-.points-pill__label[data-reduced] {
+/* Reduced motion: no rise; the chip fades in and out above the pill, clear of the count. (The Score's
+   own "+N" chip, .points-pill__label, retired with 2d.1's star and count-up, helpers-spec §2.5.) */
+.period-pill__label[data-reduced] {
   transform: none;
 }
 

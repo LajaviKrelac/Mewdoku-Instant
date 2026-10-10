@@ -7,12 +7,18 @@
 //   an open, grinning mouth (teeth, tongue);
 // - fx-star4: a four-point star with concave sides and a round soft core (the points star, G3);
 // - fx-shard, fx-shard-2, fx-shard-3: three chunky crystal bits, each a lit face in currentColor (the
-//   tile's colour), a shaded face (the same colour under 18 % black, i.e. × 0.82) and a small highlight.
+//   tile's colour), a shaded face (the same colour under 18 % black, i.e. × 0.82) and a small highlight;
+// - (integration I-4, moved from helper-art.ts) the tickers' art: art-paw-cap, a ticker pill's
+//   inline-start end as a paw (four toe beans in an arc along the outer edge, each in its own scallop of
+//   the outline, a large main pad; the pill's fill and border, --toast-fill and --toast-line, follow the
+//   scallops); art-bolt, a chunky zig-zag lightning bolt, yellow with an orange shade; art-star, a plump
+//   five-point star with rounded tips, gold with a soft highlight (the tickers' end icons).
 // They are not in the first-load sprite (they cost the first screen nothing): mountLazyArt() adds them to
 // the sprite once, called by the board's mouse chunk (board/board-mouse.ts, prefetched at idle after a
 // board entry) and by the lazy fx chunk (G3's fx/celebrate.ts; requests-G2 H2), like art/accessories.ts.
 import { CAT } from './cat-parts';
 import { EYES, MOUSE, MOUSE_BOX, mouseEyes, mouseHead, sym } from './helper-art';
+import { TOKENS } from './palette';
 import { SPRITE_ID } from './sprite';
 
 /**
@@ -49,6 +55,55 @@ function shard(outline: string, shade: string, hi: string): string {
   return `<path d="${outline}" fill="currentColor"/><path d="${shade}" fill="#000" opacity=".18"/><path d="${hi}" fill="#fff" opacity=".45"/>`;
 }
 
+/**
+ * The paw cap (30 × 31, the pill's height): four toe beans in an arc along the outer edge, each inside a
+ * scallop of the outline (circles of r 4.3 at (12.4, 4.9), (7, 11.4), (7, 19.6), (12.4, 26.1), the first and
+ * last touching the pill's edges), the pill's fill and border following the scallops, a large main pad.
+ */
+function pawCap(): string {
+  const edge = 'M30 .6H12.4A4.3 4.3 0 0 0 9.09 7.64A4.3 4.3 0 1 0 5.7 15.5A4.3 4.3 0 1 0 9.09 23.36A4.3 4.3 0 0 0 12.4 30.4H30';
+  const bean = (cx: number, cy: number): string => `<circle cx="${cx}" cy="${cy}" r="2.8" fill="#FFCD9B"/>`;
+  return (
+    `<defs><radialGradient id="paw-pad" cx=".5" cy=".5" r=".5"><stop offset=".5" stop-color="#FFD4A5"/><stop offset="1" stop-color="#FFE1B5" stop-opacity="0"/></radialGradient></defs>` +
+    `<path d="${edge}" style="fill:var(--toast-fill)"/>` +
+    bean(12.8, 5.4) +
+    bean(7.6, 11.6) +
+    bean(7.6, 19.4) +
+    bean(12.8, 25.6) +
+    `<ellipse cx="20.4" cy="15.5" rx="7" ry="8.6" fill="url(#paw-pad)"/>` +
+    `<path d="${edge}" fill="none" style="stroke:var(--toast-line)" stroke-width="1.2" stroke-linejoin="round"/>`
+  );
+}
+
+/** A plump five-point star (24 grid): rounded tips from a round-joined stroke of its own colour. */
+function star5(): string {
+  const pts: string[] = [];
+  for (let k = 0; k < 10; k++) {
+    const r = k % 2 ? 4.6 : 9.4;
+    const a = ((-90 + k * 36) * Math.PI) / 180;
+    pts.push(`${(12 + r * Math.cos(a)).toFixed(1)} ${(13 + r * Math.sin(a)).toFixed(1)}`);
+  }
+  return (
+    `<path d="M${pts.join('L')}Z" fill="${TOKENS.gold}" stroke="${TOKENS.gold}" stroke-width="3" stroke-linejoin="round"/>` +
+    `<path d="M12 5.6 13.3 9.4 9.6 10Z" fill="#FFE9A6"/><ellipse cx="9.4" cy="11.6" rx="1.6" ry="1" transform="rotate(-30 9.4 11.6)" fill="#fff" opacity=".7"/>` +
+    `<path d="M16.3 18.8 12 16.5 7.7 18.8l.9-4.6" fill="none" stroke="${TOKENS.fish}" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" opacity=".55"/>`
+  );
+}
+
+/** The tickers' art (moved here from helper-art.ts at I-4: only the lazy fx chunk's tickers draw it). */
+function tickerArt(): string[] {
+  return [
+    sym('art-paw-cap', '0 0 30 31', pawCap()),
+    sym(
+      'art-bolt',
+      '0 0 24 24',
+      `<path d="M14.8 1.2 4.6 13.4h6.3L8.4 22.8 19.6 9.4h-6.4Z" fill="${TOKENS.gold}" stroke="${TOKENS.gold}" stroke-width="1.4" stroke-linejoin="round"/>` +
+        `<path d="M13.2 9.4h6.4L8.4 22.8l2.5-9.4Z" fill="${TOKENS.fish}"/><path d="M13.4 4 7.6 11.5h1.1Z" fill="#FFE9A6"/>`,
+    ),
+    sym('art-star', '0 0 24 24', star5()),
+  ];
+}
+
 /** The lazily mounted symbols' markup. */
 export function lazyArtSymbols(): string {
   return [
@@ -59,6 +114,7 @@ export function lazyArtSymbols(): string {
     sym('fx-star4', '0 0 24 24', star4()),
     sym('fx-shard', '0 0 24 24', shard('M7 3.4 16.6 2.2c2 0 3.4 1.2 3.8 3.1l1.4 8.2c.3 1.8-.5 3.4-2.1 4.2l-8 4.3c-1.6.8-3.4.5-4.6-.8L3.2 16.6C2 15.3 1.8 13.5 2.6 12L5 5.4c.4-1.1 1-1.8 2-2Z', 'M21.8 13.5c.3 1.8-.5 3.4-2.1 4.2l-8 4.3c-1.6.8-3.4.5-4.6-.8l5.2-6.4Z', 'M7.6 5.6 15 4.4l-2.6 3.4-5.6 1.2Z')),
     sym('fx-shard-2', '0 0 24 24', shard('M11 2.4c1.1-.6 2.3-.5 3.2.3l6.6 6.2c1 .9 1.2 2.3.6 3.5l-4.8 8.4c-.6 1.1-1.8 1.7-3 1.5L5.8 21c-1.4-.2-2.4-1.3-2.5-2.7L2.6 9.6c-.1-1.2.5-2.3 1.5-2.9Z', 'M21.4 12.4l-4.8 8.4c-.6 1.1-1.8 1.7-3 1.5L5.8 21l7.4-7.6Z', 'M5.6 8.4 11.6 4.6l1.4 2.6-6.2 3.4Z')),
+    ...tickerArt(),
     sym('fx-shard-3', '0 0 24 24', shard('M5.2 5.8C6 4.4 7.6 3.8 9.1 4.2l9.6 2.9c1.6.5 2.6 2 2.4 3.7l-.9 7.1c-.2 1.7-1.6 2.9-3.3 2.9H6.5c-1.6 0-3-1.2-3.2-2.8l-.8-6.4c-.1-.8.1-1.5.5-2.2Z', 'M21.1 10.8l-.9 7.1c-.2 1.7-1.6 2.9-3.3 2.9H9.2l3.4-8.6Z', 'M6.4 7.4 13.4 7.8l-3 2.6-4.6.4Z')),
   ].join('');
 }

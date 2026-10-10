@@ -14,12 +14,19 @@
 // A lazy chunk (board-view.ts loadMouseRun: prefetched at idle after a board entry; the first screen
 // never needs it): loading it also mounts the lazy art (art/lazy-art.ts: the mouse's parts, and the star
 // and shards of the lazy fx chunk).
+// Phase 2d.1 I-4 (lead, requests-G2 H3): the chunk is the board's lazy motion as a whole: it also carries
+// the cat-placed sequence (board-cat.ts, re-exported here) and one stylesheet, styles/board-mouse.css
+// (the mouse's visits and X pop, the cat sequence, the completion wave), which left the first-load
+// board.css. Until it is in, a correct cat shows at rest and a completed unit does not wave.
 import { cfg, type GameConfig } from '../../app/config';
 import type { CellIndex } from '../../engine/types';
 import { mouseLandMs, mouseRunMs, mouseVisitMs } from '../../game/mouse';
 import { MOUSE_BOX } from '../art/helper-art';
 import { mountLazyArt } from '../art/lazy-art';
 import type { FxTimers } from './board-fx';
+import '../../styles/board-mouse.css';
+
+export { playCatSequence } from './board-cat';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
