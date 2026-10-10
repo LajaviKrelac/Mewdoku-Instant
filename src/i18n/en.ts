@@ -102,18 +102,18 @@ export const enCore = {
   'list.separator': ', ',
 
   // ── Region colour names (02 §17.2), one per palette index ─────────────────
-  'color.0': 'Strawberry',
+  'color.0': 'Coral',
   'color.1': 'Apricot',
-  'color.2': 'Lemon',
+  'color.2': 'Mustard',
   'color.3': 'Lime',
   'color.4': 'Mint',
   'color.5': 'Lagoon',
   'color.6': 'Sky',
-  'color.7': 'Lavender',
+  'color.7': 'Violet',
   'color.8': 'Orchid',
   'color.9': 'Cocoa',
   'color.10': 'Slate',
-  'color.11': 'Moss',
+  'color.11': 'Pink',
 
   // ── Pattern glyph names (02 §18), one per palette index ───────────────────
   'glyph.0': 'dot',

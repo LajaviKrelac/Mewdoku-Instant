@@ -57,7 +57,7 @@ function miniBoard(n: number, fills: readonly number[], marks: Readonly<Record<n
   return svg;
 }
 
-/** Rule 1: one cat in each colour — a solved 4×4 of our own (Lavender, Mint, Lemon, Strawberry). */
+/** Rule 1: one cat in each colour — a solved 4×4 of our own (Violet, Mint, Mustard, Coral). */
 function artColours(): SVGSVGElement {
   const fills = [7, 7, 4, 4, 7, 2, 4, 4, 2, 2, 0, 4, 2, 0, 0, 0];
   return miniBoard(4, fills, { 1: 'cat-idle', 7: 'cat-idle', 8: 'cat-idle', 14: 'cat-idle' });

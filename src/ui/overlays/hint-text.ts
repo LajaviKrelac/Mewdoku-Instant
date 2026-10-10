@@ -12,7 +12,7 @@ export interface HintTextContext {
   readonly n: number;
   /** Palette index per region label (colour names). */
   readonly colors: Uint8Array;
-  /** Colour patterns on → colour names carry their glyph: "Lavender (star)" (02 §18). */
+  /** Colour patterns on → colour names carry their glyph: "Violet (star)" (02 §18). */
   readonly patterns: boolean;
   /** Optional region label per cell (puzzle.regions): lets hintLocation() name the tile's colour. */
   readonly regions?: Uint8Array;
@@ -45,7 +45,7 @@ function unitNameWith(unit: Unit, ctx: HintTextContext, nm: Namer): string {
   }
 }
 
-/** "row 3", "column 5", "Lavender" (02 §9.1 unit names; rows/columns 1-based). */
+/** "row 3", "column 5", "Violet" (02 §9.1 unit names; rows/columns 1-based). */
 export function unitName(unit: Unit, ctx: HintTextContext): string {
   return unitNameWith(unit, ctx, PLAIN);
 }
@@ -62,7 +62,7 @@ function unitListNameWith(units: readonly Unit[], ctx: HintTextContext, nm: Name
   return joinList(units.map((u) => unitNameWith(u, ctx, nm)));
 }
 
-/** "rows 2, 4 and 5", "columns 1 and 3", "Lavender and Mint"; a single unit uses unitName(). */
+/** "rows 2, 4 and 5", "columns 1 and 3", "Violet and Mint"; a single unit uses unitName(). */
 export function unitListName(units: readonly Unit[], ctx: HintTextContext): string {
   return unitListNameWith(units, ctx, PLAIN);
 }

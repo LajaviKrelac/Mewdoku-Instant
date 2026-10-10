@@ -32,7 +32,7 @@ export interface CoachProps {
   readonly step: TutorialStepIndex;
   readonly hand: CoachHand;
   readonly showGotIt: boolean;
-  /** Palette index for {color} in the step text (step 1: Lavender), or null. */
+  /** Palette index for {color} in the step text (step 1: Violet), or null. */
   readonly colorParam: number | null;
   /** Client rects of the focus targets (cells or the bulb); re-read on resize. */
   targetRects(): readonly DOMRect[];

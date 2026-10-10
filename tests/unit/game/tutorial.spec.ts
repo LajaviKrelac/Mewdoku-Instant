@@ -48,7 +48,7 @@ describe('tutorial board (02 §11.5)', () => {
     expect(grade(4, p.regions).grade).toBe(1);
   });
 
-  it('fixed colours A Mint, B Lavender, C Lemon, D Strawberry; region B is the single tile (1,2)', () => {
+  it('fixed colours A Mint, B Violet, C Mustard, D Coral; region B is the single tile (1,2)', () => {
     expect(TUTORIAL_COLORS).toEqual([4, 7, 2, 0]);
     expect(getMode('tutorial').fixedColors).toEqual([4, 7, 2, 0]);
     expect(fixedColorsFor('tutorial', tutorialPuzzle())).toEqual(Uint8Array.from([4, 7, 2, 0]));

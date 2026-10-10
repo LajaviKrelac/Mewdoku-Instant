@@ -61,18 +61,18 @@
   --scrim-rgb: 28, 23, 32;
 
   /* ── Region palette (02 §17.2), by palette index ─────────────────────── */
-  --r0: #f49aae; /* Strawberry */
+  --r0: #f49aae; /* Coral */
   --r1: #f7b98b; /* Apricot */
-  --r2: #f2dc7c; /* Lemon */
+  --r2: #f2dc7c; /* Mustard */
   --r3: #bfdb86; /* Lime */
   --r4: #8fd6b8; /* Mint */
   --r5: #7cc6d6; /* Lagoon */
   --r6: #9bbdf0; /* Sky */
-  --r7: #b9a7ec; /* Lavender */
+  --r7: #b9a7ec; /* Violet */
   --r8: #e3a6df; /* Orchid */
   --r9: #c7a58c; /* Cocoa */
   --r10: #9aa9bc; /* Slate */
-  --r11: #a3b57f; /* Moss */
+  --r11: #a3b57f; /* Pink */
 
   /* ── Tux (phase2b §1.6; the art itself carries these in ui/art/palette.ts CAT_COLORS) ── */
   --cat-fur: #2e2a33;

@@ -171,8 +171,8 @@ describe('screen-reader policy (phase2c.1 §10.4, D22)', () => {
     const before = h.said.length;
     C(h, 2);
     expect(h.said.length).toBe(before + 1); // one fx.announce for the action
-    // Region C is palette index 2 (Lemon) in the harness.
-    expect(last(h.said)).toBe('Cat placed. 3 of 5. 2,016 points. Lemon done.');
+    // Region C is palette index 2 (Mustard) in the harness.
+    expect(last(h.said)).toBe('Cat placed. 3 of 5. 2,016 points. Mustard done.');
     expect(h.said.join(' ')).not.toMatch(/\+\d|672|768|in a row|streak/);
   });
 

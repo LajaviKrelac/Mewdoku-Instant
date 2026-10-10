@@ -1,9 +1,10 @@
 // Owner: A (phase2b §1.12); G2 (Phase 2c: the lives are fish, the period pill and counter, the 2c victory;
 // Phase 2c.1: the level-points counter, its "+N", the period counter in the cat counter's cell, the
-// victory's points row)
+// victory's points row); G3 (Phase 2d)
 // Visual review screenshots of the Classic look at 320, 390 and 1280 (the web-320, web-390 and
-// web-1280 projects): Home, mid-game, the fish loss, the win flight, ranking, victory, fail, settings
-// and event. Phase 2c (fish-lives-spec §9 "screenshots re-captured"): they are stored under
+// web-1280 projects): Home, the fish loss, the win flight, ranking, victory, fail, settings and event.
+// Phase 2d L0 (look-spec §3.2 item 1): the board capture (mid-game) moved, unchanged, to
+// visual-board.spec.ts (G2). Phase 2c (fish-lives-spec §9 "screenshots re-captured"): they are stored under
 // docs/phase2c/screenshots/ as G2-visual-<screen>-<width>.png (VISUAL_OUT overrides the folder) and
 // reviewed by a person, never diffed in CI. Each test also asserts the few things a screenshot cannot
 // show on its own: the screen is really there, the Classic tokens are live, and the 2c parts (three
@@ -159,31 +160,6 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
     await expect(pill.locator('.period-pill__n')).toHaveText('39');
     await expect(page.locator('.fish-pill, .fish-pill__plus')).toHaveCount(0);
     await shot(page, 'home');
-  });
-
-  test('mid-game', async ({ page }) => {
-    await open(page, returning());
-    const sol = await startLevel(page);
-    const n = sol.length;
-    for (const r of [0, 2]) await placeCat(page, r * n + (sol[r] as number));
-    for (const i of [n + ((sol[1] as number) + 2) % n, n + ((sol[1] as number) + 3) % n, 3 * n + ((sol[3] as number) + 1) % n]) {
-      await cell(page, i).click();
-      await page.waitForTimeout(330);
-    }
-    // even gutters and the white X over its edge
-    const x = page.locator('.cell[data-s="m"]').first();
-    await expect(x.locator('.cell__xe')).toHaveCount(2);
-    expect(await x.evaluate((el) => getComputedStyle(el.querySelector('.cell__x') as Element).stroke)).toBe('rgb(255, 255, 255)');
-    // Phase 2c §1.1: three fish where the hearts were.
-    await expect(page.locator('.pill--lives .life[data-full]')).toHaveCount(3);
-    // Phase 2c.1 §10.2: two cats in a row score 576 + 672; marks score nothing.
-    await expect(page.locator('.points-pill')).toBeVisible();
-    await expect(page.locator('.points-pill__n')).toHaveText('1,248');
-    await expect(page.locator('.points-pill')).toHaveAttribute('aria-label', 'Level points: 1,248');
-    await expect(page.locator('.pill--lives')).toHaveAttribute('aria-label', '3 of 3 fish left');
-    await expect(page.locator('.pill--hearts, .heart')).toHaveCount(0);
-    await page.waitForTimeout(400);
-    await shot(page, 'game');
   });
 
   test('a mistake: the fish loss mid-animation, then two fish left', async ({ page }) => {

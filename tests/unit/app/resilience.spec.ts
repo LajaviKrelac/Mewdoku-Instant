@@ -92,7 +92,7 @@ describe('logic-2 / RP-2: the overlay chunk cannot be loaded', () => {
     const h = createHarness({ save: (s) => ({ ...s, tutorialDone: false, progress: { level: 1, completed: 0, best: {} } }) });
     await h.session.start({ mode: 'tutorial', replay: false });
     await h.settle(h.config.fx.boardEntryMs);
-    h.session.onCellDoubleTap(1); // step 1: the Lavender tile (see tutorial-session.spec)
+    h.session.onCellDoubleTap(1); // step 1: the Violet tile (see tutorial-session.spec)
     h.session.onCoachGotIt(); // step 2
     h.session.onPaint([4, 5, 6], 'mark'); // step 3
     h.session.onCellDoubleTap(7); // step 4

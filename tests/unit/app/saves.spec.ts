@@ -152,7 +152,7 @@ describe('session save modes', () => {
     const h = createHarness({ save: (s) => ({ ...s, tutorialDone: false, progress: { level: 1, completed: 0, best: {} } }) });
     await h.session.start({ mode: 'tutorial', replay: false });
     await h.settle(h.config.fx.boardEntryMs);
-    h.session.onCellDoubleTap(1); // step 1: the Lavender tile
+    h.session.onCellDoubleTap(1); // step 1: the Violet tile
     await h.settle(h.config.save.localDebounceMs);
     expect(h.save().inProgress).toEqual({ level: null, daily: null, event: null });
     expect(h.platform.writes).toHaveLength(0);

@@ -42,7 +42,7 @@ describe('O8 tutorial coach', () => {
     vi.advanceTimersByTime(LIVE_SETTLE_MS);
     expect(q(coach.el, '.coach__card').hasAttribute('data-pending')).toBe(false);
     expect(q(coach.el, '.coach__text').textContent).toBe(
-      'Every colour hides exactly one cat. This Lavender colour is a single tile — double-tap it.',
+      'Every colour hides exactly one cat. This Violet colour is a single tile — double-tap it.',
     );
     // UX-15: "double-tap" never breaks at its hyphen (the text stays the same for screen readers).
     expect(Array.from(coach.el.querySelectorAll('.coach__text .nowrap')).map((e) => e.textContent)).toContain('double-tap');

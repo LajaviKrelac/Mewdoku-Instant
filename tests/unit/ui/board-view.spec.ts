@@ -6,7 +6,7 @@ import { CellState } from '../../../src/game/types';
 import { mountSprite } from '../../../src/ui/art/sprite';
 import { createBoardView, type BoardInput, type BoardModel, type BoardView } from '../../../src/ui/board/board-view';
 
-// 4×4: regions A B C C / A A C C / A D D C / D D D D (the tutorial board), colours Mint Lavender Lemon Strawberry.
+// 4×4: regions A B C C / A A C C / A D D C / D D D D (the tutorial board), colours Mint Violet Mustard Coral.
 const REGIONS = Uint8Array.from([0, 1, 2, 2, 0, 0, 2, 2, 0, 3, 3, 2, 3, 3, 3, 3]);
 const COLORS = Uint8Array.from([4, 7, 2, 0]);
 
@@ -44,7 +44,7 @@ describe('createBoardView', () => {
     expect(board.el.querySelectorAll('[role=row]')).toHaveLength(4);
     const buttons = board.el.querySelectorAll('button.cell[role=gridcell]');
     expect(buttons).toHaveLength(16);
-    expect(cell(1).getAttribute('aria-label')).toBe('Row 1, column 2, Lavender, empty');
+    expect(cell(1).getAttribute('aria-label')).toBe('Row 1, column 2, Violet, empty');
     expect(cell(0).dataset.s).toBe('e');
     // The region colour sits on the tile that paints it (PERF-1: never on the cell button).
     expect((cell(0).querySelector('.cell__tile') as HTMLElement).style.getPropertyValue('--c')).toBe('var(--r4)');
@@ -100,7 +100,7 @@ describe('createBoardView', () => {
     expect(Array.from({ length: 16 }, (_, i) => cell(i))).toEqual(before);
     expect(cell(1).dataset.s).toBe('c');
     expect(cell(5).dataset.s).toBe('m');
-    expect(cell(1).getAttribute('aria-label')).toBe('Row 1, column 2, Lavender, cat');
+    expect(cell(1).getAttribute('aria-label')).toBe('Row 1, column 2, Violet, cat');
     expect(cell(1).querySelector('use.cell__cat')?.getAttribute('href')).toBe('#cat-idle');
     // the same model again touches nothing
     const spy2 = vi.spyOn(Element.prototype, 'setAttribute');
@@ -112,7 +112,7 @@ describe('createBoardView', () => {
   it('renders every state code (e|m|c|w|g)', () => {
     board.update(model({ cells: withCells({ 0: CellState.Mark, 1: CellState.Cat, 2: CellState.Wrong, 3: CellState.Given }) }));
     expect([0, 1, 2, 3, 4].map((i) => cell(i).dataset.s)).toEqual(['m', 'c', 'w', 'g', 'e']);
-    expect(cell(2).getAttribute('aria-label')).toBe('Row 1, column 3, Lemon, wrong');
+    expect(cell(2).getAttribute('aria-label')).toBe('Row 1, column 3, Mustard, wrong');
   });
 
   it('fades done regions with data-done and clears them on a fresh attempt', () => {
@@ -144,10 +144,10 @@ describe('createBoardView', () => {
     board.update(model({ patterns: true }));
     expect(board.el.hasAttribute('data-patterns')).toBe(true);
     expect(cell(1).querySelector('use.cell__pat')?.getAttribute('href')).toBe('#glyph-7');
-    expect(cell(1).getAttribute('aria-label')).toBe('Row 1, column 2, Lavender (bar), empty');
+    expect(cell(1).getAttribute('aria-label')).toBe('Row 1, column 2, Violet (bar), empty');
     board.update(model({ patterns: false }));
     expect(board.el.hasAttribute('data-patterns')).toBe(false);
-    expect(cell(1).getAttribute('aria-label')).toBe('Row 1, column 2, Lavender, empty');
+    expect(cell(1).getAttribute('aria-label')).toBe('Row 1, column 2, Violet, empty');
   });
 
   it('hint highlight marks focus, ghost X and ghost cat; null clears it', () => {

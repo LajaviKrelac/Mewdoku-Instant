@@ -45,7 +45,7 @@ describe('tutorial session', () => {
     const h = firstRun();
     await begin(h);
     const before = h.game();
-    h.session.onCellDoubleTap(0); // not the Lavender tile
+    h.session.onCellDoubleTap(0); // not the Violet tile
     expect(h.game()).toBe(before);
     expect(h.router.game?.played).toEqual(['PULSE']);
     expect(h.router.isOpen('coach')).toBe(true);

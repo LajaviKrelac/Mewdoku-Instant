@@ -160,7 +160,7 @@ describe('nested isolates (review I18N-RTL-1)', () => {
     // "+⁨تلميحان⁩": a first-strong isolate would skip the nested one, resolve LTR and draw the "+" last.
     expect(isolate(`+${FSI}تلميحان${PDI}`, 'rtl')).toBe(`${RLI}+${FSI}تلميحان${PDI}${PDI}`);
     expect(isolate(`+${FSI}3${PDI}`, 'rtl')).toBe(`${FSI}+${FSI}3${PDI}${PDI}`);
-    expect(isolate('Lavender', 'rtl')).toBe(`${FSI}Lavender${PDI}`);
+    expect(isolate('Violet', 'rtl')).toBe(`${FSI}Violet${PDI}`);
     expect(isolate('قطة', 'rtl')).toBe(`${FSI}قطة${PDI}`);
     expect(isolate(`+${FSI}تلميحان${PDI}`, 'ltr')).toBe(`+${FSI}تلميحان${PDI}`);
   });

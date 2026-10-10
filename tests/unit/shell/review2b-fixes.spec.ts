@@ -279,7 +279,7 @@ describe('rule keywords and colour names styled in teaching copy (PAR-7)', () =>
     const props: HintCardProps = { ...ctxColors, step: hstep('single', [reg(0)]), onApply: vi.fn(), onClose: vi.fn() };
     card.open(props);
     expect(q(card.el, '.hint-card__text').textContent).toBe(hintText(props.step, props));
-    expect(q(card.el, '.hint-card__text .color-name').textContent?.startsWith('Lavender')).toBe(true);
+    expect(q(card.el, '.hint-card__text .color-name').textContent?.startsWith('Violet')).toBe(true);
   });
 
   it('the coach prints the rule keyword in the accent class and the colour with its swatch', () => {
@@ -292,7 +292,7 @@ describe('rule keywords and colour names styled in teaching copy (PAR-7)', () =>
     const p = q(coach.el, '.coach__text');
     expect(p.textContent).toBe(coachText(1, 7));
     expect(text(q(p, '.kw'))).toBe('exactly one cat');
-    expect(text(q(p, '.color-name'))).toBe('Lavender');
+    expect(text(q(p, '.color-name'))).toBe('Violet');
     expect(coachText(1, 7)).not.toContain('*');
     expect(t('howto.rule.colours')).toBe('Every colour hides exactly one cat.');
   });

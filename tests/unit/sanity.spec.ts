@@ -37,13 +37,13 @@ describe('i18n', () => {
   });
 
   it('formats lists, plurals, colours, dates and times', async () => {
-    expect(joinList(['Lavender'])).toBe('Lavender');
-    expect(joinList(['Lavender', 'Mint'])).toBe('Lavender and Mint');
+    expect(joinList(['Violet'])).toBe('Violet');
+    expect(joinList(['Violet', 'Mint'])).toBe('Violet and Mint');
     expect(joinList(['2', '4', '5'])).toBe('2, 4 and 5');
     // Phase 2c: the lives are fish (fish-lives-spec §1.6).
     expect(tn('a11y.mistake', 1)).toBe('Wrong tile. 1 fish left.');
     expect(tn('a11y.mistake', 2)).toBe('Wrong tile. 2 fish left.');
-    expect(colorName(7)).toBe('Lavender');
+    expect(colorName(7)).toBe('Violet');
     expect(formatShortDate('2026-10-06')).toBe('Tue 6 Oct');
     expect(formatClock(252_000)).toBe('4:12');
     expect(formatDuration((7 * 60 + 48) * 60_000 + 5_000)).toBe('7 h 48 min');

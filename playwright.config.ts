@@ -2,6 +2,8 @@
 // "playwright install".
 // Phase 2b specs (written by their owners; a pattern for a spec that does not exist yet matches nothing):
 //   visual.spec.ts (A)  → web-320, web-390, web-1280 (screenshots to docs/phase2b/screenshots/)
+//   visual-board.spec.ts (Phase 2d G2; the board captures moved from visual.spec.ts at L0) → web-320,
+//     web-390, web-1280, like visual.spec.ts (same VISUAL_OUT switch)
 //   i18n.spec.ts (E)    → web-320, web-390
 //   winflow.spec.ts, events.spec.ts (C) → web-390
 // Screenshot switches (for a person's review, never diffed):
@@ -34,10 +36,10 @@ export default defineConfig({
     // Layout, visual and i18n checks also run at the small phone; layout and visual at desktop size.
     {
       name: 'web-320',
-      testMatch: /(layout|visual|i18n)\.spec\.ts/,
+      testMatch: /(layout|visual|visual-board|i18n)\.spec\.ts/,
       use: { ...phone, viewport: { width: 320, height: 568 } },
     },
-    { name: 'web-1280', testMatch: /(layout|visual)\.spec\.ts/, use: { viewport: { width: 1280, height: 800 } } },
+    { name: 'web-1280', testMatch: /(layout|visual|visual-board)\.spec\.ts/, use: { viewport: { width: 1280, height: 800 } } },
     // FBIG build against tests/fixtures/fbinstant-stub.js (served with page.route).
     {
       name: 'fbig-390',

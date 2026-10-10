@@ -9,7 +9,7 @@ import type { DeltaMatrix, Puzzle } from '../../engine/types';
 
 export const PALETTE_SIZE = 12;
 
-/** Region colours by palette index: Strawberry, Apricot, Lemon, Lime, Mint, Lagoon, Sky, Lavender, Orchid, Cocoa, Slate, Moss. */
+/** Region colours by palette index: Coral, Apricot, Mustard, Lime, Mint, Lagoon, Sky, Violet, Orchid, Cocoa, Slate, Pink. */
 export const PALETTE: readonly string[] = Object.freeze([
   '#F49AAE', '#F7B98B', '#F2DC7C', '#BFDB86', '#8FD6B8', '#7CC6D6',
   '#9BBDF0', '#B9A7EC', '#E3A6DF', '#C7A58C', '#9AA9BC', '#A3B57F',

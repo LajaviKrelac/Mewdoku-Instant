@@ -6,7 +6,7 @@ import { CellState, type Action, type GameState } from './types';
 export const TUTORIAL_ID = 'T1' as const;
 /** Record for Level 1 (02 §11.5); pack-000 holds the same record with i = 1. */
 export const TUTORIAL_RECORD: LevelRecord = Object.freeze({ i: 1, n: 4, r: 'ABCCAACCADDCDDDD', s: '1302', g: 1, e: 8, h: 0, gv: '', tut: 1 });
-/** Palette indices for regions A, B, C, D: Mint, Lavender, Lemon, Strawberry (02 §11.5). */
+/** Palette indices for regions A, B, C, D: Mint, Violet, Mustard, Coral (02 §11.5). */
 export const TUTORIAL_COLORS: readonly number[] = Object.freeze([4, 7, 2, 0]);
 export const TUTORIAL_STEP_COUNT = 6;
 
@@ -23,7 +23,7 @@ export interface TutorialStepDef {
   readonly hand: CoachHand;
   /** Step 2 advances on the coach card's "Got it" button. */
   readonly gotIt: boolean;
-  /** Palette index named in the coach text ({color}), e.g. Lavender in step 1. */
+  /** Palette index named in the coach text ({color}), e.g. Violet in step 1. */
   readonly colorParam: number | null;
 }
 
