@@ -261,7 +261,6 @@ export const catalog: LocaleCatalog = {
   'fish.count.other': 'ปลา {count} ตัว',
   'fish.plus': '+{count}',
   'victory.next': 'ด่าน {level}',
-  'victory.points': '+{points} แต้ม',
   'victory.eventReward': 'รางวัลอีเวนต์: {reward}',
 
   // ── Phase 2b: rankings ─────────────────────────────────────────────────────
@@ -345,7 +344,7 @@ export const catalog: LocaleCatalog = {
   'ads.banner.placeholder': 'พื้นที่แบนเนอร์',
   'time.daysHours': '{d} วัน {h} ชม.',
 
-  // ── Phase 2c: fish are lives, the period ranking, the perfect streak (AI draft 2026-10-09, unreviewed) ──
+  // ── Phase 2c: fish are lives, the period ranking (AI draft 2026-10-09, unreviewed) ──
   'period.total.day': 'วันนี้: {total}',
   'period.total.week': 'สัปดาห์นี้: {total}',
   'period.total.month': 'เดือนนี้: {total}',
@@ -362,15 +361,17 @@ export const catalog: LocaleCatalog = {
   'rank.records.best.week': 'สัปดาห์ที่ดีที่สุด',
   'rank.records.best.month': 'เดือนที่ดีที่สุด',
   'rank.sub.period.other': 'ปลา +{count} ตัว · {total}',
-  'rank.records.streak': 'ชนะแบบเพอร์เฟกต์ติดกัน',
-  'rank.records.streakBest': '{count} (สูงสุด {best})',
   'a11y.fishKept.day.other': 'คุณเก็บปลาไว้ได้ {count} ตัว ยอดรวมวันนี้: {total}',
   'a11y.fishKept.week.other': 'คุณเก็บปลาไว้ได้ {count} ตัว ยอดรวมสัปดาห์นี้: {total}',
   'a11y.fishKept.month.other': 'คุณเก็บปลาไว้ได้ {count} ตัว ยอดรวมเดือนนี้: {total}',
-  'victory.streak': 'เพอร์เฟกต์ ×{count}',
-  'victory.streak.a11y.other': 'ชนะแบบเพอร์เฟกต์ติดกัน {count} ครั้ง',
-  'howto.points.day': 'ปลาที่คุณเก็บไว้ได้เมื่อไขปริศนาสำเร็จจะไปอยู่ในอันดับรายวัน ซึ่งเริ่มใหม่ทุกวันเวลา 00:00 UTC ไขปริศนาโดยไม่ผิดเลยเพื่อชนะแบบเพอร์เฟกต์ติดกันและได้แต้มมากขึ้น',
-  'howto.points.week': 'ปลาที่คุณเก็บไว้ได้เมื่อไขปริศนาสำเร็จจะไปอยู่ในอันดับรายสัปดาห์ ซึ่งเริ่มใหม่ทุกวันจันทร์เวลา 00:00 UTC ไขปริศนาโดยไม่ผิดเลยเพื่อชนะแบบเพอร์เฟกต์ติดกันและได้แต้มมากขึ้น',
-  'howto.points.month': 'ปลาที่คุณเก็บไว้ได้เมื่อไขปริศนาสำเร็จจะไปอยู่ในอันดับรายเดือน ซึ่งเริ่มใหม่ทุกวันที่ 1 ของเดือนเวลา 00:00 UTC ไขปริศนาโดยไม่ผิดเลยเพื่อชนะแบบเพอร์เฟกต์ติดกันและได้แต้มมากขึ้น',
+  'howto.points.day': 'ปลาที่คุณเก็บไว้ได้เมื่อไขปริศนาสำเร็จจะไปอยู่ในอันดับรายวัน ซึ่งเริ่มใหม่ทุกวันเวลา 00:00 UTC',
+  'howto.points.week': 'ปลาที่คุณเก็บไว้ได้เมื่อไขปริศนาสำเร็จจะไปอยู่ในอันดับรายสัปดาห์ ซึ่งเริ่มใหม่ทุกวันจันทร์เวลา 00:00 UTC',
+  'howto.points.month': 'ปลาที่คุณเก็บไว้ได้เมื่อไขปริศนาสำเร็จจะไปอยู่ในอันดับรายเดือน ซึ่งเริ่มใหม่ทุกวันที่ 1 ของเดือนเวลา 00:00 UTC',
+
+  // ── Phase 2c.1: level points per cat (AI draft 2026-10-10, unreviewed) ──
+  'game.points.a11y': 'แต้มของด่าน: {count}',
+  'a11y.points.other': '{count} แต้ม',
+  'points.count.other': '{count} แต้ม',
+  'howto.levelPoints': 'แมวทุกตัวที่คุณหาเจอจะได้แต้ม และแมวแต่ละตัวที่หาเจอติดกันโดยไม่ผิดจะได้แต้มมากกว่าตัวก่อนหน้า การผิดไม่ทำให้แต้มหายไป แต่แมวตัวถัดไปจะเริ่มนับใหม่ แมวที่คำใบ้หรือเหมียววางให้ก็นับด้วย',
   ...LOCALE_NAMES,
 };

@@ -273,7 +273,6 @@ export const catalog: LocaleCatalog = {
   'fish.count.other': '{count} рыбки',
   'fish.plus': '+{count}',
   'victory.next': 'Уровень {level}',
-  'victory.points': 'Очки: +{points}',
   'victory.eventReward': 'Награда: {reward}',
 
   // ── Phase 2b: rankings ─────────────────────────────────────────────────────
@@ -369,7 +368,7 @@ export const catalog: LocaleCatalog = {
   'ads.banner.placeholder': 'Место для баннера',
   'time.daysHours': '{d} д {h} ч',
 
-  // ── Phase 2c: fish are lives, the period ranking, the perfect streak (AI draft 2026-10-09, unreviewed) ──
+  // ── Phase 2c: fish are lives, the period ranking (AI draft 2026-10-09, unreviewed) ──
   'period.total.day': 'Сегодня: {total}',
   'period.total.week': 'За неделю: {total}',
   'period.total.month': 'За месяц: {total}',
@@ -398,8 +397,6 @@ export const catalog: LocaleCatalog = {
   'rank.sub.period.few': '+{count} рыбки · {total}',
   'rank.sub.period.many': '+{count} рыбок · {total}',
   'rank.sub.period.other': '+{count} рыбки · {total}',
-  'rank.records.streak': 'Идеальная серия',
-  'rank.records.streakBest': '{count} (рекорд {best})',
   'a11y.fishKept.day.one': 'Сохранено рыбок: {count}. Ваш итог за сегодня: {total}.',
   'a11y.fishKept.day.few': 'Сохранено рыбок: {count}. Ваш итог за сегодня: {total}.',
   'a11y.fishKept.day.many': 'Сохранено рыбок: {count}. Ваш итог за сегодня: {total}.',
@@ -412,13 +409,20 @@ export const catalog: LocaleCatalog = {
   'a11y.fishKept.month.few': 'Сохранено рыбок: {count}. Ваш итог за месяц: {total}.',
   'a11y.fishKept.month.many': 'Сохранено рыбок: {count}. Ваш итог за месяц: {total}.',
   'a11y.fishKept.month.other': 'Сохранено рыбок: {count}. Ваш итог за месяц: {total}.',
-  'victory.streak': 'Идеально ×{count}',
-  'victory.streak.a11y.one': '{count} идеальная победа подряд',
-  'victory.streak.a11y.few': '{count} идеальные победы подряд',
-  'victory.streak.a11y.many': '{count} идеальных побед подряд',
-  'victory.streak.a11y.other': '{count} идеальной победы подряд',
-  'howto.points.day': 'Рыбки, которые остаются у вас после решения пазла, идут в рейтинг дня. Он начинается заново каждый день в 00:00 UTC. Решайте без ошибок, чтобы собрать идеальную серию и получать больше очков.',
-  'howto.points.week': 'Рыбки, которые остаются у вас после решения пазла, идут в рейтинг недели. Он начинается заново каждый понедельник в 00:00 UTC. Решайте без ошибок, чтобы собрать идеальную серию и получать больше очков.',
-  'howto.points.month': 'Рыбки, которые остаются у вас после решения пазла, идут в рейтинг месяца. Он начинается заново 1-го числа каждого месяца в 00:00 UTC. Решайте без ошибок, чтобы собрать идеальную серию и получать больше очков.',
+  'howto.points.day': 'Рыбки, которые остаются у вас после решения пазла, идут в рейтинг дня. Он начинается заново каждый день в 00:00 UTC.',
+  'howto.points.week': 'Рыбки, которые остаются у вас после решения пазла, идут в рейтинг недели. Он начинается заново каждый понедельник в 00:00 UTC.',
+  'howto.points.month': 'Рыбки, которые остаются у вас после решения пазла, идут в рейтинг месяца. Он начинается заново 1-го числа каждого месяца в 00:00 UTC.',
+
+  // ── Phase 2c.1: level points per cat (AI draft 2026-10-10, unreviewed) ──
+  'game.points.a11y': 'Очки уровня: {count}',
+  'a11y.points.one': '{count} очко.',
+  'a11y.points.few': '{count} очка.',
+  'a11y.points.many': '{count} очков.',
+  'a11y.points.other': '{count} очка.',
+  'points.count.one': '{count} очко',
+  'points.count.few': '{count} очка',
+  'points.count.many': '{count} очков',
+  'points.count.other': '{count} очка',
+  'howto.levelPoints': 'Каждая найденная кошка приносит очки, а каждая следующая кошка подряд без ошибок — больше, чем предыдущая. Ошибка никогда не отнимает очки, но со следующей кошки счёт начинается заново. Кошки, поставленные подсказкой или котиком, тоже считаются.',
   ...LOCALE_NAMES,
 };

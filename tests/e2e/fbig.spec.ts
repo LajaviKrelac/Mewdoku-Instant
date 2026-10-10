@@ -501,7 +501,9 @@ test.describe('FBIG rankings (phase2b §5, phase2c §4)', () => {
     const records = page.getByRole('dialog').locator('.rank-records[data-board="period"]');
     await expect(records).toBeVisible();
     await expect(records.getByText('This week', { exact: true })).toBeVisible();
-    await expect(records.getByText('Perfect streak', { exact: true })).toBeVisible();
+    // Phase 2c.1 (D24): Total points replaced the retired Perfect streak row.
+    await expect(records.getByText('Total points', { exact: true })).toBeVisible();
+    await expect(records.getByText(/Perfect/)).toHaveCount(0);
     expect(await stub(page, (s) => s.calls.filter((c) => /eaderboard/i.test(c.name)).length)).toBe(0);
   });
 

@@ -266,7 +266,6 @@ export const catalog: LocaleCatalog = {
   'fish.count.other': '{count} मछलियाँ',
   'fish.plus': '+{count}',
   'victory.next': 'लेवल {level}',
-  'victory.points': 'पॉइंट: +{points}',
   'victory.eventReward': 'इवेंट इनाम: {reward}',
 
   // ── Phase 2b: rankings ─────────────────────────────────────────────────────
@@ -354,7 +353,7 @@ export const catalog: LocaleCatalog = {
   'ads.banner.placeholder': 'बैनर की जगह',
   'time.daysHours': '{d} दिन {h} घं॰',
 
-  // ── Phase 2c: fish are lives, the period ranking, the perfect streak (AI draft 2026-10-09, unreviewed) ──
+  // ── Phase 2c: fish are lives, the period ranking (AI draft 2026-10-09, unreviewed) ──
   'period.total.day': 'आज: {total}',
   'period.total.week': 'इस हफ़्ते: {total}',
   'period.total.month': 'इस महीने: {total}',
@@ -375,19 +374,22 @@ export const catalog: LocaleCatalog = {
   'rank.records.best.month': 'सबसे अच्छा महीना',
   'rank.sub.period.one': '+{count} मछली · {total}',
   'rank.sub.period.other': '+{count} मछलियाँ · {total}',
-  'rank.records.streak': 'परफ़ेक्ट सिलसिला',
-  'rank.records.streakBest': '{count} (रिकॉर्ड {best})',
   'a11y.fishKept.day.one': 'आपने {count} मछली बचाई। आज का कुल: {total}।',
   'a11y.fishKept.day.other': 'आपने {count} मछलियाँ बचाईं। आज का कुल: {total}।',
   'a11y.fishKept.week.one': 'आपने {count} मछली बचाई। इस हफ़्ते का कुल: {total}।',
   'a11y.fishKept.week.other': 'आपने {count} मछलियाँ बचाईं। इस हफ़्ते का कुल: {total}।',
   'a11y.fishKept.month.one': 'आपने {count} मछली बचाई। इस महीने का कुल: {total}।',
   'a11y.fishKept.month.other': 'आपने {count} मछलियाँ बचाईं। इस महीने का कुल: {total}।',
-  'victory.streak': 'परफ़ेक्ट ×{count}',
-  'victory.streak.a11y.one': 'लगातार {count} परफ़ेक्ट जीत',
-  'victory.streak.a11y.other': 'लगातार {count} परफ़ेक्ट जीत',
-  'howto.points.day': 'पहेली हल करने पर बची मछलियाँ आज की रैंकिंग में जुड़ती हैं, जो हर दिन 00:00 UTC पर फिर शुरू होती है। बिना गलती हल करें, परफ़ेक्ट सिलसिला बनाएँ और ज़्यादा पॉइंट पाएँ।',
-  'howto.points.week': 'पहेली हल करने पर बची मछलियाँ हफ़्ते की रैंकिंग में जुड़ती हैं, जो हर सोमवार 00:00 UTC पर फिर शुरू होती है। बिना गलती हल करें, परफ़ेक्ट सिलसिला बनाएँ और ज़्यादा पॉइंट पाएँ।',
-  'howto.points.month': 'पहेली हल करने पर बची मछलियाँ महीने की रैंकिंग में जुड़ती हैं, जो हर महीने की 1 तारीख को 00:00 UTC पर फिर शुरू होती है। बिना गलती हल करें, परफ़ेक्ट सिलसिला बनाएँ और ज़्यादा पॉइंट पाएँ।',
+  'howto.points.day': 'पहेली हल करने पर बची मछलियाँ आज की रैंकिंग में जुड़ती हैं, जो हर दिन 00:00 UTC पर फिर शुरू होती है।',
+  'howto.points.week': 'पहेली हल करने पर बची मछलियाँ हफ़्ते की रैंकिंग में जुड़ती हैं, जो हर सोमवार 00:00 UTC पर फिर शुरू होती है।',
+  'howto.points.month': 'पहेली हल करने पर बची मछलियाँ महीने की रैंकिंग में जुड़ती हैं, जो हर महीने की 1 तारीख को 00:00 UTC पर फिर शुरू होती है।',
+
+  // ── Phase 2c.1: level points per cat (AI draft 2026-10-10, unreviewed) ──
+  'game.points.a11y': 'लेवल पॉइंट: {count}',
+  'a11y.points.one': '{count} पॉइंट।',
+  'a11y.points.other': '{count} पॉइंट।',
+  'points.count.one': '{count} पॉइंट',
+  'points.count.other': '{count} पॉइंट',
+  'howto.levelPoints': 'हर बिल्ली ढूँढने पर पॉइंट मिलते हैं, और बिना गलती लगातार ढूँढी गई हर बिल्ली पिछली से ज़्यादा पॉइंट देती है। गलती से पॉइंट कभी नहीं कटते, लेकिन अगली बिल्ली से गिनती फिर शुरू होती है। संकेत या किटी की रखी बिल्लियाँ भी गिनी जाती हैं।',
   ...LOCALE_NAMES,
 };

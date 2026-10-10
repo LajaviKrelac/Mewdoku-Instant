@@ -261,7 +261,6 @@ export const catalog: LocaleCatalog = {
   'fish.count.other': '물고기 {count}마리',
   'fish.plus': '+{count}',
   'victory.next': '레벨 {level}',
-  'victory.points': '+{points}포인트',
   'victory.eventReward': '이벤트 보상: {reward}',
 
   // ── Phase 2b: rankings ─────────────────────────────────────────────────────
@@ -345,7 +344,7 @@ export const catalog: LocaleCatalog = {
   'ads.banner.placeholder': '배너 자리',
   'time.daysHours': '{d}일 {h}시간',
 
-  // ── Phase 2c: fish are lives, the period ranking, the perfect streak (AI draft 2026-10-09, unreviewed) ──
+  // ── Phase 2c: fish are lives, the period ranking (AI draft 2026-10-09, unreviewed) ──
   'period.total.day': '오늘: {total}',
   'period.total.week': '이번 주: {total}',
   'period.total.month': '이번 달: {total}',
@@ -362,15 +361,17 @@ export const catalog: LocaleCatalog = {
   'rank.records.best.week': '최고의 한 주',
   'rank.records.best.month': '최고의 한 달',
   'rank.sub.period.other': '물고기 +{count} · {total}',
-  'rank.records.streak': '퍼펙트 연승',
-  'rank.records.streakBest': '{count} (최고 {best})',
   'a11y.fishKept.day.other': '물고기 {count}마리를 지켰어요. 오늘 합계: {total}.',
   'a11y.fishKept.week.other': '물고기 {count}마리를 지켰어요. 이번 주 합계: {total}.',
   'a11y.fishKept.month.other': '물고기 {count}마리를 지켰어요. 이번 달 합계: {total}.',
-  'victory.streak': '퍼펙트 ×{count}',
-  'victory.streak.a11y.other': '퍼펙트 {count}연승',
-  'howto.points.day': '퍼즐을 풀 때 남은 물고기는 일간 랭킹에 더해져요. 랭킹은 매일 00:00 UTC에 새로 시작해요. 실수 없이 풀면 퍼펙트 연승이 이어지고 포인트를 더 받아요.',
-  'howto.points.week': '퍼즐을 풀 때 남은 물고기는 주간 랭킹에 더해져요. 랭킹은 매주 월요일 00:00 UTC에 새로 시작해요. 실수 없이 풀면 퍼펙트 연승이 이어지고 포인트를 더 받아요.',
-  'howto.points.month': '퍼즐을 풀 때 남은 물고기는 월간 랭킹에 더해져요. 랭킹은 매달 1일 00:00 UTC에 새로 시작해요. 실수 없이 풀면 퍼펙트 연승이 이어지고 포인트를 더 받아요.',
+  'howto.points.day': '퍼즐을 풀 때 남은 물고기는 일간 랭킹에 더해져요. 랭킹은 매일 00:00 UTC에 새로 시작해요.',
+  'howto.points.week': '퍼즐을 풀 때 남은 물고기는 주간 랭킹에 더해져요. 랭킹은 매주 월요일 00:00 UTC에 새로 시작해요.',
+  'howto.points.month': '퍼즐을 풀 때 남은 물고기는 월간 랭킹에 더해져요. 랭킹은 매달 1일 00:00 UTC에 새로 시작해요.',
+
+  // ── Phase 2c.1: level points per cat (AI draft 2026-10-10, unreviewed) ──
+  'game.points.a11y': '레벨 포인트: {count}',
+  'a11y.points.other': '{count}포인트.',
+  'points.count.other': '{count}포인트',
+  'howto.levelPoints': '고양이를 찾을 때마다 포인트를 받아요. 실수 없이 연속으로 찾으면 한 마리마다 앞의 고양이보다 더 많이 받아요. 실수해도 포인트가 줄지는 않지만, 다음 고양이부터 다시 세요. 힌트나 냥이가 놓은 고양이도 포함돼요.',
   ...LOCALE_NAMES,
 };

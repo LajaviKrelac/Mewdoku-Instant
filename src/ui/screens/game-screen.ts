@@ -1,4 +1,4 @@
-// Owner: B (Phase 2b); G2 (Phase 2c: the lives pill hooks of the win flow)
+// Owner: B (Phase 2b); G2 (Phase 2c: the lives pill hooks of the win flow; Phase 2c.1: the level points)
 // S2 Game (02 §5): composes ui-board pieces (top bar, pills, rule chips, board, tool bar), runs the
 // 02 §19 layout on resize, and forwards input to the session through callbacks.
 // Phase 2b (B): the win-flow hooks C drives (glow, showScrim; phase2b §2.2), the Home / Gear lock during the win flow (GameView.chromeLocked), and event mode
@@ -6,6 +6,8 @@
 // Phase 2c (G2, fish-lives-spec §2, §7.4): the lives are fish; the win flow lifts the kept fish off the
 // lives pill (lifeSlots, departLife) and flies them to the period counter (showPeriodCounter,
 // periodRect, periodLabel). The 2b fish-pill hooks were removed at integration step I-3.
+// Phase 2c.1 (§10.2, §10.10): GameView.points goes to the pills' level-points counter (null hides it);
+// playEvent already forwards every event, so a POINTS event rolls the counter.
 // Row heights from computeLayout() are published as CSS variables on the root so the HUD rows,
 // the board stage and the tool row follow the same numbers (compact mode below 640 px).
 //
@@ -68,6 +70,12 @@ export interface GameView {
    * Gear are aria-disabled and ignore presses. Optional (absent = false).
    */
   readonly chromeLocked?: boolean;
+  /**
+   * Phase 2c.1 §10.2: level points of this attempt (GameState.levelPoints), forwarded to
+   * PillsProps.points; null or absent hides the counter (the tutorial, a mode outside
+   * levelPoints.modes). Required since 2c.1 I-3.
+   */
+  readonly points: number | null;
 }
 
 /** Session commands (app/session.ts GameCommands) bound by the app. */
@@ -82,7 +90,7 @@ export interface GameScreenCallbacks {
 }
 
 export interface GameScreen extends View<GameView> {
-  /** Forwarded reducer events: board FX and the fish loss / revive pop (Phase 2c §1.3, §1.4). */
+  /** Forwarded reducer events: board FX, the fish loss / revive pop (Phase 2c §1.3, §1.4) and the points roll (2c.1 §10.2). */
   playEvent(ev: GameEvent): void;
   /** Board entry animation after a (re)mount; returns BoardView.playEntry()'s entryEndMs (when START is due). */
   playEntry(): number;
@@ -171,6 +179,7 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
     maxHearts: v.maxHearts,
     compact: layout.compact,
     reducedMotion: v.reducedMotion,
+    points: v.points,
   });
   const chipsProps = (v: GameView): RuleChipsProps => ({ compact: layout.compact, highlight: v.chipHighlight });
   const toolProps = (v: GameView): ToolBarProps => ({

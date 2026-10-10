@@ -4,6 +4,8 @@
 // booster stays "kitty" (§0.5); fish are "fish", never "golden fish". Wired into ../en.ts.
 // Phase 2c (G2 owns this file): the fish-currency keys went (fish-lives-spec Appendix A.3); at
 // integration step I-3 the paw-points board's `rank.points` and `rank.records.thisLevel` went too.
+// Phase 2c.1 (fish-lives-spec §10.7): `victory.points` ("+120 points") went; the victory shows the
+// level's total with `points.count` (en/ui-2c.ts).
 // Same conventions as en.ts: {name} placeholders, `.one` / `.other` plural pairs.
 export const enUi2b = {
   // ── Settings rows (§6.8, §8.5) and How to play (§7) ────────────────────────
@@ -25,7 +27,6 @@ export const enUi2b = {
 
   // ── Victory screen (§2.5) ──────────────────────────────────────────────────
   'victory.next': 'Level {level}',
-  'victory.points': '+{points} points',
   'victory.eventReward': 'Event reward: {reward}',
 
   // ── Ranking panel and hub (§2.4, §5.5) ─────────────────────────────────────

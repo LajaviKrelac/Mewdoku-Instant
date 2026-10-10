@@ -1,4 +1,5 @@
-// Owner: A (Phase 2b); G2 (Phase 2c: icon-fish-empty; the heart icons and their clip paths went)
+// Owner: A (Phase 2b); G2 (Phase 2c: icon-fish-empty; the heart icons and their clip paths went;
+// Phase 2c.1: icon-points, the level-points sparkle)
 // One hidden inline SVG sprite of <symbol>s (04 §5.3): Tux's moods, the white X with its edge, the
 // wrong X, 12 pattern glyphs, our icon set (02 §17.6, phase2b §1.7), the fish and the board cats'
 // ear-flick overlay (phase2b §1.6, §2.9). All drawn by us: the cat on a 100-unit grid, icons and the
@@ -35,6 +36,8 @@ export type IconSymbol =
   | 'icon-fish'
   // Phase 2c §1.2: a life that is gone (the lives pill, the victory's kept-fish row)
   | 'icon-fish-empty'
+  // Phase 2c.1 §10.2: the level points (the HUD counter, the victory's points row, How to play)
+  | 'icon-points'
   | 'icon-plus'
   | 'icon-shop'
   | 'icon-globe'
@@ -191,6 +194,13 @@ function newIcons(): string {
     sym('icon-fish', '0 0 24 24', fishMarkup()),
     // Phase 2c §1.2 (G2): the empty life, one 30 % ink outline around a pale wash.
     sym('icon-fish-empty', '0 0 24 24', fishOutlineMarkup()),
+    // Phase 2c.1 §10.2 (G2, our drawing): a plump four-point sparkle filled with --icon-fill (gold) and
+    // outlined in currentColor like icon-trophy, with a small solid sparkle at the top end.
+    icon24(
+      'icon-points',
+      `<path d="M10.8 3.6C11.5 9.2 13.6 11.9 19.6 12.8 13.6 13.7 11.5 16.4 10.8 22 10.1 16.4 8 13.7 2 12.8 8 11.9 10.1 9.2 10.8 3.6Z" ${LINE} ${SOFT_FILL}/>` +
+        `<path d="M18.8 2.2C19.1 4.2 19.7 4.9 21.8 5.2 19.7 5.5 19.1 6.2 18.8 8.2 18.5 6.2 17.9 5.5 15.8 5.2 17.9 4.9 18.5 4.2 18.8 2.2Z" fill="currentColor"/>`,
+    ),
     icon24('icon-plus', `<path d="M12 5.4v13.2M5.4 12h13.2" ${LINE} stroke-width="2.6"/>`),
     icon24(
       'icon-shop',

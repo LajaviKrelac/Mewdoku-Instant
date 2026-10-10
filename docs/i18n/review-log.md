@@ -64,6 +64,26 @@ Points a reviewer should check first:
 | `th`, `ja`, `ko`, `zh-Hans` | classifiers for fish (ตัว, 匹, 마리, 条) in every fish count; `victory.streak` is a short chip ("Perfect ×4") |
 | `de`, `fr`, `es`, `pt-BR`, `id`, `vi` | the perfect-streak chip and the How to play sentence about the 00:00 UTC reset |
 
+## Phase 2c.1 redraft: level points per cat (2026-10-10, workstream G2)
+
+The 16 catalogues were redrafted on 2026-10-10 by Claude (AI) for [`docs/phase2c/fish-lives-spec.md`](../phase2c/fish-lives-spec.md) §10.7 (Appendix A.4), again from our own English copy, `meta.ts` and the [glossary](glossary.md) only (its new "Points are level points" rule and the "in a row" row). Every change below is an **unreviewed AI draft**; the release still ships English only.
+
+- **New, in a block headed "Phase 2c.1" at the end of each catalogue:** `game.points.a11y` (the HUD counter's screen-reader label), `a11y.points.*` (appended to "Cat placed. 3 of 8."), `points.count.*` (the victory row "7,296 points"), `howto.levelPoints` (the How to play paragraph).
+- **Changed in place:** `howto.points.{day|week|month}` lost their last sentence (the perfect streak); each draft was cut at the same sentence, nothing else changed.
+- **Removed from all 17 catalogues, `meta.ts` and `drafted-from.json`:** `victory.points`, `victory.streak`, `victory.streak.a11y.*` (every plural form), `rank.records.streak`, `rank.records.streakBest`.
+
+Points a reviewer should check first:
+
+| Locale | Check |
+|---|---|
+| all | "points" means level points only (earned per cat, 0 at every level); the ranking's unit stays fish; `howto.levelPoints` explains the run without the word "streak" or "combo" and says hint and kitty cats count |
+| `fr` | `points.count.*` and `a11y.points.*` equal the English ("2 016 points") by design (listed in `SAME_AS_ENGLISH`); `game.points.a11y` has the no-break space before the colon |
+| `pl`, `ru` | one / few / many / other forms of `points.count` and `a11y.points` ("2 016 punktów", «2 016 очков»); level totals are multiples of 96, so most real values take *many* |
+| `ar` | six forms; real totals (576, 1 248, 7 104 …) take *many* or *few*; zero/one/two leave the number out and are never shown in play |
+| `ja`, `ko`, `zh-Hans` | no space between the number and ポイント / 포인트 / 积分; `a11y.points` is read right after the cat's own line |
+| `th` | no full stop, like the other Thai screen-reader lines |
+| `tr`, `hi` | the same noun for one and many (puan, पॉइंट) |
+
 ## Known limits of the drafts
 
 - Event names, product names and praise words are our own and were translated for meaning and tone, not literally; reviewers may propose better local names (they must stay our own, never another game's).

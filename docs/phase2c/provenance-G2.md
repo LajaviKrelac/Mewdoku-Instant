@@ -40,3 +40,17 @@ No new sound. The fish loss reuses the existing `mistake` and `heart_last` cues 
 ## Dev-only material (not shipped)
 
 The private frame-capture harness used to tune the motion (virtual time over `setTimeout` and `document.getAnimations()`) lived in the session's scratch directory and is not in the repository. The screenshots in `docs/phase2c/screenshots/G2-*.png` and `docs/i18n/screenshots/` are of our own build.
+
+## Phase 2c.1: level points per cat (2026-10-10)
+
+Written by Claude (Anthropic) for G2 from [fish-lives-spec](fish-lives-spec.md) §10. The user reported the rule (96 × (5 + s) per correct cat, a running total during play, the level's total at the win) but not how the original draws it; every look, size and timing below is ours (R6: nothing sampled). No source of 06 §4 was opened.
+
+| Asset | File(s) | Method and tools |
+|---|---|---|
+| `icon-points` | `src/ui/art/sprite.ts` | Two hand-written cubic-curve paths on the 24 grid: a four-point sparkle (points at 3.6 / 19.6 / 22 / 2 units, pinched waist) filled with `--icon-fill` under the sprite's 2-unit `currentColor` line, and a small solid sparkle at its top end. Drawn anew in the family of our victory illustration's sparkles |
+| Points counter in the pills row | `src/ui/hud/pills.ts`, `src/styles/hud.css` | The row became a `1fr auto 1fr` grid (cats / points / lives; RTL mirrors). The counter is a `.pill` (same box, shadow and digits as its neighbours) with fs-m digits and a 20 px icon, fs-l and 24 px from 390 px, fs-s and 18 px in a compact row. Measured on our build: 73 px wide with "11,616" at 320 (12 px gaps each side), 95 px at 390 and 1280; centred to the pixel. `[data-final]` (`--accent-soft`) at the win. The tight fallback (`[data-tight]` 1: no icon, 2: fs-xs) is measured on the next animation frame after a widening change or a resize |
+| Roll, bump, chip | `src/ui/hud/pills.ts` (`buildCounter`), `src/styles/{fx,screens}.css` | The 2c period counter's roll (old number out upward, new one in from below, two numbers at most) and chip, generalised into one builder for both counters; the points bump scales to 1.18 (`--bump-scale`). The per-cat chip is fs-s with 2 / 7 px padding and overlaps the pill's top edge by 6 px: in our first captures the period-chip size and position touched the Hard badge at 390 and came within 2 px of it at 320, so it was made smaller and lower; it now ends ≥ 8 px below the title band at 320, 390 and 1280 |
+| Win flow cell swap | `src/ui/hud/pills.ts`, `src/styles/fx.css` | The first `showPeriodCounter` fades the cat counter out (`pill-fade-out`, `fx.win.fishPillFadeMs`) while the period counter fades in in the same grid cell; a new board restores the cat counter |
+| Victory points row, records row, How to play note | `src/ui/overlays/{victory-screen,ranking-panel,how-to-play}.ts`, `src/styles/overlay-chunk.css` | A white pill like the kept-fish row (24 px sparkle, fs-xl display digits) above it; "Total points" in place of "Perfect streak"; the note icons no longer shrink beside a long note and sit at the inline start in RTL |
+| Copy and drafts | `src/i18n/en/ui-2c.ts`, `src/i18n/locales/*.ts`, `src/i18n/meta.ts`, `docs/i18n/*` | Our English (§10.7); 16 AI drafts written as TypeScript from our English, `meta.ts` and the glossary only; unreviewed (review log, 2c.1 section) |
+| Screenshots | `docs/phase2c/screenshots/points-*.png` | Captured from our private e2e build (port 4972) with Playwright: `visual.spec.ts` for 320 / 390 / 1280 and a scratch capture script for de and ar at 320 |

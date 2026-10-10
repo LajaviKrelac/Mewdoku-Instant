@@ -261,7 +261,6 @@ export const catalog: LocaleCatalog = {
   'fish.count.other': 'さかな{count}匹',
   'fish.plus': '+{count}',
   'victory.next': 'レベル {level}',
-  'victory.points': '+{points} ポイント',
   'victory.eventReward': 'イベント報酬：{reward}',
 
   // ── Phase 2b: rankings ─────────────────────────────────────────────────────
@@ -345,7 +344,7 @@ export const catalog: LocaleCatalog = {
   'ads.banner.placeholder': 'バナースペース',
   'time.daysHours': '{d}日{h}時間',
 
-  // ── Phase 2c: fish are lives, the period ranking, the perfect streak (AI draft 2026-10-09, unreviewed) ──
+  // ── Phase 2c: fish are lives, the period ranking (AI draft 2026-10-09, unreviewed) ──
   'period.total.day': '今日：{total}',
   'period.total.week': '今週：{total}',
   'period.total.month': '今月：{total}',
@@ -362,15 +361,17 @@ export const catalog: LocaleCatalog = {
   'rank.records.best.week': '1週間の最高記録',
   'rank.records.best.month': '1か月の最高記録',
   'rank.sub.period.other': 'さかな +{count} · {total}',
-  'rank.records.streak': 'パーフェクト連勝',
-  'rank.records.streakBest': '{count}（最高{best}）',
   'a11y.fishKept.day.other': 'さかなを{count}匹残しました。今日の合計：{total}。',
   'a11y.fishKept.week.other': 'さかなを{count}匹残しました。今週の合計：{total}。',
   'a11y.fishKept.month.other': 'さかなを{count}匹残しました。今月の合計：{total}。',
-  'victory.streak': 'パーフェクト×{count}',
-  'victory.streak.a11y.other': 'パーフェクト{count}連勝',
-  'howto.points.day': 'パズルを解いたときに残ったさかなは、今日のランキングに加算されます。ランキングは毎日 00:00 UTC にリセットされます。ミスなしで解くとパーフェクト連勝がつながり、もらえるポイントが増えます。',
-  'howto.points.week': 'パズルを解いたときに残ったさかなは、週間ランキングに加算されます。ランキングは毎週月曜日の 00:00 UTC にリセットされます。ミスなしで解くとパーフェクト連勝がつながり、もらえるポイントが増えます。',
-  'howto.points.month': 'パズルを解いたときに残ったさかなは、月間ランキングに加算されます。ランキングは毎月1日の 00:00 UTC にリセットされます。ミスなしで解くとパーフェクト連勝がつながり、もらえるポイントが増えます。',
+  'howto.points.day': 'パズルを解いたときに残ったさかなは、今日のランキングに加算されます。ランキングは毎日 00:00 UTC にリセットされます。',
+  'howto.points.week': 'パズルを解いたときに残ったさかなは、週間ランキングに加算されます。ランキングは毎週月曜日の 00:00 UTC にリセットされます。',
+  'howto.points.month': 'パズルを解いたときに残ったさかなは、月間ランキングに加算されます。ランキングは毎月1日の 00:00 UTC にリセットされます。',
+
+  // ── Phase 2c.1: level points per cat (AI draft 2026-10-10, unreviewed) ──
+  'game.points.a11y': 'レベルのポイント：{count}',
+  'a11y.points.other': '{count}ポイント。',
+  'points.count.other': '{count}ポイント',
+  'howto.levelPoints': 'ねこを見つけるたびにポイントがもらえます。ミスなしで続けて見つけると、1匹ごとに前よりも多くもらえます。ミスしてもポイントは減りませんが、次のねこから数え直しになります。ヒントやこねこが置いたねこも数えます。',
   ...LOCALE_NAMES,
 };

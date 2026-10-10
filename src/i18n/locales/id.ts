@@ -260,7 +260,6 @@ export const catalog: LocaleCatalog = {
   'fish.count.other': '{count} ikan',
   'fish.plus': '+{count}',
   'victory.next': 'Level {level}',
-  'victory.points': '+{points} poin',
   'victory.eventReward': 'Hadiah event: {reward}',
 
   // ── Phase 2b: rankings ─────────────────────────────────────────────────────
@@ -344,7 +343,7 @@ export const catalog: LocaleCatalog = {
   'ads.banner.placeholder': 'Tempat banner',
   'time.daysHours': '{d} hr {h} j',
 
-  // ── Phase 2c: fish are lives, the period ranking, the perfect streak (AI draft 2026-10-09, unreviewed) ──
+  // ── Phase 2c: fish are lives, the period ranking (AI draft 2026-10-09, unreviewed) ──
   'period.total.day': 'Hari ini: {total}',
   'period.total.week': 'Minggu ini: {total}',
   'period.total.month': 'Bulan ini: {total}',
@@ -361,15 +360,17 @@ export const catalog: LocaleCatalog = {
   'rank.records.best.week': 'Minggu terbaikmu',
   'rank.records.best.month': 'Bulan terbaikmu',
   'rank.sub.period.other': '+{count} ikan · {total}',
-  'rank.records.streak': 'Rentetan sempurna',
-  'rank.records.streakBest': '{count} (rekor {best})',
   'a11y.fishKept.day.other': 'Kamu menyimpan {count} ikan. Totalmu hari ini: {total}.',
   'a11y.fishKept.week.other': 'Kamu menyimpan {count} ikan. Totalmu minggu ini: {total}.',
   'a11y.fishKept.month.other': 'Kamu menyimpan {count} ikan. Totalmu bulan ini: {total}.',
-  'victory.streak': 'Sempurna ×{count}',
-  'victory.streak.a11y.other': '{count} kemenangan sempurna berturut-turut',
-  'howto.points.day': 'Ikan yang kamu simpan saat menyelesaikan teka-teki masuk ke peringkat harian, yang dimulai ulang setiap hari pukul 00:00 UTC. Selesaikan tanpa salah untuk membangun rentetan sempurna dan mendapat lebih banyak poin.',
-  'howto.points.week': 'Ikan yang kamu simpan saat menyelesaikan teka-teki masuk ke peringkat mingguan, yang dimulai ulang setiap Senin pukul 00:00 UTC. Selesaikan tanpa salah untuk membangun rentetan sempurna dan mendapat lebih banyak poin.',
-  'howto.points.month': 'Ikan yang kamu simpan saat menyelesaikan teka-teki masuk ke peringkat bulanan, yang dimulai ulang setiap tanggal 1 pukul 00:00 UTC. Selesaikan tanpa salah untuk membangun rentetan sempurna dan mendapat lebih banyak poin.',
+  'howto.points.day': 'Ikan yang kamu simpan saat menyelesaikan teka-teki masuk ke peringkat harian, yang dimulai ulang setiap hari pukul 00:00 UTC.',
+  'howto.points.week': 'Ikan yang kamu simpan saat menyelesaikan teka-teki masuk ke peringkat mingguan, yang dimulai ulang setiap Senin pukul 00:00 UTC.',
+  'howto.points.month': 'Ikan yang kamu simpan saat menyelesaikan teka-teki masuk ke peringkat bulanan, yang dimulai ulang setiap tanggal 1 pukul 00:00 UTC.',
+
+  // ── Phase 2c.1: level points per cat (AI draft 2026-10-10, unreviewed) ──
+  'game.points.a11y': 'Poin level: {count}',
+  'a11y.points.other': '{count} poin.',
+  'points.count.other': '{count} poin',
+  'howto.levelPoints': 'Setiap kucing yang kamu temukan memberi poin, dan setiap kucing berturut-turut tanpa salah memberi lebih banyak daripada sebelumnya. Kesalahan tidak pernah mengurangi poin, tetapi hitungan dimulai lagi dari kucing berikutnya. Kucing yang ditaruh oleh petunjuk atau Meong juga dihitung.',
   ...LOCALE_NAMES,
 };

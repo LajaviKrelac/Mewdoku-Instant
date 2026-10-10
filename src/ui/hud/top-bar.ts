@@ -7,7 +7,9 @@
 //          .top-bar__actions > .btn.btn--icon.top-bar__btn--trophy|home|settings
 // Review fixes: the title renders as a shrinking name plus a non-shrinking " · 13" / " · Fri 9 Oct"
 // suffix (split at the last " · " of the localized title), so a long event name loses its end, never
-// the puzzle number or the date (I18N-TEXT-2, UX-8); the h1's text stays the whole title. The labels
+// the puzzle number or the date (I18N-TEXT-2, UX-8); 2c.1 integration (N1): a title without " · " keeps
+// its trailing level number the same way ("المستوى 310" next to the Hard badge at 320 px lost "310").
+// The h1's text stays the whole title. The labels
 // follow the language (A11Y-I18N-1). The bar mirrors fbSafeZone to <html data-fb-safe>, so overlays
 // keep their controls out of the FB top-left safe zone too (UX-3, UX-9).
 import { t } from '../../i18n';
@@ -43,9 +45,16 @@ function iconButton(name: string, sym: IconSymbol, onPress: () => void): HTMLBut
 /** The separator of the titles that carry a suffix ("Lantern Walk · 13", "Daily · Tue 6 Oct"); every catalogue uses it. */
 const SUFFIX_SEP = ' · ';
 
-/** Splits a title at its last " · ": the name (may shrink) and the suffix with its separator (never shrinks). */
+/** A trailing number after a space ("Level 310"), inside its placeholder's bidi isolates if any. */
+const TRAILING_NUM = /\s[\u2066-\u2069]*\d+[\u2066-\u2069]*$/;
+
+/**
+ * Splits a title at its last " · ", else before a trailing level number: the name (may shrink) and
+ * the suffix with its separator (never shrinks).
+ */
 export function splitTitle(title: string): { readonly name: string; readonly suffix: string } {
-  const at = title.lastIndexOf(SUFFIX_SEP);
+  const sep = title.lastIndexOf(SUFFIX_SEP);
+  const at = sep > 0 ? sep : title.search(TRAILING_NUM);
   return at <= 0 ? { name: title, suffix: '' } : { name: title.slice(0, at), suffix: title.slice(at) };
 }
 

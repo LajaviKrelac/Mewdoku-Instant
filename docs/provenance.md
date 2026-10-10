@@ -154,3 +154,21 @@ The full rows, with method notes, are in the draft [`docs/phase2c/provenance-G2.
 No new sound: the fish loss keeps the `mistake` and `heart_last` cues (ids unchanged).
 
 **Integration (lead, I-5, 2026-10-09).** No further rows: G1 (game and app logic, the event milestone data) and G3 (platform, the FB stub) made no drawing, animation, sound or player-facing copy; the lead's integration changes are code and text only (the `dev/**` harnesses, which are never shipped, and the removal of the paw-points strings `rank.points` and `rank.records.thisLevel`). The `docs/phase2c/screenshots/final-*.png` set was captured by the lead from our own built e2e apps (STATUS-2c §6). No source of 06 §4 was opened.
+
+## 10. Phase 2c.1: level points per cat (workstream G2, 2026-10-10)
+
+Everything below is ours, written as code and text by Claude (Anthropic) for G2 from [fish-lives-spec](phase2c/fish-lives-spec.md) §10 (the user's first-hand rule F5 says only that a running total shows during play and the level's total at the win; how the original draws it is not reported, so the look is ours). No reference image, no source of 06 §4, and no colour, size or timing sampled from the original (spec R6). Draft rows with method notes: [`docs/phase2c/provenance-G2.md`](phase2c/provenance-G2.md) §2c.1.
+
+| Asset | File(s) | Author and date | Method |
+|---|---|---|---|
+| `icon-points` (a plump four-point sparkle with a small solid sparkle at its top end; gold `--icon-fill`, ink outline) | `src/ui/art/sprite.ts` | G2, 2026-10-10 | Hand-coded on the 24-unit grid as two cubic-curve paths, drawn anew in the shape family of our own victory-illustration sparkles; the same line style as `icon-trophy` |
+| HUD level-points counter (white pill, centred in a `1fr auto 1fr` pills row; `[data-final]` highlight at the win; tight fallback) | `src/ui/hud/pills.ts`, `src/styles/hud.css` | G2, 2026-10-10 | DOM and CSS; layout D21 of the spec, sizes ours, checked on captures of our own build at 320, 390 and 1280 and in de and ar |
+| Counter motion: number roll (`fx.levelPoints.rollMs` 360), icon bump (×1.18) and the rising "+576" chip (`plusMs` 700, 6 px rise; reduced motion: a 150 / 600 ms fade) | `src/ui/hud/pills.ts` (`buildCounter`, shared with the period counter), `src/styles/fx.css`, `src/styles/screens.css` | G2, 2026-10-10 (roll and chip from our 2c period counter) | The 2c roll and chip code generalised into one builder; the per-cat chip is smaller than the win flow's and pops out of the pill's top edge so its rise stays clear of the title |
+| Win flow: the period counter fades in in the cat counter's cell while the cat counter fades out (200 ms) | `src/ui/hud/pills.ts`, `src/styles/fx.css` (`pill-fade-out`) | G2, 2026-10-10 | CSS keyframe; spec §10.3 |
+| Victory points row ("7,296 points" with `icon-points` in a white pill); the "Perfect ×N" chip and its row are retired | `src/ui/overlays/victory-screen.ts`, `src/styles/overlay-chunk.css` | G2, 2026-10-10 | Layout ours |
+| Period records row "Total points" (replaces "Perfect streak"); How to play level-points note with `icon-points` | `src/ui/overlays/{ranking-panel,how-to-play}.ts` | G2, 2026-10-10 | Our layout and our sentences |
+| English copy (§10.7: `game.points.a11y`, `a11y.points.*`, `points.count.*`, `howto.levelPoints`; `howto.points.*` without the streak sentence) and the 16 redrafted catalogues (**AI drafts, unreviewed**) | `src/i18n/en/ui-2c.ts`, `src/i18n/locales/*.ts`, `src/i18n/meta.ts`, `docs/i18n/{glossary,review-log}.md`, `docs/i18n/drafted-from.json` | G2 (Claude), 2026-10-10 | Same brief as §8.4: our English, `meta.ts` and the glossary only |
+
+No new sound or haptic (spec D23): the cat's own cue marks the moment. Screenshots `docs/phase2c/screenshots/points-*.png` are of our own private e2e build.
+
+**Integration (lead, 2c.1, 2026-10-10).** No further rows: G1 (the scoring rule, the reducer and the save fields) made no drawing, animation, sound or player-facing copy, and the lead's integration changes are code and text only (the `dev/**` harness fixtures, which are never shipped; the top bar's title split that keeps the level number visible, N1). The final screenshots `docs/phase2c/screenshots/final-*.png` are captures of our own built e2e app.

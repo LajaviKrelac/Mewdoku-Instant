@@ -1,10 +1,12 @@
 // Owner: C (Phase 2b; was app). Feature flags (02 §22) and the AppState → view-model selectors.
 import { afterEach, describe, expect, it } from 'vitest';
 import { DEFAULT_FLAGS, isFlagOn, parseFlagParam, setFlagOverrides } from '../../../src/app/flags';
-import { initialAppState, type AppState } from '../../../src/app/store';
-import { selectGameView, selectHomeView, type ViewContext } from '../../../src/app/views';
+import { initialAppState, type AppState, type SessionMeta } from '../../../src/app/store';
+import { personalRecords, selectGameView, selectHomeView, selectVictoryView, type ViewContext } from '../../../src/app/views';
+import type { WinSummary } from '../../../src/app/session-effects';
 import { newGame } from '../../../src/game/factory';
 import { defaults } from '../../../src/game/save';
+import type { SaveData } from '../../../src/game/types';
 import { tutorialPuzzle } from '../../../src/game/tutorial';
 import type { Capabilities } from '../../../src/platform/types';
 import { createHarness, levelPuzzle, NOW, startLevel, TODAY } from './harness';
@@ -123,5 +125,69 @@ describe('selectGameView', () => {
     const replay = selectGameView(state({ game: g, session: { ...meta, request: { mode: 'tutorial', replay: true } } }), ctx);
     expect(replay?.showHome).toBe(true);
     expect(levelPuzzle(2).n).toBe(5);
+  });
+
+  it('phase2c.1 §3.2.5: points = the attempt\'s running total where cats score, null (no counter) in the tutorial', () => {
+    const meta = (mode: 'tutorial' | 'level' | 'daily'): SessionMeta => ({
+      request: mode === 'tutorial' ? { mode, replay: false } : mode === 'daily' ? { mode, dateKey: TODAY } : { mode, level: 5 },
+      mode,
+      puzzleId: 'L5',
+      level: mode === 'level' ? 5 : null,
+      dateKey: mode === 'daily' ? TODAY : null,
+      hard: false,
+      colors: Uint8Array.from([0, 1, 2, 3, 4]),
+      tutorialStep: null,
+      substitute: false,
+    });
+    const tut = { ...newGame(tutorialPuzzle(), 'tutorial'), status: 'playing' as const };
+    expect(selectGameView(state({ game: tut, session: { ...meta('tutorial'), tutorialStep: 1 } }), ctx)?.points).toBeNull();
+    const lvl = { ...newGame(levelPuzzle(5), 'level'), status: 'playing' as const };
+    expect(selectGameView(state({ game: lvl, session: meta('level') }), ctx)?.points).toBe(0);
+    expect(selectGameView(state({ game: { ...lvl, levelPoints: 2_016, catStreak: 3 }, session: meta('level') }), ctx)?.points).toBe(2_016);
+    const daily = { ...newGame(levelPuzzle(5), 'daily'), status: 'playing' as const, levelPoints: 576 };
+    expect(selectGameView(state({ game: daily, session: meta('daily') }), ctx)?.points).toBe(576);
+    // A board whose rules score nothing ({0, 0}: a mode dropped from levelPoints.modes) hides the counter.
+    const off = { ...lvl, rules: { ...lvl.rules, points: { first: 0, step: 0 } } };
+    expect(selectGameView(state({ game: off, session: meta('level') }), ctx)?.points).toBeNull();
+  });
+});
+
+describe('phase2c.1 §3.2.5: the victory and the records (no streak anywhere)', () => {
+  const app = (patch: Partial<SaveData> = {}): AppState => initialAppState({ ...defaults(NOW), ...patch });
+  const win = (patch: Partial<WinSummary> = {}): WinSummary => ({
+    mode: 'level',
+    replay: false,
+    restored: false,
+    counted: true,
+    level: 7,
+    dateKey: null,
+    hard: false,
+    n: 8,
+    ms: 60_000,
+    mistakes: 0,
+    hints: 0,
+    kitties: 0,
+    kept: 3,
+    maxKept: 3,
+    period: { kind: 'week', key: '2026-10-05', gained: 3, before: 0, total: 3 },
+    pointsEarned: 7_296,
+    pointsTotal: 7_296,
+    event: null,
+    ...patch,
+  });
+
+  it('selectVictoryView: pointsEarned is the level\'s total, counted or not; null for 0 and the tutorial; never a streak', () => {
+    const v = selectVictoryView(app(), ctx, win(), { praise: 0 });
+    expect(v.pointsEarned).toBe(7_296);
+    expect(v).not.toHaveProperty('streak');
+    expect(selectVictoryView(app(), ctx, win({ counted: false, period: { kind: 'week', key: '2026-10-05', gained: 0, before: 4, total: 4 } }), { praise: 0 }).pointsEarned).toBe(7_296);
+    expect(selectVictoryView(app(), ctx, win({ pointsEarned: 0 }), { praise: 0 }).pointsEarned).toBeNull();
+    expect(selectVictoryView(app(), ctx, win({ mode: 'tutorial', pointsEarned: 576, period: null }), { praise: 0 }).pointsEarned).toBeNull();
+  });
+
+  it('personalRecords (period board): This week, best week and Total points (points.total); no streak', () => {
+    const r = personalRecords(app({ points: { total: 13_248 }, streak: { current: 4, best: 9 }, period: { key: '2026-10-05', total: 12, bestKey: '2026-09-28', bestTotal: 30 } }), ctx, { board: 'period', n: 8, thisMs: 1000 });
+    expect(r).toMatchObject({ board: 'period', totalPoints: 13_248, period: { kind: 'week', total: 12, best: 30 } });
+    expect(r).not.toHaveProperty('streak');
   });
 });

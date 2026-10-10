@@ -78,8 +78,13 @@ describe('tutorial session', () => {
     expect(h.router.isOpen('victory')).toBe(false);
     await h.settle(1);
     expect(h.router.isOpen('ranking')).toBe(false);
-    expect(h.router.props.victory).toMatchObject({ variant: 'tutorial', nextLevel: 2, pointsEarned: null, streak: null, kept: null });
-    // The tutorial is scored for neither the period board nor the streak (§3.3).
+    expect(h.router.props.victory).toMatchObject({ variant: 'tutorial', nextLevel: 2, pointsEarned: null, kept: null });
+    expect(h.router.props.victory).not.toHaveProperty('streak');
+    // The tutorial is scored for neither the period board nor level points (§3.3; 2c.1: no counter).
+    expect(g.levelPoints).toBe(0);
+    expect(h.router.game?.last.points).toBeNull();
+    expect(h.router.game?.played).not.toContain('POINTS');
+    expect(h.save().points.total).toBe(0);
     expect(h.save().period).toEqual({ key: '', total: 0, bestKey: '', bestTotal: 0 });
     expect(h.save().streak).toEqual({ current: 0, best: 0 });
     expect(h.save()).not.toHaveProperty('wallet');
@@ -120,7 +125,8 @@ describe('tutorial session', () => {
     expect(h.platform.writes.some((w) => w.cloud === 'flush')).toBe(false);
     await h.settle(h.config.fx.win.replayVictoryAtMs);
     expect(h.router.props.victory?.variant).toBe('tutorial_replay');
-    expect(h.router.props.victory).toMatchObject({ kept: null, streak: null, pointsEarned: null });
+    expect(h.router.props.victory).toMatchObject({ kept: null, pointsEarned: null });
+    expect(h.router.props.victory).not.toHaveProperty('streak');
     expect(h.save().period).toEqual(before.period);
     expect(h.save().streak).toEqual(before.streak);
     await h.session.onNext();

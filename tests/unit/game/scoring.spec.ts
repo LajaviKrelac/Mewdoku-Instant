@@ -1,5 +1,6 @@
-// Owner: C (Phase 2b). Phase 2c (G1): level points with the perfect streak (§3.1, §3.2), UTC periods
-// (§3.5), the period board encoding (§4.3) and the period points bookkeeping (§3.4).
+// Owner: C (Phase 2b). Phase 2c (G1): UTC periods (§3.5), the period board encoding (§4.3) and the
+// period points bookkeeping (§3.4). Phase 2c.1 (G1): level points per correct cat (§3.1, §10.8: the
+// user's table, first-hand 2026-10-10); the 2c per-win formula and the perfect streak are gone.
 // Board scores (phase2b §5.3): encode/decode round trips, ordering properties (faster = higher, newer
 // day > older day, more solved > fewer), the client-side submit limits, and every encoded score < 2³¹.
 import { describe, expect, it } from 'vitest';
@@ -10,8 +11,8 @@ import {
   addPeriodPoints,
   addPoints,
   boardFormat,
-  breakStreak,
   canSubmit,
+  catIncrement,
   dayIndex,
   decodeScore,
   encodeDailyScore,
@@ -19,101 +20,95 @@ import {
   encodePeriodScore,
   isPeriodKey,
   keptPoints,
-  levelPointsFor,
   PERIOD_SPAN,
   periodIndex,
   periodKeyAt,
   periodTotal,
-  streakAfterWin,
-  type LevelPointsInput,
+  pointsRuleFor,
+  runTotal,
 } from '../../../src/game/scoring';
-import type { SaveData } from '../../../src/game/types';
 
 const MAX31 = 2 ** 31;
 const T = (iso: string): number => Date.parse(iso);
-const base: LevelPointsInput = { mode: 'level', n: 8, hard: false, streak: 0 };
 
-describe('level points (phase2c §3.1)', () => {
-  it('the spec table: 80 with a mistake, 90 / 120 for the 1st / 4th perfect win, 300 for a 10×10 Hard 12th, 150 for a 12×12 daily', () => {
-    expect(levelPointsFor({ ...base, streak: 0 })).toBe(80);
-    expect(levelPointsFor({ ...base, streak: 1 })).toBe(90);
-    expect(levelPointsFor({ ...base, streak: 4 })).toBe(120);
-    expect(levelPointsFor({ mode: 'level', n: 10, hard: true, streak: 12 })).toBe(300); // bonus capped at ×10
-    expect(levelPointsFor({ mode: 'daily', n: 12, hard: false, streak: 3 })).toBe(150);
+describe('level points per cat (phase2c.1 §3.1: the user\'s rule, first-hand 2026-10-10)', () => {
+  const rule = pointsRuleFor('level');
+  // The user's verified table: the s-th correct cat in a row adds 96 × (5 + s); running totals.
+  const TABLE: readonly [s: number, add: number, total: number][] = [
+    [1, 576, 576],
+    [2, 672, 1_248],
+    [3, 768, 2_016],
+    [4, 864, 2_880],
+    [5, 960, 3_840],
+    [6, 1_056, 4_896],
+    [7, 1_152, 6_048],
+    [8, 1_248, 7_296],
+    [9, 1_344, 8_640],
+    [10, 1_440, 10_080],
+  ];
+
+  it.each(TABLE)('cat %i in a row adds %i; an unbroken run of that many totals %i', (s, add, total) => {
+    expect(catIncrement(s, rule)).toBe(add);
+    expect(runTotal(s, rule)).toBe(total);
   });
 
-  it('the streak bonus is capped at levelPoints.streakCap (10)', () => {
-    expect(levelPointsFor({ ...base, streak: 10 })).toBe(180);
-    expect(levelPointsFor({ ...base, streak: 11 })).toBe(180);
-    expect(levelPointsFor({ ...base, streak: 1_000_000 })).toBe(180);
+  it('11 and 12 cats (our boards reach 12×12): 11 616 and 13 248, the largest level total', () => {
+    expect(runTotal(11, rule)).toBe(11_616);
+    expect(runTotal(12, rule)).toBe(13_248);
+    expect(catIncrement(11, rule)).toBe(1_536);
+    expect(catIncrement(12, rule)).toBe(1_632);
   });
 
-  it('the tutorial and modes outside levelPoints.modes score 0; events score like levels', () => {
-    expect(levelPointsFor({ ...base, mode: 'tutorial', streak: 3 })).toBe(0);
-    expect(levelPointsFor({ ...base, mode: 'event', streak: 2 })).toBe(100);
-    const noDaily = mergeConfig({ levelPoints: { modes: ['level', 'event'] } });
-    expect(levelPointsFor({ ...base, mode: 'daily' }, noDaily)).toBe(0);
-    expect(levelPointsFor({ ...base, mode: 'level' }, noDaily)).toBe(80);
-  });
-
-  it('every result is a multiple of 5 and hints or kitties never enter the formula (n 4…12, Hard, streak 0…15)', () => {
-    for (let n = 4; n <= 12; n++) {
-      for (const hard of [false, true]) {
-        for (let streak = 0; streak <= 15; streak++) {
-          for (const mode of ['level', 'daily', 'event'] as const) {
-            const p = levelPointsFor({ mode, n, hard, streak });
-            expect(p % 5).toBe(0);
-            expect(p).toBeGreaterThanOrEqual(10 * n);
-          }
-        }
-      }
+  it('catIncrement(s) = 96 × (5 + s) for s = 1…12, and the running total is the sum of the increments', () => {
+    let sum = 0;
+    for (let s = 1; s <= 12; s++) {
+      expect(catIncrement(s, rule)).toBe(96 * (5 + s));
+      sum += catIncrement(s, rule);
+      expect(runTotal(s, rule)).toBe(sum);
+      expect(runTotal(s, rule) % 96).toBe(0);
     }
   });
 
-  it('follows levelPoints.* (perSize, hardMultiplier, streakStep, streakCap)', () => {
-    const c = mergeConfig({ levelPoints: { perSize: 5, hardMultiplier: 3, streakStep: 20, streakCap: 2 } });
-    expect(levelPointsFor({ mode: 'level', n: 8, hard: true, streak: 5 }, c)).toBe(5 * 8 * 3 + 20 * 2);
-    expect(cfg.levelPoints).toMatchObject({ perSize: 10, hardMultiplier: 2, streakStep: 10, streakCap: 10 });
+  it('no increment for s < 1 or a non-integer s; no total for k ≤ 0', () => {
+    expect(catIncrement(0, rule)).toBe(0);
+    expect(catIncrement(-3, rule)).toBe(0);
+    expect(catIncrement(1.5, rule)).toBe(0);
+    expect(catIncrement(Number.NaN, rule)).toBe(0);
+    expect(runTotal(0, rule)).toBe(0);
+    expect(runTotal(-2, rule)).toBe(0);
+    expect(runTotal(Number.NaN, rule)).toBe(0);
   });
 
-  it('the 2b paw-points formula is gone (pointsFor, encodePointsScore)', () => {
-    expect('pointsFor' in scoring).toBe(false);
-    expect('encodePointsScore' in scoring).toBe(false);
+  it('pointsRuleFor: {576, 96} for level, daily and event; {0, 0} for the tutorial and a mode dropped from levelPoints.modes', () => {
+    for (const mode of ['level', 'daily', 'event'] as const) expect(pointsRuleFor(mode)).toEqual({ first: 576, step: 96 });
+    expect(pointsRuleFor('tutorial')).toEqual({ first: 0, step: 0 });
+    const noDaily = mergeConfig({ levelPoints: { modes: ['level', 'event'] } });
+    expect(pointsRuleFor('daily', noDaily)).toEqual({ first: 0, step: 0 });
+    expect(pointsRuleFor('level', noDaily)).toEqual({ first: 576, step: 96 });
+    // The {0, 0} rule scores nothing at any s.
+    expect(catIncrement(5, pointsRuleFor('tutorial'))).toBe(0);
+    expect(runTotal(12, pointsRuleFor('tutorial'))).toBe(0);
   });
 
-  it('addPoints (the lifetime total) is capped at points.max and never negative', () => {
+  it('follows levelPoints.firstIncrement and levelPoints.step (config, never hard-coded)', () => {
+    expect(cfg.levelPoints).toMatchObject({ firstIncrement: 576, step: 96 });
+    const c = mergeConfig({ levelPoints: { firstIncrement: 100, step: 10 } });
+    const r = pointsRuleFor('level', c);
+    expect(r).toEqual({ first: 100, step: 10 });
+    expect([1, 2, 3].map((s) => catIncrement(s, r))).toEqual([100, 110, 120]);
+    expect(runTotal(3, r)).toBe(330);
+  });
+
+  it('the 2c per-win formula and the perfect streak helpers are gone; the 2b paw-points formula too', () => {
+    for (const name of ['levelPointsFor', 'streakAfterWin', 'breakStreak', 'pointsFor', 'encodePointsScore']) {
+      expect(name in scoring).toBe(false);
+    }
+  });
+
+  it('addPoints (the lifetime total of counted level totals) is capped at points.max and never negative', () => {
     expect(addPoints(100, 55)).toBe(155);
-    expect(addPoints(cfg.points.max - 5, 55)).toBe(cfg.points.max);
+    expect(addPoints(cfg.points.max - 5, 13_248)).toBe(cfg.points.max);
     expect(addPoints(10, -50)).toBe(10);
-  });
-});
-
-describe('the perfect streak (phase2c §3.2)', () => {
-  const withStreak = (current: number, best = current): SaveData => ({ ...defaults(0), streak: { current, best } });
-
-  it('a perfect counted win adds 1 and best follows; a win with a mistake or a revive resets current', () => {
-    expect(streakAfterWin(withStreak(3, 5), 'level', true).streak).toEqual({ current: 4, best: 5 });
-    expect(streakAfterWin(withStreak(5, 5), 'daily', true).streak).toEqual({ current: 6, best: 6 });
-    expect(streakAfterWin(withStreak(5, 5), 'event', false).streak).toEqual({ current: 0, best: 5 });
-  });
-
-  it('the tutorial and modes outside levelPoints.modes leave it alone (the same save)', () => {
-    const s = withStreak(3, 7);
-    expect(streakAfterWin(s, 'tutorial', true)).toBe(s);
-    expect(streakAfterWin(s, 'daily', true, mergeConfig({ levelPoints: { modes: ['level'] } }))).toBe(s);
-  });
-
-  it('breakStreak sets current to 0 and keeps best; the same save when it is already 0', () => {
-    expect(breakStreak(withStreak(4, 9)).streak).toEqual({ current: 0, best: 9 });
-    const zero = withStreak(0, 9);
-    expect(breakStreak(zero)).toBe(zero);
-  });
-
-  it('never mutates its input', () => {
-    const s = withStreak(2, 2);
-    streakAfterWin(s, 'level', true);
-    breakStreak(s);
-    expect(s.streak).toEqual({ current: 2, best: 2 });
   });
 });
 

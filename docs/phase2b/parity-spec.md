@@ -2,7 +2,7 @@
 
 Status: Phase 2b spec, ready to build after review · Date: 2026-10-08 · Owner: game design + tech lead · Branch `claude/mewdoku-instant`
 
-> **Superseded in part (2026-10-09).** Phase 2c ([fish-lives-spec](../phase2c/fish-lives-spec.md)) supersedes §0.5 (hearts), §0.8 (fish rates, fish packs), §2.1 (what fish are for), §2.2–§2.3 (fish steps and sources), §2.5 (fish pill, reward row), §2.6, §2.8, §2.9 (heart break), §2.14, §5.3 (points and boards), §5.5 (board by mode), §5.6 (group scoring and fish), §8.3 (catalogue), §9 (wallet) and §10 (fish, shop, points). The user, who plays the Play Store app, reported first-hand (2026-10-09) that **fish are the lives**, that the fish left at a win are **added to the leaderboard points ranked per period**, that **level points grow without mistakes**, and that our fish currency was an invention to remove. Each of those sections carries a one-line pointer; the rest of this spec still holds. Build status: [STATUS-2c](../phase2c/STATUS-2c.md).
+> **Superseded in part (2026-10-09).** Phase 2c ([fish-lives-spec](../phase2c/fish-lives-spec.md)) supersedes §0.5 (hearts), §0.8 (fish rates, fish packs), §2.1 (what fish are for), §2.2–§2.3 (fish steps and sources), §2.5 (fish pill, reward row), §2.6, §2.8, §2.9 (heart break), §2.14, §5.3 (points and boards), §5.5 (board by mode), §5.6 (group scoring and fish), §8.3 (catalogue), §9 (wallet) and §10 (fish, shop, points). The user, who plays the Play Store app, reported first-hand (2026-10-09) that **fish are the lives**, that the fish left at a win are **added to the leaderboard points ranked per period**, that **level points grow without mistakes**, and that our fish currency was an invention to remove. Each of those sections carries a one-line pointer; the rest of this spec still holds. Build status: [STATUS-2c](../phase2c/STATUS-2c.md). **Phase 2c.1 (2026-10-10):** the user's exact level-points rule (per correct cat inside one level, 96 × (5 + s); every level and Retry start at 0) replaces 2c's per-win formula and its "Perfect ×N" streak; the running total shows in the HUD and at the win (fish-lives-spec §3.1–§3.2, §10; STATUS-2c §10).
 
 Review pass (2026-10-08): checked with three lenses (implementer, platform truth, originality) and fixed in place. Appendix C lists what changed and why.
 
@@ -434,7 +434,7 @@ Interruptions:
 
 ### 2.5 Victory screen (new overlay `victory`; replaces O3, and O7 for dailies)
 
-> **Phase 2c:** §2.5 → 2c: no fish pill, no "+", no bonus chip; the kept-fish row, the level points and the "Perfect ×N" chip (fish-lives-spec §2.7).
+> **Phase 2c:** §2.5 → 2c: no fish pill, no "+", no bonus chip; the kept-fish row, the level points and the "Perfect ×N" chip (fish-lives-spec §2.7). **2c.1:** the level's total ("7,296 points") then the kept-fish row; no streak chip (§10.3).
 
 | Part | Spec |
 |---|---|
@@ -840,7 +840,7 @@ Every score we post is **higher-is-better** (§5.3), so each board must be confi
 
 ### 5.3 Scoring `[DECISION]`
 
-> **Phase 2c:** §5.3 → 2c: paw points are retired; level points with a perfect-streak bonus (fish-lives-spec §3.1–§3.2) and one period points board (§3.4–§4.5).
+> **Phase 2c:** §5.3 → 2c: paw points are retired; level points with a perfect-streak bonus (fish-lives-spec §3.1–§3.2) and one period points board (§3.4–§4.5). **2c.1:** level points per correct cat inside one level (96 × (5 + s)), no perfect streak (§3.1).
 
 Paw points per win (all multiples of 5, which matches the reported "multiples of 5"):
 

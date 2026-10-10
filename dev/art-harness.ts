@@ -117,7 +117,7 @@ function galleryScene(): void {
   section(wrap, 'Wrong X', [tile(42, 2, ['wrong-x']), tile(42, 10, ['wrong-x'])], 'ax-tight');
   const icons: SymbolId[] = [
     'icon-fish', 'icon-plus', 'icon-shop', 'icon-globe', 'icon-crown', 'icon-users', 'icon-house', 'icon-gear', 'icon-bulb', 'icon-paw',
-    'icon-fish-empty', 'icon-trophy', 'icon-lock', 'icon-calendar', 'icon-play-video', 'icon-close', 'icon-chevron',
+    'icon-fish-empty', 'icon-points', 'icon-trophy', 'icon-lock', 'icon-calendar', 'icon-play-video', 'icon-close', 'icon-chevron',
   ];
   for (const px of [32, 24, 16]) {
     section(wrap, `Icons at ${px} px`, icons.map((id) => {

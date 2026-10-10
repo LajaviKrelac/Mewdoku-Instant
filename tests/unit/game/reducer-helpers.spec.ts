@@ -1,4 +1,5 @@
 // Owner: C (Phase 2b; was game). Hint open/apply/close (02 §9.1 step 4) and kitty (02 §9.2) in the reducer (04 §4.2).
+// Phase 2c.1: hint and kitty cats score like the player's (POINTS after their CAT_PLACED, fish-lives-spec F5.4).
 import { describe, expect, it } from 'vitest';
 import { reduce } from '../../../src/game/reducer';
 import { CellState, type GameState, type Move } from '../../../src/game/types';
@@ -74,7 +75,7 @@ describe('HINT_APPLY (02 §9.1 step 4)', () => {
     expect(lastMove(r.state)).toEqual({ t: 5, kind: 'unmark', cells: [x] });
   });
 
-  it('a forced cat is placed as a Cat (source hint), with REGION_DONE; a Mark there is replaced', () => {
+  it('a forced cat is placed as a Cat (source hint), scores (POINTS), with REGION_DONE; a Mark there is replaced', () => {
     const target = SOL5[3] as number;
     const s0 = reduce(playing(), tap(target)).state;
     const h = step({ kind: 'single', placeCell: target });
@@ -82,6 +83,7 @@ describe('HINT_APPLY (02 §9.1 step 4)', () => {
     expect(r.events).toEqual([
       { type: 'HINT_APPLIED', step: h },
       { type: 'CAT_PLACED', cell: target, source: 'hint' },
+      { type: 'POINTS', cell: target, gained: 576, total: 576, streak: 1 },
       { type: 'REGION_DONE', region: 3 },
     ]);
     expect(r.state.catsPlaced).toBe(1);
@@ -94,7 +96,7 @@ describe('HINT_APPLY (02 §9.1 step 4)', () => {
     const s0 = run(playing(), SOL5.slice(0, 4).map((c) => dbl(c))).state;
     const h = step({ kind: 'reveal_fallback', effectCells: [cell(4, 4)], placeCell: last });
     const r = reduce(openHint(s0, h), { type: 'HINT_APPLY', t: 9 });
-    expect(types(r.events)).toEqual(['HINT_APPLIED', 'MARKED', 'CAT_PLACED', 'REGION_DONE', 'WON']);
+    expect(types(r.events)).toEqual(['HINT_APPLIED', 'MARKED', 'CAT_PLACED', 'POINTS', 'REGION_DONE', 'WON']);
     expect(r.state.status).toBe('won');
     expect(r.state.openHint).toBeNull();
   });
@@ -122,11 +124,12 @@ describe('HINT_APPLY (02 §9.1 step 4)', () => {
 });
 
 describe('KITTY (02 §9.2)', () => {
-  it('places a correct cat (source kitty), kittiesUsed+1, → kitty, then KITTY_DONE → playing', () => {
+  it('places a correct cat (source kitty) that scores, kittiesUsed+1, → kitty, then KITTY_DONE → playing', () => {
     const target = SOL5[1] as number;
     const r = reduce(playing(), { type: 'KITTY', cell: target, t: 3 });
     expect(r.events).toEqual([
       { type: 'CAT_PLACED', cell: target, source: 'kitty' },
+      { type: 'POINTS', cell: target, gained: 576, total: 576, streak: 1 },
       { type: 'REGION_DONE', region: 1 },
     ]);
     expect(r.state).toMatchObject({ status: 'kitty', kittiesUsed: 1, catsPlaced: 1, hearts: 3 });
@@ -147,7 +150,7 @@ describe('KITTY (02 §9.2)', () => {
   it('the kitty cat that completes the board goes straight to won (no KITTY_REVEAL)', () => {
     const s = run(playing(), SOL5.slice(0, 4).map((c) => dbl(c))).state;
     const r = reduce(s, { type: 'KITTY', cell: SOL5[4] as number, t: 1 });
-    expect(types(r.events)).toEqual(['CAT_PLACED', 'REGION_DONE', 'WON']);
+    expect(types(r.events)).toEqual(['CAT_PLACED', 'POINTS', 'REGION_DONE', 'WON']);
     expect(r.state.status).toBe('won');
     expect(reduce(r.state, { type: 'KITTY_DONE' }).state).toBe(r.state);
   });

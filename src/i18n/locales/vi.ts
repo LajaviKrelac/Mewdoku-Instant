@@ -260,7 +260,6 @@ export const catalog: LocaleCatalog = {
   'fish.count.other': '{count} cá',
   'fish.plus': '+{count}',
   'victory.next': 'Màn {level}',
-  'victory.points': '+{points} điểm',
   'victory.eventReward': 'Quà sự kiện: {reward}',
 
   // ── Phase 2b: rankings ─────────────────────────────────────────────────────
@@ -344,7 +343,7 @@ export const catalog: LocaleCatalog = {
   'ads.banner.placeholder': 'Chỗ banner',
   'time.daysHours': '{d} ngày {h} giờ',
 
-  // ── Phase 2c: fish are lives, the period ranking, the perfect streak (AI draft 2026-10-09, unreviewed) ──
+  // ── Phase 2c: fish are lives, the period ranking (AI draft 2026-10-09, unreviewed) ──
   'period.total.day': 'Hôm nay: {total}',
   'period.total.week': 'Tuần này: {total}',
   'period.total.month': 'Tháng này: {total}',
@@ -361,15 +360,17 @@ export const catalog: LocaleCatalog = {
   'rank.records.best.week': 'Tuần tốt nhất',
   'rank.records.best.month': 'Tháng tốt nhất',
   'rank.sub.period.other': '+{count} cá · {total}',
-  'rank.records.streak': 'Chuỗi hoàn hảo',
-  'rank.records.streakBest': '{count} (kỷ lục {best})',
   'a11y.fishKept.day.other': 'Bạn giữ được {count} cá. Tổng hôm nay: {total}.',
   'a11y.fishKept.week.other': 'Bạn giữ được {count} cá. Tổng tuần này: {total}.',
   'a11y.fishKept.month.other': 'Bạn giữ được {count} cá. Tổng tháng này: {total}.',
-  'victory.streak': 'Hoàn hảo ×{count}',
-  'victory.streak.a11y.other': '{count} trận thắng hoàn hảo liên tiếp',
-  'howto.points.day': 'Số cá bạn giữ được khi giải xong một câu đố sẽ vào bảng xếp hạng ngày, bắt đầu lại mỗi ngày lúc 00:00 UTC. Giải không sai lần nào để có chuỗi hoàn hảo và nhận thêm điểm.',
-  'howto.points.week': 'Số cá bạn giữ được khi giải xong một câu đố sẽ vào bảng xếp hạng tuần, bắt đầu lại lúc 00:00 UTC mỗi thứ Hai. Giải không sai lần nào để có chuỗi hoàn hảo và nhận thêm điểm.',
-  'howto.points.month': 'Số cá bạn giữ được khi giải xong một câu đố sẽ vào bảng xếp hạng tháng, bắt đầu lại lúc 00:00 UTC ngày 1 hằng tháng. Giải không sai lần nào để có chuỗi hoàn hảo và nhận thêm điểm.',
+  'howto.points.day': 'Số cá bạn giữ được khi giải xong một câu đố sẽ vào bảng xếp hạng ngày, bắt đầu lại mỗi ngày lúc 00:00 UTC.',
+  'howto.points.week': 'Số cá bạn giữ được khi giải xong một câu đố sẽ vào bảng xếp hạng tuần, bắt đầu lại lúc 00:00 UTC mỗi thứ Hai.',
+  'howto.points.month': 'Số cá bạn giữ được khi giải xong một câu đố sẽ vào bảng xếp hạng tháng, bắt đầu lại lúc 00:00 UTC ngày 1 hằng tháng.',
+
+  // ── Phase 2c.1: level points per cat (AI draft 2026-10-10, unreviewed) ──
+  'game.points.a11y': 'Điểm màn chơi: {count}',
+  'a11y.points.other': '{count} điểm.',
+  'points.count.other': '{count} điểm',
+  'howto.levelPoints': 'Mỗi chú mèo bạn tìm được đều cho điểm, và mỗi chú mèo tìm liên tiếp không sai lần nào cho nhiều điểm hơn chú trước. Sai không bao giờ làm mất điểm, nhưng chú mèo tiếp theo sẽ tính lại từ đầu. Mèo do gợi ý hoặc mèo con đặt cũng được tính.',
   ...LOCALE_NAMES,
 };

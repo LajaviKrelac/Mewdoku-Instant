@@ -265,7 +265,6 @@ export const catalog: LocaleCatalog = {
   'fish.count.other': '{count} peixes',
   'fish.plus': '+{count}',
   'victory.next': 'Nível {level}',
-  'victory.points': '+{points} pontos',
   'victory.eventReward': 'Prêmio do evento: {reward}',
 
   // ── Phase 2b: rankings ─────────────────────────────────────────────────────
@@ -353,7 +352,7 @@ export const catalog: LocaleCatalog = {
   'ads.banner.placeholder': 'Espaço de banner',
   'time.daysHours': '{d} d {h} h',
 
-  // ── Phase 2c: fish are lives, the period ranking, the perfect streak (AI draft 2026-10-09, unreviewed) ──
+  // ── Phase 2c: fish are lives, the period ranking (AI draft 2026-10-09, unreviewed) ──
   'period.total.day': 'Hoje: {total}',
   'period.total.week': 'Esta semana: {total}',
   'period.total.month': 'Este mês: {total}',
@@ -374,19 +373,22 @@ export const catalog: LocaleCatalog = {
   'rank.records.best.month': 'Seu melhor mês',
   'rank.sub.period.one': '+{count} peixe · {total}',
   'rank.sub.period.other': '+{count} peixes · {total}',
-  'rank.records.streak': 'Sequência perfeita',
-  'rank.records.streakBest': '{count} (recorde {best})',
   'a11y.fishKept.day.one': 'Você guardou {count} peixe. Seu total hoje: {total}.',
   'a11y.fishKept.day.other': 'Você guardou {count} peixes. Seu total hoje: {total}.',
   'a11y.fishKept.week.one': 'Você guardou {count} peixe. Seu total nesta semana: {total}.',
   'a11y.fishKept.week.other': 'Você guardou {count} peixes. Seu total nesta semana: {total}.',
   'a11y.fishKept.month.one': 'Você guardou {count} peixe. Seu total neste mês: {total}.',
   'a11y.fishKept.month.other': 'Você guardou {count} peixes. Seu total neste mês: {total}.',
-  'victory.streak': 'Perfeito ×{count}',
-  'victory.streak.a11y.one': '{count} vitória perfeita seguida',
-  'victory.streak.a11y.other': '{count} vitórias perfeitas seguidas',
-  'howto.points.day': 'Os peixes que você guarda ao resolver um desafio vão para o ranking do dia, que recomeça todo dia às 00:00 UTC. Resolva sem erros para criar uma sequência perfeita e ganhar mais pontos.',
-  'howto.points.week': 'Os peixes que você guarda ao resolver um desafio vão para o ranking semanal, que recomeça toda segunda-feira às 00:00 UTC. Resolva sem erros para criar uma sequência perfeita e ganhar mais pontos.',
-  'howto.points.month': 'Os peixes que você guarda ao resolver um desafio vão para o ranking mensal, que recomeça no dia 1 de cada mês às 00:00 UTC. Resolva sem erros para criar uma sequência perfeita e ganhar mais pontos.',
+  'howto.points.day': 'Os peixes que você guarda ao resolver um desafio vão para o ranking do dia, que recomeça todo dia às 00:00 UTC.',
+  'howto.points.week': 'Os peixes que você guarda ao resolver um desafio vão para o ranking semanal, que recomeça toda segunda-feira às 00:00 UTC.',
+  'howto.points.month': 'Os peixes que você guarda ao resolver um desafio vão para o ranking mensal, que recomeça no dia 1 de cada mês às 00:00 UTC.',
+
+  // ── Phase 2c.1: level points per cat (AI draft 2026-10-10, unreviewed) ──
+  'game.points.a11y': 'Pontos do nível: {count}',
+  'a11y.points.one': '{count} ponto.',
+  'a11y.points.other': '{count} pontos.',
+  'points.count.one': '{count} ponto',
+  'points.count.other': '{count} pontos',
+  'howto.levelPoints': 'Cada gato que você encontra vale pontos, e cada gato seguido sem erros vale mais que o anterior. Um erro nunca tira pontos, mas o próximo gato começa a contagem de novo. Gatos colocados por uma dica ou pelo gatinho também contam.',
   ...LOCALE_NAMES,
 };

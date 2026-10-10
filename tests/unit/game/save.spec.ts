@@ -1,7 +1,8 @@
 // Owner: C (Phase 2b). Phase 2c (G1): schema v3 (docs/phase2c/fish-lives-spec.md §3.8): the fixtures
 // are v3 documents; the last block covers v2 → v3 (wallet and paw_points pending dropped, retired
 // packs compensated once), the streak and period validation (a changed period kind starts fresh) and
-// their merge rows.
+// their merge rows. Phase 2c.1 (G1): the in-progress slot's optional points / catStreak / scoredRows
+// (still v3; a bad field is dropped and reported, the slot kept) and the frozen streak (last block).
 // Save schema (phase2b §9; v1 = 04 §4.3, §7): defaults, migrate (garbage, partial, wrong
 // types, v1 → v3), merge table (§7.3 + phase2b §9.3), in-progress validation (§7.2), cells codec, size bound.
 import { describe, expect, it } from 'vitest';
@@ -15,6 +16,7 @@ import {
   merge,
   migrate,
   migrateReport,
+  SAVE_VERSION,
   validateInProgress,
 } from '../../../src/game/save';
 import type { InProgressV2, SaveData, SaveDataV1, SaveDataV2 } from '../../../src/game/types';
@@ -641,5 +643,62 @@ describe('save v3 (phase2c §3.8)', () => {
   it('the pending period_points score round-trips and follows the newer document', () => {
     const s = migrate(JSON.parse(JSON.stringify(full())) as unknown, NOW);
     expect(s.rank.pending).toEqual({ period_points: 3_900_042 });
+  });
+});
+
+describe('phase2c.1 §3.2.3–§3.2.4: the slot\'s level-points fields; the save stays v3; the streak is frozen', () => {
+  /** A level slot from a real attempt: C C M C on P5 → 1 824 points, run 1, rows 0–2. */
+  const scored = (): InProgressV2 =>
+    toInProgress(run(playing(P5), [dbl(SOL5[0] as number), dbl(SOL5[1] as number), dbl(WRONG5[0] as number), dbl(SOL5[2] as number)]).state, NOW - 3);
+  const withSlot = (slot: unknown): unknown => ({ ...(JSON.parse(JSON.stringify(full())) as SaveData), inProgress: { level: slot, daily: null, event: null } });
+
+  it('the version stays 3 and the three fields round-trip through JSON + migrate (outcome ok)', () => {
+    expect(SAVE_VERSION).toBe(3);
+    const r = migrateReport(JSON.parse(JSON.stringify(withSlot(scored()))) as unknown, NOW);
+    expect(r.outcome).toBe('ok');
+    expect(r.save.v).toBe(3);
+    expect(r.save.inProgress.level).toEqual(scored());
+    expect(r.save.inProgress.level).toMatchObject({ points: 1_824, catStreak: 1, scoredRows: 0b111 });
+  });
+
+  it('a slot written before 2c.1 (without the fields) is valid as it is: kept, not repaired, nothing invented', () => {
+    const { points: _p, catStreak: _s, scoredRows: _r, ...old } = scored();
+    const r = migrateReport(withSlot(old), NOW);
+    expect(r.outcome).toBe('ok');
+    expect(r.save.inProgress.level).toEqual(old);
+    expect(Object.keys(r.save.inProgress.level as object)).not.toContain('points');
+    expect(validateInProgress(old, P5, { mode: 'level', id: 'L2' }).ok).toBe(true);
+    expect(validateInProgress(scored(), P5, { mode: 'level', id: 'L2' }).ok).toBe(true);
+  });
+
+  it.each([
+    ['points', -1],
+    ['points', 1.5],
+    ['catStreak', '1'],
+    ['scoredRows', null],
+    ['points', Number.MAX_SAFE_INTEGER + 2],
+  ] as const)('an invalid %s (%s) is dropped and reported; the slot and the other fields are kept', (key, bad) => {
+    const r = migrateReport(withSlot({ ...scored(), [key]: bad }), NOW);
+    expect(r.outcome).toBe('repaired');
+    expect(r.repairedFields).toEqual([`inProgress.level.${key}`]);
+    const slot = r.save.inProgress.level as InProgressV2;
+    expect(slot).not.toBeNull();
+    expect(key in slot).toBe(false);
+    const { [key]: _gone, ...rest } = scored();
+    expect(slot).toEqual(rest);
+  });
+
+  it('merge takes inProgress whole from the newer document, the level-points fields included', () => {
+    const older: SaveData = { ...full(), updatedAt: NOW - 100 };
+    const newer: SaveData = { ...full(), updatedAt: NOW, inProgress: { level: scored(), daily: null, event: null } };
+    expect(merge(older, newer).inProgress.level).toEqual(scored());
+    expect(merge(newer, older).inProgress.level).toEqual(scored());
+  });
+
+  it('a 2c perfect-streak record is still read and left unchanged (nothing writes it after 2c.1)', () => {
+    const doc = { ...(JSON.parse(JSON.stringify(full())) as SaveData), streak: { current: 3, best: 9 } };
+    const r = migrateReport(doc, NOW);
+    expect(r.outcome).toBe('ok');
+    expect(r.save.streak).toEqual({ current: 3, best: 9 });
   });
 });

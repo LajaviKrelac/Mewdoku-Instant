@@ -221,6 +221,7 @@ describe('S2 game', () => {
     fbSafeZone: false,
     reducedMotion: false,
     event: null,
+    points: null,
     ...over,
   });
   const callbacks = (): GameScreenCallbacks => ({
@@ -285,6 +286,23 @@ describe('S2 game', () => {
     game.update(view({ mode: 'daily', level: null, dateKey: '2026-10-06', hints: 0 }));
     expect(lastOf('topbar', 'update')).toMatchObject({ title: 'Daily · Tue 6 Oct' });
     expect(lastOf('tools', 'update')).toMatchObject({ hints: 0 });
+    game.destroy();
+  });
+
+  it('Phase 2c.1 §10.10: GameView.points (required since I-3) goes to the pills (null hides the counter); a POINTS event reaches the pills', () => {
+    const game = createGameScreen(view(), callbacks());
+    // Absent (a G1 view from before 2c.1) means hidden.
+    expect(callsOf('pills', 'create')[0]).toMatchObject({ points: null });
+    game.update(view({ points: 1248 }));
+    expect(lastOf('pills', 'update')).toMatchObject({ points: 1248, catsPlaced: 2, n: 5 });
+    game.update(view({ points: null }));
+    expect(lastOf('pills', 'update')).toMatchObject({ points: null });
+    game.update(view({ points: 0 }));
+    expect(lastOf('pills', 'update')).toMatchObject({ points: 0 });
+    const ev = { type: 'POINTS', cell: 7, gained: 672, total: 1248, streak: 2 } as const;
+    game.playEvent(ev);
+    expect(callsOf('pills', 'playEvent')).toEqual([ev]);
+    expect(callsOf('board', 'playEvent')).toEqual([ev]);
     game.destroy();
   });
 

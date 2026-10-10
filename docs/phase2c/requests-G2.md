@@ -33,3 +33,20 @@ Status: living list · Owner: G2 · Process: [fish-lives-spec §7.5](fish-lives-
 ## Integration (lead, I-2, 2026-10-09)
 
 Every request above was run or answered at integration; the outcome of each is in [STATUS-2c §2](STATUS-2c.md).
+
+## Phase 2c.1 (level points per cat, 2026-10-10)
+
+G2 kept every §10.10 interface exactly: `PillsProps.points?` / `GameView.points?` (optional, `number | null`, absent = hidden), `PillsView.playEvent` handling `POINTS` (ignored while hidden), `VictoryProps.streak?` and `PersonalRecordsView.streak?` optional, `@deprecated` and ignored, and the i18n key `a11y.points.one` / `.other` (G1 calls `tn('a11y.points', total, { count: formatNumber(total) })`). DOM contract: `.points-pill` (`[data-final]`, `hidden`), `.points-pill__n`, `.points-pill__chip`, `.victory__points`; `.victory__streak` no longer exists. The 2c names are unchanged.
+
+| # | From → to | Request | Why |
+|---|---|---|---|
+| R6 | G2 → lead (I-4) | **Bundle budget.** Private FBIG builds (`vite build --mode fbig`, 2026-10-10): HEAD `23cc250` + config = main JS 278,155 B, first-load CSS 41,941 B; HEAD + G2's files = 279,872 B (**+1,717**) and 43,451 B (**+1,510**); the whole tree with G1's work = **280,496 B / 279,000 (over by 1.5 KB)**, CSS 43,451 / 43,500 (49 B left), first-load total 341.3 / 340.0 KB, first load + 1 locale 367.2 / 365.0 KB (over), gzip 126.0 / 126.5 KB (ok); lazy rows all within (core JS 70.3 / 74, lazy CSS 29.8 / 31.2, locale chunk 25.9 / 28). G2 already reused the period pill's roll and chip code (one `buildCounter`), made the points pill a `.pill` (shared base rule), shortened the roll selectors and the motion data, and dropped a font-load hook. What is left is the counter itself (~1.1 KB minified: the points pill, `[data-final]`, the period counter's cell swap, the tight-fallback measure), `icon-points` (0.3 KB) and the grid / sizes / tight CSS. A further cut would need a structural change (for example moving the How to play and tutorial English strings out of the main bundle). Decision needed: a reduction elsewhere, or a ceiling raise recorded in 04 §9. | Spec §10.9 "Budget (I-4)" |
+| R7 | G2 → lead (I-1) | `dev/b-harness.ts`: the victory fixtures still pass `streak` (harmless: optional and ignored) and `pointsEarned: 200`; to show the 2c.1 look use a level total such as `pointsEarned: 7296` and drop `streak`; the records fixture's `streak` likewise. Add a `points` prop and a `POINTS` demo to the game-screen fixture (`playEvent({ type: 'POINTS', cell: 0, gained: 576, total: 576, streak: 1 })`). `dev/art-harness.ts` / `dev/board-harness.ts` icon lists: add `'icon-points'`. | Spec §10.9 I-1 |
+| R8 | G2 → lead (I-3) | Delete `VictoryProps.streak` and `PersonalRecordsView.streak`; make `GameView.points` and `PillsProps.points` required (`number | null`). Tests that hand in a stale `streak` (`tests/unit/shell/victory-ranking.spec.ts`) then need a cast. | Spec §10.9 I-3 |
+| N1 | G2 note (observed, not changed) | Arabic at 320 px on a **Hard** level: the game title "المستوى 310" is cut to "المستوى …" next to the "صعب" badge, so the level number is hidden (`docs/phase2c/screenshots/points-hud-ar-320.png`). The top bar is unchanged by 2c.1 (pre-existing); the event and daily titles keep their suffix since review I18N-TEXT-2, the level title does not. A follow-up could split "{level}" into the never-shrinking suffix. | Found while reviewing the 2c.1 captures |
+
+**Done in G2's own files:** the 6 new English keys, 3 changed, 6 removed (every plural form) in all 17 catalogues, `meta.ts`, `drafted-from.json` (`--write-drafted-from` after the drafts); glossary rows ("Points are level points", "in a row"); review log 2c.1 section; `docs/provenance.md` §10 and the draft rows in `provenance-G2.md`; `scripts/palette-check.ts` rows for the counter (`--ink` on `--card` and on `--accent-soft`, the sparkle outline); screenshots `docs/phase2c/screenshots/points-*.png`.
+
+## Integration (lead, Phase 2c.1, 2026-10-10)
+
+Every 2c.1 request above was run or answered at integration; the outcome of each is in [STATUS-2c §10.2](STATUS-2c.md).

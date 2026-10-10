@@ -1,22 +1,34 @@
-// Owner: B (Phase 2b); G2 (Phase 2c)
+// Owner: B (Phase 2b); G2 (Phase 2c; Phase 2c.1: the level-points counter)
 // The pills row of the game screen (02 §5 S2): the cat counter and the LIVES pill. Phase 2c
 // (docs/phase2c/fish-lives-spec.md §1, §2): the lives are fish. Each life slot holds our icon-fish
 // and the new icon-fish-empty outline; a MISTAKE plays our fish loss (wriggle, flip out belly-up,
 // three droplets, the empty outline fading in; reduced motion: a 150 ms swap), a REVIVED pops the
 // restored fish back with a small splash. In the win flow the fish still in the pill lift off one by
-// one (departLife) and fly to the PERIOD COUNTER (this period's leaderboard points), which fades in
-// centred in the row; it counts up per arrival with a roll and a bump, and a "+N" chip rises.
+// one (departLife) and fly to the PERIOD COUNTER (this period's leaderboard points); it counts up per
+// arrival with a roll and a bump, and a "+N" chip rises.
+// Phase 2c.1 (§10.2–§10.3): the row is a three-column grid (1fr auto 1fr). Column 2 holds the LEVEL
+// POINTS counter (icon-points + the running total of this attempt, hidden when PillsProps.points is
+// null or absent), exactly centred; a POINTS event rolls it from total − gained to total, bumps the
+// icon and raises a "+576" chip (one at a time). At the win (catsPlaced ≥ n) it gets data-final. The
+// period counter now appears in column 1, in the cat counter's cell, while the cat counter fades out;
+// a new board brings the cat counter back. When the row still overflows (OS text scaling, a long
+// count, more lives) .pills[data-tight] drops the counter's icon (1), then steps its digits down (2).
+// The period counter and the points counter are one builder (buildCounter): the same roll, bump and
+// chip code (bundle budget, §10.9).
 // The same period pill (icon-trophy + the period total, not a button) sits on Home (createPeriodPill).
 // Identifiers keep "hearts" where they cross into G1 or are stored (PillsProps.hearts / maxHearts,
 // spec §0.5): hearts = lives = fish.
-// Classes: .pills[data-compact] > .pill.pill--cats(.pill__icon .pill__count) .period-pill[data-in-game]
+// Classes: .pills[data-compact][data-tight] > .pill.pill--cats(.pill__icon .pill__count)[data-out]
+//            .period-pill[data-in-game] .points-pill[data-final]
 //            .pill.pill--lives[data-last] > .life[data-full][data-departed]
 //          .life > svg.life__empty (icon-fish-empty) svg.life__full (icon-fish)
 //                  (+ during a loss: .life--lose > svg.life__lost (the falling fish) svg.life__splash > circle.life__drop)
 //                  (+ on a revive: .life--pop > svg.life__splash)
-//          .period-pill[data-in-game] > .period-pill__icon .period-pill__count > .period-pill__n ; .period-pill__label > .period-pill__chip
+//          .period-pill > .period-pill__icon .period-pill__count > .period-pill__n ; .period-pill__label > .period-pill__chip
+//          .points-pill > .points-pill__icon .points-pill__count > .points-pill__n ; .points-pill__label > .points-pill__chip
 // Keyframes and the CSS-only constants of the fish loss: src/styles/fx.css (--t-life-loss from
-// fx.lifeLossMs, --t-life-hurt from fx.lifeLossPillMs); layout: hud.css (lives), screens.css (period pill).
+// fx.lifeLossMs, --t-life-hurt from fx.lifeLossPillMs); layout: hud.css (row, lives, points counter),
+// screens.css (period pill).
 import { cfg, type PeriodKind } from '../../app/config';
 import type { GameEvent } from '../../game/types';
 import { formatNumber, onLocaleChanged, t } from '../../i18n';
@@ -34,6 +46,12 @@ export interface PillsProps {
   readonly compact: boolean;
   /** Reduced motion (§1.3): the fish loss becomes a 150 ms swap; no roll or rise. Default false. */
   readonly reducedMotion?: boolean;
+  /**
+   * Phase 2c.1 §10.2: level points of this attempt, set WITHOUT animation (first render, restore,
+   * Retry, a new board, a language change); only playEvent(POINTS) animates. null or absent hides the
+   * counter (the tutorial, a mode outside levelPoints.modes). Required since 2c.1 I-3.
+   */
+  readonly points: number | null;
 }
 
 /** A full life slot and its icon's client rect (the win flight's source, §2.3). */
@@ -43,13 +61,20 @@ export interface LifeSlotRect {
 }
 
 export interface PillsView extends View<PillsProps> {
-  /** MISTAKE → the fish loss of slot `heartsLeft` (§1.3); REVIVED → the restored fish pops back (§1.4). */
+  /**
+   * MISTAKE → the fish loss of slot `heartsLeft` (§1.3); REVIVED → the restored fish pops back (§1.4).
+   * Phase 2c.1: POINTS → the counter rolls from total − gained to total, its icon bumps and a
+   * "+gained" chip rises (ignored while the counter is hidden).
+   */
   playEvent(ev: GameEvent): void;
   /** Full life slots in departure order (highest slot first), with their icon's client rect; [] while hidden. */
   lifeSlots(): readonly LifeSlotRect[];
   /** The life in `slot` leaves for the win flight: it shows empty at once, no loss animation. Idempotent. */
   departLife(slot: number): void;
-  /** Win flow: shows the period counter (fade in at the first call), later calls with a higher total roll + bump. */
+  /**
+   * Win flow: shows the period counter (fade in at the first call), later calls with a higher total
+   * roll + bump. Phase 2c.1: it shows in the cat counter's cell (column 1) while the cat counter fades out.
+   */
   showPeriodCounter(total: number): void;
   /** Client rect of the counter's icon (flight target), null while hidden. */
   periodRect(): DOMRect | null;
@@ -57,7 +82,7 @@ export interface PillsView extends View<PillsProps> {
   periodLabel(text: string): void;
 }
 
-// ─────────────────────────────── period pill (§2.1, §2.8) ───────────────────────────────
+// ─────────────────────────────── counters (§2.1, §2.8; 2c.1 §10.2) ───────────────────────────────
 
 export interface PeriodPillProps {
   /** This period's leaderboard points (fish kept), 0 after a rollover. */
@@ -82,116 +107,166 @@ function restart(el: Element, cls: string, ms: number, timers: Timers): void {
   later(timers, ms, () => el.classList.remove(cls));
 }
 
-/** The period pill plus the in-game behaviours (roll, bump, rising label), shared by both factories. */
-interface PeriodPillInternal extends View<PeriodPillProps> {
-  /** Sets the total; `roll` animates the number up and bumps the icon (an arrival). */
-  setTotal(total: number, roll: boolean): void;
-  /** The rising "+3" chip. */
-  label(text: string): void;
-  /** Client rect of the pill's trophy icon; null while hidden or detached. */
-  iconRect(): DOMRect | null;
+/**
+ * The motion of one counter, from config: [roll (and icon bump) ms, chip ms, chip rise px, reduced
+ * chip fade-in ms, reduced chip fade-out ms]. A tuple, not an object: its keys would stay in the
+ * main bundle (budget, §10.9).
+ */
+type CounterMotion = readonly [rollMs: number, chipMs: number, risePx: number, reducedInMs: number, reducedOutMs: number];
+
+/** What makes a counter a period pill or the level-points pill. */
+interface CounterSpec {
+  /** The block class: 'period-pill' or 'points-pill' (every part is `${cls}__…`). */
+  readonly cls: 'period-pill' | 'points-pill';
+  readonly icon: 'icon-trophy' | 'icon-points';
+  /** The pill's accessible name for a total (role="img"). */
+  label(total: number): string;
+  motion(): CounterMotion;
+  reduced(): boolean;
 }
 
-function buildPeriodPill(props: PeriodPillProps, opts: { inGame: boolean; reduced: () => boolean }): PeriodPillInternal {
+/** A counter pill: an icon and a number that can roll up, plus the rising chip. */
+interface Counter {
+  readonly el: HTMLElement;
+  /**
+   * Shows `next` and re-reads the accessible name and the number's format (so it also relabels after
+   * a language change). With `rollFrom` (and no reduced motion) the number rolls up from `rollFrom`
+   * and the icon bumps.
+   */
+  setTotal(next: number, rollFrom?: number): void;
+  /** The current total (−1 before the first set). */
+  total(): number;
+  /** The rising chip ("+3", "+576"); a newer chip replaces a running one. */
+  chip(text: string): void;
+  /** Client rect of the pill's icon; null while hidden or detached. */
+  iconRect(): DOMRect | null;
+  destroy(): void;
+}
+
+function buildCounter(spec: CounterSpec): Counter {
+  const { cls } = spec;
   const timers: Timers = new Set();
   const el = document.createElement('div');
-  el.className = 'period-pill';
-  el.toggleAttribute('data-in-game', opts.inGame);
-  // Not a button (§2.8 [DECISION]): an image of this period's total, read as "42 fish this week".
+  el.className = cls;
+  // Not a button (§2.8 [DECISION]; §10.2): an image of the total, read on demand, never a live region.
   el.setAttribute('role', 'img');
-  const trophy = icon('icon-trophy', { class: 'period-pill__icon' });
+  const mark = icon(spec.icon, { class: `${cls}__icon` });
   const countBox = document.createElement('span');
-  countBox.className = 'period-pill__count num';
+  countBox.className = `${cls}__count num`;
   countBox.setAttribute('aria-hidden', 'true');
   let numEl = document.createElement('span');
-  numEl.className = 'period-pill__n';
+  numEl.className = `${cls}__n`;
   countBox.appendChild(numEl);
-  el.append(trophy, countBox);
+  el.append(mark, countBox);
 
-  let kind = props.kind;
   let total = -1;
-  const relabel = (): void => el.setAttribute('aria-label', periodPillLabel(kind, Math.max(0, total)));
+  let chipEl: HTMLElement | null = null;
 
-  const setTotal = (next: number, roll: boolean): void => {
+  const setTotal = (next: number, rollFrom?: number): void => {
     const text = formatNumber(next);
-    const animate = roll && next > total && total >= 0 && !opts.reduced();
     total = next;
-    relabel();
-    if (!animate) {
+    el.setAttribute('aria-label', spec.label(Math.max(0, next)));
+    if (rollFrom === undefined || !(next > rollFrom) || spec.reduced()) {
       if (numEl.textContent !== text) numEl.textContent = text;
       return;
     }
-    // The number roll (§2.2 "counter + pointsPerFish (roll + bump)"): the old number slides out
-    // upward, the new one slides in from below; the trophy bumps for fx.win.counterBumpMs. Arrivals
-    // come every fx.win.fishStaggerMs (150), faster than a roll: a new one first settles the running
-    // roll (the outgoing number goes, the incoming one rests), so the box never holds more than two.
+    // The number roll (§2.2 "counter + pointsPerFish (roll + bump)"; §10.2 the per-cat roll): the old
+    // number slides out upward, the new one slides in from below; the icon bumps. A newer roll first
+    // settles a running one (the outgoing number goes, the incoming one rests), so the box never
+    // holds more than two numbers.
     for (const gone of Array.from(countBox.querySelectorAll('.is-out'))) gone.remove();
     const old = numEl;
     old.classList.remove('is-in');
     old.classList.add('is-out');
+    // The props may already show `next` (the session updates the store before it plays the events).
+    old.textContent = formatNumber(rollFrom);
     numEl = document.createElement('span');
-    numEl.className = 'period-pill__n is-in';
+    numEl.className = `${cls}__n is-in`;
     numEl.textContent = text;
     countBox.appendChild(numEl);
     const fresh = numEl;
-    later(timers, cfg.fx.win.counterBumpMs, () => {
+    const [rollMs] = spec.motion();
+    el.style.setProperty('--bump-ms', `${rollMs}ms`);
+    later(timers, rollMs, () => {
       old.remove();
       fresh.classList.remove('is-in');
     });
-    restart(el, 'period-pill--bump', cfg.fx.win.counterBumpMs, timers);
+    restart(el, `${cls}--bump`, rollMs, timers);
   };
-
-  el.style.setProperty('--bump-ms', `${cfg.fx.win.counterBumpMs}ms`);
-  const render = (p: PeriodPillProps): void => {
-    kind = p.kind;
-    if (p.total !== total) setTotal(p.total, false);
-    else relabel();
-  };
-  render(props);
-  // The label and the number format follow the language (review A11Y-I18N-1).
-  const offLocale = onLocaleChanged(() => {
-    if (total < 0) return;
-    relabel();
-    numEl.textContent = formatNumber(total);
-  });
 
   return {
     el,
-    update: render,
     setTotal,
-    label(text) {
-      const W = cfg.fx.win;
-      const rm = opts.reduced();
+    total: () => total,
+    chip(text) {
+      const [, chipMs, risePx, inMs, outMs] = spec.motion();
+      const rm = spec.reduced();
+      chipEl?.remove();
       // A small opaque chip that pops out of the pill's top edge and rises (clean over the top bar).
       const span = document.createElement('span');
-      span.className = 'period-pill__label';
+      span.className = `${cls}__label`;
       span.setAttribute('aria-hidden', 'true');
-      const chip = document.createElement('b');
-      chip.className = 'period-pill__chip num';
-      chip.textContent = text;
-      span.appendChild(chip);
+      const b = document.createElement('b');
+      b.className = `${cls}__chip num`;
+      b.textContent = text;
+      span.appendChild(b);
       span.toggleAttribute('data-reduced', rm);
-      const ms = rm ? W.reduced.plusLabelInMs + W.reduced.plusLabelOutMs : W.plusLabelMs;
+      const ms = rm ? inMs + outMs : chipMs;
       span.style.setProperty('--label-ms', `${ms}ms`);
-      span.style.setProperty('--label-rise', `${-W.plusLabelRisePx}px`);
+      span.style.setProperty('--label-rise', `${-risePx}px`);
       el.appendChild(span);
-      // Reduced motion (§2.4): fade in and out in place, on WAAPI (the global reduced-motion CSS rule
-      // would cut a CSS animation to 1 ms).
+      chipEl = span;
+      // Reduced motion (§2.4, §10.2): fade in and out in place, on WAAPI (the global reduced-motion
+      // CSS rule would cut a CSS animation to 1 ms).
       if (rm && typeof span.animate === 'function') {
         try {
-          span.animate([{ opacity: 0 }, { opacity: 1, offset: W.reduced.plusLabelInMs / ms }, { opacity: 0 }], { duration: ms, easing: 'linear', fill: 'both' });
+          span.animate([{ opacity: 0 }, { opacity: 1, offset: inMs / ms }, { opacity: 0 }], { duration: ms, easing: 'linear', fill: 'both' });
         } catch {
-          // the label simply shows until it is removed
+          // the chip simply shows until it is removed
         }
       }
-      later(timers, ms, () => span.remove());
+      later(timers, ms, () => {
+        span.remove();
+        if (chipEl === span) chipEl = null;
+      });
     },
-    iconRect: () => (el.isConnected && !el.hidden ? trophy.getBoundingClientRect() : null),
+    iconRect: () => (el.isConnected && !el.hidden ? mark.getBoundingClientRect() : null),
     destroy() {
-      offLocale();
       for (const id of timers) clearTimeout(id);
       timers.clear();
       el.parentNode?.removeChild(el);
+    },
+  };
+}
+
+const periodMotion = (): CounterMotion => {
+  const W = cfg.fx.win;
+  return [W.counterBumpMs, W.plusLabelMs, W.plusLabelRisePx, W.reduced.plusLabelInMs, W.reduced.plusLabelOutMs];
+};
+
+const pointsMotion = (): CounterMotion => {
+  const P = cfg.fx.levelPoints;
+  return [P.rollMs, P.plusMs, P.plusRisePx, P.reducedPlusInMs, P.reducedPlusOutMs];
+};
+
+/** The period pill (Home and the win flow's counter): icon-trophy and this period's total. */
+function buildPeriodPill(props: PeriodPillProps, opts: { inGame: boolean; reduced: () => boolean }): Counter & View<PeriodPillProps> {
+  let kind = props.kind;
+  const c = buildCounter({ cls: 'period-pill', icon: 'icon-trophy', label: (n) => periodPillLabel(kind, n), motion: periodMotion, reduced: opts.reduced });
+  c.el.toggleAttribute('data-in-game', opts.inGame);
+  const render = (p: PeriodPillProps): void => {
+    kind = p.kind;
+    c.setTotal(p.total);
+  };
+  render(props);
+  // The label and the number format follow the language (review A11Y-I18N-1).
+  const offLocale = onLocaleChanged(() => c.setTotal(c.total()));
+  return {
+    ...c,
+    update: render,
+    destroy() {
+      offLocale();
+      c.destroy();
     },
   };
 }
@@ -255,6 +330,9 @@ export const LIFE_POP_MS = 520;
 
 // ─────────────────────────────── pills row ───────────────────────────────
 
+/** Steps of the tight fallback (§10.2): 1 drops the points counter's icon, 2 also steps its digits down. */
+export const TIGHT_STEPS = 2;
+
 export function createPills(props: PillsProps): PillsView {
   const el = document.createElement('div');
   el.className = 'pills';
@@ -262,6 +340,7 @@ export function createPills(props: PillsProps): PillsView {
   el.style.setProperty('--t-life-hurt', `${cfg.fx.lifeLossPillMs}ms`);
   el.style.setProperty('--t-life-pop', `${LIFE_POP_MS}ms`);
   el.style.setProperty('--t-pop-splash', `${POP_SPLASH_MS}ms`);
+  el.style.setProperty('--fade-ms', `${cfg.fx.win.fishPillFadeMs}ms`);
   const cats = document.createElement('div');
   cats.className = 'pill pill--cats';
   cats.setAttribute('role', 'img');
@@ -274,17 +353,48 @@ export function createPills(props: PillsProps): PillsView {
 
   let current = props;
   const reduced = (): boolean => current.reducedMotion === true;
-  // The in-game period counter (§2.1): between the two pills, hidden during play.
+  // The in-game period counter (§2.1): hidden during play; 2c.1 (§10.3): in the cat counter's cell.
   const period = buildPeriodPill({ total: 0, kind: cfg.period.kind }, { inGame: true, reduced });
   period.el.hidden = true;
   let periodShown = false;
-  el.append(cats, period.el, lives);
+  // The level-points counter (2c.1 §10.2): the row's middle column; "Level points: 2,016".
+  const points = buildCounter({
+    cls: 'points-pill',
+    icon: 'icon-points',
+    label: (n) => t('game.points.a11y', { count: formatNumber(n) }),
+    motion: pointsMotion,
+    reduced,
+  });
+  points.el.hidden = true;
+  // It shares the white pill's base rule (.pill: box, shadow, digits; hud.css) with its neighbours.
+  points.el.classList.add('pill');
+  // DOM (and reading) order: cats, the period counter (same cell), points, lives (hud.css places them).
+  el.append(cats, period.el, points.el, lives);
 
   const timers: Timers = new Set();
   let slots: HTMLElement[] = [];
   /** Slots whose fish left for the win flight (§2.2): they stay empty whatever `hearts` says. */
   const departed = new Set<number>();
   let prev: PillsProps | null = null;
+
+  // ── the tight fallback (§10.2): measured on the next frame after a change that can widen the row
+  // (never a forced layout inside a render), and on resize. 1 px of slack for sub-pixel rounding.
+  const win = el.ownerDocument.defaultView;
+  let tightRaf = 0;
+  let tightQueued = false;
+  let tightFor = '';
+  const measureTight = (): void => {
+    tightQueued = false;
+    if (!el.isConnected || el.clientWidth <= 0) return;
+    el.removeAttribute('data-tight');
+    for (let step = 1; step <= TIGHT_STEPS && el.scrollWidth > el.clientWidth + 1; step++) el.dataset.tight = String(step);
+  };
+  const scheduleTight = (): void => {
+    if (tightQueued || !win?.requestAnimationFrame) return;
+    tightQueued = true;
+    tightRaf = win.requestAnimationFrame(measureTight);
+  };
+  win?.addEventListener('resize', scheduleTight);
 
   const ensureSlots = (max: number): void => {
     if (slots.length === max) return;
@@ -301,24 +411,50 @@ export function createPills(props: PillsProps): PillsView {
 
   const isFull = (k: number, p: PillsProps): boolean => k < p.hearts && !departed.has(k);
 
+  /** A new board (§10.3): the cat counter is back in column 1 and the period counter hides again. */
+  const resetPeriod = (): void => {
+    periodShown = false;
+    period.el.hidden = true;
+    period.el.classList.remove('period-pill--in');
+    cats.hidden = false;
+    cats.removeAttribute('data-out');
+  };
+
   const render = (p: PillsProps): void => {
     current = p;
-    // A board that is not complete is not in a win: a new board (next level, retry) refills the slots.
-    if (p.catsPlaced < p.n && departed.size > 0) {
-      for (const k of departed) slots[k]?.removeAttribute('data-departed');
-      departed.clear();
+    // A board that is not complete is not in a win: a new board (next level, retry) refills the slots
+    // and brings the cat counter back.
+    if (p.catsPlaced < p.n) {
+      if (departed.size > 0) {
+        for (const k of departed) slots[k]?.removeAttribute('data-departed');
+        departed.clear();
+      }
+      if (periodShown) resetPeriod();
     }
     ensureSlots(Math.max(0, p.maxHearts));
     el.toggleAttribute('data-compact', p.compact);
     const text = t('game.cats', { placed: p.catsPlaced, n: p.n });
     if (count.textContent !== text) count.textContent = text;
     cats.setAttribute('aria-label', t('game.cats.a11y', { placed: p.catsPlaced, n: p.n }));
-    cats.toggleAttribute('data-complete', p.catsPlaced >= p.n && p.n > 0);
+    const complete = p.catsPlaced >= p.n && p.n > 0;
+    cats.toggleAttribute('data-complete', complete);
     if (prev && p.catsPlaced > prev.catsPlaced) restart(cats, 'pill--bump', 360, timers);
     slots.forEach((s, k) => s.toggleAttribute('data-full', isFull(k, p)));
     // "2 of 3 fish left" (game.hearts.a11y, §1.1).
     lives.setAttribute('aria-label', t('game.hearts.a11y', { hearts: p.hearts, max: p.maxHearts }));
     lives.toggleAttribute('data-last', p.hearts === 1);
+    // The level points (§10.2): set without animation (only POINTS animates); hidden when unscored.
+    const pts = typeof p.points === 'number' && p.points >= 0 ? Math.floor(p.points) : null;
+    points.el.hidden = pts === null;
+    // setTotal only writes a number that changed; it also relabels after a language change.
+    if (pts !== null) points.setTotal(pts);
+    // The level's total is final at the win: it keeps the highlight until the board changes.
+    points.el.toggleAttribute('data-final', pts !== null && complete);
+    const key = `${text}|${pts === null ? '' : formatNumber(pts)}|${p.compact}|${p.maxHearts}|${periodShown}`;
+    if (key !== tightFor) {
+      tightFor = key;
+      scheduleTight();
+    }
     prev = p;
   };
   render(props);
@@ -356,17 +492,27 @@ export function createPills(props: PillsProps): PillsView {
   const showPeriodCounter = (n: number): void => {
     if (!periodShown) {
       periodShown = true;
-      period.setTotal(n, false);
-      period.el.style.setProperty('--fade-ms', `${cfg.fx.win.fishPillFadeMs}ms`);
+      period.setTotal(n);
       period.el.hidden = false;
-      if (!reduced()) restart(period.el, 'period-pill--in', cfg.fx.win.fishPillFadeMs, timers);
+      // §10.3: in column 1, where the cat counter ("n / n") fades out over the same fishPillFadeMs.
+      if (reduced()) {
+        cats.hidden = true;
+      } else {
+        restart(period.el, 'period-pill--in', cfg.fx.win.fishPillFadeMs, timers);
+        cats.setAttribute('data-out', '');
+        later(timers, cfg.fx.win.fishPillFadeMs, () => {
+          if (periodShown) cats.hidden = true;
+        });
+      }
+      scheduleTight();
       return;
     }
-    period.setTotal(n, true);
+    const before = period.total();
+    period.setTotal(n, before >= 0 ? before : undefined);
   };
   const periodRect = (): DOMRect | null => (periodShown ? period.iconRect() : null);
   const periodLabel = (text: string): void => {
-    if (periodShown) period.label(text);
+    if (periodShown) period.chip(text);
   };
 
   return {
@@ -382,6 +528,11 @@ export function createPills(props: PillsProps): PillsView {
         const full = slots.filter((s) => s.hasAttribute('data-full'));
         const slot = full[full.length - 1];
         if (slot) popLife(slot);
+      } else if (ev.type === 'POINTS') {
+        // §10.2: roll from total − gained to total, bump, "+576". No sound or vibration of its own (D23).
+        if (points.el.hidden || !(ev.gained > 0)) return;
+        points.setTotal(ev.total, ev.total - ev.gained);
+        points.chip(t('fish.plus', { count: formatNumber(ev.gained) }));
       }
     },
     lifeSlots() {
@@ -411,7 +562,10 @@ export function createPills(props: PillsProps): PillsView {
     destroy() {
       for (const id of timers) clearTimeout(id);
       timers.clear();
+      if (tightQueued) win?.cancelAnimationFrame(tightRaf);
+      win?.removeEventListener('resize', scheduleTight);
       period.destroy();
+      points.destroy();
       el.parentNode?.removeChild(el);
     },
   };

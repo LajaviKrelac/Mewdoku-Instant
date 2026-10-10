@@ -264,7 +264,6 @@ export const catalog: LocaleCatalog = {
   'fish.count.other': '{count} peces',
   'fish.plus': '+{count}',
   'victory.next': 'Nivel {level}',
-  'victory.points': '+{points} puntos',
   'victory.eventReward': 'Premio del evento: {reward}',
 
   // ── Phase 2b: rankings ─────────────────────────────────────────────────────
@@ -352,7 +351,7 @@ export const catalog: LocaleCatalog = {
   'ads.banner.placeholder': 'Espacio de banner',
   'time.daysHours': '{d} d {h} h',
 
-  // ── Phase 2c: fish are lives, the period ranking, the perfect streak (AI draft 2026-10-09, unreviewed) ──
+  // ── Phase 2c: fish are lives, the period ranking (AI draft 2026-10-09, unreviewed) ──
   'period.total.day': 'Hoy: {total}',
   'period.total.week': 'Esta semana: {total}',
   'period.total.month': 'Este mes: {total}',
@@ -373,19 +372,22 @@ export const catalog: LocaleCatalog = {
   'rank.records.best.month': 'Tu mejor mes',
   'rank.sub.period.one': '+{count} pez · {total}',
   'rank.sub.period.other': '+{count} peces · {total}',
-  'rank.records.streak': 'Racha perfecta',
-  'rank.records.streakBest': '{count} (récord {best})',
   'a11y.fishKept.day.one': 'Conservaste {count} pez. Tu total de hoy: {total}.',
   'a11y.fishKept.day.other': 'Conservaste {count} peces. Tu total de hoy: {total}.',
   'a11y.fishKept.week.one': 'Conservaste {count} pez. Tu total de esta semana: {total}.',
   'a11y.fishKept.week.other': 'Conservaste {count} peces. Tu total de esta semana: {total}.',
   'a11y.fishKept.month.one': 'Conservaste {count} pez. Tu total de este mes: {total}.',
   'a11y.fishKept.month.other': 'Conservaste {count} peces. Tu total de este mes: {total}.',
-  'victory.streak': 'Perfecto ×{count}',
-  'victory.streak.a11y.one': '{count} victoria perfecta seguida',
-  'victory.streak.a11y.other': '{count} victorias perfectas seguidas',
-  'howto.points.day': 'Los peces que conservas al resolver un puzle van al ranking del día, que vuelve a empezar cada día a las 00:00 UTC. Resuelve sin errores para lograr una racha perfecta y ganar más puntos.',
-  'howto.points.week': 'Los peces que conservas al resolver un puzle van al ranking semanal, que vuelve a empezar cada lunes a las 00:00 UTC. Resuelve sin errores para lograr una racha perfecta y ganar más puntos.',
-  'howto.points.month': 'Los peces que conservas al resolver un puzle van al ranking mensual, que vuelve a empezar el día 1 de cada mes a las 00:00 UTC. Resuelve sin errores para lograr una racha perfecta y ganar más puntos.',
+  'howto.points.day': 'Los peces que conservas al resolver un puzle van al ranking del día, que vuelve a empezar cada día a las 00:00 UTC.',
+  'howto.points.week': 'Los peces que conservas al resolver un puzle van al ranking semanal, que vuelve a empezar cada lunes a las 00:00 UTC.',
+  'howto.points.month': 'Los peces que conservas al resolver un puzle van al ranking mensual, que vuelve a empezar el día 1 de cada mes a las 00:00 UTC.',
+
+  // ── Phase 2c.1: level points per cat (AI draft 2026-10-10, unreviewed) ──
+  'game.points.a11y': 'Puntos del nivel: {count}',
+  'a11y.points.one': '{count} punto.',
+  'a11y.points.other': '{count} puntos.',
+  'points.count.one': '{count} punto',
+  'points.count.other': '{count} puntos',
+  'howto.levelPoints': 'Cada gato que encuentras da puntos, y cada gato seguido sin errores da más que el anterior. Un error nunca te quita puntos, pero con el siguiente gato la cuenta vuelve a empezar. Los gatos que coloca una pista o el gatito también cuentan.',
   ...LOCALE_NAMES,
 };

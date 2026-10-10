@@ -5,10 +5,14 @@
 // with the rank.localOnly line and no other player's row (§5.10).
 // Phase 2c (G1): a mistake costs a fish (the lives pill shows 2 full); on the web there is no shop at
 // all (no Home "+", no Settings Shop row); the panel's records are this week's; the victory rows.
+// Phase 2c.1 (G1, fish-lives-spec §10.8): the level-points counter in the pills row follows the user's
+// rule (two cats 1,248; a mistake changes nothing; the next cat 1,824; a reload resumes the points and
+// the run: the next cat 2,496; Retry 0); the tutorial has no counter; the victory shows the level's
+// total and no "Perfect ×N"; the web records show Total points.
 import { expect, test, type Page } from '@playwright/test';
 import type { E2EHooks } from '../../src/app/boot';
 import { defaults } from '../../src/game/save';
-import { periodKeyAt } from '../../src/game/scoring';
+import { periodKeyAt, pointsRuleFor, runTotal } from '../../src/game/scoring';
 import type { InProgressV2, SaveData } from '../../src/game/types';
 
 type TestWindow = Window & { __mewdoku?: E2EHooks };
@@ -158,7 +162,8 @@ test('4b · web rankings: my own records and the rankings-not-available line, ne
   await expect(panel).toContainText("Rankings with other players aren't available in this version. Here are your own records.");
   await expect(panel.locator('.rank-records')).toBeVisible();
   await expect(panel).toContainText('This week');
-  await expect(panel).toContainText('Perfect streak');
+  await expect(panel).toContainText('Total points'); // 2c.1 (D24): instead of the retired perfect streak
+  await expect(panel).not.toContainText('Perfect streak');
   await expect(panel).toContainText('Levels solved');
   expect(await panel.locator('.rank-list__row, [data-rank-row]').count()).toBe(0);
   expect((await app(page))?.save.period.total).toBe(3);
@@ -178,7 +183,7 @@ test('4c · no shop on the web (phase2c §5.2): no fish pill "+" on Home, no Sho
   expect((await app(page))?.save).not.toHaveProperty('wallet');
 });
 
-test('4d · the victory rows: the fish kept, "This week", level points and "Perfect ×1"', async ({ page }) => {
+test('4d · the victory rows: the level\'s points total, the fish kept and "This week"; no "Perfect ×N"', async ({ page }) => {
   await open(page, '', returning());
   await playLevel(page);
   const sol = await solution(page);
@@ -187,10 +192,11 @@ test('4d · the victory rows: the fish kept, "This week", level points and "Perf
   const victory = page.locator('[data-overlay="victory"]');
   await expect(victory.locator('.victory__kept')).toHaveAttribute('data-count', '3');
   await expect(victory.locator('.victory__period')).toHaveText('This week: 3');
-  await expect(victory.locator('.victory__points')).toHaveText(/^\+\d+ points$/);
-  await expect(victory.locator('.victory__streak')).toHaveText('Perfect ×1');
-  const n = sol.length;
-  await expect(victory.locator('.victory__points')).toHaveText(`+${10 * n + 10} points`);
+  // 2c.1: n cats in a row, 96 × (5 + s) each: runTotal(n) (5×5 → 3,840; 8×8 → 7,296).
+  const total = runTotal(sol.length, pointsRuleFor('level'));
+  await expect(victory.locator('.victory__points')).toHaveText(`${total.toLocaleString('en-US')} points`);
+  await expect(victory.locator('.victory__streak')).toHaveCount(0);
+  expect((await app(page))?.save.points.total).toBe(total);
 });
 
 test('5 · reload mid-level restores the exact board', async ({ page }) => {
@@ -417,4 +423,59 @@ test('17 · the event screen stylesheet failing once: it is re-fetched and the e
   // Styled: the reward track's nodes are laid out in a row (unstyled they are a plain numbered list).
   const listStyle = await page.locator('.event__nodes').evaluate((el) => getComputedStyle(el).listStyleType);
   expect(listStyle).toBe('none');
+});
+
+// ── Phase 2c.1: level points per cat (fish-lives-spec §3.1, §10.2, §10.8) ──
+
+/** The HUD counter's number, as shown (the last number in the box is the one rolling in). */
+const points = (page: Page) => page.locator('.pills .points-pill');
+async function pointsShow(page: Page, text: string): Promise<void> {
+  await expect(points(page)).toHaveAttribute('aria-label', `Level points: ${text}`);
+  await expect(points(page).locator('.points-pill__n').last()).toHaveText(text);
+}
+
+test('18 · level points: two cats 1,248; a mistake keeps them; the next cat 1,824; a reload resumes points and run (next 2,496); Retry 0', async ({ page }) => {
+  await open(page, '?ads=unsupported', returning());
+  await playLevel(page);
+  await expect(points(page)).toBeVisible();
+  await pointsShow(page, '0'); // F5.1: every level starts at 0
+  const sol = await solution(page);
+  const n = sol.length;
+  const cat = (r: number): number => r * n + (sol[r] as number);
+  await dbl(page, cat(0));
+  await dbl(page, cat(1));
+  await pointsShow(page, '1,248');
+  const [w1, w2, w3] = await wrongCells(page, 3);
+  await dbl(page, w1 as number);
+  await pointsShow(page, '1,248'); // a mistake takes nothing away
+  await dbl(page, cat(2));
+  await pointsShow(page, '1,824'); // the run restarted: +576
+  // The local save (save.localDebounceMs) holds the board with its points; a reload resumes both.
+  await page.waitForTimeout(800);
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('mewdoku.save.v1') ?? 'null') as SaveData | null);
+  expect(stored?.inProgress.level).toMatchObject({ points: 1_824, catStreak: 1 });
+  await page.reload();
+  await ready(page, 'home');
+  await page.locator('.home__play').click();
+  await playing(page);
+  await pointsShow(page, '1,824');
+  await dbl(page, cat(3));
+  await pointsShow(page, '2,496'); // the run was restored exactly: the 2nd cat in a row adds 672
+  // Fail and Retry: a new attempt starts at 0.
+  await dbl(page, w2 as number);
+  await dbl(page, w3 as number);
+  await expect(page.getByRole('button', { name: 'Retry level' })).toBeEnabled();
+  await page.getByRole('button', { name: 'Retry level' }).click();
+  await playing(page);
+  await pointsShow(page, '0');
+});
+
+test('19 · the tutorial shows no level-points counter; a level shows it in the pills row', async ({ page }) => {
+  await open(page);
+  expect((await app(page))?.session?.mode).toBe('tutorial');
+  await playing(page);
+  await dbl(page, 1);
+  await expect(page.locator('.pills .pill--cats')).toBeVisible();
+  await expect(points(page)).toBeHidden();
+  expect(await page.evaluate(() => (window as TestWindow).__mewdoku?.state()?.levelPoints)).toBe(0);
 });

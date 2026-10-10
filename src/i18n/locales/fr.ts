@@ -264,7 +264,6 @@ export const catalog: LocaleCatalog = {
   'fish.count.other': '{count} poissons',
   'fish.plus': '+{count}',
   'victory.next': 'Niveau {level}',
-  'victory.points': '+{points} points',
   'victory.eventReward': 'Récompense : {reward}',
 
   // ── Phase 2b: rankings ─────────────────────────────────────────────────────
@@ -352,7 +351,7 @@ export const catalog: LocaleCatalog = {
   'ads.banner.placeholder': 'Emplacement de bannière',
   'time.daysHours': '{d} j {h} h',
 
-  // ── Phase 2c: fish are lives, the period ranking, the perfect streak (AI draft 2026-10-09, unreviewed) ──
+  // ── Phase 2c: fish are lives, the period ranking (AI draft 2026-10-09, unreviewed) ──
   'period.total.day': 'Aujourd’hui : {total}',
   'period.total.week': 'Cette semaine : {total}',
   'period.total.month': 'Ce mois-ci : {total}',
@@ -373,19 +372,22 @@ export const catalog: LocaleCatalog = {
   'rank.records.best.month': 'Ton meilleur mois',
   'rank.sub.period.one': '+{count} poisson · {total}',
   'rank.sub.period.other': '+{count} poissons · {total}',
-  'rank.records.streak': 'Série parfaite',
-  'rank.records.streakBest': '{count} (record {best})',
   'a11y.fishKept.day.one': 'Tu as gardé {count} poisson. Ton total aujourd’hui : {total}.',
   'a11y.fishKept.day.other': 'Tu as gardé {count} poissons. Ton total aujourd’hui : {total}.',
   'a11y.fishKept.week.one': 'Tu as gardé {count} poisson. Ton total cette semaine : {total}.',
   'a11y.fishKept.week.other': 'Tu as gardé {count} poissons. Ton total cette semaine : {total}.',
   'a11y.fishKept.month.one': 'Tu as gardé {count} poisson. Ton total ce mois-ci : {total}.',
   'a11y.fishKept.month.other': 'Tu as gardé {count} poissons. Ton total ce mois-ci : {total}.',
-  'victory.streak': 'Parfait ×{count}',
-  'victory.streak.a11y.one': '{count} victoire parfaite d’affilée',
-  'victory.streak.a11y.other': '{count} victoires parfaites d’affilée',
-  'howto.points.day': 'Les poissons que tu gardes en résolvant un puzzle comptent pour le classement du jour, qui recommence chaque jour à 00:00 UTC. Résous sans erreur pour bâtir une série parfaite et gagner plus de points.',
-  'howto.points.week': 'Les poissons que tu gardes en résolvant un puzzle comptent pour le classement de la semaine, qui recommence chaque lundi à 00:00 UTC. Résous sans erreur pour bâtir une série parfaite et gagner plus de points.',
-  'howto.points.month': 'Les poissons que tu gardes en résolvant un puzzle comptent pour le classement du mois, qui recommence le 1er de chaque mois à 00:00 UTC. Résous sans erreur pour bâtir une série parfaite et gagner plus de points.',
+  'howto.points.day': 'Les poissons que tu gardes en résolvant un puzzle comptent pour le classement du jour, qui recommence chaque jour à 00:00 UTC.',
+  'howto.points.week': 'Les poissons que tu gardes en résolvant un puzzle comptent pour le classement de la semaine, qui recommence chaque lundi à 00:00 UTC.',
+  'howto.points.month': 'Les poissons que tu gardes en résolvant un puzzle comptent pour le classement du mois, qui recommence le 1er de chaque mois à 00:00 UTC.',
+
+  // ── Phase 2c.1: level points per cat (AI draft 2026-10-10, unreviewed) ──
+  'game.points.a11y': 'Points du niveau : {count}',
+  'a11y.points.one': '{count} point.',
+  'a11y.points.other': '{count} points.',
+  'points.count.one': '{count} point',
+  'points.count.other': '{count} points',
+  'howto.levelPoints': 'Chaque chat trouvé rapporte des points, et chaque chat trouvé d’affilée sans erreur en rapporte plus que le précédent. Une erreur ne t’enlève jamais de points, mais le chat suivant recommence le compte. Les chats posés par un indice ou par le minou comptent aussi.',
   ...LOCALE_NAMES,
 };

@@ -36,6 +36,15 @@
 // loader, not a cheap change). Ceilings = the measured maximum + about 3 %: main JS 266 → 279, first
 // load 327 → 340 (2.7 %: kept below the sum of its rows' ceilings, so it still binds), + 1 locale 351 → 365, gzip 121.5 → 126.5, core lazy JS 68 → 74, lazy CSS 28.5 →
 // 31.2, and the optional lazy JS 28.5 → 29.3 (within, but at 28.4 KB it had 0.1 KB left). The first load stays inside Meta's < 5 s on Slow 4G (STATUS-2b §4, measured).
+// Phase 2c (2026-10-09): no ceiling moved. Phase 2c.1 (lead decision L7, 2026-10-10; STATUS-2c §10,
+// 04 §9): the per-cat level points (the reducer's points, the in-progress slot fields, the HUD counter
+// with its roll / chip / tight fallback, icon-points, the 2c.1 strings; net of the deleted per-win
+// formula, perfect streak and streak chip) grew the FBIG main JS 278.2 → 280.6 KB. G1 and G2 had
+// already shared the counter with the period pill and trimmed; a further cut needs a structural
+// change (moving English strings out of the main bundle). Only the rows over budget moved, each to the
+// measured maximum + about 3 %: main JS 279 → 289, first load 340 → 350 (2.6 %: below the sum of its
+// rows' ceilings, so it still binds), + 1 locale 365 → 377 (2.7 %). CSS (43.45 / 43.5), gzip
+// (126.1 / 126.5) and the optional lazy JS (29.1 / 29.3) are within and unchanged.
 //
 // Usage: tsx scripts/size-check.ts [distDir …] [--json]
 //   No dirs → every existing one of dist/web, dist/fbig, dist/release-web and dist/release-fbig. A dir
@@ -83,11 +92,11 @@ export const LOCALE_CHUNK = /^assets\/locale-[A-Za-z-]+-[^/]*\.js$/;
 
 /**
  * In matching order: a file is counted by the first budget it matches. Ceilings (2b integration,
- * 2026-10-09, re-set after the review fixes): the largest measured build (FBIG for JS) plus about 3 %
- * (04 §9).
+ * 2026-10-09, re-set after the review fixes; main JS and the two first-load totals re-set at 2c.1,
+ * 2026-10-10): the largest measured build (FBIG for JS) plus about 3 % (04 §9).
  */
 export const BUDGETS: readonly SizeBudget[] = [
-  { label: 'Main JS', pattern: /^assets\/index-[^/]*\.js$/, maxBytes: 279 * KB, fromHtml: 'js', firstLoad: true },
+  { label: 'Main JS', pattern: /^assets\/index-[^/]*\.js$/, maxBytes: 289 * KB, fromHtml: 'js', firstLoad: true },
   // Only the stylesheet index.html links; the lazy chunks' stylesheets are the 'Lazy CSS' row.
   { label: 'CSS', pattern: /^$/, maxBytes: 43.5 * KB, fromHtml: 'css', firstLoad: true },
   // The latin-ext face (tr, pl) is fetched only when such glyphs appear (unicode-range, phase2b §6.6).
@@ -103,9 +112,9 @@ export const BUDGETS: readonly SizeBudget[] = [
 ];
 
 /** Everything index.html loads before the first screen, English (the firstLoad rows). */
-export const FIRST_LOAD_MAX = 340 * KB;
+export const FIRST_LOAD_MAX = 350 * KB;
 /** The first load plus the largest non-English locale chunk (phase2b §11). */
-export const FIRST_LOAD_LOCALE_MAX = 365 * KB;
+export const FIRST_LOAD_LOCALE_MAX = 377 * KB;
 /** The first load gzipped (woff2 as is): what players download from a compressing host. */
 export const FIRST_LOAD_GZIP_MAX = 126.5 * KB;
 export const FB_MAX_FILES = 100;

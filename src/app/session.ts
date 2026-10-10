@@ -7,11 +7,14 @@
 // once, then win-flow.ts plays glow → fish → ranking panel → victory screen on the session clock.
 // Helper flows live in helper-flows.ts, pure effect tables in session-effects.ts, timers and overlay
 // props in session-parts.ts.
-// Phase 2c (G1, docs/phase2c/fish-lives-spec.md): fish are the lives. A MISTAKE (or a REVIVE) breaks
-// the perfect streak at once, in the same store update as the board slot, so Home, a reload, a fail
-// or Retry cannot undo it (§3.2). A scored win submits this period's leaderboard points (and an event
-// win its event board) as one batch, the panel shows the period board, and the fish kept fly from the
-// lives pill to the period counter (§2, §4.4). No fish wallet, no shop entry from the victory.
+// Phase 2c (G1, docs/phase2c/fish-lives-spec.md): fish are the lives. A scored win submits this
+// period's leaderboard points (and an event win its event board) as one batch, the panel shows the
+// period board, and the fish kept fly from the lives pill to the period counter (§2, §4.4). No fish
+// wallet, no shop entry from the victory.
+// Phase 2c.1 (G1, §3.2.5): level points live in GameState (per attempt) and in the in-progress slot,
+// which commit writes in the same store update as the board, so Home and a reload resume the points
+// and the cat run exactly; the cross-level perfect streak (streakBreaks / breakStreak) is gone. A
+// scoring cat's announcement ends with the running total (POINTS → a11y.points, one utterance).
 import type { CellIndex, HintStep, Puzzle } from '../engine/types';
 import { eventEnd, eventRules, type EventDef } from '../game/events';
 import { newGame, restoreGame, toInProgress } from '../game/factory';
@@ -19,7 +22,7 @@ import { getMode, rulesFor } from '../game/modes';
 import { isHard } from '../game/progression';
 import { reduce } from '../game/reducer';
 import { validateSlot } from '../game/save';
-import { breakStreak, encodeDailyScore, encodeEventScore, encodePeriodScore } from '../game/scoring';
+import { encodeDailyScore, encodeEventScore, encodePeriodScore } from '../game/scoring';
 import { advance, filterTutorialAction, tutorialStep } from '../game/tutorial';
 import type { Action, BoardKey, GameEvent, GameState, ModeId, RuleFlags } from '../game/types';
 import type { RankingListState, RankScoreView } from '../ui/overlays/ranking-panel';
@@ -180,23 +183,21 @@ export function createSession(deps: SessionDeps): Session {
   }
 
   function commit(prev: GameState, state: GameState, a: Action, events: readonly GameEvent[], m: SessionMeta): void {
+    // phase2c.1 §3.2.3: the slot (board, lives and the attempt's level points / cat run / scored
+    // rows, toInProgress) is written in the same store update as the game, so a reload never pairs a
+    // board with older points. A scoring cat changes `cells`; a mistake changes `cells` and `hearts`.
     const changed = state.cells !== prev.cells || state.hearts !== prev.hearts || state.revivesUsed !== prev.revivesUsed;
     const slot = slotFor(m);
     const writeSlot = slot !== null && changed && state.status !== 'won';
     const now = clock.now();
-    // phase2c §3.2: a mistake (with the mistake penalty) or a revive breaks the perfect streak at once,
-    // saved with the board, so leaving, reloading, failing or retrying never restores it.
-    const breaks = streakBreaks(state, events, m);
-    const streakBroken = breaks && save().streak.current !== 0;
-    if (state !== prev || writeSlot || streakBroken) {
-      store.update((app) => {
-        const slotted = writeSlot ? withSlot(app.save, slot, toInProgress(state, now)) : app.save;
-        return { ...app, game: state, save: breaks ? breakStreak(slotted) : slotted };
-      });
+    if (state !== prev || writeSlot) {
+      store.update((app) => ({ ...app, game: state, save: writeSlot ? withSlot(app.save, slot, toInProgress(state, now)) : app.save }));
     }
     if (state.cells !== prev.cells || a.type === 'RETRY' || a.type === 'REVIVE') helpers.clearHintCache();
     if (events.length) bus.emit('game:events', { events, state, prev });
     for (const fn of [...listeners]) fn(state, events);
+    // phase2c.1 §10.4: the lines of one action are joined into ONE announcement (the POINTS line
+    // follows its CAT_PLACED line: "Cat placed. 3 of 8. 2,016 points.").
     const lines: string[] = [];
     for (const ev of events) {
       screen?.playEvent(ev);
@@ -208,15 +209,9 @@ export function createSession(deps: SessionDeps): Session {
       else if (ev.type === 'LOST') onLost(state, m);
     }
     if (lines.length) fx.announce(lines.join(' '));
-    if (writeSlot || streakBroken) deps.saves.touch();
+    if (writeSlot) deps.saves.touch();
     timers.sync();
     if (m.mode === 'tutorial') tutorialAdvance();
-  }
-
-  /** phase2c §3.2: whether these events break the perfect streak (a MISTAKE with the penalty, or REVIVED) in a scored mode. */
-  function streakBreaks(state: GameState, events: readonly GameEvent[], m: SessionMeta): boolean {
-    if (!(c.levelPoints.modes as readonly string[]).includes(m.mode)) return false;
-    return events.some((ev) => (ev.type === 'MISTAKE' && state.rules.mistakePenalty) || ev.type === 'REVIVED');
   }
 
   // ─────────────────────────────── win (phase2b §2.2) ───────────────────────────────

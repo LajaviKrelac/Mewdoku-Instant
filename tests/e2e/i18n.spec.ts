@@ -1,5 +1,5 @@
 // Owner: E (phase2b §6.9); G2 (Phase 2c: lives are fish in every locale, the 2c victory rows, no web
-// shop). Localized layout at 320×568 (web-320) and 390×844 (web-390): for German,
+// shop; Phase 2c.1: the level-points counter and the victory's points row per locale). Localized layout at 320×568 (web-320) and 390×844 (web-390): for German,
 // Russian, Arabic, Thai, Japanese and the pseudo-locale "xx-long" (+40 % length, accents; dev and
 // e2e builds only, ?i18n=pseudo), Home, the game screen and Settings render in that language with
 // no horizontal overflow, no clipped button, chip or title, and — for Arabic — dir=rtl with the board
@@ -8,7 +8,11 @@
 // docs/i18n/screenshots/ for the native reviewers (docs/i18n/review-log.md).
 // Phase 2c (fish-lives-spec §5.2, §7.3): the web build has no shop at all, so the shop checks moved to
 // fbig.spec.ts (G3); each locale checks the lives pill's label (its own "fish left" copy) and the
-// victory's kept-fish row, level points and streak chip at 320 px instead.
+// victory's kept-fish row, level points and streak chip at 320 px instead. Phase 2c.1 (fish-lives-spec
+// §10.8): there is no streak chip; de, fr and ar at 320 px solve a 12×12 level for the largest level
+// total ("13,248" in each locale's number format) and check that the pills row never overflows (the
+// counter centred, clear of the cat counter and the lives, also while the period counter takes the cat
+// counter's cell) and that the victory's points row fits.
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,6 +20,7 @@ import { expect, test, type Page, type TestInfo } from '@playwright/test';
 import type { E2EHooks } from '../../src/app/boot';
 import { catalog as ar } from '../../src/i18n/locales/ar';
 import { catalog as de } from '../../src/i18n/locales/de';
+import { catalog as fr } from '../../src/i18n/locales/fr';
 import { catalog as ja } from '../../src/i18n/locales/ja';
 import { catalog as ru } from '../../src/i18n/locales/ru';
 import { catalog as th } from '../../src/i18n/locales/th';
@@ -101,7 +106,7 @@ async function noClipping(page: Page): Promise<void> {
   const clipped = await page.evaluate(() => {
     const out: string[] = [];
     const sel =
-      '.btn, .btn__label, .chip, .chip__text, .top-bar__text, .top-bar__suffix, .overlay__title, .settings-row__label, .segmented__opt, .switch__state, .daily-card__text > *, .tool__badge, .shop__name, .victory__sub, .victory__praise, .ranking__title, .ranking__sub, .period-pill, .victory__kept, .victory__period, .victory__points, .victory__streak';
+      '.btn, .btn__label, .chip, .chip__text, .top-bar__text, .top-bar__suffix, .overlay__title, .settings-row__label, .segmented__opt, .switch__state, .daily-card__text > *, .tool__badge, .shop__name, .victory__sub, .victory__praise, .ranking__title, .ranking__sub, .period-pill, .victory__kept, .victory__period, .victory__points, .points-pill, .points-pill__count';
     for (const el of Array.from(document.querySelectorAll<HTMLElement>(sel))) {
       if (el.closest('[hidden], [inert], .sr-only')) continue;
       const s = getComputedStyle(el);
@@ -195,7 +200,7 @@ for (const c of CASES) {
     });
 
     // Review UX-8: the win flow's screens are checked per locale too (Phase 2c: the web has no shop;
-    // the period pill, the ranking subtitle and the victory's kept-fish row, points and streak chip).
+    // the period pill, the ranking subtitle and the victory's kept-fish row and points; 2c.1: no streak chip).
     test('the period pill, the ranking panel and the victory fit and read in the locale', async ({ page }, info) => {
       await bootHome(page, c);
       await expect(page.locator('.screen--home .period-pill')).toBeVisible();
@@ -213,7 +218,7 @@ for (const c of CASES) {
       await expect(page.locator('[data-overlay="victory"] .victory__primary')).toBeVisible({ timeout: 4000 });
       await expect(page.locator('[data-overlay="victory"] .victory__kept')).toBeVisible();
       await expect(page.locator('[data-overlay="victory"] .victory__points')).toBeVisible();
-      await expect(page.locator('[data-overlay="victory"] .victory__streak')).toBeVisible();
+      await expect(page.locator('[data-overlay="victory"] .victory__streak')).toHaveCount(0);
       await page.waitForTimeout(800);
       await noOverflow(page);
       await noClipping(page);
@@ -377,6 +382,32 @@ test.describe('review fixes: Russian at the small phone (I18N-TEXT-2)', () => {
   });
 });
 
+// Phase 2c.1 integration (N1): on a Hard level the Arabic title "المستوى 310" beside the "صعب" badge
+// was cut to "المستوى …" at 320 px; the level number now sits in the non-shrinking suffix.
+test.describe('2c.1 integration N1: Arabic Hard-level title at the small phone', () => {
+  test.use({ locale: 'ar-EG' });
+
+  test('the level title keeps its level number next to the Hard badge', async ({ page }, info) => {
+    test.skip(info.project.name !== 'web-320', 'the small phone is the tight case');
+    await seededHome(page, { progress: { level: 310, completed: 309, best: {} } });
+    await page.locator('.home__play').click();
+    await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
+    await page.waitForTimeout(600);
+    const title = await page.evaluate(() => {
+      const h1 = document.querySelector<HTMLElement>('.screen--game .top-bar__text') as HTMLElement;
+      const suffix = h1.querySelector<HTMLElement>('.top-bar__suffix') as HTMLElement;
+      const badge = document.querySelector<HTMLElement>('.screen--game .top-bar__title .badge--hard') as HTMLElement;
+      const a = h1.getBoundingClientRect();
+      const b = suffix.getBoundingClientRect();
+      return { whole: h1.textContent, text: suffix.textContent, hard: !badge.hidden, inside: b.left >= a.left - 1 && b.right <= a.right + 1 && b.width > 0 };
+    });
+    expect(title.hard).toBe(true);
+    expect(title.whole?.replace(/[⁦-⁩]/g, '')).toBe('المستوى 310');
+    expect(title.text?.replace(/[⁦-⁩]/g, '')).toBe(' 310');
+    expect(title.inside).toBe(true);
+  });
+});
+
 test.describe('review fixes: larger text (I18N-TEXT-1)', () => {
   test.use({ locale: 'en-US' });
 
@@ -396,3 +427,94 @@ test.describe('review fixes: larger text (I18N-TEXT-1)', () => {
     expect(r.s[1] ?? 0).toBeLessThanOrEqual((r.c[1] ?? 0) + 0.5);
   });
 });
+
+// ── Phase 2c.1 (G2, fish-lives-spec §10.8): the points counter and the victory points row at 320 px ──
+interface PointsCase {
+  readonly name: string;
+  readonly browser: string;
+  readonly lang: string;
+  readonly rtl?: boolean;
+  /** The catalogue's victory row template (points.count.other, or the form 13 248 selects). */
+  readonly row: string;
+  /** The HUD label template (game.points.a11y). */
+  readonly label: string;
+}
+const POINTS_CASES: readonly PointsCase[] = [
+  { name: 'de', browser: 'de-DE', lang: 'de', row: de['points.count.other'] ?? '', label: de['game.points.a11y'] ?? '' },
+  { name: 'fr', browser: 'fr-FR', lang: 'fr', row: fr['points.count.other'] ?? '', label: fr['game.points.a11y'] ?? '' },
+  // 13 248 ends in 48, Arabic's "many" form.
+  { name: 'ar', browser: 'ar-EG', lang: 'ar', rtl: true, row: ar['points.count.many'] ?? '', label: ar['game.points.a11y'] ?? '' },
+];
+
+/** The cat counter (or the period counter), the points counter and the lives: disjoint, in the row, centred. */
+async function rowFits(page: Page, start: '.pill--cats' | '.pills .period-pill'): Promise<void> {
+  const g = await page.evaluate((first) => {
+    const box = (sel: string) => {
+      const el = document.querySelector<HTMLElement>(sel);
+      if (!el || el.hidden || el.getClientRects().length === 0) return null;
+      const r = el.getBoundingClientRect();
+      return { l: r.left, r: r.right };
+    };
+    const row = document.querySelector('.pills') as HTMLElement;
+    return { row: box('.pills'), parts: [box(first), box('.points-pill'), box('.pill--lives')], scroll: row.scrollWidth, client: row.clientWidth };
+  }, start);
+  const row = g.row as { l: number; r: number };
+  for (const p of g.parts) expect(p, `${start} / points / lives shown`).not.toBeNull();
+  const parts = (g.parts as { l: number; r: number }[]).slice().sort((a, b) => a.l - b.l);
+  for (let k = 1; k < 3; k++) expect((parts[k] as { l: number }).l, 'pills overlap').toBeGreaterThanOrEqual((parts[k - 1] as { r: number }).r - 0.5);
+  expect((parts[0] as { l: number }).l).toBeGreaterThanOrEqual(row.l - 0.5);
+  expect((parts[2] as { r: number }).r).toBeLessThanOrEqual(row.r + 0.5);
+  const mid = g.parts[1] as { l: number; r: number };
+  expect(Math.abs((mid.l + mid.r) / 2 - (row.l + row.r) / 2), 'points counter centred').toBeLessThanOrEqual(1);
+  expect(g.scroll, 'pills row overflows').toBeLessThanOrEqual(g.client + 1);
+}
+
+for (const c of POINTS_CASES) {
+  test.describe(`level points in ${c.name} at 320 px (2c.1 §10.8)`, () => {
+    test.use({ locale: c.browser });
+
+    test('the row fits with "13,248" in the locale\'s format, and the victory points row fits', async ({ page }, info) => {
+      test.skip(info.project.name !== 'web-320', 'the small phone is the tight case');
+      await seededHome(page, { progress: { level: 310, completed: 309, best: {} } });
+      await page.waitForFunction((lang) => document.documentElement.lang === lang, c.lang);
+      await page.locator('.home__play').click();
+      await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
+      await page.waitForTimeout(900);
+      expect(await page.evaluate(() => (window as TestWindow).__mewdoku?.solution()?.length)).toBe(12);
+      await rowFits(page, '.pill--cats');
+      // Twelve cats in a row (through the session, as double taps): the largest level total.
+      await page.evaluate(() => (window as TestWindow).__mewdoku?.solve());
+      const n = page.locator('.points-pill[data-final] .points-pill__n:not(.is-out)');
+      await expect(n).toBeVisible();
+      await page.waitForTimeout(450); // the last roll
+      const shown = strip((await n.textContent()) ?? '');
+      const want = new Intl.NumberFormat(c.lang === 'ar' ? 'ar-u-nu-latn' : c.lang).format(13248);
+      expect(shown.replace(/[\u00a0\u202f]/g, ' ')).toBe(want.replace(/[\u00a0\u202f]/g, ' '));
+      expect(strip((await page.locator('.points-pill').getAttribute('aria-label')) ?? '')).toBe(strip(c.label.replace('{count}', shown)));
+      await rowFits(page, '.pill--cats');
+      await noOverflow(page);
+      await noClipping(page);
+      // §10.3: the period counter takes the cat counter's cell; the row still fits.
+      await expect(page.locator('.pills .period-pill[data-in-game]')).toBeVisible({ timeout: 4000 });
+      await expect(page.locator('.pill--cats')).toBeHidden({ timeout: 1000 });
+      await rowFits(page, '.pills .period-pill');
+      await shot(page, info, { name: c.name, browser: c.browser, lang: c.lang, settingsTitle: '', livesLabel: '' }, 'points-winflow');
+      const tap = page.locator('[data-overlay="ranking"] .ranking__tap');
+      await expect(tap).toBeEnabled({ timeout: 10_000 });
+      await tap.click();
+      const row = page.locator('[data-overlay="victory"] .victory__points');
+      await expect(row).toBeVisible({ timeout: 4000 });
+      await page.waitForTimeout(800);
+      expect(strip((await row.textContent()) ?? '')).toBe(strip(c.row.replace('{count}', shown)));
+      const fit = await row.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        return { l: r.left, r: r.right, w: window.innerWidth };
+      });
+      expect(fit.l).toBeGreaterThanOrEqual(16 - 0.5);
+      expect(fit.r).toBeLessThanOrEqual(fit.w - 16 + 0.5);
+      await noOverflow(page);
+      await noClipping(page);
+      await shot(page, info, { name: c.name, browser: c.browser, lang: c.lang, settingsTitle: '', livesLabel: '' }, 'points-victory');
+    });
+  });
+}

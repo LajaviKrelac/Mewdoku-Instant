@@ -1,7 +1,9 @@
 // Owner: C (Phase 2b; was game). newGame / restoreGame / toInProgress (04 §4.2, §7.2; 02 §15 restore steps 3–6) and the mode registry.
+// Phase 2c.1 (G1, fish-lives-spec §3.2.3, §10.8): the slot carries the attempt's level points, cat run
+// and scored rows; restoreGame takes them back exactly when consistent, else derives them.
 import { describe, expect, it } from 'vitest';
 import { cfg, mergeConfig } from '../../../src/app/config';
-import { countCats, newGame, regionsDoneMask, restoreGame, toInProgress } from '../../../src/game/factory';
+import { countCats, newGame, regionsDoneMask, restoreGame, slotPoints, toInProgress } from '../../../src/game/factory';
 import { fixedColorsFor, getMode, MODES, rulesFor } from '../../../src/game/modes';
 import { reduce } from '../../../src/game/reducer';
 import { encodeCells } from '../../../src/game/save';
@@ -30,6 +32,9 @@ describe('newGame', () => {
       elapsedMs: 0,
       openHint: null,
       moves: [],
+      levelPoints: 0,
+      catStreak: 0,
+      scoredRows: 0,
     });
     expect(g.cells).toEqual(new Uint8Array(25));
     expect(g.rules).toEqual(rulesFor('level'));
@@ -49,7 +54,7 @@ describe('newGame', () => {
 });
 
 describe('toInProgress / restoreGame', () => {
-  it('round-trips the board, hearts, revives, counters and timer; restores into READY', () => {
+  it('round-trips the board, hearts, revives, counters, timer and (2c.1) level points; restores into READY', () => {
     const s = run(playing(), [tap(cell(1, 1)), dbl(SOL5[0] as number), dbl(WRONG5[0] as number), { type: 'TICK', dtMs: 1234.4 }]).state;
     const slot = toInProgress(s, 999);
     expect(slot).toEqual({
@@ -63,11 +68,15 @@ describe('toInProgress / restoreGame', () => {
       kittiesUsed: 0,
       elapsedMs: 1234,
       savedAt: 999,
+      points: 576,
+      catStreak: 0,
+      scoredRows: 0b1,
     });
     const g = restoreGame(P5, slot);
     expect(g.status).toBe('ready');
     expect(g.cells).toEqual(s.cells);
     expect(g).toMatchObject({ hearts: 2, mistakes: 1, catsPlaced: 1, regionsDone: 1, elapsedMs: 1234, moves: [], openHint: null });
+    expect(g).toMatchObject({ levelPoints: 576, catStreak: 0, scoredRows: 0b1 });
     expect(reduce(g, { type: 'START' }).state.status).toBe('playing');
   });
 
@@ -130,6 +139,100 @@ describe('toInProgress / restoreGame', () => {
   });
 });
 
+describe('phase2c.1 §3.2.3: level points in the slot (restore exactly, else derive)', () => {
+  const C = (r: number) => dbl(SOL5[r] as number);
+  const M = (i: number) => dbl(WRONG5[i] as number);
+  /** The slot written after these actions (the same snapshot the session saves with the board). */
+  const saved = (actions: Parameters<typeof run>[1], puzzle = P5) => toInProgress(run(playing(puzzle), actions).state, 7);
+  const without = (slot: InProgressV2): InProgressV2 => {
+    const { points: _p, catStreak: _s, scoredRows: _r, ...rest } = slot;
+    return rest;
+  };
+
+  it('C C M C restores exactly (1 824, run 1) and the next cat adds 672 → 2 496', () => {
+    const slot = saved([C(0), C(1), M(0), C(2)]);
+    expect(slot).toMatchObject({ points: 1_824, catStreak: 1, scoredRows: 0b111 });
+    const g = restoreGame(P5, slot);
+    expect(g).toMatchObject({ levelPoints: 1_824, catStreak: 1, scoredRows: 0b111, mistakes: 1 });
+    const next = reduce(reduce(g, { type: 'START' }).state, C(3));
+    expect(next.state.levelPoints).toBe(2_496);
+    expect(next.events).toContainEqual({ type: 'POINTS', cell: SOL5[3], gained: 672, total: 2_496, streak: 2 });
+  });
+
+  it('a removed cat restores exactly too: its row stays scored, so putting it back adds nothing', () => {
+    const slot = saved([C(0), C(1), dbl(SOL5[1] as number)]); // remove row 1's cat
+    expect(slot).toMatchObject({ points: 1_248, catStreak: 2, scoredRows: 0b11 });
+    const g = reduce(restoreGame(P5, slot), { type: 'START' }).state;
+    expect(g).toMatchObject({ levelPoints: 1_248, catStreak: 2, catsPlaced: 1 });
+    const back = reduce(g, C(1));
+    expect(back.events.map((e) => e.type)).not.toContain('POINTS');
+    expect(reduce(back.state, C(2)).state.levelPoints).toBe(1_248 + 768);
+  });
+
+  it('a slot written before 2c.1 (no fields) derives them: exact without mistakes (runTotal(k), run k)', () => {
+    const g = restoreGame(P5, without(saved([C(0), C(1), C(2)])));
+    expect(g).toMatchObject({ levelPoints: 2_016, catStreak: 3, scoredRows: 0b111, catsPlaced: 3 });
+  });
+
+  it('… and with a mistake the lowest total those cats can have (k × 576) and run 0: a restore never inflates points', () => {
+    const g = restoreGame(P5, without(saved([C(0), C(1), M(0), C(2)])));
+    expect(g).toMatchObject({ levelPoints: 3 * 576, catStreak: 0, scoredRows: 0b111, mistakes: 1, hearts: 2 });
+    expect(reduce(reduce(g, { type: 'START' }).state, C(3)).state.levelPoints).toBe(3 * 576 + 576);
+  });
+
+  it('only some of the three fields present → derived (all three are needed)', () => {
+    const slot = saved([C(0), C(1)]);
+    const { catStreak: _s, ...partial } = slot;
+    expect(restoreGame(P5, { ...partial, points: 99 })).toMatchObject({ levelPoints: 1_248, catStreak: 2, scoredRows: 0b11 });
+  });
+
+  const exact = () => saved([C(0), C(1), M(0), C(2)]); // 1 824, run 1, rows 0–2, mistakes 1
+  const derivedWithMistake = { levelPoints: 3 * 576, catStreak: 0, scoredRows: 0b111 };
+  const BAD: { name: string; slot: () => InProgressV2; puzzle?: typeof P5 }[] = [
+    // Each bad slot fails only the named check (the other values would pass on their own).
+    { name: '(a) scoredRows ≥ 2ⁿ', slot: () => ({ ...exact(), scoredRows: 0b111 | (1 << 5), points: 2_304 }) },
+    { name: '(a) a row with a Cat is not scored', slot: () => ({ ...exact(), scoredRows: 0b011, points: 1_152 }) },
+    { name: '(b) catStreak > k', slot: () => ({ ...exact(), catStreak: 4 }) },
+    { name: '(c) points below runTotal(s) + (k − s) × first', slot: () => ({ ...exact(), points: 1_727 }) },
+    { name: '(c) points above runTotal(k)', slot: () => ({ ...exact(), points: 2_017 }) },
+    { name: '(c) points above runTotal(k − s) + runTotal(s) (no sequence reaches it)', slot: () => ({ ...exact(), points: 2_016 }) },
+    { name: 'a negative or fractional value', slot: () => ({ ...exact(), points: -1 }) },
+    { name: 'a non-number', slot: () => ({ ...exact(), catStreak: '1' as unknown as number }) },
+  ];
+
+  it.each(BAD)('$name → derived, the board kept (no RangeError)', ({ slot }) => {
+    const g = restoreGame(P5, slot());
+    expect(g).toMatchObject({ ...derivedWithMistake, catsPlaced: 3, mistakes: 1, status: 'ready' });
+  });
+
+  it('(a) a Given\'s row in scoredRows → derived; givens never score (P5G, row 2 given)', () => {
+    const slot = saved([C(0), C(1)], P5G);
+    expect(slot.scoredRows).toBe(0b11);
+    expect(restoreGame(P5G, slot)).toMatchObject({ levelPoints: 1_248, catStreak: 2, scoredRows: 0b11 });
+    const g = restoreGame(P5G, { ...slot, scoredRows: 0b111, points: 2_016, catStreak: 3 });
+    expect(g).toMatchObject({ levelPoints: 1_248, catStreak: 2, scoredRows: 0b11, catsPlaced: 3 });
+  });
+
+  it('(d) no mistake ⇒ the run is every scored cat and points = runTotal(k), else derived', () => {
+    const slot = saved([C(0), C(1), C(2)]);
+    expect(restoreGame(P5, slot)).toMatchObject({ levelPoints: 2_016, catStreak: 3 });
+    expect(restoreGame(P5, { ...slot, catStreak: 1, points: 1_728 })).toMatchObject({ levelPoints: 2_016, catStreak: 3 });
+    expect(restoreGame(P5, { ...slot, points: 2_000 })).toMatchObject({ levelPoints: 2_016, catStreak: 3 });
+  });
+
+  it('a mode that scores nothing restores 0 (consistency (c) forces 0)', () => {
+    const noLevel = rulesFor('level', mergeConfig({ levelPoints: { modes: ['daily'] } }));
+    const slot = saved([C(0), C(1)]);
+    expect(restoreGame(P5, slot, noLevel).levelPoints).toBe(0);
+    expect(slotPoints(P5, restoreGame(P5, slot).cells, slot, noLevel.points)).toEqual({ levelPoints: 0, catStreak: 2, scoredRows: 0b11 });
+  });
+
+  it('a full board restores its total for the victory (no reward twice is the session\'s rule)', () => {
+    const g = restoreGame(P5, toInProgress(wonState(), 1));
+    expect(g).toMatchObject({ status: 'won', levelPoints: 3_840, catStreak: 5, scoredRows: 0b11111 });
+  });
+});
+
 describe('regionsDoneMask / countCats', () => {
   it('count Cats and Givens only', () => {
     const cells = new Uint8Array(25);
@@ -143,8 +246,8 @@ describe('regionsDoneMask / countCats', () => {
 });
 
 describe('modes (02 §22 GameMode registry)', () => {
-  it('rules per mode from cfg: hearts 3, revive 1 / 1, solution model, no auto-X; tutorial without penalty', () => {
-    for (const id of ['tutorial', 'level', 'daily'] as ModeId[]) {
+  it('rules per mode from cfg: hearts 3, revive 1 / 1, solution model, no auto-X; tutorial without penalty; 2c.1 points', () => {
+    for (const id of ['tutorial', 'level', 'daily', 'event'] as ModeId[]) {
       expect(MODES[id].rules).toEqual({
         mistakeModel: 'solution',
         mistakePenalty: id !== 'tutorial',
@@ -152,6 +255,8 @@ describe('modes (02 §22 GameMode registry)', () => {
         heartsPerAttempt: 3,
         maxRevives: 1,
         heartsOnRevive: 1,
+        // phase2c.1 §3.2.1: what a correct cat is worth ({0, 0}: the tutorial scores nothing).
+        points: id === 'tutorial' ? { first: 0, step: 0 } : { first: 576, step: 96 },
       });
       expect(getMode(id).id).toBe(id);
       expect(Object.isFrozen(getMode(id))).toBe(true);
@@ -167,6 +272,9 @@ describe('modes (02 §22 GameMode registry)', () => {
   it('rulesFor reads a config variant', () => {
     const c = mergeConfig({ hearts: { perAttempt: 4 }, revive: { maxPerAttempt: 2, heartsRestored: 2 } });
     expect(rulesFor('daily', c)).toMatchObject({ heartsPerAttempt: 4, maxRevives: 2, heartsOnRevive: 2, mistakePenalty: true });
+    const pts = mergeConfig({ levelPoints: { firstIncrement: 10, step: 1, modes: ['level'] } });
+    expect(rulesFor('level', pts).points).toEqual({ first: 10, step: 1 });
+    expect(rulesFor('daily', pts).points).toEqual({ first: 0, step: 0 }); // dropped from levelPoints.modes
   });
 
   it('getMode throws on an unknown id; fixedColorsFor needs a matching board size', () => {

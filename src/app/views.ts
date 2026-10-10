@@ -1,7 +1,10 @@
 // Owner: C (Phase 2b). Phase 2c (G1): Home shows this period's leaderboard points (no fish pill), the
-// post-win panel shows the period board in every scored mode, the victory shows level points, the
-// perfect streak and the fish kept, and the personal records gain the period and streak rows
-// (docs/phase2c/fish-lives-spec.md §2.5–§2.8, §4.6).
+// post-win panel shows the period board in every scored mode, the victory shows level points and the
+// fish kept, and the personal records gain the period rows (docs/phase2c/fish-lives-spec.md §2.5–§2.8,
+// §4.6).
+// Phase 2c.1 (G1, §3.2.5, §4.6, §10.2–§10.3): the game view carries the attempt's running level
+// points (null hides the HUD counter: the tutorial, a mode outside levelPoints.modes), the victory
+// shows the level's total and no streak, and the period records show Total points (no streak row).
 // Selectors from AppState to the UI view models (UI modules define the view types; the app maps).
 // Phase 2b: the Home fish pill, event card and banner reserve; the game's event title; and the three
 // new selectors (C → B contract, CONTRACTS-2b §4.3): victory, ranking panel and event screen, plus the
@@ -152,6 +155,8 @@ export function selectGameView(state: AppState, ctx: ViewContext): GameView | nu
     hearts: game.hearts,
     maxHearts: game.rules.heartsPerAttempt,
     catsPlaced: game.catsPlaced,
+    // phase2c.1 §3.2.5: the attempt's running total; null hides the counter (a mode that scores nothing).
+    points: game.rules.points.first > 0 ? game.levelPoints : null,
     status: game.status,
     hints: save.stock.hints,
     kitties: save.stock.kitties,
@@ -190,6 +195,7 @@ export function boardKindOf(_mode: WinSummary['mode']): RankingBoardKind {
 /**
  * The victory screen's props for the win that just happened (phase2b §2.5, phase2c §2.7). The
  * callbacks are bound by the caller (session); this maps the data. No fish pill, no "+", no bonus.
+ * Phase 2c.1 §10.3: pointsEarned = the level's total when > 0 (counted or not), else null; no streak.
  */
 export type VictoryData = Omit<VictoryProps, 'now' | 'onPrimary' | 'onHome'>;
 export function selectVictoryView(state: AppState, ctx: ViewContext, win: WinSummary, opts: { readonly praise: number }, c: GameConfig = cfg): VictoryData {
@@ -231,9 +237,7 @@ export function selectVictoryView(state: AppState, ctx: ViewContext, win: WinSum
     praise: opts.praise,
     level,
     nextLevel: variant === 'level' && level !== null ? level + 1 : variant === 'tutorial' ? 2 : null,
-    pointsEarned: win.pointsEarned > 0 ? win.pointsEarned : null,
-    // "Perfect ×N" only after a perfect win that moved the streak (never after a mistake or a revive).
-    streak: win.streakUp && win.streak.current >= 1 ? win.streak.current : null,
+    pointsEarned: win.mode !== 'tutorial' && win.pointsEarned > 0 ? win.pointsEarned : null,
     // The kept-fish row: only when the win added leaderboard points (§2.7: hidden when G = 0).
     kept: p && p.gained > 0 ? { fish: win.kept, max: Math.max(win.maxKept, win.kept), gained: p.gained, total: p.total, kind: p.kind } : null,
     daily,
@@ -281,8 +285,9 @@ export interface RecordsInput {
 /**
  * The player's own records (§2.4 "Your records", §4.8): this result, the best time on this board size,
  * total points, levels solved, and for an event "7 of 21, total 1:12:04". Phase 2c §4.6, the period
- * board: this period's total, the best period, the perfect streak (and levels solved). Only facts
- * from the save.
+ * board: this period's total, the best period (and levels solved); phase2c.1 (D24): Total points
+ * (totalPoints, the lifetime points.total) instead of the retired perfect streak. Only facts from the
+ * save.
  */
 export function personalRecords(state: AppState, ctx: ViewContext, input: RecordsInput, c: GameConfig = cfg): PersonalRecordsView {
   const { save } = state;
@@ -307,12 +312,7 @@ export function personalRecords(state: AppState, ctx: ViewContext, input: Record
   const ev = input.event ?? null;
   const rec = ev ? eventRecord(save, ev.id) : null;
   const period =
-    input.board === 'period'
-      ? {
-          period: { kind: c.period.kind, total: periodTotal(save, ctx.now, c), best: save.period.bestTotal },
-          streak: { current: save.streak.current, best: save.streak.best },
-        }
-      : {};
+    input.board === 'period' ? { period: { kind: c.period.kind, total: periodTotal(save, ctx.now, c), best: save.period.bestTotal } } : {};
   return {
     board: input.board,
     thisMs: Math.max(0, Math.round(input.thisMs)),

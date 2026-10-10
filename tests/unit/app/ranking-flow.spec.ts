@@ -103,7 +103,6 @@ const records: PersonalRecordsView = {
   levelsSolved: 40,
   event: null,
   period: { kind: 'week', total: 42, best: 57 },
-  streak: { current: 2, best: 6 },
 };
 const ctx: ListContext = { records, myScore: { kind: 'fish', fish: 42 }, periodKey: WEEK };
 /** A band read as G3's provider returns it: each entry carries its board rank (phase2c §4.5). */

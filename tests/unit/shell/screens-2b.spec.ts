@@ -182,6 +182,7 @@ function gameView(over: Partial<GameView> = {}): GameView {
     fbSafeZone: false,
     reducedMotion: false,
     event: null,
+    points: null,
     ...over,
   };
 }

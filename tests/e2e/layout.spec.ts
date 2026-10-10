@@ -10,6 +10,11 @@
 // alone gets through the win flow (Enter on the panel, Enter on "Level N") and Settings.
 // Phase 2c (G1, §5.2): the web build has no shop (no Home "+", no Settings Shop row), so the
 // keyboard shop part became "Settings by keyboard shows no Shop row"; the FB shop is fbig.spec's (G3).
+// Phase 2c.1 (G1, fish-lives-spec §10.2, §10.8): on level 310 (12×12) with 11 cats and 11,616 points
+// (the widest cat counter and a 5-digit total) the cat counter, the points counter and the lives pill
+// never overlap and stay inside the pills row, with the points counter centred; during the win flow
+// the period counter (in the cat counter's place) never overlaps the points counter; the counter is
+// not focusable.
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,7 +22,8 @@ import { expect, test, type Page } from '@playwright/test';
 import type { E2EHooks } from '../../src/app/boot';
 import type { LevelPack } from '../../src/engine/types';
 import { defaults } from '../../src/game/save';
-import type { SaveData } from '../../src/game/types';
+import { pointsRuleFor, runTotal } from '../../src/game/scoring';
+import type { InProgressV2, SaveData } from '../../src/game/types';
 
 type TestWindow = Window & { __mewdoku?: E2EHooks };
 
@@ -360,4 +366,112 @@ test('keyboard only: focus moves into every new screen (event card → event, ev
   // And Tab goes on from there inside Home, not from the top of the document.
   await page.keyboard.press('Tab');
   expect(await focusIn('.screen--home')).toBe(true);
+});
+
+// ── Phase 2c.1: the level-points counter in the pills row (§10.2 D21, §10.3) ──
+
+/** Level 310 (12×12) from the bundled pack: its solution columns (base 36, one per row). */
+function level310(): { level: number; n: number; sol: number[] } {
+  for (let k = 0; k <= 9; k++) {
+    const pack = JSON.parse(readFileSync(resolve(LEVELS_DIR, `pack-${String(k).padStart(3, '0')}.json`), 'utf8')) as LevelPack;
+    const idx = pack.levels.findIndex((r, j) => (r.i ?? pack.first + j) === 310);
+    const rec = pack.levels[idx];
+    if (rec) return { level: 310, n: rec.n, sol: Array.from(rec.s, (ch) => parseInt(ch, 36)) };
+  }
+  throw new Error('level 310 not shipped');
+}
+
+type Rect = { left: number; right: number; top: number; bottom: number };
+
+test('the pills row on a 12×12 board with 11 cats and 11,616 points: three disjoint pills, the points counter centred, not focusable', async ({ page }) => {
+  const { level, n, sol } = level310();
+  expect(n).toBe(12);
+  const rule = pointsRuleFor('level');
+  const cells = Array.from({ length: n * n }, (_, i) => (Math.floor(i / n) < 11 && sol[Math.floor(i / n)] === i % n ? '2' : '0')).join('');
+  const slot: InProgressV2 = {
+    id: `L${level}`,
+    mode: 'level',
+    cells,
+    hearts: 3,
+    revivesUsed: 0,
+    mistakes: 0,
+    hintsUsed: 0,
+    kittiesUsed: 0,
+    elapsedMs: 60_000,
+    savedAt: Date.now(),
+    points: runTotal(11, rule),
+    catStreak: 11,
+    scoredRows: (1 << 11) - 1,
+  };
+  expect(slot.points).toBe(11_616);
+  await boot(page, { ...defaults(Date.now()), tutorialDone: true, progress: { level, completed: level - 1, best: {} }, inProgress: { level: slot, daily: null, event: null } });
+  await page.locator('.home__play').click();
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
+  const pts = page.locator('.pills .points-pill');
+  await expect(pts).toHaveAttribute('aria-label', 'Level points: 11,616');
+  await expect(page.locator('.pills .pill--cats')).toContainText('11');
+  await noHorizontalOverflow(page);
+
+  const rects = await page.evaluate(() => {
+    const r = (q: string): Rect | null => {
+      const e = document.querySelector(q);
+      if (!e) return null;
+      const b = e.getBoundingClientRect();
+      return { left: b.left, right: b.right, top: b.top, bottom: b.bottom };
+    };
+    return { row: r('.pills'), cats: r('.pills .pill--cats'), points: r('.pills .points-pill'), lives: r('.pills .pill--lives') };
+  });
+  const { row, cats, points, lives } = rects;
+  if (!row || !cats || !points || !lives) throw new Error(`missing a pill: ${JSON.stringify(rects)}`);
+  // Left to right in LTR: cats, points, lives, with no overlap, all inside the row.
+  expect(cats.right).toBeLessThanOrEqual(points.left + 0.5);
+  expect(points.right).toBeLessThanOrEqual(lives.left + 0.5);
+  for (const [name, b] of Object.entries({ cats, points, lives })) {
+    expect(b.left, name).toBeGreaterThanOrEqual(row.left - 0.5);
+    expect(b.right, name).toBeLessThanOrEqual(row.right + 0.5);
+  }
+  expect(Math.abs((points.left + points.right) / 2 - (row.left + row.right) / 2)).toBeLessThanOrEqual(1);
+
+  // Not focusable (§10.2 A11y): no tab stop on the counter or inside it, so the Tab order is unchanged.
+  const focusable = await page.evaluate(() => {
+    const el = document.querySelector('.pills .points-pill') as HTMLElement | null;
+    if (!el) return -1;
+    const inside = el.querySelectorAll('button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])').length;
+    return inside + (el.tabIndex >= 0 ? 1 : 0);
+  });
+  expect(focusable).toBe(0);
+
+  // The win (the 12th cat): 13,248, the largest level total. From the period counter's beat until the
+  // scrim, the period counter (in the cat counter's place) never overlaps the points counter or the lives.
+  await page.locator('.cell').nth(11 * n + (sol[11] as number)).dblclick();
+  await expect(pts).toHaveAttribute('aria-label', 'Level points: 13,248');
+  const bad = await page.evaluate(async () => {
+    const t0 = performance.now();
+    const out: string[] = [];
+    let seen = 0;
+    const box = (q: string): DOMRect | null => {
+      const e = document.querySelector(q) as HTMLElement | null;
+      return e && !e.hidden && e.getClientRects().length ? e.getBoundingClientRect() : null;
+    };
+    await new Promise<void>((done) => {
+      const step = (): void => {
+        const t = performance.now() - t0;
+        const period = box('.pills .period-pill[data-in-game]');
+        const p = box('.pills .points-pill');
+        const l = box('.pills .pill--lives');
+        if (period && p) {
+          seen++;
+          if (period.right > p.left + 0.5 && period.left < p.right - 0.5) out.push(`t=${Math.round(t)} period [${period.left}, ${period.right}] × points [${p.left}, ${p.right}]`);
+          if (l && period.right > l.left + 0.5 && period.left < l.right - 0.5) out.push(`t=${Math.round(t)} period × lives`);
+        }
+        const scrim = document.querySelector('.screen--game .game__scrim') as HTMLElement | null;
+        if (t > 4600 || (scrim && !scrim.hidden)) done();
+        else requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    });
+    return { out, seen };
+  });
+  expect(bad.out).toEqual([]);
+  expect(bad.seen).toBeGreaterThan(0);
 });

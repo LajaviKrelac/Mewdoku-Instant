@@ -1,8 +1,10 @@
 // Owner: G2 (Phase 2c)
 // Phase 2c English strings (docs/phase2c/fish-lives-spec.md Appendix A.2): the leaderboard period
-// (the fish kept at each win add up per UTC day, week or month), the perfect streak and the lives
-// as fish. Our own copy (06 §3). "fish" is a life and a leaderboard point, never a currency word and
-// never "golden fish" (docs/i18n/glossary.md). Wired into ../en.ts.
+// (the fish kept at each win add up per UTC day, week or month) and the lives as fish. Phase 2c.1
+// (§10.7): the level points per cat (the HUD counter, the victory total, the screen-reader line and the
+// How to play note); the perfect streak's keys went (victory.streak*, rank.records.streak*).
+// Our own copy (06 §3). "fish" is a life and a leaderboard point, never a currency word and never
+// "golden fish"; "points" are always level points (docs/i18n/glossary.md). Wired into ../en.ts.
 // `{kind}` keys exist for 'day', 'week' and 'month' (config PeriodKind); callers map the kind to the
 // literal key with a switch (src/ui/period-text.ts), never with a template string.
 // Same conventions as en.ts: {name} placeholders, `.one` / `.other` plural pairs.
@@ -32,9 +34,6 @@ export const enUi2c = {
   // {total} is the whole period.total.{kind} text ("This week: 42").
   'rank.sub.period.one': '+{count} fish · {total}',
   'rank.sub.period.other': '+{count} fish · {total}',
-  'rank.records.streak': 'Perfect streak',
-  // G2 addition to Appendix A: the streak row's value when the best streak is longer (§4.6).
-  'rank.records.streakBest': '{count} (best {best})',
 
   // ── Win flow and victory (§1.6, §2.7) ──────────────────────────────────────
   'a11y.fishKept.day.one': 'You kept {count} fish. Your total today: {total}.',
@@ -43,15 +42,27 @@ export const enUi2c = {
   'a11y.fishKept.week.other': 'You kept {count} fish. Your total this week: {total}.',
   'a11y.fishKept.month.one': 'You kept {count} fish. Your total this month: {total}.',
   'a11y.fishKept.month.other': 'You kept {count} fish. Your total this month: {total}.',
-  'victory.streak': 'Perfect ×{count}',
-  'victory.streak.a11y.one': '{count} perfect win in a row',
-  'victory.streak.a11y.other': '{count} perfect wins in a row',
 
   // ── How to play: the points note (§1.5) ────────────────────────────────────
   'howto.points.day':
-    'The fish you keep when you solve a puzzle go to the daily ranking, which starts again every day at 00:00 UTC. Solve without a mistake to build a perfect streak and earn more points.',
+    'The fish you keep when you solve a puzzle go to the daily ranking, which starts again every day at 00:00 UTC.',
   'howto.points.week':
-    'The fish you keep when you solve a puzzle go to the weekly ranking, which starts again every Monday at 00:00 UTC. Solve without a mistake to build a perfect streak and earn more points.',
+    'The fish you keep when you solve a puzzle go to the weekly ranking, which starts again every Monday at 00:00 UTC.',
   'howto.points.month':
-    'The fish you keep when you solve a puzzle go to the monthly ranking, which starts again on the 1st of every month at 00:00 UTC. Solve without a mistake to build a perfect streak and earn more points.',
+    'The fish you keep when you solve a puzzle go to the monthly ranking, which starts again on the 1st of every month at 00:00 UTC.',
+
+  // ── Phase 2c.1: level points per cat (§10.7) ───────────────────────────────
+  // "points" are always LEVEL points: earned per cat inside one level, 0 at every level and Retry.
+  // The leaderboard's unit stays "fish". {count} is the number, already formatted ("2,016").
+  // The HUD counter's screen-reader label (§10.2); never shown.
+  'game.points.a11y': 'Level points: {count}',
+  // Appended to a scoring cat's announcement: "Cat placed. 3 of 8. 2,016 points." (§10.4).
+  'a11y.points.one': '{count} point.',
+  'a11y.points.other': '{count} points.',
+  // The victory's points row: the level's total ("7,296 points", §10.3).
+  'points.count.one': '{count} point',
+  'points.count.other': '{count} points',
+  // How to play: a note with icon-points after the period note.
+  'howto.levelPoints':
+    'Every cat you find earns points, and each cat you find in a row without a mistake earns more than the one before. A mistake never takes points away, but the next cat starts the count again. Cats placed by a hint or the kitty count too.',
 } as const;

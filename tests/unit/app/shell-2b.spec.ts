@@ -317,7 +317,9 @@ describe('shell: shop, hub, settings rows (§5.5, §6.8, §8.5; phase2c §5.2, �
     expect(p?.list.kind).toBe('records');
     if (p?.list.kind === 'records') {
       // eventStart(LANTERN) + 1 h = Friday 2026-11-13: this week is 2026-11-09.
-      expect(p.list.records).toMatchObject({ board: 'period', period: { kind: 'week', total: 12, best: 30 }, streak: { current: 2, best: 5 } });
+      // 2c.1 (D24): Total points (the lifetime points.total) instead of the retired perfect streak.
+      expect(p.list.records).toMatchObject({ board: 'period', period: { kind: 'week', total: 12, best: 30 }, totalPoints: 0 });
+      expect(p.list.records).not.toHaveProperty('streak');
     }
     p?.onTab('event');
     await flush(h);

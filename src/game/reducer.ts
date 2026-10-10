@@ -1,7 +1,11 @@
 // Owner: C (Phase 2b; was game)
 // Pure reducer (02 §6.2, §7.3, §8; status × action matrix in 04 §4.2).
 // An action not allowed in the current status returns { state: s, events: [] }.
+// Phase 2c.1 (G1, fish-lives-spec §3.2.2): the attempt's level points. Every correct cat (player,
+// hint, kitty) in a row that has not scored yet adds catIncrement(catStreak + 1) and emits POINTS
+// right after its CAT_PLACED; a MISTAKE (with the penalty) resets the run; RETRY starts at 0.
 import { newGame } from './factory';
+import { catIncrement } from './scoring';
 import {
   CellState,
   type Action,
@@ -103,12 +107,27 @@ function withMarks(s: GameState, list: CellIndex[], to: 0 | 1, t: number, events
   return { ...s, cells, moves: [...s.moves, { t, kind: marking ? 'mark' : 'unmark', cells: list }] };
 }
 
-/** Places a correct cat (02 §8 step 1): CAT_PLACED, REGION_DONE, and WON when the board is full. */
+/**
+ * Places a correct cat (02 §8 step 1): CAT_PLACED, then (phase2c.1 §3.2.2) POINTS when the cat
+ * scores, REGION_DONE, and WON when the board is full. A cat scores when its row has not scored in
+ * this attempt (D16: a cat put back after a removal adds nothing and leaves the run alone): the run
+ * becomes s = catStreak + 1, the row's bit is set and levelPoints += catIncrement(s, rules.points);
+ * POINTS is emitted only when that increment is > 0 (never with the {0, 0} rule of the tutorial).
+ */
 function withCat(s: GameState, cell: CellIndex, source: CatSource, t: number, events: GameEvent[]): GameState {
   const cells = s.cells.slice();
   cells[cell] = CellState.Cat;
   const catsPlaced = s.catsPlaced + 1;
   events.push({ type: 'CAT_PLACED', cell, source });
+  const rowBit = 1 << Math.floor(cell / s.puzzle.n);
+  let { levelPoints, catStreak, scoredRows } = s;
+  if ((scoredRows & rowBit) === 0) {
+    catStreak += 1;
+    scoredRows |= rowBit;
+    const gained = catIncrement(catStreak, s.rules.points);
+    levelPoints += gained;
+    if (gained > 0) events.push({ type: 'POINTS', cell, gained, total: levelPoints, streak: catStreak });
+  }
   const region = s.puzzle.regions[cell] ?? 0;
   const bit = 1 << region;
   let regionsDone = s.regionsDone;
@@ -125,6 +144,9 @@ function withCat(s: GameState, cell: CellIndex, source: CatSource, t: number, ev
     regionsDone,
     status: won ? 'won' : s.status,
     moves: [...s.moves, { t, kind: 'cat', cell, source }],
+    levelPoints,
+    catStreak,
+    scoredRows,
   };
 }
 
@@ -149,7 +171,11 @@ function doubleTap(s: GameState, cell: CellIndex, t: number): ReduceResult {
   return wrongAttempt(s, cell, t);
 }
 
-/** 02 §6.2: a double-tap on a placed cat removes it, with no penalty. */
+/**
+ * 02 §6.2: a double-tap on a placed cat removes it, with no penalty. Phase 2c.1 (D15): the level
+ * points, the cat run and the scored rows are unchanged (removing is not a mistake; points are never
+ * taken back; the row keeps its bit, so putting the cat back scores nothing).
+ */
 function removeCat(s: GameState, cell: CellIndex, t: number): ReduceResult {
   const cells = s.cells.slice();
   cells[cell] = CellState.Empty;
@@ -166,7 +192,11 @@ function removeCat(s: GameState, cell: CellIndex, t: number): ReduceResult {
   };
 }
 
-/** 02 §8 step 2. With rules.mistakePenalty = false (tutorial) a wrong attempt only pulses. */
+/**
+ * 02 §8 step 2. With rules.mistakePenalty = false (tutorial) a wrong attempt only pulses. Phase 2c.1
+ * §3.2.2 (F5.3): a mistake takes no points away and resets the cat run (catStreak = 0), so the next
+ * correct cat adds firstIncrement again.
+ */
 function wrongAttempt(s: GameState, cell: CellIndex, t: number): ReduceResult {
   if (!s.rules.mistakePenalty) return pulse(s, cell);
   const cells = s.cells.slice();
@@ -181,6 +211,7 @@ function wrongAttempt(s: GameState, cell: CellIndex, t: number): ReduceResult {
       cells,
       hearts,
       mistakes: s.mistakes + 1,
+      catStreak: 0,
       status: lost ? 'lost' : s.status,
       moves: [...s.moves, { t, kind: 'wrong', cell }],
     },
@@ -246,7 +277,11 @@ function kitty(s: GameState, cell: CellIndex, t: number): ReduceResult {
   return { state: withCat(base, cell, 'kitty', t, events), events };
 }
 
-/** 02 §8 / §10.2: hearts = heartsOnRevive, board kept (Wrong cells, marks, cats, timer). */
+/**
+ * 02 §8 / §10.2: hearts = heartsOnRevive, board kept (Wrong cells, marks, cats, timer). Phase 2c.1:
+ * the same attempt, so the level points stay (the run is already 0 after the mistake that emptied
+ * the lives).
+ */
 function revive(s: GameState, t: number): ReduceResult {
   if (!canRevive(s)) return none(s);
   return {

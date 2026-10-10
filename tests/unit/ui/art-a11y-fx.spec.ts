@@ -2,6 +2,7 @@
 // palette helpers and the board cell's X underlay (phase2b §1.5–§1.7, §1.12, §2.9, §4.4).
 // Phase 2c (fish-lives-spec §1.2): icon-fish-empty (one 30 % outline, a pale wash, no eye); the heart
 // icons and the heart clip paths are gone (only the colour-pattern glyph 9 is a heart).
+// Phase 2c.1 (§10.2): icon-points, our level-points sparkle (gold fill, ink outline, decorative).
 // phase2b F0 split: the fx and a11y cases moved to fx-a11y.spec.ts (B).
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cfg } from '../../../src/app/config';
@@ -33,6 +34,8 @@ describe('sprite', () => {
     'icon-fish', 'icon-plus', 'icon-shop', 'icon-globe', 'icon-crown', 'icon-users', 'cat-ear-flick',
     // Phase 2c §1.2
     'icon-fish-empty',
+    // Phase 2c.1 §10.2
+    'icon-points',
   ];
 
   it('mounts once and defines every symbol; the heart icons and clip paths are gone (Phase 2c)', () => {
@@ -46,6 +49,31 @@ describe('sprite', () => {
     for (const gone of ['icon-heart', 'icon-heart-empty', 'clip-heart-l', 'clip-heart-r']) expect(sprite.querySelector(`[id="${gone}"]`), gone).toBeNull();
     // The colour-pattern glyph 9 is still a heart shape (a pattern, not a life).
     expect(sprite.querySelector('symbol[id="glyph-9"] path')).not.toBeNull();
+  });
+
+  it('icon-points (2c.1 §10.2): a four-point sparkle filled with --icon-fill and outlined in currentColor, plus a small solid sparkle; decorative', () => {
+    mountSprite();
+    const sym = document.querySelector('symbol[id="icon-points"]') as Element;
+    expect(sym.getAttribute('viewBox')).toBe('0 0 24 24');
+    const paths = Array.from(sym.querySelectorAll('path'));
+    expect(paths).toHaveLength(2);
+    const [star, small] = paths as unknown as [Element, Element];
+    // The big sparkle: like icon-trophy, a gold wash (--icon-fill) under the usual 2-unit ink line.
+    expect(star.getAttribute('style')).toBe('fill:var(--icon-fill,none)');
+    expect(star.getAttribute('stroke')).toBe('currentColor');
+    expect(star.getAttribute('stroke-width')).toBe('2');
+    expect(star.getAttribute('stroke-linejoin')).toBe('round');
+    // Four points: the path's extreme coordinates stay on the 24 grid with room for the stroke.
+    const nums = (star.getAttribute('d') ?? '').match(/-?\d+(\.\d+)?/g)?.map(Number) ?? [];
+    expect(Math.min(...nums)).toBeGreaterThanOrEqual(1);
+    expect(Math.max(...nums)).toBeLessThanOrEqual(23);
+    expect(small.getAttribute('fill')).toBe('currentColor');
+    // Never a heart, a coin or a fish: no circle, no use of the fish body.
+    expect(sym.querySelector('circle')).toBeNull();
+    expect(sym.innerHTML).not.toContain(FISH_BODY);
+    const svg = icon('icon-points', { class: 'points-pill__icon' });
+    expect(svg.getAttribute('aria-hidden')).toBe('true');
+    expect(svg.getAttribute('class')).toBe('icon icon-points points-pill__icon');
   });
 
   it('icon-fish-empty (§1.2): the fish silhouette as one 30 % ink outline around a pale wash; no eye, sheen or band', () => {

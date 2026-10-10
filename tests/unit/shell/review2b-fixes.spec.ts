@@ -118,6 +118,7 @@ function gameView(over: Partial<GameView> = {}): GameView {
     fbSafeZone: false,
     reducedMotion: false,
     event: null,
+    points: null,
     ...over,
   };
 }
@@ -144,7 +145,6 @@ function victoryProps(over: Partial<VictoryProps> = {}): VictoryProps {
     level: 37,
     nextLevel: 38,
     pointsEarned: 55,
-    streak: 1,
     kept: { fish: 3, max: 3, gained: 3, total: 42, kind: 'week' },
     daily: null,
     event: null,
@@ -460,10 +460,15 @@ describe('arrow keys follow the visual order in right-to-left layouts (A11Y-HUB-
 // ─────────────────────────────── I18N-TEXT-2 / UX-8 ───────────────────────────────
 
 describe('the top-bar title keeps its " · N" suffix (I18N-TEXT-2, UX-8)', () => {
-  it('splitTitle splits at the last " · "', () => {
+  it('splitTitle splits at the last " · ", else before a trailing level number (2c.1 integration, N1)', () => {
     expect(splitTitle('Progulka s fonaryami · 3')).toEqual({ name: 'Progulka s fonaryami', suffix: ' · 3' });
     expect(splitTitle('Daily · Tue 6 Oct')).toEqual({ name: 'Daily', suffix: ' · Tue 6 Oct' });
-    expect(splitTitle('Level 37')).toEqual({ name: 'Level 37', suffix: '' });
+    expect(splitTitle('Level 37')).toEqual({ name: 'Level', suffix: ' 37' });
+    // The Arabic level title with its placeholder's bidi isolates: the number never shrinks.
+    expect(splitTitle('المستوى \u2068310\u2069')).toEqual({ name: 'المستوى', suffix: ' \u2068310\u2069' });
+    // No space before the number (zh-Hans "第38关"), or no number: one shrinking name.
+    expect(splitTitle('第38关')).toEqual({ name: '第38关', suffix: '' });
+    expect(splitTitle('Level')).toEqual({ name: 'Level', suffix: '' });
   });
 
   it('renders a shrinking name and a separate suffix; the h1 reads the whole title', () => {
@@ -471,7 +476,11 @@ describe('the top-bar title keeps its " · N" suffix (I18N-TEXT-2, UX-8)', () =>
     expect(q(bar.el, '.top-bar__text').textContent).toBe('Lantern Walk · 13');
     expect(q(bar.el, '.top-bar__name').textContent).toBe('Lantern Walk');
     expect(q(bar.el, '.top-bar__suffix').textContent).toBe(' · 13');
-    bar.update({ title: 'Level 38', hard: false, showHome: true, showSettings: true, showTrophy: false, fbSafeZone: false });
+    bar.update({ title: 'Level 38', hard: true, showHome: true, showSettings: true, showTrophy: false, fbSafeZone: false });
+    expect(q(bar.el, '.top-bar__text').textContent).toBe('Level 38');
+    expect(q(bar.el, '.top-bar__suffix').textContent).toBe(' 38');
+    expect(q(bar.el, '.top-bar__suffix').hidden).toBe(false);
+    bar.update({ title: '第38关', hard: false, showHome: true, showSettings: true, showTrophy: false, fbSafeZone: false });
     expect(q(bar.el, '.top-bar__suffix').hidden).toBe(true);
   });
 });

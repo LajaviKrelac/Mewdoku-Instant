@@ -1,7 +1,9 @@
 // Owner: C (Phase 2b)
 // GameMode registry (02 §22 Phase 3 hook): rules flags, save slot, helper charging, win flow.
+// Phase 2c.1 (G1): RuleFlags.points, what a correct cat is worth in the mode (fish-lives-spec §3.2.1).
 import { cfg, type GameConfig } from '../app/config';
 import type { Puzzle } from '../engine/types';
+import { pointsRuleFor } from './scoring';
 import { TUTORIAL_COLORS } from './tutorial';
 import type { ModeId, RuleFlags } from './types';
 
@@ -31,7 +33,10 @@ export interface GameMode {
   readonly homeButton: boolean;
 }
 
-/** RuleFlags for a mode from cfg (hearts 3, revive 1/1; tutorial: mistakePenalty false). */
+/**
+ * RuleFlags for a mode from cfg (hearts 3, revive 1/1; tutorial: mistakePenalty false). Phase 2c.1:
+ * `points` = pointsRuleFor(id) ({576, 96} in levelPoints.modes, {0, 0} for the tutorial).
+ */
 export function rulesFor(id: ModeId, c: GameConfig = cfg): RuleFlags {
   return Object.freeze({
     mistakeModel: 'solution',
@@ -40,6 +45,7 @@ export function rulesFor(id: ModeId, c: GameConfig = cfg): RuleFlags {
     heartsPerAttempt: c.hearts.perAttempt,
     maxRevives: c.revive.maxPerAttempt,
     heartsOnRevive: c.revive.heartsRestored,
+    points: pointsRuleFor(id, c),
   });
 }
 

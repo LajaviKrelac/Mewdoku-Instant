@@ -2,6 +2,8 @@
 // Run `npx vite --port 5182 --strictPort` and open the index (no view) for the list.
 // Options: &rm=1 (reduced motion), &fb=1 (FB safe zone), &banner=1 (banner reserve), &n=<size>,
 // &kept=1|2|3 (fish kept at the win).
+// Phase 2c.1 (lead, I-1): the level-points counter (`game-points` plays three scoring cats and a
+// mistake), level totals on the victory fixtures, no perfect streak.
 // The `win` view plays the Phase 2c §2.2 timeline the way the app's win flow drives it (glow, the
 // period counter, the KEPT fish lifting off the lives pill and flying to it, "+N", scrim, ranking
 // panel, victory screen), so frames can be captured at any t.
@@ -22,6 +24,7 @@ import eventsJson from '../src/data/events/events.json';
 import { cfg } from '../src/app/config';
 import { panelAt } from '../src/app/win-flow';
 import type { EventDef } from '../src/game/events';
+import { pointsRuleFor, runTotal } from '../src/game/scoring';
 import { CellState } from '../src/game/types';
 import { setInert, trapFocus } from '../src/ui/a11y/focus-trap';
 import { mountSprite } from '../src/ui/art/sprite';
@@ -167,13 +170,28 @@ const RECORDS: RankingListState = {
     thisMs: 134_000,
     n: 8,
     bestSizeMs: 118_000,
-    totalPoints: 1240,
+    totalPoints: 186_624,
     levelsSolved: 37,
     event: null,
     period: { kind: 'week', total: 42, best: 57 },
-    streak: { current: 4, best: 9 },
   },
 };
+
+/**
+ * Phase 2c.1 §3.1: a level's total for n cats with `mistakes` resets spread evenly (each run of k
+ * cats in a row scores runTotal(k)); 0 mistakes is the unbroken run (8 cats: 7 296).
+ */
+function levelTotal(n: number, mistakes = 0): number {
+  const rule = pointsRuleFor('level');
+  let total = 0;
+  let left = n;
+  for (let runs = mistakes + 1; runs > 0; runs--) {
+    const k = Math.ceil(left / runs);
+    total += runTotal(k, rule);
+    left -= k;
+  }
+  return total;
+}
 
 function victoryProps(over: Partial<VictoryProps> = {}): VictoryProps {
   return {
@@ -181,8 +199,7 @@ function victoryProps(over: Partial<VictoryProps> = {}): VictoryProps {
     praise: 1,
     level: 37,
     nextLevel: 38,
-    pointsEarned: 120,
-    streak: 4,
+    pointsEarned: levelTotal(8),
     kept: { fish: 3, max: 3, gained: 3, total: 42, kind: 'week' },
     daily: null,
     event: null,
@@ -202,7 +219,8 @@ function victoryProps(over: Partial<VictoryProps> = {}): VictoryProps {
 function winFlow(level: number, opts: { kept: number; tutorial: boolean }): void {
   const b = solved(level);
   const kept = opts.tutorial ? 3 : Math.max(1, Math.min(3, Math.floor(opts.kept)));
-  const g = game(gameView(b, { status: 'won', inputLocked: true, fbSafeZone: fb, reducedMotion: reduced, chromeLocked: true, hearts: kept }));
+  const pts = opts.tutorial ? null : levelTotal(b.puzzle.n, 3 - kept);
+  const g = game(gameView(b, { status: 'won', inputLocked: true, fbSafeZone: fb, reducedMotion: reduced, chromeLocked: true, hearts: kept, points: pts }));
   const W = cfg.fx.win;
   const before = 39;
   const total = before + kept;
@@ -277,8 +295,7 @@ function winFlow(level: number, opts: { kept: number; tutorial: boolean }): void
         level,
         nextLevel: opts.tutorial ? 2 : level + 1,
         variant: opts.tutorial ? 'tutorial' : 'level',
-        pointsEarned: opts.tutorial ? null : kept === 3 ? 120 : 80,
-        streak: opts.tutorial || kept < 3 ? null : 4,
+        pointsEarned: pts,
         kept: opts.tutorial ? null : { fish: kept, max: 3, gained: kept, total, kind: 'week' },
       }),
     );
@@ -389,6 +406,22 @@ const VIEWS: Record<string, () => void> = {
   win: () => winFlow(Number(q.get('level') ?? 37), { kept: Number(q.get('kept') ?? 3), tutorial: false }),
   'win-kept-1': () => winFlow(40, { kept: 1, tutorial: false }),
   'win-tutorial': () => winFlow(1, { kept: 3, tutorial: true }),
+  // Phase 2c.1 §10.2: two scoring cats (+672, +768), a mistake (nothing on the counter), then +576.
+  'game-points': () => {
+    const b1 = midGame(37, 0, [0]);
+    const n = b1.puzzle.n;
+    const sol = (row: number): number => row * n + (b1.puzzle.solution[row] ?? 0);
+    const g = game(gameView(b1, { fbSafeZone: fb, reducedMotion: reduced, points: 576 }));
+    const step = (ms: number, b: ReturnType<typeof midGame>, over: Partial<GameView>, ev?: Parameters<GameScreen['playEvent']>[0]): void =>
+      void setTimeout(() => {
+        g.update(gameView(b, { reducedMotion: reduced, ...over }));
+        if (ev) g.playEvent(ev);
+      }, ms);
+    step(900, midGame(37, 0, [0, 3]), { points: 1248 }, { type: 'POINTS', cell: sol(3), gained: 672, total: 1248, streak: 2 });
+    step(2100, midGame(37, 0, [0, 3, 5]), { points: 2016 }, { type: 'POINTS', cell: sol(5), gained: 768, total: 2016, streak: 3 });
+    step(3300, midGame(37, 1, [0, 3, 5]), { points: 2016, hearts: 2 }, { type: 'MISTAKE', cell: 5, heartsLeft: 2 } as never);
+    step(4500, midGame(37, 1, [0, 3, 5, 1]), { points: 2592, hearts: 2 }, { type: 'POINTS', cell: sol(1), gained: 576, total: 2592, streak: 1 });
+  },
   'fish-loss': () => {
     const b = midGame(37, 1);
     const g = game(gameView(b, { fbSafeZone: fb, reducedMotion: reduced }));
@@ -446,19 +479,20 @@ const VIEWS: Record<string, () => void> = {
     openOverlay(createVictoryScreen(), victoryProps());
   },
   'victory-hard': () => {
-    game(gameView(solved(40), { status: 'won', inputLocked: true }));
-    openOverlay(createVictoryScreen(), victoryProps({ level: 40, nextLevel: 41, pointsEarned: 200, streak: null, kept: { fish: 2, max: 3, gained: 2, total: 41, kind: 'week' } }));
+    const pts = levelTotal(solved(40).puzzle.n, 1); // one mistake: 2 fish kept
+    game(gameView(solved(40), { status: 'won', inputLocked: true, hearts: 2, points: pts }));
+    openOverlay(createVictoryScreen(), victoryProps({ level: 40, nextLevel: 41, pointsEarned: pts, kept: { fish: 2, max: 3, gained: 2, total: 41, kind: 'week' } }));
   },
   'victory-daily': () => {
-    game(gameView(solved(80), { mode: 'daily', level: null, dateKey: '2026-10-06', status: 'won', inputLocked: true }));
+    const pts = levelTotal(solved(80).puzzle.n, 1); // one mistake: 2 fish kept
+    game(gameView(solved(80), { mode: 'daily', level: null, dateKey: '2026-10-06', status: 'won', inputLocked: true, hearts: 2, points: pts }));
     openOverlay(
       createVictoryScreen(),
       victoryProps({
         variant: 'daily',
         level: null,
         nextLevel: null,
-        pointsEarned: 80,
-        streak: null,
+        pointsEarned: pts,
         kept: { fish: 2, max: 3, gained: 2, total: 44, kind: 'week' },
         daily: { dateKey: '2026-10-06', ms: 252_000, mistakes: 1, hints: 0, kitties: 0, nextPuzzleAt: Date.now() + (7 * 60 + 48) * 60_000 },
       }),
@@ -472,8 +506,7 @@ const VIEWS: Record<string, () => void> = {
         variant: 'event',
         level: null,
         nextLevel: null,
-        pointsEarned: 140,
-        streak: 5,
+        pointsEarned: levelTotal(solved(37).puzzle.n),
         kept: { fish: 3, max: 3, gained: 3, total: 45, kind: 'week' },
         event: { nameKey: lantern.nameKey, index: 6, total: 21, solvedBefore: 6, solvedAfter: 7, reward: { hints: 2 }, last: false },
       }),
@@ -481,11 +514,11 @@ const VIEWS: Record<string, () => void> = {
   },
   'victory-tutorial': () => {
     game(gameView(solved(1), { mode: 'tutorial', status: 'won', inputLocked: true }));
-    openOverlay(createVictoryScreen(), victoryProps({ variant: 'tutorial', level: 1, nextLevel: 2, pointsEarned: null, streak: null, kept: null }));
+    openOverlay(createVictoryScreen(), victoryProps({ variant: 'tutorial', level: 1, nextLevel: 2, pointsEarned: null, kept: null }));
   },
   'victory-replay': () => {
     game(gameView(solved(1), { mode: 'tutorial', status: 'won', inputLocked: true }));
-    openOverlay(createVictoryScreen(), victoryProps({ variant: 'tutorial_replay', level: 1, nextLevel: null, pointsEarned: null, streak: null, kept: null }));
+    openOverlay(createVictoryScreen(), victoryProps({ variant: 'tutorial_replay', level: 1, nextLevel: null, pointsEarned: null, kept: null }));
   },
   'shop-web': () => shop({ kind: 'hidden' }),
   'shop-fb': () => shop(PRODUCTS),

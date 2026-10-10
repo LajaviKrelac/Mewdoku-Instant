@@ -5,10 +5,12 @@
 // "Play puzzle 1" → win → the weekly ranking panel (web: my records) → the victory shows 1 / 21 →
 // back Home, where the card says 1 / 21 solved. Before the start the card teases; a locked player
 // gets the "Opens after level 10" toast.
+// Phase 2c.1 (G1, §3.3 D17, §10.8): event puzzles score level points with the same rule: the HUD
+// counter shows during play and the victory shows the puzzle's total.
 import { expect, test, type Page } from '@playwright/test';
 import type { E2EHooks } from '../../src/app/boot';
 import { defaults } from '../../src/game/save';
-import { periodKeyAt } from '../../src/game/scoring';
+import { periodKeyAt, pointsRuleFor, runTotal } from '../../src/game/scoring';
 import type { SaveData } from '../../src/game/types';
 
 type TestWindow = Window & { __mewdoku?: E2EHooks };
@@ -55,15 +57,23 @@ test('Lantern Walk: card → event screen → puzzle 1 → win → victory 1 / 2
   expect(id).toBe('Elantern-walk-2026/0');
   const app = await page.evaluate(() => (window as TestWindow).__mewdoku?.app());
   expect(app?.session?.mode).toBe('event');
+  // D17: the level-points counter shows on an event puzzle, from 0.
+  const pts = page.locator('.pills .points-pill');
+  await expect(pts).toBeVisible();
+  await expect(pts).toHaveAttribute('aria-label', 'Level points: 0');
+  const n = (await page.evaluate(() => (window as TestWindow).__mewdoku?.state()?.puzzle.n)) ?? 0;
+  const total = runTotal(n, pointsRuleFor('event'));
 
   await page.evaluate(() => (window as TestWindow).__mewdoku?.solve());
+  await expect(pts).toHaveAttribute('aria-label', `Level points: ${total.toLocaleString('en-US')}`);
   const saved = await page.evaluate(() => (window as TestWindow).__mewdoku?.app().save);
   expect(saved?.events['lantern-walk-2026']?.solved).toBe(1);
   expect(saved).not.toHaveProperty('wallet');
   // D5: the kept fish go to this (UTC) week's points: 2026-11-14 is in the week of Monday 2026-11-09.
   expect(saved?.period).toMatchObject({ key: periodKeyAt(INSIDE.getTime()), total: 3 });
   expect(periodKeyAt(INSIDE.getTime())).toBe('2026-11-09');
-  expect(saved?.streak.current).toBe(1);
+  expect(saved?.points.total).toBe(total); // 2c.1: the puzzle's total, added once (a counted win)
+  expect(saved?.streak).toEqual({ current: 0, best: 0 }); // 2c.1: retired, never written
 
   // D7: the post-win panel is the period board in every mode; the event board stays on the event screen.
   const panel = page.locator('[data-overlay="ranking"]');
@@ -78,6 +88,8 @@ test('Lantern Walk: card → event screen → puzzle 1 → win → victory 1 / 2
   await expect(victory).toContainText('1 / 21 solved');
   await expect(victory.locator('.victory__primary')).toHaveText(/Play puzzle 2/);
   await expect(victory.locator('.victory__kept')).toHaveAttribute('data-count', '3');
+  await expect(victory.locator('.victory__points')).toHaveText(`${total.toLocaleString('en-US')} points`);
+  await expect(victory.locator('.victory__streak')).toHaveCount(0);
   await victory.getByRole('button', { name: 'Home' }).click();
 
   await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');

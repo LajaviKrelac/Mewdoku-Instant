@@ -1,4 +1,4 @@
-// Owner: B (Phase 2b); G2 (Phase 2c: the period board, the fish score, the period records)
+// Owner: B (Phase 2b); G2 (Phase 2c: the period board, the fish score, the period records; 2c.1: Total points)
 // Ranking panel (new overlay `ranking`, phase2b §2.4): a dimmed full-screen --scrim with a centred
 // --stage panel (orange --title-on-dark title, the subtitle for this win, the list area) and the
 // "Tap to keep going" footer in --tap-text. Opens at t = fx.winOverlayDelayMs (4.5 s) of the win flow.
@@ -13,7 +13,8 @@
 // Lazy overlay chunk.
 // Phase 2c (fish-lives-spec §2.6, §4.6): after every scored win the panel shows THE leaderboard, the
 // period board ('period': "Weekly ranking", "+2 fish · This week: 42", scores as "42 fish"); without
-// a provider the records card shows This week · Your best week · Perfect streak · Levels solved.
+// a provider the records card shows This week · Your best week · Total points · Levels solved
+// (Phase 2c.1 §4.6, D24: "Total points" replaced the retired "Perfect streak").
 //
 // Classes: .overlay[data-overlay=ranking] > .overlay__scrim--dark + .overlay__panel--stage.ranking[data-list]
 //          > .ranking__card(.ranking__title .ranking__sub .rank-list[data-kind]) .ranking__tap
@@ -64,8 +65,6 @@ export interface PersonalRecordsView {
   readonly event: { readonly solved: number; readonly total: number; readonly totalMs: number } | null;
   /** Phase 2c §4.6 (board 'period'): this period's total and the best period's total (row hidden while 0). */
   readonly period?: { readonly kind: PeriodKind; readonly total: number; readonly best: number };
-  /** Phase 2c §4.6 (board 'period'): the perfect streak now and its best ("best N" when best > current). */
-  readonly streak?: { readonly current: number; readonly best: number };
 }
 
 /**
@@ -178,8 +177,8 @@ function mineBlock(mine: RankMineView): HTMLElement {
 }
 
 /**
- * Phase 2c §4.6, board 'period': This week · Your best week (hidden while 0) · Perfect streak (with
- * "best N" when the best is longer) · Levels solved. Only facts from the save.
+ * Phase 2c §4.6, board 'period' (2c.1, D24): This week · Your best week (hidden while 0) · Total points
+ * (the lifetime sum of counted level totals) · Levels solved. Only facts from the save.
  */
 export function periodRecordRows(r: PersonalRecordsView): [string, string][] {
   const kind = r.period?.kind ?? cfg.period.kind;
@@ -187,13 +186,7 @@ export function periodRecordRows(r: PersonalRecordsView): [string, string][] {
   const rows: [string, string][] = [[periodTabLabel(kind), fish(r.period?.total ?? 0)]];
   const best = r.period?.best ?? 0;
   if (best > 0) rows.push([periodBestLabel(kind), fish(best)]);
-  const streak = r.streak ?? { current: 0, best: 0 };
-  rows.push([
-    t('rank.records.streak'),
-    streak.best > streak.current
-      ? t('rank.records.streakBest', { count: formatNumber(streak.current), best: formatNumber(streak.best) })
-      : formatNumber(streak.current),
-  ]);
+  rows.push([t('rank.records.total'), formatNumber(r.totalPoints)]);
   rows.push([t('rank.records.solved'), formatNumber(r.levelsSolved)]);
   return rows;
 }

@@ -1,4 +1,5 @@
-// Owner: E (Phase 2b); G2 (Phase 2c: lives are fish, the period and streak keys, the fish currency went)
+// Owner: E (Phase 2b); G2 (Phase 2c: lives are fish, the period and streak keys, the fish currency went;
+// Phase 2c.1: the level points per cat, the perfect-streak keys went)
 // Translator notes per key (phase2b §6.7 step 1): a description, a max length where the layout needs
 // one (chips ≤ 18 chars, buttons ≤ 22, titles ≤ 28) and placeholder notes. The AI-draft brief carries
 // only our English, this file and docs/i18n/glossary.md (never the original game or its strings).
@@ -61,8 +62,6 @@ export const PLACEHOLDER_NOTES: Readonly<Record<string, string>> = {
   mistakes: 'number of mistakes',
   hints: 'number of hints used',
   total: "a total: fish kept this period (a number), puzzles in an event, or in rank.sub.period the whole 'This week: 42' text",
-  best: 'the longest perfect streak so far (a number)',
-  points: 'a number of points (formatted)',
   reward: "an event reward phrase, e.g. '2 hints' or '2 hints and 5 kitties'",
   rank: 'a rank number (formatted), shown after #',
   score: 'a score (formatted points or a time)',
@@ -118,7 +117,9 @@ const GROUPS: readonly (readonly [prefix: string, description: string, maxLength
   ['rank.title.period.', 'Ranking panel title (28 px, orange): the ranking of fish kept this period', 20],
   ['rank.tab.period.', 'Rankings hub tab and records row: this period (short)', 14],
   ['rank.records.best.', 'Ranking panel records row: the best period so far', 22],
-  ['howto.points.', 'How to play: where the fish you keep go (the period ranking, reset at 00:00 UTC) and the perfect streak'],
+  ['howto.points.', 'How to play: where the fish you keep go (the period ranking, reset at 00:00 UTC)'],
+  // Phase 2c.1 (fish-lives-spec §10.7): "points" are always level points, earned per cat inside one level.
+  ['points.', 'Level points: earned for each cat found inside one level (0 at the start of every level); never the leaderboard (that is fish)'],
   ['victory.', 'Victory screen after a win'],
   ['rank.', 'Ranking panel after a win and the rankings hub (never invent players or scores)'],
   ['rank.records.', 'Ranking panel: a row label of the personal records card', 22],
@@ -194,9 +195,20 @@ const NOTES: Readonly<Partial<Record<I18nKey, Partial<KeyMeta>>>> = {
   'game.hearts.a11y': { description: 'Screen-reader label of the lives pill: the fish are the lives' },
   'howto.hearts': { description: 'How to play: the fish are the lives; a wrong cat costs one' },
   'victory.next': { description: 'The wide orange button to the next level (24 px)', maxLength: 18 },
-  'victory.points': { description: 'Victory chip: the level points of this win', maxLength: 18 },
-  'victory.streak': { description: 'Victory chip after a win without a mistake: the perfect streak ("Perfect ×4")', maxLength: 16 },
-  'victory.streak.a11y.one': { description: 'Screen-reader label of the perfect-streak chip' },
+  // Phase 2c.1 (§10.7): the level points.
+  'game.points.a11y': { description: 'Screen-reader label of the level-points counter in the game HUD (never shown): the running total of this level' },
+  'a11y.points.one': { description: 'A short sentence read right after "Cat placed. 3 of 8.": the level\'s running points total ("2,016 points.")' },
+  'points.count.one': {
+    description: 'Victory screen: the level\'s points total in a white pill ("7,296 points"); must fit at 320 px with a 5-digit number',
+    // 18 wide with "13,248" (§10.7); measured with the 2-digit sample "37", so 4 less.
+    maxLength: 14,
+  },
+  'points.count.other': {
+    description: 'Victory screen: the level\'s points total in a white pill ("7,296 points"); must fit at 320 px with a 5-digit number',
+    // 18 wide with "13,248" (§10.7); measured with the 2-digit sample "37", so 4 less.
+    maxLength: 14,
+  },
+  'howto.levelPoints': { description: 'How to play: how level points are earned (a paragraph next to a small star icon)' },
   'period.total.day': { description: 'Victory and ranking panel: the fish total of this period', maxLength: 20 },
   'period.total.week': { description: 'Victory and ranking panel: the fish total of this period', maxLength: 20 },
   'period.total.month': { description: 'Victory and ranking panel: the fish total of this period', maxLength: 20 },
@@ -205,8 +217,6 @@ const NOTES: Readonly<Partial<Record<I18nKey, Partial<KeyMeta>>>> = {
   'period.pill.month.one': { description: 'Screen-reader label of the Home period pill (a trophy and a number)' },
   'rank.sub.period.one': { description: 'Ranking panel subtitle after a win: the fish this win added, then the period total ({total} is the whole "This week: 42")', maxLength: 30 },
   'rank.sub.period.other': { description: 'Ranking panel subtitle after a win: the fish this win added, then the period total ({total} is the whole "This week: 42")', maxLength: 30 },
-  'rank.records.streak': { description: 'Records row: wins in a row without a mistake', maxLength: 22 },
-  'rank.records.streakBest': { description: 'Records value: the streak now, then the longest one ("4 (best 9)")', maxLength: 16 },
   'rank.title.daily': { description: "Ranking panel title: the fastest solvers of today's daily puzzle", maxLength: 20 },
   'rank.title.event': { maxLength: 28 },
   'rank.tap': { description: 'Pulsing line under the ranking panel', maxLength: 26 },
@@ -242,7 +252,7 @@ const NOTES: Readonly<Partial<Record<I18nKey, Partial<KeyMeta>>>> = {
  */
 export const SAME_AS_ENGLISH: Readonly<Partial<Record<LocaleId, readonly I18nKey[]>>> = {
   de: ['about.version', 'common.ok', 'home.play', 'game.title.level', 'victory.next', 'shop.title', 'settings.shop', 'glyph.1', 'glyph.6', 'rank.tab.event'],
-  fr: ['about.version', 'common.ok', 'victory.points', 'glyph.2', 'glyph.8', 'ads.placeholder.title'],
+  fr: ['about.version', 'common.ok', 'points.count.one', 'points.count.other', 'a11y.points.one', 'a11y.points.other', 'glyph.2', 'glyph.8', 'ads.placeholder.title'],
   it: ['common.ok', 'color.3', 'shop.owned'],
   'pt-BR': [],
   es: [],

@@ -1,4 +1,5 @@
 // Owner: C (Phase 2b; was game). 02 §6.2 cell-state × gesture table, 02 §8 mistake model, region done, win/lose, move log.
+// Phase 2c.1: a correct cat in a level also emits POINTS right after its CAT_PLACED (fish-lives-spec §3.2.2).
 import { describe, expect, it } from 'vitest';
 import { newGame } from '../../../src/game/factory';
 import { reduce } from '../../../src/game/reducer';
@@ -46,12 +47,12 @@ interface Row {
 // Every cell of the 02 §6.2 table; a cat attempt is split into its §8 outcomes (solution / not).
 const TABLE: Row[] = [
   { from: 'Empty', gesture: 'tap', solution: false, to: 'Mark', events: ['MARKED'] },
-  { from: 'Empty', gesture: 'double', solution: true, to: 'Cat', events: ['CAT_PLACED', 'REGION_DONE'] },
+  { from: 'Empty', gesture: 'double', solution: true, to: 'Cat', events: ['CAT_PLACED', 'POINTS', 'REGION_DONE'] },
   { from: 'Empty', gesture: 'double', solution: false, to: 'Wrong', events: ['MISTAKE'] },
   { from: 'Empty', gesture: 'drag-mark', solution: false, to: 'Mark', events: ['MARKED'] },
   { from: 'Empty', gesture: 'drag-erase', solution: false, to: 'Empty', events: [] },
   { from: 'Mark', gesture: 'tap', solution: false, to: 'Empty', events: ['UNMARKED'] },
-  { from: 'Mark', gesture: 'double', solution: true, to: 'Cat', events: ['CAT_PLACED', 'REGION_DONE'] },
+  { from: 'Mark', gesture: 'double', solution: true, to: 'Cat', events: ['CAT_PLACED', 'POINTS', 'REGION_DONE'] },
   { from: 'Mark', gesture: 'double', solution: false, to: 'Wrong', events: ['MISTAKE'] },
   { from: 'Mark', gesture: 'drag-mark', solution: false, to: 'Mark', events: [] },
   { from: 'Mark', gesture: 'drag-erase', solution: false, to: 'Empty', events: ['UNMARKED'] },
@@ -126,11 +127,12 @@ describe('02 §6.2 cell state × gesture', () => {
 });
 
 describe('02 §8 mistake model', () => {
-  it('a correct cat: Cat, catsPlaced+1, CAT_PLACED then REGION_DONE with the region label', () => {
+  it('a correct cat: Cat, catsPlaced+1, CAT_PLACED, POINTS (2c.1), then REGION_DONE with the region label', () => {
     const r = reduce(playing(), dbl(cell(3, 1), 3));
     expect(r.state.catsPlaced).toBe(1);
     expect(r.events).toEqual([
       { type: 'CAT_PLACED', cell: cell(3, 1), source: 'player' },
+      { type: 'POINTS', cell: cell(3, 1), gained: 576, total: 576, streak: 1 },
       { type: 'REGION_DONE', region: 3 }, // D
     ]);
     expect(r.state.regionsDone).toBe(1 << 3);
@@ -145,12 +147,12 @@ describe('02 §8 mistake model', () => {
     expect(r.state.status).toBe('playing');
   });
 
-  it('the last cat wins: WON after CAT_PLACED/REGION_DONE, status won', () => {
+  it('the last cat wins: WON after CAT_PLACED/POINTS/REGION_DONE, status won', () => {
     const r = run(playing(), SOL5.map((c, i) => dbl(c, i)));
     expect(r.state.status).toBe('won');
     expect(r.state.catsPlaced).toBe(5);
     expect(r.state.regionsDone).toBe(0b11111);
-    expect(r.events.slice(-3).map((e) => e.type)).toEqual(['CAT_PLACED', 'REGION_DONE', 'WON']);
+    expect(r.events.slice(-4).map((e) => e.type)).toEqual(['CAT_PLACED', 'POINTS', 'REGION_DONE', 'WON']);
     expect(r.events.filter((e) => e.type === 'REGION_DONE')).toHaveLength(5);
   });
 

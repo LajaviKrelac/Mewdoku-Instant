@@ -7,7 +7,9 @@
 // the pops from B's flight, the panel's fade-out before the victory, the reduced-motion timeline, the
 // tutorial / replay / daily / event variants, teardown mid-flow (no timers, no fish nodes), a 10 s
 // clock jump running each missed step once (slots still emptied), and a restored full board going
-// to the victory at once with no second award.
+// to the victory at once with no second award. Phase 2c.1 (§3.2.5, §3.7, §10.3): the win's level
+// points are the attempt's running total (5 cats in a row on 5×5: 3 840), shown on the victory counted
+// or not, added to points.total only when the win counts; no streak anywhere.
 import { describe, expect, it } from 'vitest';
 import { createFakeClock } from '../../../src/app/clock';
 import { cfg } from '../../../src/app/config';
@@ -381,19 +383,19 @@ describe('session win flow (phase2c §2.2 t = 0, §2.5–§2.7, §3.7)', () => {
     winGame(h);
   }
 
-  it('the rewards (level points, streak, period points, progress) are in the critical save at t = 0, before any animation; no wallet', async () => {
-    const h = createHarness();
+  it('the rewards (the level\'s points total, period points, progress) are in the critical save at t = 0, before any animation; no wallet', async () => {
+    const h = createHarness({ save: (s) => ({ ...s, points: { total: 100 } }) });
     const writes = h.platform.writes.length;
     await wonLevel(h);
     const flush = h.platform.writes.slice(writes).find((w) => w.cloud === 'flush');
     expect(flush?.data).not.toHaveProperty('wallet');
-    expect(flush?.data.points.total).toBe(5 * 10 + 10); // 5×5, 1st perfect win in a row
-    expect(flush?.data.streak).toEqual({ current: 1, best: 1 });
+    expect(flush?.data.points.total).toBe(100 + 3_840); // 2c.1: 5 cats in a row: 576 + 672 + 768 + 864 + 960
+    expect(flush?.data.streak).toEqual({ current: 0, best: 0 }); // 2c.1: frozen, never written
     expect(flush?.data.period).toEqual({ key: '2026-10-05', total: 3, bestKey: '2026-10-05', bestTotal: 3 });
     expect(flush?.data.progress.level).toBe(6);
     expect(h.router.isOpen('ranking')).toBe(false); // nothing shown yet
     expect(h.analytics.find((e) => e.name === 'level_win')).toBeDefined();
-    expect(h.analytics).toContainEqual({ name: 'win_points', params: { mode: 'level', fish: 3, total: 3, points: 60, streak: 1 } });
+    expect(h.analytics).toContainEqual({ name: 'win_points', params: { mode: 'level', fish: 3, total: 3, points: 3_840, run: 5 } });
   });
 
   it('Home and Gear in the top bar do nothing (and render aria-disabled) until the ranking panel opens', async () => {
@@ -435,7 +437,8 @@ describe('session win flow (phase2c §2.2 t = 0, §2.5–§2.7, §3.7)', () => {
     expect(p?.list.kind).toBe('records');
     if (p?.list.kind === 'records') {
       expect(p.list.reason).toBe('local');
-      expect(p.list.records).toMatchObject({ board: 'period', levelsSolved: 5, period: { kind: 'week', total: 3, best: 3 }, streak: { current: 1, best: 1 } });
+      expect(p.list.records).toMatchObject({ board: 'period', levelsSolved: 5, period: { kind: 'week', total: 3, best: 3 }, totalPoints: 3_840 });
+      expect(p.list.records).not.toHaveProperty('streak'); // 2c.1 (D24): Total points instead
     }
     expect(p?.tapMinMs).toBe(cfg.rank.panelTapMinMs);
     expect(h.analytics).toContainEqual({ name: 'rank_panel', params: { board: 'period_points', api: 'local', ms: 0, ok: 1 } });
@@ -445,11 +448,11 @@ describe('session win flow (phase2c §2.2 t = 0, §2.5–§2.7, §3.7)', () => {
       variant: 'level',
       level: 5,
       nextLevel: 6,
-      pointsEarned: 60,
-      streak: 1,
+      pointsEarned: 3_840,
       kept: { fish: 3, max: 3, gained: 3, total: 3, kind: 'week' },
       buttonDelayMs: 600,
     });
+    expect(v).not.toHaveProperty('streak'); // 2c.1: no "Perfect ×N"
     // §2.7: no fish pill, no "+" (shop), no bonus chip.
     expect(v).not.toHaveProperty('onShop');
     expect(v).not.toHaveProperty('fish');
@@ -457,15 +460,18 @@ describe('session win flow (phase2c §2.2 t = 0, §2.5–§2.7, §3.7)', () => {
     expect(h.router.isOpen('ranking')).toBe(false);
   });
 
-  it('a mistake: 2 fish kept fly, the panel opens at 4 350 (scrim 4 050), no streak chip and no streak bonus', async () => {
+  it('a mistake: 2 fish kept fly, the panel opens at 4 350 (scrim 4 050); the run restarts after it (2c.1)', async () => {
     const h = createHarness({ save: (s) => ({ ...s, streak: { current: 4, best: 6 } }) });
     await startLevel(h, 5);
+    h.session.onCellDoubleTap(SOL5[0] as number);
+    h.session.onCellDoubleTap(SOL5[1] as number);
     h.session.onCellDoubleTap(WRONG5[0] as number);
     await h.settle(h.config.input.cellLockAfterCatMs);
-    expect(h.save().streak).toEqual({ current: 0, best: 6 }); // broken at the mistake itself
+    expect(h.save().streak).toEqual({ current: 4, best: 6 }); // 2c.1: the retired record is never written
+    expect(h.game()).toMatchObject({ levelPoints: 1_248, catStreak: 0 });
     winGame(h);
     expect(h.save().period.total).toBe(2);
-    expect(h.save().points.total).toBe(50); // base only
+    expect(h.save().points.total).toBe(1_248 + 576 + 672 + 768); // C C M C C C = 3 264
     await h.settle(4050 - 1);
     expect(h.router.game?.scrims).toBe(0);
     await h.settle(1);
@@ -477,7 +483,8 @@ describe('session win flow (phase2c §2.2 t = 0, §2.5–§2.7, §3.7)', () => {
     expect(h.router.game?.departed).toEqual([1, 0]); // the last full slot first
     expect(h.router.game?.counters.slice(0, 3)).toEqual([0, 1, 2]);
     await tapRanking(h);
-    expect(h.router.props.victory).toMatchObject({ pointsEarned: 50, streak: null, kept: { fish: 2, max: 3, gained: 2, total: 2 } });
+    expect(h.router.props.victory).toMatchObject({ pointsEarned: 3_264, kept: { fish: 2, max: 3, gained: 2, total: 2 } });
+    expect(h.router.props.victory).not.toHaveProperty('streak');
   });
 
   it('UX-4: the tap crossfades — the victory opens over the panel at once; the panel closes only once the victory is opaque', async () => {
@@ -501,17 +508,18 @@ describe('session win flow (phase2c §2.2 t = 0, §2.5–§2.7, §3.7)', () => {
     expect(victoryCrossfadeMs(true)).toBe(Math.max(cfg.rank.panelOutMs, cfg.fx.screenReducedMs) + 50);
   });
 
-  it('a Hard level doubles the base (no fish bonus any more): 5×5 × 10 × 2 + the streak bonus', async () => {
+  it('a Hard level scores like any other (2c.1: the user\'s rule names no multiplier); no fish bonus', async () => {
     const h = createHarness({ save: (s) => ({ ...s, progress: { level: 30, completed: 29, best: {} }, streak: { current: 3, best: 3 } }) });
     await wonLevel(h, 30);
     expect(h.save().period.total).toBe(3); // still the fish kept
+    expect(h.save().points.total).toBe(3_840);
     await h.settle(cfg.fx.winOverlayDelayMs);
     await tapRanking(h);
-    expect(h.router.props.victory?.pointsEarned).toBe(5 * 10 * 2 + 10 * 4);
-    expect(h.router.props.victory?.streak).toBe(4);
+    expect(h.router.props.victory?.pointsEarned).toBe(3_840);
+    expect(h.router.props.victory).not.toHaveProperty('streak');
   });
 
-  it('a level already counted (replayed after a merge moved progress on) is never awarded twice: no points, no fish, panel at 1 200 with "This week" only', async () => {
+  it('a level already counted (replayed after a merge moved progress on) is never awarded twice: no lifetime points, no fish, panel at 1 200 with "This week" only; the victory still shows the level\'s total', async () => {
     const before = { key: '2026-10-05', total: 9, bestKey: '2026-10-05', bestTotal: 9 };
     const h = createHarness({ save: (s) => ({ ...s, progress: { level: 9, completed: 8, best: {} }, streak: { current: 2, best: 2 }, period: before }) });
     await startLevel(h, 5); // replaying an old level: not counted
@@ -527,7 +535,8 @@ describe('session win flow (phase2c §2.2 t = 0, §2.5–§2.7, §3.7)', () => {
     expect(h.router.props.ranking?.result).toEqual({ kind: 'period', gained: 0, total: 9, periodKind: 'week' });
     expect(h.router.game?.counters).toEqual([]); // no counter, no flight
     await tapRanking(h);
-    expect(h.router.props.victory).toMatchObject({ pointsEarned: null, streak: null, kept: null });
+    // 2c.1 §10.3: the player watched the total grow, so it shows counted or not (it adds nothing).
+    expect(h.router.props.victory).toMatchObject({ pointsEarned: 3_840, kept: null });
   });
 
   it('teardown mid-flow (Home from the victory, or dispose) leaves the saved rewards', async () => {
@@ -538,7 +547,7 @@ describe('session win flow (phase2c §2.2 t = 0, §2.5–§2.7, §3.7)', () => {
     await h.settle(10_000);
     expect(h.router.isOpen('ranking')).toBe(false);
     expect(h.save().period.total).toBe(3);
-    expect(h.save().streak.current).toBe(1);
+    expect(h.save().points.total).toBe(3_840);
   });
 
   it('the win shows the period counter: the period total before the win at 1 s, then +1 per arriving fish; the lives empty from the last slot', async () => {

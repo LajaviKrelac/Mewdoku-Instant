@@ -4,6 +4,7 @@ import packJson from '../src/data/levels/pack-000.json';
 import { recordToPuzzle } from '../src/engine/codec';
 import { getHintStep } from '../src/engine/hint';
 import type { HintStep, LevelPack, Puzzle } from '../src/engine/types';
+import { pointsRuleFor, runTotal } from '../src/game/scoring';
 import { TUTORIAL_COLORS, tutorialPuzzle, tutorialStep, type TutorialStepIndex } from '../src/game/tutorial';
 import { CellState } from '../src/game/types';
 import { regionColorsFor } from '../src/ui/art/palette';
@@ -85,6 +86,10 @@ function boardModel(b: Board, patterns = false): BoardModel {
 export function gameView(b: Board, over: Partial<GameView> = {}): GameView {
   const cats = Array.from(b.cells).filter((s) => s === CellState.Cat).length;
   const wrongs = Array.from(b.cells).filter((s) => s === CellState.Wrong).length;
+  // Phase 2c.1 §3.2.3, as a restore derives it: an unbroken run without a mistake, else k × first;
+  // null (no counter) for the tutorial and unscored modes.
+  const rule = pointsRuleFor(over.mode ?? 'level');
+  const points = rule.first > 0 ? (wrongs === 0 ? runTotal(cats, rule) : cats * rule.first) : null;
   return {
     mode: 'level',
     level: Number(b.puzzle.id.slice(1)) || 1,
@@ -107,6 +112,7 @@ export function gameView(b: Board, over: Partial<GameView> = {}): GameView {
     fbSafeZone: false,
     reducedMotion: false,
     event: null,
+    points,
     ...over,
   };
 }

@@ -448,7 +448,7 @@
     transform: none;
   }
   40% {
-    transform: scale(1.25);
+    transform: scale(var(--bump-scale, 1.25));
   }
 }
 
@@ -572,20 +572,35 @@
   clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
 }
 
-/* ── Period counter (Phase 2c §2.2; was the 2b fish pill): fade-in, number roll, icon bump, rising label ── */
+/* ── Period counter (Phase 2c §2.2; was the 2b fish pill): fade-in, number roll, icon bump, rising label ──
+   Phase 2c.1 §10.2: the level-points counter shares the roll, the bump (1.18 there, --bump-scale) and
+   the rising chip; its durations come from fx.levelPoints (pills.ts). §10.3: the cat counter fades out
+   in its cell while the period counter fades in. */
 .period-pill--in {
   animation: mw-fade-in var(--fade-ms, 200ms) ease-out both;
 }
 
-.period-pill--bump .period-pill__icon {
+.pill--cats[data-out] {
+  animation: pill-fade-out var(--fade-ms, 200ms) ease-out both;
+}
+
+@keyframes pill-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+.period-pill--bump .period-pill__icon,
+.points-pill--bump .points-pill__icon {
   animation: bump var(--bump-ms, 360ms) var(--ease-drop);
 }
 
-.period-pill__n.is-in {
+/* .is-in / .is-out belong to the counters' number roll only (pills.ts buildCounter). */
+.is-in {
   animation: period-roll-in var(--bump-ms, 360ms) var(--ease-out) both;
 }
 
-.period-pill__n.is-out {
+.is-out {
   animation: period-roll-out var(--bump-ms, 360ms) var(--ease-out) both;
 }
 
@@ -611,7 +626,8 @@
   }
 }
 
-.period-pill__label:not([data-reduced]) {
+.period-pill__label:not([data-reduced]),
+.points-pill__label:not([data-reduced]) {
   animation: period-label-rise var(--label-ms, 700ms) var(--ease-out) both;
 }
 

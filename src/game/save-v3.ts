@@ -4,6 +4,8 @@
 // validation of the two v3 records ("an invalid field gets its default"), and their merge rows.
 // PURE. save.ts wires these into defaults() / migrate() / merge(); the one-time compensation of the
 // retired fish packs lives in purchases.ts (compensateRetired), run by save.ts after validation.
+// Phase 2c.1 (§3.2.4, D19): the perfect streak is retired but kept in v3: nothing writes it any more;
+// its validation and merge rows below still run so every v3 document parses.
 import type { GameConfig } from '../app/config';
 import { isPeriodKey, STREAK_MAX } from './scoring';
 import { isNonNegInt, isRecord } from './save-fields';

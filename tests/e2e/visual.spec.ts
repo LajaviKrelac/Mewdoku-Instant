@@ -1,4 +1,6 @@
-// Owner: A (phase2b §1.12); G2 (Phase 2c: the lives are fish, the period pill and counter, the 2c victory)
+// Owner: A (phase2b §1.12); G2 (Phase 2c: the lives are fish, the period pill and counter, the 2c victory;
+// Phase 2c.1: the level-points counter, its "+N", the period counter in the cat counter's cell, the
+// victory's points row)
 // Visual review screenshots of the Classic look at 320, 390 and 1280 (the web-320, web-390 and
 // web-1280 projects): Home, mid-game, the fish loss, the win flight, ranking, victory, fail, settings
 // and event. Phase 2c (fish-lives-spec §9 "screenshots re-captured"): they are stored under
@@ -7,6 +9,10 @@
 // show on its own: the screen is really there, the Classic tokens are live, and the 2c parts (three
 // fish for lives, the period pill, the kept-fish row) are on screen. The shop is FB-only in 2c (§5.2):
 // fbig.spec.ts covers it.
+// Phase 2c.1 (fish-lives-spec §10.2–§10.3, §10.8): the points counter on a 12×12 level with 11 cats and
+// a 5-digit total (points-hud-<width>.png), a "+N" mid-rise (points-plus-<width>.png) and the win flow
+// with the period counter in column 1 (points-winflow-<width>.png) at 320, 390 and 1280; the counter
+// stays centred and clear of its neighbours.
 import { mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,7 +28,7 @@ const OUT = process.env.VISUAL_OUT ?? resolve(dirname(fileURLToPath(import.meta.
 mkdirSync(OUT, { recursive: true });
 
 const NOW = Date.now();
-/** A returning player: level 12, 39 fish this week (this UTC week's key), a perfect streak of 3. */
+/** A returning player: level 12, 39 fish this week (this UTC week's key); a stale 2c `streak` record (frozen in 2c.1, never shown). */
 const returning = (patch: Partial<SaveData> = {}): SaveData => {
   const base = defaults(NOW - 3 * 86_400_000);
   const key = periodKeyAt(NOW);
@@ -59,6 +65,61 @@ async function open(page: Page, save: SaveData): Promise<void> {
 async function shot(page: Page, name: string): Promise<void> {
   const width = page.viewportSize()?.width ?? 0;
   await page.screenshot({ path: join(OUT, `G2-visual-${name}-${width}.png`) });
+}
+
+/** Phase 2c.1 review set: docs/phase2c/screenshots/points-<name>-<width>.png (VISUAL_OUT overrides the folder). */
+async function pointsShot(page: Page, name: string, hudOnly = false): Promise<void> {
+  const width = page.viewportSize()?.width ?? 0;
+  const clip = hudOnly
+    ? await page.evaluate(() => {
+        const top = (document.querySelector('.screen--game .top-bar') as HTMLElement).getBoundingClientRect();
+        const row = (document.querySelector('.pills') as HTMLElement).getBoundingClientRect();
+        return { x: 0, y: Math.max(0, top.top), width: window.innerWidth, height: row.bottom - Math.max(0, top.top) + 8 };
+      })
+    : undefined;
+  await page.screenshot({ path: join(OUT, `points-${name}-${width}.png`), ...(clip ? { clip } : {}) });
+}
+
+interface PillBox {
+  readonly left: number;
+  readonly right: number;
+}
+/** The pills row's parts (hidden ones are null). */
+const pillsRow = (page: Page) =>
+  page.evaluate(() => {
+    const box = (sel: string) => {
+      const el = document.querySelector<HTMLElement>(sel);
+      if (!el || el.hidden || el.getClientRects().length === 0) return null;
+      const r = el.getBoundingClientRect();
+      return { left: r.left, right: r.right };
+    };
+    const row = document.querySelector('.pills') as HTMLElement;
+    return {
+      row: box('.pills'),
+      cats: box('.pill--cats'),
+      period: box('.pills .period-pill'),
+      points: box('.points-pill'),
+      lives: box('.pill--lives'),
+      scroll: row.scrollWidth,
+      client: row.clientWidth,
+    };
+  });
+
+/** §10.8: start | points | lives are disjoint, inside the row, and the points counter is centred (± 1 px). */
+function expectRow(g: Awaited<ReturnType<typeof pillsRow>>, start: 'cats' | 'period'): void {
+  const row = g.row as PillBox;
+  const first = g[start] as PillBox;
+  const mid = g.points as PillBox;
+  const end = g.lives as PillBox;
+  expect(first, start).not.toBeNull();
+  expect(mid, 'points').not.toBeNull();
+  // Inline order does not matter (RTL mirrors): sort by position and check the gaps.
+  const parts = [first, mid, end].sort((a, b) => a.left - b.left);
+  for (let k = 1; k < parts.length; k++) expect((parts[k] as PillBox).left, 'pills overlap').toBeGreaterThanOrEqual((parts[k - 1] as PillBox).right - 0.5);
+  expect((parts[0] as PillBox).left).toBeGreaterThanOrEqual(row.left - 0.5);
+  expect((parts[2] as PillBox).right).toBeLessThanOrEqual(row.right + 0.5);
+  expect(Math.abs((mid.left + mid.right) / 2 - (row.left + row.right) / 2), 'points counter centred').toBeLessThanOrEqual(1);
+  expect(g.scroll, 'row overflows').toBeLessThanOrEqual(g.client + 1);
 }
 
 const solution = (page: Page) => page.evaluate(() => (window as TestWindow).__mewdoku?.solution() ?? []);
@@ -115,6 +176,10 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
     expect(await x.evaluate((el) => getComputedStyle(el.querySelector('.cell__x') as Element).stroke)).toBe('rgb(255, 255, 255)');
     // Phase 2c §1.1: three fish where the hearts were.
     await expect(page.locator('.pill--lives .life[data-full]')).toHaveCount(3);
+    // Phase 2c.1 §10.2: two cats in a row score 576 + 672; marks score nothing.
+    await expect(page.locator('.points-pill')).toBeVisible();
+    await expect(page.locator('.points-pill__n')).toHaveText('1,248');
+    await expect(page.locator('.points-pill')).toHaveAttribute('aria-label', 'Level points: 1,248');
     await expect(page.locator('.pill--lives')).toHaveAttribute('aria-label', '3 of 3 fish left');
     await expect(page.locator('.pill--hearts, .heart')).toHaveCount(0);
     await page.waitForTimeout(400);
@@ -169,14 +234,58 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
     await page.waitForTimeout(1300); // the tap gate
     await page.mouse.click(10, (page.viewportSize()?.height ?? 600) - 10);
     await expect(page.locator('.overlay[data-overlay="victory"]')).toBeVisible({ timeout: 4000 });
-    // §2.7: the kept fish, "+3", "This week: 42", the level points and "Perfect ×4"; no fish pill.
+    // §2.7, 2c.1 §10.3: the level's total first, then the kept fish, "+3", "This week: 42"; no
+    // "Perfect ×N" and no fish pill.
     await expect(page.locator('.victory__kept')).toHaveAttribute('data-count', '3');
     await expect(page.locator('.victory__period')).toHaveText('This week: 42');
-    await expect(page.locator('.victory__points')).toHaveText(/^\+\d+ points$/);
-    await expect(page.locator('.victory__streak')).toHaveText('Perfect ×4');
+    await expect(page.locator('.victory__points')).toHaveText(/^\d{1,2},\d{3} points$/);
+    await expect(page.locator('.victory__streak, .victory__score')).toHaveCount(0);
     await expect(page.locator('.victory__top, .fish-pill')).toHaveCount(0);
     await page.waitForTimeout(900);
     await shot(page, 'victory');
+  });
+
+  test('level points: the counter on a 12×12 board with 11 cats, a "+N" mid-rise, and the win flow', async ({ page }) => {
+    // Level 310 is 12×12 (the widest cat counter, "11 / 12"); 11 cats in a row reach 11,616.
+    await open(page, returning({ progress: { level: 310, completed: 309, best: {} } }));
+    const sol = await startLevel(page);
+    const n = sol.length;
+    expect(n).toBe(12);
+    await expect(page.locator('.points-pill__n')).toHaveText('0');
+    expectRow(await pillsRow(page), 'cats');
+    for (let r = 0; r < n - 1; r++) {
+      await cell(page, r * n + (sol[r] as number)).dblclick();
+      if (r < n - 2) await page.waitForTimeout(350);
+    }
+    // The 11th cat: the roll and its "+1,536" chip, about a fifth of the way through its rise.
+    await expect(page.locator('.points-pill__chip')).toHaveText('+1,536');
+    await page.waitForTimeout(140);
+    await pointsShot(page, 'plus', true);
+    await page.waitForTimeout(900);
+    await expect(page.locator('.points-pill__n')).toHaveText('11,616');
+    await expect(page.locator('.pill--cats .pill__count')).toHaveText('11 / 12');
+    await expect(page.locator('.points-pill__chip')).toHaveCount(0);
+    expectRow(await pillsRow(page), 'cats');
+    await pointsShot(page, 'hud');
+    // The winning cat: 13,248 (the largest level total), highlighted, still centred.
+    await cell(page, (n - 1) * n + (sol[n - 1] as number)).dblclick();
+    await expect(page.locator('.points-pill[data-final] .points-pill__n:not(.is-out)')).toHaveText('13,248');
+    expectRow(await pillsRow(page), 'cats');
+    // §10.3: the period counter fades in where the cat counter was; the points counter stays.
+    const counter = page.locator('.pills .period-pill[data-in-game]');
+    await expect(counter).toBeVisible({ timeout: 4000 });
+    await expect(page.locator('.pill--cats')).toBeHidden({ timeout: 1000 });
+    expectRow(await pillsRow(page), 'period');
+    await expect(page.locator('.fx-layer .fx-fish').first()).toBeAttached({ timeout: 4000 });
+    await page.waitForTimeout(450);
+    await pointsShot(page, 'winflow');
+    await expect(page.locator('.points-pill[data-final]')).toBeVisible();
+    await expect(page.locator('.overlay[data-overlay="ranking"]')).toBeVisible({ timeout: 8000 });
+    await page.waitForTimeout(2000);
+    await page.mouse.click(10, (page.viewportSize()?.height ?? 600) - 10);
+    await expect(page.locator('.overlay[data-overlay="victory"] .victory__points')).toHaveText('13,248 points', { timeout: 4000 });
+    await page.waitForTimeout(900);
+    await pointsShot(page, 'victory');
   });
 
   test('settings', async ({ page }) => {
@@ -195,6 +304,10 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
     await page.locator('.overlay[data-overlay="settings"] .settings__howto-link').click();
     await expect(page.locator('.overlay[data-overlay="how_to_play"] .howto__lives use')).toHaveAttribute('href', '#icon-fish');
     await expect(page.locator('.overlay[data-overlay="how_to_play"] .howto__points')).toContainText('every Monday at 00:00 UTC');
+    await expect(page.locator('.overlay[data-overlay="how_to_play"] .howto__points')).not.toContainText('streak');
+    // 2c.1 §10.7: the level-points note with our sparkle follows it.
+    await expect(page.locator('.overlay[data-overlay="how_to_play"] .howto__level-points use')).toHaveAttribute('href', '#icon-points');
+    await expect(page.locator('.overlay[data-overlay="how_to_play"] .howto__level-points')).toContainText('Every cat you find earns points');
     await page.locator('.overlay[data-overlay="how_to_play"] .howto__points').scrollIntoViewIfNeeded();
     await page.waitForTimeout(300);
     await shot(page, 'howto');
@@ -221,7 +334,7 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
 // ads.banner.buttonClearancePx (16) above the mock banner at 320 × 568 (web-320) and 360 × 640 and
 // 375 × 667 (web-390). Home with the event card and the banner never overlaps itself (UX-2,
 // I18N-LAYOUT-2). The victory rays never paint over the reward rows (UX-13; Phase 2c: the kept-fish
-// row replaced the fish pill).
+// row replaced the fish pill; 2c.1: the points row is the first reward row).
 
 const IN_EVENT = new Date('2026-11-16T12:00:00Z').getTime(); // Lantern Walk: 2026-11-13 → 2026-11-27
 const CLEARANCE = 16;
@@ -368,6 +481,6 @@ test.describe('short phones with the banner band (review UX-1, UX-2, I18N-LAYOUT
         '.victory__rays{pointer-events:auto!important;background:#f00!important;-webkit-mask-image:none!important;mask-image:none!important;width:3000px!important;height:3000px!important;margin:-1500px 0 0 -1500px!important}',
     });
     expect(await onTop(page, '.victory__kept .victory__period')).toBe(true);
-    expect(await onTop(page, '.victory__score .victory__points')).toBe(true);
+    expect(await onTop(page, '.victory__points .victory__points-text')).toBe(true);
   });
 });

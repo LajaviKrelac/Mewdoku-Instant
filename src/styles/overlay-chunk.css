@@ -153,9 +153,11 @@
 .howto__notes { margin-top: 10px; padding: 12px 14px; border-radius: var(--radius-l); background: var(--page-2); }
 .howto__notes p { display: flex; align-items: flex-start; color: var(--ink-2); font-size: var(--fs-s); line-height: 1.45; }
 .howto__notes p + p { margin-top: 8px; }
-.howto__note-icon { width: 20px; height: 20px; margin: 0 10px 0 0; color: var(--accent); }
+/* The note icons never shrink beside a long note, and sit at the inline start in RTL too (2c.1). */
+.howto__note-icon { flex: none; width: 20px; height: 20px; margin: 0; margin-inline-end: 10px; color: var(--accent); }
 .howto__note-icon--fish { flex: none; width: 22px; margin-inline-start: -1px; margin-inline-end: 9px; }
-.howto__note-icon--trophy { color: var(--ink); --icon-fill: var(--gold); }
+.howto__note-icon--trophy,
+.howto__note-icon--points { color: var(--ink); --icon-fill: var(--gold); }
 .howto__note-icon--bulb { color: var(--gold-deep); }
 /* Keyboard controls: only where a keyboard is likely (a mouse or trackpad is present). */
 .howto__notes .howto__keys { display: none; }
@@ -651,13 +653,45 @@
   font-size: var(--fs-s);
 }
 
-/* Phase 2c §2.7: the reward block, two rows. Row 1, the fish kept: a white pill with the lives of
-   this attempt (kept fish full, lost ones as the empty outline), "+2" and "This week: 42". */
+/* Phase 2c.1 §10.3: the reward block, two white pills. Row 1, the level's points total: the gold
+   sparkle (icon-points) and "7,296 points". Row 2 (Phase 2c §2.7), the fish kept: the lives of this
+   attempt (kept fish full, lost ones as the empty outline), "+2" and "This week: 42". */
 .victory__reward {
   display: flex;
   flex-direction: column;
   align-items: center;
   margin-top: 14px;
+}
+
+.victory__points {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  margin-bottom: 8px;
+  padding: 6px 16px;
+  padding-inline-start: 12px;
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  box-shadow: var(--shadow-1);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  font-size: var(--fs-xl);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.victory__points-icon {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin-inline-end: 8px;
+  color: var(--ink);
+  --icon-fill: var(--gold);
+}
+
+.victory__points-text {
+  font-variant-numeric: tabular-nums;
 }
 
 .victory__kept {
@@ -704,38 +738,6 @@
   color: var(--ink-2);
   font-size: var(--fs-m);
   white-space: nowrap;
-}
-
-/* Row 2: level points and, after a perfect win, the perfect-streak chip (--ink on --gold). */
-.victory__score {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  margin-top: 8px;
-}
-
-.victory__chip {
-  display: inline-flex;
-  align-items: center;
-  height: 28px;
-  margin: 3px;
-  padding: 0 12px;
-  border-radius: var(--radius-pill);
-  font-family: var(--font-display);
-  font-weight: var(--display-weight);
-  font-size: var(--fs-s);
-  white-space: nowrap;
-}
-
-.victory__points {
-  background: var(--accent-soft);
-  color: var(--accent-text);
-  font-family: var(--font-num);
-}
-
-.victory__streak {
-  background: var(--gold);
-  color: var(--ink);
 }
 
 .victory__event {

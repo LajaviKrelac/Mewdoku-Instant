@@ -1,10 +1,11 @@
 // Owner: C (Phase 2b). Phase 2c (G1): the fish that fly are the LIVES kept (docs/phase2c/fish-lives-spec.md
 // §2.1–§2.5): each full life lifts off the lives pill and flies to this period's points counter.
 // The post-win orchestration on the session clock: rewards already saved at t = 0 (critical save,
-// same as the win: level points, streak, period points, progress, event record), then glow (t = 300),
-// the PERIOD COUNTER (1 000, this period's total before the win), fish k lifting off life slot
-// N − 1 − k at L(k) = 1 200 + 150 k (GameScreen.departLife: the slot shows empty at once; B's flyFish
-// pops it at scale 1 and plays 'fish_pop' through onPop), arrivals at A(k) = 2 250 + 150 k (counter
+// same as the win: level points (phase2c.1: the level's total), period points, progress, event
+// record), then glow (t = 300), the PERIOD COUNTER (1 000, this period's total before the win),
+// fish k lifting off life slot N − 1 − k at L(k) = 1 200 + 150 k (GameScreen.departLife: the slot
+// shows empty at once; B's flyFish pops it at scale 1 and plays 'fish_pop' through onPop), arrivals
+// at A(k) = 2 250 + 150 k (counter
 // + pointsPerFish, 'fish_plink', 8 ms haptic), "+G" and the a11y line at A(N − 1), a safety net at
 // A(N − 1) + counterBumpMs, the scrim at panelAt(N) − scrimLeadMs and the ranking panel (the period
 // board) at panelAt(N) = min(fx.winOverlayDelayMs, A(N − 1) + panelAfterLastMs): 4 200 / 4 350 /

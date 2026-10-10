@@ -1,4 +1,4 @@
-// Owner: E (Phase 2b); G2 (Phase 2c: lives are fish in every catalogue). The translated catalogues (phase2b §6.7, §6.9): one AI draft per non-English locale; for
+// Owner: E (Phase 2b); G2 (Phase 2c: lives are fish in every catalogue; 2c.1: level points per cat). The translated catalogues (phase2b §6.7, §6.9): one AI draft per non-English locale; for
 // every locale every English key present and non-empty (English-only date parts and `.one` forms a
 // language never selects excepted), placeholder sets equal to English, every plural category that
 // Intl.PluralRules selects for 0…200 and 1 000, nothing translatable left identical to English, no
@@ -150,17 +150,76 @@ describe('Phase 2c: lives are fish, the period and streak copy, no fish currency
     }
   });
 
-  it('every catalogue has the period, streak and kept-fish copy for all three period kinds', () => {
+  it('every catalogue has the period and kept-fish copy for all three period kinds', () => {
     const kinds = ['day', 'week', 'month'] as const;
     const singles = kinds.flatMap((k) => [`period.total.${k}`, `rank.title.period.${k}`, `rank.tab.period.${k}`, `rank.records.best.${k}`, `howto.points.${k}`]);
-    const plurals = [...kinds.flatMap((k) => [`period.pill.${k}`, `a11y.fishKept.${k}`]), 'rank.sub.period', 'victory.streak.a11y'];
-    for (const key of [...singles, 'rank.records.streak', 'rank.records.streakBest', 'victory.streak']) expect(SOURCE[key], key).toBeTruthy();
+    const plurals = [...kinds.flatMap((k) => [`period.pill.${k}`, `a11y.fishKept.${k}`]), 'rank.sub.period'];
+    for (const key of singles) expect(SOURCE[key], key).toBeTruthy();
     for (const base of plurals) expect(BASES, base).toContain(base);
     for (const [id, catalog] of CATALOGS) {
-      for (const key of [...singles, 'rank.records.streak', 'rank.records.streakBest', 'victory.streak']) expect(catalog[key], `${id} ${key}`).toBeTruthy();
+      for (const key of singles) expect(catalog[key], `${id} ${key}`).toBeTruthy();
       for (const base of plurals) expect(catalog[`${base}.other`], `${id} ${base}.other`).toBeTruthy();
       // The weekly copy names Monday 00:00 UTC (a fixed boundary for every player): the digits stay.
       expect(catalog['howto.points.week'], id).toContain('00:00 UTC');
+    }
+  });
+});
+
+// ── Phase 2c.1 (G2, fish-lives-spec §10.7, Appendix A.4): level points per cat; the perfect streak is gone ──
+describe('Phase 2c.1: level points per cat, no perfect streak', () => {
+  const NEW: Readonly<Record<string, string>> = {
+    'game.points.a11y': 'Level points: {count}',
+    'a11y.points.one': '{count} point.',
+    'a11y.points.other': '{count} points.',
+    'points.count.one': '{count} point',
+    'points.count.other': '{count} points',
+    'howto.levelPoints':
+      'Every cat you find earns points, and each cat you find in a row without a mistake earns more than the one before. A mistake never takes points away, but the next cat starts the count again. Cats placed by a hint or the kitty count too.',
+  };
+  const RETIRED = ['victory.points', 'victory.streak', 'victory.streak.a11y', 'rank.records.streak', 'rank.records.streakBest'];
+  /** Each draft's 2c word for the retired "perfect streak" (glossary 2c), which no value may keep. */
+  const STREAK: Readonly<Record<string, RegExp>> = {
+    de: /perfekte\w* Serie/i, es: /racha perfecta/i, fr: /série parfaite/i, it: /serie perfetta/i, 'pt-BR': /sequência perfeita/i,
+    id: /rentetan sempurna/i, tr: /kusursuz (bir )?seri/i, pl: /idealn\p{L}* seri/iu, ru: /идеальн\p{L}* сери/iu, vi: /chuỗi hoàn hảo/i,
+    th: /เพอร์เฟกต์/, ja: /パーフェクト/, ko: /퍼펙트/, 'zh-Hans': /完美连胜/, hi: /परफ़ेक्ट सिलसिला/, ar: /سلسلة مثالية|انتصار\p{L}* مثالي/u,
+  };
+
+  it('English has the six new keys with their final values (§10.7)', () => {
+    for (const [k, v] of Object.entries(NEW)) expect(SOURCE[k], k).toBe(v);
+    expect(BASES).toEqual(expect.arrayContaining(['a11y.points', 'points.count']));
+    // The period notes lost the perfect-streak sentence; nothing in English mentions a streak or "Perfect ×".
+    for (const k of ['day', 'week', 'month']) expect(SOURCE[`howto.points.${k}`], k).not.toMatch(/streak|perfect/i);
+    expect(Object.values(SOURCE).filter((v) => /perfect streak|Perfect ×/i.test(v ?? ''))).toEqual([]);
+    // "points" are level points: the levelPoints note never calls them fish, and says hint and kitty cats count.
+    expect(SOURCE['howto.levelPoints']).not.toMatch(/fish/i);
+    expect(SOURCE['howto.levelPoints']).toMatch(/hint/);
+    expect(SOURCE['howto.levelPoints']).toMatch(/kitty/);
+  });
+
+  it('the retired streak keys are gone from English, meta and every catalogue, in every plural form', () => {
+    const gone = (k: string): boolean => RETIRED.some((r) => k === r || k.startsWith(`${r}.`));
+    expect(Object.keys(SOURCE).filter(gone)).toEqual([]);
+    expect(Object.keys(META).filter(gone)).toEqual([]);
+    for (const [id, catalog] of CATALOGS) expect(Object.keys(catalog).filter(gone), id).toEqual([]);
+  });
+
+  it.each([...CATALOGS.keys()].sort())('%s: has the level-points copy and no perfect-streak wording left', (id) => {
+    const catalog = CATALOGS.get(id) as Strings;
+    for (const k of ['game.points.a11y', 'howto.levelPoints', 'a11y.points.other', 'points.count.other']) expect(catalog[k], `${id} ${k}`).toBeTruthy();
+    const re = STREAK[id] as RegExp;
+    expect(re, `a streak word for ${id}`).toBeDefined();
+    const left = Object.entries(catalog).filter(([, v]) => typeof v === 'string' && re.test(v)).map(([k]) => k);
+    expect(left).toEqual([]);
+  });
+
+  it('the victory row fits: points.count is short (≤ 18 wide with "13,248") and noted for translators', () => {
+    expect(META['points.count.other']?.maxLength).toBe(14);
+    expect(META['game.points.a11y']?.description).toMatch(/screen-reader/i);
+    for (const [id, catalog] of CATALOGS) {
+      for (const [k, v] of Object.entries(catalog)) {
+        if (!k.startsWith('points.count.') || typeof v !== 'string') continue;
+        expect(displayWidth(v.replace('{count}', '13,248')), `${id} ${k}`).toBeLessThanOrEqual(18);
+      }
     }
   });
 });

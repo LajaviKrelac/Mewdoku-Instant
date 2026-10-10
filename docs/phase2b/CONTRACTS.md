@@ -437,10 +437,10 @@ The exact Phase 2c interfaces (G1 game + app, G2 UI, G3 platform) are **[fish-li
 
 | Area | Final state |
 |---|---|
-| Save (G1) | `SaveData = SaveDataV3` (`streak`, `period`; no `wallet`), `SAVE_VERSION = 3`, `src/game/save-v3.ts`; `BoardKey` keeps `'paw_points'` only so old saves parse |
-| Scoring (G1) | `periodKeyAt`, `periodIndex`, `PERIOD_SPAN`, `encodePeriodScore`, `periodTotal`, `addPeriodPoints`, `keptPoints`, `levelPointsFor`, `streakAfterWin`, `breakStreak`; `DecodedScore` is `'period' \| 'time' \| 'event'` (**the `'points'` kind was removed at I-3**); `boardFormat` has no paw-points format; `pointsFor` and `encodePointsScore` are gone |
+| Save (G1) | `SaveData = SaveDataV3` (`streak` (2c.1: frozen, §13), `period`; no `wallet`), `SAVE_VERSION = 3`, `src/game/save-v3.ts`; `BoardKey` keeps `'paw_points'` only so old saves parse |
+| Scoring (G1) | `periodKeyAt`, `periodIndex`, `PERIOD_SPAN`, `encodePeriodScore`, `periodTotal`, `addPeriodPoints`, `keptPoints`, `levelPointsFor`, `streakAfterWin`, `breakStreak` (2c.1: the last three deleted, §13); `DecodedScore` is `'period' \| 'time' \| 'event'` (**the `'points'` kind was removed at I-3**); `boardFormat` has no paw-points format; `pointsFor` and `encodePointsScore` are gone |
 | Events (G1) | `Reward` is `{ hints?, kitties? }` (**`fish` removed at I-3**) |
-| Win flow (G1) | `WinSummary { kept, perfect, streak, period, pointsEarned, pointsTotal, … }`; `panelAt(N)`, `winTimeline` by N; `WinFlowInput { kept, perFish, periodBefore, periodKind, … }` |
+| Win flow (G1) | `WinSummary { kept, perfect, streak, period, pointsEarned, pointsTotal, … }` (2c.1: no `perfect` / `streak`, §13); `panelAt(N)`, `winTimeline` by N; `WinFlowInput { kept, perFish, periodBefore, periodKind, … }` |
 | Ranking flow (G1) | `submitAll(entries, solveMs)` (one limiter check per win), `fetch(board, band?)`, `bandFilter`; reads `RankEntry.boardRank` directly (the local intersection type went at I-3) |
 | Game screen / pills (G2) | `lifeSlots()`, `departLife(slot)`, `showPeriodCounter(total)`, `periodRect()`, `periodLabel(text)`; `createPeriodPill`. **Removed at I-3:** `GameScreen.fishRect / showFishPill / fishLabel`, `PillsView.showFish / fishRect / fishLabel` |
 | Fish flight (G2) | `FlyFishOptions.startScale`, `fishSpread(index, count)`, `fishSizeFromRect`. **Removed at I-3:** `fishSourceRows`, `fishSizePx` |
@@ -450,3 +450,23 @@ The exact Phase 2c interfaces (G1 game + app, G2 UI, G3 platform) are **[fish-li
 | Build (lead, I-1) | `playwright.config.ts` maps `period_points → e2e_period_points` and the three event boards; `paw_points` and `daily_fastest` are not mapped |
 | Config (lead) | 2c keys per spec §8; the 2b fish, shop and points keys stay `@deprecated` and unread (the config file never removes a key) |
 
+
+## 13. Phase 2c.1 (2026-10-10): per-cat level points — API changes
+
+The exact Phase 2c.1 interfaces (G1 game + app, G2 UI) are **[fish-lives-spec §10.10](../phase2c/fish-lives-spec.md)**; where §12 above or §3–§11 disagree with them, §10.10 wins. The rule and the data model are spec §3.1–§3.2. What integration (lead, 2026-10-10) settled beyond §10.10:
+
+| Area | Final state |
+|---|---|
+| Rules and state (G1) | `PointsRule { first, step }`, `RuleFlags.points` (`rulesFor` / `eventRules`; {0, 0} for the tutorial and for a mode outside `levelPoints.modes`); `GameState.levelPoints / catStreak / scoredRows` (0 at `newGame` and `RETRY`); `GameEvent 'POINTS' { cell, gained, total, streak }`, emitted right after the scoring `CAT_PLACED` (a winning cat: CAT_PLACED, POINTS, REGION_DONE, WON) |
+| Scoring (G1) | `pointsRuleFor(mode, c?)`, `catIncrement(s, rule)`, `runTotal(k, rule)` (576 / 96 from `levelPoints.firstIncrement` / `step`). **Deleted:** `levelPointsFor`, `LevelPointsInput`, `streakAfterWin`, `breakStreak` (`STREAK_MAX` stays for save validation) |
+| Factory and save (G1) | `toInProgress` always writes `InProgressV2.points / catStreak / scoredRows` (optional on read; the save **stays v3**). `restoreGame` takes them through `slotPoints(puzzle, cells, slot, rule)` when consistent, else derives them (spec §3.2.3, D20; the tighter upper bound of check (c) is accepted, STATUS-2c §10). `popcount` is exported from `factory.ts`. `copySlot` drops an invalid field (repair `inProgress.<mode>.<field>`) and keeps the slot. `StreakRecord` / `SaveDataV3.streak` are `@deprecated`: validated and merged, never written |
+| Session (G1) | `streakBreaks` / `breakStreak` gone; the slot (with the points) is written in the same store update as the board. `feedbackFor('POINTS')` → `tn('a11y.points', total)`, joined into the cat's one announcement. `WinSummary` has no `perfect`, `streak`, `streakUp`; `pointsEarned` = `state.levelPoints` (counted or not; only a counted win adds it to `points.total`). Analytics `win_points { mode, fish, total, points, run }` |
+| Views (G1) | `selectGameView.points` (`number \| null`; null where nothing scores); `selectVictoryView` has no `streak`; `personalRecords` has no `streak` |
+| Pills and game screen (G2) | `PillsProps.points` and `GameView.points` are **required** `number \| null` since I-3 (null hides the counter). `PillsView.playEvent(POINTS)` rolls, bumps and shows the "+N" chip (ignored while hidden). The period pill and the points pill share one counter builder. DOM: `.points-pill` (`[data-final]`, `hidden`), `.points-pill__n`, `.points-pill__chip` |
+| Overlays (G2) | `VictoryProps.pointsEarned` is the level's total (null or 0 hides `.victory__points`). **Deleted at I-3:** `VictoryProps.streak`, `PersonalRecordsView.streak`; `.victory__streak` does not exist. The period records rows are This week · best · Total points · Levels solved |
+| Art (G2) | `icon-points` (sprite symbol; provenance §10) |
+| Top bar (lead, N1) | `splitTitle` also keeps a trailing level number ("Level 310", "المستوى 310") in the non-shrinking suffix when the title has no " · " |
+| i18n (G2) | Appendix A.4: 6 new keys, 3 changed, 6 removed (all 17 catalogues, `meta.ts`, `drafted-from.json`) |
+| Dev harness (lead, I-1) | `dev/shell-fixtures.ts gameView` derives `points` (as a restore would); `dev/b-harness.ts` has a `game-points` view (two scoring cats, a mistake, a 576 after it) and level totals on the victories; `dev/board-harness.ts` feeds the real reducer's `levelPoints`; `icon-points` in the art and board harness icon lists |
+| Config (lead) | 2c.1 keys per spec §10.6; `levelPoints.perSize / hardMultiplier / streakStep / streakCap` stay `@deprecated` and unread |
+| Budgets (lead, I-4) | `scripts/size-check.ts`: see STATUS-2c §10 and 04 §9 |

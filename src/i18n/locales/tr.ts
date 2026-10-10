@@ -266,7 +266,6 @@ export const catalog: LocaleCatalog = {
   'fish.count.other': '{count} balık',
   'fish.plus': '+{count}',
   'victory.next': 'Bölüm {level}',
-  'victory.points': '+{points} puan',
   'victory.eventReward': 'Etkinlik ödülü: {reward}',
 
   // ── Phase 2b: rankings ─────────────────────────────────────────────────────
@@ -354,7 +353,7 @@ export const catalog: LocaleCatalog = {
   'ads.banner.placeholder': 'Banner alanı',
   'time.daysHours': '{d} g {h} sa',
 
-  // ── Phase 2c: fish are lives, the period ranking, the perfect streak (AI draft 2026-10-09, unreviewed) ──
+  // ── Phase 2c: fish are lives, the period ranking (AI draft 2026-10-09, unreviewed) ──
   'period.total.day': 'Bugün: {total}',
   'period.total.week': 'Bu hafta: {total}',
   'period.total.month': 'Bu ay: {total}',
@@ -375,19 +374,22 @@ export const catalog: LocaleCatalog = {
   'rank.records.best.month': 'En iyi ayın',
   'rank.sub.period.one': '+{count} balık · {total}',
   'rank.sub.period.other': '+{count} balık · {total}',
-  'rank.records.streak': 'Kusursuz seri',
-  'rank.records.streakBest': '{count} (rekor {best})',
   'a11y.fishKept.day.one': 'Elinde {count} balık kaldı. Bugünkü toplamın: {total}.',
   'a11y.fishKept.day.other': 'Elinde {count} balık kaldı. Bugünkü toplamın: {total}.',
   'a11y.fishKept.week.one': 'Elinde {count} balık kaldı. Bu haftaki toplamın: {total}.',
   'a11y.fishKept.week.other': 'Elinde {count} balık kaldı. Bu haftaki toplamın: {total}.',
   'a11y.fishKept.month.one': 'Elinde {count} balık kaldı. Bu ayki toplamın: {total}.',
   'a11y.fishKept.month.other': 'Elinde {count} balık kaldı. Bu ayki toplamın: {total}.',
-  'victory.streak': 'Kusursuz ×{count}',
-  'victory.streak.a11y.one': 'Üst üste {count} kusursuz galibiyet',
-  'victory.streak.a11y.other': 'Üst üste {count} kusursuz galibiyet',
-  'howto.points.day': 'Bir bulmacayı çözdüğünde elinde kalan balıklar günlük sıralamaya eklenir. Sıralama her gün 00:00 UTC itibarıyla yeniden başlar. Hiç hata yapmadan çözerek kusursuz bir seri yap ve daha çok puan kazan.',
-  'howto.points.week': 'Bir bulmacayı çözdüğünde elinde kalan balıklar haftalık sıralamaya eklenir. Sıralama her pazartesi 00:00 UTC itibarıyla yeniden başlar. Hiç hata yapmadan çözerek kusursuz bir seri yap ve daha çok puan kazan.',
-  'howto.points.month': 'Bir bulmacayı çözdüğünde elinde kalan balıklar aylık sıralamaya eklenir. Sıralama her ayın ilk günü 00:00 UTC itibarıyla yeniden başlar. Hiç hata yapmadan çözerek kusursuz bir seri yap ve daha çok puan kazan.',
+  'howto.points.day': 'Bir bulmacayı çözdüğünde elinde kalan balıklar günlük sıralamaya eklenir. Sıralama her gün 00:00 UTC itibarıyla yeniden başlar.',
+  'howto.points.week': 'Bir bulmacayı çözdüğünde elinde kalan balıklar haftalık sıralamaya eklenir. Sıralama her pazartesi 00:00 UTC itibarıyla yeniden başlar.',
+  'howto.points.month': 'Bir bulmacayı çözdüğünde elinde kalan balıklar aylık sıralamaya eklenir. Sıralama her ayın ilk günü 00:00 UTC itibarıyla yeniden başlar.',
+
+  // ── Phase 2c.1: level points per cat (AI draft 2026-10-10, unreviewed) ──
+  'game.points.a11y': 'Bölüm puanı: {count}',
+  'a11y.points.one': '{count} puan.',
+  'a11y.points.other': '{count} puan.',
+  'points.count.one': '{count} puan',
+  'points.count.other': '{count} puan',
+  'howto.levelPoints': 'Bulduğun her kedi puan kazandırır ve hatasız art arda bulduğun her kedi bir öncekinden daha fazla kazandırır. Hata hiçbir zaman puan götürmez ama sayım bir sonraki kediyle baştan başlar. İpucunun ya da pisinin yerleştirdiği kediler de sayılır.',
   ...LOCALE_NAMES,
 };

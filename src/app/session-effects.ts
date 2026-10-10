@@ -1,16 +1,19 @@
-// Owner: C (Phase 2b; was app). Phase 2c (G1): the win's rewards are level points with the perfect
-// streak and this period's leaderboard points from the fish (lives) kept; no fish wallet
-// (docs/phase2c/fish-lives-spec.md §3.1–§3.9).
+// Owner: C (Phase 2b; was app). Phase 2c (G1): the win's rewards are level points and this period's
+// leaderboard points from the fish (lives) kept; no fish wallet (docs/phase2c/fish-lives-spec.md
+// §3.1–§3.9). Phase 2c.1 (G1, §3.2.5, §3.7, §10.4–§10.5): the level points are the attempt's running
+// total (GameState.levelPoints, earned per cat); a counted win adds it to the lifetime points.total;
+// a scoring cat's announcement ends with the running total; no perfect streak, no "Perfect ×N".
 // Pure parts of the session's effects layer (04 §5.2): per-event feedback (sound, vibration, live
 // announcement; 02 §16, §18), analytics payloads (02 §20) and win bookkeeping (02 §10.1 + phase2b
 // §4.3 event wins + phase2c §3.7: all saved with the win, before any animation).
 import type { SfxId } from '../audio/sfx';
 import { applyEventWin, type EventDef, type Milestone } from '../game/events';
+import { popcount } from '../game/factory';
 import { getMode } from '../game/modes';
-import { addPeriodPoints, addPoints, keptPoints, levelPointsFor, periodKeyAt, periodTotal, streakAfterWin } from '../game/scoring';
+import { addPeriodPoints, addPoints, keptPoints, periodKeyAt, periodTotal } from '../game/scoring';
 import { applyDailyWin, applyLevelWin, applyTutorialDone } from '../game/stats';
 import type { GameEvent, GameState, ModeId, SaveData } from '../game/types';
-import { colorName, t, tn } from '../i18n';
+import { colorName, formatNumber, t, tn } from '../i18n';
 import { cfg, type GameConfig, type PeriodKind, type ScoredMode } from './config';
 import type { AnalyticsEvent } from './events';
 import type { SessionMeta } from './store';
@@ -21,16 +24,6 @@ export interface Feedback {
   readonly sfxIndex?: number;
   readonly haptic?: number | readonly number[];
   readonly announce?: string;
-}
-
-function popcount(x: number): number {
-  let v = x >>> 0;
-  let n = 0;
-  while (v) {
-    v &= v - 1;
-    n++;
-  }
-  return n;
 }
 
 /**
@@ -51,6 +44,10 @@ export function feedbackFor(ev: GameEvent, state: GameState, colors: Uint8Array,
       return { sfx: 'cat', haptic: c.haptics.cat, announce: t('a11y.catPlaced', { placed, n }) };
     case 'CAT_REMOVED':
       return { sfx: 'unmark', announce: t('a11y.catRemoved', { placed, n }) };
+    case 'POINTS':
+      // phase2c.1 §10.4 (D22): the running total only, appended to the cat's own line by commit (one
+      // utterance); never the increment or the run; no sound and no vibration of its own (D23).
+      return { announce: tn('a11y.points', ev.total, { count: formatNumber(ev.total) }) };
     case 'MISTAKE':
       return ev.heartsLeft <= 0
         ? { sfx: 'heart_last', haptic: c.haptics.heartLast, announce: tn('a11y.mistake', 0) }
@@ -162,17 +159,15 @@ export interface WinSummary {
   readonly kept: number;
   /** The attempt's lives (rules.heartsPerAttempt): the victory's kept-fish row shows this many slots. */
   readonly maxKept: number;
-  /** 0 mistakes and 0 revives. */
-  readonly perfect: boolean;
-  /** The perfect streak after this win (unchanged by a win that does not count or the tutorial). */
-  readonly streak: { readonly current: number; readonly best: number };
-  /** Whether this win moved the streak (counted, perfect, in a mode of levelPoints.modes): "Perfect ×N". */
-  readonly streakUp: boolean;
+  // phase2c.1 §3.7: `perfect`, `streak` and `streakUp` are removed (no streak of wins any more).
   /** This period's leaderboard points; null for the tutorial (never scored). */
   readonly period: WinPeriodSummary | null;
-  /** Level points of this win (§3.1); 0 when it scores none. */
+  /**
+   * phase2c.1 §3.7: the level's total, GameState.levelPoints at WON (0 in the tutorial and outside
+   * levelPoints.modes), counted or not.
+   */
   readonly pointsEarned: number;
-  /** Lifetime level points (points.total) after the win. */
+  /** Lifetime level points after the win: points.total, which a COUNTED win raised by pointsEarned. */
   readonly pointsTotal: number;
   readonly event: EventWinSummary | null;
 }
@@ -184,6 +179,7 @@ export interface WinBookkeeping {
   readonly events: readonly AnalyticsEvent[];
   /** The rewards, for the win flow, the panel and the victory (phase2c §3.7). */
   readonly summary: WinSummary;
+  /** The level's total (summary.pointsEarned). */
   readonly pointsEarned: number;
 }
 
@@ -202,8 +198,9 @@ const inModes = (mode: ModeId, modes: readonly ScoredMode[]): boolean => (modes 
  * tutorial, tutorial replay (none). The rewards are added only when the win COUNTS: a level not
  * counted before (applyLevelWin's guard), a daily's first win for its date, an event puzzle once per
  * index; the tutorial is never scored. Order inside the call: mode bookkeeping (progress / daily /
- * event record and milestones) → streak → level points → period points; everything returned is saved
- * in the same critical save as the win.
+ * event record and milestones) → lifetime level points (phase2c.1: the level's total,
+ * state.levelPoints, into points.total) → period points; everything returned is saved in the same
+ * critical save as the win. The level's total is reported (pointsEarned) whether the win counts or not.
  */
 export function winBookkeeping(save: SaveData, meta: SessionMeta, state: GameState, ctx: WinContext = { now: 0 }): WinBookkeeping {
   const c = ctx.config ?? cfg;
@@ -211,7 +208,6 @@ export function winBookkeeping(save: SaveData, meta: SessionMeta, state: GameSta
   const flow = getMode(meta.mode).winFlow;
   const replay = meta.request.mode === 'tutorial' && meta.request.replay;
   const solveMs = ms(state.elapsedMs);
-  const perfect = state.mistakes === 0 && state.revivesUsed === 0;
   const kept = Math.max(0, state.hearts);
   const base = {
     mode: meta.mode,
@@ -227,24 +223,19 @@ export function winBookkeeping(save: SaveData, meta: SessionMeta, state: GameSta
     kitties: state.kittiesUsed,
     kept,
     maxKept: state.rules.heartsPerAttempt,
-    perfect,
   };
-  /** Streak, level points and period points of a counted win (§3.7 order), and the summary. */
+  /** Level points and period points of a counted win (§3.7 order), and the summary. */
   const reward = (next: SaveData, counted: boolean, mode: ModeId, event: EventWinSummary | null, critical: boolean, events: AnalyticsEvent[]): WinBookkeeping => {
     let out = next;
-    let pts = 0;
-    let streakUp = false;
     let period: WinPeriodSummary | null = null;
     const scored = mode !== 'tutorial';
+    // phase2c.1 §3.2.5: the attempt's running total (0 in the tutorial and outside levelPoints.modes).
+    const pts = scored && inModes(mode, c.levelPoints.modes) ? Math.max(0, Math.floor(state.levelPoints)) : 0;
     if (scored) {
       const before = periodTotal(out, ctx.now, c);
       period = { kind: c.period.kind, key: periodKeyAt(ctx.now, c), gained: 0, before, total: before };
     }
     if (counted && scored) {
-      const streaked = streakAfterWin(out, mode, perfect, c);
-      streakUp = perfect && streaked.streak.current > out.streak.current;
-      out = streaked;
-      pts = levelPointsFor({ mode, n: size, hard: meta.hard, streak: perfect ? out.streak.current : 0 }, c);
       if (pts > 0) out = { ...out, points: { total: addPoints(out.points.total, pts, c) } };
       const before = period?.before ?? 0;
       out = addPeriodPoints(out, keptPoints(mode, kept, c), ctx.now, c);
@@ -252,14 +243,13 @@ export function winBookkeeping(save: SaveData, meta: SessionMeta, state: GameSta
       // gained is what the total really moved (a capped total at period.max adds less, or nothing).
       period = { kind: c.period.kind, key: periodKeyAt(ctx.now, c), gained: total - before, before, total };
       if (inModes(mode, c.levelPoints.modes) || inModes(mode, c.period.modes)) {
-        events.push({ name: 'win_points', params: { mode, fish: kept, total, points: pts, streak: out.streak.current } });
+        // phase2c.1 §10.5: points = the level's total, run = the cat run at WON (no streak of wins).
+        events.push({ name: 'win_points', params: { mode, fish: kept, total, points: pts, run: Math.max(0, state.catStreak) } });
       }
     }
     const summary: WinSummary = {
       ...base,
       counted,
-      streak: { current: out.streak.current, best: out.streak.best },
-      streakUp,
       period,
       pointsEarned: pts,
       pointsTotal: out.points.total,

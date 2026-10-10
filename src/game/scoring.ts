@@ -1,66 +1,63 @@
-// Owner: C (Phase 2b). Phase 2c (G1): level points with the perfect streak, leaderboard points per
-// UTC period and the period board encoding (docs/phase2c/fish-lives-spec.md §3.1–§3.6, §4.3).
+// Owner: C (Phase 2b). Phase 2c (G1): leaderboard points per UTC period and the period board
+// encoding (docs/phase2c/fish-lives-spec.md §3.4–§3.6, §4.3). Phase 2c.1 (G1): level points per
+// correct cat inside one attempt (pointsRuleFor, catIncrement, runTotal; §3.1, the user's rule F5);
+// the 2c per-win formula (levelPointsFor) and the perfect streak (streakAfterWin, breakStreak) are gone.
 // Level points, board score encodings and the client-side submit limits (phase2b §5.3). PURE.
 // Every encoded score is an integer, higher is better, and < 2³¹. Decoding is used by the app to
 // format overlay rows and the ranking panel (platform/ never imports this module: CONTRACTS §2).
 import { cfg, type GameConfig, type ScoredMode } from '../app/config';
-import type { BoardKey, ModeId, SaveData } from './types';
+import type { BoardKey, ModeId, PointsRule, SaveData } from './types';
 
-/** points.total += n, capped at points.max (never negative). Phase 2c: the lifetime LEVEL POINTS total. */
+/**
+ * points.total += n, capped at points.max (never negative). Phase 2c.1 §3.2.4: the lifetime sum of the
+ * level totals of counted wins.
+ */
 export function addPoints(total: number, n: number, c: GameConfig = cfg): number {
   return Math.min(c.points.max, Math.max(0, Math.floor(total) + Math.max(0, Math.floor(n))));
 }
 
 const isScored = (mode: ModeId, modes: readonly ScoredMode[]): boolean => (modes as readonly string[]).indexOf(mode) >= 0;
 
-// ─────────────────────────────── level points (phase2c §3.1) ───────────────────────────────
+// ─────────────────────────────── level points (phase2c.1 §3.1) ───────────────────────────────
 
-/** What one counted win's level points depend on (phase2c §3.1). */
-export interface LevelPointsInput {
-  readonly mode: ModeId;
-  /** Board size. */
-  readonly n: number;
-  readonly hard: boolean;
-  /** The perfect streak INCLUDING this win (0 when this win had a mistake or a revive). */
-  readonly streak: number;
-}
+const NO_POINTS: PointsRule = Object.freeze({ first: 0, step: 0 });
 
 /**
- * Level points of a counted win (phase2c §3.1): levelPoints.perSize × n (× hardMultiplier on a Hard
- * level) + streakStep × min(streak, streakCap). 0 for the tutorial and for a mode outside
- * levelPoints.modes. Every result is a multiple of 5 with the default config. Examples: 8×8 with a
- * mistake → 80; 8×8, 4th perfect win in a row → 120; 10×10 Hard, 12th perfect win → 300.
+ * What a correct cat is worth in `mode` (phase2c.1 §3.1, §3.3): {levelPoints.firstIncrement,
+ * levelPoints.step} (576 / 96) for a mode of levelPoints.modes, else {0, 0} (the tutorial always;
+ * a mode dropped from levelPoints.modes).
  */
-export function levelPointsFor(input: LevelPointsInput, c: GameConfig = cfg): number {
+export function pointsRuleFor(mode: ModeId, c: GameConfig = cfg): PointsRule {
   const lp = c.levelPoints;
-  if (input.mode === 'tutorial' || !isScored(input.mode, lp.modes)) return 0;
-  let base = lp.perSize * Math.max(0, Math.floor(input.n));
-  if (input.hard) base *= lp.hardMultiplier;
-  const streak = Math.max(0, Math.floor(input.streak));
-  return base + lp.streakStep * Math.min(streak, lp.streakCap);
+  return mode === 'tutorial' || !isScored(mode, lp.modes) ? NO_POINTS : Object.freeze({ first: lp.firstIncrement, step: lp.step });
 }
-
-/** The streak record's ceiling (phase2c §3.8: 0 ≤ current ≤ best ≤ 1 000 000). */
-export const STREAK_MAX = 1_000_000;
 
 /**
- * The perfect streak after a counted win (phase2c §3.2): a perfect win (0 mistakes, 0 revives) in a
- * mode of levelPoints.modes adds 1 (best follows); any other win there sets current to 0 (it was
- * already 0 after the mistake). A mode outside levelPoints.modes (the tutorial) changes nothing.
- * Returns the same save when nothing changes.
+ * The increment of the s-th correct cat in a row (phase2c.1 §3.1, the user's rule F5.2):
+ * add(s) = r.first + r.step × (s − 1) for an integer s ≥ 1, else 0. With the default config
+ * add(s) = 96 × (5 + s): 576, 672, 768, 864, 960, 1 056, 1 152, 1 248, 1 344, 1 440, …
  */
-export function streakAfterWin(save: SaveData, mode: ModeId, perfect: boolean, c: GameConfig = cfg): SaveData {
-  if (mode === 'tutorial' || !isScored(mode, c.levelPoints.modes)) return save;
-  if (!perfect) return breakStreak(save);
-  const current = Math.min(STREAK_MAX, save.streak.current + 1);
-  return { ...save, streak: { current, best: Math.max(save.streak.best, current) } };
+export function catIncrement(s: number, r: PointsRule): number {
+  if (!Number.isInteger(s) || s < 1) return 0;
+  return r.first + r.step * (s - 1);
 }
 
-/** A mistake or a revive (phase2c §3.2): current = 0. The same save when it is already 0. */
-export function breakStreak(save: SaveData): SaveData {
-  if (save.streak.current === 0) return save;
-  return { ...save, streak: { ...save.streak, current: 0 } };
+/**
+ * The running total of an unbroken run of k correct cats (phase2c.1 §3.1): add(1) + … + add(k) =
+ * k × r.first + r.step × k (k − 1) / 2; 0 for k ≤ 0 (k is floored). Default config: 576, 1 248,
+ * 2 016, 2 880, 3 840, 4 896, 6 048, 7 296, 8 640, 10 080, 11 616, 13 248 for k = 1…12.
+ */
+export function runTotal(k: number, r: PointsRule): number {
+  const n = Number.isFinite(k) ? Math.floor(k) : 0;
+  if (n <= 0) return 0;
+  return n * r.first + (r.step * n * (n - 1)) / 2;
 }
+
+/**
+ * The ceiling of the retired perfect-streak record (phase2c §3.8: 0 ≤ current ≤ best ≤ 1 000 000).
+ * Phase 2c.1 §3.2.4 (D19): the record is frozen (nothing writes it) but still validated on read.
+ */
+export const STREAK_MAX = 1_000_000;
 
 // ─────────────────────────────── periods (phase2c §3.4, §3.5) ───────────────────────────────
 

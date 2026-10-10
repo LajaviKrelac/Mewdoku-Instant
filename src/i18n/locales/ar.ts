@@ -283,7 +283,6 @@ export const catalog: LocaleCatalog = {
   'fish.count.other': '{count} سمكة',
   'fish.plus': '+{count}',
   'victory.next': 'المستوى {level}',
-  'victory.points': 'النقاط: +{points}',
   'victory.eventReward': 'مكافأة الفعالية: {reward}',
 
   // ── Phase 2b: rankings ─────────────────────────────────────────────────────
@@ -387,7 +386,7 @@ export const catalog: LocaleCatalog = {
   'ads.banner.placeholder': 'مكان لافتة',
   'time.daysHours': '{d} ي {h} س',
 
-  // ── Phase 2c: fish are lives, the period ranking, the perfect streak (AI draft 2026-10-09, unreviewed) ──
+  // ── Phase 2c: fish are lives, the period ranking (AI draft 2026-10-09, unreviewed) ──
   'period.total.day': 'اليوم: {total}',
   'period.total.week': 'هذا الأسبوع: {total}',
   'period.total.month': 'هذا الشهر: {total}',
@@ -424,8 +423,6 @@ export const catalog: LocaleCatalog = {
   'rank.sub.period.few': 'السمك +{count} · {total}',
   'rank.sub.period.many': 'السمك +{count} · {total}',
   'rank.sub.period.other': 'السمك +{count} · {total}',
-  'rank.records.streak': 'سلسلة مثالية',
-  'rank.records.streakBest': '{count} (الأفضل {best})',
   'a11y.fishKept.day.zero': 'الأسماك التي احتفظت بها: {count}. مجموعك اليوم: {total}.',
   'a11y.fishKept.day.one': 'الأسماك التي احتفظت بها: {count}. مجموعك اليوم: {total}.',
   'a11y.fishKept.day.two': 'الأسماك التي احتفظت بها: {count}. مجموعك اليوم: {total}.',
@@ -444,15 +441,24 @@ export const catalog: LocaleCatalog = {
   'a11y.fishKept.month.few': 'الأسماك التي احتفظت بها: {count}. مجموعك هذا الشهر: {total}.',
   'a11y.fishKept.month.many': 'الأسماك التي احتفظت بها: {count}. مجموعك هذا الشهر: {total}.',
   'a11y.fishKept.month.other': 'الأسماك التي احتفظت بها: {count}. مجموعك هذا الشهر: {total}.',
-  'victory.streak': 'مثالي ×{count}',
-  'victory.streak.a11y.zero': 'لا انتصارات مثالية متتالية',
-  'victory.streak.a11y.one': 'انتصار مثالي واحد',
-  'victory.streak.a11y.two': 'انتصاران مثاليان متتاليان',
-  'victory.streak.a11y.few': '{count} انتصارات مثالية متتالية',
-  'victory.streak.a11y.many': '{count} انتصارًا مثاليًا متتاليًا',
-  'victory.streak.a11y.other': '{count} انتصار مثالي متتالٍ',
-  'howto.points.day': 'الأسماك التي تحتفظ بها عند حلّ لغز تُضاف إلى ترتيب اليوم، الذي يبدأ من جديد كل يوم عند الساعة 00:00 UTC. حُلّ دون أخطاء لتبني سلسلة مثالية وتكسب نقاطًا أكثر.',
-  'howto.points.week': 'الأسماك التي تحتفظ بها عند حلّ لغز تُضاف إلى ترتيب الأسبوع، الذي يبدأ من جديد كل يوم اثنين عند الساعة 00:00 UTC. حُلّ دون أخطاء لتبني سلسلة مثالية وتكسب نقاطًا أكثر.',
-  'howto.points.month': 'الأسماك التي تحتفظ بها عند حلّ لغز تُضاف إلى ترتيب الشهر، الذي يبدأ من جديد في أول يوم من كل شهر عند الساعة 00:00 UTC. حُلّ دون أخطاء لتبني سلسلة مثالية وتكسب نقاطًا أكثر.',
+  'howto.points.day': 'الأسماك التي تحتفظ بها عند حلّ لغز تُضاف إلى ترتيب اليوم، الذي يبدأ من جديد كل يوم عند الساعة 00:00 UTC.',
+  'howto.points.week': 'الأسماك التي تحتفظ بها عند حلّ لغز تُضاف إلى ترتيب الأسبوع، الذي يبدأ من جديد كل يوم اثنين عند الساعة 00:00 UTC.',
+  'howto.points.month': 'الأسماك التي تحتفظ بها عند حلّ لغز تُضاف إلى ترتيب الشهر، الذي يبدأ من جديد في أول يوم من كل شهر عند الساعة 00:00 UTC.',
+
+  // ── Phase 2c.1: level points per cat (AI draft 2026-10-10, unreviewed) ──
+  'game.points.a11y': 'نقاط المستوى: {count}',
+  'a11y.points.zero': 'لا نقاط.',
+  'a11y.points.one': 'نقطة واحدة.',
+  'a11y.points.two': 'نقطتان.',
+  'a11y.points.few': '{count} نقاط.',
+  'a11y.points.many': '{count} نقطة.',
+  'a11y.points.other': '{count} نقطة.',
+  'points.count.zero': 'لا نقاط',
+  'points.count.one': 'نقطة واحدة',
+  'points.count.two': 'نقطتان',
+  'points.count.few': '{count} نقاط',
+  'points.count.many': '{count} نقطة',
+  'points.count.other': '{count} نقطة',
+  'howto.levelPoints': 'كل قطة تجدها تمنحك نقاطًا، وكل قطة تجدها على التوالي دون خطأ تمنحك أكثر من التي قبلها. الخطأ لا ينقص نقاطك أبدًا، لكن العدّ يبدأ من جديد مع القطة التالية. القطط التي يضعها التلميح أو القُطيطة تُحتسب أيضًا.',
   ...LOCALE_NAMES,
 };

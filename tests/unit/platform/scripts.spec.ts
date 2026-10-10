@@ -90,11 +90,13 @@ describe('size-check', () => {
     expect(r.maxFiles).toBeUndefined();
   });
 
-  it('has the 2b ceilings (measured + about 3 %, lead decision 2026-10-09, re-set after the review fixes, 04 §9)', () => {
+  it('has the recorded ceilings (measured + about 3 %: 2b lead decision 2026-10-09; main JS and the first-load totals re-set at 2c.1, L7, 04 §9)', () => {
     const max = (label: string) => BUDGETS.find((b) => b.label === label)?.maxBytes;
     expect([max('Main JS'), max('CSS'), max('Font'), max('index.html'), FIRST_LOAD_MAX, FIRST_LOAD_LOCALE_MAX, FIRST_LOAD_GZIP_MAX]).toEqual([
-      279_000, 43_500, 17_000, 1_000, 340_000, 365_000, 126_500,
+      289_000, 43_500, 17_000, 1_000, 350_000, 377_000, 126_500,
     ]);
+    // The first-load total still binds: below the sum of its rows' ceilings.
+    expect(FIRST_LOAD_MAX).toBeLessThan((max('Main JS') ?? 0) + (max('CSS') ?? 0) + (max('Font') ?? 0) + (max('index.html') ?? 0));
     expect([max('Worker JS (lazy)'), max('Lazy JS (core)'), max('Lazy JS (optional)'), max('Lazy CSS'), max('Locale chunk (each)')]).toEqual([
       18_500, 74_000, 29_300, 31_200, 28_000,
     ]);
@@ -128,8 +130,10 @@ describe('size-check', () => {
 
   it('fails when the first-load total or the lazy chunks are over budget', () => {
     const d = tempDir('web');
-    // shared-def.js (10 KB) is a modulepreload chunk, so main JS = 279 KB: each row at its ceiling, the sum over 340 KB.
-    fakeBuild(d, { main: 269_000, css: 43_500, font: 17_000, html: 1_000 });
+    // shared-def.js (10 KB) is a modulepreload chunk, so main JS = its ceiling (289 KB since 2c.1): each row
+    // at its ceiling, the sum (350.5 KB) over the first-load total's 350 KB.
+    const mainMax = BUDGETS.find((b) => b.label === 'Main JS')?.maxBytes ?? 0;
+    fakeBuild(d, { main: mainMax - 10_000, css: 43_500, font: 17_000, html: 1_000 });
     const r = checkSizes(d, { fb: false });
     expect(r.rows.find((x) => x.label === 'Main JS')?.ok).toBe(true);
     expect(r.rows.find((x) => x.label === 'CSS')?.ok).toBe(true);
@@ -142,7 +146,8 @@ describe('size-check', () => {
 
   it('fails when a budget is exceeded', () => {
     const d = tempDir('web');
-    fakeBuild(d, { main: 269_001 }); // + the 10 KB modulepreload chunk = 279.001 KB
+    const mainMax = BUDGETS.find((b) => b.label === 'Main JS')?.maxBytes ?? 0;
+    fakeBuild(d, { main: mainMax - 10_000 + 1 }); // + the 10 KB modulepreload chunk = the ceiling + 1 byte (289.001 KB)
     const r = checkSizes(d, { fb: false });
     expect(r.ok).toBe(false);
     expect(r.rows.find((x) => x.label === 'Main JS')?.ok).toBe(false);

@@ -264,7 +264,6 @@ export const catalog: LocaleCatalog = {
   'fish.count.other': '{count} Fische',
   'fish.plus': '+{count}',
   'victory.next': 'Level {level}',
-  'victory.points': '+{points} Punkte',
   'victory.eventReward': 'Event-Belohnung: {reward}',
 
   // ── Phase 2b: rankings ─────────────────────────────────────────────────────
@@ -352,7 +351,7 @@ export const catalog: LocaleCatalog = {
   'ads.banner.placeholder': 'Banner-Platzhalter',
   'time.daysHours': '{d} T. {h} Std.',
 
-  // ── Phase 2c: fish are lives, the period ranking, the perfect streak (AI draft 2026-10-09, unreviewed) ──
+  // ── Phase 2c: fish are lives, the period ranking (AI draft 2026-10-09, unreviewed) ──
   'period.total.day': 'Heute: {total}',
   'period.total.week': 'Diese Woche: {total}',
   'period.total.month': 'Diesen Monat: {total}',
@@ -373,19 +372,22 @@ export const catalog: LocaleCatalog = {
   'rank.records.best.month': 'Dein bester Monat',
   'rank.sub.period.one': '+{count} Fisch · {total}',
   'rank.sub.period.other': '+{count} Fische · {total}',
-  'rank.records.streak': 'Perfekte Serie',
-  'rank.records.streakBest': '{count} (Rekord {best})',
   'a11y.fishKept.day.one': 'Du hast {count} Fisch behalten. Deine Summe heute: {total}.',
   'a11y.fishKept.day.other': 'Du hast {count} Fische behalten. Deine Summe heute: {total}.',
   'a11y.fishKept.week.one': 'Du hast {count} Fisch behalten. Deine Summe diese Woche: {total}.',
   'a11y.fishKept.week.other': 'Du hast {count} Fische behalten. Deine Summe diese Woche: {total}.',
   'a11y.fishKept.month.one': 'Du hast {count} Fisch behalten. Deine Summe diesen Monat: {total}.',
   'a11y.fishKept.month.other': 'Du hast {count} Fische behalten. Deine Summe diesen Monat: {total}.',
-  'victory.streak': 'Perfekt ×{count}',
-  'victory.streak.a11y.one': '{count} perfekter Sieg in Folge',
-  'victory.streak.a11y.other': '{count} perfekte Siege in Folge',
-  'howto.points.day': 'Die Fische, die du beim Lösen eines Rätsels behältst, kommen in die Tagesrangliste. Sie beginnt jeden Tag um 00:00 UTC neu. Löse ohne Fehler, um eine perfekte Serie aufzubauen und mehr Punkte zu verdienen.',
-  'howto.points.week': 'Die Fische, die du beim Lösen eines Rätsels behältst, kommen in die Wochenrangliste. Sie beginnt jeden Montag um 00:00 UTC neu. Löse ohne Fehler, um eine perfekte Serie aufzubauen und mehr Punkte zu verdienen.',
-  'howto.points.month': 'Die Fische, die du beim Lösen eines Rätsels behältst, kommen in die Monatsrangliste. Sie beginnt am 1. jedes Monats um 00:00 UTC neu. Löse ohne Fehler, um eine perfekte Serie aufzubauen und mehr Punkte zu verdienen.',
+  'howto.points.day': 'Die Fische, die du beim Lösen eines Rätsels behältst, kommen in die Tagesrangliste. Sie beginnt jeden Tag um 00:00 UTC neu.',
+  'howto.points.week': 'Die Fische, die du beim Lösen eines Rätsels behältst, kommen in die Wochenrangliste. Sie beginnt jeden Montag um 00:00 UTC neu.',
+  'howto.points.month': 'Die Fische, die du beim Lösen eines Rätsels behältst, kommen in die Monatsrangliste. Sie beginnt am 1. jedes Monats um 00:00 UTC neu.',
+
+  // ── Phase 2c.1: level points per cat (AI draft 2026-10-10, unreviewed) ──
+  'game.points.a11y': 'Levelpunkte: {count}',
+  'a11y.points.one': '{count} Punkt.',
+  'a11y.points.other': '{count} Punkte.',
+  'points.count.one': '{count} Punkt',
+  'points.count.other': '{count} Punkte',
+  'howto.levelPoints': 'Jede Katze, die du findest, bringt Punkte, und jede weitere Katze in Folge ohne Fehler bringt mehr als die davor. Ein Fehler nimmt dir nie Punkte weg, aber mit der nächsten Katze beginnt die Zählung von vorn. Katzen, die ein Tipp oder das Kätzchen setzt, zählen auch.',
   ...LOCALE_NAMES,
 };

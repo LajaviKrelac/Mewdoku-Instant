@@ -1,4 +1,4 @@
-/* Owner: A (Phase 2b; was ui-board); G2 (Phase 2c: the lives pill)
+/* Owner: A (Phase 2b; was ui-board); G2 (Phase 2c: the lives pill; Phase 2c.1: the grid row and the points counter)
    Top bar (with the phase2b lead slot), pills, rule chips, tool bar, compact mode (02 §5, §19).
    Classic look (phase2b §1.4): white pills and round tools with soft shadows, orange accents, count
    badges with white text on --accent-text (small white text never sits on --accent). Tokens only. */
@@ -89,12 +89,33 @@
   margin-left: var(--sp-2);
 }
 
-/* ── Pills: cat counter · lives (fish, Phase 2c) ─────────────────────────── */
+/* ── Pills: cat counter · level points · lives (fish) ─────────────────────
+   Phase 2c.1 §10.2 (D21): a three-column grid, 1fr auto 1fr, so the level-points counter sits exactly
+   in the middle whatever the side pills show. Column 1: the cat counter, and from the win flow's
+   counter beat the period counter in the same cell (§10.3); column 3: the lives. RTL mirrors with the
+   grid. A hidden counter collapses the middle column (the 2c row). */
 .pills {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  grid-template-rows: 100%;
+  column-gap: 6px;
   align-items: center;
   height: var(--pills);
+}
+
+.pill--cats,
+.pills > .period-pill {
+  grid-area: 1 / 1;
+  justify-self: start;
+}
+
+.pills > .points-pill {
+  grid-column: 2;
+}
+
+.pill--lives {
+  grid-column: 3;
+  justify-self: end;
 }
 
 .pill {
@@ -204,6 +225,74 @@
 .pills[data-compact] .life {
   width: 23px;
   height: 23px;
+}
+
+/* ── Level points (Phase 2c.1 §10.2; our design): the same white pill as its neighbours (it is a
+   .pill too: box, shadow, digits), a gold sparkle (icon-points) and the running total of this attempt
+   in tabular digits. The roll, the bump and the rising "+576" share the period counter's rules
+   (screens.css, fx.css). Sizes: fs-m digits and a 20 px icon in a regular row (≤ 86 px at "13,248"),
+   the row's fs-l and a 24 px icon from 390 px (≤ 99 px), fs-s and 18 px in a compact row (≤ 78 px). */
+.points-pill {
+  position: relative;
+  padding-inline-start: 8px;
+  padding-inline-end: 14px;
+  color: var(--ink);
+  font-size: var(--fs-m);
+  line-height: 1;
+  transition: background-color 200ms ease;
+  --bump-scale: 1.18;
+}
+
+.points-pill__icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-inline-end: 5px;
+  color: var(--ink);
+  --icon-fill: var(--gold);
+  transform-origin: 50% 55%;
+}
+
+/* The level's total at the win (catsPlaced = n): highlighted like the complete cat counter. */
+.points-pill[data-final] {
+  background: var(--accent-soft);
+}
+
+@media (min-width: 390px) {
+  .pills:not([data-compact]) .points-pill {
+    font-size: var(--fs-l);
+  }
+
+  .pills:not([data-compact]) .points-pill__icon {
+    width: 24px;
+    height: 24px;
+  }
+}
+
+.pills[data-compact] .points-pill {
+  padding-inline-start: 6px;
+  padding-inline-end: 11px;
+  font-size: var(--fs-s);
+}
+
+.pills[data-compact] .points-pill__icon {
+  width: 18px;
+  height: 18px;
+  margin-inline-end: 4px;
+}
+
+/* The tight fallback (pills.ts measures the row): 1 drops the icon, 2 also steps the digits down.
+   The number never wraps and is never cut. */
+.pills[data-tight] .points-pill {
+  padding-inline-start: 11px;
+}
+
+.pills[data-tight] .points-pill__icon {
+  display: none;
+}
+
+.pills[data-tight='2'] .points-pill {
+  font-size: var(--fs-xs);
 }
 
 /* ── Rule chips ────────────────────────────────────────────────────────── */

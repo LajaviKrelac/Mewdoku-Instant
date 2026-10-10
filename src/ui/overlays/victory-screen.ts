@@ -1,14 +1,16 @@
-// Owner: B (Phase 2b); G2 (Phase 2c: the kept-fish row, level points and the perfect streak)
+// Owner: B (Phase 2b); G2 (Phase 2c: the kept-fish row; Phase 2c.1: the level's points total)
 // Victory screen (new overlay `victory`, phase2b §2.5; replaces O3 `win` and, for dailies, O7
 // `daily_result`, which stay one release unopened). Full screen, opaque --page; 12 --accent-soft sun
 // rays behind the cat turning once per fx.victoryRaysTurnMs (static with reduced motion). Top to
 // bottom: praise word, the win pose, "Level 37 complete", the reward block, the event milestone line;
 // then the wide orange primary button (btn--primary btn--lg, enabled `buttonDelayMs` after open) and
 // a ghost "Home".
-// Phase 2c (fish-lives-spec §2.7): no fish pill, no "+" (shop) and no bonus chip. The reward block has
-// two rows: the FISH KEPT (maxHearts fish, the kept ones full and the lost ones as icon-fish-empty,
-// "+2" and "This week: 42"; hidden when the win added no leaderboard points) and the LEVEL POINTS
-// ("+120 points" and, after a perfect win, the chip "Perfect ×4").
+// Phase 2c (fish-lives-spec §2.7): no fish pill, no "+" (shop) and no bonus chip. Phase 2c.1 (§10.3):
+// the reward block has two rows: first the LEVEL'S POINTS TOTAL (icon-points and "7,296 points" in a
+// white pill; every scored variant whenever the total is > 0, counted or not; never the tutorial),
+// then the FISH KEPT (maxHearts fish, the kept ones full and the lost ones as icon-fish-empty, "+2" and
+// "This week: 42"; hidden when the win added no leaderboard points). There is no streak chip any more
+// (the 2c "Perfect ×N" went with the cross-level streak).
 // With `bannerReserved` the root gets data-banner (phase2b §3.2) and the column keeps the
 // ads.banner.reservePx band free under the buttons.
 // Esc and Enter: Enter presses the focused primary (autofocus); Esc is ignored (a choice is needed).
@@ -25,8 +27,8 @@
 // Classes: .overlay[data-overlay=victory] > .victory[data-variant][data-banner]
 //          > .victory__col(.victory__praise .victory__stage(.victory__rays .victory__art)
 //            .victory__sub .victory__daily .victory__event(.victory__bar .victory__milestone)
-//            .victory__reward(.victory__kept[data-count](.victory__fishes > .victory__fish[data-kept] .victory__plus .victory__period)
-//              .victory__score(.victory__chip.victory__points .victory__chip.victory__streak))
+//            .victory__reward(.victory__points(.victory__points-icon .victory__points-text)
+//              .victory__kept[data-count](.victory__fishes > .victory__fish[data-kept] .victory__plus .victory__period))
 //            .victory__actions(.victory__primary .victory__home))
 import { cfg, type PeriodKind } from '../../app/config';
 import type { Reward } from '../../game/events';
@@ -77,10 +79,11 @@ export interface VictoryProps {
   readonly level: number | null;
   /** The primary button's level ("Level 38"); 2 for the first-run tutorial; null otherwise. */
   readonly nextLevel: number | null;
-  /** Level points: "+120 points"; null (or 0) when the win scores none (tutorial, not counted). */
+  /**
+   * Phase 2c.1 §10.3: the level's points total (GameState.levelPoints at WON), counted or not:
+   * "7,296 points". null or 0 hides the row (the tutorial, a mode outside levelPoints.modes).
+   */
   readonly pointsEarned: number | null;
-  /** Phase 2c §2.7: "Perfect ×N" for a perfect win (N = streak after it, ≥ 1); null otherwise. */
-  readonly streak: number | null;
   /**
    * Phase 2c §2.7: the fish-kept row (`fish` of `max` lives kept, "+`gained`", the period `total`
    * after the win); null when the win added no leaderboard points (tutorial, not counted, mode excluded).
@@ -167,19 +170,19 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
   const dailyNext = h('p', { class: 'victory__next' });
   const daily = h('div', { class: 'victory__daily' }, dailyTime, dailyStats, dailyNext);
 
-  // Reward block (Phase 2c §2.7), row 1: the fish kept ("[fish][fish][empty] +2 | This week: 42").
+  // Reward block (Phase 2c.1 §10.3), row 1: the level's points total ("[sparkle] 7,296 points"); its
+  // accessible name is the visible text.
+  const pointsText = h('span', { class: 'victory__points-text num' });
+  const pointsId = nextId('victory-points');
+  const pointsRow = h('div', { class: 'victory__points', id: pointsId }, icon('icon-points', { class: 'victory__points-icon' }), pointsText);
+  // Row 2: the fish kept ("[fish][fish][empty] +2 | This week: 42").
   const fishes = h('span', { class: 'victory__fishes', 'aria-hidden': 'true' });
   let fishFor = '';
   const plus = h('span', { class: 'victory__plus num', 'aria-hidden': 'true' });
   const periodLine = h('span', { class: 'victory__period', 'aria-hidden': 'true' });
   const keptId = nextId('victory-kept');
   const kept = h('div', { class: 'victory__kept', role: 'img', id: keptId }, fishes, plus, periodLine);
-  // Row 2: level points and the perfect-streak chip.
-  const pointsChip = h('span', { class: 'victory__chip victory__points num' });
-  const streakChip = h('span', { class: 'victory__chip victory__streak', role: 'img' });
-  const scoreId = nextId('victory-score');
-  const score = h('div', { class: 'victory__score', id: scoreId }, pointsChip, streakChip);
-  const reward = h('div', { class: 'victory__reward' }, kept, score);
+  const reward = h('div', { class: 'victory__reward' }, pointsRow, kept);
 
   // Event: progress bar + milestone line. The bar's name is its visible "3 / 21 solved" line (A11Y-NAME-1).
   const eventLabelId = nextId('victory-event-label');
@@ -296,7 +299,11 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
       renderNext();
     }
 
-    // Row 1 (§2.7): hidden when the win added no leaderboard points; never on a tutorial.
+    // Row 1 (§10.3): the level's total, counted or not; never on a tutorial.
+    const pts = tutorial || p.pointsEarned === null || !(p.pointsEarned > 0) ? null : Math.floor(p.pointsEarned);
+    pointsRow.hidden = pts === null;
+    if (pts !== null) setText(pointsText, tn('points.count', pts, { count: formatNumber(pts) }));
+    // Row 2 (§2.7): hidden when the win added no leaderboard points; never on a tutorial.
     const k = tutorial ? null : keptRow(p.kept);
     kept.hidden = k === null;
     if (k) {
@@ -318,18 +325,7 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
     } else {
       delete kept.dataset.count;
     }
-    // Row 2: "+120 points" and the "Perfect ×4" chip (a perfect win only).
-    const pts = tutorial ? null : p.pointsEarned;
-    pointsChip.hidden = pts === null || pts <= 0;
-    if (pts !== null && pts > 0) setText(pointsChip, t('victory.points', { points: formatNumber(pts) }));
-    const streak = tutorial || p.streak === null || !(p.streak >= 1) ? null : Math.floor(p.streak);
-    streakChip.hidden = streak === null;
-    if (streak !== null) {
-      setText(streakChip, t('victory.streak', { count: formatNumber(streak) }));
-      streakChip.setAttribute('aria-label', tn('victory.streak.a11y', streak, { count: formatNumber(streak) }));
-    }
-    score.hidden = pointsChip.hidden && streakChip.hidden;
-    reward.hidden = kept.hidden && score.hidden;
+    reward.hidden = kept.hidden && pointsRow.hidden;
 
     event.hidden = !(p.variant === 'event' && p.event);
     if (p.event) {
@@ -350,12 +346,12 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
       }
     }
 
-    // The dialog's description (§7 screen reader): the result line, the fish kept ("You kept 2 fish.
-    // Your total this week: 42."), the points and the streak, the event progress and milestone; only
-    // what is shown.
+    // The dialog's description (§7 screen reader): the result line, the level's points ("7,296
+    // points"), the fish kept ("You kept 2 fish. Your total this week: 42."), the event progress and
+    // milestone; only what is shown, in the order shown.
     const described = [shell.descId];
+    if (!pointsRow.hidden) described.push(pointsId);
     if (!kept.hidden) described.push(keptId);
-    if (!score.hidden) described.push(scoreId);
     if (!event.hidden) described.push(eventId);
     root.setAttribute('aria-describedby', described.join(' '));
 

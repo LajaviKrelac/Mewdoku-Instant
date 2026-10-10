@@ -264,7 +264,6 @@ export const catalog: LocaleCatalog = {
   'fish.count.other': '{count} pesci',
   'fish.plus': '+{count}',
   'victory.next': 'Livello {level}',
-  'victory.points': '+{points} punti',
   'victory.eventReward': 'Premio evento: {reward}',
 
   // ── Phase 2b: rankings ─────────────────────────────────────────────────────
@@ -352,7 +351,7 @@ export const catalog: LocaleCatalog = {
   'ads.banner.placeholder': 'Spazio banner',
   'time.daysHours': '{d} g {h} h',
 
-  // ── Phase 2c: fish are lives, the period ranking, the perfect streak (AI draft 2026-10-09, unreviewed) ──
+  // ── Phase 2c: fish are lives, the period ranking (AI draft 2026-10-09, unreviewed) ──
   'period.total.day': 'Oggi: {total}',
   'period.total.week': 'Questa settimana: {total}',
   'period.total.month': 'Questo mese: {total}',
@@ -373,19 +372,22 @@ export const catalog: LocaleCatalog = {
   'rank.records.best.month': 'Mese migliore',
   'rank.sub.period.one': '+{count} pesce · {total}',
   'rank.sub.period.other': '+{count} pesci · {total}',
-  'rank.records.streak': 'Serie perfetta',
-  'rank.records.streakBest': '{count} (record {best})',
   'a11y.fishKept.day.one': 'Hai tenuto {count} pesce. Il tuo totale di oggi: {total}.',
   'a11y.fishKept.day.other': 'Hai tenuto {count} pesci. Il tuo totale di oggi: {total}.',
   'a11y.fishKept.week.one': 'Hai tenuto {count} pesce. Il tuo totale di questa settimana: {total}.',
   'a11y.fishKept.week.other': 'Hai tenuto {count} pesci. Il tuo totale di questa settimana: {total}.',
   'a11y.fishKept.month.one': 'Hai tenuto {count} pesce. Il tuo totale di questo mese: {total}.',
   'a11y.fishKept.month.other': 'Hai tenuto {count} pesci. Il tuo totale di questo mese: {total}.',
-  'victory.streak': 'Perfetto ×{count}',
-  'victory.streak.a11y.one': '{count} vittoria perfetta di fila',
-  'victory.streak.a11y.other': '{count} vittorie perfette di fila',
-  'howto.points.day': 'I pesci che tieni quando risolvi una sfida vanno nella classifica di oggi, che riparte ogni giorno alle 00:00 UTC. Risolvi senza errori per costruire una serie perfetta e guadagnare più punti.',
-  'howto.points.week': 'I pesci che tieni quando risolvi una sfida vanno nella classifica settimanale, che riparte ogni lunedì alle 00:00 UTC. Risolvi senza errori per costruire una serie perfetta e guadagnare più punti.',
-  'howto.points.month': 'I pesci che tieni quando risolvi una sfida vanno nella classifica mensile, che riparte il 1° di ogni mese alle 00:00 UTC. Risolvi senza errori per costruire una serie perfetta e guadagnare più punti.',
+  'howto.points.day': 'I pesci che tieni quando risolvi una sfida vanno nella classifica di oggi, che riparte ogni giorno alle 00:00 UTC.',
+  'howto.points.week': 'I pesci che tieni quando risolvi una sfida vanno nella classifica settimanale, che riparte ogni lunedì alle 00:00 UTC.',
+  'howto.points.month': 'I pesci che tieni quando risolvi una sfida vanno nella classifica mensile, che riparte il 1° di ogni mese alle 00:00 UTC.',
+
+  // ── Phase 2c.1: level points per cat (AI draft 2026-10-10, unreviewed) ──
+  'game.points.a11y': 'Punti del livello: {count}',
+  'a11y.points.one': '{count} punto.',
+  'a11y.points.other': '{count} punti.',
+  'points.count.one': '{count} punto',
+  'points.count.other': '{count} punti',
+  'howto.levelPoints': 'Ogni gatto che trovi vale punti, e ogni gatto trovato di fila senza errori vale più del precedente. Un errore non ti toglie mai punti, ma con il gatto successivo il conto riparte. Valgono anche i gatti piazzati da un indizio o dal micio.',
   ...LOCALE_NAMES,
 };

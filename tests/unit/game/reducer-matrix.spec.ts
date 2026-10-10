@@ -249,6 +249,6 @@ describe('02 §8 invariants under random play', () => {
 
   it('events are consistent: one MISTAKE per Wrong cell, LOST exactly when hearts reach 0', () => {
     const r = run(playing(), [...WRONG5.slice(0, 2).map((c) => dbl(c)), dbl(SOL5[0] as number), dbl(WRONG5[2] as number)]);
-    expect(types(r.events)).toEqual(['MISTAKE', 'MISTAKE', 'CAT_PLACED', 'REGION_DONE', 'MISTAKE', 'LOST']);
+    expect(types(r.events)).toEqual(['MISTAKE', 'MISTAKE', 'CAT_PLACED', 'POINTS', 'REGION_DONE', 'MISTAKE', 'LOST']);
   });
 });

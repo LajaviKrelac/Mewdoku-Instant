@@ -1,8 +1,8 @@
 # 02 · Rebuild spec: Phase 2 "as is"
 
-Status: Phase 1 deliverable (2026-10-06); **Phase 2b notes added at integration (2026-10-09); Phase 2c notes (2026-10-09)** · Applies to: Phase 2 (rebuild), Phase 2b ("parity") and Phase 4 (Facebook Instant Games)
+Status: Phase 1 deliverable (2026-10-06); **Phase 2b notes added at integration (2026-10-09); Phase 2c notes (2026-10-09); Phase 2c.1 notes (2026-10-10)** · Applies to: Phase 2 (rebuild), Phase 2b ("parity") and Phase 4 (Facebook Instant Games)
 
-> **Phase 2c (2026-10-09).** The user, who plays the Play Store app, reported first-hand that **the lives are fish**, that the fish left at a win are **added to the leaderboard points ranked per period**, that **level points grow without mistakes**, and that our fish currency was an invention. [fish-lives-spec](../phase2c/fish-lives-spec.md) wins over this document and over the 2b notes wherever they talk about hearts, fish, points, the shop or the save; the HUD (S2), win flow (§10), monetization (§13) and persistence (§15) sections carry a "Phase 2c" pointer. Status: [STATUS-2c](../phase2c/STATUS-2c.md).
+> **Phase 2c (2026-10-09).** The user, who plays the Play Store app, reported first-hand that **the lives are fish**, that the fish left at a win are **added to the leaderboard points ranked per period**, that **level points grow without mistakes**, and that our fish currency was an invention. [fish-lives-spec](../phase2c/fish-lives-spec.md) wins over this document and over the 2b notes wherever they talk about hearts, fish, points, the shop or the save; the HUD (S2), win flow (§10), monetization (§13) and persistence (§15) sections carry a "Phase 2c" pointer. Status: [STATUS-2c](../phase2c/STATUS-2c.md). **Phase 2c.1 (2026-10-10):** the user gave the exact level-points rule (first-hand): each correct cat inside one level adds 96 × (5 + s), s being the cats in a row since the start or the last mistake; every level and Retry starts at 0; hint and kitty cats count; the running total shows during play and at the win (fish-lives-spec §0.1 F5, §3.1–§3.2, §10). The 2c per-win formula and its "Perfect ×N" streak are gone.
 
 > **Phase 2b.** The [parity spec](../phase2b/parity-spec.md) changed the behaviour of several sections below to close the eight headline differences with the original. Where a "Phase 2b" note opens a section, the note and the parity spec win over the Phase 2 text that follows; the Phase 2 text is kept for history. Sections without a note are unchanged. The built APIs are in [phase2b CONTRACTS](../phase2b/CONTRACTS.md) §11.
 
@@ -200,7 +200,7 @@ All screens are portrait. The wireframes show a 390×844 CSS-px phone. Legend: `
 
 ### S2 Game
 
-> **Phase 2c** ([fish-lives-spec](../phase2c/fish-lives-spec.md) §1): the lives pill shows **3 fish** (our fish icon; a lost life is our empty fish outline), not hearts; a mistake plays our fish loss. In the win flow the fish still left fly from this pill to the period counter (§2). Below, "hearts" means these fish.
+> **Phase 2c** ([fish-lives-spec](../phase2c/fish-lives-spec.md) §1): the lives pill shows **3 fish** (our fish icon; a lost life is our empty fish outline), not hearts; a mistake plays our fish loss. In the win flow the fish still left fly from this pill to the period counter (§2). **Phase 2c.1** (§10.2): the pills row is a three-column grid with the **level-points counter** (our sparkle `icon-points` and the attempt's running total, "0" at the start) centred between the cat counter and the lives; each scoring cat rolls it up with a small rising "+N"; it is hidden in the tutorial. At the win the period counter takes the cat counter's place. Below, "hearts" means these fish.
 
 ```
 ┌──────────────────────────────────────┐
@@ -520,7 +520,7 @@ In the tutorial, the hint and its auto-X effects are **free** and are not charge
 
 ## 10. Win and lose flows
 
-> **Phase 2c** ([fish-lives-spec](../phase2c/fish-lives-spec.md) §2, §3): the fish that fly are the **lives kept** (1–3), from the lives pill to this period's points counter; the panel opens at 4 200 / 4 350 / 4 500 ms for 1 / 2 / 3 fish and always shows the period board; the victory shows the level points, the "Perfect ×N" streak chip and the period total. No fish are saved as a currency. Losing: "Out of fish"; Continue gives one fish back.
+> **Phase 2c** ([fish-lives-spec](../phase2c/fish-lives-spec.md) §2, §3): the fish that fly are the **lives kept** (1–3), from the lives pill to this period's points counter; the panel opens at 4 200 / 4 350 / 4 500 ms for 1 / 2 / 3 fish and always shows the period board; the victory shows the level points, the "Perfect ×N" streak chip and the period total (**2c.1:** the level's total, e.g. "7,296 points", then the kept-fish row; no streak chip; the HUD counter keeps the total on screen through the win flow). No fish are saved as a currency. Losing: "Out of fish"; Continue gives one fish back.
 
 ### 10.1 Win (level mode)
 
@@ -744,7 +744,7 @@ after an interstitial resolves ok, or a rewarded ad completes
 
 ## 15. Persistence
 
-> **Phase 2c** ([fish-lives-spec](../phase2c/fish-lives-spec.md) §3.8): save **v3** drops the fish wallet and adds the perfect streak (`streak`) and this period's leaderboard points (`period`); see 04 §4.3.
+> **Phase 2c** ([fish-lives-spec](../phase2c/fish-lives-spec.md) §3.8): save **v3** drops the fish wallet and adds the perfect streak (`streak`) and this period's leaderboard points (`period`); see 04 §4.3. **Phase 2c.1** (§3.2.3): still v3; the in-progress slot gains three optional fields (`points`, `catStreak`, `scoredRows`), written with the board, so leaving or a reload resumes the level's points and its cat run exactly; `streak` is frozen (never written).
 
 Save schema and adapters are in 04 §7.
 

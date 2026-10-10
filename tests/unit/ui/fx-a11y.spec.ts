@@ -61,11 +61,11 @@ describe('a11y', () => {
     const a = createAnnouncer();
     const el = document.querySelector('[role=status]') as HTMLElement;
     expect(el.getAttribute('aria-live')).toBe('polite');
-    a.say('Wrong tile. 2 hearts left.');
+    a.say('Wrong tile. 2 fish left.');
     const first = el.textContent;
-    a.say('Wrong tile. 2 hearts left.');
+    a.say('Wrong tile. 2 fish left.');
     expect(el.textContent).not.toBe(first);
-    expect(el.textContent?.trim()).toBe('Wrong tile. 2 hearts left.');
+    expect(el.textContent?.trim()).toBe('Wrong tile. 2 fish left.');
     a.say('Cat placed. 4 of 8.');
     expect(el.textContent).toBe('Cat placed. 4 of 8.');
     a.clear();

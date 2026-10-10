@@ -1,4 +1,4 @@
-// Owner: A (Phase 2b; was ui-board)
+// Owner: A (Phase 2b; was ui-board); G2 (Phase 2c.1: the level-points counter rows)
 // Palette validation for the one token set of the Classic look (02 §17.2, §18; phase2b §1.4, §1.5,
 // §1.12): pairwise CIEDE2000 ≥ 10, simulated deuteranopia/protanopia/tritanopia ΔE report; on every
 // tile, normal and faded: the white X's edge vs the tile ≥ 3 AND white vs that edge ≥ 3, Tux's outline
@@ -285,6 +285,11 @@ export function uiContrast(): UiContrastRow[] {
     ['free tool badge (--ink on --gold)', T.ink, T.gold, MIN_TEXT_CONTRAST],
     ['"In progress" (--amber-text on --card)', T['amber-text'], T.card, MIN_TEXT_CONTRAST],
     ['fish outline (--ink on --fish)', T.ink, T.fish, MIN_CONTRAST],
+    // Phase 2c.1 §10.2 (G2): the level-points counter: digits on the white pill and, at the win, on
+    // --accent-soft ([data-final]); the icon-points outline (--ink) on the white pill (WCAG 1.4.11).
+    ['level points (--ink on --card)', T.ink, T.card, MIN_TEXT_CONTRAST],
+    ['level points at the win (--ink on --accent-soft)', T.ink, T['accent-soft'], MIN_TEXT_CONTRAST],
+    ['points sparkle outline (--ink on --card)', T.ink, T.card, MIN_CONTRAST],
     // The dark victory screen (review PAR-3): light text on opaque --stage, like the fail card.
     ['victory praise, large text (--title-on-dark on --stage)', T['title-on-dark'], T.stage, MIN_CONTRAST],
     ['victory lines (white .82 on --stage)', over(white, T.stage, 0.82), T.stage, MIN_TEXT_CONTRAST],

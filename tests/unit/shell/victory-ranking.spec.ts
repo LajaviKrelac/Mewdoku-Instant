@@ -3,8 +3,10 @@
 // list rows without provider data; the three FB list modes (placed overlay, "See top players", no
 // overlay) and "Your score" when there is no rank; the hub tabs. Phase 2c (fish-lives-spec §2.6, §2.7,
 // §4.6, §4.7): the period board ("Weekly ranking", "+2 fish · This week: 42", scores in fish, the
-// personal period records), the hub's "This week" tab, and the victory's kept-fish row, level points
-// and the perfect-streak chip (no fish pill, no "+", no bonus chip).
+// personal period records), the hub's "This week" tab, and the victory's kept-fish row (no fish pill,
+// no "+", no bonus chip). Phase 2c.1 (§10.3, §4.6): the victory's first row is the level's points total
+// ("7,296 points"), there is no "Perfect ×N" chip, and the period records show Total points instead of
+// the perfect streak (a stale `streak` prop is ignored).
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cfg } from '../../../src/app/config';
 import type { I18nKey } from '../../../src/i18n';
@@ -53,6 +55,7 @@ function rankingProps(list: RankingListState, over: Partial<RankingPanelProps> =
 const RECORDS: RankingListState = {
   kind: 'records',
   reason: 'local',
+  // A stale 2c `streak` (deleted from PersonalRecordsView at 2c.1 I-3) rides along through a cast: it is ignored.
   records: {
     board: 'period',
     thisMs: 134_000,
@@ -63,7 +66,7 @@ const RECORDS: RankingListState = {
     event: null,
     period: { kind: 'week', total: 42, best: 57 },
     streak: { current: 4, best: 9 },
-  },
+  } as PersonalRecordsView,
 };
 /** The daily board's records card (2b rows; shown only in the hub's "Today" tab with rank.dailyBoard). */
 const DAILY_RECORDS: RankingListState = {
@@ -145,7 +148,7 @@ describe('ranking panel (§2.4)', () => {
   it('web / no provider: the personal records card and the honest line, never another player', () => {
     const panel = openPanel(rankingProps(RECORDS));
     const rows = Array.from(panel.el.querySelectorAll('.rank-records__row')).map((r) => r.textContent);
-    expect(rows).toEqual(['This week42 fish', 'Your best week57 fish', 'Perfect streak4 (best 9)', 'Levels solved37']);
+    expect(rows).toEqual(['This week42 fish', 'Your best week57 fish', 'Total points1,240', 'Levels solved37']);
     expect(q(panel.el, '.rank-list__note').textContent).toBe("Rankings with other players aren't available in this version. Here are your own records.");
     expect(panel.el.querySelector('.rank-mine')).toBeNull();
     panel.update(rankingProps({ ...RECORDS, reason: 'unavailable' } as RankingListState));
@@ -262,8 +265,9 @@ const PERIOD_RECORDS: PersonalRecordsView = {
   levelsSolved: 37,
   event: null,
   period: { kind: 'week', total: 42, best: 57 },
-  streak: { current: 4, best: 9 },
 };
+/** The same records with a stale 2c `streak` (deleted at 2c.1 I-3), handed in through a cast: ignored. */
+const STALE_PERIOD_RECORDS = { ...PERIOD_RECORDS, streak: { current: 4, best: 9 } } as PersonalRecordsView;
 const periodPanel = (list: RankingListState, gained = 2, total = 42): RankingPanelProps =>
   rankingProps(list, { board: 'period', periodKind: 'week', result: { kind: 'period', gained, total, periodKind: 'week' } });
 
@@ -281,20 +285,22 @@ describe('ranking panel, the period board (Phase 2c §2.6, §4.6)', () => {
     expect(resultText({ kind: 'period', gained: 3, total: 9, periodKind: 'month' })).toBe('+3 fish · This month: 9');
   });
 
-  it('web / no provider: This week · Your best week · Perfect streak (best N) · Levels solved, and the honest line', () => {
-    const panel = openPanel(periodPanel({ kind: 'records', reason: 'local', records: PERIOD_RECORDS }));
+  it('web / no provider: This week · Your best week · Total points · Levels solved (2c.1, D24), and the honest line', () => {
+    const panel = openPanel(periodPanel({ kind: 'records', reason: 'local', records: STALE_PERIOD_RECORDS }));
     const rows = Array.from(panel.el.querySelectorAll('.rank-records__row')).map((r) => [q(r, 'dt').textContent, q(r, 'dd').textContent]);
     expect(rows).toEqual([
       ['This week', '42 fish'],
       ['Your best week', '57 fish'],
-      ['Perfect streak', '4 (best 9)'],
+      ['Total points', '4,210'],
       ['Levels solved', '37'],
     ]);
+    // The retired perfect streak is never shown, even when a stale prop carries one.
+    expect(panel.el.textContent).not.toMatch(/streak/i);
     expect(q(panel.el, '.rank-list__note').textContent).toBe("Rankings with other players aren't available in this version. Here are your own records.");
-    // No row for another player, ever; the best row hides while 0; no "best" when the streak is the best.
-    expect(periodRecordRows({ ...PERIOD_RECORDS, period: { kind: 'week', total: 0, best: 0 }, streak: { current: 2, best: 2 } })).toEqual([
+    // No row for another player, ever; the best row hides while 0; Total points shows 0 too.
+    expect(periodRecordRows({ ...PERIOD_RECORDS, period: { kind: 'week', total: 0, best: 0 }, totalPoints: 0 })).toEqual([
       ['This week', '0 fish'],
-      ['Perfect streak', '2'],
+      ['Total points', '0'],
       ['Levels solved', '37'],
     ]);
     expect(periodRecordRows({ ...PERIOD_RECORDS, period: { kind: 'day', total: 3, best: 5 } }).slice(0, 2)).toEqual([
@@ -402,8 +408,7 @@ function victoryProps(over: Partial<VictoryProps> = {}): VictoryProps {
     praise: 0,
     level: 37,
     nextLevel: 38,
-    pointsEarned: 120,
-    streak: 4,
+    pointsEarned: 7296,
     kept: { fish: 3, max: 3, gained: 3, total: 42, kind: 'week' },
     daily: null,
     event: null,
@@ -427,14 +432,22 @@ function openVictory(p: VictoryProps) {
 const fishes = (root: ParentNode): string[] =>
   Array.from(root.querySelectorAll('.victory__kept .victory__fish')).map((f) => f.querySelector('use')?.getAttribute('href') ?? '');
 
-describe('victory screen (§2.5; Phase 2c §2.7)', () => {
-  it('level: praise, "Level 37 complete", the kept fish, "+120 points", "Perfect ×4", and "Level 38" after 600 ms', () => {
+describe('victory screen (§2.5; Phase 2c §2.7; 2c.1 §10.3)', () => {
+  it('level: praise, "Level 37 complete", "7,296 points", the kept fish, and "Level 38" after 600 ms', () => {
     vi.useFakeTimers();
-    const p = victoryProps();
+    // A stale 2c `streak` (deleted from VictoryProps at 2c.1 I-3) handed in through a cast is ignored.
+    const p = { ...victoryProps(), streak: 4 } as VictoryProps;
     const v = openVictory(p);
     expect(q(v.el, '.victory__praise').textContent).toBe('Clever cat!');
     expect(q(v.el, '.victory__sub').textContent).toBe('Level 37 complete');
-    // Row 1: the lives of this attempt, all kept; "+3"; "This week: 42".
+    // Row 1 (2c.1): the level's points total in a white pill with icon-points; its name is the visible text.
+    const points = q(v.el, '.victory__points');
+    expect(points.hidden).toBe(false);
+    expect(points.textContent).toBe('7,296 points');
+    expect(points.hasAttribute('role')).toBe(false);
+    expect(points.querySelector('.victory__points-icon use')?.getAttribute('href')).toBe('#icon-points');
+    expect(points.querySelector('.victory__points-icon')?.getAttribute('aria-hidden')).toBe('true');
+    // Row 2: the lives of this attempt, all kept; "+3"; "This week: 42".
     const kept = q(v.el, '.victory__kept');
     expect(kept.dataset.count).toBe('3');
     expect(fishes(v.el)).toEqual(['#icon-fish', '#icon-fish', '#icon-fish']);
@@ -442,14 +455,12 @@ describe('victory screen (§2.5; Phase 2c §2.7)', () => {
     expect(q(v.el, '.victory__period').textContent).toBe('This week: 42');
     expect(kept.getAttribute('role')).toBe('img');
     expect(kept.getAttribute('aria-label')).toBe('You kept 3 fish. Your total this week: 42.');
-    // Row 2: level points and the perfect-streak chip.
-    expect(q(v.el, '.victory__points').textContent).toBe('+120 points');
-    const streak = q(v.el, '.victory__streak');
-    expect(streak.hidden).toBe(false);
-    expect(streak.textContent).toBe('Perfect ×4');
-    expect(streak.getAttribute('aria-label')).toBe('4 perfect wins in a row');
-    // Gone in 2c: the fish pill at the top, its "+", the bonus chip.
+    // The points row comes first, then the kept fish (§10.3).
+    expect(Array.from(q(v.el, '.victory__reward').children).map((c) => c.className.split(' ')[0])).toEqual(['victory__points', 'victory__kept']);
+    // Gone in 2c: the fish pill at the top, its "+", the bonus chip; in 2c.1 the "Perfect ×N" chip and the chips row.
     expect(v.el.querySelector('.victory__top, .fish-pill, .fish-pill__plus, .victory__chip--bonus, .victory__total')).toBeNull();
+    expect(v.el.querySelector('.victory__streak, .victory__score, .victory__chip')).toBeNull();
+    expect(v.el.textContent).not.toMatch(/Perfect|×/);
     const primary = q<HTMLButtonElement>(v.el, '.victory__primary');
     expect(primary.classList.contains('btn--primary')).toBe(true);
     expect(primary.classList.contains('btn--lg')).toBe(true);
@@ -466,20 +477,20 @@ describe('victory screen (§2.5; Phase 2c §2.7)', () => {
     expect(v.dismiss()).toBe(false);
     const dialog = q(v.el, '[role="dialog"]');
     expect(dialog.getAttribute('aria-modal')).toBe('true');
-    // The description reads the result, the fish kept, then the points and the streak (§7 screen reader).
+    // The description reads the result, the level's points, then the fish kept, in the order shown.
     const ids = (dialog.getAttribute('aria-describedby') ?? '').split(' ');
-    expect(ids.map((id) => document.getElementById(id)?.className.split(' ')[0])).toEqual(['victory__sub', 'victory__kept', 'victory__score']);
+    expect(ids.map((id) => document.getElementById(id)?.className.split(' ')[0])).toEqual(['victory__sub', 'victory__points', 'victory__kept']);
   });
 
-  it('a win with a mistake: the lost fish show empty, "+2", no streak chip; one fish after a revive', () => {
-    const v = openVictory(victoryProps({ streak: null, pointsEarned: 80, kept: { fish: 2, max: 3, gained: 2, total: 41, kind: 'week' } }));
+  it('a win with a mistake: the lost fish show empty, "+2", the total as it is; one fish after a revive', () => {
+    const v = openVictory(victoryProps({ pointsEarned: 7104, kept: { fish: 2, max: 3, gained: 2, total: 41, kind: 'week' } }));
     expect(q(v.el, '.victory__kept').dataset.count).toBe('2');
     expect(fishes(v.el)).toEqual(['#icon-fish', '#icon-fish', '#icon-fish-empty']);
     expect(Array.from(v.el.querySelectorAll('.victory__fish')).map((f) => f.hasAttribute('data-kept'))).toEqual([true, true, false]);
     expect(q(v.el, '.victory__plus').textContent).toBe('+2');
-    expect(q(v.el, '.victory__points').textContent).toBe('+80 points');
-    expect(q<HTMLElement>(v.el, '.victory__streak').hidden).toBe(true);
-    v.update(victoryProps({ streak: null, pointsEarned: 80, kept: { fish: 1, max: 3, gained: 1, total: 12, kind: 'week' } }));
+    expect(q(v.el, '.victory__points').textContent).toBe('7,104 points');
+    v.update(victoryProps({ pointsEarned: 576, kept: { fish: 1, max: 3, gained: 1, total: 12, kind: 'week' } }));
+    expect(q(v.el, '.victory__points').textContent).toBe('576 points');
     expect(fishes(v.el)).toEqual(['#icon-fish', '#icon-fish-empty', '#icon-fish-empty']);
     expect(q(v.el, '.victory__kept').getAttribute('aria-label')).toBe('You kept 1 fish. Your total this week: 12.');
     // Five lives (an event rule), a monthly period.
@@ -489,10 +500,21 @@ describe('victory screen (§2.5; Phase 2c §2.7)', () => {
   });
 
   it('no kept row when the win added no leaderboard points; banner reserve and the rays variable', () => {
-    const v = openVictory(victoryProps({ kept: null, streak: null, pointsEarned: 0, bannerReserved: true }));
+    const v = openVictory(victoryProps({ kept: null, pointsEarned: 0, bannerReserved: true }));
     expect(q<HTMLElement>(v.el, '.victory__kept').hidden).toBe(true);
-    expect(q<HTMLElement>(v.el, '.victory__score').hidden).toBe(true);
+    expect(q<HTMLElement>(v.el, '.victory__points').hidden).toBe(true);
     expect(q<HTMLElement>(v.el, '.victory__reward').hidden).toBe(true);
+    // A win that does not count still shows the total the player watched grow (§10.3), without fish.
+    v.update(victoryProps({ kept: null, pointsEarned: 2016, bannerReserved: true }));
+    expect(q<HTMLElement>(v.el, '.victory__points').hidden).toBe(false);
+    expect(q(v.el, '.victory__points').textContent).toBe('2,016 points');
+    expect(q<HTMLElement>(v.el, '.victory__reward').hidden).toBe(false);
+    expect((q(v.el, '[role="dialog"]').getAttribute('aria-describedby') ?? '').split(' ')).toHaveLength(2);
+    // null hides it too; one point reads singular.
+    v.update(victoryProps({ kept: null, pointsEarned: null, bannerReserved: true }));
+    expect(q<HTMLElement>(v.el, '.victory__points').hidden).toBe(true);
+    v.update(victoryProps({ kept: null, pointsEarned: 1, bannerReserved: true }));
+    expect(q(v.el, '.victory__points').textContent).toBe('1 point');
     // A kept row with nothing gained is hidden too (G = 0).
     v.update(victoryProps({ kept: { fish: 3, max: 3, gained: 0, total: 42, kind: 'week' }, bannerReserved: true }));
     expect(q<HTMLElement>(v.el, '.victory__kept').hidden).toBe(true);
@@ -503,14 +525,15 @@ describe('victory screen (§2.5; Phase 2c §2.7)', () => {
   });
 
   it("tutorial: \"You're ready!\" and \"Play Level 2\", no Home, no reward block; replay: \"Home\"", () => {
-    const t = openVictory(victoryProps({ variant: 'tutorial', level: 1, nextLevel: 2, pointsEarned: null, streak: null, kept: null }));
+    const t = openVictory(victoryProps({ variant: 'tutorial', level: 1, nextLevel: 2, pointsEarned: null, kept: null }));
     expect(q(t.el, '.victory__praise').textContent).toBe("You're ready!");
     expect(q(t.el, '.victory__primary').textContent).toBe('Play Level 2');
     expect(q<HTMLElement>(t.el, '.victory__home').hidden).toBe(true);
     expect(q<HTMLElement>(t.el, '.victory__reward').hidden).toBe(true);
     // Even if the app hands in a row, the tutorial shows none (§2.5: not scored).
-    const r = openVictory(victoryProps({ variant: 'tutorial_replay', level: 1, nextLevel: null, pointsEarned: 50, streak: 2 }));
+    const r = openVictory(victoryProps({ variant: 'tutorial_replay', level: 1, nextLevel: null, pointsEarned: 50 }));
     expect(q<HTMLElement>(r.el, '.victory__reward').hidden).toBe(true);
+    expect(q<HTMLElement>(r.el, '.victory__points').hidden).toBe(true);
     expect(q(r.el, '.victory__primary').textContent).toBe('Home');
   });
 
@@ -522,8 +545,7 @@ describe('victory screen (§2.5; Phase 2c §2.7)', () => {
         variant: 'daily',
         level: null,
         nextLevel: null,
-        pointsEarned: 150,
-        streak: 3,
+        pointsEarned: 3264,
         kept: { fish: 3, max: 3, gained: 3, total: 45, kind: 'week' },
         daily: { dateKey: '2026-10-06', ms: 252_000, mistakes: 1, hints: 0, kitties: 0, nextPuzzleAt: 61_000 },
         now: () => now,
@@ -533,7 +555,7 @@ describe('victory screen (§2.5; Phase 2c §2.7)', () => {
     expect(q(v.el, '.victory__time').textContent).toBe('Solved in 4:12');
     expect(q(v.el, '.victory__stats').textContent).toBe('Mistakes 1 · Hints 0');
     expect(q(v.el, '.victory__next').textContent).toBe('Next puzzle in 1 min');
-    expect(q(v.el, '.victory__streak').textContent).toBe('Perfect ×3');
+    expect(q(v.el, '.victory__points').textContent).toBe('3,264 points');
     // The daily's own lines come first, then the reward block.
     const col = Array.from(q(v.el, '.victory__col').children).map((c) => c.className.split(' ')[0]);
     expect(col.indexOf('victory__daily')).toBeLessThan(col.indexOf('victory__reward'));

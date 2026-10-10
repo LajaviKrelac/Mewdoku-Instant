@@ -4,6 +4,9 @@
 // Save schema v3 (phase2c §3.8; v2 = phase2b §9; v1 = 04 §4.3): defaults, migration/validation, merge,
 // cell encoding, slot validation (04 §7). The v2 field rules live in save-v2.ts, the v3 ones in
 // save-v3.ts; the paid-grant repair in purchases.ts.
+// Phase 2c.1 (G1, fish-lives-spec §3.2.3–§3.2.4): still v3. The in-progress slots may carry the
+// optional points / catStreak / scoredRows (copySlot keeps the valid ones, reports and drops a bad
+// one); merge takes inProgress whole from the newer document, fields included. `streak` is frozen.
 import { cfg, type GameConfig } from '../app/config';
 import {
   copySlot,
@@ -161,7 +164,7 @@ function validateV3(d: Record<string, unknown>, now: number, c: GameConfig, rep:
   const slot = (mode: InProgressV2['mode']): InProgressV2 | null => {
     const v = ip ? ip[mode] : null;
     if (v === null || v === undefined) return null;
-    if (isInProgressShape(v, mode)) return copySlot(v);
+    if (isInProgressShape(v, mode)) return copySlot(v, rep, `inProgress.${mode}`);
     rep.push(`inProgress.${mode}`);
     return null;
   };

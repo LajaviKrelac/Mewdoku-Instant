@@ -158,16 +158,17 @@ describe('event sessions (§4.4, §4.5)', () => {
     for (const c of SOL5) h.session.onCellDoubleTap(c);
     expect(h.save().events[LANTERN.id]?.solved).toBe(3);
     expect(h.save().period.total).toBe(3); // the fish kept go to this period's board in every scored mode
-    expect(h.save().streak.current).toBe(1);
+    expect(h.save().streak).toEqual({ current: 0, best: 0 }); // 2c.1: retired, never written
     expect(h.save()).not.toHaveProperty('wallet');
     expect(h.save().stock.hints).toBe(5 + 2); // the 3-puzzle milestone: +2 hints at once
-    expect(h.save().points.total).toBe(5 * 10 + 10);
+    expect(h.save().points.total).toBe(3_840); // 2c.1: event cats score like level cats (5 in a row)
     expect(h.analytics).toContainEqual({ name: 'event_milestone', params: { id: LANTERN.id, at: 3 } });
     await h.settle(h.config.fx.winOverlayDelayMs);
     // phase2c §2.6: the post-win panel shows the period board in every mode (the event board stays on the event screen).
     expect(h.router.props.ranking).toMatchObject({ board: 'period', eventNameKey: null, result: { kind: 'period', gained: 3, total: 3 } });
     await tapRanking(h);
     expect(h.router.props.victory?.event).toMatchObject({ index: 2, total: 21, solvedBefore: 2, solvedAfter: 3, reward: { hints: 2 }, last: false });
+    expect(h.router.props.victory?.pointsEarned).toBe(3_840);
   });
 
   it('"Puzzle {i+1}" passes the event_next gate, then opens the next puzzle', async () => {

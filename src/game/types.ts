@@ -1,6 +1,9 @@
 // Owner: C (Phase 2b; F0 added the v2 contract types: additive only, ask the lead to change a shape).
 // Phase 2c (G1): BoardKey 'period_points', save schema v3 (StreakRecord, PeriodRecord, no wallet),
 // docs/phase2c/fish-lives-spec.md §3.8, §4.1, §7.4.
+// Phase 2c.1 (G1): per-cat level points (PointsRule, RuleFlags.points, GameState.levelPoints /
+// catStreak / scoredRows, the POINTS event, the optional in-progress slot fields), fish-lives-spec
+// §3.1–§3.2, §10.10. The save stays v3; StreakRecord / SaveDataV3.streak are @deprecated (frozen).
 // Game state, actions, events (04 §4.2) and save data (04 §4.3, phase2b §9). PURE types.
 import type { LocaleId, ProductId } from '../app/config';
 import type { CellIndex, HintStep, Puzzle, PuzzleId } from '../engine/types';
@@ -29,6 +32,16 @@ export type Status = 'ready' | 'playing' | 'hint' | 'kitty' | 'won' | 'lost';
 export type PaintMode = 'mark' | 'erase';
 export type CatSource = 'player' | 'hint' | 'kitty';
 
+/**
+ * Phase 2c.1 §3.1: what a correct cat is worth. The s-th correct cat in a row adds
+ * first + step × (s − 1) (576, 672, 768, … with the default config). {0, 0}: the mode scores nothing
+ * (the tutorial, a mode outside levelPoints.modes).
+ */
+export interface PointsRule {
+  readonly first: number;
+  readonly step: number;
+}
+
 export interface RuleFlags {
   // set per mode by modes.ts (Phase 3 hook)
   readonly mistakeModel: 'solution'; // only model in Phase 2 (02 §2)
@@ -37,6 +50,8 @@ export interface RuleFlags {
   readonly heartsPerAttempt: number; // cfg.hearts.perAttempt (3)
   readonly maxRevives: number; // cfg.revive.maxPerAttempt (1)
   readonly heartsOnRevive: number; // cfg.revive.heartsRestored (1)
+  /** Phase 2c.1 §3.1: level points per correct cat (scoring.pointsRuleFor). */
+  readonly points: PointsRule;
 }
 
 export interface GameState {
@@ -55,6 +70,18 @@ export interface GameState {
   readonly elapsedMs: number;
   readonly openHint: HintStep | null;
   readonly moves: readonly Move[]; // move log (Phase 3 hook: undo, replay)
+  /** Phase 2c.1 §3.1: level points of this attempt; 0 at newGame and RETRY; only a scoring cat adds. */
+  readonly levelPoints: number;
+  /**
+   * Phase 2c.1 §3.2: correct cats in a row since the attempt started or since the last MISTAKE; the
+   * next scoring cat has s = catStreak + 1.
+   */
+  readonly catStreak: number;
+  /**
+   * Phase 2c.1 §3.2 (D16): bit r set = row r's cat has scored in this attempt (n ≤ 12, a bitmask like
+   * regionsDone). A removal never clears a bit, so a cat put back in that row scores nothing.
+   */
+  readonly scoredRows: number;
 }
 
 export type Move =
@@ -89,7 +116,12 @@ export type GameEvent =
   | { type: 'HINT_APPLIED'; step: HintStep }
   | { type: 'REVIVED' }
   | { type: 'WON' }
-  | { type: 'LOST' };
+  | { type: 'LOST' }
+  /**
+   * Phase 2c.1 §3.2.2: right after the CAT_PLACED that scored, only when gained > 0: the increment,
+   * the new running total (GameState.levelPoints) and the run s (GameState.catStreak).
+   */
+  | { type: 'POINTS'; cell: CellIndex; gained: number; total: number; streak: number };
 
 export type GameEventType = GameEvent['type'];
 
@@ -155,6 +187,15 @@ export interface SaveDataV1 {
 /** A v1 slot is a valid v2 slot; v2 adds mode 'event' (id `E<eventId>/<i>`, i 0-based; the UI shows i + 1). */
 export interface InProgressV2 extends Omit<InProgressV1, 'mode'> {
   mode: 'level' | 'daily' | 'event';
+  /**
+   * Phase 2c.1 §3.2.3: GameState.levelPoints when saved. Optional (still v3): slots written before
+   * 2c.1 lack it, and restoreGame derives it then.
+   */
+  points?: number;
+  /** Phase 2c.1 §3.2.3: GameState.catStreak when saved (optional, see points). */
+  catStreak?: number;
+  /** Phase 2c.1 §3.2.3: GameState.scoredRows when saved (optional, see points). */
+  scoredRows?: number;
 }
 
 /** v2 settings: v1 plus the language override ('auto' = follow the platform, phase2b §6.3). No look settings (one theme). */
@@ -197,7 +238,11 @@ export interface SaveDataV2 extends Omit<SaveDataV1, 'v' | 'settings' | 'inProgr
 
 // ─────────────────────────── Save data v3 (phase2c §3.8) ───────────────────────────
 
-/** The perfect streak (phase2c §3.2): 0 ≤ current ≤ best ≤ 1 000 000. */
+/**
+ * The perfect streak (phase2c §3.2): 0 ≤ current ≤ best ≤ 1 000 000.
+ * @deprecated phase2c.1 §3.2.4 (D19): retired and frozen. Nothing reads or writes it after 2c.1; it
+ * stays in the v3 schema (validated and merged) so every v3 document still parses.
+ */
 export interface StreakRecord {
   current: number;
   best: number;
@@ -219,6 +264,7 @@ export interface PeriodRecord {
 /** v3 = v2 without the fish wallet, plus the perfect streak and the period points (phase2c §3.8). */
 export interface SaveDataV3 extends Omit<SaveDataV2, 'v' | 'wallet'> {
   v: 3;
+  /** @deprecated phase2c.1 §3.2.4 (D19): frozen; validated and merged, never written. */
   streak: StreakRecord;
   period: PeriodRecord;
 }

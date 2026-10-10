@@ -1,6 +1,6 @@
 # 01 · Game deconstruction: what we know about the original Meowdoku
 
-Status: Phase 1 deliverable · Research date: 2026-10-06 · Owner: lead game designer / tech lead
+Status: Phase 1 deliverable · Research date: 2026-10-06; first-hand updates from the user 2026-10-09 and 2026-10-10 · Owner: lead game designer / tech lead
 
 This file records **observable design facts** about the original game: rules, UX flow, controls, progression, economy, monetization, look and feel (described in words) and numbers. It holds no code, art, audio or text from the original. Everything here was collected from public pages, press, reviews, store metadata and third-party write-ups (see [SOURCES.md](SOURCES.md)). See [06-legal-and-originality.md](06-legal-and-originality.md) for the clean-room rules this document follows.
 
@@ -39,6 +39,19 @@ No new web searches were possible in this pass: the session's search budget was 
 - **F4. No fish currency.** Fish are not spent on anything. Our Phase 2b build had invented a fish wallet, fish swaps for hints and kitties, and fish packs; the user asked for them to be removed (11.13).
 
 The user did not give the period length, the reset time, the points numbers, or whether dailies and events count. Those are still unknown (§19), and our build uses defaults marked `[DECISION: default, user may change]`.
+
+**First-hand update (2026-10-10).** The user reported the **exact level-points rule** of the Play Store app. It makes F3 exact and **replaces our Phase 2c reading of it** (a per-win formula with a streak of perfect wins across levels, "Perfect ×N"). Rows it touches carry the source tag **"user, first-hand, 2026-10-10"** (built in Phase 2c.1, 2026-10-10: [fish-lives-spec §3.1–§3.2, §10](../phase2c/fish-lives-spec.md), [STATUS-2c §10](../phase2c/STATUS-2c.md)):
+
+- **F5. Level points are earned per cat, inside one level** (10.17, §8 note).
+  - They belong to one level: every level, and every Retry attempt, **starts at 0**.
+  - Each correct cat found adds **96 × (5 + s)**, where s counts the correct cats in a row since the level started or since the last mistake (s = 1 for the first): 576, 672, 768, 864, 960, 1 056, 1 152, 1 248, 1 344, 1 440, …
+  - The running totals of an unbroken run are **576, 1 248, 2 016, 2 880, 3 840, 4 896, 6 048, 7 296, 8 640, 10 080** (verified by the user).
+  - A mistake **does not remove points**; it resets the run, so the next correct cat adds 576 again.
+  - Cats placed by a **hint** or by the **paw (kitty)** count exactly like the player's cats.
+  - The points show as a **running total during play**, rising as each cat is found, and the **level's total is shown at the win**.
+  - The weekly leaderboard is unaffected: the fish (lives) left at a win are the leaderboard points (F2).
+
+The user did not say what removing a placed cat does, whether dailies, events and the tutorial score, how and where the running total is drawn, or whether a lifetime total exists (§19). The per-cat increments are multiples of 96, which contradicts a review's "points only in multiples of 5" (§18 entry 14).
 
 ---
 
@@ -175,7 +188,9 @@ Web build, top to bottom (likely, [nicdoku]). The App Store screenshots confirm 
 4. The board card.
 5. One round **Hint** button with a count badge. The app also has the kitty button ([as-story]).
 
-The cats-remaining counter is also reported for the app in a Russian review ([irecommend], likely). A complaint that the board "feels like a little mini browser instead of full screen" may be about a web clone (fact-check note).
+The cats-remaining counter is also reported for the app in a Russian review ([irecommend], likely).
+
+**2026-10-10 (user, first-hand):** on the Play Store app the level's **points are shown as a running total during play**, rising as each cat is found (10.17). Where in the HUD and how it is drawn is not reported. A complaint that the board "feels like a little mini browser instead of full screen" may be about a web clone (fact-check note).
 
 ## 9. Tutorial / onboarding
 
@@ -206,7 +221,7 @@ The cats-remaining counter is also reported for the app in a Russian review ([ir
 | 10.14 | No play time limit. No source says this outright. | inferred | App | — |
 | 10.15 | Google Play ran LiveOps "event" cards for Oakever (ending around 8/12, 9/23 and 10/1). Their content is unknown, and they may belong to other Oakever titles. | inferred | App | [gp-events] |
 | 10.16 | **The leaderboard ranks points per period.** It shows a points total that resets each period. When a level is passed, the **remaining lives (fish) are added** to the player's leaderboard points. The period's length and reset time, and whether dailies and events add their fish too, are unknown (§19). | confirmed | App (Android) | user (first-hand, 2026-10-09) |
-| 10.17 | **Level points** exist separately from the leaderboard points, and they **get better when you make no mistakes** (streak-like: clean wins in a row are worth more). The numbers, and whether hints matter, are unknown (§19). | confirmed (exists) / unknown (numbers) | App (Android) | user (first-hand, 2026-10-09) |
+| 10.17 | **Level points** exist separately from the leaderboard points, and they **get better when you make no mistakes** (streak-like). **2026-10-10, the exact rule (user, first-hand):** the points belong to **one level** and start at 0 with every level and every Retry. Each correct cat found adds **96 × (5 + s)**, s being the correct cats in a row since the level started or the last mistake: 576, 672, 768, 864, 960, 1 056, 1 152, 1 248, 1 344, 1 440; an unbroken run totals 576, 1 248, 2 016, 2 880, 3 840, 4 896, 6 048, 7 296, 8 640, 10 080 (verified by the user). A mistake removes nothing but resets the run (the next cat adds 576). Hint and kitty cats count like the player's. The total is shown **live during play** and **at the win**. ~~"Clean wins in a row are worth more"~~ was our 2026-10-09 reading and is wrong: the run counts cats inside one level, not wins. Unknown: what removing a cat does, whether dailies, events and the tutorial score, the HUD look (§19). | confirmed (rule and numbers) | App (Android) | user (first-hand, 2026-10-09; rule 2026-10-10) |
 
 ## 11. Economy and monetization
 
@@ -326,6 +341,7 @@ These are listed so Phase 2 does not import them by accident, and so Phase 3 has
 11. **Brief versus research**: the project brief names Yandex 537825 "Meowdoku Cat Puzzle" and a Playgama port by "XdendunGames". Research found 537825 titled "Meowdoku", "Meowdoku Cat Puzzle" at 541580, and a Playgama port by "DRA".
 12. **Single-origin corroboration**: Gamigion and felixbraberg.substack.com are the same author, so the ad-cadence numbers have one origin.
 13. **Lives: hearts or fish** (added 2026-10-09). App Store screenshots ([broadpass]) and store text show hearts; the user, playing the Play Store app, sees fish everywhere (user, first-hand, 2026-10-09). Explanation: the iOS build differs from Android, or the screenshots show an older version. Our parity target is the Play Store app, so the first-hand report wins (5.11).
+14. **Points in multiples of 5, or of 96** (added 2026-10-10). An iOS user review (AppFollow, cited in [differences-vs-original](../phase2/differences-vs-original.md) §2.6) says points come only in multiples of 5. The user's first-hand level-points rule on the Play Store app gives 576, 672, 768 … per cat (multiples of 96; totals such as 1 248 or 7 296 are not multiples of 5) (10.17). Explanations: the review means another number (the leaderboard points, an iOS build or an older version), or it is wrong. The first-hand report wins for level points.
 
 ## 19. Unknowns that matter for the rebuild
 
@@ -339,8 +355,9 @@ These are carried into [02](02-rebuild-spec.md) as `[DECISION]`s:
 - Daily puzzle structure: count, size, unlock, streaks, calendar, reset time.
 - ~~Leaderboard scope (per level, per daily, levels-completed, points).~~ **Resolved 2026-10-09 (user, first-hand):** points per period, a total that resets (10.16).
 - **New (2026-10-09):** the leaderboard **period's length and reset time** (our default: UTC weeks from Monday 00:00 UTC).
-- **New:** the **points numbers**: how many leaderboard points a kept fish is worth, the level points per level, and how the no-mistake streak raises them (our defaults: 1 point per fish; 10 × n, × 2 on Hard, plus 10 × the streak up to 10).
-- **New:** whether **dailies and events** add their kept fish to the leaderboard and move the streak (our default: both do; the tutorial does neither).
+- **New:** the **points numbers**: how many leaderboard points a kept fish is worth (our default: 1), ~~the level points per level, and how the no-mistake streak raises them~~ **level points resolved 2026-10-10 (user, first-hand):** 96 × (5 + s) per correct cat inside one level, s reset by a mistake (10.17).
+- **New (2026-10-10):** around the level-points rule: what **removing a placed cat** does (ours: nothing, and a cat put back scores nothing); whether **dailies, events and the tutorial** score (ours: dailies and events do, the tutorial does not); whether a **lifetime points total** or a best score exists; and how and where the running total is drawn during play and at the win (ours is our own design).
+- **New:** whether **dailies and events** add their kept fish to the leaderboard and ~~move the streak~~ score level points (2026-10-10 wording; our default: both do; the tutorial does neither).
 - **New:** what an **empty life** looks like, and the look and timing of the **fish-loss and win-fish animations** (ours are drawn and timed by us, [provenance](../provenance.md) §9).
 - The exact size and difficulty schedule per level number; whether boards are fixed or generated.
 - Settings in the app (haptics? music?), BGM, language list.

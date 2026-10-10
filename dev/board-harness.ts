@@ -97,7 +97,7 @@ function gameScene(): void {
     { title: t('game.title.level', { level: q.get('hard') === '1' ? 40 : 7 }), hard: q.get('hard') === '1', showHome: true, showSettings: true, showTrophy: false, fbSafeZone: q.get('fb') === '1' },
     { onHome: () => undefined, onSettings: () => undefined, onTrophy: () => undefined },
   );
-  const pills = createPills({ catsPlaced: state.catsPlaced, n, hearts: state.hearts, maxHearts: 3, compact: false });
+  const pills = createPills({ catsPlaced: state.catsPlaced, n, hearts: state.hearts, maxHearts: 3, compact: false, points: state.levelPoints });
   const chips = createRuleChips({ compact: false, highlight: q.get('coach') === '1' ? 'space' : null });
   const hint = (): void => {
     if (state.status === 'playing') dispatch({ type: 'HINT_OPEN', step: getHintStep(puzzle, state.cells), charged: true });
@@ -142,7 +142,7 @@ function gameScene(): void {
     for (const [k, v] of Object.entries(vars)) screen.style.setProperty(k, v);
     screen.dataset.compact = String(L.compact);
     board.setSlot(L.slot);
-    pills.update({ catsPlaced: state.catsPlaced, n, hearts: state.hearts, maxHearts: 3, compact: L.compact });
+    pills.update({ catsPlaced: state.catsPlaced, n, hearts: state.hearts, maxHearts: 3, compact: L.compact, points: state.levelPoints });
     chips.update({ compact: L.compact, highlight: q.get('coach') === '1' ? 'space' : null });
   };
 
@@ -154,7 +154,7 @@ function gameScene(): void {
 
   function render(): void {
     board.update(model());
-    pills.update({ catsPlaced: state.catsPlaced, n, hearts: state.hearts, maxHearts: 3, compact: screen.dataset.compact === 'true' });
+    pills.update({ catsPlaced: state.catsPlaced, n, hearts: state.hearts, maxHearts: 3, compact: screen.dataset.compact === 'true', points: state.levelPoints });
     const coach = coachCells();
     board.setHighlight(state.openHint ? { kind: 'hint', step: state.openHint } : coach ? { kind: 'coach', cells: coach } : null);
     board.setLocked(state.status !== 'playing' || coach !== null);
@@ -201,7 +201,7 @@ function galleryScene(): void {
   });
   section('Cats on tiles (36 px slot)', tiles);
   const ids: SymbolId[] = [
-    'icon-house', 'icon-gear', 'icon-bulb', 'icon-paw', 'icon-fish', 'icon-fish-empty', 'icon-trophy', 'icon-lock',
+    'icon-house', 'icon-gear', 'icon-bulb', 'icon-paw', 'icon-fish', 'icon-fish-empty', 'icon-points', 'icon-trophy', 'icon-lock',
     'icon-calendar', 'icon-play-video', 'icon-close', 'icon-chevron', 'icon-rule-colours', 'icon-rule-lines', 'icon-rule-space',
   ];
   section('Icons', ids.map((id) => swatch(id.slice(5), icon(id, { class: 'hx-icon' }))));

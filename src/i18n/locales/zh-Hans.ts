@@ -261,7 +261,6 @@ export const catalog: LocaleCatalog = {
   'fish.count.other': '{count}条小鱼',
   'fish.plus': '+{count}',
   'victory.next': '第{level}关',
-  'victory.points': '+{points} 积分',
   'victory.eventReward': '活动奖励：{reward}',
 
   // ── Phase 2b: rankings ─────────────────────────────────────────────────────
@@ -345,7 +344,7 @@ export const catalog: LocaleCatalog = {
   'ads.banner.placeholder': '横幅广告位',
   'time.daysHours': '{d}天{h}小时',
 
-  // ── Phase 2c: fish are lives, the period ranking, the perfect streak (AI draft 2026-10-09, unreviewed) ──
+  // ── Phase 2c: fish are lives, the period ranking (AI draft 2026-10-09, unreviewed) ──
   'period.total.day': '今日：{total}',
   'period.total.week': '本周：{total}',
   'period.total.month': '本月：{total}',
@@ -362,15 +361,17 @@ export const catalog: LocaleCatalog = {
   'rank.records.best.week': '最佳单周',
   'rank.records.best.month': '最佳单月',
   'rank.sub.period.other': '小鱼 +{count} · {total}',
-  'rank.records.streak': '完美连胜',
-  'rank.records.streakBest': '{count}（最高{best}）',
   'a11y.fishKept.day.other': '你留下了{count}条小鱼。今日合计：{total}。',
   'a11y.fishKept.week.other': '你留下了{count}条小鱼。本周合计：{total}。',
   'a11y.fishKept.month.other': '你留下了{count}条小鱼。本月合计：{total}。',
-  'victory.streak': '完美 ×{count}',
-  'victory.streak.a11y.other': '完美{count}连胜',
-  'howto.points.day': '解开谜题时留下的小鱼会计入今日排行，排行每天 00:00 UTC 重新开始。零失误过关可以累积完美连胜，赢得更多积分。',
-  'howto.points.week': '解开谜题时留下的小鱼会计入本周排行，排行每周一 00:00 UTC 重新开始。零失误过关可以累积完美连胜，赢得更多积分。',
-  'howto.points.month': '解开谜题时留下的小鱼会计入本月排行，排行每月1日 00:00 UTC 重新开始。零失误过关可以累积完美连胜，赢得更多积分。',
+  'howto.points.day': '解开谜题时留下的小鱼会计入今日排行，排行每天 00:00 UTC 重新开始。',
+  'howto.points.week': '解开谜题时留下的小鱼会计入本周排行，排行每周一 00:00 UTC 重新开始。',
+  'howto.points.month': '解开谜题时留下的小鱼会计入本月排行，排行每月1日 00:00 UTC 重新开始。',
+
+  // ── Phase 2c.1: level points per cat (AI draft 2026-10-10, unreviewed) ──
+  'game.points.a11y': '本关积分：{count}',
+  'a11y.points.other': '{count}积分。',
+  'points.count.other': '{count}积分',
+  'howto.levelPoints': '每找到一只猫都能得到积分，连续找到且没有失误时，每只猫都比前一只得分更多。失误不会扣分，但下一只猫会重新开始计数。提示或猫咪放下的猫也算在内。',
   ...LOCALE_NAMES,
 };

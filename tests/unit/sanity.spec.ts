@@ -7,7 +7,7 @@ import { createFakeClock, delay } from '../../src/app/clock';
 import { createEventBus } from '../../src/app/events';
 import { createStore } from '../../src/app/store';
 import { breatherBand, breatherPool, dailySlotFor, isHardLevel, pickWeighted, rampRowFor, RAMP } from '../../src/game/ramp';
-import { colorName, formatClock, formatDuration, formatShortDate, interpolate, joinList, setLocale, t, tn } from '../../src/i18n';
+import { colorName, formatClock, formatDuration, formatNumber, formatShortDate, interpolate, joinList, setLocale, t, tn } from '../../src/i18n';
 import { COLOR_KEYS, en, EN_PARTS } from '../../src/i18n/en';
 import { BANNED_PHRASES } from '../../scripts/i18n-check';
 
@@ -108,6 +108,20 @@ describe('i18n', () => {
     // No currency words for fish anywhere (glossary §2): fish are lives and leaderboard points.
     const currency = Object.entries(en).filter(([, v]) => /\b(coins?|money|wallet|swap)\b/i.test(v)).map(([k]) => k);
     expect(currency).toEqual([]);
+  });
+});
+
+describe('Phase 2c.1 English: level points per cat (fish-lives-spec §10.4, §10.7)', () => {
+  it('the HUD label, the screen-reader line, the victory row and the How to play note read as specified', () => {
+    expect(t('game.points.a11y', { count: formatNumber(2016) })).toBe('Level points: 2,016');
+    // Appended to the cat's own line: "Cat placed. 3 of 8. 2,016 points." (one utterance, §10.4).
+    expect(`${t('a11y.catPlaced', { placed: 3, n: 8 })} ${tn('a11y.points', 2016, { count: formatNumber(2016) })}`).toBe('Cat placed. 3 of 8. 2,016 points.');
+    expect(tn('a11y.points', 1, { count: formatNumber(1) })).toBe('1 point.');
+    expect(tn('points.count', 7296, { count: formatNumber(7296) })).toBe('7,296 points');
+    expect(tn('points.count', 13248, { count: formatNumber(13248) })).toBe('13,248 points');
+    expect(en['howto.levelPoints']).toMatch(/^Every cat you find earns points/);
+    // The retired per-win and perfect-streak copy is gone.
+    for (const k of ['victory.points', 'victory.streak', 'victory.streak.a11y.one', 'rank.records.streak', 'rank.records.streakBest']) expect(k in en, k).toBe(false);
   });
 });
 

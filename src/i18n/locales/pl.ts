@@ -273,7 +273,6 @@ export const catalog: LocaleCatalog = {
   'fish.count.other': '{count} rybki',
   'fish.plus': '+{count}',
   'victory.next': 'Poziom {level}',
-  'victory.points': 'Punkty: +{points}',
   'victory.eventReward': 'Nagroda: {reward}',
 
   // ── Phase 2b: rankings ─────────────────────────────────────────────────────
@@ -369,7 +368,7 @@ export const catalog: LocaleCatalog = {
   'ads.banner.placeholder': 'Miejsce na baner',
   'time.daysHours': '{d} d. {h} godz.',
 
-  // ── Phase 2c: fish are lives, the period ranking, the perfect streak (AI draft 2026-10-09, unreviewed) ──
+  // ── Phase 2c: fish are lives, the period ranking (AI draft 2026-10-09, unreviewed) ──
   'period.total.day': 'Dziś: {total}',
   'period.total.week': 'W tym tygodniu: {total}',
   'period.total.month': 'W tym miesiącu: {total}',
@@ -398,8 +397,6 @@ export const catalog: LocaleCatalog = {
   'rank.sub.period.few': '+{count} rybki · {total}',
   'rank.sub.period.many': '+{count} rybek · {total}',
   'rank.sub.period.other': '+{count} rybki · {total}',
-  'rank.records.streak': 'Idealna seria',
-  'rank.records.streakBest': '{count} (rekord {best})',
   'a11y.fishKept.day.one': 'Zachowane rybki: {count}. Twoja suma dziś: {total}.',
   'a11y.fishKept.day.few': 'Zachowane rybki: {count}. Twoja suma dziś: {total}.',
   'a11y.fishKept.day.many': 'Zachowane rybki: {count}. Twoja suma dziś: {total}.',
@@ -412,13 +409,20 @@ export const catalog: LocaleCatalog = {
   'a11y.fishKept.month.few': 'Zachowane rybki: {count}. Twoja suma w tym miesiącu: {total}.',
   'a11y.fishKept.month.many': 'Zachowane rybki: {count}. Twoja suma w tym miesiącu: {total}.',
   'a11y.fishKept.month.other': 'Zachowane rybki: {count}. Twoja suma w tym miesiącu: {total}.',
-  'victory.streak': 'Idealnie ×{count}',
-  'victory.streak.a11y.one': '{count} idealna wygrana z rzędu',
-  'victory.streak.a11y.few': '{count} idealne wygrane z rzędu',
-  'victory.streak.a11y.many': '{count} idealnych wygranych z rzędu',
-  'victory.streak.a11y.other': '{count} idealnej wygranej z rzędu',
-  'howto.points.day': 'Rybki, które zachowasz po rozwiązaniu zagadki, trafiają do rankingu dnia. Ranking zaczyna się od nowa codziennie o 00:00 UTC. Rozwiązuj bez błędów, aby budować idealną serię i zdobywać więcej punktów.',
-  'howto.points.week': 'Rybki, które zachowasz po rozwiązaniu zagadki, trafiają do rankingu tygodnia. Ranking zaczyna się od nowa w każdy poniedziałek o 00:00 UTC. Rozwiązuj bez błędów, aby budować idealną serię i zdobywać więcej punktów.',
-  'howto.points.month': 'Rybki, które zachowasz po rozwiązaniu zagadki, trafiają do rankingu miesiąca. Ranking zaczyna się od nowa pierwszego dnia każdego miesiąca o 00:00 UTC. Rozwiązuj bez błędów, aby budować idealną serię i zdobywać więcej punktów.',
+  'howto.points.day': 'Rybki, które zachowasz po rozwiązaniu zagadki, trafiają do rankingu dnia. Ranking zaczyna się od nowa codziennie o 00:00 UTC.',
+  'howto.points.week': 'Rybki, które zachowasz po rozwiązaniu zagadki, trafiają do rankingu tygodnia. Ranking zaczyna się od nowa w każdy poniedziałek o 00:00 UTC.',
+  'howto.points.month': 'Rybki, które zachowasz po rozwiązaniu zagadki, trafiają do rankingu miesiąca. Ranking zaczyna się od nowa pierwszego dnia każdego miesiąca o 00:00 UTC.',
+
+  // ── Phase 2c.1: level points per cat (AI draft 2026-10-10, unreviewed) ──
+  'game.points.a11y': 'Punkty poziomu: {count}',
+  'a11y.points.one': '{count} punkt.',
+  'a11y.points.few': '{count} punkty.',
+  'a11y.points.many': '{count} punktów.',
+  'a11y.points.other': '{count} punktu.',
+  'points.count.one': '{count} punkt',
+  'points.count.few': '{count} punkty',
+  'points.count.many': '{count} punktów',
+  'points.count.other': '{count} punktu',
+  'howto.levelPoints': 'Każdy znaleziony kot daje punkty, a każdy kolejny kot znaleziony z rzędu bez błędu daje więcej niż poprzedni. Błąd nigdy nie odbiera punktów, ale od następnego kota liczenie zaczyna się od nowa. Koty postawione przez podpowiedź lub kotka też się liczą.',
   ...LOCALE_NAMES,
 };

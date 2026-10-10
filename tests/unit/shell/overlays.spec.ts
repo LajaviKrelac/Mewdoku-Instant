@@ -159,8 +159,8 @@ describe('O4 fail overlay', () => {
   });
 });
 
-describe('O6 how to play, Phase 2c (fish-lives-spec §1.5): the lives are fish, then the points note', () => {
-  it('the lives note shows our fish and says so; a trophy note explains the weekly ranking and the perfect streak', () => {
+describe('O6 how to play, Phase 2c (fish-lives-spec §1.5; 2c.1 §10.7): the lives are fish, the ranking note, the level-points note', () => {
+  it('the lives note shows our fish; a trophy note explains the weekly ranking; a sparkle note explains the level points', () => {
     const howto = createHowToPlay();
     document.body.append(howto.el);
     howto.open({ showSkip: false, showReplay: true, onSkip: vi.fn(), onReplay: vi.fn(), onClose: vi.fn() });
@@ -170,11 +170,20 @@ describe('O6 how to play, Phase 2c (fish-lives-spec §1.5): the lives are fish, 
     const points = q(howto.el, '.howto__points');
     expect(points.querySelector('use')?.getAttribute('href')).toBe('#icon-trophy');
     expect(points.textContent).toContain('weekly ranking, which starts again every Monday at 00:00 UTC');
-    expect(points.textContent).toContain('perfect streak');
-    // The points note follows the lives note; no heart icon anywhere.
+    // 2c.1: the perfect streak is gone from the ranking note.
+    expect(points.textContent).not.toMatch(/streak|perfect/i);
+    const level = q(howto.el, '.howto__level-points');
+    expect(level.querySelector('use')?.getAttribute('href')).toBe('#icon-points');
+    expect(level.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+    expect(level.textContent).toBe(
+      'Every cat you find earns points, and each cat you find in a row without a mistake earns more than the one before. A mistake never takes points away, but the next cat starts the count again. Cats placed by a hint or the kitty count too.',
+    );
+    // Lives, then the ranking note, then the level-points note; no heart icon anywhere; no streak anywhere.
     const notes = Array.from(q(howto.el, '.howto__notes').children);
     expect(notes.indexOf(points)).toBe(notes.indexOf(lives) + 1);
+    expect(notes.indexOf(level)).toBe(notes.indexOf(points) + 1);
     expect(howto.el.innerHTML).not.toContain('icon-heart');
+    expect(howto.el.textContent).not.toMatch(/streak/i);
   });
 });
 

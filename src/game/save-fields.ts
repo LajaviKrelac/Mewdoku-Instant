@@ -1,6 +1,8 @@
 // Owner: C (Phase 2b)
 // Save-schema building blocks (04 §4.3, §7.2): value guards, record/slot shape checks, the cells codec
 // and the in-progress validation against a puzzle. PURE. Re-exported through save.ts.
+// Phase 2c.1 (G1, fish-lives-spec §3.2.3): the in-progress slot's optional level-points fields
+// (points, catStreak, scoredRows); a slot without them is still valid (the save stays v3).
 import { cfg, type GameConfig } from '../app/config';
 import type { Puzzle, PuzzleId } from '../engine/types';
 import { CellState, type DailyRecord, type InProgressV2, type LevelBest } from './types';
@@ -13,6 +15,11 @@ export function isRecord(x: unknown): x is Record<string, unknown> {
 
 export function isNonNegInt(x: unknown): x is number {
   return typeof x === 'number' && Number.isInteger(x) && x >= 0;
+}
+
+/** A whole number 0 … Number.MAX_SAFE_INTEGER (phase2c.1 §3.2.3: the slot's level-points fields). */
+export function isNonNegSafeInt(x: unknown): x is number {
+  return typeof x === 'number' && Number.isSafeInteger(x) && x >= 0;
 }
 
 export function isPosInt(x: unknown): x is number {
@@ -66,7 +73,11 @@ function readMap<T>(
   return { value, dropped };
 }
 
-/** Structural check of a stored slot (types and id format only; the puzzle check is validateInProgress). */
+/**
+ * Structural check of a stored slot (types and id format only; the puzzle check is validateInProgress).
+ * Phase 2c.1 §3.2.3: the optional points / catStreak / scoredRows are not checked here (a slot without
+ * them, or with a bad one, keeps its shape; copySlot drops a bad field).
+ */
 export function isInProgressShape(x: unknown, mode: InProgressV2['mode']): x is InProgressV2 {
   if (!isRecord(x) || x.mode !== mode || typeof x.id !== 'string') return false;
   if (!(mode === 'level' ? LEVEL_ID_RE : mode === 'daily' ? DAILY_ID_RE : EVENT_SLOT_ID_RE).test(x.id)) return false;
@@ -84,9 +95,16 @@ export function isInProgressShape(x: unknown, mode: InProgressV2['mode']): x is 
   );
 }
 
-/** A copy of a valid slot without unknown fields. */
-export function copySlot(s: InProgressV2): InProgressV2 {
-  return {
+/** The optional level-points fields of a slot (phase2c.1 §3.2.3), in their stored order. */
+const POINT_FIELDS = ['points', 'catStreak', 'scoredRows'] as const;
+
+/**
+ * A copy of a valid slot without unknown fields. Phase 2c.1 §3.2.3: each of points / catStreak /
+ * scoredRows is copied only when it is a non-negative safe integer; an invalid one is dropped (and,
+ * with `rep`, reported as `<path>.<field>`) while the slot is kept (restoreGame derives it then).
+ */
+export function copySlot(s: InProgressV2, rep?: string[], path = 'inProgress'): InProgressV2 {
+  const out: InProgressV2 = {
     id: s.id,
     mode: s.mode,
     cells: s.cells,
@@ -98,6 +116,13 @@ export function copySlot(s: InProgressV2): InProgressV2 {
     elapsedMs: s.elapsedMs,
     savedAt: s.savedAt,
   };
+  for (const k of POINT_FIELDS) {
+    const v: unknown = s[k];
+    if (v === undefined) continue;
+    if (isNonNegSafeInt(v)) out[k] = v;
+    else rep?.push(`${path}.${k}`);
+  }
+  return out;
 }
 
 // ─────────────────────────────── cells codec ───────────────────────────────

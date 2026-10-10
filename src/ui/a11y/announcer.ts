@@ -1,5 +1,5 @@
 // Owner: B (Phase 2b; was ui-board)
-// Polite aria-live region (02 §18): "Cat placed. 4 of 8.", "Wrong tile. 2 hearts left.", "Lavender done."
+// Polite aria-live region (02 §18): "Cat placed. 4 of 8. 3,840 points.", "Wrong tile. 2 fish left.", "Lavender done."
 
 export interface Announcer {
   /** Announces politely; repeated identical messages are still read (the region is reset first). */
