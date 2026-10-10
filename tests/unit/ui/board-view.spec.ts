@@ -7,7 +7,7 @@ import { CellState } from '../../../src/game/types';
 import { mountSprite } from '../../../src/ui/art/sprite';
 import { createBoardView, type BoardInput, type BoardModel, type BoardView } from '../../../src/ui/board/board-view';
 
-// 4×4: regions A B C C / A A C C / A D D C / D D D D (the tutorial board), colours Mint Violet Mustard Coral.
+// 4×4: regions A B C C / A A C C / A D D C / D D D D (the tutorial board), colours Denim Violet Mustard Coral.
 const REGIONS = Uint8Array.from([0, 1, 2, 2, 0, 0, 2, 2, 0, 3, 3, 2, 3, 3, 3, 3]);
 const COLORS = Uint8Array.from([4, 7, 2, 0]);
 

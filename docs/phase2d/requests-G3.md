@@ -74,3 +74,50 @@ Status: living list · Owner: G3 · Spec: [look-spec §3](look-spec.md#3-workstr
 | R4 | **Done at I-4**: the event page patterns moved to the lazy `events-chunk.css` and 16 unused custom properties went (first-load CSS 48.3 → 44.7 KB); the CSS ceiling then moved 43.5 → 46 KB (measured + 2.9 %, 04 §9, STATUS-2d §4). |
 | R5 | **Done at I-5**: CONTRACTS §7 and look-spec §4.6 name the label `.points-pill__name`. |
 | R6 | **Done at I-3**: every listed member is required; `PillsProps.compact` and `points` are deleted (also `BoardInput.mouse`, `KeyboardCallbacks.mouse`, `setSlot`'s frame, `HomeView` / `EventScreenView.settingsDot`). |
+
+---
+
+## 2d.1 (helpers-spec, 2026-10-10)
+
+Spec: [helpers-spec §7](helpers-spec.md#7-workstreams-interfaces-tests-and-acceptance) (ownership §7.1, order §7.2; the lead runs I-2) · Interfaces: [CONTRACTS-2d1.md](CONTRACTS-2d1.md). "How to file a request" above still applies, but ownership now follows helpers-spec §7.1, not look-spec §3.1. Number the 2d.1 rows **H1, H2, …** so they never clash with the 2d rows above.
+
+### 2d.1 Requests
+
+| # | From → to | What | Why |
+|---|---|---|---|
+
+*(none yet)*
+
+### 2d.1 Done for other workstreams' requests
+
+*(none yet)*
+
+### 2d.1 Notes from G3 for the others (no action needed)
+
+*(none yet)*
+
+### 2d.1 L0 (lead, 2026-10-10): what changed in G3's files
+
+- **English `color.4` "Mint" → "Denim"** (`src/i18n/en.ts`; helpers-spec §6.2, Appendix A).
+  - Tests updated:
+    - `tests/unit/sanity.spec.ts`: the `joinList` example.
+    - `tests/unit/shell/hint-text.spec.ts`: the label comment and five expected sentences.
+    - `tests/unit/shell/review-fixes.spec.ts`: `hintLocation` now ends "…, Denim.".
+  - No snapshot names a colour, so none changed.
+  - Comments updated: the example names in `hint-text.ts` (`unitListName`) and `how-to-play.ts` (`artColours`).
+  - The `sources` translator note in `src/i18n/meta.ts` now says "'Violet and Denim'".
+- **`how-to-play.ts`.** Rule 1's mini board (`artColours`) uses palette index 4 (five tiles). Per §6.2, those tiles show Denim once G2's palette lands, and their glyph follows §6.4 (`isDarkTile`). Only the comment changed at L0.
+- **Left for G3 (the redraft):**
+  - The 16 locales are untouched: each `color.4` is still that draft's word for Mint.
+  - `npm run i18n:check` passes: OK with 17 warnings. 16 are new stale-draft warnings (`color.4` in each of the 16 locales). The 17th is the `it` `rank.title.period.week` width warning, which was already there at HEAD `a5afc28`.
+  - `docs/i18n/drafted-from.json` was deliberately not rewritten.
+  - `meta.ts` `SAME_AS_ENGLISH.id` lists `color.4`. Indonesian "Mint" no longer equals the English, so that entry is stale.
+  - `docs/i18n/glossary.md` (row 4) and `review-log.md` (the `id` row) still say "Mint". §7.3 G3 item 9 adds "Denim" to the glossary.
+- **Config you read** (read-only):
+  - `fx.headFoundMs` **300 → 280**. `pills.ts` reads it, and `pills.spec` passes unchanged.
+  - `fx.points`, `fx.unitDone.labelMs`, `fx.catPlaced.shards` / `shardLifeMs`, `fx.hint.dimMs`, `fx.tickers` and `layout.hint` (the card and Apply sizes, × s).
+  - `ads.banner.hideDuringHint` (G1 acts on it).
+- **@deprecated phase2d.1:**
+  - `fx.startToast`: `start-toast.ts`, deleted at I-3.
+  - `fx.mouseStaggerMs`.
+  - `fx.levelPoints.rollMs` / `plusMs` / `plusRisePx`: the Score column stops reading them (`pills.ts` `counterMotion`). `reducedPlusInMs` / `reducedPlusOutMs` stay in use for the reduced-motion "+N".

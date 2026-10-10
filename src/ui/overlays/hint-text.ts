@@ -62,7 +62,7 @@ function unitListNameWith(units: readonly Unit[], ctx: HintTextContext, nm: Name
   return joinList(units.map((u) => unitNameWith(u, ctx, nm)));
 }
 
-/** "rows 2, 4 and 5", "columns 1 and 3", "Violet and Mint"; a single unit uses unitName(). */
+/** "rows 2, 4 and 5", "columns 1 and 3", "Violet and Denim"; a single unit uses unitName(). */
 export function unitListName(units: readonly Unit[], ctx: HintTextContext): string {
   return unitListNameWith(units, ctx, PLAIN);
 }

@@ -107,7 +107,7 @@ export const enCore = {
   'color.1': 'Apricot',
   'color.2': 'Mustard',
   'color.3': 'Lime',
-  'color.4': 'Mint',
+  'color.4': 'Denim',
   'color.5': 'Lagoon',
   'color.6': 'Sky',
   'color.7': 'Violet',

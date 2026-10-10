@@ -283,7 +283,7 @@ describe('retired-look guard (phase2b §1.8, §1.12)', () => {
     for (const gone of ['stroke-dasharray', 'xe-draw', '--x-len', 'fx-draw']) expect(board, gone).not.toContain(gone);
     // the pop (fx.markPopMs) and the wrong X filled in --wrong
     expect(board).toMatch(/\.cell\.fx-pop \.cell__xg\s*\{[^}]*animation:\s*x-pop var\(--x-pop-ms, 140ms\)/);
-    expect(cfg.fx.markPopMs).toBe(140);
+    expect(cfg.fx.markPopMs).toBe(170); // helpers-spec §0.6, §1.5: 140 → 170 at 2d.1 L0 (the CSS fallback above is G2's)
     expect(/\.cell\[data-s='w'\] \.cell__x\s*\{([^}]*)\}/.exec(board)?.[1]).toMatch(/fill:\s*var\(--wrong\)/);
     expect(/\.cell__pat\s*\{([^}]*)\}/.exec(board)?.[1]).toMatch(/color:\s*var\(--ink-deep\)/);
   });

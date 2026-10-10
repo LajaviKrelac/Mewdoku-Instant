@@ -5,8 +5,10 @@
 // (CAT_COLORS), the event theme overrides (EVENT_THEME_TOKENS) and xEdgeColor(), the X's dark edge
 // per tile, drawn only with Colour patterns on (look-spec §1.10, D-2d-5).
 // Phase 2d (D-2d-0, user decision 2026-10-10): ten region colours and the page, ink and helper
-// colours are sampled from the user's own screenshot of the original's game screen; Mint and Cocoa
+// colours are sampled from the user's own screenshot of the original's game screen; index 4 and Cocoa
 // (11 and 12) and every darkened or derived value are ours (look-spec §1.2, §1.9).
+// Phase 2d.1 L0 (helpers-spec §6.2): index 4 is named Denim (was Mint); it keeps 2d's own value here
+// until G2 sets the measured Denim (D-2d1-10).
 import { cfg, type GameConfig } from '../../app/config';
 import { assignColors } from '../../engine/colors';
 import type { DeltaMatrix, Puzzle } from '../../engine/types';
@@ -14,9 +16,10 @@ import type { DeltaMatrix, Puzzle } from '../../engine/types';
 export const PALETTE_SIZE = 12;
 
 /**
- * Region colours by palette index: Coral, Apricot, Mustard, Lime, Mint, Lagoon, Sky, Violet, Orchid,
- * Cocoa, Slate, Pink. Ten measured on the user's recording (PNG still, D-2d-2); Mint (4) and Cocoa (9)
- * are ours, used only by boards that need more than ten colours (look-spec §1.9, D-2d-10).
+ * Region colours by palette index: Coral, Apricot, Mustard, Lime, Denim, Lagoon, Sky, Violet, Orchid,
+ * Cocoa, Slate, Pink. Ten measured on the user's recording (PNG still, D-2d-2); index 4 (named Denim
+ * since 2d.1 L0, still 2d's own value until helpers-spec §6.2) and Cocoa (9) are ours, used only by
+ * boards that need more than ten colours (look-spec §1.9, D-2d-10).
  */
 export const PALETTE: readonly string[] = Object.freeze([
   '#D57374', '#FFAA6D', '#E4BB49', '#AED994', '#52A982', '#48B5B2',
@@ -28,7 +31,7 @@ export const PALETTE_CORE: readonly number[] = Object.freeze([0, 1, 2, 3, 5, 6, 
 
 /**
  * Heads-pill order (look-spec §1.6: around the colour wheel from green, as the recording shows):
- * Lime, Mint, Lagoon, Sky, Slate, Violet, Orchid, Pink, Coral, Apricot, Cocoa, Mustard.
+ * Lime, Denim, Lagoon, Sky, Slate, Violet, Orchid, Pink, Coral, Apricot, Cocoa, Mustard.
  */
 export const HEAD_ORDER: readonly number[] = Object.freeze([3, 4, 5, 6, 10, 7, 8, 11, 0, 1, 9, 2]);
 
@@ -215,7 +218,7 @@ export function paletteTier(n: number): readonly number[] {
  * Palette index per region label: `fixed` (tutorial, game/modes fixedColors) or the engine's
  * assignColors on the board's tier (look-spec §1.9): the k × k sub-matrix of PALETTE_DE00 for the
  * tier's colours, mapped back to palette indices. So a 10×10 board shows exactly the 10 measured
- * colours, and Mint / Cocoa appear only on boards that need more than 10.
+ * colours, and Denim (4) / Cocoa (9) appear only on boards that need more than 10.
  */
 export function regionColorsFor(puzzle: Pick<Puzzle, 'id' | 'n' | 'regions'>, fixed: readonly number[] | null): Uint8Array {
   if (fixed && fixed.length >= puzzle.n && fixed.slice(0, puzzle.n).every(isPaletteIndex)) {

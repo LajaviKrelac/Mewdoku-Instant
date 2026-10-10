@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { HintKind, HintStep, Unit } from '../../../src/engine/types';
 import { hintText, unitListName, unitName, type HintTextContext } from '../../../src/ui/overlays/hint-card';
 
-// Region labels 0..3 → palette Violet (7), Mint (4), Mustard (2), Coral (0).
+// Region labels 0..3 → palette Violet (7), Denim (4), Mustard (2), Coral (0).
 const ctx: HintTextContext = { n: 4, colors: Uint8Array.from([7, 4, 2, 0]), patterns: false };
 const withPatterns: HintTextContext = { ...ctx, patterns: true };
 
@@ -25,15 +25,15 @@ describe('unitName', () => {
 
   it('adds the glyph name when colour patterns are on (02 §18)', () => {
     expect(unitName(reg(0), withPatterns)).toBe('Violet (bar)');
-    expect(unitName(reg(1), withPatterns)).toBe('Mint (diamond)');
+    expect(unitName(reg(1), withPatterns)).toBe('Denim (diamond)');
     expect(unitName(row(0), withPatterns)).toBe('row 1');
   });
 
   it('joins lists of lines and colours', () => {
     expect(unitListName([row(1), row(3), row(4)], ctx)).toBe('rows 2, 4 and 5');
     expect(unitListName([col(0), col(2)], ctx)).toBe('columns 1 and 3');
-    expect(unitListName([reg(0), reg(1)], ctx)).toBe('Violet and Mint');
-    expect(unitListName([reg(0), reg(1), reg(2)], ctx)).toBe('Violet, Mint and Mustard');
+    expect(unitListName([reg(0), reg(1)], ctx)).toBe('Violet and Denim');
+    expect(unitListName([reg(0), reg(1), reg(2)], ctx)).toBe('Violet, Denim and Mustard');
     expect(unitListName([row(6)], ctx)).toBe('row 7');
     expect(unitListName([], ctx)).toBe('');
   });
@@ -60,7 +60,7 @@ describe('hintText (02 §9.1 templates)', () => {
 
   it('confinement line → region', () => {
     expect(hintText(step('confine_line_region', [col(1), reg(1)], { level: 2 }), ctx)).toBe(
-      'All open tiles of column 2 are Mint. So the rest of Mint is out.',
+      'All open tiles of column 2 are Denim. So the rest of Denim is out.',
     );
     expect(hintText(step('confine_line_region', [row(0), reg(2)], { level: 2 }), withPatterns)).toBe(
       'All open tiles of row 1 are Mustard (triangle). So the rest of Mustard (triangle) is out.',
@@ -75,7 +75,7 @@ describe('hintText (02 §9.1 templates)', () => {
 
   it('pigeonhole: colours into rows, rows into colours, columns into colours', () => {
     expect(hintText(step('pigeonhole', [reg(0), reg(1), row(1), row(3)], { level: 4, k: 2 }), ctx)).toBe(
-      'Violet and Mint only fit in rows 2 and 4. Those rows are taken, so clear their other tiles.',
+      'Violet and Denim only fit in rows 2 and 4. Those rows are taken, so clear their other tiles.',
     );
     expect(hintText(step('pigeonhole', [row(0), row(1), row(2), reg(0), reg(2), reg(3)], { level: 4, k: 3 }), ctx)).toBe(
       'Rows 1, 2 and 3 only fit in Violet, Mustard and Coral. Those colours are taken, so clear their other tiles.',

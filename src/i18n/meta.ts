@@ -38,7 +38,7 @@ export const PLACEHOLDER_NOTES: Readonly<Record<string, string>> = {
   unit: "a row ('row 3'), a column ('column 5') or a colour name ('Violet'); may start the sentence",
   color: "a colour name such as 'Violet' (a proper name, used in apposition: 'the colour Violet')",
   line: "a row or a column, e.g. 'row 3' or 'column 5'",
-  sources: "a list of rows, columns or colours, e.g. 'rows 2 and 4' or 'Violet and Mint'",
+  sources: "a list of rows, columns or colours, e.g. 'rows 2 and 4' or 'Violet and Denim'",
   targets: "a list of rows, columns or colours, e.g. 'columns 1 and 3'",
   targetKind: "the plural kind word of the targets: 'rows', 'columns' or 'colours'",
   index: 'a 1-based number (row, column or puzzle number)',

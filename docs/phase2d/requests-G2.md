@@ -49,3 +49,43 @@ Status: living list · Owner: G2 · Spec: [look-spec §3](look-spec.md#3-workstr
 | R1 | **Done** (I-1): the four `dev/*-harness.html` pages carry `#F7F2EF`; `PENDING_R1` is gone from `css-rules.spec.ts`, which now also fails on any 2d-retired value in the dev pages. |
 | R2 | **Done** (I-1 / I-3): the harnesses no longer use `wrong-x` or `icon-rule-*` and call `setSlot(slot, { pad, radius })`; the four ids are deleted from `SymbolId` / `IconSymbol`, and `setSlot`'s frame is required (the 2b `boardPad` / `boardRadius` reads are gone). |
 | R3 | **Done by G3** (`how-to-play.ts` `miniBoard()`). |
+
+---
+
+## 2d.1 (helpers-spec, 2026-10-10)
+
+Spec: [helpers-spec §7](helpers-spec.md#7-workstreams-interfaces-tests-and-acceptance) (ownership §7.1, order §7.2; the lead runs I-2) · Interfaces: [CONTRACTS-2d1.md](CONTRACTS-2d1.md). "How to file a request" above still applies, but ownership now follows helpers-spec §7.1, not look-spec §3.1. Number the 2d.1 rows **H1, H2, …** so they never clash with the 2d rows above.
+
+### 2d.1 Requests
+
+| # | From → to | What | Why |
+|---|---|---|---|
+
+*(none yet)*
+
+### 2d.1 Done for other workstreams' requests
+
+*(none yet)*
+
+### 2d.1 Notes from G2 for the others (no action needed)
+
+*(none yet)*
+
+### 2d.1 L0 (lead, 2026-10-10): what changed in G2's files
+
+- **`color.4` "Mint" → "Denim"** (helpers-spec §6.2). Only the name changed at L0:
+  - `tests/unit/ui/board-view.spec.ts`: the board comment now names the colours "Denim Violet Mustard Coral".
+  - `tests/unit/ui/art-a11y-fx.spec.ts`: two test titles changed. One now ends "… Denim (4, still the 2d value until helpers-spec §6.2) and Cocoa (9) are the extras". The `HEAD_ORDER` title now lists "Lime, Denim, …". No assertion changed.
+  - `tests/unit/ui/palette-check.spec.ts`: the comment over `from(4) ≥ 13.5`.
+  - `src/ui/art/palette.ts`: doc comments only (the file header, `PALETTE`, `HEAD_ORDER`, `regionColorsFor`).
+  - `src/styles/tokens.css`: the palette block's heading comment and the `--r4` comment.
+  - **No value changed.** `PALETTE[4]` is still `#52A982` and `--r4` is still `#52a982`. `PALETTE_CORE`, the tiers, `HEAD_ORDER` and `PALETTE_DE00` are still 2d's. Your §6.2 work sets them. The comments say "until helpers-spec §6.2"; rewrite them when you do.
+- **`tests/unit/ui/css-rules.spec.ts`:** `expect(cfg.fx.markPopMs).toBe(140)` is now `170` (helpers-spec §0.6, §1.5).
+  - The same test still checks for `board.css`'s fallback `var(--x-pop-ms, 140ms)`. That file is yours, and §4.4 reworks the X animation, so update the CSS and its regex together.
+  - Until then the inline `--x-pop-ms` that `board-view.ts` sets already gives 170 ms.
+- **Left for G2:** `scripts/palette-check.ts` `NAMES[4]` (the report label) is still `'Mint'`. It is your script, and §6.2 reruns it.
+- **Config you read** (read-only):
+  - `fx.markDraw`, `fx.mouse`, `fx.catPlaced`, `fx.unitDone.waveStepMs`, and `fx.hint.ghostFirstMs` / `ghostStaggerMs` / `ghostPopMs`.
+  - `fx.markPopMs` 170: from now on only the mouse's X pops.
+  - `kitty.revealMs` 820: the board's surprised kitty and `board-fx.ts`'s cleanup read it. `board-view.spec` passes unchanged.
+  - `fx.mouseStaggerMs` is @deprecated phase2d.1. `board-view.ts` reads it until your mouse run lands, and the reader goes at I-3.

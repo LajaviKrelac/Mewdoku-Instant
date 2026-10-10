@@ -56,7 +56,8 @@ describe('palette-check', () => {
     expect((min?.de ?? 0) >= MIN_DE00).toBe(true);
     expect(min?.de).toBeCloseTo(10.4, 2);
     expect([min?.i, min?.j]).toEqual([6, 10]);
-    // the two colours of ours sit far from every other: Mint ≥ 13.5, Cocoa ≥ 16.5
+    // the two colours of ours sit far from every other: index 4 (named Denim at 2d.1 L0, still 2d's Mint
+    // value until helpers-spec §6.2) ≥ 13.5, Cocoa ≥ 16.5
     const from = (i: number): number => Math.min(...pairwise(PALETTE).filter((p) => p.i === i || p.j === i).map((p) => p.de));
     expect(from(4)).toBeGreaterThanOrEqual(13.5);
     expect(from(9)).toBeGreaterThanOrEqual(16.5);

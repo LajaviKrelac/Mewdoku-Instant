@@ -74,12 +74,12 @@
   --warm-rgb: 239, 134, 39; /* measured fit: the round buttons' warm shadow */
   --pulse-rgb: 255, 165, 30; /* measured fit: the helper pulse glow */
 
-  /* ── Region palette (look-spec §1.9), by palette index: 10 measured, Mint and Cocoa ours ── */
+  /* ── Region palette (look-spec §1.9), by palette index: 10 measured, index 4 and Cocoa ours ── */
   --r0: #d57374; /* Coral */
   --r1: #ffaa6d; /* Apricot */
   --r2: #e4bb49; /* Mustard */
   --r3: #aed994; /* Lime */
-  --r4: #52a982; /* Mint (ours, 12×12 only) */
+  --r4: #52a982; /* Denim (named at 2d.1 L0; still 2d's Mint value, ours, 12×12 only, until helpers-spec §6.2) */
   --r5: #48b5b2; /* Lagoon */
   --r6: #6bbce7; /* Sky */
   --r7: #9778d6; /* Violet */

@@ -38,7 +38,7 @@ describe('i18n', () => {
 
   it('formats lists, plurals, colours, dates and times', async () => {
     expect(joinList(['Violet'])).toBe('Violet');
-    expect(joinList(['Violet', 'Mint'])).toBe('Violet and Mint');
+    expect(joinList(['Violet', 'Denim'])).toBe('Violet and Denim');
     expect(joinList(['2', '4', '5'])).toBe('2, 4 and 5');
     // Phase 2c: the lives are fish (fish-lives-spec §1.6).
     expect(tn('a11y.mistake', 1)).toBe('Wrong tile. 1 fish left.');

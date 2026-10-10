@@ -62,3 +62,38 @@ Status: living list · Owner: G1 · Spec: [look-spec §3](look-spec.md#3-workstr
 | R4 | **Done**: `boot.spec.ts`'s fake implements `playStartToast`; `win-flow.spec.ts` fakes `WinScreen` (no `playStartToast` needed); `screens-2b.spec.ts` and `dev/b-harness.ts` use the real `createGameScreen`. `GameScreen.playStartToast` is required since I-3 and the session calls it without `?.`. |
 | R5 | **Done at I-5**: CONTRACTS §10 lists G1's members. |
 | R6 | **Done at I-5**: 05 §6 and the parity-spec banner lines point at the banner in play (D-2d-15) and fb-dashboard B7–B9. |
+
+---
+
+## 2d.1 (helpers-spec, 2026-10-10)
+
+Spec: [helpers-spec §7](helpers-spec.md#7-workstreams-interfaces-tests-and-acceptance) (ownership §7.1, order §7.2; the lead runs I-2) · Interfaces: [CONTRACTS-2d1.md](CONTRACTS-2d1.md). "How to file a request" above still applies, but ownership now follows helpers-spec §7.1, not look-spec §3.1. Number the 2d.1 rows **H1, H2, …** so they never clash with the 2d rows above.
+
+### 2d.1 Requests
+
+| # | From → to | What | Why |
+|---|---|---|---|
+
+*(none yet)*
+
+### 2d.1 Done for other workstreams' requests
+
+*(none yet)*
+
+### 2d.1 Notes from G1 for the others (no action needed)
+
+*(none yet)*
+
+### 2d.1 L0 (lead, 2026-10-10): what changed for G1
+
+- **No G1 file was edited at L0.** Every G1 spec passes unchanged.
+- **Config** (`src/app/config.ts`, helpers-spec §0.6; read-only for G1–G3). It now holds everything G1 reads:
+  - `fx.helperPulse.idleMs` 5000, `needsStock` true and `untilHelperUsed` true (`views.ts`, §4.6). `'auto'` changes meaning, as `HelperPulseTarget`'s doc comment explains. Today's `views.ts` ignores the three keys, so `flags-views.spec` still passes.
+  - `fx.mouse` `{ appearMs: 115, dwellMs: 850, exitMs: 85 }` and `fx.markPopMs` **140 → 170** (§1.5), for `mouseVisitMs` (935), `mouseLandMs` and `mouseRunMs`. For 3 tiles that is 3 × 935 + 170 = 2 975; with reduced motion it is `fx.reducedMotionFadeMs`, 150.
+  - `fx.points.starAtMs` 783 and `flightMs` 530 (§2.5). Schedule the `points` sound at 783 + 17 + 530 = 1 330 ms after `POINTS`.
+  - `fx.tickers` `{ enabled: true, delayMs: 150, crossMs: 9000, lead: 0.086, reducedHoldMs: 3000 }` (§5). The session's trigger checks `fx.tickers.enabled` where 2d checked `fx.startToast.enabled`.
+  - `ads.banner.hideDuringHint` true (`banner-flow.ts`, §3.2).
+  - `kitty.revealMs` **600 → 820** (§2.4). `helper-flows.spec`, `timer.spec` and `points-session.spec` read it from the config, so they pass unchanged.
+- **@deprecated phase2d.1.** These are still read today, and the readers go at I-3:
+  - `fx.mouseStaggerMs`: the mark sounds in `session.ts`, and `session-2d.spec`.
+  - `fx.startToast`: the toast trigger in `session.ts`, and `session-2d.spec`.

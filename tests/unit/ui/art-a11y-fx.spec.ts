@@ -419,7 +419,7 @@ describe('Phase 2d palette (look-spec §1.6, §1.9)', () => {
     return out;
   };
 
-  it('the 10 measured colours are the core tier; Mint (4) and Cocoa (9) are the extras', () => {
+  it('the 10 measured colours are the core tier; Denim (4, still the 2d value until helpers-spec §6.2) and Cocoa (9) are the extras', () => {
     expect(PALETTE).toEqual(['#D57374', '#FFAA6D', '#E4BB49', '#AED994', '#52A982', '#48B5B2', '#6BBCE7', '#9778D6', '#EB85B7', '#B0855A', '#A7BFD7', '#FAB4D0']);
     expect([...PALETTE_CORE]).toEqual([0, 1, 2, 3, 5, 6, 7, 8, 10, 11]);
     expect([...paletteTier(4)]).toEqual([...PALETTE_CORE]);
@@ -448,7 +448,7 @@ describe('Phase 2d palette (look-spec §1.6, §1.9)', () => {
     }
   });
 
-  it('HEAD_ORDER is a permutation of 0…11 around the wheel from green: Lime, Mint, Lagoon, Sky, Slate, Violet, Orchid, Pink, Coral, Apricot, Cocoa, Mustard', () => {
+  it('HEAD_ORDER is a permutation of 0…11 around the wheel from green: Lime, Denim, Lagoon, Sky, Slate, Violet, Orchid, Pink, Coral, Apricot, Cocoa, Mustard', () => {
     expect([...HEAD_ORDER]).toEqual([3, 4, 5, 6, 10, 7, 8, 11, 0, 1, 9, 2]);
     expect([...HEAD_ORDER].sort((a, b) => a - b)).toEqual(Array.from({ length: 12 }, (_, i) => i));
     // filtered to the 10 core colours it is the recording's order

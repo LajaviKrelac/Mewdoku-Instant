@@ -98,7 +98,7 @@ describe('hint location for screen readers (A11Y-7)', () => {
     expect(hintLocation(single, ctx)).toBe('Highlighted tile: row 3, column 2.');
     expect(hintLocation(single, { ...ctx, regions })).toBe('Highlighted tile: row 3, column 2, Mustard.');
     const byColour: HintStep = { kind: 'single', level: 1, focusUnits: [{ kind: 'region', index: 1 }], focusCells: [6], effectCells: [], placeCell: 6 };
-    expect(hintLocation(byColour, ctx)).toBe('Highlighted tile: row 2, column 3, Mint.');
+    expect(hintLocation(byColour, ctx)).toBe('Highlighted tile: row 2, column 3, Denim.');
     const trial: HintStep = { kind: 'trial', level: 4, focusUnits: [{ kind: 'region', index: 3 }], focusCells: [0], effectCells: [0] };
     expect(hintLocation(trial, { ...ctx, regions, patterns: true })).toBe('Highlighted tile: row 1, column 1, Violet (bar).');
     const mistaken: HintStep = { kind: 'mistaken_mark', level: 0, focusUnits: [], focusCells: [15], effectCells: [15] };
