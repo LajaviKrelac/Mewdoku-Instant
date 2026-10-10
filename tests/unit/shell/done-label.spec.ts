@@ -85,7 +85,7 @@ describe('the completion label (helpers-spec §4.3)', () => {
       expect(l.querySelector('text')?.getAttribute('paint-order')).toBe('stroke');
       expect(l.querySelector('linearGradient stop')?.getAttribute('style')).toContain('var(--done-top)');
       // the 1 s brown drop, then the measured soft warm shadow ≈ 4 px under it (audit B10)
-      expect(l.style.filter).toBe('drop-shadow(0 1px 0 var(--done-line)) drop-shadow(0 2px 2px rgba(150, 90, 70, 0.5))');
+      expect(l.style.filter).toBe('drop-shadow(0 1px 0 var(--done-line)) drop-shadow(0 2px 2px rgba(150, 90, 70, 0.32))');
     }
     const [x1, y1] = translate(labels[0] as SVGSVGElement);
     expect(x1).toBeCloseTo(119.5, 2);

@@ -75,6 +75,13 @@
 // hi). New rows for the new lazy chunks (measured + about 3 %): the fx chunk JS 14.8 (14.4) and CSS 2.73 (2.65),
 // the board's lazy motion JS 3.8 (3.7) and CSS 6.4 (6.2), the lazy art 4.2 (4.06). The core lazy JS (66.7 / 74)
 // and the lazy CSS (33.5 / 34.6) are within and unchanged.
+// Final 2d / 2d.1 audit fixes (fix lead, 2026-10-10; STATUS-2d §18): the fx chunk drew the measured look closer
+// (the shards' start in the cat's cell, the star's streak as its own layer and a fuller trail, the burst's
+// sparkles spaced all round, the label overlap rule; the tickers' body as ::before, the column clip, the paw's
+// overhang) and the lazy art redrew the star and the paw cap, so three lazy rows moved to the largest build + about
+// 3 %: the fx chunk JS 14.8 → 15.3 (14.88, web), its CSS 2.73 → 3.26 (3.16), the lazy art 4.2 → 4.4 (4.27, web).
+// The first load stays inside every ceiling (FBIG e2e: main JS 323.3 / 332, CSS 48.9 / 49.3, first load
+// 389.9 / 398, gzip 144.7 / 148.5); nothing else moved.
 //
 // Usage: tsx scripts/size-check.ts [distDir …] [--json]
 //   No dirs → every existing one of dist/web, dist/fbig, dist/release-web and dist/release-fbig. A dir
@@ -125,8 +132,8 @@ export const LOCALE_CHUNK = /^assets\/locale-[A-Za-z-]+-[^/]*\.js$/;
  * 2026-10-09, re-set after the review fixes; main JS and the two first-load totals re-set at 2c.1,
  * 2026-10-10; main JS, CSS, the three first-load totals and the lazy CSS re-set at 2d I-4,
  * 2026-10-10; main JS, CSS, index.html, the three first-load totals and the locale chunk re-set, and the
- * fx-chunk, board-motion and lazy-art rows added at 2d.1 I-4, 2026-10-10): the largest measured build (FBIG
- * for JS) plus about 3 % (04 §9).
+ * fx-chunk, board-motion and lazy-art rows added at 2d.1 I-4, 2026-10-10; the fx chunk's JS and CSS and the lazy
+ * art re-set at the final audit fixes, 2026-10-10): the largest measured build (FBIG for JS) plus about 3 % (04 §9).
  */
 export const BUDGETS: readonly SizeBudget[] = [
   // The entry and the modulepreload chunks index.html links (since 2d.1 I-4: core-*, and the tutorial coach's
@@ -143,13 +150,13 @@ export const BUDGETS: readonly SizeBudget[] = [
   { label: 'Locale chunk (each)', pattern: LOCALE_CHUNK, maxBytes: 29.3 * KB, perFile: true },
   { label: 'Lazy JS (optional)', pattern: /^assets\/(?:events|fb-social|social-flows)-[^/]*\.js$/, maxBytes: 29.3 * KB },
   // Phase 2d.1 (I-4): the fx chunk (src/ui/fx/celebrate.ts), prefetched at idle after the first game screen mounts.
-  { label: 'Lazy JS (fx chunk)', pattern: /^assets\/celebrate-[^/]*\.js$/, maxBytes: 14.8 * KB },
+  { label: 'Lazy JS (fx chunk)', pattern: /^assets\/celebrate-[^/]*\.js$/, maxBytes: 15.3 * KB },
   // Phase 2d.1 (I-4): the board's lazy motion (src/ui/board/board-mouse.ts: the mouse, the cat sequence, the wave).
   { label: 'Lazy JS (board motion)', pattern: /^assets\/board-mouse-[^/]*\.js$/, maxBytes: 3.8 * KB },
   // Phase 2d.1: the symbols only those two chunks draw (src/ui/art/lazy-art.ts), split out because both import it.
-  { label: 'Lazy JS (lazy art)', pattern: /^assets\/lazy-art-[^/]*\.js$/, maxBytes: 4.2 * KB },
+  { label: 'Lazy JS (lazy art)', pattern: /^assets\/lazy-art-[^/]*\.js$/, maxBytes: 4.4 * KB },
   { label: 'Lazy JS (core)', pattern: /^assets\/[^/]*\.js$/, maxBytes: 74 * KB },
-  { label: 'Lazy CSS (fx chunk)', pattern: /^assets\/celebrate-[^/]*\.css$/, maxBytes: 2.73 * KB },
+  { label: 'Lazy CSS (fx chunk)', pattern: /^assets\/celebrate-[^/]*\.css$/, maxBytes: 3.26 * KB },
   { label: 'Lazy CSS (board motion)', pattern: /^assets\/board-mouse-[^/]*\.css$/, maxBytes: 6.4 * KB },
   { label: 'Lazy CSS', pattern: /^assets\/[^/]*\.css$/, maxBytes: 34.6 * KB },
   { label: 'Event packs', pattern: /^assets\/[a-z][a-z-]*-\d{4}-[^/]*\.json$/, maxBytes: LISTED },

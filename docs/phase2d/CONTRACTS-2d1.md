@@ -368,3 +368,14 @@ The anchor is the unit's last changed tile in reading order, **except for the mo
 - `Router.coachReady(): Promise<boolean>` (boot waits for it on a first run instead of `overlaysReady()`); `RouterFactories.loadCoach?()`; `router.ts` `loadCoachChunk()`; `loadOverlayChunk()` loads both chunks together. O8 left `overlay-chunk.ts`.
 - `vite.config.ts`: one `core` chunk for the first-load modules that lazy chunks share (`codeSplitting.groups`, `$initial` only), preloaded next to the entry.
 - `src/styles/board-mouse.css` (requests-G2 H3): the board's lazy motion (the mouse, the cat sequence, the wave) left the first-load `board.css`; the ghost rules moved to `overlay-chunk.css`.
+
+### 11.7 Final audit fixes (fix lead, 2026-10-10)
+
+- `CelebrateContext.cellHost?(cell): HTMLElement | null` (optional; the game screen passes `board.cellElement`): the cat's shards fly their first `SHARD_UNDER_MS` (150) inside that cell, under the cat (B4). `playCatBurst`'s `CatBurstFx.host` likewise.
+- `src/ui/dom.ts` `trackPress(btn)`: `[data-pressed]` from `pointerdown` to `pointerup` / `pointercancel` / `pointerleave` / `lostpointercapture`, used by the helper discs and Apply (B12; the CSS presses `:active` and `[data-pressed]` alike).
+- `src/ui/hud/pills.ts` `headsPillWidth(heads, fish)`: the heads pill's width in s-units (n × 25.33 + 16.6, at most the room next to the fish pill); `.pills` carries it as `--hpw` (B1).
+- `src/ui/fx/done-label.ts` `labelsOverlap(a, b, s)`, `LABEL_BOX_H`: one action never places two labels that overlap (A-1).
+- `src/ui/fx/cat-burst.ts` `SHARD_UNDER_MS`; `src/ui/board/layout.ts` `GameLayout.pad` may be fractional and `board` is the full card (B11).
+- `GameBarView.countTo()` also sets `[data-counting]` and `--count-ms` on the Score column (its halo behind the digits, B6).
+- Board: a mouse `MARKED` before its lazy chunk has loaded reveals its X's at `mouseRunMs` if the chunk has not landed, and a chunk landing after that plays nothing (A-2).
+

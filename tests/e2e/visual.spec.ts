@@ -214,15 +214,20 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
 
   test('the win flight, the ranking panel and the victory', async ({ page }) => {
     await open(page, returning());
-    await solve(page);
+    const sol = await startLevel(page);
+    // The heads pill's box before the win (final audit B1: as wide as its heads, the pills row centred).
+    const heads = (await page.locator('.pill--heads').boundingBox()) as { x: number; width: number };
+    for (let r = 0; r < sol.length; r++) await placeCat(page, r * sol.length + (sol[r] as number));
     // §2.2: the period counter shows this week's total before the win, the kept fish fly to it;
-    // Phase 2d §1.13: in the heads pill's place (the heads fade out).
+    // Phase 2d §1.13: in the heads pill's place and size (the heads fade out).
     const counter = page.locator('.pills .period-pill[data-in-game]');
     await expect(counter).toBeVisible({ timeout: 4000 });
     await expect(page.locator('.pill--heads')).toBeHidden({ timeout: 1000 });
     const over = await hud(page);
     const cb = (await counter.boundingBox()) as { x: number; width: number };
-    expect(Math.abs(cb.x - (over.pills as Box).left), 'over the heads pill').toBeLessThanOrEqual(1);
+    expect(Math.abs(cb.x - heads.x), 'over the heads pill').toBeLessThanOrEqual(1);
+    expect(Math.abs(cb.width - heads.width), 'as wide as the heads pill').toBeLessThanOrEqual(1);
+    expect(cb.x, 'inside the pills row').toBeGreaterThanOrEqual((over.pills as Box).left - 0.5);
     await expect(page.locator('.fx-layer .fx-fish').first()).toBeAttached({ timeout: 4000 });
     await page.waitForTimeout(450);
     await shot(page, 'win-flight');

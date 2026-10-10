@@ -26,8 +26,9 @@
    at the inline end. Content width, at most the column − 24 s (the text ellipsizes).
    Audit B14: they cross the game column (.tickers is the column, clipped), not the whole viewport, so on a
    wide desktop window they stay over the HUD and move as fast as on a phone.
-   Audit B8: the pill's body (::before: fill, border, round end) starts under the paw (14 s in), so its
-   straight top and bottom never run past the scallops; the paw draws the end. */
+   Audit B8: the pill's body (::before: fill, border, round end) starts under the paw (8 s in, where the paw's
+   own fill begins), so its straight top and bottom never run past the scallops, which hide it where they
+   bulge; the paw draws the scalloped end, its border meeting the body's in one line. */
 .tickers {
   position: absolute;
   top: 0;
@@ -60,7 +61,7 @@
   z-index: -1;
   top: 0;
   bottom: 0;
-  inset-inline-start: calc(var(--s) * 14px);
+  inset-inline-start: calc(var(--s) * 8px);
   inset-inline-end: 0;
   box-sizing: border-box;
   border: calc(var(--s) * 1.2px) solid var(--toast-line);

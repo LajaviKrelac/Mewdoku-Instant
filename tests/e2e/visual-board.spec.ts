@@ -116,6 +116,8 @@ async function checkBoardLook(page: Page): Promise<void> {
       gap: t1.left - t0.right,
       tileRadius: parseFloat(getComputedStyle(document.querySelector('.cell__tile') as Element).borderTopLeftRadius),
       firstTile: t0.left - board.getBoundingClientRect().left,
+      boardW: board.getBoundingClientRect().width,
+      n: parseFloat(cs.getPropertyValue('--n')),
       s: parseFloat(getComputedStyle(document.querySelector('.screen--game') as Element).getPropertyValue('--s')) || null,
     };
   });
@@ -128,7 +130,12 @@ async function checkBoardLook(page: Page): Promise<void> {
   expect(m.firstTile).toBeCloseTo(m.pad + gap / 2, 1);
   if (m.s) {
     expect(m.cardRadius).toBeCloseTo(cfg.layout.game.cardRadius * m.s, 1);
-    expect(m.pad).toBe(Math.max(3, Math.round(cfg.layout.game.cardPad * m.s)));
+    // final audit B11 (measured on 9 × 9): the card keeps its size; what the whole-px slots leave of it is padding,
+    // so the pad is at least round(cardPad × s) and less than half a slot's px more per side (n px in all)
+    const pad0 = Math.max(3, Math.round(cfg.layout.game.cardPad * m.s));
+    expect(m.pad).toBeGreaterThanOrEqual(pad0 - 0.01);
+    expect(m.pad - pad0).toBeLessThan(m.n / 2);
+    expect(m.boardW).toBeCloseTo(m.slot * m.n + 2 * m.pad, 1);
   }
 }
 
@@ -236,9 +243,10 @@ test.describe('Phase 2d visual review: the board (look-spec §1.8–§1.10, §5.
     await mark(page, [0, 1, 2, 3, 4]);
     await checkBoardLook(page);
     const box = await page.locator('.board').boundingBox();
-    // look-spec §1.1, §1.8: the card is 390 wide at x 6 (whole-px slots of 38: tile 35, gap 3)
-    expect(box?.width).toBeCloseTo(390, 0);
-    expect(box?.x).toBeCloseTo(6, 0);
+    // look-spec §1.1, §1.8 (final audit B11): the card is its full 390.66 wide at x 5.67, as measured (390.67 at 5.67);
+    // whole-px slots of 38 (tile 35, gap 3), the 10.66 px they leave in the padding
+    expect(box?.width).toBeCloseTo(402 - 2 * cfg.layout.game.cardMargin, 1);
+    expect(box?.x).toBeCloseTo(cfg.layout.game.cardMargin, 1);
     const slot = await page.evaluate(() => parseFloat(getComputedStyle(document.querySelector('.board') as Element).getPropertyValue('--slot')));
     expect(slot).toBe(38);
     await page.waitForTimeout(300);

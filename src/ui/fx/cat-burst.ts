@@ -39,15 +39,15 @@ export interface Shard {
 /**
  * The shards of one burst (pure, seeded): `count` chunks drawn 9–16 s px across (the first three up to 22;
  * their boxes SHARD_BOX larger, as the art does not fill its box), thrown radially at 0.3–0.5 px/ms × s,
- * mostly up and sideways, starting 0.25–0.5 T out from the tile centre along their way (audit B4: the
+ * all round but straight down, starting 0.25–0.5 T out from the tile centre along their way (audit B4: the
  * measured chunks already reach the tile's edge at +16).
  */
 export function shardPlan(count: number, s: number, tile: number, seed: number): Shard[] {
   const rand = seeded(seed);
   const out: Shard[] = [];
   for (let i = 0; i < count; i++) {
-    // −200° … +20° from the right: the upper half and a little below on both sides.
-    const a = ((-200 + rand() * 220) * Math.PI) / 180;
+    // −240° … +60° from the right: all round but straight down (measured: "mainly up, left and down"; audit B4).
+    const a = ((-240 + rand() * 300) * Math.PI) / 180;
     const v = (0.3 + rand() * 0.2) * s;
     const big = i < 3;
     const r0 = (0.25 + rand() * 0.25) * tile;

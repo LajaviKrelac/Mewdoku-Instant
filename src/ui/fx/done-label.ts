@@ -103,7 +103,7 @@ export function playDoneLabels(o: DoneLabelFx): void {
     svg.dataset.anchor = String(a.cell);
     // The heavier bottom of the outline: a 1 s drop of the same brown; then a soft warm-grey shadow ≈ 4 px
     // under it (audit B10, measured under the column-8 label: #E1CBC3 → #E9DDD8 → #EDE7E3 → #F2ECEA → the page).
-    svg.style.filter = `drop-shadow(0 ${px(s)} 0 var(--done-line)) drop-shadow(0 ${px(2 * s)} ${px(2 * s)} rgba(150, 90, 70, 0.5))`;
+    svg.style.filter = `drop-shadow(0 ${px(s)} 0 var(--done-line)) drop-shadow(0 ${px(2 * s)} ${px(2 * s)} rgba(150, 90, 70, 0.32))`;
     svg.style.zIndex = '5';
     svg.style.opacity = '0';
     o.layer.appendChild(svg);

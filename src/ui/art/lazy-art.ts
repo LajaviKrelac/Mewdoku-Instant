@@ -44,7 +44,7 @@ function mouseGrin(): string {
 }
 
 /** The star's outline (24 grid): four points with gently concave sides, plump arms (audit B5). */
-const STAR4 = 'M12 .8C13.6 7.4 16.6 10.4 23.2 12 16.6 13.6 13.6 16.6 12 23.2 10.4 16.6 7.4 13.6.8 12 7.4 10.4 10.4 7.4 12 .8Z';
+const STAR4 = 'M12 .8C14.1 6.9 17.1 9.9 23.2 12 17.1 14.1 14.1 17.1 12 23.2 9.9 17.1 6.9 14.1.8 12 6.9 9.9 9.9 6.9 12 .8Z';
 /** The same outline scaled by k about the centre (12, 12). */
 const star4At = (k: number, fill: string, extra = ''): string =>
   `<path d="${STAR4}" transform="matrix(${k} 0 0 ${k} ${Math.round(12 * (1 - k) * 100) / 100} ${Math.round(12 * (1 - k) * 100) / 100})" ${fill}${extra}/>`;
@@ -72,9 +72,9 @@ function shard(outline: string, shade: string, hi: string): string {
  * The paw cap (28.4 × 33.5 in s units, the pill 29.3 tall from y 0, overhanging 2.1 above and below; audit B8,
  * measured on still-a: the toe beans ≈ 7.8 px across form the pill's outer edge and overhang it ≈ 2 px): four
  * toe beans (r 3.5) in an arc, each in a scallop of the outline (outer radius 5.4: the first and last 2.1
- * past the pill, the middle two on the outer edge), the pill's fill behind them up to the box's end, the
- * 1.2 border along the union of the scallops and the pill's top and bottom (y 0–1.2, 28.1–29.3, as the CSS
- * body's border it meets), and a large main pad. Our drawing, from those words and numbers.
+ * past the pill, the middle two on the outer edge), the pill's fill inside its border up to the box's end (the
+ * straight top and bottom border is the CSS body's, ticker::before, which starts 8 in: one continuous line,
+ * no seam), the 1.2 border round the scallops, and a large main pad. Our drawing, from those words and numbers.
  */
 function pawCap(): string {
   const scallops: readonly (readonly [number, number])[] = [
@@ -83,13 +83,14 @@ function pawCap(): string {
     [5.4, 18.43],
     [9.5, 26],
   ];
-  // the border: every shape stroked 2.4 wide, then the same shapes filled over the inner half
-  const shapes = (paint: string): string =>
-    scallops.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="4.2" ${paint}/>`).join('') + `<rect x="8" y="1.2" width="21" height="26.9" ${paint}/>`;
+  // the scallops' border: each circle stroked 2.4 wide, then filled over the inner half; the pill's straight top
+  // and bottom border is the CSS body's (it starts 8 in, under the scallops, which hide it where they bulge)
+  const circles = (paint: string): string => scallops.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="4.2" ${paint}/>`).join('');
   return (
     `<defs><radialGradient id="paw-pad" cx=".5" cy=".5" r=".5"><stop offset=".5" stop-color="#FFD4A5"/><stop offset="1" stop-color="#FFE1B5" stop-opacity="0"/></radialGradient></defs>` +
-    shapes('fill="none" style="stroke:var(--toast-line)" stroke-width="2.4"') +
-    shapes('style="fill:var(--toast-fill)"') +
+    circles('fill="none" style="stroke:var(--toast-line)" stroke-width="2.4"') +
+    circles('style="fill:var(--toast-fill)"') +
+    `<rect x="8" y="1.2" width="21" height="26.9" style="fill:var(--toast-fill)"/>` +
     scallops.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="3.5" fill="#FFCD9B"/>`).join('') +
     `<ellipse cx="19.4" cy="14.65" rx="7" ry="8.6" fill="url(#paw-pad)"/>`
   );

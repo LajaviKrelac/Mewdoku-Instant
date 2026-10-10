@@ -89,14 +89,14 @@ The same decision is recorded, briefly, in [parity-spec §0.3](../phase2b/parity
 
 | Row (top to bottom) | Height at s = 1 | Gap above | Original y (402 × 874) | Ours at s = 1, safe 62/34, band (§5.4 target) |
 |---|---|---|---|---|
-| Safe area / spare | — | — | 0–62 (blank page) | 0–62.6 |
-| Top bar band: back disc, Level / Score columns, gear disc | `bar` 52 (discs centred at 26) | — | discs 69.7–106.5 (centre 88.0) | band 62.6–114.6, disc centre 88.6 |
-| Pills row: heads pill + fish pill | `pills` 31.3 | `barToPills` 10.3 | 124.3–155.7 | 124.9–156.2 |
-| Rules container (three rule cards) | `rules` 60.3 | `pillsToRules` 8.3 | 164.0–224.3 | 164.5–224.8 |
-| Board card (square) | card width | `rulesToBoard` 25.7 | 250.0–641.0 | 250.5–640.5 |
-| Helper discs (badges reach 9 s above) | `tools` 60.3 | `boardToTools` 53.0 | 694.0–754.3 | 693.5–753.8 |
-| Banner (only with the band, §1.16) | `ads.banner.bannerPx` 50, fixed | `toolsToBanner` 23.4 | 777.7–827.7 | 777.2–827.2 |
-| Bottom | `bottom` 12.3 | — | 827.7–840 (+ 34 safe) | 827.2–840 |
+| Safe area / spare | — | — | 0–62 (blank page) | 0–62.2 |
+| Top bar band: back disc, Level / Score columns, gear disc | `bar` 52 (discs centred at 26) | — | discs 69.7–106.5 (centre 88.0) | band 62.2–114.2, disc centre 88.2 |
+| Pills row: heads pill + fish pill | `pills` 31.3 | `barToPills` 10.3 | 124.3–155.7 | 124.5–155.8 (audit B11; was 124.9) |
+| Rules container (three rule cards) | `rules` 60.3 | `pillsToRules` 8.3 | 164.0–224.3 | 164.1–224.4 |
+| Board card (square) | card width | `rulesToBoard` 25.7 | 250.0–641.0 | 250.1–640.8 (390.66, the card's full width) |
+| Helper discs (badges reach 9 s above) | `tools` 60.3 | `boardToTools` 53.0 | 694.0–754.3 | 693.8–754.1 |
+| Banner (only with the band, §1.16) | `ads.banner.bannerPx` 50, fixed | `toolsToBanner` 23.4 | 777.7–827.7 | 777.5–827.5 |
+| Bottom | `bottom` 12.3 | — | 827.7–840 (+ 34 safe) | 827.5–839.8 |
 
 **The scale** (G2, `computeLayout`, all values from `layout.game`; A = vh − safeTop − safeBottom; B = `ads.banner.bannerPx` when the band is reserved, else 0):
 
@@ -113,7 +113,8 @@ rulesH = rules × s × (textScale > 1 && !compact ? min(rulesGrowMax, textScale 
 barH   = bar × s × (textScale > 1 ? min(rulesGrowMax, textScale) : 1)  // the bar's two text lines are rem-based (§1.3), so it grows too (also in compact)
 grown  = rulesH + barH;  rest = fixed − rules − bar                    // the rows that never grow
 boardMax = min(colW − 2 × cardMargin × s, A − B − rest × s − grown)
-pad    = max(3, round(cardPad × s));  slot = max(1, floor((boardMax − 2 × pad) / n));  board = slot × n + 2 × pad
+pad0   = max(3, round(cardPad × s));  slot = max(1, floor((boardMax − 2 × pad0) / n))
+board  = max(boardMax, slot × n + 2 × pad0);  pad = (board − slot × n) / 2   // audit B11: the card keeps its size, the slots' remainder is padding
 gap    = max(1, round(slot × gapFraction));  inset = gap / 2           // every tile, every side (hitTest unchanged)
 spare  = A − rest × s − grown − board − B
 y0     = safeTop + min(max(0, spare) / 2, topSpareMax × s)             // spare goes above (capped), the rest below
@@ -131,20 +132,23 @@ The card is centred horizontally; the column is centred in the viewport (on desk
 
 | Viewport (safe top/bottom, band) | s | colW | compact | slot / gap / tile | board | y0 | pills y | board y | discs y | banner y | spare below |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| 402 × 874 (62/34, band): the recording | 1.000 | 402 | no | 38 / 3 / 35 | 390 | 62.6 | 124.9 | 250.5 | 693.5 | 777.2 | 0.6 |
-| 402 × 874 web (0/0, no band) | 1.000 | 402 | no | 38 / 3 / 35 | 390 | 62.0 | 124.3 | 249.9 | 692.9 | — | 108.5 |
-| 390 × 844 (47/34, band): iPhone 14/15 FBIG | 0.970 | 390 | no | 36 / 3 / 33 | 370 | 55.1 | 115.5 | 237.4 | 658.8 | 740.0 | 8.1 |
-| 390 × 844 web (Playwright `web-390`) | 0.970 | 390 | no | 36 / 3 / 33 | 370 | 60.1 | 120.6 | 242.4 | 663.9 | — | 109.7 |
-| 360 × 640 web | 0.896 | 360 | no | 33 / 3 / 30 | 340 | 9.6 | 65.4 | 177.9 | 565.4 | — | 9.6 |
-| 360 × 640 FBIG (band) | 0.811 | 326 | yes | 30 / 2 / 28 | 308 | 4.4 | 54.9 | 156.8 | 507.8 | 575.6 | 4.4 |
-| 320 × 568 web (`web-320`) | 0.796 | 320 | yes | 30 / 2 / 28 | 308 | 5.2 | 54.8 | 154.8 | 505.0 | — | 5.2 |
-| 320 × 568 web, 12 × 12 | 0.796 | 320 | yes | 25 / 2 / 23 | 308 | 5.2 | 54.8 | 154.8 | 505.0 | — | 5.2 |
-| 320 × 568 FBIG (band) | 0.712 | 286 | yes | 27 / 2 / 25 | 278 | 0.1 | 44.4 | 133.8 | 449.6 | 509.2 | 0.1 |
-| 320 × 568 FBIG (band), 12 × 12 | 0.712 | 286 | yes | 22 / 2 / 20 | 272 | 3.1 | 47.4 | 136.8 | 446.6 | 506.2 | 3.1 |
-| 1280 × 800 desktop web | 1.136 | 457 | no | 43 / 3 / 40 | 442 | 0.9 | 71.7 | 214.4 | 716.6 | — | 0.9 |
-| 1280 × 800 desktop web, 12 × 12 | 1.136 | 457 | no | 35 / 3 / 32 | 432 | 5.9 | 76.7 | 219.4 | 711.6 | — | 5.9 |
-| 320 × 568 FBIG (band), 12 × 12, **safe top 20** (critic) | 0.684 | 275 | yes | 21 / 2 / 19 | 260 | 23.7 | 66.3 | 152.3 | 448.6 | 505.9 | 3.7 |
-| 375 × 667 FBIG (band), 12 × 12, safe top 20 (critic) | 0.821 | 330 | yes | 26 / 2 / 24 | 320 | 20.3 | 71.4 | 174.5 | 537.9 | 606.6 | 0.3 |
+| 402 × 874 (62/34, band): the recording | 1.000 | 402 | no | 38 / 3 / 35 | 390.66 | 62.2 | 124.5 | 250.1 | 693.8 | 777.5 | 0.2 |
+| 402 × 874 (62/34, band), **9 × 9** (the helper recordings; audit B11) | 1.000 | 402 | no | 42 / 3 / 39 | 390.66 | 62.2 | 124.5 | 250.1 | 693.8 | 777.5 | 0.2 |
+| 402 × 874 web (0/0, no band) | 1.000 | 402 | no | 38 / 3 / 35 | 390.66 | 62.0 | 124.3 | 249.9 | 693.6 | — | 107.8 |
+| 390 × 844 (47/34, band): iPhone 14/15 FBIG | 0.970 | 390 | no | 36 / 3 / 33 | 379 | 50.6 | 111.0 | 232.9 | 663.3 | 744.5 | 3.6 |
+| 390 × 844 web (Playwright `web-390`) | 0.970 | 390 | no | 36 / 3 / 33 | 379 | 60.1 | 120.6 | 242.4 | 672.9 | — | 100.7 |
+| 360 × 640 web | 0.896 | 360 | no | 33 / 3 / 30 | 349.84 | 4.7 | 60.5 | 173.0 | 570.3 | — | 4.7 |
+| 360 × 640 FBIG (band) | 0.811 | 326 | yes | 30 / 2 / 28 | 316.8 | 0.0 | 50.5 | 152.4 | 512.2 | 580.0 | 0.0 |
+| 320 × 568 web (`web-320`) | 0.796 | 320 | yes | 30 / 2 / 28 | 310.97 | 3.7 | 53.3 | 153.3 | 506.5 | — | 3.7 |
+| 320 × 568 web, 12 × 12 | 0.796 | 320 | yes | 25 / 2 / 23 | 310.97 | 3.7 | 53.3 | 153.3 | 506.5 | — | 3.7 |
+| 320 × 568 FBIG (band) | 0.712 | 286 | yes | 27 / 2 / 25 | 278.14 | 0.0 | 44.4 | 133.8 | 449.7 | 509.2 | 0.0 |
+| 320 × 568 FBIG (band), 12 × 12 | 0.712 | 286 | yes | 22 / 2 / 20 | 278.14 | 0.0 | 44.4 | 133.8 | 449.7 | 509.2 | 0.0 |
+| 1280 × 800 desktop web | 1.136 | 457 | no | 43 / 3 / 40 | 443.83 | 0.0 | 70.8 | 213.5 | 717.5 | — | 0.0 |
+| 1280 × 800 desktop web, 12 × 12 | 1.136 | 457 | no | 35 / 3 / 32 | 443.83 | 0.0 | 70.8 | 213.5 | 717.5 | — | 0.0 |
+| 320 × 568 FBIG (band), 12 × 12, **safe top 20** (critic) | 0.684 | 275 | yes | 21 / 2 / 19 | 267.4 | 20.0 | 62.6 | 148.6 | 452.3 | 509.6 | 0.0 |
+| 375 × 667 FBIG (band), 12 × 12, safe top 20 (critic) | 0.821 | 330 | yes | 26 / 2 / 24 | 320.56 | 20.0 | 71.1 | 174.2 | 538.2 | 606.9 | 0.0 |
+
+**Audit B11 (final audit, 2026-10-10):** the table above is the re-computed one. The original keeps its card at the full width (measured on 9 × 9 in the helper recordings: card 390.67, the slots' remainder in the padding, 7.33–7.7 to the first tile, hint-stills §2.1), so `board = boardMax` and the whole-px slots' remainder (< n px) is padding; before, the card shrank to the slots (390 on 10 × 10, 388 on 9 × 9) and the stack moved by up to 2.7 px (9 × 9: pills 125.8, discs 722.6 vs 124.3 / 724). Where the height binds, the board fills the room and the spare above the bar shrinks accordingly.
 
 The smallest slot is 22 px for 12 × 12 at 320 × 568 on FBIG with no safe top (as today), and **21 px** when that phone also reports a 20 px safe top (an iPhone SE-class webview with a status bar; re-computed by the critic). 21 px still clears `patternMinPx` 7 and the drag threshold `max(8, 0.2 × cell)`; the `layout` e2e adds the 20 px safe-top case (via `--dev-safe-top`) so whole cells and the gesture specs are checked there. Desktop uses a column up to `refWidth × maxScale` = 482 px wide (≈ the 2b `colMax` 480).
 
@@ -233,6 +237,8 @@ Home and the event screen keep their own top bars (2b layout), restyled only: th
 
 **Measured**: the row spans x 12–390 [12.0–390.0] at y0 + 62.3, height 31.3 s; a two-column grid `1fr auto`, column gap 11.3 s.
 
+> **Final audit (B1, 2026-10-10; measured on 9 × 9 in the helper recordings, mouse-cat §1.2, hint-stills §2.1, 01 row 12.23):** the heads pill is as wide as its heads, **n × 25.33 + 16.6 s** (244.6 for 9 heads at x 24.7, 270 for 10), and the whole row (heads pill, 11.3 gap, fish pill) is **centred** in the column; 11 and 12 heads keep the room next to the fish pill and shrink. Built: `.pills` is a centred `auto auto` grid, the heads pill and the win flow's period counter take `--hpw` (pills.ts `headsPillWidth`). Measured on ours at 9 × 9: heads 24.95–269.52, fish 280.81–377.05, first head 35.25 (the original 24.7–269.3, 280.7–377.3, 35.0).
+
 | Part | Spec |
 |---|---|
 | Heads pill (replaces the cat counter "0 / 10") | white, radius = half its height, `--shadow-pill`; 270 × 31.3 at n = 10 [12.0–282.0]. Holds **n heads** (§1.6). Each head 21.3 × 21.7, 4.0 apart (pitch 25.33), the group centred, top inset 4.7 [first head x 22.3]. When n heads do not fit (n = 11, 12, or a narrow pill), heads and gaps shrink together so the group keeps 10.5 s of inset at each end (12 heads at s = 1: head 17.7). `role="img"`, `aria-label` = `game.cats.a11y` ("3 of 10 cats placed", reused). |
@@ -277,11 +283,12 @@ Home and the event screen keep their own top bars (2b layout), restyled only: th
 
 | Item | 2d rule (G2) | At s = 1, n = 10 |
 |---|---|---|
-| Card | `--board-card`, radius `cardRadius × s`, **no shadow** (`--shadow-card` no longer used on the board), side margin `cardMargin × s` | 390 wide (whole-px slots), radius 11.6 |
-| Padding | `pad = max(3, round(cardPad × s))` to the first **slot** edge; the first tile edge adds half a gap | 5 + 1.5 = 6.5 |
+| Card | `--board-card`, radius `cardRadius × s`, **no shadow** (`--shadow-card` no longer used on the board), side margin `cardMargin × s` | 390.66 wide (final audit B11: the full card; was 390 from whole-px slots), radius 11.6 |
+| Padding | `pad = max(3, round(cardPad × s))` to the first **slot** edge, plus half of what the whole-px slots leave of the card (B11); the first tile edge adds half a gap | 5.33 + 1.5 = 6.83 (measured 6.67; was 6.5) |
 | Gap / inset | `gap = max(1, round(slot × gapFraction))`, every tile inset `gap / 2` on every side (`evenInsets`, even as in 2b) | 3 / 1.5 |
 | Tile radius | `tileRadiusFraction × (slot − gap)` | 3.85 |
 | n ≠ 10 `[DECISION]` | the same ratios (unknown in the original): the gap and radius follow the slot, the padding and card radius follow s | 12 × 12 at 320 × 568 FBIG: slot 22, gap 2, tile 20 |
+| Card size (final audit B11, measured on 9 × 9) | the card keeps its full width (`board = boardMax`); what the whole-px slots leave goes into the padding (`pad = (board − slot × n) / 2`, at least `round(cardPad × s)`) | 10 × 10: 390.66, pad 5.33; 9 × 9: 390.66, slot 42, pad 6.33 (+ 1.5 = 7.83 to the first tile; measured 7.33–7.7) |
 | Done region | unchanged: the veil 45 % toward `--page` over 400 ms (the original's fade is confirmed, its look unknown; research Q2.1) | — |
 | Cats, glow, wrong ring, hint dim, focus ring | unchanged (no cat or wrong cell in the recording) | — |
 
@@ -349,7 +356,7 @@ Home and the event screen keep their own top bars (2b layout), restyled only: th
 | Which | kitty and bulb: the count when > 0; "Free" for the tutorial bulb; at 0 the video badge when a rewarded video can refill it (`GameView.videoRefill`: the platform can show rewarded ads), else a muted "0" (white on `--ink-2`). Mouse: the video badge when `videoRefill`, else no badge (web) |
 | Bump | 2b's badge bump on a stock increase, unchanged |
 
-**Idle pulse (measured)**: the suggested helper's disc and icon scale 1.00 → 1.08 with a warm glow, period **1.50 s**, forever: rise 0.48 s (0 → 32 %), hold to 36 %, fall 0.50 s (to 69 %), rest 0.47 s (to 100 %); the glow's opacity follows the scale (0 at rest, 1 at the peak); glow = `0 0 9px 2px rgba(var(--pulse-rgb), .9)` × s on a pseudo-element whose opacity animates (no box-shadow animation); the badge stays still. Keyframes in `hud.css` from `fx.helperPulse.periodMs` and `peakScale` (mirrored to `--pulse-ms`, `--pulse-scale` by the screen).
+**Idle pulse (measured; final audit B2: the icon swells more than its disc, 21.3 → 26.7 wide = 1.25 × at the peak while the disc reaches 1.08, so the icon adds `--pulse-icon` 1.15 at the same stops, hud.css `tool-icon-pulse`)**: the suggested helper's disc and icon scale 1.00 → 1.08 with a warm glow, period **1.50 s**, forever: rise 0.48 s (0 → 32 %), hold to 36 %, fall 0.50 s (to 69 %), rest 0.47 s (to 100 %); the glow's opacity follows the scale (0 at rest, 1 at the peak); glow = `0 0 9px 2px rgba(var(--pulse-rgb), .9)` × s on a pseudo-element whose opacity animates (no box-shadow animation); the badge stays still. Keyframes in `hud.css` from `fx.helperPulse.periodMs` and `peakScale` (mirrored to `--pulse-ms`, `--pulse-scale` by the screen).
 
 **Which helper pulses** `[DECISION]` D-2d-11 (`fx.helperPulse.target`, default `'auto'`): the recording shows the bulb pulsing on a board with five X marks and the user's screenshot (level start, nothing marked) shows the **kitty** glowing. Rule `'auto'`: while the attempt is `playing`, no overlay, hint card or coach is open, it is not the tutorial and the win flow has not started: the **kitty** pulses while every cell of the board is empty (nothing marked or placed), otherwise the **bulb**; a helper pulses only while it is enabled. `'bulb'` / `'kitty'` pin one; `'off'` stops it. Reduced motion: no pulse.
 
@@ -927,3 +934,12 @@ What the integration changed against the spec above, with the measurements behin
 - G1: the per-attempt mouse use counter restarts on mount and on Retry (`HelperFlows.newAttempt`), and `pickMouseCells` returns its cells in board order, so the X's pop in reading order. An "untouched" board for the `'auto'` pulse means every cell is Empty or Given. `pulse` is null under reduced motion in the view; when the chosen helper is disabled neither pulses. Banner persistence (§1.16) covers any move into an eligible game screen, from Home too (the same banner-to-banner rule); `screenGone()` is no longer a hide. The tutorial (a replay too) never reserves the band. A restored lost board (O4 open at mount) calls `screenShown('game')`. Settings marks `settingsSeen` from the shell on every `router.open('settings')`. Duplicate cells in `MOUSE` are marked once. The FB stub banner stays at the viewport's bottom edge (Meta's native banner); only the web mock sits at the band. e2e builds only: `?bannerPlay=0` turns `duringPlay` off.
 - G2: `tool-kitty` reuses our Tux head with its wink eyes and open mouth (about 80 B of code); its closed eye is drawn in ink because it sits on the white blaze. The filled gear is a thick stroked ring with six round-capped teeth (271 B; the even-odd outline came to 637 B), which shows the same hole. Each `tool-*` symbol's viewBox is fitted to its art. The comparison board uses our level 785 (the five top-left cells one Coral region); `dev/look-compare.ts` uses our level 96 (Sky there). `--shadow-btn` is re-declared on `.screen--game`. The event motifs' `a` colours were mixed 15 % toward white so the new ink keeps 4.5:1 on them. The retired-colour guard skips `#B2AAB4` (the FB rank overlay's own canvas colour).
 - G3: the game bar has `z-index: 1` so its discs' 44 px hit areas reach over the pills row at 320 (the win-flow scrim and the fx layer stay above it). When no slot keeps the coach card clear of the bar and the board, "Got it" moves beside the text (`[data-row]`). How to play's mini-board X covers the slot (tile + gap) and its tiles have an 11 % corner. `visual.spec` waits for the start toast to leave before the game shots (a separate shot keeps the toast mid-drift). In Arabic the heads pill mirrors: the first colour sits at the inline start (the right). The start-toast CSS stays first-load (a lazy toast could show unstyled at a level start).
+
+## 10. Final audit fixes (fix lead, 2026-10-10)
+
+Two independent auditors compared the integrated build with the user's recordings again; the measured differences fixed in the game screen of this spec (each re-measured against the user's frames; details and numbers in [STATUS-2d](STATUS-2d.md) §18):
+
+- **B1** (§1.5): the heads pill is as wide as its heads (n × 25.33 + 16.6 s) and the pills row is centred; 11 and 12 heads keep the room next to the fish pill.
+- **B2** (§1.11): the idle pulse swells the icon 1.15 on top of its disc's 1.08 (1.25 × in all, measured).
+- **B11** (§1.1, §1.8): the board card keeps its full width; the whole-px slots' remainder is padding. Every stack row moved by ≤ 0.4 px on 10 × 10 (closer to the recording) and by up to 2.7 px on 9 × 9.
+- **B16** (§1.3, D-2d-7): Fredoka's digits are 11–15 % narrower than the original's; kept by design as part of the one-face decision (no letter-spacing hack: it would also move the numbers off their centres).

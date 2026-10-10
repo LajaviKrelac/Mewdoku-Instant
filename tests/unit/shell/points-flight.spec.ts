@@ -289,7 +289,7 @@ describe('playing POINTS (celebrate.play)', () => {
 });
 
 describe('the cat burst (celebrate.play(CAT_PLACED), §2.4 screen layer)', () => {
-  it('the shards: thrown at 0.3–0.5 px/ms × s, mostly up and sideways, then falling at ≈ 900 px/s² × s; shrink and fade from 430 ms', () => {
+  it('the shards: thrown at 0.3–0.5 px/ms × s, all round but straight down, then falling at ≈ 900 px/s² × s; shrink and fade from 430 ms', () => {
     const plan = shardPlan(10, 1, 39, 1);
     expect(plan).toHaveLength(10);
     for (const sh of plan) {
@@ -310,7 +310,9 @@ describe('the cat burst (celebrate.play(CAT_PLACED), §2.4 screen layer)', () =>
       expect(shardAt(sh, 50, 1).scale).toBe(1);
     }
     expect(Math.max(...plan.slice(0, 3).map((sh) => sh.size))).toBeGreaterThan(16 * 1.2); // the first few are the big ones
-    expect(plan.filter((sh) => sh.vy < 0).length).toBeGreaterThanOrEqual(7);
+    // all round but straight down (measured: "mainly up, left and down"; audit B4): most go up, some down, none straight down
+    expect(plan.filter((sh) => sh.vy < 0).length).toBeGreaterThanOrEqual(5);
+    for (const sh of plan) expect(Math.atan2(sh.vy, sh.vx) * (180 / Math.PI)).not.toSatisfy((d: number) => d > 60 && d < 120);
     const sh = { x: 0, y: 0, vx: 0, vy: 0, size: 10, rot: 0, spin: 0, art: 'fx-shard' as const };
     expect(shardAt(sh, 1000, 1).y).toBeCloseTo(0.5 * SHARD_GRAVITY * 1000 * 1000, 6); // 450 px after 1 s
     expect(SHARD_GRAVITY * 1e6).toBeCloseTo(900, 6);

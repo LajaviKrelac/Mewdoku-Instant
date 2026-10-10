@@ -374,13 +374,13 @@ describe('Phase 2d.1: the fx layer and the tickers (§2.5, §5.2)', () => {
       'color: var(--ink)',
     ])
       expect(t, d).toContain(d);
-    // audit B8: the body (fill, border, round end) is the ::before, starting under the paw (14 s in), so its
+    // audit B8: the body (fill, border, round end) is the ::before, starting under the paw (8 s in), so its
     // straight top and bottom never run past the scallops; the ticker box itself has none
     expect(t).not.toMatch(/(?:^|[;\s])(?:border(?:-[a-z]+)*|background)\s*:/);
     const body = ruleOf(celebrate, '.ticker::before') ?? '';
     for (const d of [
       'z-index: -1',
-      'inset-inline-start: calc(var(--s) * 14px)',
+      'inset-inline-start: calc(var(--s) * 8px)',
       'border: calc(var(--s) * 1.2px) solid var(--toast-line)',
       'border-inline-start: 0',
       'border-start-end-radius: calc(var(--s) * 14.65px)',

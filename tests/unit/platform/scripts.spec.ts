@@ -105,9 +105,9 @@ describe('size-check', () => {
     expect([max('Worker JS (lazy)'), max('Lazy JS (core)'), max('Lazy JS (optional)'), max('Lazy CSS'), max('Locale chunk (each)')]).toEqual([
       18_500, 74_000, 29_300, 34_600, 29_300,
     ]);
-    // Phase 2d.1 I-4: the new lazy chunks' rows.
+    // Phase 2d.1 I-4: the new lazy chunks' rows (the fx chunk's JS and CSS and the lazy art re-set at the final audit fixes).
     expect([max('Lazy JS (fx chunk)'), max('Lazy JS (board motion)'), max('Lazy JS (lazy art)'), max('Lazy CSS (fx chunk)'), max('Lazy CSS (board motion)')]).toEqual([
-      14_800, 3_800, 4_200, 2_730, 6_400,
+      15_300, 3_800, 4_400, 3_260, 6_400,
     ]);
     expect(FB_MAX_FILES).toBe(100);
   });
@@ -217,29 +217,29 @@ describe('size-check', () => {
     const d = tempDir('web');
     fakeBuild(d);
     writeTree(d, {
-      'assets/celebrate-a1.js': 14_800, // at the ceiling
-      'assets/celebrate-b2.css': 2_730,
+      'assets/celebrate-a1.js': 15_300, // at the ceiling (re-set at the final audit fixes)
+      'assets/celebrate-b2.css': 3_260,
       'assets/board-mouse-c3.js': 3_800,
       'assets/board-mouse-d4.css': 6_400,
-      'assets/lazy-art-e5.js': 4_200,
+      'assets/lazy-art-e5.js': 4_400,
       'assets/overlay-chunk-f6.css': 20_000,
     });
     const r = checkSizes(d, { fb: false });
     const row = (label: string) => r.rows.find((x) => x.label === label);
-    expect(row('Lazy JS (fx chunk)')).toMatchObject({ bytes: 14_800, ok: true });
+    expect(row('Lazy JS (fx chunk)')).toMatchObject({ bytes: 15_300, ok: true });
     expect(row('Lazy JS (board motion)')).toMatchObject({ bytes: 3_800, ok: true });
-    expect(row('Lazy JS (lazy art)')).toMatchObject({ bytes: 4_200, ok: true });
-    expect(row('Lazy CSS (fx chunk)')).toMatchObject({ bytes: 2_730, ok: true });
+    expect(row('Lazy JS (lazy art)')).toMatchObject({ bytes: 4_400, ok: true });
+    expect(row('Lazy CSS (fx chunk)')).toMatchObject({ bytes: 3_260, ok: true });
     expect(row('Lazy CSS (board motion)')).toMatchObject({ bytes: 6_400, ok: true });
     // not counted twice: the core rows hold only the rest
     expect(row('Lazy JS (core)')?.bytes).toBe(18_000);
     expect(row('Lazy CSS')?.bytes).toBe(20_000);
     expect(r.ok).toBe(true);
     for (const [file, bytes, label] of [
-      ['assets/celebrate-a1.js', 14_801, 'Lazy JS (fx chunk)'],
+      ['assets/celebrate-a1.js', 15_301, 'Lazy JS (fx chunk)'],
       ['assets/board-mouse-c3.js', 3_801, 'Lazy JS (board motion)'],
-      ['assets/lazy-art-e5.js', 4_201, 'Lazy JS (lazy art)'],
-      ['assets/celebrate-b2.css', 2_731, 'Lazy CSS (fx chunk)'],
+      ['assets/lazy-art-e5.js', 4_401, 'Lazy JS (lazy art)'],
+      ['assets/celebrate-b2.css', 3_261, 'Lazy CSS (fx chunk)'],
       ['assets/board-mouse-d4.css', 6_401, 'Lazy CSS (board motion)'],
     ] as const) {
       const o = tempDir('web');

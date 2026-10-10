@@ -322,10 +322,10 @@
 
 .cell__flash::before {
   z-index: 1;
-  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 70%),
-    repeating-conic-gradient(rgba(255, 255, 255, 0.95) 0deg 9deg, rgba(255, 255, 255, 0) 13deg 30deg);
-  -webkit-mask: radial-gradient(closest-side, rgba(0, 0, 0, 1) 55%, rgba(0, 0, 0, 0) 100%);
-  mask: radial-gradient(closest-side, rgba(0, 0, 0, 1) 55%, rgba(0, 0, 0, 0) 100%);
+  background: radial-gradient(closest-side, #fff, #fff 22%, rgba(255, 255, 255, 0) 62%),
+    repeating-conic-gradient(#fff 0deg 10deg, rgba(255, 255, 255, 0) 15deg 30deg);
+  -webkit-mask: radial-gradient(closest-side, rgba(0, 0, 0, 1) 68%, rgba(0, 0, 0, 0) 100%);
+  mask: radial-gradient(closest-side, rgba(0, 0, 0, 1) 68%, rgba(0, 0, 0, 0) 100%);
   animation: cat-rays 200ms ease-out both;
 }
 
@@ -351,17 +351,20 @@
   }
 }
 
+/* Audit B3 (measured on (0,8) in v2: 12 / 18 / 23 / 22 % of the tile near-white at +0 / +16 / +33 / +50,
+   fading by +83): the rays at full strength from the first frame to +50, then gone by +133 (cut by 200). */
 @keyframes cat-rays {
   0% {
-    opacity: 0.8;
-    transform: scale(0.7) rotate(0deg);
+    opacity: 1;
+    transform: scale(0.9) rotate(0deg);
   }
-  15% {
+  25% {
     opacity: 1;
   }
-  40% {
-    opacity: 0.55;
+  45% {
+    opacity: 0.35;
   }
+  66.5%,
   100% {
     opacity: 0;
     transform: scale(1.3) rotate(18deg);
