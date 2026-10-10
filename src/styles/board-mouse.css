@@ -8,9 +8,11 @@
    Same rules and values as at the 2d.1 build; the cascade is unchanged (these selectors only ever met
    the board.css rules they override by specificity). */
 
-/* The mouse's X (helpers-spec §1.5): it pops in under the leaving mouse, 1.15 → 1 over --x-pop-ms. */
+/* The mouse's X (helpers-spec §1.5): it pops in under the leaving mouse, 1.15 → 1 over --x-pop-ms;
+   ease-in-out (the lead's I-6 refit: the measured X is still ≈ 1.10 at +84 and 1.04 at +134, which an
+   ease-out passes 25 ms early). */
 .cell.fx-pop .cell__xg {
-  animation: x-pop var(--x-pop-ms, 170ms) ease-out both;
+  animation: x-pop var(--x-pop-ms, 170ms) ease-in-out both;
 }
 
 @keyframes x-pop {
@@ -27,7 +29,8 @@
    size as the helper disc's mouse), centred, 1 % T above the tile centre; above the tiles and X's, below
    the lock layer's pointer box (pointer-events none). It grows in 0.5 → 1 over --mouse-in (opacity by
    50 ms), plays its face while it sits, and shrinks to 0.77 and fades over --mouse-out when its X pops.
-   The tile it lands on presses 0.88 → 1 over 70 ms. Face timings ours (visit-relative, of --mouse-dwell). */
+   The tile it lands on presses 0.87 → 1 over 70 ms, linear (I-6 refit: both measured arrivals dip to
+   0.85–0.88 and recover about evenly, 1.0 by 67–83 ms; an ease-out came back 0.06 early). Face timings ours (visit-relative, of --mouse-dwell). */
 .board__mouse {
   --mt: calc(var(--slot) - var(--gap, 3px));
   position: absolute;
@@ -96,8 +99,8 @@
 }
 
 .cell.fx-press .cell__tile {
-  --squish: 0.88;
-  animation: tile-squish 70ms ease-out both;
+  --squish: 0.87;
+  animation: tile-squish 70ms linear both;
 }
 
 /* measured (v1, arrival on B): 0.5 and faint at +16, then about linear to 1 by +116; opaque by +66 */

@@ -15,23 +15,24 @@
 //   MEWDOKU_ORIG_REF=<folder with still.png>            optional: like-for-like pixel measures + composites
 //   MEWDOKU_ORIG_FRAMES=<folder with t2.400-cc.png, t3.200-cc.png>   default: MEWDOKU_ORIG_REF
 //   LOOK_SCRATCH=<scratch folder>                        required with MEWDOKU_ORIG_REF (composites, report)
+//   LOOK_REF_TILES=<json outside the repo>               optional: one reference tile per colour, sampled for the record
+// Phase 2d.1 (integration I-1): the bulb pulses only after fx.helperPulse.idleMs without a board change
+// (helpers-spec §4.6, requests-G1 H2), so the scene waits for it after the five marks; the two level-start
+// tickers replaced 2d's start toast (§5), so it waits for them to cross; our level 96 draws Denim (4) in
+// place of Pink (11) since §6.2 (requests-G2 H5); the PNG helpers live in dev/compare-kit.ts.
 //   npx tsx dev/look-compare.ts [--url http://127.0.0.1:4173] [--out docs/phase2d/screenshots]
 //                               [--prefix INT] [--no-sizes] [--no-shots]
 // Without --url it serves dist/e2e itself (vite preview --mode e2e on port 4993) and stops it after.
 // PLAYWRIGHT_BROWSERS_PATH must point at the installed browsers (never `playwright install` here).
-import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { crc32, deflateSync, inflateSync } from 'node:zlib';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { chromium, type Browser, type Page } from '@playwright/test';
-import { deltaE2000, hexToLab } from '../scripts/palette-check';
+import { assertOutsideRepo, at, composite, de, decodePng, encodePng, hex, hexRgb, lum, median, pixels, readPng, ROOT, S, scaleImg, serve, type Box, type Img, type RGB } from './compare-kit';
 import { defaults } from '../src/game/save';
 import { periodKeyAt } from '../src/game/scoring';
 import type { LocaleId } from '../src/app/config';
 import type { SaveData } from '../src/game/types';
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const argv = process.argv.slice(2);
 const arg = (name: string): string | null => {
   const i = argv.indexOf(name);
@@ -44,12 +45,14 @@ const SHOTS = !argv.includes('--no-shots');
 const REF_DIR = process.env.MEWDOKU_ORIG_REF ?? null;
 const FRAMES_DIR = process.env.MEWDOKU_ORIG_FRAMES ?? REF_DIR;
 const SCRATCH = process.env.LOOK_SCRATCH ?? null;
+/** Optional (outside the repo): `{ "<palette index>": [row, col] }`, one tile of each colour in the reference still. */
+const REF_TILES_PATH = process.env.LOOK_REF_TILES ?? null;
+assertOutsideRepo(REF_TILES_PATH, 'look-compare: LOOK_REF_TILES');
+const REF_TILES: Record<string, readonly [number, number]> | null = REF_TILES_PATH ? (JSON.parse(readFileSync(REF_TILES_PATH, 'utf8')) as Record<string, readonly [number, number]>) : null;
 if (REF_DIR && !SCRATCH) throw new Error('look-compare: set LOOK_SCRATCH (a scratch folder outside the repo) to compare with MEWDOKU_ORIG_REF');
-if (SCRATCH && resolve(SCRATCH).startsWith(ROOT)) throw new Error('look-compare: LOOK_SCRATCH must be outside the repo (D-2d-0 d)');
-if (REF_DIR && resolve(REF_DIR).startsWith(ROOT)) throw new Error('look-compare: MEWDOKU_ORIG_REF must be outside the repo (D-2d-0 d)');
-
-/** Image px per CSS px: the recording is an iPhone at 3×, our screenshots are taken at DSF 3. */
-const S = 3;
+assertOutsideRepo(SCRATCH, 'look-compare: LOOK_SCRATCH');
+assertOutsideRepo(REF_DIR, 'look-compare: MEWDOKU_ORIG_REF');
+assertOutsideRepo(FRAMES_DIR, 'look-compare: MEWDOKU_ORIG_FRAMES');
 
 // ─────────────────────────────── the original's numbers (measure.md, 402 × 874, CSS px) ───────────────────────────────
 
@@ -76,144 +79,15 @@ const REF = {
   video: { w: 35.3, h: 21.0, dx: 25.7, dy: -28.8 },
   banner: { left: 41, right: 361, top: 777.7, bottom: 827.7 },
   colours: { page: '#F7F2EF', card: '#FFFFFF', ink: '#935A5A', icon: '#996767' },
-  /** Palette index → the colour measured on the PNG still (look-spec §1.9). */
-  tiles: { 0: '#D57374', 1: '#FFAA6D', 2: '#E4BB49', 3: '#AED994', 5: '#48B5B2', 6: '#6BBCE7', 7: '#9778D6', 8: '#EB85B7', 10: '#A7BFD7', 11: '#FAB4D0' } as Record<number, string>,
-  /** The original's level 96 (measure.md §7), for sampling its tiles: letter → palette index. */
-  regionMap: ['AAAAABBBBB', 'AAACACCDDD', 'EEFCAACDCC', 'EEFCGGCDDC', 'EEFCGGCCCC', 'EEFCHHHHCC', 'EFFCHIIICC', 'FFFCHICICC', 'JJJCHICICC', 'JJJCCCCCCC'],
-  letters: { A: 0, B: 7, C: 5, D: 3, E: 11, F: 1, G: 6, H: 8, I: 2, J: 10 } as Record<string, number>,
+  /**
+   * Palette index → the colour measured on the PNG stills (look-spec §1.9; index 4, Denim, from the
+   * 2026-10-10 still-b, helpers-spec §6.1). Since 2d.1 our level 96 draws colours 0–8 and 10 (n ≤ 11
+   * boards draw from the 11 measured colours, §6.2; requests-G2 H5), so ten of these are compared.
+   */
+  tiles: { 0: '#D57374', 1: '#FFAA6D', 2: '#E4BB49', 3: '#AED994', 4: '#5B75B2', 5: '#48B5B2', 6: '#6BBCE7', 7: '#9778D6', 8: '#EB85B7', 10: '#A7BFD7', 11: '#FAB4D0' } as Record<number, string>,
   /** Pulse peak (measure.md §11.1): disc Ø at the peak, the glow at the disc edge. */
   peak: { d: 65.3, glowEdge: '#F7C880' },
 } as const;
-
-// ─────────────────────────────── PNG (8-bit RGB / RGBA, non-interlaced) ───────────────────────────────
-
-interface Img {
-  readonly w: number;
-  readonly h: number;
-  /** RGB, 3 bytes a pixel. */
-  readonly data: Uint8Array;
-}
-
-function decodePng(buf: Buffer): Img {
-  let p = 8;
-  let w = 0;
-  let h = 0;
-  let ct = 0;
-  let depth = 0;
-  let lace = 0;
-  const idat: Buffer[] = [];
-  while (p < buf.length) {
-    const len = buf.readUInt32BE(p);
-    const type = buf.toString('latin1', p + 4, p + 8);
-    const body = buf.subarray(p + 8, p + 8 + len);
-    if (type === 'IHDR') {
-      w = body.readUInt32BE(0);
-      h = body.readUInt32BE(4);
-      depth = body[8] as number;
-      ct = body[9] as number;
-      lace = body[12] as number;
-    } else if (type === 'IDAT') idat.push(body);
-    else if (type === 'IEND') break;
-    p += 12 + len;
-  }
-  if (depth !== 8 || (ct !== 2 && ct !== 6) || lace !== 0) throw new Error(`look-compare: unsupported PNG (depth ${depth}, colour type ${ct}, interlace ${lace})`);
-  const ch = ct === 6 ? 4 : 3;
-  const raw = inflateSync(Buffer.concat(idat));
-  const stride = w * ch;
-  const px = new Uint8Array(h * stride);
-  for (let y = 0; y < h; y++) {
-    const f = raw[y * (stride + 1)] as number;
-    const src = y * (stride + 1) + 1;
-    const dst = y * stride;
-    for (let x = 0; x < stride; x++) {
-      const a = x >= ch ? (px[dst + x - ch] as number) : 0;
-      const b = y > 0 ? (px[dst - stride + x] as number) : 0;
-      const c = x >= ch && y > 0 ? (px[dst - stride + x - ch] as number) : 0;
-      let v = raw[src + x] as number;
-      if (f === 1) v += a;
-      else if (f === 2) v += b;
-      else if (f === 3) v += (a + b) >> 1;
-      else if (f === 4) {
-        const q = a + b - c;
-        const pa = Math.abs(q - a);
-        const pb = Math.abs(q - b);
-        const pc = Math.abs(q - c);
-        v += pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
-      }
-      px[dst + x] = v & 255;
-    }
-  }
-  if (ch === 3) return { w, h, data: px };
-  const rgb = new Uint8Array(w * h * 3);
-  for (let i = 0, j = 0; i < px.length; i += 4, j += 3) {
-    // Our screenshots are opaque; composite any alpha over white.
-    const al = (px[i + 3] as number) / 255;
-    for (let k = 0; k < 3; k++) rgb[j + k] = Math.round((px[i + k] as number) * al + 255 * (1 - al));
-  }
-  return { w, h, data: rgb };
-}
-
-function encodePng(img: Img): Buffer {
-  const stride = img.w * 3;
-  const raw = Buffer.alloc((stride + 1) * img.h);
-  for (let y = 0; y < img.h; y++) {
-    raw[y * (stride + 1)] = 0;
-    raw.set(img.data.subarray(y * stride, (y + 1) * stride), y * (stride + 1) + 1);
-  }
-  const chunk = (type: string, body: Buffer): Buffer => {
-    const len = Buffer.alloc(4);
-    len.writeUInt32BE(body.length);
-    const tb = Buffer.concat([Buffer.from(type, 'latin1'), body]);
-    const crc = Buffer.alloc(4);
-    crc.writeUInt32BE(crc32(tb) >>> 0);
-    return Buffer.concat([len, tb, crc]);
-  };
-  const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(img.w, 0);
-  ihdr.writeUInt32BE(img.h, 4);
-  ihdr[8] = 8;
-  ihdr[9] = 2;
-  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw, { level: 6 })), chunk('IEND', Buffer.alloc(0))]);
-}
-
-// ─────────────────────────────── pixel helpers (CSS px in, image px inside) ───────────────────────────────
-
-type RGB = readonly [number, number, number];
-interface Box {
-  readonly left: number;
-  readonly top: number;
-  readonly right: number;
-  readonly bottom: number;
-}
-
-const at = (img: Img, x: number, y: number): RGB => {
-  const xi = Math.min(img.w - 1, Math.max(0, Math.round(x)));
-  const yi = Math.min(img.h - 1, Math.max(0, Math.round(y)));
-  const i = (yi * img.w + xi) * 3;
-  return [img.data[i] as number, img.data[i + 1] as number, img.data[i + 2] as number];
-};
-const hex = (c: RGB): string => `#${c.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('').toUpperCase()}`;
-const lum = (c: RGB): number => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
-const de = (a: string, b: string): number => deltaE2000(hexToLab(a), hexToLab(b));
-const hexRgb = (h: string): RGB => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
-
-/** Every image pixel of a CSS box. */
-function* pixels(img: Img, b: Box): Generator<{ x: number; y: number; c: RGB }> {
-  const x0 = Math.max(0, Math.floor(b.left * S));
-  const x1 = Math.min(img.w - 1, Math.ceil(b.right * S) - 1);
-  const y0 = Math.max(0, Math.floor(b.top * S));
-  const y1 = Math.min(img.h - 1, Math.ceil(b.bottom * S) - 1);
-  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) yield { x, y, c: at(img, x, y) };
-}
-
-function median(cs: RGB[]): RGB {
-  if (!cs.length) return [0, 0, 0];
-  const m = (k: 0 | 1 | 2): number => {
-    const v = cs.map((c) => c[k]).sort((a, b) => a - b);
-    return v[Math.floor(v.length / 2)] as number;
-  };
-  return [m(0), m(1), m(2)];
-}
 
 /** Median of the darkest `share` of a box's pixels (the anti-aliased core of text and icons, measure.md §0). */
 function darkCore(img: Img, b: Box, share: number, skip?: (c: RGB) => boolean): RGB {
@@ -389,7 +263,7 @@ interface Scene {
   readonly locale?: LocaleId;
 }
 
-/** Opens the game screen in the recording's state and returns the page (toast gone, pulse paused at rest). */
+/** Opens the game screen in the recording's state and returns the page (tickers gone, the bulb pulsing, paused at rest). */
 async function openRecording(browser: Browser, base: string, sc: Scene): Promise<Page> {
   const ctx = await browser.newContext({ viewport: { width: sc.vw, height: sc.vh }, deviceScaleFactor: sc.dsf, hasTouch: sc.vw < 800, isMobile: sc.vw < 800 });
   // tsx keeps function names with an `__name` helper that page.evaluate's serialised functions call.
@@ -409,8 +283,12 @@ async function openRecording(browser: Browser, base: string, sc: Scene): Promise
   await page.waitForTimeout(1200);
   for (let c = 0; c < 5; c++) await page.locator('.cell').nth(c).click();
   await page.waitForTimeout(400);
-  // The recording's frame t2.400 is after the start toast has drifted off (§1.14).
-  await page.waitForFunction(() => document.querySelectorAll('.start-toast').length === 0, null, { timeout: 10_000 });
+  // The recording's frame t2.400 has no level-start line on screen: wait for the two tickers to cross
+  // (2d.1 §5: fx.tickers.crossMs 9 s from the board entry; they leave the DOM when done).
+  await page.waitForFunction(() => document.querySelectorAll('.ticker').length === 0, null, { timeout: 20_000 });
+  // The bulb pulses in the recording (§1.11). 2d.1 §4.6 (D-2d1-9): only after fx.helperPulse.idleMs (5 s)
+  // without a board change; the view re-renders on the 1 s tick, so allow up to 8 s after the marks.
+  await page.waitForSelector('.tool--bulb[data-pulse]', { timeout: 8_000 });
   await pulseAt(page, 0);
   return page;
 }
@@ -723,19 +601,18 @@ function measure402(g: Dom, ours: Img, ref: { frame: Img | null; still: Img | nu
     if (want) colour('colour', `tile colour ${t.color}`, c, want, 1);
     else info('colour', `tile colour ${t.color} (ours only)`, c, '—');
   }
-  if (ref.still) {
-    // the reference's own pixels, for the record: its tiles against the measured values
-    REF.regionMap.forEach((row, r) =>
-      [...row].forEach((L, c) => {
-        const idx = REF.letters[L] as number;
-        if (seen.has(1000 + idx)) return;
-        seen.add(1000 + idx);
-        const x = REF.tile.left + REF.tile.size / 2 + c * 38;
-        const y = REF.tile.top + REF.tile.size / 2 + r * 38;
-        const s = hex(median([...pixels(ref.still as Img, { left: x - 7, top: y - 7, right: x + 7, bottom: y + 7 })].map((p) => p.c)));
-        info('colour', `reference tile ${idx} as sampled from still.png`, '—', s, `ΔE00 to measure.md ${f2(de(s, REF.tiles[idx] as string))}`);
-      }),
-    );
+  if (ref.still && REF_TILES) {
+    // The reference's own pixels, for the record: one of its tiles per colour against the measured value.
+    // Which tile holds which colour comes from LOOK_REF_TILES (a file outside the repo): the original's
+    // layouts never enter the repo (look-spec §0.2; 2d.1 integration moved the level-96 map out of here).
+    for (const [k, [r, c]] of Object.entries(REF_TILES)) {
+      const idx = Number(k);
+      const x = REF.tile.left + REF.tile.size / 2 + c * 38;
+      const y = REF.tile.top + REF.tile.size / 2 + r * 38;
+      const s = hex(median([...pixels(ref.still, { left: x - 7, top: y - 7, right: x + 7, bottom: y + 7 })].map((p) => p.c)));
+      const want = REF.tiles[idx];
+      info('colour', `reference tile ${idx} as sampled from still.png`, '—', s, want ? `ΔE00 to measure.md ${f2(de(s, want))}` : '');
+    }
   }
 }
 
@@ -755,77 +632,15 @@ function refText(img: Img): { label: ReturnType<typeof inkStats>; num: ReturnTyp
   };
 }
 
-// ─────────────────────────────── composites (scratch only) ───────────────────────────────
-
-/** [reference | ours] at the same CSS-px scale on a grey ground, with a guide every 50 CSS px. */
-function composite(left: Img, right: Img): Img {
-  const gap = 24;
-  const W = left.w + gap + right.w;
-  const H = Math.max(left.h, right.h);
-  const data = new Uint8Array(W * H * 3).fill(128);
-  const blit = (src: Img, ox: number): void => {
-    for (let y = 0; y < src.h; y++) data.set(src.data.subarray(y * src.w * 3, (y + 1) * src.w * 3), (y * W + ox) * 3);
-  };
-  blit(left, 0);
-  blit(right, left.w + gap);
-  for (let y = 0; y < H; y += 50 * S)
-    for (let x = 0; x < W; x++) {
-      const i = (y * W + x) * 3;
-      data[i] = Math.round((data[i] as number) * 0.5 + 255 * 0.5);
-      data[i + 1] = Math.round((data[i + 1] as number) * 0.5);
-      data[i + 2] = Math.round((data[i + 2] as number) * 0.5);
-    }
-  return { w: W, h: H, data };
-}
-
-/** Scales an image by an integer-free factor (nearest neighbour; for the DSF-1 desktop shot). */
-function scaleImg(img: Img, k: number): Img {
-  const W = Math.round(img.w * k);
-  const H = Math.round(img.h * k);
-  const data = new Uint8Array(W * H * 3);
-  for (let y = 0; y < H; y++)
-    for (let x = 0; x < W; x++) {
-      const s = (Math.min(img.h - 1, Math.floor(y / k)) * img.w + Math.min(img.w - 1, Math.floor(x / k))) * 3;
-      data.set(img.data.subarray(s, s + 3), (y * W + x) * 3);
-    }
-  return { w: W, h: H, data };
-}
-
 // ─────────────────────────────── main ───────────────────────────────
-
-async function serve(): Promise<{ url: string; stop: () => void }> {
-  const given = arg('--url');
-  if (given) return { url: given.replace(/\/$/, ''), stop: () => undefined };
-  if (!existsSync(join(ROOT, 'dist/e2e/index.html'))) throw new Error('look-compare: build first (npm run build:e2e)');
-  const port = 4993;
-  // vite's own bin under node (not `npx`), so stopping the child stops the server too.
-  const child: ChildProcess = spawn(process.execPath, [join(ROOT, 'node_modules/vite/bin/vite.js'), 'preview', '--mode', 'e2e', '--host', '127.0.0.1', '--port', String(port), '--strictPort'], { cwd: ROOT, stdio: 'ignore' });
-  const url = `http://127.0.0.1:${port}`;
-  for (let i = 0; i < 100; i++) {
-    try {
-      if ((await fetch(url)).ok) return { url, stop: () => child.kill('SIGTERM') };
-    } catch {
-      /* not up yet */
-    }
-    await new Promise((r) => setTimeout(r, 200));
-  }
-  child.kill('SIGTERM');
-  throw new Error('look-compare: the preview server did not start');
-}
-
-const readRef = (dir: string | null, name: string): Img | null => {
-  if (!dir) return null;
-  const p = join(dir, name);
-  return existsSync(p) ? decodePng(readFileSync(p)) : null;
-};
 
 async function main(): Promise<void> {
   mkdirSync(OUT, { recursive: true });
   if (SCRATCH) mkdirSync(SCRATCH, { recursive: true });
-  const still = readRef(REF_DIR, 'still.png');
-  const frame = readRef(FRAMES_DIR, 't2.400-cc.png') ?? still;
-  const peakRef = readRef(FRAMES_DIR, 't3.200-cc.png');
-  const server = await serve();
+  const still = readPng(REF_DIR, 'still.png');
+  const frame = readPng(FRAMES_DIR, 't2.400-cc.png') ?? still;
+  const peakRef = readPng(FRAMES_DIR, 't3.200-cc.png');
+  const server = await serve(arg('--url'), 4993, 'look-compare');
   const browser = await chromium.launch();
   try {
     // 1. 402 × 874, DSF 3, the recording's state: at rest and at the bulb's pulse peak.

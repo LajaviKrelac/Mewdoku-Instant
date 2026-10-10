@@ -66,12 +66,14 @@
 }
 
 /* O1 hint overlay (Phase 2d.1 §3.2, D-2d1-7; measured, ours): a 75 % black dim over the whole screen with
-   holes at the hint's tiles (hint-card.ts, even-odd), fading in linearly over --dim-ms; the card over the
+   holes at the hint's tiles (hint-card.ts, even-odd), fading in linearly over --dim-ms, 30 ms ahead (the
+   original's first dimmed frame already shows α 0.078: its fade started ≈ 31 ms before, helpers-spec §3.2
+   critic; the lead's I-6 refit); the card over the
    rule cards and the Apply pill under the board, placed from the board's rect (× s via --hs); no
    entrance or exit animation ([data-instant]); the panel shows once placed ([data-placed], one frame). */
 .overlay[data-overlay='hint'] { padding: 0; animation: none; }
 .hint-dim { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;
-  animation: hint-dim-in var(--dim-ms, 300ms) linear both; }
+  animation: hint-dim-in var(--dim-ms, 300ms) linear -30ms both; }
 .hint-dim > path { fill: rgba(0, 0, 0, 0.75); fill-rule: evenodd; }
 @keyframes hint-dim-in { from { opacity: 0; } }
 .overlay__panel.hint-sheet { position: absolute; top: 0; right: 0; bottom: 0; left: 0; max-height: none; overflow: visible;
@@ -208,8 +210,9 @@
    they load with it. board.css keeps the hidden default (.cell__xog). Ghost X on Empty effect cells:
    the X's outline only (xOutlinePath, the union of the two bars), a 1.5 px white stroke over 10 %
    white, its --xe edge under it with Colour patterns on. Each pops in at --gd (ghostFirstMs + i ×
-   ghostStaggerMs, ghostOrder) over --ghost-pop: .25 → 1 (13 %) → 1.22 (27 %) → 1 (47 %) → .92 (60 %)
-   → 1, opacity .3 → 1 by 12 %; then still. The clear and cat ghosts' keyframes came from fx.css. */
+   ghostStaggerMs, ghostOrder) over --ghost-pop, every 17 ms of the measured pop (hint-stills §8.2; the
+   lead's I-6 refit of the spec's five-stop sketch, whose 1.22 came 18 ms late): .27 → 1 (67 ms) → 1.22
+   held 117–150 → 1 (233) → .925 held 267–367 → 1 (500), linear between, opacity .3 → 1 by 60 ms; then still. The clear and cat ghosts' keyframes came from fx.css. */
 .cell__xo {
   fill: rgba(255, 255, 255, 0.1);
   stroke: #fff;
@@ -241,22 +244,51 @@
 @keyframes ghost-pop {
   0% {
     opacity: 0.3;
-    transform: scale(0.25);
+    transform: scale(0.27);
+  }
+  6.6% {
+    transform: scale(0.7);
+  }
+  10% {
+    transform: scale(0.86);
   }
   12% {
     opacity: 1;
   }
-  13% {
+  13.4% {
     transform: none;
   }
-  27% {
+  16.6% {
+    transform: scale(1.09);
+  }
+  20% {
+    transform: scale(1.16);
+  }
+  23.4%,
+  30% {
     transform: scale(1.22);
   }
-  47% {
+  33.4% {
+    transform: scale(1.18);
+  }
+  40% {
+    transform: scale(1.09);
+  }
+  46.6% {
     transform: none;
   }
-  60% {
-    transform: scale(0.92);
+  50% {
+    transform: scale(0.96);
+  }
+  53.4%,
+  73.4% {
+    transform: scale(0.925);
+  }
+  80% {
+    transform: scale(0.96);
+  }
+  90% {
+    transform: scale(0.99);
   }
   100% {
     opacity: 1;

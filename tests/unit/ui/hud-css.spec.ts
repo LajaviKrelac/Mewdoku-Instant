@@ -367,7 +367,8 @@ describe('Phase 2d.1: the fx layer and the tickers (§2.5, §5.2)', () => {
 
   it('the hint overlay (O1, §3.2): the 75 % dim fades in linearly, the card and Apply sizes × s, no entrance animation', () => {
     expect(ruleOf(chunk, ".overlay[data-overlay='hint']")).toContain('animation: none');
-    expect(ruleOf(chunk, '.hint-dim')).toContain('animation: hint-dim-in var(--dim-ms, 300ms) linear both');
+    // 30 ms ahead: the original's first dimmed frame already shows α 0.078 (helpers-spec §3.2 critic; I-6 refit)
+    expect(ruleOf(chunk, '.hint-dim')).toContain('animation: hint-dim-in var(--dim-ms, 300ms) linear -30ms both');
     expect(ruleOf(chunk, '.hint-dim > path')).toContain('fill: rgba(0, 0, 0, 0.75)');
     expect(ruleOf(chunk, '.hint-dim > path')).toContain('fill-rule: evenodd');
     const card = ruleOf(chunk, '.hint-card') ?? '';

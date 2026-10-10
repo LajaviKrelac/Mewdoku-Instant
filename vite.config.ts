@@ -11,7 +11,9 @@
 // that have a catalogue (scripts/locale-loaders.ts, the `virtual:mewdoku-locales` module).
 //
 // First load: assets/index-*.js (the entry) + assets/core-*.js (2d.1 I-4: the first-load modules that lazy
-// chunks share, preloaded by index.html; see codeSplitting below) + the first-load stylesheet.
+// chunks share, preloaded by index.html; see codeSplitting below) + the first-load stylesheet, and (2d.1
+// I-4, preloadFirstRun below) the coach chunk with its stylesheet and the shared rich-text chunk, which a
+// first run's tutorial board waits for.
 // Lazy chunks (phase2b §11) keep stable names for scripts/size-check.ts:
 //   assets/overlay-chunk-*.js   core overlays (O1–O7 + ranking, victory, shop, rank hub, group result)
 //   assets/coach-chunk-*.js     O8, the tutorial coach (2d.1 I-4: a first run waits for this one only)
@@ -29,7 +31,7 @@
 import { copyFileSync, existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig, type Plugin, type Rolldown } from 'vite';
 import basicSsl from '@vitejs/plugin-basic-ssl';
 import { chunkFileName, isReleaseMode, localeLoaderPlugin } from './scripts/locale-loaders.ts';
 
@@ -59,13 +61,51 @@ function platformHtml(fb: boolean): Plugin {
   };
 }
 
+/**
+ * Phase 2d.1 integration I-4 (lead, LOAD TIME): index.html also preloads the tutorial coach's lazy chunk
+ * (assets/coach-chunk-*.js, the shared chunks it imports that index.html does not already load, and its
+ * stylesheet). A first run shows the tutorial board with its coach, so boot waits for that chunk
+ * (boot.overlayTimeoutMs); fetched only after the entry had run, it was one more serial round trip
+ * (≈ 0.65 s of the 4.3 s first run on Slow 4G, STATUS-2d §5). Preloaded, it downloads next to the entry
+ * (≈ 11 KB, ≈ 0.06 s for every player) and boot's import() finds it in the module map. The modules stay
+ * a separate chunk (not evaluated until a first run or the overlay chunk asks for them), and Vite's
+ * preload helper skips a stylesheet the page already links.
+ */
+function preloadFirstRun(): Plugin {
+  return {
+    name: 'preload-first-run',
+    apply: 'build',
+    transformIndexHtml: {
+      order: 'post',
+      handler(html, ctx) {
+        const bundle = ctx.bundle;
+        if (!bundle) return html;
+        const chunks = Object.values(bundle).filter((c): c is Rolldown.OutputChunk => c.type === 'chunk');
+        const coach = chunks.find((c) => /[\\/]app[\\/]coach-chunk\.ts$/.test(c.facadeModuleId ?? ''));
+        if (!coach) return html;
+        const linked = (file: string): boolean => html.includes(`/${file}"`);
+        const entry = new Set(chunks.filter((c) => c.isEntry).map((c) => c.fileName));
+        const js = [...coach.imports.filter((f) => !entry.has(f) && !linked(f)), coach.fileName];
+        const css = [...(coach.viteMetadata?.importedCss ?? [])].filter((f) => !linked(f));
+        return {
+          html,
+          tags: [
+            ...js.map((f) => ({ tag: 'link', attrs: { rel: 'modulepreload', crossorigin: true, href: `./${f}` }, injectTo: 'head' as const })),
+            ...css.map((f) => ({ tag: 'link', attrs: { rel: 'stylesheet', crossorigin: true, href: `./${f}` }, injectTo: 'head' as const })),
+          ],
+        };
+      },
+    },
+  };
+}
+
 export default defineConfig(({ mode, command, isPreview }) => {
   const release = isReleaseMode(mode);
   const fb = mode === 'fbig' || mode === 'release-fbig';
   const e2e = mode === 'e2e' || process.env.MEWDOKU_E2E === '1';
   const platformEntry = fb ? './src/platform/fb/index.ts' : './src/platform/web/index.ts';
   const outDir = release ? (fb ? 'dist/release-fbig' : 'dist/release-web') : fb ? 'dist/fbig' : mode === 'e2e' ? 'dist/e2e' : 'dist/web';
-  const plugins: Plugin[] = [platformHtml(fb), localeLoaderPlugin(mode, rootDir)];
+  const plugins: Plugin[] = [platformHtml(fb), localeLoaderPlugin(mode, rootDir), preloadFirstRun()];
   // HTTPS for the FB embed player (05 §11), dev server only (preview stays HTTP for Playwright).
   if (fb && command === 'serve' && !isPreview) plugins.push(basicSsl());
 

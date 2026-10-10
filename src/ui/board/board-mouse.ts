@@ -3,7 +3,7 @@
 // MARKED { source: 'mouse' } already holds the marks; each X waits hidden (.cell.fx-pend) while our mouse
 // (art/helper-art.ts, the board-mouse parts) visits the tiles one by one in event order:
 //   t = k × visit (visit = dwellMs + exitMs, 935): the mouse appears on tile k (scale 0.5 → 1 over
-//     appearMs, board.css) and the tile does a press bump (0.88 → 1 over 70 ms); its face plays
+//     appearMs, board.css) and the tile does a press bump (0.87 → 1 over 70 ms, linear); its face plays
 //     blink, glance or grin (k mod 3) while it sits;
 //   t = k × visit + dwellMs (850): its X pops in under it (1.15 → 1 over fx.markPopMs) and the mouse
 //     shrinks to 0.77 and fades over exitMs; the next visit starts as it vanishes.

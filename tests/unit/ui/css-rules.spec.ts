@@ -288,7 +288,9 @@ describe('retired-look guard (phase2b §1.8, §1.12)', () => {
     for (const gone of ['stroke-dasharray', 'xe-draw', '--x-len', 'fx-draw']) expect(board, gone).not.toContain(gone);
     // the mouse's pop (fx.markPopMs, 1.15 → 1; in the lazy board-mouse.css since 2d.1 I-4) and the wrong X filled in --wrong
     const lazy = stripComments(read(join(STYLES, 'board-mouse.css')));
-    expect(lazy).toMatch(/\.cell\.fx-pop \.cell__xg\s*\{[^}]*animation:\s*x-pop var\(--x-pop-ms, 170ms\)/);
+    expect(lazy).toMatch(/\.cell\.fx-pop \.cell__xg\s*\{[^}]*animation:\s*x-pop var\(--x-pop-ms, 170ms\) ease-in-out both/);
+    // the tile the mouse lands on presses 0.87 → 1 over 70 ms, linear (measured B and C; I-6 refit)
+    expect(lazy).toMatch(/\.cell\.fx-press \.cell__tile\s*\{\s*--squish:\s*0\.87;\s*animation:\s*tile-squish 70ms linear both;/);
     expect(board).not.toContain('fx-pop');
     expect(cfg.fx.markPopMs).toBe(170); // helpers-spec §0.6, §1.5: 140 → 170 at 2d.1 L0
     expect(/@keyframes x-pop\s*\{\s*from\s*\{\s*transform:\s*scale\(1\.15\)/.test(lazy)).toBe(true);
@@ -330,9 +332,27 @@ describe('retired-look guard (phase2b §1.8, §1.12)', () => {
     expect(board).not.toContain('ghost-pop');
     expect(/\.cell\[data-ghost='x'\]\[data-s='e'\] \.cell__xog\s*\{[^}]*animation:\s*ghost-pop var\(--ghost-pop, 500ms\) linear var\(--gd, 0ms\) forwards/.test(chunk)).toBe(true);
     expect(/\.cell__xo\s*\{[^}]*fill:\s*rgba\(255, 255, 255, 0\.1\);[^}]*stroke:\s*#fff;[^}]*stroke-width:\s*1\.5px/.test(chunk)).toBe(true);
-    // the keyframes of the measured pop: .25 → 1 (13 %) → 1.22 (27 %) → 1 (47 %) → .92 (60 %) → 1
+    // the keyframes of the measured pop (hint-stills §8.2, every 17 ms; refit by the lead at 2d.1 I-6):
+    // .27 → 1 (67 ms) → 1.22 held 117–150 → 1 (233) → .925 held 267–367 → 1 (500), opacity .3 → 1 by 60 ms
     const kf = /@keyframes ghost-pop\s*\{([\s\S]*?)\n\}/.exec(chunk)?.[1] ?? '';
-    for (const stop of ['0% {\n    opacity: 0.3;\n    transform: scale(0.25)', '12% {\n    opacity: 1', '13% {\n    transform: none', '27% {\n    transform: scale(1.22)', '47% {\n    transform: none', '60% {\n    transform: scale(0.92)']) {
+    for (const stop of [
+      '0% {\n    opacity: 0.3;\n    transform: scale(0.27)',
+      '6.6% {\n    transform: scale(0.7)',
+      '10% {\n    transform: scale(0.86)',
+      '12% {\n    opacity: 1',
+      '13.4% {\n    transform: none',
+      '16.6% {\n    transform: scale(1.09)',
+      '20% {\n    transform: scale(1.16)',
+      '23.4%,\n  30% {\n    transform: scale(1.22)',
+      '33.4% {\n    transform: scale(1.18)',
+      '40% {\n    transform: scale(1.09)',
+      '46.6% {\n    transform: none',
+      '50% {\n    transform: scale(0.96)',
+      '53.4%,\n  73.4% {\n    transform: scale(0.925)',
+      '80% {\n    transform: scale(0.96)',
+      '90% {\n    transform: scale(0.99)',
+      '100% {\n    opacity: 1;\n    transform: none',
+    ]) {
       expect(kf, stop).toContain(stop);
     }
     // the coach keeps its ring
