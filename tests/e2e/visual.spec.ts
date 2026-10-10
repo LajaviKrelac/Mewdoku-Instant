@@ -21,6 +21,13 @@
 // checked against the measured positions (±2 px, look-spec §1.1 / §5.4); the bulb at its pulse peak;
 // the start toast mid-drift; the win flow with the period counter over the heads pill; the Score's
 // "+N" on a 12×12 level, clear of the gear; Home and Settings with the 2d tokens and the gear's dot.
+// Phase 2d.1 (G3, helpers-spec §7.7): the start toast became the two level-start tickers (captured
+// mid-crossing); the bulb pulses only after fx.helperPulse.idleMs without a move (G1 H1); the Score's
+// "+N" moved over the placed tile, a star flies to the Score and it counts up (no chip in the bar). New
+// captures on one of our 9 × 9 levels (273, a two-tile colour in the top-right corner) with Playwright's
+// clock and the animations put at their age on it: the tickers mid-crossing, the kitty's "+N" at rest,
+// the star mid-flight, the count-up mid-way, the completion label, the hint overlay settled and Apply's
+// labels, at 402 × 874 (the recordings' phone) and in de and ar at 320 × 568 (G3-2d1-<moment>-<width>.png).
 import { mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -106,7 +113,7 @@ const hud = (page: Page) =>
       board: box('.board'),
       tools: box('.tool-bar .tool--paw'),
       mouse: box('.tool-bar .tool--mouse'),
-      chip: box('.points-pill__label'),
+      plus: box('.game-fx svg.fx-plus text'),
     };
   });
 
@@ -240,17 +247,18 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
     await shot(page, 'victory');
   });
 
-  test('the game screen in the recording\'s state: bar, heads, fish, cards, helpers, the pulse and the start toast', async ({ page }) => {
+  test('the game screen in the recording\'s state: bar, heads, fish, cards, helpers, the pulse and the tickers', async ({ page }) => {
     await open(page, recordingSave());
     await page.locator('.home__play').click();
     await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
-    // §1.14: the start toast on a fresh level, with our honest line; it is decorative.
-    const toast = page.locator('.start-toast[data-kind="level"]');
-    await expect(toast).toBeAttached();
-    await expect(toast).toHaveText('You can solve this one!');
-    await expect(toast).toHaveAttribute('aria-hidden', 'true');
-    await page.waitForTimeout(150 + 300 + 1200 + 500); // delay, in, hold, then half a second of drift
-    await shot(page, 'toast');
+    // Phase 2d.1 §5 (was the 2d start toast): two tickers cross right → left on a fresh level; decorative.
+    await page.waitForSelector('.game-fx[data-celebrate=ready]', { state: 'attached', timeout: 10_000 });
+    const tickers = page.locator('.game-fx .tickers');
+    await expect(tickers).toBeAttached();
+    await expect(tickers).toHaveAttribute('aria-hidden', 'true');
+    await expect(tickers.locator('.ticker')).toHaveCount(2);
+    await page.waitForTimeout(2500); // both on screen, mid-crossing
+    await shot(page, 'tickers');
     await markRow0(page);
     await expect(page.locator('.cell[data-s="m"]')).toHaveCount(5);
     const g = await expectStack(page);
@@ -268,13 +276,15 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
     await expect(page.locator('.pill--heads .head')).toHaveCount(10);
     await expect(page.locator('.pill--heads .head[data-done]')).toHaveCount(0);
     await expect(page.locator('.pill--lives .life[data-full]')).toHaveCount(3);
-    // The cards (§1.7) and the helpers (§1.11): kitty 2, bulb 2, the mouse with its video badge; the bulb pulses (X's on the board).
+    // The cards (§1.7) and the helpers (§1.11): kitty 2, bulb 2, the mouse with its video badge. The bulb
+    // pulses (X's on the board, hint stock) once fx.helperPulse.idleMs (5 s) has passed without a move
+    // (2d.1 §4.6, G1 H1; the view re-renders on the 1 s tick).
     await expect(page.locator('.rule-chips .chip .chip__art')).toHaveCount(3);
     await expect(page.locator('.tool--paw .tool__badge')).toHaveText('2');
     await expect(page.locator('.tool--bulb .tool__badge')).toHaveText('2');
     await expect(page.locator('.tool--mouse')).not.toHaveAttribute('data-off', '');
     await expect(page.locator('.tool--mouse .tool__badge--video')).toBeVisible();
-    await expect(page.locator('.tool--bulb')).toHaveAttribute('data-pulse', '');
+    await expect(page.locator('.tool--bulb')).toHaveAttribute('data-pulse', '', { timeout: 8000 });
     await expect(page.locator('.tool--paw')).not.toHaveAttribute('data-pulse', '');
     // Every round button keeps a 44 × 44 hit area at every s (critic C6): the area's corners hit the button.
     for (const sel of ['.top-bar--game .top-bar__btn--back', '.top-bar--game .top-bar__btn--settings', '.tool--paw', '.tool--bulb', '.tool--mouse']) {
@@ -291,7 +301,7 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
       }, sel);
       expect(hit, `${sel} hit area`).toBe(true);
     }
-    await expect(page.locator('.start-toast')).toHaveCount(0, { timeout: 8000 }); // drifted off (§1.14)
+    await expect(page.locator('.game-fx .tickers')).toHaveCount(0, { timeout: 12_000 }); // crossed (2d.1 §5)
     await shot(page, 'game');
     // The bulb at its pulse peak (32 % of the 1.5 s cycle, §1.11).
     await page.evaluate(() => {
@@ -322,8 +332,8 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
     await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
     await page.waitForTimeout(1200);
     await markRow0(page);
-    // The recording's frame is after the start toast has drifted off (§1.14).
-    await expect(page.locator('.start-toast')).toHaveCount(0, { timeout: 8000 });
+    // The recording's frame is after the tickers have crossed (2d.1 §5).
+    await expect(page.locator('.game-fx .tickers')).toHaveCount(0, { timeout: 12_000 });
     const g = await expectStack(page);
     const near = (got: number, want: number, what: string): void => expect(Math.abs(got - want), `${what}: ${got.toFixed(1)} vs ${want}`).toBeLessThanOrEqual(2);
     const b = (x: Box | null): Box => x as Box;
@@ -362,7 +372,7 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
       await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
       await page.waitForTimeout(1200);
       await markRow0(page);
-      await expect(page.locator('.start-toast')).toHaveCount(0, { timeout: 8000 });
+      await expect(page.locator('.game-fx .tickers')).toHaveCount(0, { timeout: 12_000 });
       const g = await expectStack(page);
       // Arabic mirrors the bar: the back disc at the right, the gear at the left (§4.8).
       const [start, end] = lang === 'ar' ? [g.gear, g.back] : [g.back, g.gear];
@@ -375,10 +385,11 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
     });
   }
 
-  test('the Score on a 12×12 level: 11 cats in a row, a "+N" mid-rise clear of the gear, and the win flow', async ({ page }) => {
+  test('the Score on a 12×12 level: 11 cats in a row, each "+N" over its tile, the star, the count-up, and the win flow', async ({ page }) => {
     // Level 310 is 12×12; 11 cats in a row reach 11,616, the winning cat 13,248.
     await open(page, returning({ progress: { level: 310, completed: 309, best: {} } }));
     const sol = await startLevel(page);
+    await page.waitForSelector('.game-fx[data-celebrate=ready]', { state: 'attached', timeout: 10_000 });
     const n = sol.length;
     expect(n).toBe(12);
     await expect(page.locator('.points-pill__n')).toHaveText('0');
@@ -387,17 +398,20 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
       await cell(page, r * n + (sol[r] as number)).dblclick();
       if (r < n - 2) await page.waitForTimeout(350);
     }
-    // The 11th cat: the roll and its "+1,536" chip, at the number's inline end, before the gear.
-    await expect(page.locator('.points-pill__chip')).toHaveText('+1,536');
-    await page.waitForTimeout(140);
+    // 2d.1 §2.5: the 11th cat's "+1,536" pops one pitch above its tile (inside the viewport); a star
+    // flies to the Score, which then counts up. No chip in the bar.
+    await expect(page.locator('.game-fx svg.fx-plus text').last()).toHaveText('+1,536');
+    await page.waitForTimeout(300);
     const mid = await hud(page);
-    expect((mid.chip as Box).right, '"+N" clear of the gear').toBeLessThanOrEqual((mid.gear as Box).left - 4 + 1);
-    expect((mid.chip as Box).top, '"+N" inside the bar').toBeGreaterThanOrEqual(-0.5);
+    expect((mid.plus as Box).left, '"+N" inside the viewport').toBeGreaterThanOrEqual(-0.5);
+    expect((mid.plus as Box).right, '"+N" inside the viewport').toBeLessThanOrEqual(mid.vw + 0.5);
+    expect((mid.plus as Box).top, '"+N" below the bar').toBeGreaterThanOrEqual((mid.gear as Box).bottom - 0.5);
+    await expect(page.locator('.points-pill__chip, .points-pill__label')).toHaveCount(0);
     await shot(page, 'score-plus');
-    await page.waitForTimeout(900);
-    await expect(page.locator('.points-pill__n')).toHaveText('11,616');
+    await expect(page.locator('.game-fx .fx-star').last()).toBeAttached({ timeout: 1500 });
+    await shot(page, 'score-star');
+    await expect(page.locator('.points-pill__n')).toHaveText('11,616', { timeout: 4000 });
     await expect(page.locator('.pill--heads .head[data-done]')).toHaveCount(11);
-    await expect(page.locator('.points-pill__chip')).toHaveCount(0);
     await shot(page, 'score-hud');
     await cell(page, (n - 1) * n + (sol[n - 1] as number)).dblclick();
     await expect(page.locator('.points-pill[data-final] .points-pill__n:not(.is-out)')).toHaveText('13,248');
@@ -536,6 +550,184 @@ async function playUntilVictory(page: Page): Promise<void> {
   await page.clock.runFor(1000);
   await expect(page.locator('.victory')).toHaveAttribute('data-banner', '');
 }
+
+// ── Phase 2d.1 (G3, helpers-spec §7.7): the helpers' moments on one of our 9 × 9 levels ──
+
+/** Level 273 (ours, 9 × 9): a two-tile colour at (0,8) and (1,8); one kitty, one hint. */
+const helperSave = (locale?: 'de' | 'ar'): SaveData => {
+  const save = returning({ progress: { level: 273, completed: 272, best: {} }, stock: { hints: 1, kitties: 1 } });
+  return locale ? { ...save, settings: { ...save.settings, locale } } : save;
+};
+
+/** 2d.1 captures: docs/phase2d/screenshots/G3-2d1-<moment>-<width>.png (VISUAL_OUT overrides the folder). */
+async function shot2d1(page: Page, name: string): Promise<void> {
+  const width = page.viewportSize()?.width ?? 0;
+  await page.screenshot({ path: join(OUT, `G3-2d1-${name}-${width}.png`) });
+}
+
+/** Playwright's clock drives the timers and rAF; the CSS / WAAPI animations are put at their age on it. */
+async function syncAnims(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const w = window as Window & { __births?: WeakMap<Animation, number> };
+    w.__births ??= new WeakMap();
+    const now = performance.now();
+    for (const a of document.getAnimations()) {
+      if (!w.__births.has(a)) w.__births.set(a, now);
+      try {
+        a.pause();
+        a.currentTime = now - (w.__births.get(a) as number);
+      } catch {
+        // finished
+      }
+    }
+  });
+}
+
+async function pauseClock(page: Page): Promise<void> {
+  const now = await page.evaluate(() => Date.now());
+  await page.clock.pauseAt(new Date(now + 1));
+  await syncAnims(page);
+}
+
+/** Moves the paused clock on by ms in ≤ 8 ms steps (the fx loop's frames), animations along. */
+async function advance(page: Page, ms: number): Promise<void> {
+  for (let left = ms; left > 0.001; left -= 8) {
+    await page.clock.runFor(Math.min(8, left));
+    await syncAnims(page);
+  }
+}
+
+/** Home → level 273 with the fx chunk in (the clock installed, still running). */
+async function helperGame(page: Page, locale?: 'de' | 'ar', safe = false): Promise<void> {
+  await page.clock.install({ time: new Date(NOW) });
+  await page.goto('/?ads=ok');
+  await ready(page);
+  await page.evaluate((json) => (window as TestWindow).__mewdoku?.seedSave(json), JSON.stringify(helperSave(locale)));
+  await page.reload();
+  await ready(page, 'home');
+  if (safe) {
+    await page.addStyleTag({ content: ':root{--dev-safe-top:62px;--dev-safe-bottom:34px}' });
+    await page.evaluate(() => window.dispatchEvent(new Event('resize')));
+  }
+  await page.locator('.home__play').click();
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
+  await page.waitForSelector('.game-fx[data-celebrate=ready]', { state: 'attached', timeout: 10_000 });
+}
+
+/** The tickers at still-a's moment (line 2 at 0.489 of its crossing), captured, then sent off. */
+async function tickersMid(page: Page, name: string): Promise<void> {
+  await expect(page.locator('.game-fx .tickers .ticker')).toHaveCount(2);
+  await page.evaluate(() => {
+    for (const a of document.getAnimations()) {
+      if (((a.effect as KeyframeEffect | null)?.target as Element | null)?.closest('.tickers')) {
+        a.pause();
+        a.currentTime = 150 + 0.489 * 9000;
+      }
+    }
+  });
+  await page.waitForTimeout(100);
+  const boxes = await page.locator('.game-fx .ticker').evaluateAll((els) => els.map((e) => e.getBoundingClientRect()).map((r) => ({ l: r.left, r: r.right, t: r.top, b: r.bottom })));
+  const vw = page.viewportSize()?.width ?? 0;
+  // Both on screen, line 2 below line 1 (separate slots).
+  for (const b of boxes) expect(b.r > 0 && b.l < vw, 'a ticker on screen').toBe(true);
+  expect((boxes[1] as { t: number }).t).toBeGreaterThanOrEqual((boxes[0] as { b: number }).b - 0.5);
+  await shot2d1(page, name);
+  await page.evaluate(() => {
+    for (const a of document.getAnimations()) if (((a.effect as KeyframeEffect | null)?.target as Element | null)?.closest('.tickers')) a.finish();
+  });
+  await expect(page.locator('.game-fx .tickers')).toHaveCount(0);
+}
+
+/** The kitty on (0,8) after (1,8) was crossed: "+576" at rest (300), the star (1 066), the count-up (1 450). */
+async function kittyMoments(page: Page, tag: string, all: boolean): Promise<void> {
+  await cell(page, 17).click(); // (1,8): the colour's other tile, so the kitty's cat completes the colour
+  await page.waitForTimeout(1200);
+  await pauseClock(page);
+  await page.locator('.tool--paw').click();
+  await page.waitForFunction(() => ((window as TestWindow).__mewdoku?.state()?.levelPoints ?? 0) > 0, null, { timeout: 10_000 });
+  await syncAnims(page);
+  await advance(page, 300);
+  // "+576" (in Arabic the number is a bidi isolate inside the sign's run).
+  await expect(page.locator('.game-fx svg.fx-plus text')).toHaveText(/^\+[\u2066-\u2069]?576[\u2066-\u2069]?$/);
+  await expect(page.locator('.game-fx .fx-done-label')).toHaveCount(1); // the colour is done
+  const plus = (await page.locator('.game-fx svg.fx-plus text').boundingBox()) as { x: number; width: number };
+  const vw = page.viewportSize()?.width ?? 0;
+  expect(plus.x).toBeGreaterThanOrEqual(0);
+  expect(plus.x + plus.width).toBeLessThanOrEqual(vw);
+  await shot2d1(page, `plus-${tag}`);
+  await advance(page, 1066 - 300);
+  await expect(page.locator('.game-fx .fx-star')).toBeAttached();
+  await shot2d1(page, `star-${tag}`);
+  if (all) {
+    await advance(page, 1450 - 1066);
+    const n = Number((await page.locator('.points-pill__n').innerText()).replace(/\D/g, ''));
+    expect(n, 'mid-way through the count-up').toBeGreaterThan(0);
+    expect(n).toBeLessThan(576);
+    await shot2d1(page, `count-${tag}`);
+    await advance(page, 2400 - 1450);
+  } else {
+    await advance(page, 2400 - 1066);
+  }
+  await expect(page.locator('.points-pill__n')).toHaveText(/576/);
+  await expect(page.locator('.pill--heads .head[data-done] .head__face')).toHaveCount(1);
+}
+
+/** The hint settled (its card 5.9 s above the board, Apply 31 s below it), then Apply's labels (+66). */
+async function hintMoments(page: Page, tag: string): Promise<void> {
+  await advance(page, 2000);
+  await page.locator('.tool--bulb').click();
+  await page.waitForSelector('.overlay[data-overlay=hint]:not([hidden])', { timeout: 10_000 });
+  await syncAnims(page);
+  await advance(page, 2200);
+  const r = await page.evaluate(() => {
+    const b = (sel: string) => {
+      const x = (document.querySelector(sel) as HTMLElement).getBoundingClientRect();
+      return { l: x.left, r: x.right, t: x.top, b: x.bottom };
+    };
+    const s = Number(getComputedStyle(document.querySelector('.screen--game') as HTMLElement).getPropertyValue('--s')) || 1;
+    return { s, card: b('.hint-card'), apply: b('.hint-apply'), board: b('.board'), bar: b('.screen--game .top-bar'), vh: window.innerHeight };
+  });
+  const near = (got: number, want: number, what: string): void => expect(Math.abs(got - want), `${what}: ${got.toFixed(1)} vs ${want.toFixed(1)}`).toBeLessThanOrEqual(2);
+  near(r.card.b, r.board.t - 5.9 * r.s, 'card bottom');
+  near((r.card.l + r.card.r) / 2, (r.board.l + r.board.r) / 2, 'card centre');
+  expect(r.card.t, 'card below the bar').toBeGreaterThanOrEqual(r.bar.b - 0.5);
+  near(r.apply.t, r.board.b + 31 * r.s, 'Apply top');
+  near((r.apply.l + r.apply.r) / 2, (r.board.l + r.board.r) / 2, 'Apply centre');
+  expect(r.apply.b).toBeLessThanOrEqual(r.vh + 0.5);
+  await shot2d1(page, `hint-${tag}`);
+  await page.locator('.hint-apply').click();
+  await syncAnims(page);
+  await advance(page, 66);
+  await expect(page.locator('.overlay[data-overlay=hint]')).toBeHidden();
+  expect(await page.locator('.game-fx .fx-done-label').count()).toBeGreaterThanOrEqual(1);
+  await shot2d1(page, `label-${tag}`);
+}
+
+test.describe('Phase 2d.1 helpers (helpers-spec §7.7): tickers, "+N", star, count-up, labels, hint', () => {
+  test('402 × 874 with the recordings\' safe areas: every moment', async ({ browser }, info) => {
+    test.skip(info.project.name !== 'web-390', 'the recordings\' phone');
+    test.setTimeout(120_000);
+    const ctx = await browser.newContext({ viewport: { width: 402, height: 874 }, deviceScaleFactor: 3, hasTouch: true, isMobile: true });
+    const page = await ctx.newPage();
+    await helperGame(page, undefined, true);
+    await tickersMid(page, 'tickers-en');
+    await kittyMoments(page, 'en', true);
+    await hintMoments(page, 'en');
+    await ctx.close();
+  });
+
+  for (const lang of ['de', 'ar'] as const) {
+    test(`${lang} at 320 × 568: the tickers, the "+N", the star, the hint and a label`, async ({ page }, info) => {
+      test.skip(info.project.name !== 'web-320', 'the small phone only');
+      test.setTimeout(120_000);
+      await helperGame(page, lang);
+      await expect(page.locator('html')).toHaveAttribute('lang', lang);
+      await tickersMid(page, `tickers-${lang}`);
+      await kittyMoments(page, lang, false);
+      await hintMoments(page, lang);
+    });
+  }
+});
 
 test.describe('short phones with the banner band (review UX-1, UX-2, I18N-LAYOUT-1, I18N-LAYOUT-2)', () => {
   for (const variant of ['level', 'daily', 'event'] as const) {

@@ -14,7 +14,7 @@
        > .board__row[role=row] > button.cell[data-i][data-s=e|m|c|w|g][data-dark][data-done][data-f][data-ghost][data-mood]
              (--xe; transient --gd --wd --wd2; .fx-mark .fx-pend .fx-pop .fx-press .fx-cat .fx-wave .fx-wave2)
            > .cell__tile (--c --diag) + .cell__glow + (.cell__flash .cell__light > i ×6, during .fx-cat) + svg.cell__g (--diag --breathe-delay)
-               > .cell__pat? g.cell__xg(g.cell__xb--a(rect.cell__xe, rect.cell__x), g.cell__xb--b(…)) g.cell__xog?(path.cell__xoe, path.cell__xo)
+               > .cell__pat? g.cell__xg(g.cell__xb--a > rect.cell__xe, g.cell__xb--b > rect.cell__xe, g.cell__xb--a > rect.cell__x, g.cell__xb--b > rect.cell__x) g.cell__xog?(path.cell__xoe, path.cell__xo)
                  .cell__catg?(.cell__cat .cell__blink (--blink-dur --blink-delay) .cell__ear)
        > .board__mouse[data-cell][data-face] (--mr --mc; during the mouse's visits) > svg > use ×4
    Custom properties sit on the element that uses them (review PERF-1): the even insets and the entry

@@ -66,3 +66,67 @@ Status: draft for the lead to merge into [docs/provenance.md](../provenance.md) 
 | `icon-rule-colours`, `icon-rule-lines`, `icon-rule-space` | Replaced by `ruleDiagram`; the ids stay in `IconSymbol` for `dev/**` until I-3 |
 | The 2c.1 line gear (polar outline, `gearPath()`), the 2c.1 fish (facing right, ink outline, top fin, belly band) and its 30 % empty outline | Redrawn above |
 | The 2c.1 palette and the page, ink, fish and wrong tokens | Replaced by the measured values; css-rules' retired-look guard now also fails on the 2c.1 values (`RETIRED_2D`) |
+
+---
+
+## Phase 2d.1 (helpers-spec, 2026-10-10)
+
+### How this art and motion were made
+
+- **Decision D-2d1-0 (user, 2026-10-10)** under D-2d-0's terms: the user's three recordings (mouse, cat, bulb) and two stills may be used to measure sizes, positions, timings and sequences and to sample colours. Tracing is not allowed, and no file of the original enters the repo.
+- **Drawings.** Every drawing below was written by an AI coding agent (Claude) as hand-typed SVG in TypeScript, from the words in [helpers-spec](helpers-spec.md) §1.4, §2.4, §5.2 and Appendix C. Where a shape can only come out one way (a four-point star, a paw print, a lightning bolt), it is drawn with our own proportions on our own grid.
+- **Motion.** The timings, scales and orders are the spec's measured numbers (helpers-spec §1.5, §2.4, §3.3, §4.2, §4.4). The easing of the cat's scale segments is fitted to the measured scale samples listed in the spec and in `mouse-cat.md` (numbers only).
+- **What was not used.**
+  - No frame of the recordings was traced, copied, or opened in an editor while drawing.
+  - No source listed in [06 §4](../phase1/06-legal-and-originality.md) was opened.
+  - No image, audio or text generator other than the coding agent itself was used.
+- **How it was checked.** Our build at 402 × 874, DSF 3 was frozen at exact milliseconds after each action (`page.clock` plus a pause-and-seek of the CSS animations) and saved as `docs/phase2d/screenshots/G2-2d1-*.png`. Those frames were then looked at beside the user's frames at the same moments (60 fps, same CSS-px box, 10 px guides): the mouse's second visit (v1), the cat (v2), and a ghost and the draw-in (v3). The side-by-sides stay in the session scratchpad (`2d1-G2/cmp-*.png`) and are never committed.
+- **Bytes.** "Markup" is the symbol's length in the sprite at run time. "Code" is the esbuild-minified module.
+  - First load: `helper-art.ts` 2.8 KB code. It holds the mouse's head and eyes, which moved here from `sprite.ts`'s `tool-mouse`, so the net new part is the ticker art.
+  - Lazy: `lazy-art.ts` 2.5 KB and `board-mouse.ts` 2.6 KB (code). Both go in the lazy `board-mouse` chunk, 4.8 KB raw (2.2 KB gzip) after bundling.
+  - Measured on the FBIG build against a copy of the same tree with G2's files at `7048674`: main JS +7.9 KB raw (+2.8 KB gzip), plus `palette.ts` +0.5 KB; first-load CSS +7.5 KB raw (+1.6 KB gzip).
+
+### Art (SVG, hand-coded)
+
+| Asset | File(s) | Method and words drawn from | Markup |
+|---|---|---|---|
+| `cat-wink` (the celebrating cat, helpers-spec §2.4) | `src/ui/art/sprite.ts` (`catSymbols`), `src/ui/art/cat-parts.ts` | Our Tux head (`catHead`) with the existing `wink` eyes and the `smile` mouth. The left eye is open. The right eye is a closed upward arc in ink on the white blaze. A tiny white four-point glint sits just past the arc's outer end, where it overlaps the dark fur so it shows. No new face drawing. | 2 602 (generated; about 200 B of code) |
+| `board-mouse`, `board-mouse-eyes`, `board-mouse-lids`, `board-mouse-grin` (the board mouse, §1.4) | `src/ui/art/helper-art.ts` (`mouseHead`, `mouseEyes`), `src/ui/art/lazy-art.ts` | Our 2d `tool-mouse` face split into parts on its own box (`1 4.5 98 88`). `tool-mouse` is now `mouseHead()` + `mouseEyes()`, so it draws as before. The **head** has the ears with pink insides, the head and muzzle, three whiskers a side, the nose, the closed mouth and the two teeth. The **eyes** are the bead eyes with catchlights. The **lids** are two rounded lids in the head's grey covering each eye from its top, with a dark closed-eye curve along their lower edge; the board scales them from the top edge. The **grin** is an open mouth below the nose: a dark rounded mouth, a pink tongue, the two teeth at its top edge and the nose redrawn over it. | 782 + 255 + 300 + 383 |
+| `fx-star4` (the points star, §2.5; used by G3) | `src/ui/art/lazy-art.ts` | A four-point star with concave sides (four cubic curves between the tips) on the 24 grid, in `currentColor`. It has a round soft core: two circles in `var(--star-core, #FFFD79)`, the outer one at 70 %. | 348 |
+| `fx-shard`, `fx-shard-2`, `fx-shard-3` (the cat's shards, §2.4; used by G3) | `src/ui/art/lazy-art.ts` (`shard`) | Three irregular rounded polygons (chunky crystal bits) on the 24 grid. Each has a lit face (the whole chunk in `currentColor`, i.e. the tile's colour), a shaded face (the lower-right facet in black at 18 %, so the colour × 0.82) and a small white highlight facet at 45 %. | 408 / 399 / 390 |
+| `art-paw-cap` (the ticker's inline-start cap, §5.2) | `src/ui/art/helper-art.ts` (`pawCap`) | On a 30 × 31 box: the pill's outline runs from its top edge around four scallops (circles of r 4.3 at (12.4, 4.9), (7, 11.4), (7, 19.6), (12.4, 26.1); the first and last touch the pill's edges) and back along its bottom edge. It is filled with `--toast-fill` and stroked 1.2 in `--toast-line`. Each scallop holds a round toe bean (r 2.8, `#FFCD9B`). A large main pad (an ellipse) has a radial `#FFD4A5` → `#FFE1B5` gradient that fades into the fill. | 867 |
+| `art-bolt` (ticker line 1's icon) | `src/ui/art/helper-art.ts` | A chunky zig-zag bolt on the 24 grid in `--gold`. Its corners are rounded by a 1.4 stroke of the same gold (no outline colour). The lower-right facet is in `--fish` orange, and a thin pale highlight runs along the upper-left edge. | 290 |
+| `art-star` (ticker line 2's icon) | `src/ui/art/helper-art.ts` (`star5`) | A plump five-point star on the 24 grid (radii 9.4 / 4.6). It is `--gold` with its tips rounded by a round-joined 3-unit gold stroke. A pale facet and a small white highlight sit at the upper left, with a faint `--fish` inner line toward the bottom. | 537 |
+| The ghost X's outline (`path.cell__xo`, §3.3) | `src/ui/board/board-fx.ts` (`xOutlinePath`), `src/ui/board/board-cells.ts` (`ensureGhost`) | Computed, not drawn. It is the union outline of the two X bars of `layout.mark` (a plus shape turned 45°: eight rounded bar ends and four concave corners, with no inner crossing lines). It is grown so that the 1.5 px white non-scaling stroke ends 0.8 px outside the real X on a 39 px tile, as measured. Patterns on adds a 3 px `--xe` copy under it. | 357 (path data) |
+
+### The board's motion (measured numbers; our own CSS and code)
+
+| Item | File(s) | Method |
+|---|---|---|
+| X draw-in (§4.4, D-2d1-8) | `src/ui/board/board-cells.ts` (bar groups), `src/styles/board.css` (`.fx-mark`, `tile-squish`, `x-grow`, `x-reveal`, `x-over`), `board-view.ts` | Each rect sits in a rotated bar group, so CSS scales it in the bar's own frame. The two edge groups come first and the two white ones last, so both edges stay under both whites. On every new X of a tap, a paint or Apply, all at once: the tile squishes 0.90 → 1 over 80 ms; "\" scales 0.3 → 1 about the X's centre over 70 ms; "/" is revealed from its top-right tip (84.5, 50 in its frame) over 130 ms after that; the group goes to 1.1 by 70 ms, holds, and is back to 1 at 250 ms. The durations come from `fx.markDraw`. Reduced motion: a 150 ms WAAPI fade. |
+| The mouse's visits (§1.4–§1.5, D-2d1-1) | `src/ui/board/board-mouse.ts` (lazy chunk), `src/styles/board.css` (`.board__mouse*`, `mouse-in`, `mouse-out`, `mouse-blink`, `mouse-glance`, `mouse-grin`, `mouse-narrow`, `mouse-tilt`) | One sprite per visit over the tile: 0.86 × 0.79 T (measured 0.88 × 0.77), 1 % T above the centre. Visits run in event order, `mouseVisitMs` (935) apart, with the times from G1's `mouseLandMs` / `mouseRunMs`. The tile presses 0.88 → 1 (70 ms). The mouse comes in from 0.5 (faint at +16, then about linear to 1 by +115, opaque by +66: fitted to the v1 samples). The face is blink, glance or grin (k mod 3; our timings, shaped on the observed ones). At +850 the X pops 1.15 → 1 (170 ms) under it while it shrinks to 0.77 and fades (opaque to +35, 0.93 at +50, 0.5 at +67, gone at +85). The run follows elapsed time, so late timers catch up, and a finaliser at `mouseRunMs` removes every hidden X. |
+| The cat-placed sequence (§2.4, D-2d1-3) | `src/ui/board/board-cat.ts`, `src/styles/board.css` (`.fx-cat`, `cat-placed`, `.cell__flash`, `cat-wash`, `cat-rays`, `cat-halo`, `.cell__light`, `cat-light`, `cat-twinkle`) | Scale, in units of the resting size, about 50 % 80 % of the cat: 0.3 at 16 ms, 1.56 at 116–133, 1.25 at 300, held to 816, 0.89 at 950, held to 1 000, then 1 at 1 400. Each segment's easing is fitted to the measured samples. The wink runs from 350 to 780 (`cat-wink`). The flash is our twelve soft white rays (a repeating conic gradient, masked round) and a white wash: 0.55 at 50, 0.65 from 200 to 366, gone by 733. The halo mixes the tile's colour with the measured `#FEFFEA` (33 → 83 ms). The light is a 3-slot radial white glow at up to 25 %, peaking at 300. Six four-point twinkles (white, `--r11` pink, `--twinkle-cyan`) sit at our own offsets within 1.5 T, each 360 ms from 133 to 373. The cell is lifted while the cat overflows. A `CAT_REMOVED` or a props render cancels the sequence. |
+| Ghost X pop (§3.3) | `src/ui/board/board-highlight.ts`, `src/styles/board.css` (`ghost-pop`) | Ghosts appear at 333 + 60 i ms in `ghostOrder` (inline `--gd`). Each pops over 500 ms with the measured keyframes: 0 % scale 0.25 opacity 0.3 → 12 % opacity 1 → 13 % 1 → 27 % 1.22 → 47 % 1 → 60 % 0.92 → 100 % 1. The ghost cat pops at 333, then bobs (2b). The board's 2b hint dim, focus ring and `ghost-pulse` are retired. |
+| Completion waves (§4.2, D-2d1-6) | `src/ui/board/board-fx.ts` (`waveOrder`), `board-view.ts`, `src/styles/board.css` (`wave-bump`, `wave-glow`) | Each tile of a completed unit starts at k × 33 ms (`--wd`), from the end nearer the anchor; a region steps by king distance (ours). Scale 0.93 at +33, 1.10 at +67 held to +167, 1 by +270. A pale yellow glow (`--wave-rgb`) peaks at +50. A tile in two units bumps twice (`--wd2`). |
+| Done veil and resting cat (§4.7, D-2d1-15) | `src/styles/board.css`, `src/ui/board/board-cells.ts` (`CAT_BOX`) | The veil skips the found cat's own tile. The resting cat's box is 86.4 units at (6.8, 6.9) on the slot box. Our Tux's art (84.9 × 80.4 of its grid) then measures 31.0 × 29.7 px on a 39 px tile in our build (0.80 × 0.76 T; measured 0.78 × 0.77 T), with its centre 2 % T above the tile centre. |
+| Dark tiles (§6.4, D-2d1-11) | `src/ui/art/palette.ts` (`isDarkTile`), `board-cells.ts` (`data-dark`), `src/styles/board.css` | On a tile where white reaches 4:1 (Denim), the pattern glyph is white unless the tile is faded. |
+
+### Colours (helpers-spec §6)
+
+| Item | File(s) | Source |
+|---|---|---|
+| Denim `#5B75B2` (palette index 4) | `src/ui/art/palette.ts`, `src/styles/tokens.css` (`--r4`) | Sampled from the user's PNG still (helpers-spec §6.1). It replaces our Mint `#52A982`. `PALETTE_DE00` is recomputed; Denim's nearest colour is Violet at 14.19. |
+| Tier, heads ring and its start | `src/ui/art/palette.ts` (`PALETTE_CORE`, `paletteTier`, `HEAD_ORDER`, `headOrderFor`) | n ≤ 11 boards draw from the 11 measured colours; n = 12 adds our Cocoa. The ring order is measured (§6.5). The start is ours: `cyrb128(puzzleId)[0] mod count`. |
+| `--wrong` `#560A1C`; `--toast-fill` `#FFF1C8`, `--toast-line` `#E98E33` | `palette.ts` (`TOKENS`), `tokens.css` | `--wrong` is ours: 2d's crimson darkened until it reaches 3:1 on Denim (3.18). The toast colours are re-sampled from the PNG still (§5.2). |
+| `--plus`, `--done-top`, `--done-bottom`, `--done-line`, `--hint-card` (measured); `--apply` (the measured `#F0912A` darkened to 3.05 for white large text) | `palette.ts`, `tokens.css` | helpers-spec §2.5, §3.2, §4.3 |
+| `--halo-rgb` 254, 255, 234 (measured cc), `--wave-rgb` 255, 236, 150 (edge measured `#FFF2C0`–`#FFF6C7` cc), `--twinkle-cyan` `#C4F2FF` (ours) | `tokens.css` | the cat's halo, the wave glow, the twinkles |
+
+### Retired in 2d.1
+
+| Asset | Why |
+|---|---|
+| Mint `#52A982`, 2d's `--wrong` `#6E0E25`, the video-sampled toast `#FEF0C7` / `#DD9045` | Replaced (§6.2, §6.4, §5.2). css-rules' retired-look guard fails on them. |
+| The 2d X pop for player and hint marks, and the mouse's 90 ms stagger | Replaced by the draw-in and the visiting mouse. `x-pop` stays only as the mouse's X (1.15 → 1). |
+| The kitty's surprised mood, the 2b kitty `sparkle()` call and the cat drop on `CAT_PLACED` | Replaced by the cat sequence. `sparkle()` itself is left in `board-fx.ts` for the lead's I-3, and the `cat-drop` keyframes are in G3's `fx.css`. |
+| The board's hint dim (`--hint-dim`), its focus ring and `ghost-pulse` for hints | The hint overlay dims the screen (G3) and the ghosts are outlines. |
+| `art-flex` | Still in the sprite and `@deprecated phase2d.1`; its id is deleted at I-3 (the tickers use `art-bolt` and `art-star`). |

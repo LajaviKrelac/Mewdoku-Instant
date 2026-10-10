@@ -30,12 +30,13 @@ import { buildCell, cellLabel, ensureCat, ensurePattern, setCatMood, STATE_CODE,
 import type { EventAccessory } from '../../game/events';
 import { playCatSequence, type CatSequence } from './board-cat';
 import { cellNoise, createFxTimers, earFlickDelayMs, entryEndMs, entryTiming, flashClass, waveOrder } from './board-fx';
-import { playMouseRun, type MouseRun } from './board-mouse';
+import type { MouseRun } from './board-mouse';
 import { attachGestures } from './gestures';
 import { attachKeyboard, type KeyboardHandle } from './keyboard';
 import { applyHighlight } from './board-highlight';
 import type { BoardFrame, BoardHighlight, BoardInput, BoardModel, BoardView, BoardViewOptions, CatMood } from './board-types';
 import { evenInsets, gapFor, type CellInsets } from './layout';
+import { mouseRunMs } from '../../game/mouse';
 
 export type { BoardFrame, BoardHighlight, BoardInput, BoardModel, BoardView, BoardViewOptions, CatMood } from './board-types';
 
@@ -46,6 +47,28 @@ const sameBytes = (a: ArrayLike<number>, b: ArrayLike<number>): boolean => {
 };
 
 const isCatState = (s: number): boolean => s === CellState.Cat || s === CellState.Given;
+
+/**
+ * Phase 2d.1: the mouse's visits live in a lazy chunk (board-mouse.ts with the lazy art): the first screen
+ * never needs them, and the mouse can only run after its O2 card. loadMouseRun() starts the import once;
+ * a board prefetches it at idle after its entry (MOUSE_PREFETCH_MS), and a MARKED that arrives before it
+ * has loaded hides its X's at once and starts the run, timed from the MARKED, when it lands.
+ */
+type MouseModule = typeof import('./board-mouse');
+let mouseModule: MouseModule | null = null;
+let mouseLoading: Promise<MouseModule> | null = null;
+export function loadMouseRun(): Promise<MouseModule> {
+  mouseLoading ??= import('./board-mouse').then(
+    (mod) => (mouseModule = mod),
+    (err: unknown) => {
+      mouseLoading = null; // a later board may retry
+      throw err;
+    },
+  );
+  return mouseLoading;
+}
+/** After the board entry ends, when the mouse chunk is prefetched. */
+export const MOUSE_PREFETCH_MS = 1500;
 
 /** One tile's wave bump (helpers-spec §4.2: 0.93 at +33, 1.10 at +67 held to +167, 1 by +270). */
 const WAVE_TILE_MS = 270;
@@ -137,6 +160,8 @@ export function createBoardView(model: BoardModel, input: BoardInput, opts: Boar
   const cellMood = new Map<CellIndex, CatMood>(); // per-cell overrides (the cat sequence: idle, wink)
   const catSeqs = new Map<CellIndex, CatSequence>(); // Phase 2d.1: running cat sequences
   let mouseRun: MouseRun | null = null; // Phase 2d.1: the mouse's visits
+  let mouseGen = 0; // bumped by every mouse run and by endRuns (a pending chunk load then does nothing)
+  let destroyed = false;
 
   const paletteOf = (cell: CellIndex): number => m.colors[m.regions[cell] as number] as number;
   /** Writes a board-level custom property only when it changes (an unchanged write still restyles). */
@@ -226,6 +251,7 @@ export function createBoardView(model: BoardModel, input: BoardInput, opts: Boar
     for (const seq of [...catSeqs.values()]) seq.cancel();
     mouseRun?.finish();
     mouseRun = null;
+    mouseGen++;
   };
 
   const renderCell = (i: CellIndex, state: number): void => {
@@ -237,6 +263,7 @@ export function createBoardView(model: BoardModel, input: BoardInput, opts: Boar
       mouseRun.finish();
       mouseRun = null;
     }
+    if (state !== CellState.Mark) refs.el.classList.remove('fx-pend');
     refs.el.dataset.s = STATE_CODE[state] ?? 'e';
     refs.el.setAttribute('aria-label', label(i, state));
     if (isCatState(state)) {
@@ -366,10 +393,42 @@ export function createBoardView(model: BoardModel, input: BoardInput, opts: Boar
           // Phase 2d.1 (helpers-spec §1.5): the mouse visits its tiles in event order; each X waits
           // (.fx-pend) until the mouse leaves its tile, then pops. Reduced motion: they fade in together.
           mouseRun?.finish();
-          mouseRun = playMouseRun(
-            ev.cells,
-            { board: el, cellElement: (i) => cells[i]?.el ?? null, n: m.n, timers, flash: (node, cls, ms) => flashClass(node, cls, ms, timers) },
-            rm,
+          mouseRun = null;
+          if (rm) {
+            for (const i of ev.cells) fadeIn(cells[i]?.el.querySelector('.cell__xg') ?? null);
+            break;
+          }
+          const list = ev.cells;
+          const deps = {
+            board: el,
+            cellElement: (i: CellIndex) => cells[i]?.el ?? null,
+            n: m.n,
+            timers,
+            flash: (node: Element, cls: string, ms: number) => flashClass(node, cls, ms, timers),
+            startedAt: performance.now(),
+          };
+          if (mouseModule) {
+            mouseRun = mouseModule.playMouseRun(list, deps, false);
+            break;
+          }
+          // not loaded yet: hide the X's now; the run starts (catching up) when the chunk lands, and a
+          // failed load, or one later than the whole run, shows them at once
+          for (const i of list) cells[i]?.el.classList.add('fx-pend');
+          el.setAttribute('aria-busy', 'true');
+          const reveal = (): void => {
+            for (const i of list) cells[i]?.el.classList.remove('fx-pend');
+            el.removeAttribute('aria-busy');
+          };
+          const gen = ++mouseGen;
+          timers.later(mouseRunMs(list.length, false), () => {
+            if (gen === mouseGen && !mouseRun) reveal();
+          });
+          loadMouseRun().then(
+            (mod) => {
+              if (gen !== mouseGen || destroyed) return;
+              mouseRun = mod.playMouseRun(list, deps, false);
+            },
+            reveal,
           );
           break;
         }
@@ -567,6 +626,8 @@ export function createBoardView(model: BoardModel, input: BoardInput, opts: Boar
       applyEntryVars(m.n, rm);
       const end = entryEndMs(m.n, rm);
       flashClass(el, 'fx-entry', end + 80, timers);
+      // Phase 2d.1: fetch the mouse's chunk once the board is up (it is never needed before)
+      if (!mouseModule) timers.later(end + MOUSE_PREFETCH_MS, () => void loadMouseRun().catch(() => undefined));
       // The reduced fade runs on WAAPI: the global reduced-motion CSS rule shortens CSS animations to 1 ms.
       if (rm && typeof el.animate === 'function') {
         try {
@@ -581,6 +642,7 @@ export function createBoardView(model: BoardModel, input: BoardInput, opts: Boar
       keyboard?.focus(i, true);
     },
     destroy() {
+      destroyed = true;
       offLocale();
       endRuns();
       timers.clear();

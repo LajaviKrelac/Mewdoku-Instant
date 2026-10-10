@@ -6,6 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cfg } from '../../../src/app/config';
 import { createCelebrate, type CelebrateContext } from '../../../src/ui/fx/celebrate';
+import { SPRITE_ID } from '../../../src/ui/art/sprite';
 import { SHARD_GRAVITY, shardAt, shardPlan } from '../../../src/ui/fx/cat-burst';
 import { createFxLoop, keyed, seeded } from '../../../src/ui/fx/fx-loop';
 import {
@@ -17,6 +18,9 @@ import {
   STAR_FROM_PLUS,
   starStart,
   starTimes,
+  SPARK_PATH,
+  STREAK_MAX,
+  streakFor,
 } from '../../../src/ui/fx/points-flight';
 
 const rect = (left: number, top: number, w: number, h: number): DOMRect =>
@@ -77,9 +81,68 @@ describe('the "+N" and the star\'s path (helpers-spec §2.5)', () => {
     expect(starTimes()).toEqual({ born: cfg.fx.points.starAtMs, fly: cfg.fx.points.starAtMs + 17, land: cfg.fx.points.starAtMs + 17 + cfg.fx.points.flightMs });
     expect(starTimes().land).toBe(1330);
   });
+
+  it('the glow streaks along the path while fast: 1 at rest, + speed / s, at most 1.6 (§2.5 "Star look")', () => {
+    expect(STREAK_MAX).toBe(1.6);
+    expect(streakFor(0, 1)).toBe(1);
+    expect(streakFor(0.3, 1)).toBeCloseTo(1.3, 9);
+    expect(streakFor(0.3, 0.75)).toBeCloseTo(1.4, 9);
+    expect(streakFor(5, 1)).toBe(1.6);
+  });
 });
 
 describe('the fx loop (lazy chunk)', () => {
+  it('the chunk mounts the star\'s and the shards\' symbols into the sprite (requests-G2 H2)', () => {
+    const sprite = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    sprite.id = SPRITE_ID;
+    document.body.appendChild(sprite);
+    expect(document.getElementById('fx-star4')).toBeNull();
+    createCelebrate(document.createElement('div'), {
+      cellRect: () => null,
+      color: () => 'var(--r0)',
+      pitch: () => 42,
+      s: () => 1,
+      reduced: () => false,
+      scoreRect: () => null,
+      countTo: () => undefined,
+    });
+    expect(document.getElementById('fx-star4')).not.toBeNull();
+    expect(document.getElementById('fx-shard')).not.toBeNull();
+    sprite.remove();
+  });
+
+  it('keeps one requestAnimationFrame chain when pieces add pieces during a frame (the trail)', () => {
+    // A manual frame queue: a second chain shows as two callbacks waiting for the same frame.
+    let q: FrameRequestCallback[] = [];
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb: FrameRequestCallback) => {
+      q.push(cb);
+      return q.length;
+    });
+    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined);
+    const loop = createFxLoop(window);
+    let adds = 0;
+    loop.add({
+      delay: 0,
+      dur: 500,
+      frame: () => {
+        adds += 1;
+        loop.add({ delay: 0, dur: 50, frame: () => undefined });
+      },
+    });
+    const waiting: number[] = [];
+    for (let k = 0; k < 10; k++) {
+      vi.advanceTimersByTime(16);
+      const run = q;
+      q = [];
+      for (const cb of run) cb(performance.now());
+      waiting.push(q.length);
+    }
+    expect(adds).toBeGreaterThan(5);
+    expect(waiting.every((n) => n === 1)).toBe(true);
+    loop.cancel();
+    vi.restoreAllMocks();
+  });
+
   it('draws a piece due now in the same call, then every frame by elapsed time; ends it; cancel ends the rest', () => {
     const loop = createFxLoop(window);
     const seen: number[] = [];
@@ -150,14 +213,24 @@ describe('playing POINTS (celebrate.play)', () => {
     expect(target).not.toHaveBeenCalled();
     vi.advanceTimersByTime(50); // 840: in flight; the target is read once when it takes off
     expect(target).toHaveBeenCalledTimes(1);
-    expect(layer.querySelectorAll('.fx-dot').length).toBeGreaterThan(0); // the trail
+    // The trail: fx-star4 sparkles; the glow's tail streaks behind the star along its path.
+    const trail = layer.querySelectorAll('svg.fx-spark');
+    expect(trail.length).toBeGreaterThan(0);
+    expect(trail[0]?.querySelector('path')?.getAttribute('d')).toBe(SPARK_PATH);
+    expect(trail[0]?.getAttribute('aria-hidden')).toBe('true');
+    expect((layer.querySelector('.fx-star__tail') as HTMLElement).style.transform).toMatch(/rotate\(-?\d+deg\) scaleX\(1(\.\d+)?\)/);
     vi.advanceTimersByTime(1330 - 840 - 20);
     expect(onLand).not.toHaveBeenCalled();
     vi.advanceTimersByTime(40);
     expect(onLand).toHaveBeenCalledTimes(1);
     expect(onLand).toHaveBeenCalledWith(576);
-    expect(layer.querySelector('.fx-star')).toBeNull();
+    // The star itself is gone; its tail runs on into the number for ≈ 5 frames.
+    expect(layer.querySelector('.fx-star__art')).toBeNull();
+    expect(layer.querySelector('.fx-star__tail')).not.toBeNull();
     expect(layer.querySelector('.fx-burst')).not.toBeNull();
+    expect(layer.querySelectorAll('.fx-burst svg.fx-spark')).toHaveLength(10);
+    vi.advanceTimersByTime(100);
+    expect(layer.querySelector('.fx-star')).toBeNull();
     expect(layer.querySelector('svg.fx-plus')).toBeNull(); // removed at 916
     vi.advanceTimersByTime(cfg.fx.points.burstMs + 50);
     expect(layer.children.length).toBe(0);

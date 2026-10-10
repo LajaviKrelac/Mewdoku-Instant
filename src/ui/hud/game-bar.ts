@@ -151,14 +151,18 @@ export function createGameBar(props: GameBarProps, cb: GameBarCallbacks): GameBa
     stopCount();
     const from = Math.max(0, shown);
     const ms = cfg.fx.points.countMs;
-    let t0 = -1;
+    // The landing frame is the count's frame 0 (measured: 0, 54, 104 … from the landing): the clock
+    // starts at the call, and every later frame shows the value at its own timestamp (same origin).
+    const t0 = win.performance.now();
     score.numEl().setAttribute('data-counting', '');
+    shown = from;
+    score.show(from);
     const frame = (ts: number): void => {
-      if (t0 < 0) t0 = ts;
-      const v = countValue(from, total, ts - t0, ms);
+      const el = Math.max(0, ts - t0);
+      const v = countValue(from, total, el, ms);
       shown = v;
       score.show(v);
-      if (ts - t0 >= ms) {
+      if (el >= ms) {
         countRaf = 0;
         score.numEl().removeAttribute('data-counting');
         return;

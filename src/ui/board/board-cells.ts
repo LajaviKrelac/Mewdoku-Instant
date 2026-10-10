@@ -177,19 +177,21 @@ export function buildCell(cell: CellIndex, paletteIndex: number, insets: CellIns
 const num = (v: number): string => String(Math.round(v * 10) / 10);
 
 /**
- * g.cell__xg > g.cell__xb.cell__xb--a (rotate 45: "\\") and g.cell__xb--b (rotate −45: "/"), each holding
- * its edge rect (.cell__xe, shown with Colour patterns on) and its white bar (.cell__x), axis-aligned in
- * the bar's frame (helpers-spec §4.4; CONTRACTS-2d1 §9).
+ * g.cell__xg > g.cell__xb.cell__xb--a (rotate 45: "\\") and g.cell__xb--b (rotate −45: "/"), each rect
+ * axis-aligned in its bar's frame (helpers-spec §4.4; CONTRACTS-2d1 §9). The edges (.cell__xe, shown with
+ * Colour patterns on) sit in their own pair of bar groups under the pair holding the white bars (.cell__x),
+ * so both edges stay under both whites as in 2d (one group per bar would draw "/"'s edge over "\\"'s white);
+ * the draw-in animates every rect of a bar's class together.
  */
 function markGroup(doc: Document): SVGGElement {
   const g = doc.createElementNS(SVG_NS, 'g');
   g.setAttribute('class', 'cell__xg');
   const { bar, edge } = markRects();
-  for (const [mod, deg] of [['a', 45], ['b', -45]] as const) {
-    const bg = doc.createElementNS(SVG_NS, 'g');
-    bg.setAttribute('class', `cell__xb cell__xb--${mod}`);
-    bg.setAttribute('transform', `rotate(${deg} 50 50)`);
-    for (const [cls, b] of [['cell__xe', edge], ['cell__x', bar]] as const) {
+  for (const [cls, b] of [['cell__xe', edge], ['cell__x', bar]] as const) {
+    for (const [mod, deg] of [['a', 45], ['b', -45]] as const) {
+      const bg = doc.createElementNS(SVG_NS, 'g');
+      bg.setAttribute('class', `cell__xb cell__xb--${mod}`);
+      bg.setAttribute('transform', `rotate(${deg} 50 50)`);
       const rect = doc.createElementNS(SVG_NS, 'rect');
       rect.setAttribute('class', cls);
       rect.setAttribute('x', num(b[0] as number));
@@ -198,8 +200,8 @@ function markGroup(doc: Document): SVGGElement {
       rect.setAttribute('height', num(b[3] as number));
       rect.setAttribute('rx', num(b[4] as number));
       bg.appendChild(rect);
+      g.appendChild(bg);
     }
-    g.appendChild(bg);
   }
   return g;
 }

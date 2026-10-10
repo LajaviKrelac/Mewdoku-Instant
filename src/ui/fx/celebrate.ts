@@ -5,7 +5,8 @@
 // screen, the tutorial, which has no ticker). Until it has loaded, POINTS falls back to 2d's roll, a finished unit shows no label
 // and a level start's tickers wait for it (they join their crossing where it would be by then); once it
 // has, the game screen's fx layer carries [data-celebrate=ready]. Its stylesheet (celebrate.css: the fx
-// layer and the tickers) comes with it, out of the first load.
+// layer and the tickers) comes with it, out of the first load, and so do the star's and the shards'
+// symbols (mountLazyArt, G2's lazy art; the board's mouse chunk mounts them too).
 // Which event plays what (CONTRACTS-2d1 §8): CAT_PLACED → shards, light, twinkles (not with reduced
 // motion); POINTS → the "+N" over the tile, the star to the Score, then the bar's count-up (reduced
 // motion: the "+N" fades in place); UNITS_DONE → one label per anchor tile (the board plays the waves;
@@ -13,6 +14,7 @@
 import './celebrate.css';
 import type { GameEvent } from '../../game/types';
 import { formatNumber, t } from '../../i18n';
+import { mountLazyArt } from '../art/lazy-art';
 import { createFxLoop, type FxLoop } from './fx-loop';
 import { playCatBurst } from './cat-burst';
 import { playDoneLabels } from './done-label';
@@ -46,6 +48,8 @@ export interface Celebrate {
 }
 
 export function createCelebrate(layer: HTMLElement, ctx: CelebrateContext): Celebrate {
+  // The star and the shards are not in the first-load sprite: add them now (idempotent; requests-G2 H2).
+  mountLazyArt(layer.ownerDocument);
   const loop: FxLoop = createFxLoop(layer.ownerDocument.defaultView as Window);
   return {
     play(ev) {

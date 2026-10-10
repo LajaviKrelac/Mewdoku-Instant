@@ -18,6 +18,11 @@
 // heads and fish pills fit, the rule cards (diagrams only at 320 px) and the score's "+N" chip stays
 // clear of the gear; in Arabic the game bar mirrors (back at the right, the gear and its dot at the
 // left) while the board stays left to right.
+// Phase 2d.1 (G3, helpers-spec §7.7): the Score's "+N" moved over the placed tile (no chip in the bar).
+// The hint card at 320 px in de, fr and ar: its text fits the card's width, the card keeps its bottom
+// 5.9 s above the board and grows upward, never under the bar (a long sentence scrolls inside it); the
+// completion labels stay inside the viewport; in Arabic the tickers enter at the left edge and move
+// right, and the labels read right to left.
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -483,8 +488,8 @@ async function rowFits(page: Page, start: '.pill--heads' | '.pills .period-pill'
 
 /**
  * Phase 2d §1.4 (critic C5, C9): the Level and Score columns sit between the two discs with 4 px to
- * spare and never overlap; the level number is whole (never cut, never ellipsized); a running "+N"
- * chip ends before the gear's inner edge − 4 px.
+ * spare and never overlap; the level number is whole (never cut, never ellipsized). (2d.1: the "+N"
+ * chip is gone from the bar; the check below only runs if one were ever shown again.)
  */
 async function barFits(page: Page): Promise<void> {
   const g = await page.evaluate(() => {
@@ -543,12 +548,13 @@ for (const c of POINTS_CASES) {
       await page.evaluate(() => (window as TestWindow).__mewdoku?.solve());
       const n = page.locator('.points-pill[data-final] .points-pill__n:not(.is-out)');
       await expect(n).toBeVisible();
-      await page.waitForTimeout(450); // the last roll
-      const shown = strip((await n.textContent()) ?? '');
+      await rowFits(page, '.pill--heads'); // twelve found heads, before the period counter takes the cell (t = 1 000)
+      // 2d.1 §2.5: the last stars land at ≈ 1.33 s and the Score counts up to the total (was: the roll).
       const want = new Intl.NumberFormat(c.lang === 'ar' ? 'ar-u-nu-latn' : c.lang).format(13248);
-      expect(shown.replace(/[\u00a0\u202f]/g, ' ')).toBe(want.replace(/[\u00a0\u202f]/g, ' '));
+      const norm = (v: string): string => strip(v).replace(/[\u00a0\u202f]/g, ' ');
+      await expect.poll(async () => norm((await n.textContent()) ?? ''), { timeout: 4000 }).toBe(norm(want));
+      const shown = strip((await n.textContent()) ?? '');
       expect(strip((await page.locator('.points-pill').getAttribute('aria-label')) ?? '')).toBe(strip(c.label.replace('{count}', shown)));
-      await rowFits(page, '.pill--heads');
       await barFits(page);
       await noOverflow(page);
       await noClipping(page);
@@ -573,6 +579,99 @@ for (const c of POINTS_CASES) {
       await noOverflow(page);
       await noClipping(page);
       await shot(page, info, { name: c.name, browser: c.browser, lang: c.lang, settingsTitle: '', livesLabel: '' }, 'points-victory');
+    });
+  });
+}
+
+// ── Phase 2d.1 (G3, helpers-spec §7.7): the hint card, the completion labels and the tickers per locale ──
+
+const HINT_CASES = [
+  { name: 'de', browser: 'de-DE', lang: 'de', rtl: false },
+  { name: 'fr', browser: 'fr-FR', lang: 'fr', rtl: false },
+  { name: 'ar', browser: 'ar-EG', lang: 'ar', rtl: true },
+] as const;
+
+for (const c of HINT_CASES) {
+  test.describe(`2d.1 helpers in ${c.name} at 320 px`, () => {
+    test.use({ locale: c.browser });
+
+    test('the hint card fits and grows upward under the bar; the labels stay inside; the tickers\' direction', async ({ page }, info) => {
+      test.skip(info.project.name !== 'web-320', 'the small phone is the tight case');
+      // Level 273 (ours, 9 × 9): a two-tile colour at (0,8) and (1,8); one kitty, one hint.
+      await seededHome(page, { progress: { level: 273, completed: 272, best: {} }, stock: { hints: 1, kitties: 1 } });
+      await page.waitForFunction((lang) => document.documentElement.lang === lang, c.lang);
+      await page.locator('.home__play').click();
+      await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
+      await page.waitForSelector('.game-fx[data-celebrate=ready]', { state: 'attached', timeout: 10_000 });
+      // The tickers: right → left, mirrored in RTL (they enter at the left edge and move right).
+      const frames = await page.locator('.game-fx .ticker').evaluateAll((els) =>
+        els.map((e) => (e.getAnimations()[0]?.effect as KeyframeEffect | undefined)?.getKeyframes().map((k) => String(k.transform)) ?? []),
+      );
+      expect(frames).toHaveLength(2);
+      for (const f of frames) {
+        const [from, to] = f.map((t) => Number(/translateX\((-?[\d.]+)px\)/.exec(t)?.[1] ?? NaN));
+        if (c.rtl) {
+          expect(from, 'RTL: enters at the left').toBeLessThan(0);
+          expect(to, 'RTL: leaves past the right').toBeGreaterThan(0);
+        } else {
+          expect(from, 'enters at the right').toBeGreaterThan(0);
+          expect(to, 'leaves past the left').toBeLessThan(0);
+        }
+      }
+      // The kitty's cat completes the colour (its other tile crossed first); then the hint (the cat's shadow).
+      await page.locator('.cell').nth(17).click();
+      await page.waitForTimeout(600);
+      await page.locator('.tool--paw').click();
+      await page.waitForFunction(() => ((window as TestWindow).__mewdoku?.state()?.levelPoints ?? 0) > 0, null, { timeout: 10_000 });
+      await page.waitForTimeout(2600);
+      await page.locator('.tool--bulb').click();
+      await page.waitForSelector('.overlay[data-overlay=hint][data-placed]:not([hidden])', { timeout: 10_000 });
+      await page.waitForTimeout(400);
+      const g = await page.evaluate(() => {
+        const r = (sel: string) => {
+          const b = (document.querySelector(sel) as HTMLElement).getBoundingClientRect();
+          return { l: b.left, r: b.right, t: b.top, b: b.bottom };
+        };
+        const text = document.querySelector('.hint-card__text') as HTMLElement;
+        const s = Number(getComputedStyle(document.querySelector('.screen--game') as HTMLElement).getPropertyValue('--s')) || 1;
+        return {
+          s,
+          vw: window.innerWidth,
+          card: r('.hint-card'),
+          apply: r('.hint-apply'),
+          board: r('.board'),
+          bar: r('.screen--game .top-bar'),
+          fitsWidth: text.scrollWidth <= text.clientWidth + 1,
+          align: getComputedStyle(text).textAlign,
+          dir: getComputedStyle(text).direction,
+        };
+      });
+      expect(g.fitsWidth, 'the sentence fits the card\'s width').toBe(true);
+      expect(Math.abs(g.card.b - (g.board.t - 5.9 * g.s)), 'the card\'s bottom stays 5.9 s above the board').toBeLessThanOrEqual(2);
+      expect(g.card.t, 'the card never goes under the bar').toBeGreaterThanOrEqual(g.bar.b - 0.5);
+      expect(g.card.l).toBeGreaterThanOrEqual(-0.5);
+      expect(g.card.r).toBeLessThanOrEqual(g.vw + 0.5);
+      expect(g.dir).toBe(c.rtl ? 'rtl' : 'ltr');
+      await expect(page.locator('.hint-apply')).toBeInViewport({ ratio: 1 });
+      await noOverflow(page);
+      await shot(page, info, { name: c.name, browser: c.browser, lang: c.lang, settingsTitle: '', livesLabel: '' }, '2d1-hint');
+      // Apply: the shadow completes the cat's row and column, one label per anchor, each inside the viewport.
+      await page.locator('.hint-apply').click();
+      await expect(page.locator('.game-fx .fx-done-label').first()).toBeAttached({ timeout: 2000 });
+      await page.waitForTimeout(150);
+      const labels = await page.locator('.game-fx .fx-done-label text').evaluateAll((els) =>
+        els.map((e) => {
+          const b = e.getBoundingClientRect();
+          return { l: b.left, r: b.right, dir: getComputedStyle(e).direction };
+        }),
+      );
+      expect(labels.length).toBeGreaterThanOrEqual(1);
+      for (const b of labels) {
+        expect(b.l, 'a label inside the viewport').toBeGreaterThanOrEqual(-0.5);
+        expect(b.r, 'a label inside the viewport').toBeLessThanOrEqual(g.vw + 0.5);
+        expect(b.dir).toBe(c.rtl ? 'rtl' : 'ltr');
+      }
+      await shot(page, info, { name: c.name, browser: c.browser, lang: c.lang, settingsTitle: '', livesLabel: '' }, '2d1-label');
     });
   });
 }

@@ -5,12 +5,16 @@
 // Bézier (parameter linear in time over fx.points.flightMs) leaving a trail of small sparkles; it lands
 // as a burst of sparkles with a warm glow around the number, and the game bar counts up (onLand). All
 // of it is aria-hidden; the number and its announcement take the total at once elsewhere.
+// Our drawing of the look: the star's soft glow trails it as a tapering comet streak along the path
+// (stretched up to 1.6× while fast, anchored at the star so it reads as a tail); the trail and the burst
+// and the burst are plump four-point sparkles of ours (a lemon body with a cream heart and a soft glow);
+// the burst's glow is a bright white-to-yellow disc over the digits that peaks while they count.
 // Reduced motion: the "+N" fades in and out in place (fx.levelPoints.reducedPlusInMs / OutMs), nothing
 // else; the Score changed at once.
 // Lazy fx chunk (fx/celebrate.ts). Classes: .game-fx > svg.fx-plus, .fx-star (> .fx-star__glow +
-// svg), .fx-dot (trail), .fx-burst (> .fx-burst__glow, .fx-dot).
+// .fx-star__tail + svg), .fx-spark (trail), .fx-burst (> .fx-burst__glow, .fx-spark).
 import { cfg, type GameConfig } from '../../app/config';
-import { fxEl, fxText, fxUse, keyed, seeded, type FxLoop } from './fx-loop';
+import { fxEl, fxText, fxUse, keyed, seeded, SVG_NS, type FxLoop } from './fx-loop';
 
 export interface Pt {
   readonly x: number;
@@ -27,6 +31,13 @@ export const PLUS_STROKE = 4;
 export const PLUS_MARGIN = 3;
 /** The star's full size (s px) and its glow (1.5×). */
 export const STAR_SIZE = 22;
+/** The glow's streak along the path: ≤ 1.6× its length while fast (helpers-spec §2.5 "Star look"). */
+export const STREAK_MAX = 1.6;
+
+/** The streak's stretch for a speed in px/ms at scale s: 1 at rest, + speed / s, at most STREAK_MAX. */
+export function streakFor(speed: number, s: number): number {
+  return 1 + Math.min(STREAK_MAX - 1, Math.max(0, speed) / Math.max(0.01, s));
+}
 
 /** "+N" scale keyframes [ms, scale] (v2: 0.53 → 1.0 at 83 → 1.15 at 166–216 → 1.0 at 350). */
 const PLUS_SCALE: readonly (readonly [number, number])[] = [
@@ -180,18 +191,29 @@ function playStar(o: PointsFx, plus: Pt): void {
     doc,
     'fx-star__glow',
     `left:50%;top:50%;width:${px(size * 1.5)};height:${px(size * 1.5)};margin:${px(-size * 0.75)} 0 0 ${px(-size * 0.75)};border-radius:50%;` +
-      'background:radial-gradient(closest-side,rgba(255,250,150,.85),rgba(255,214,80,.35) 55%,rgba(255,214,80,0))',
+      'background:radial-gradient(closest-side,rgba(255,252,170,.95),rgba(255,226,70,.55) 50%,rgba(255,214,80,0))',
+  );
+  // The comet tail: the glow's length 1.5 × size, half as thick, its head at the star's centre and its
+  // body behind it along the path (rotate + scaleX from the head); bright at the star, clear at the end.
+  const tl = size * 1.5;
+  const tail = fxEl(
+    doc,
+    'fx-star__tail',
+    `left:50%;top:50%;width:${px(tl)};height:${px(size * 0.7)};margin:${px(-size * 0.35)} 0 0 ${px(-tl)};border-radius:50%;` +
+      `transform-origin:100% 50%;opacity:0;background:linear-gradient(to left,#fffbb0,rgba(255,236,90,.9) 45%,rgba(255,220,80,0))`,
   );
   const art = fxUse(doc, 'fx-star__art', 'fx-star4', 'width:100%;height:100%;color:var(--gold);--star-core:#fffd79');
-  star.append(glow, art);
+  star.append(tail, glow, art);
   let p2: Pt = p0;
+  let box: DOMRect | null = null;
   let ctl: Pt = p0;
   let last: Pt = p0;
   let lastT = 0;
   let lastDot = -Infinity;
   const place = (p: Pt, scale: number, angle: number, stretch: number): void => {
     star.style.transform = `translate(${px(p.x)},${px(p.y)}) scale(${Math.round(scale * 1000) / 1000})`;
-    glow.style.transform = `rotate(${Math.round(angle)}deg) scaleX(${Math.round(stretch * 100) / 100})`;
+    tail.style.opacity = stretch > 1 ? '1' : '0';
+    tail.style.transform = `rotate(${Math.round(angle)}deg) scaleX(${Math.round(stretch * 100) / 100})`;
   };
   let landed = false;
   o.loop.add({
@@ -207,6 +229,7 @@ function playStar(o: PointsFx, plus: Pt): void {
       }
       if (p2 === p0) {
         const r = o.target();
+        box = r;
         p2 = r ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : p0;
         ctl = bezierControl(p0, p2);
       }
@@ -217,60 +240,111 @@ function playStar(o: PointsFx, plus: Pt): void {
       // px per ms (0.2 → 0.6 × s measured along the arc): the glow streaks along the path, ≤ 1.6.
       const speed = t > lastT ? Math.hypot(dx, dy) / (t - lastT) : 0;
       const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
-      place(p, 1, angle, 1 + Math.min(0.6, speed / s));
+      place(p, 1, angle, streakFor(speed, s));
+      // One sparkle a frame, dropped a little behind the star's centre (≈ 7 s px apart, as measured).
+      if (t - lastDot >= 16 && u < 0.97 && u > 0) {
+        lastDot = t;
+        trailDot(o, { x: (p.x + last.x) / 2, y: (p.y + last.y) / 2 }, rand);
+      }
       last = p;
       lastT = t;
-      if (t - lastDot >= 33 && u < 0.97) {
-        lastDot = t;
-        trailDot(o, p, rand);
-      }
     },
     end: (cancelled) => {
-      star.remove();
-      if (cancelled || landed) return;
+      if (cancelled || landed) {
+        star.remove();
+        return;
+      }
       landed = true;
-      playBurst(o, p2, rand);
+      // The star goes into the number: its tail runs on into it and fades over ≈ 5 frames.
+      art.remove();
+      glow.remove();
+      const from = tail.style.transform.replace(/scaleX\([^)]*\)/, '');
+      o.loop.add({
+        delay: 0,
+        dur: 83,
+        frame: (t) => {
+          const k = t / 83;
+          tail.style.opacity = String(Math.round((1 - k) * 1000) / 1000);
+          tail.style.transform = `${from}scaleX(${Math.round((STREAK_MAX - 0.9 * k) * 100) / 100})`;
+        },
+        end: () => star.remove(),
+      });
+      playBurst(o, p2, box, rand);
       o.onLand();
     },
   });
 }
 
-/** A trail sparkle (3–7 s px) left behind the star, fading in ≈ 150 ms. */
+/** Our plump four-point sparkle (24 × 24): tips on the box edges, gently concave sides. */
+export const SPARK_PATH = 'M12 0Q14.9 9.1 24 12Q14.9 14.9 12 24Q9.1 14.9 0 12Q9.1 9.1 12 0Z';
+/** Its heart: the same shape at 0.5 around the centre. */
+const SPARK_CORE = 'M12 6Q13.45 10.55 18 12Q13.45 13.45 12 18Q10.55 13.45 6 12Q10.55 10.55 12 6Z';
+
+/** A four-point sparkle (lemon body, `core` heart, a soft glow), centred on its translate point. */
+function spark(doc: Document, size: number, core: string, glow: number): SVGSVGElement {
+  const svg = doc.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('class', 'fx-spark');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.style.cssText =
+    `position:absolute;left:0;top:0;overflow:visible;pointer-events:none;width:${px(size)};height:${px(size)};` +
+    `margin:${px(-size / 2)} 0 0 ${px(-size / 2)};opacity:0;filter:drop-shadow(0 0 ${px(glow)} rgba(255,226,60,.85))`;
+  const body = doc.createElementNS(SVG_NS, 'path');
+  body.setAttribute('d', SPARK_PATH);
+  body.setAttribute('fill', '#ffe54a');
+  const heart = doc.createElementNS(SVG_NS, 'path');
+  heart.setAttribute('d', SPARK_CORE);
+  heart.setAttribute('fill', core);
+  svg.append(body, heart);
+  return svg;
+}
+
+/** A trail sparkle (3–7 s px) left behind the star: it holds a moment, then shrinks and fades by ≈ 150 ms. */
 function trailDot(o: PointsFx, p: Pt, rand: () => number): void {
   const doc = o.layer.ownerDocument;
   const size = (3 + rand() * 4) * o.s;
-  const jx = (rand() - 0.5) * 6 * o.s;
-  const jy = (rand() - 0.5) * 6 * o.s;
-  const dot = fxEl(doc, 'fx-dot', `z-index:3;width:${px(size)};height:${px(size)};margin:${px(-size / 2)} 0 0 ${px(-size / 2)};background:#fff3a0`);
+  const jx = (rand() - 0.5) * 7 * o.s;
+  const jy = (rand() - 0.5) * 7 * o.s;
+  const dot = spark(doc, size, '#fff', 1.2 * o.s);
+  dot.style.zIndex = '3';
   o.layer.appendChild(dot);
   o.loop.add({
     delay: 0,
     dur: 150,
     frame: (t) => {
-      const k = t / 150;
-      dot.style.transform = `translate(${px(p.x + jx)},${px(p.y + jy)}) scale(${Math.round((1 - 0.7 * k) * 1000) / 1000})`;
-      dot.style.opacity = String(Math.round((1 - k) * 1000) / 1000);
+      const k = Math.max(0, t - 40) / 110;
+      dot.style.transform = `translate(${px(p.x + jx)},${px(p.y + jy)}) scale(${Math.round((1 - 0.6 * k) * 1000) / 1000})`;
+      dot.style.opacity = String(Math.round((1 - k * k) * 1000) / 1000);
     },
     end: () => dot.remove(),
   });
 }
 
-/** The landing burst around the Score: 10 four-point sparkles (4–15 s px) within 30 s px, a warm glow. */
-function playBurst(o: PointsFx, at: Pt, rand: () => number): void {
+/**
+ * The landing burst around the Score: 10 four-point sparkles (4–15 s px; the first three, the big ones,
+ * over the digits) spread up to 30 s px outside the number and its "Score" label, drifting outward; a
+ * bright warm glow over the digits.
+ */
+function playBurst(o: PointsFx, at: Pt, num: DOMRect | null, rand: () => number): void {
   const doc = o.layer.ownerDocument;
   const s = o.s;
   const dur = cfg.fx.points.burstMs;
   const burst = fxEl(doc, 'fx-burst', `z-index:4;transform:translate(${px(at.x)},${px(at.y)})`);
-  const g = 46 * s;
+  // A bright disc over the digits: white at its heart, warm yellow, clear at its edge.
+  const g = 52 * s;
   const glow = fxEl(
     doc,
     'fx-burst__glow',
-    `width:${px(g)};height:${px(g)};margin:${px(-g / 2)} 0 0 ${px(-g / 2)};border-radius:50%;` +
-      'background:radial-gradient(closest-side,rgba(255,236,120,.7),rgba(255,214,80,0))',
+    `width:${px(g)};height:${px(g * 0.8)};margin:${px(-g * 0.4)} 0 0 ${px(-g / 2)};border-radius:50%;` +
+      'background:radial-gradient(closest-side,#fff,rgba(255,250,190,.95) 30%,rgba(255,228,90,.65) 62%,rgba(255,214,80,0))',
   );
   burst.appendChild(glow);
+  // The number and the label above it, relative to the number's centre (s units when unmeasured).
+  const hw = Math.max(num ? num.width / 2 : 0, 26 * s); // at least the label's half width
+  const top = -(num ? num.height / 2 : 12 * s) - 18 * s;
+  const bottom = num ? num.height / 2 : 12 * s;
   interface Spark {
-    readonly el: HTMLElement;
+    readonly el: SVGSVGElement;
     readonly x: number;
     readonly y: number;
     readonly dx: number;
@@ -278,28 +352,34 @@ function playBurst(o: PointsFx, at: Pt, rand: () => number): void {
     readonly t0: number;
   }
   const sparks: Spark[] = [];
+  const midY = (top + bottom) / 2;
+  const hh = (bottom - top) / 2;
   for (let i = 0; i < 10; i++) {
-    const size = (4 + rand() * 11) * s;
-    // Around the number and the "Score" label above it: biased upward.
+    // The first three are the big ones over the digits and the label (13–15 s px), the rest 7–12 s px
+    // up to 30 s px outside the box, all around it.
+    const big = i < 3;
+    const size = (big ? 13 + rand() * 2 : 7 + rand() * 5) * s;
     const a = rand() * Math.PI * 2;
-    const r = (8 + rand() * 22) * s;
-    const x = Math.cos(a) * r;
-    const y = Math.sin(a) * r * 0.8 - 6 * s;
-    const el = fxEl(doc, 'fx-dot', `width:${px(size)};height:${px(size)};margin:${px(-size / 2)} 0 0 ${px(-size / 2)};background:${i % 3 ? '#ffe45c' : '#fff6b8'};opacity:0`);
+    const d = big ? 0 : (2 + rand() * 28) * s;
+    const k = big ? 0.3 + rand() * 0.5 : 1;
+    const x = Math.cos(a) * (hw * k + d);
+    const y = midY + Math.sin(a) * (hh * k + d * 0.8);
+    const len = Math.hypot(x, y - midY) || 1;
+    const el = spark(doc, size, i % 3 ? '#fffbd0' : '#fff', 2.5 * s);
     burst.appendChild(el);
-    sparks.push({ el, x, y, dx: (x / r) * 7 * s, dy: (y / r) * 7 * s, t0: rand() * 160 });
+    sparks.push({ el, x, y, dx: (x / len) * 20 * s, dy: ((y - midY) / len) * 20 * s, t0: big ? rand() * 20 : 30 + rand() * 170 });
   }
   o.layer.appendChild(burst);
   o.loop.add({
     delay: 0,
     dur,
     frame: (t) => {
-      // The glow peaks at +70…+170 (measured 1 400–1 500) and is gone by the end.
-      glow.style.opacity = String(Math.round(keyed([[0, 0.3], [70, 1], [170, 1], [dur, 0]], t) * 1000) / 1000);
+      // The glow peaks at +70…+170 (measured 1 400–1 500), mild by +250 and gone by +350.
+      glow.style.opacity = String(Math.round(keyed([[0, 0.6], [70, 1], [170, 1], [250, 0.35], [350, 0]], t) * 1000) / 1000);
       for (const sp of sparks) {
         const k = Math.max(0, t - sp.t0) / Math.max(1, dur - sp.t0);
-        const grow = Math.min(1, Math.max(0, t - sp.t0) / 80);
-        const scale = grow * (1 - 0.6 * k);
+        const grow = Math.min(1, Math.max(0, t - sp.t0) / 50);
+        const scale = grow * (1 - 0.6 * k * k * k);
         sp.el.style.opacity = String(t < sp.t0 ? 0 : Math.round((1 - k * k) * 1000) / 1000);
         sp.el.style.transform = `translate(${px(sp.x + sp.dx * k)},${px(sp.y + sp.dy * k)}) scale(${Math.round(scale * 1000) / 1000})`;
       }

@@ -56,7 +56,8 @@ export function createFxLoop(win: Window): FxLoop {
     raf = 0;
     const at = now();
     for (const r of [...live]) step(r, at);
-    if (live.size > 0) raf = win.requestAnimationFrame(tick);
+    // One chain only: a piece added during this frame (a trail sparkle) may have asked for the next one.
+    if (live.size > 0 && !raf) raf = win.requestAnimationFrame(tick);
   };
 
   return {

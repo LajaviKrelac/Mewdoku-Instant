@@ -85,19 +85,66 @@ Spec: [helpers-spec §7](helpers-spec.md#7-workstreams-interfaces-tests-and-acce
 
 | # | From → to | What | Why |
 |---|---|---|---|
-| H1 | G3 → G2 | `src/ui/board/board-mouse.ts` and `board.css` use the classes `is-in` / `is-out` on `.board__mouse`. Those two names are global: `fx.css` `.is-in` / `.is-out` (the counters' number roll animations) and `screens.css` `.is-out { position: absolute; top: 0; left: 0 }`. `.board__mouse.is-in/.is-out` win the `animation` by specificity, but `screens.css`' `top: 0; left: 0` (same specificity as `.board__mouse`'s `left` / `top`, later in the bundle) moves the leaving mouse to the board's corner for its 85 ms exit. Please rename them (e.g. `.board__mouse--in` / `--out`). `tests/unit/ui/hud-css.spec.ts` ("the counters share one roll…") checks that only `hud/pills.ts` uses `is-in` / `is-out` and fails until then. | helpers-spec §1.5; hud-css.spec |
+| H1 | G3 → G2 | `src/ui/board/board-mouse.ts` and `board.css` use the classes `is-in` / `is-out` on `.board__mouse`. Those two names are global: `fx.css` `.is-in` / `.is-out` (the counters' number roll animations) and `screens.css` `.is-out { position: absolute; top: 0; left: 0 }`. `.board__mouse.is-in/.is-out` win the `animation` by specificity, but `screens.css`' `top: 0; left: 0` (same specificity as `.board__mouse`'s `left` / `top`, later in the bundle) moves the leaving mouse to the board's corner for its 85 ms exit. Please rename them (e.g. `.board__mouse--in` / `--out`). `tests/unit/ui/hud-css.spec.ts` ("the counters share one roll…") checks that only `hud/pills.ts` uses `is-in` / `is-out` and fails until then. **Done by G2** (`.board__mouse--in` / `--out`); `hud-css.spec` passes. | helpers-spec §1.5; hud-css.spec |
 | H2 | G3 → lead | At I-3, with the 2b sheet placement (`sheetPlacement`, `fbTopInset`, `HintCardProps.avoidRect`): delete `tests/unit/ui/review2b-css.spec.ts` "a top-placed hint card keeps its content below the zone" (no owner in helpers-spec §7.1) and the dead rule it reads, `overlay-chunk.css` `:root[data-fb-safe] .overlay[data-overlay='hint'][data-placement='top'] .hint-card` (kept only so that test stays green). The new hint card never enters the FB zone: it sits below the top bar (§3.5). | helpers-spec §3.2 "Placement fallback", §7.2 I-3 |
+| H3 | G3 → lead (I-3) | `src/styles/screens.css` (not in G3's 2d.1 files): drop `.points-pill__label` from the selector `.period-pill__label[data-reduced], .points-pill__label[data-reduced]`. The Score's "+N" chip is gone (2d.1 §2.5); `fx.css`' twin selector was removed by G3. | helpers-spec §2.5, §7.9 (dead first-load CSS) |
+| H4 | G3 → lead (I-4) | Budgets: the new lazy fx chunk `celebrate-*.js` measures **14.4 KB raw / 5.7 KB gzip** (§7.9 estimated ≈ 3 KB). Its sources: points-flight 5.2 KB, tickers 2.4, fx-loop 1.9, done-label 1.7, cat-burst 1.3, celebrate 0.8. Its stylesheet `celebrate-*.css` is new too (2.6 KB raw, 0.7 KB gzip; the fx layer and the tickers, out of the first load). Please add both rows to `size-check` (lazy), and the shared `lazy-art-*.js` chunk Vite now splits out (G2's lazy art, imported by both `board-mouse` and `celebrate`). | §7.9; LOAD TIME (none of it is first-load) |
+| H5 | G3 → lead (I-6) | The 2d screenshots `docs/phase2d/screenshots/G3-visual-toast-*.png` are stale: `visual.spec.ts` now writes `G3-visual-tickers-*.png` (the tickers mid-crossing), and `G3-visual-score-plus-*.png` shows the "+N" over the tile, plus a new `G3-visual-score-star-*.png`. G3 wrote only `G3-2d1-*.png` this round. Re-run the visual project to refresh `G3-visual-*`, and delete the toast ones. | §7.7 visual; ownership §7.1 (G3-2d1-* only) |
 
 ### 2d.1 Done for other workstreams' requests
 
-*(none yet)*
+| Request | Done |
+|---|---|
+| G1 H1 (`visual.spec.ts`: the pulse after idleMs, the tickers instead of the toast) | The recording-state test waits up to 8 s for `.tool--bulb[data-pulse]` after the marks, and captures the two tickers (`.game-fx .tickers`, aria-hidden) mid-crossing. Every `.start-toast` wait became "the tickers have crossed" (≤ 12 s). The 12×12 Score test checks the "+N" over the tile, the star and the counted total (no chip). |
+| G1 H5 (the ranking panel ≈ 10 s after `solve()` with `page.clock.setFixedTime`) | **A G3 bug, fixed.** The fx loop requested a second animation frame whenever a piece added a piece during a frame (each star's trail sparkle), so the rAF chains piled up: about 2 300 callbacks a second at the win with Playwright's clock installed, and repeated frames in a real browser. `fx-loop.ts` `tick` now asks for the next frame only if nothing did. Probe on the private build (level 15, 1280 × 800, fixed time): the panel opened at 11.8 s before the fix, 5.5 s after it (4.9 s without the fx chunk), and `layout` "keyboard only …" passes. The unit test "keeps one requestAnimationFrame chain…" (points-flight.spec) fails without the fix. |
+| G2 H1 (shards only) | `cat-burst.ts` draws only the shards; the board draws the light and the twinkles. |
+| G2 H2 (`mountLazyArt()`) | `createCelebrate()` calls it before any star or shard is drawn (test in points-flight.spec). |
+| G2 H6 (dead `fx.css` rules) | Removed `.cell.fx-drop` / `@keyframes cat-drop`, `@keyframes ghost-pulse`, `@keyframes spark` and the reduced-motion `.cell__spark` selector (`.cell__spark` itself is in G2's `board.css`, with `sparkle()` in `board-fx.ts`, for I-3). |
 
 ### 2d.1 Notes from G3 for the others (no action needed)
+
+- **Build done (2026-10-10).** helpers-spec §7.3 G3 items 1–10 are in, with the unit specs of §7.6 and the `visual` / `i18n` e2e of §7.7 green against G3's private build.
+- **Members added** (all optional or additive; nothing in `dev/**` needs a change):
+  - `GameBarProps.starPoints?`;
+  - `GameBarView.scoreRect()`, `countTo(total)`, `syncPoints()`;
+  - `countValue()` (exported);
+  - `PillsProps.ringId?` (default: the board id; null in the tutorial);
+  - `ToolBarProps.busy?` (→ `.tool-bar[data-busy]`);
+  - `Counter.setLabel` / `show` / `numEl`;
+  - `game-screen.ts` `loadCelebrate()` (the cached dynamic import);
+  - `fx/celebrate.ts` `CelebrateContext`, `createCelebrate(layer, ctx)` → `{ play(ev), cancel(), running() }`, and the re-exported `createTickers`;
+  - `hint-card.ts` `hintLayout(board, s, ceiling)`, `dimPath(vw, vh, holes)`;
+  - `Tickers.play(lines, sinceMs = 0)` (a late start joins mid-crossing);
+  - `points-flight.ts` `SPARK_PATH`, `STREAK_MAX`, `streakFor`.
+- **The lazy fx chunk.** `fx/celebrate.ts` (+ `celebrate.css` under `src/ui/fx/`, which only `celebrate.ts` imports; `hud-css.spec` checks that) is prefetched at idle after the first game screen mounts. When it is in, `.game-fx[data-celebrate=ready]`. Until then POINTS falls back to 2d's roll, a finished unit shows no label, and the tickers wait, then join their crossing late.
+- **Count-up timing.** The landing frame is the count's frame 0: `countTo` starts its clock at the call (`performance.now()`) and shows the old number in that frame. Under Playwright's clock (16 ms frames) the values are 0, 51, 101, 147 …; at 60 fps they are the measured 0, 54, 104, 153 ….
+- **Size deltas against `7048674`** (first-load; private e2e build, source-map attribution for JS, esbuild-minified CSS per sheet):
+
+  | File | Raw delta |
+  |---|---|
+  | `game-screen.ts` | +1 969 |
+  | `en/ui-2d1.ts` (new) | +625 |
+  | `game-bar.ts` | +505 |
+  | `pills.ts` | +468 |
+  | `hint-text.ts` | +265 |
+  | `tool-bar.ts` | +254 |
+  | `en.ts` | +7 |
+  | **G3 main JS total** | **+4 106 B** |
+  | `hud.css` | +500 B |
+  | `fx.css` | −350 B (the fx layer and tickers moved to the lazy `celebrate.css`; dead rules removed) |
+  | `overlays.css` | 0 |
+  | `i18n.css` | 0 |
+  | **G3 first-load CSS total** | **+150 B** |
+
+  Lazy files:
+  - `hint-card.ts` in the overlay chunk: +1 776 B.
+  - `overlay-chunk.css`: +684 B.
+  - The new fx chunk: 14.4 KB JS and 1.45 KB CSS minified (H4).
 
 - **S0 landed (2026-10-10; tsc clean, the i18n / audio / hint-text specs green):**
   - `src/audio/sfx.ts`: `SfxId` + `'mouse' | 'points' | 'unit_done'` (in `SFX_IDS`; our recipes, final). `unit_done` takes `opts.index` (units − 1) for its pitch step.
   - `src/ui/fx/tickers.ts` (new): `TickerKey`, `TickerLine` (CONTRACTS-2d1 §4).
-  - `src/ui/screens/game-screen.ts`: `GameScreen.playTickers?(lines)` (optional until I-3). Until the tickers view lands it plays line 1 as the 2d toast.
+  - `src/ui/screens/game-screen.ts`: `GameScreen.playTickers?(lines)` (optional until I-3). At S0 it played line 1 as the 2d toast; since the build it plays the two tickers.
   - `src/ui/overlays/hint-card.ts`: `HintCardProps.cells?`, `boardRect?()`, `cellRect?(cell)`; `avoidRect` marked `@deprecated phase2d.1`.
   - `src/ui/overlays/hint-text.ts`: `hintCutouts(step, cells)` (ascending, each once; re-exported by `hint-card.ts`).
   - Strings: `src/i18n/en/ui-2d1.ts` (new, wired into `en.ts` and `EN_PARTS`) with every Appendix A key at its final English value; translator notes in `meta.ts` (`fx.done` ≤ 8, `ticker.*` ≤ 40, new groups `fx.` and `ticker.`); the 16 drafts of the new keys and of `color.4` (Denim) are in; `docs/i18n/drafted-from.json` rewritten (`i18n:check`: OK, only the old `it` width warning).

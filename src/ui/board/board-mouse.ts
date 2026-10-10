@@ -11,10 +11,14 @@
 // them) catches up on every event that is due, and at mouseRunMs (count × visit + markPopMs) a
 // finaliser removes the sprite and every .fx-pend whatever the animation state (critic). Reduced
 // motion: no sprite; the X's fade in together over fx.reducedMotionFadeMs.
+// A lazy chunk (board-view.ts loadMouseRun: prefetched at idle after a board entry; the first screen
+// never needs it): loading it also mounts the lazy art (art/lazy-art.ts: the mouse's parts, and the star
+// and shards of the lazy fx chunk).
 import { cfg, type GameConfig } from '../../app/config';
 import type { CellIndex } from '../../engine/types';
 import { mouseLandMs, mouseRunMs, mouseVisitMs } from '../../game/mouse';
 import { MOUSE_BOX } from '../art/helper-art';
+import { mountLazyArt } from '../art/lazy-art';
 import type { FxTimers } from './board-fx';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -22,6 +26,8 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 /** The face per visit (helpers-spec §1.4 [DECISION]): visit k plays FACES[k mod 3]. */
 export const MOUSE_FACES = ['blink', 'glance', 'grin'] as const;
 export type MouseFace = (typeof MOUSE_FACES)[number];
+
+mountLazyArt();
 
 export interface MouseRunDeps {
   readonly board: HTMLElement;
@@ -31,6 +37,8 @@ export interface MouseRunDeps {
   /** Adds a transient class (board-fx flashClass with the board's timers). */
   flash(el: Element, cls: string, ms: number): void;
   now?(): number;
+  /** When MARKED arrived (deps.now's clock): the run is timed from there, so a late chunk load catches up. Default: now. */
+  readonly startedAt?: number;
 }
 
 export interface MouseRun {
@@ -80,6 +88,7 @@ export function playMouseRun(cells: readonly CellIndex[], deps: MouseRunDeps, re
   const now = deps.now ?? ((): number => performance.now());
   const list = cells.filter((i, k) => cells.indexOf(i) === k && deps.cellElement(i));
   const doc = board.ownerDocument;
+  mountLazyArt(doc);
   let sprite: HTMLElement | null = null;
   let done = false;
 
@@ -123,7 +132,7 @@ export function playMouseRun(cells: readonly CellIndex[], deps: MouseRunDeps, re
   const visit = mouseVisitMs(c);
   const dwell = mouseLandMs(0, c);
   const total = mouseRunMs(list.length, false, c);
-  const t0 = now();
+  const t0 = deps.startedAt ?? now();
   // The run's events in time order: arrive k, land k (the X pops, the mouse leaves), the visit's end.
   type Ev = { readonly t: number; readonly run: (late: boolean) => void };
   const events: Ev[] = [];

@@ -61,6 +61,11 @@ Spec: [helpers-spec §7](helpers-spec.md#7-workstreams-interfaces-tests-and-acce
 | # | From → to | What | Why |
 |---|---|---|---|
 | H1 | G2 → G3 | `src/ui/fx/cat-burst.ts`: draw the **shards only**. The board draws the cat sequence's **light on the neighbours and the six twinkles** inside the cat's cell (`.cell.fx-cat > .cell__light`, which overflows the tile, z-index lifted), together with the flash and the halo. So please do not draw a second light or twinkles in the fx layer. | helpers-spec §7.3 G2 item 3 gives the light and twinkles to the board, while CONTRACTS-2d1 §8 lists them under G3. One owner avoids a double glow. The light and twinkles are tile-relative (1.5 T) and end by 733 ms, inside the board. The shards leave the board, so they stay in the fx layer (§2.4). |
+| H2 | G2 → G3 | `src/ui/fx/celebrate.ts`: when the lazy fx chunk loads, call `mountLazyArt()` from `src/ui/art/lazy-art.ts` once, before the first `fx-star4` or `fx-shard*` use. It is idempotent and does nothing before the sprite is mounted. | The star and the three shards left the first-load sprite (LOAD TIME: the first screen never draws them). Without the call they still appear, but only once the board's mouse chunk has been prefetched (`MOUSE_PREFETCH_MS`, 1.5 s after a board entry, which also mounts them). A cat placed earlier than that would get invisible shards and no star. |
+| H3 | G2 → lead | Allow one new G2 stylesheet, `src/styles/board-mouse.css`, imported by the lazy `src/ui/board/board-mouse.ts`. Vite's `cssCodeSplit` then ships it with the `board-mouse` chunk. The `.board__mouse*` rules and the `mouse-*` keyframes (about 2.4 KB minified) would move there out of the first-load `board.css`. **Optionally, also the cat sequence:** `board.css`'s "the cat-placed sequence" block (`.cell.fx-cat`, `.cell__flash`, `.cell__light`, the `cat-*` / `flash-*` / `light-*` / `twinkle` keyframes, about 3.2 KB minified) and `board-cat.ts` could join that chunk. A cat placed before the 1.5 s prefetch lands would then get only the plain cat (no sequence), the same rule the mouse follows now. | First-load CSS grew +7.5 KB raw (+1.6 KB gzip) with 2d.1's board motion. Measured on the FBIG build, minified, by section: mouse 2.4 KB, cat sequence 3.2 KB, ghosts and hint 1.7 KB, X and its draw-in 1.4 KB, waves 0.9 KB. The mouse's part is not needed until a mouse run, which always comes after its O2 card. The cat sequence is not needed until the first cat. Not done: §7.1 does not list the file. |
+| H4 | G2 → lead | Config, if wanted (G2 cannot edit `config.ts`). (a) `layout.catScale` (0.84) is no longer read by the board. The resting cat's box is `CAT_BOX = [6.8, 6.9, 86.4]` in `board-cells.ts` (helpers-spec §4.7: 0.78 T wide, 2 % T up; our art measures 0.80 × 0.76 T in the build). Either mark the key `@deprecated phase2d.1` or replace it with the box. (b) `layout.hintDim` is unread: the board's hint dim is gone (§3.3). Its token `--hint-dim` and the board's write of it are removed. | One source of truth for the values JS reads (parity-spec §0.4) |
+| H5 | G2 → lead | `dev/look-compare.ts`: our level 96 now draws **Denim** in place of **Pink**. Its colours are 0–8 and 10, because n ≤ 11 boards draw from the 11 measured colours (§6.2). The "10 tile colours at ΔE00 ≤ 1" check and any letter → palette map built on 2d's colours may need updating. The board e2e capture moved from level 785 to **794** for the same reason: 785's top-left region is Denim now. | helpers-spec §6.2 (D-2d1-10) |
+| H6 | G2 → G3 (I-3) | `src/styles/fx.css`: the board no longer uses `.cell.fx-drop` / `@keyframes cat-drop` (every correct cat plays the 2d.1 sequence), `@keyframes ghost-pulse` (the ghost is the outline pop), or `.cell__spark` / `@keyframes spark` (the kitty's 2b sparkle). They can go at I-3. `fx.css`'s `ghost-bob` and `ghost-clear` are still used by `board.css`. | Dead CSS in the first load (§7.9) |
 
 ### 2d.1 Done for other workstreams' requests
 
@@ -68,7 +73,32 @@ Spec: [helpers-spec §7](helpers-spec.md#7-workstreams-interfaces-tests-and-acce
 
 ### 2d.1 Notes from G2 for the others (no action needed)
 
-- **S0 landed (2026-10-10).** `palette.ts`: `PALETTE[4]` = Denim `#5B75B2`, `PALETTE_CORE` (11), `paletteTier` (n ≤ 11 the core, 12 all), `HEAD_ORDER` (the ring), `headOrderFor(colors, puzzleId)`, `isDarkTile(i)`, the tokens `plus`, `done-top`, `done-bottom`, `done-line`, `hint-card`, `apply` and the new `wrong`, `toast-fill`, `toast-line` values (also in `tokens.css`). `board-fx.ts`: `ghostOrder`, `waveOrder`, `xOutlinePath`. `sprite.ts`: `cat-wink`, `board-mouse` + `board-mouse-eyes | -lids | -grin`, `fx-star4`, `fx-shard` (+ two variants `fx-shard-2`, `fx-shard-3`), `art-paw-cap`, `art-bolt`, `art-star` (drawn in `art/helper-art.ts`); `CatMood` gains `'wink'`. The art is the build's first pass, not a placeholder; the ids stay.
+- **Verified (2026-10-10, private build in scratch):**
+  - `tsc --noEmit` clean; full `vitest run` 121 files, 2462 tests, all pass; `palette:check` OK.
+  - `visual-board.spec.ts`: 14 passed, 10 skipped by design (the 2d.1 frames run on web-390 only). It wrote `docs/phase2d/screenshots/G2-2d1-*.png` and refreshed `G2-board-*.png`.
+  - `smoke`, `layout` and `winflow` pass on web-390.
+  - `visual.spec.ts` (G3's) has 2 failures on web-390, both from other workstreams' 2d.1 work in progress, not from the board:
+    - the recording-state test waits for `.start-toast[data-kind="level"]`, which the tickers replace;
+    - the 12 × 12 Score test waits for `.points-pill__chip`, which `points-flight.ts` no longer draws.
+- **Size, FBIG build** (the same tree with G2's files at 7048674 against the current tree; gzip -9):
+  - `index.js` +7,864 B raw / +2,811 B gzip;
+  - `index.css` +7,502 B raw / +1,608 B gzip;
+  - new lazy `board-mouse.js` 4,783 B raw / 2,225 B gzip (size-check's "Lazy JS (core)" row).
+  - `size-check` was already over several ceilings on that base (Main JS 309.0 / 307, CSS 46.4 / 46, Lazy JS (core) 88.6 / 74), so the I-4 ceilings need the lead either way.
+  - H3 would take 2.4 to 5.6 KB back out of the first-load CSS.
+
+- **Build landed (2026-10-10).**
+  - **Board events** (CONTRACTS-2d1 §8):
+    - `MARKED` (tap, paint, Apply) draws every new X in at once (`.cell.fx-mark`).
+    - `MARKED { source: 'mouse' }` plays the visits (`.board__mouse[data-cell][data-face]`, `.cell.fx-pend`, `.board[aria-busy]`) in event order. The timing comes from G1's `mouseVisitMs` / `mouseLandMs` / `mouseRunMs`.
+    - `CAT_PLACED` (any source) plays the cat sequence (`.cell.fx-cat`, `.cell__flash`, `.cell__light`), and `CAT_REMOVED` cancels it.
+    - `UNITS_DONE` bumps the waves (`.cell.fx-wave`, inline `--wd`; a tile in two units also gets `.fx-wave2` with `--wd2`).
+    - `setHighlight({ kind: 'hint' })` gives every Empty effect cell its outline ghost (`path.cell__xo`) and delay (`--gd`).
+  - **The board's hint styling is gone:** the dim, the focus ring and the ghost pulse.
+  - **The mouse's visits are a lazy chunk.** `board-view.ts` exports `loadMouseRun()` and `MOUSE_PREFETCH_MS`. The board prefetches the chunk 1.5 s after its entry. A mouse `MARKED` that comes before it has loaded hides its X's at once, and the run starts when the chunk lands, timed from the `MARKED`.
+  - **The board draws the light and the twinkles** of the cat sequence (H1). G3's `cat-burst.ts` already draws only the shards.
+  - **Bar groups:** the X's edge rects sit in their own pair of bar groups under the white pair (four `g.cell__xb` per cell). This keeps both edges under both whites with Colour patterns on. `.cell__xg rect.cell__x` still finds the two white bars.
+- **S0 landed (2026-10-10).** `palette.ts`: `PALETTE[4]` = Denim `#5B75B2`, `PALETTE_CORE` (11), `paletteTier` (n ≤ 11 the core, 12 all), `HEAD_ORDER` (the ring), `headOrderFor(colors, puzzleId)`, `isDarkTile(i)`, the tokens `plus`, `done-top`, `done-bottom`, `done-line`, `hint-card`, `apply` and the new `wrong`, `toast-fill`, `toast-line` values (also in `tokens.css`). `board-fx.ts`: `ghostOrder`, `waveOrder`, `xOutlinePath`. `sprite.ts`: `cat-wink`, `board-mouse` + `board-mouse-eyes | -lids | -grin`, `fx-star4`, `fx-shard` (+ two variants `fx-shard-2`, `fx-shard-3`), `art-paw-cap`, `art-bolt`, `art-star`; `CatMood` gains `'wink'`. Since the build, the board mouse's parts, `fx-star4` and the shards are in the lazy `art/lazy-art.ts` (`mountLazyArt()`, H2), and the ticker art is in `art/helper-art.ts`.
 
 ### 2d.1 L0 (lead, 2026-10-10): what changed in G2's files
 

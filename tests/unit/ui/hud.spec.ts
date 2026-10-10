@@ -189,8 +189,14 @@ describe('the game bar: back · Level / Score · gear (§1.4)', () => {
   });
 
   describe('2d.1 §2.5: the star mode and the count-up', () => {
-    /** A manual rAF clock: frame(ts) runs the queued callbacks at ts. */
+    /** A manual rAF clock: frame(ts) runs the queued callbacks at ts (performance.now() reads ts too); at(ts) moves the clock. */
+    let clock = 0;
+    const at = (ts: number): void => {
+      clock = ts;
+    };
     const rafClock = () => {
+      clock = 0;
+      vi.spyOn(performance, 'now').mockImplementation(() => clock);
       let q: FrameRequestCallback[] = [];
       vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb: FrameRequestCallback) => {
         q.push(cb);
@@ -200,6 +206,7 @@ describe('the game bar: back · Level / Score · gear (§1.4)', () => {
         q = [];
       });
       return (ts: number): void => {
+        clock = ts;
         const run = q;
         q = [];
         for (const cb of run) cb(ts);
@@ -223,10 +230,12 @@ describe('the game bar: back · Level / Score · gear (§1.4)', () => {
       bar.update({ ...barProps, starPoints: true, points: 576 });
       expect(nums(score)).toEqual(['0']);
       expect(score.getAttribute('aria-label')).toBe('Level points: 576');
+      // The star lands at 1000: that frame shows 0, the next one (1016.7) 54 — never a frame late.
+      at(1000);
       bar.countTo(576);
       expect(n().hasAttribute('data-counting')).toBe(true);
-      const seen: string[] = [];
-      for (let k = 0; k <= 21; k++) {
+      const seen: string[] = [nums(score)[0] ?? ''];
+      for (let k = 1; k <= 21; k++) {
         frame(1000 + (k * 350) / 21);
         seen.push(nums(score)[0] ?? '');
       }
@@ -251,6 +260,7 @@ describe('the game bar: back · Level / Score · gear (§1.4)', () => {
       frame(0);
       frame(175); // u = 0.5: 576 × 0.75 = 432
       expect(nums(score)).toEqual(['432']);
+      at(200);
       bar.countTo(1248);
       frame(200);
       expect(nums(score)).toEqual(['432']);

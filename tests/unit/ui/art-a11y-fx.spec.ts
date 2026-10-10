@@ -21,6 +21,7 @@ import { mascotIllustration, startHeadTilt } from '../../../src/ui/art/mascot';
 import { CAT_COLORS, HEAD_ORDER, headOrderFor, isDarkTile, mixHex, PALETTE, PALETTE_CORE, PALETTE_DE00, PALETTE_SIZE, paletteTier, regionColorsFor, regionColorVar, TOKENS, xEdgeColor } from '../../../src/ui/art/palette';
 import { ruleDiagram } from '../../../src/ui/art/rule-art';
 import { icon, markRects, mountSprite, setIcon, spriteMarkup, SPRITE_ID, type SymbolId } from '../../../src/ui/art/sprite';
+import { lazyArtSymbols, mountLazyArt } from '../../../src/ui/art/lazy-art';
 import { regionAdjacency } from '../../../src/engine/colors';
 import { buildCell, CAT_BOX, ensureCat, ensureGhost } from '../../../src/ui/board/board-cells';
 import { evenInsets } from '../../../src/ui/board/layout';
@@ -45,9 +46,8 @@ describe('sprite', () => {
     'icon-points',
     // Phase 2d (look-spec Appendix C)
     'icon-back', 'icon-play', 'tool-kitty', 'tool-bulb', 'tool-mouse', 'cat-head-flat', 'art-flex',
-    // Phase 2d.1 (helpers-spec Appendix C)
-    'cat-wink', 'board-mouse', 'board-mouse-eyes', 'board-mouse-lids', 'board-mouse-grin',
-    'fx-star4', 'fx-shard', 'fx-shard-2', 'fx-shard-3', 'art-paw-cap', 'art-bolt', 'art-star',
+    // Phase 2d.1 (helpers-spec Appendix C; the mouse's parts, the star and the shards are lazy-art.ts's)
+    'cat-wink', 'art-paw-cap', 'art-bolt', 'art-star',
   ];
 
   it('mounts once and defines every symbol; the heart icons and clip paths are gone (Phase 2c)', () => {
@@ -368,24 +368,26 @@ describe('board cell: the X is two white rounded bars, its edge only with Colour
     expect(((len + w - 4 * r) / Math.SQRT2 + 2 * r) * k).toBeCloseTo(21.5, 1);
   });
 
-  it('every cell has g.cell__xg with two bar groups (\\ at 45°, / at −45°), each an edge rect under a white bar; --xe = xEdgeColor(paletteIndex) (helpers-spec §4.4)', () => {
+  it('every cell has g.cell__xg with bar groups (\\ at 45°, / at −45°): the two edges under the two white bars; --xe = xEdgeColor(paletteIndex) (helpers-spec §4.4)', () => {
     const insets = evenInsets(1, 38)[0] as Parameters<typeof buildCell>[2];
     for (let p = 0; p < PALETTE.length; p++) {
       const refs = buildCell(p, p, insets, 0);
       expect(refs.el.style.getPropertyValue('--xe')).toBe(xEdgeColor(p));
       const g = refs.svg.querySelector('g.cell__xg') as SVGGElement;
       const bars = Array.from(g.children);
-      expect(bars.map((e) => e.getAttribute('class'))).toEqual(['cell__xb cell__xb--a', 'cell__xb cell__xb--b']);
-      expect(bars.map((e) => e.getAttribute('transform'))).toEqual(['rotate(45 50 50)', 'rotate(-45 50 50)']);
+      // the two edge groups under the two white ones (both edges stay under both whites, as in 2d)
+      expect(bars.map((e) => e.getAttribute('class'))).toEqual(['cell__xb cell__xb--a', 'cell__xb cell__xb--b', 'cell__xb cell__xb--a', 'cell__xb cell__xb--b']);
+      expect(bars.map((e) => e.getAttribute('transform'))).toEqual(['rotate(45 50 50)', 'rotate(-45 50 50)', 'rotate(45 50 50)', 'rotate(-45 50 50)']);
+      expect(bars.map((e) => e.firstElementChild?.getAttribute('class'))).toEqual(['cell__xe', 'cell__xe', 'cell__x', 'cell__x']);
+      const box = (r: Element): string[] => ['x', 'y', 'width', 'height', 'rx'].map((a) => r.getAttribute(a) ?? '');
       for (const bar of bars) {
         const rects = Array.from(bar.querySelectorAll('rect'));
-        expect(rects.map((e) => e.getAttribute('class'))).toEqual(['cell__xe', 'cell__x']);
+        expect(rects).toHaveLength(1);
         // axis-aligned in the bar's own frame (no transform on the rects: CSS scales them there)
-        for (const r of rects) expect(r.hasAttribute('transform')).toBe(false);
-        const box = (r: Element): string[] => ['x', 'y', 'width', 'height', 'rx'].map((a) => r.getAttribute(a) ?? '');
-        expect(box(rects[1] as Element)).toEqual(['15.5', '40.9', '69', '18.2', '6']);
-        expect(box(rects[0] as Element)).toEqual(['12', '37.4', '76', '25.2', '9.5']);
+        expect(rects[0]?.hasAttribute('transform')).toBe(false);
       }
+      expect(box(bars[2]?.firstElementChild as Element)).toEqual(['15.5', '40.9', '69', '18.2', '6']);
+      expect(box(bars[0]?.firstElementChild as Element)).toEqual(['12', '37.4', '76', '25.2', '9.5']);
       // no strokes left (the 2b stroke X and its dash draw-in are gone); no ghost path until a ghost shows
       expect(refs.svg.querySelector('path.cell__x, path.cell__xe, path.cell__xo')).toBeNull();
       expect(refs.el.querySelector('.cell__glow')).not.toBeNull();
@@ -599,8 +601,22 @@ describe('Phase 2d symbols (look-spec Appendix C)', () => {
 describe('Phase 2d.1 symbols (helpers-spec Appendix C)', () => {
   const sym = (id: string): Element => {
     mountSprite();
+    mountLazyArt();
     return document.querySelector(`symbol[id="${id}"]`) as Element;
   };
+
+  it('the mouse\'s parts, the star and the shards are not in the first-load sprite; mountLazyArt adds them once (the mouse and fx chunks)', () => {
+    const lazy = ['board-mouse', 'board-mouse-eyes', 'board-mouse-lids', 'board-mouse-grin', 'fx-star4', 'fx-shard', 'fx-shard-2', 'fx-shard-3'];
+    for (const id of lazy) expect(spriteMarkup(), id).not.toContain(`id="${id}"`);
+    mountLazyArt(); // before the sprite: a no-op
+    expect(document.querySelector('symbol[id="fx-star4"]')).toBeNull();
+    mountSprite();
+    mountLazyArt();
+    mountLazyArt();
+    const sprite = document.getElementById(SPRITE_ID) as Element;
+    for (const id of lazy) expect(sprite.querySelectorAll(`symbol[id="${id}"]`), id).toHaveLength(1);
+    expect(lazyArtSymbols()).toContain('id="fx-shard-3"');
+  });
 
   it('cat-wink: Tux with the left iris open, the right eye a closed upward arc and a tiny white glint', () => {
     const w = sym('cat-wink');

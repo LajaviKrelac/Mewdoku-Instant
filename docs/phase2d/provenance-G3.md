@@ -48,3 +48,52 @@ Status: draft for the lead to merge into [docs/provenance.md](../provenance.md) 
 - The 2c.1 rule chips' icons (the chips are now cards with G2's `ruleDiagram`).
 - `fx.css`' X draw-in rules (G2's X now pops; look-spec §1.10).
 - `.pill--bump .pill__icon` and the old chip CSS.
+
+---
+
+## Phase 2d.1 (helpers-spec, 2026-10-10): the helpers' HUD, overlay and fx
+
+### How this was made
+
+- **Same decision, new material.** D-2d-0 covers the user's three new recordings (v1 the mouse, v2 the kitty's cat, v3 the hint) and the two level-start stills. They were measured by script in the session scratchpad (sizes, positions, timings, sampled colours); the numbers live in helpers-spec §2–§5 and its config keys (`fx.points`, `fx.unitDone`, `fx.catPlaced`, `fx.hint`, `fx.tickers`, `layout.hint`).
+- **What G3 made.**
+  - Every new motion below, in hand-written TypeScript (one rAF loop whose pieces are pure functions of time) and CSS.
+  - One new drawing: the **trail and burst sparkle** (`points-flight.ts` `SPARK_PATH`, a plump four-point star with gently concave sides and a cream heart). It is drawn from the words "four-point sparkles" in helpers-spec §2.5.
+  - The gradients and glows: the star's round glow and comet tail, the burst's glow disc, the "+N" outline and shadow, the completion label's two-colour fill and outline, and the hint dim's rounded holes (geometry from the tile radius).
+  - The copy (English, then 16 AI drafts).
+- **G2's art used as is:** `fx-star4` (the flying star), `fx-shard` / `-2` / `-3` (the shards, in the tile's colour), `art-paw-cap`, `art-bolt` and `art-star` (the tickers), and the cat face on a found head. See [provenance-G2.md](provenance-G2.md).
+- **How it was checked.** Our private e2e build was driven with Playwright's clock: each capture lands on an exact ms after the action, and the CSS and WAAPI animations are put at their age on that clock. The captures were set side by side with the user's frames at the same ms, in the same CSS-px box, **in the scratchpad only** (D-2d-0 d). Our side alone is committed as `docs/phase2d/screenshots/G3-2d1-*.png`.
+  - Matched: the "+N" and label positions within ≈ 2 px; the card's box (y 175.2–245.5 against 174.0–244.3); Apply's top (670.4 against 672.0; ours is centred by design); the star's birth at 783 → first frame 789; the landing frame and the count-up values on our 16 ms test frames (51, 101, 147 … 576, the formula of the measured 0, 54, 104 … 576 at 60 fps); the tickers' slots within 1.5 px.
+  - The visible differences are by design: our words, our art, our level (273, not the recording's), Apply centred, and our sparkle and tail drawings.
+- **What was not used.** No frame was traced or opened in an editor while writing code. No source listed in [06 §4](../phase1/06-legal-and-originality.md) was opened. No generator other than the coding agent was used. The original's sentences, its Apply label and its completion word are not in our copy (the completion word was readable in the reference frames and was deliberately avoided).
+
+### Motions (2d.1)
+
+| Motion | Where | What it does | From the recordings | Ours |
+|---|---|---|---|---|
+| Hint dim | `hint-card.ts` `dimPath`, `overlay-chunk.css` `.hint-dim`, `@keyframes hint-dim-in` | Black at 0.75 over the whole screen, with one rounded hole per cut-out tile (even-odd path). It fades in linearly over `fx.hint.dimMs` (300). The holes are measured on the opening frame and again at `dimMs`. It closes in one frame (`[data-instant]`). | the colour and α, the linear 0.30 s fade, what stays bright, the one-frame close | the SVG path and the re-measure |
+| Hint card and Apply | `hint-card.ts` `hintLayout`; `overlay-chunk.css` `.hint-sheet`, `.hint-card`, `.btn.hint-apply` | The card is anchored 5.9 s above the board card and Apply 31 s below it, both centred on the board (sizes from `layout.hint`). The card grows upward to the bar, and past that its text scrolls. Apply presses to 0.90 on `:active`. | the boxes, gaps, radius, fill, shadow, type size, the press scale | Apply centred (the original's sits 6.9 px right); our close button (visually hidden, shown on focus) |
+| "+N" pop | `points-flight.ts` `PLUS_SCALE`, `PLUS_ALPHA` | The orange "+576" with a white outline, one pitch above the tile: 0.53 → 1.0 at 83 → 1.15 at 166–216 → 1.0 at 350. Opaque by 33, it fades to 0.4 from 683 to 900 and is gone at 916. It is clamped 3 px inside the viewport. Reduced motion: a fade in place. | every key above, the colour, the margin | the type face and the soft shadow |
+| Star flight | `points-flight.ts` `playStar`, `bezierControl`, `streakFor` | Born on the "+N" baseline at 783 (5 → 22 s px by +67), it flies from +800 on a quadratic Bézier, C = (P2.x + (P0.x − P2.x) / 3, P0.y), linear in time over 530 ms, and lands at 1 330. Its glow trails as a comet tail along the path, stretched up to 1.6× by speed; at the landing the tail runs on into the number over ≈ 5 frames. A sparkle drops behind it every frame (3–7 s px, gone in 150 ms). | the timings, the path, the yellow star with a light core, the trail | the tail drawing, the sparkle drawing, the tail's hand-over at the landing |
+| Landing burst | `points-flight.ts` `playBurst` | A white-to-yellow glow disc over the digits (peak +70…+170, gone by +350). Ten sparkles: three big ones (13–15 s px) over the number and label, seven (7–12 s px) up to 30 s px around them; they drift 20 s px outward, then shrink and fade by `fx.points.burstMs` (650). | the timing, the spread, the warm glow over the digits | the drawings and the drift |
+| Count-up | `game-bar.ts` `countTo`, `countValue` | From the landing frame, every frame shows `round(from + (to − from)(1 − (1 − u)²))` over `fx.points.countMs` (350). No bump, no colour change. A higher total waits for its star (`starPoints`). | the measured sequence 0, 54, 104, 153 … 576 | the hold-and-sync rules (reset on a new board, a Retry, a language change) |
+| Shards | `cat-burst.ts` | `fx.catPlaced.shards` (10) of G2's shard art in the tile's colour: radial at 0.3–0.5 px/ms × s, mostly up and sideways; they fall under gravity 0.0009 px/ms² × s, then shrink and fade from 430 to `shardLifeMs` (650). Not drawn with reduced motion. | the count, sizes, speeds, gravity and fade | the seeded plan |
+| Completion label | `done-label.ts` | One label per anchor tile, centred 0.82 pitch below it and clamped 2 px inside the viewport: 0.78 → 1.07 at 83 → 1.0 at 170, opaque by 60, fading from 560 to `fx.unitDone.labelMs` (720). Reduced motion: a 150 ms fade in and out. | the place, the size, the gradient fill and dark outline colours, the timings | the word ("Done!") |
+| Found head | `pills.ts`, `hud.css` `.head__face`, `.head__dot`; `fx.css` `.head--pop` | A found colour's head becomes G2's cat face, with a dot of the colour at its lower inline end. It pops 0.56 → 1.2 → 1 over `fx.headFoundMs` (280). | the face, the dot's place and tint, the pop | the dot's ring |
+| Helper press and release | `hud.css` `.tool:active`, `.tool--spring`, `@keyframes tool-spring`; `tool-bar.ts` | The disc presses to 0.90 in 50 ms ease-out. On release it springs 1.0 → 1.04 → 1.02 → 1.0 over 300 ms. While the board is busy (`data-busy`), the row ignores taps and keeps full opacity. | the 0.90 press, the overshoot ≈ 1.03 at +100, settled by +250 | the spring keys |
+| Level-start tickers | `tickers.ts` (WAAPI), `celebrate.css` `.ticker` | Two pills with G2's paw cap cross right → left. Each takes `fx.tickers.crossMs` (9 000) over the viewport plus its own width, linearly; line 2 starts `delayMs` (150) after the board entry and line 1 `lead × T` (774) later. A late load joins mid-crossing. RTL mirrors it. Reduced motion: a fade in place, held 3 s. | the slots, the fill and border colours, the paw, the end icons, the equal crossing time, the 0.086 T lead | the copy, T = 9 s (Q1), the late join |
+
+### Copy (2d.1)
+
+- `src/i18n/en/ui-2d1.ts` is ours:
+  - the completion word "Done!" and its screen-reader line;
+  - eleven ticker lines that state only the player's own numbers (best time, levels solved, level points) or the board's (cats hiding), or general true facts (one solution, a daily puzzle, two play tips).
+- None of it is the original's sentences, labels or completion word. The original's tickers state very large player totals and country counts; ours never claim numbers we cannot back.
+- The 16 locales' 2d.1 keys (and `color.4` "Denim") are AI drafts by the same agent, marked "Phase 2d.1 (AI draft, unreviewed)". They are logged in [review-log.md](../i18n/review-log.md) and follow [glossary.md](../i18n/glossary.md): the completion cheer, the ticker rules, and Denim.
+
+### Retired in 2d.1 (G3's files)
+
+- The Score's "+N" chip and its gear clamp (`game-bar.ts` `clampChip`; `hud.css` `.points-pill__chip` / `__label`; `fx.css`' chip rise for the Score).
+- The 2b hint sheet placement rules in `overlay-chunk.css`. One dead rule stays for the lead's `review2b-css` test until I-3 (requests-G3 H2).
+- `fx.css`' dead `.cell.fx-drop` / `@keyframes cat-drop`, `@keyframes ghost-pulse` and `@keyframes spark` (requests-G2 H6).
+- The level-start toast is no longer played by the game screen: the tickers replace it. `start-toast.ts` itself goes at I-3.

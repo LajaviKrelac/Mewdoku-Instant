@@ -104,25 +104,6 @@
   display: inline;
 }
 
-/* Cat drop with overshoot: 280 ms cubic-bezier(.2, 1.4, .4, 1). */
-.cell.fx-drop .cell__catg {
-  animation: cat-drop var(--t-drop) var(--ease-drop) both;
-}
-
-@keyframes cat-drop {
-  from {
-    opacity: 0;
-    transform: translateY(-26%) scale(0.55);
-  }
-  45% {
-    opacity: 1;
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
 /* Happy hop on WON. */
 .cell.fx-hop .cell__catg {
   animation: cat-hop 520ms ease-out;
@@ -216,16 +197,6 @@
   }
 }
 
-@keyframes ghost-pulse {
-  0%,
-  100% {
-    opacity: 0.25;
-  }
-  50% {
-    opacity: 0.6;
-  }
-}
-
 @keyframes ghost-clear {
   0%,
   100% {
@@ -243,20 +214,6 @@
   }
   50% {
     transform: translateY(-6%);
-  }
-}
-
-@keyframes spark {
-  from {
-    opacity: 1;
-    transform: translate(0, 0) scale(0.2) rotate(0deg);
-  }
-  60% {
-    opacity: 1;
-  }
-  to {
-    opacity: 0;
-    transform: translate(calc(var(--sx) * var(--slot) * 0.75), calc(var(--sy) * var(--slot) * 0.75)) scale(1) rotate(90deg);
   }
 }
 
@@ -606,8 +563,7 @@
   }
 }
 
-.period-pill__label:not([data-reduced]),
-.points-pill__label:not([data-reduced]) {
+.period-pill__label:not([data-reduced]) {
   animation: period-label-rise var(--label-ms, 700ms) var(--ease-out) both;
 }
 
@@ -713,7 +669,6 @@
   transition-duration: 150ms !important;
 }
 
-[data-motion='reduced'] .cell__spark,
 [data-motion='reduced'] .life__lost,
 [data-motion='reduced'] .life__splash,
 [data-motion='reduced'] .fx-dot {

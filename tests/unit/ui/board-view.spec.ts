@@ -10,7 +10,7 @@ import { mouseLandMs, mouseRunMs, mouseVisitMs } from '../../../src/game/mouse';
 import { mountSprite } from '../../../src/ui/art/sprite';
 import { WINK_FROM_MS, WINK_TO_MS } from '../../../src/ui/board/board-cat';
 import { GHOST_OUTER_PX, GHOST_STROKE_PX, ghostOrder, waveOrder, xOutlinePath } from '../../../src/ui/board/board-fx';
-import { createBoardView, type BoardInput, type BoardModel, type BoardView } from '../../../src/ui/board/board-view';
+import { createBoardView, loadMouseRun, MOUSE_PREFETCH_MS, type BoardInput, type BoardModel, type BoardView } from '../../../src/ui/board/board-view';
 
 // 4×4: regions A B C C / A A C C / A D D C / D D D D (the tutorial board), colours Denim Violet Mustard Coral.
 const REGIONS = Uint8Array.from([0, 1, 2, 2, 0, 0, 2, 2, 0, 3, 3, 2, 3, 3, 3, 3]);
@@ -308,7 +308,26 @@ describe('createBoardView', () => {
     expect(board.el.style.getPropertyValue('--xd-over')).toBe(String(cfg.fx.markDraw.overshoot));
   });
 
-  it('the mouse visits its tiles in event order: each X hidden (.fx-pend) until k × 935 + 850, then it pops; the sprite moves on with its face (helpers-spec §1.5)', () => {
+  it('a mouse MARKED before its chunk has loaded hides the X\'s at once (aria-busy); the run starts when the chunk lands (first in this file: nothing loaded it yet)', async () => {
+    board.playEvent({ type: 'MARKED', cells: [3, 12], source: 'mouse' });
+    expect(cell(3).classList.contains('fx-pend')).toBe(true);
+    expect(cell(12).classList.contains('fx-pend')).toBe(true);
+    expect(board.el.getAttribute('aria-busy')).toBe('true');
+    await loadMouseRun();
+    await Promise.resolve();
+    expect(board.el.querySelector('.board__mouse')?.getAttribute('data-cell')).toBe('3');
+  });
+
+  it('the mouse\'s visits are a lazy chunk: a MARKED before it loads hides the X\'s, and the run starts timed from the MARKED once it lands; the entry prefetches it', async () => {
+    const mod = await loadMouseRun();
+    expect(typeof mod.playMouseRun).toBe('function');
+    expect(await loadMouseRun()).toBe(mod); // loaded once
+    expect(document.querySelector('symbol[id="board-mouse-lids"]')).not.toBeNull(); // with the lazy art
+    expect(MOUSE_PREFETCH_MS).toBeGreaterThan(0);
+  });
+
+  it('the mouse visits its tiles in event order: each X hidden (.fx-pend) until k × 935 + 850, then it pops; the sprite moves on with its face (helpers-spec §1.5)', async () => {
+    await loadMouseRun();
     vi.useFakeTimers();
     const cells = [14, 6, 9]; // event order, not reading order
     board.playEvent({ type: 'MARKED', cells, source: 'mouse' });
@@ -346,7 +365,8 @@ describe('createBoardView', () => {
     expect(mouseRunMs(3, false)).toBe(3 * 935 + 170);
   });
 
-  it('a late timer (a hidden page) catches up: every due X lands, and at mouseRunMs nothing stays hidden whatever the animations do', () => {
+  it('a late timer (a hidden page) catches up: every due X lands, and at mouseRunMs nothing stays hidden whatever the animations do', async () => {
+    await loadMouseRun();
     vi.useFakeTimers();
     let now = 0;
     const spy = vi.spyOn(performance, 'now').mockImplementation(() => now);
@@ -363,7 +383,8 @@ describe('createBoardView', () => {
     spy.mockRestore();
   });
 
-  it('a props render that takes a mark of the run away (Retry) ends the run at once; a new board too', () => {
+  it('a props render that takes a mark of the run away (Retry) ends the run at once; a new board too', async () => {
+    await loadMouseRun();
     vi.useFakeTimers();
     board.update(model({ cells: withCells({ 5: CellState.Mark, 10: CellState.Mark }) }));
     board.playEvent({ type: 'MARKED', cells: [5, 10], source: 'mouse' });
