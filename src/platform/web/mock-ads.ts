@@ -4,6 +4,11 @@
 // phase2b §3.3: the same ?ads= mode drives a mock banner, a 50 px grey "Banner placeholder" bar fixed
 // at the bottom, shown and hidden by the app's banner rules exactly like the FB banner (ok / close:
 // shown; nofill: no_fill; unsupported: no banner at all).
+// Phase 2d (G1, docs/phase2d/look-spec.md §1.16): the bar also shows on the game screen (banner during
+// play). There it is drawn like the original's banner, 320 × 50 and centred, at the band the game
+// screen reserves: its bottom edge at var(--play-band-bottom), which the game screen publishes on
+// <html> while it is mounted (platform/ may not import ui/). Elsewhere the variables are absent and
+// the bar is the 2b full-width bar at the bottom.
 import { cfg } from '../../app/config';
 import { t } from '../../i18n';
 import type { AdKind, AdResult, PlatformAds, PlatformTimers } from '../types';
@@ -31,6 +36,37 @@ export const MOCK_AD_TEST_ID = 'mock-ad';
 export const MOCK_BANNER_TEST_ID = 'mock-banner';
 /** The FB banner's height (50 dp, [search: Meta docs]); the app reserves ads.banner.reservePx around it. */
 export const MOCK_BANNER_HEIGHT_PX = 50;
+/** Phase 2d §1.16: the standard banner's width, as the original's in the user's recording (320 × 50). */
+export const MOCK_BANNER_GAME_WIDTH_PX = 320;
+
+/**
+ * The bar's inline style. On the game screen (`--play-band` > 0 on <html>, the band is reserved) the
+ * width resolves to 320 px and the bottom to `--play-band-bottom`; elsewhere both variables are absent
+ * (0) and the bar spans the viewport at the bottom, as in 2b. CSS only, so the bar follows the screen
+ * it is on (a banner may stay up from the victory into the next game screen) without any listener.
+ */
+export function mockBannerStyle(): string {
+  return [
+    'position:fixed',
+    'left:0',
+    'right:0',
+    'margin:0 auto',
+    // 100 % when --play-band is 0 or absent; any band (≥ 1 px) makes the second term negative → 320 px.
+    `width:max(${MOCK_BANNER_GAME_WIDTH_PX}px, calc(100% - var(--play-band, 0px) * 100000))`,
+    'max-width:100%',
+    'bottom:var(--play-band-bottom, 0px)',
+    `height:${MOCK_BANNER_HEIGHT_PX}px`,
+    'box-sizing:border-box',
+    'z-index:2147483646',
+    'display:flex',
+    'align-items:center',
+    'justify-content:center',
+    'background:#d9d9d9',
+    'color:#333',
+    'font:14px system-ui,-apple-system,sans-serif',
+    'border-top:1px solid #bbb',
+  ].join(';');
+}
 
 /**
  * Mock PlatformAds.banner for dev/e2e (phase2b §3.3), or undefined in 'unsupported' mode. show() puts
@@ -50,21 +86,7 @@ export function createMockBanner(mode: MockAdMode, opts: { doc: Document }): Pla
         bar.setAttribute('aria-label', t('ads.banner.placeholder'));
         bar.textContent = t('ads.banner.placeholder');
         // Inline styles: platform/ may not use ui/ or styles/. Neutral grey, like an empty ad slot.
-        bar.style.cssText = [
-          'position:fixed',
-          'left:0',
-          'right:0',
-          'bottom:0',
-          `height:${MOCK_BANNER_HEIGHT_PX}px`,
-          'z-index:2147483646',
-          'display:flex',
-          'align-items:center',
-          'justify-content:center',
-          'background:#d9d9d9',
-          'color:#333',
-          'font:14px system-ui,-apple-system,sans-serif',
-          'border-top:1px solid #bbb',
-        ].join(';');
+        bar.style.cssText = mockBannerStyle();
         (doc.body ?? doc.documentElement).appendChild(bar);
       }
       return Promise.resolve({ ok: true });

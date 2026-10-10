@@ -6,6 +6,7 @@
 // Pure parts of the session's effects layer (04 §5.2): per-event feedback (sound, vibration, live
 // announcement; 02 §16, §18), analytics payloads (02 §20) and win bookkeeping (02 §10.1 + phase2b
 // §4.3 event wins + phase2c §3.7: all saved with the win, before any animation).
+// Phase 2d (G1, docs/phase2d/look-spec.md §1.12): the mouse's MARKED announces a11y.mouse.
 import type { SfxId } from '../audio/sfx';
 import { applyEventWin, type EventDef, type Milestone } from '../game/events';
 import { popcount } from '../game/factory';
@@ -35,6 +36,11 @@ export function feedbackFor(ev: GameEvent, state: GameState, colors: Uint8Array,
   const placed = state.catsPlaced;
   switch (ev.type) {
     case 'MARKED':
+      // Phase 2d §1.12: the mouse's X marks are the action's one line ("The mouse crossed out 3 tiles.").
+      if (ev.source === 'mouse') {
+        const count = ev.cells.length;
+        return { sfx: 'mark', haptic: c.haptics.mark, announce: tn('a11y.mouse', count, { count: formatNumber(count) }) };
+      }
       return { sfx: 'mark', haptic: c.haptics.mark, announce: tn('a11y.marked', ev.cells.length) };
     case 'UNMARKED':
       return { sfx: 'unmark', announce: tn('a11y.unmarked', ev.cells.length) };

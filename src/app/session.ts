@@ -15,6 +15,11 @@
 // which commit writes in the same store update as the board, so Home and a reload resume the points
 // and the cat run exactly; the cross-level perfect streak (streakBreaks / breakStreak) is gone. A
 // scoring cat's announcement ends with the running total (POINTS → a11y.points, one utterance).
+// Phase 2d (G1, docs/phase2d/look-spec.md §1.12, §1.14, §1.16, §4.3): the mouse helper (onMouse, its
+// per-X mark sounds), the level-start toast from playBoardEntry on a fresh board or a Retry (never on
+// a resumed board, a revive or the tutorial), and the banner during play: the band is decided at
+// mount (BannerFlow.eligible('game') → SessionMeta.bannerBand), a banner already up stays into an
+// eligible board (no hide), and the board entry's end is the game screen's screenShown('game').
 import type { CellIndex, HintStep, Puzzle } from '../engine/types';
 import { eventEnd, eventRules, type EventDef } from '../game/events';
 import { newGame, restoreGame, toInProgress } from '../game/factory';
@@ -27,7 +32,7 @@ import { advance, filterTutorialAction, tutorialStep } from '../game/tutorial';
 import type { Action, BoardKey, GameEvent, GameState, ModeId, RuleFlags } from '../game/types';
 import type { RankingListState, RankScoreView } from '../ui/overlays/ranking-panel';
 import { periodRankTitle } from '../ui/period-text';
-import type { GameScreen, GameScreenCallbacks, GameView } from '../ui/screens/game-screen';
+import type { GameScreen, GameScreenCallbacks, GameView, StartToastKind } from '../ui/screens/game-screen';
 import { t } from '../i18n';
 import type { TimerId } from './clock';
 import { cfg } from './config';
@@ -154,7 +159,7 @@ export function createSession(deps: SessionDeps): Session {
 
   /** Re-renders the game screen from the store (state outside the store changed: the win flow's lock). */
   function refreshGameView(): void {
-    const v = selectGameView(store.get(), viewCtx());
+    const v = selectGameView(store.get(), viewCtx(), c);
     if (v && screen) screen.update(v);
   }
 
@@ -194,6 +199,7 @@ export function createSession(deps: SessionDeps): Session {
       store.update((app) => ({ ...app, game: state, save: writeSlot ? withSlot(app.save, slot, toInProgress(state, now)) : app.save }));
     }
     if (state.cells !== prev.cells || a.type === 'RETRY' || a.type === 'REVIVE') helpers.clearHintCache();
+    if (a.type === 'RETRY') helpers.newAttempt();
     if (events.length) bus.emit('game:events', { events, state, prev });
     for (const fn of [...listeners]) fn(state, events);
     // phase2c.1 §10.4: the lines of one action are joined into ONE announcement (the POINTS line
@@ -203,6 +209,7 @@ export function createSession(deps: SessionDeps): Session {
       screen?.playEvent(ev);
       const fb = feedbackFor(ev, state, m.colors, c);
       fx.play(fb);
+      if (ev.type === 'MARKED' && ev.source === 'mouse') mouseTicks(ev.cells.length);
       if (fb.announce) lines.push(fb.announce);
       if (ev.type === 'MISTAKE') log(mistakeEvent(m, state));
       else if (ev.type === 'WON') onWon(state, m, false);
@@ -212,6 +219,15 @@ export function createSession(deps: SessionDeps): Session {
     if (writeSlot) deps.saves.touch();
     timers.sync();
     if (m.mode === 'tutorial') tutorialAdvance();
+  }
+
+  /**
+   * Phase 2d §1.12: the mark sound per X of the mouse, in step with the board's pops fx.mouseStaggerMs
+   * apart (the first one is the MARKED's own sound). Reduced motion: the X's appear at once, one sound.
+   */
+  function mouseTicks(count: number): void {
+    if (store.get().ui.reducedMotion) return;
+    for (let i = 1; i < count; i++) timers.later(i * c.fx.mouseStaggerMs, () => fx.play({ sfx: 'mark' }));
   }
 
   // ─────────────────────────────── win (phase2b §2.2) ───────────────────────────────
@@ -545,6 +561,7 @@ export function createSession(deps: SessionDeps): Session {
     let current = save();
     let state = newGame(puzzle, mode, rules);
     let cleared = false;
+    let resumed = false;
     const slot = slotKey ? current.inProgress[slotKey] : null;
     if (slotKey && slot) {
       // 02 §15 step 3 (validation); restoreGame applies steps 4 (full board → won) and 5 (0 hearts → lost).
@@ -556,8 +573,10 @@ export function createSession(deps: SessionDeps): Session {
           restored = null; // never reached after validateSlot; a bad slot must not break the level
         }
       }
-      if (restored) state = restored;
-      else {
+      if (restored) {
+        state = restored;
+        resumed = true;
+      } else {
         const next = withoutSlot(current, slotKey, puzzle.id);
         cleared = next !== current;
         current = next;
@@ -575,14 +594,18 @@ export function createSession(deps: SessionDeps): Session {
       tutorialStep: mode === 'tutorial' ? 1 : null,
       substitute,
       event: eventDef && req.mode === 'event' ? { def: eventDef, index: req.index } : null,
+      // §1.16: decided once, at mount (the band never appears or goes mid-level, except for No Ads).
+      bannerBand: deps.banners?.eligible('game', { firstRunTutorial: mode === 'tutorial' }) === true,
     };
     store.update((app) => ({ ...app, screen: 'game', game: state, session: m, save: current, ui: { ...app.ui, inputLocked: false } }));
     if (cleared) deps.saves.touch();
-    screen = router.showGame(selectGameView(store.get(), viewCtx()) as GameView, callbacks);
+    helpers.newAttempt();
+    screen = router.showGame(selectGameView(store.get(), viewCtx(), c) as GameView, callbacks);
     unbindView = store.select(
-      (s) => [s.game, s.session, s.save.stock, s.save.settings, s.ui, s.overlays] as const,
+      // ext: the settings dot (§1.15); purchases: No Ads takes the banner band away (§1.16).
+      (s) => [s.game, s.session, s.save.stock, s.save.settings, s.save.ext, s.save.purchases, s.ui, s.overlays] as const,
       () => {
-        const v = selectGameView(store.get(), viewCtx());
+        const v = selectGameView(store.get(), viewCtx(), c);
         if (v && screen) screen.update(v);
       },
       { equals: shallowEqual },
@@ -594,22 +617,42 @@ export function createSession(deps: SessionDeps): Session {
     if (req.mode === 'level') deps.levels.prefetch(req.level);
     if (mode === 'tutorial') showCoach();
     if (state.status === 'ready') {
-      playBoardEntry();
+      playBoardEntry(resumed || mode === 'tutorial' ? null : m.hard ? 'hard' : 'level');
     } else if (state.status === 'won') onWon(state, m, true);
-    else if (state.status === 'lost') openFail(0);
+    else if (state.status === 'lost') {
+      openFail(0);
+      // §1.16: O4 is a results screen that keeps the banner; a restored lost board has no entry.
+      bannerScreenShown(m);
+    }
     timers.sync();
+  }
+
+  /** §1.16: the game screen is ready for its banner (the board entry ended), when its band is reserved. */
+  function bannerScreenShown(m: SessionMeta): void {
+    if (m.bannerBand && deps.banners) void deps.banners.screenShown('game', { firstRunTutorial: m.mode === 'tutorial' }).catch(() => undefined);
   }
 
   /**
    * The board-entry wave, its cue (review PAR-8: 'board_in', with the wave) and START when it ends.
    * Only a fresh or retried board enters; a restored won or lost board does not (no wave, no cue).
+   * Phase 2d §1.14: `toast` is the level-start toast's line for a fresh board ('level' / 'hard') or a
+   * Retry ('retry'); null for a resumed board and the tutorial (fx.startToast.enabled off: none).
+   * §1.16: the entry's end is when the game screen may show its banner.
    */
-  function playBoardEntry(): void {
+  function playBoardEntry(toast: StartToastKind | null): void {
     if (screen) {
       screen.playEntry();
       fx.play({ sfx: 'board_in' });
+      if (toast !== null && c.fx.startToast.enabled) {
+        const scr = screen;
+        fx.guard(() => scr.playStartToast?.(toast));
+      }
     }
-    timers.later(c.fx.boardEntryMs, () => dispatch({ type: 'START' }));
+    timers.later(c.fx.boardEntryMs, () => {
+      dispatch({ type: 'START' });
+      const m = meta();
+      if (m) bannerScreenShown(m);
+    });
   }
 
   const callbacks: GameScreenCallbacks = {
@@ -618,6 +661,7 @@ export function createSession(deps: SessionDeps): Session {
     onPaint: (cells, mode) => session.onPaint(cells, mode),
     onBulb: () => void session.onBulb(),
     onPaw: () => void session.onPaw(),
+    onMouse: () => void session.onMouse(),
     // §2.2: the top bar's Home and Gear do nothing from WON until the ranking panel (or the victory) opens.
     onHome: () => {
       if (!winFlow.blocking()) session.onHome();
@@ -671,7 +715,8 @@ export function createSession(deps: SessionDeps): Session {
       const m = meta();
       if (!st || !m) return;
       for (const e of startEvents(m, st)) log(e);
-      playBoardEntry();
+      // §1.14: a Retry gets the toast too (never the tutorial: it has no Retry).
+      playBoardEntry(m.mode === 'tutorial' ? null : 'retry');
     },
   });
 
@@ -682,8 +727,13 @@ export function createSession(deps: SessionDeps): Session {
         request.mode === 'level' && request.level <= 1 ? { mode: 'tutorial', replay: save().tutorialDone } : request;
       teardown();
       hideLoading();
-      deps.banners?.screenGone();
-      void deps.banners?.hide().catch(() => undefined); // §3.2: never a banner on the game screen
+      // §3.2 / phase 2d §1.16: a banner that is up stays only when the new game screen may carry one
+      // (banner-to-banner: no screenGone + hide pair); otherwise (the tutorial, duringPlay off, No
+      // Ads, under 10 levels) it is hidden before the board.
+      if (deps.banners?.eligible('game', { firstRunTutorial: req.mode === 'tutorial' }) !== true) {
+        deps.banners?.screenGone();
+        void deps.banners?.hide().catch(() => undefined);
+      }
       const mine = gen;
       let puzzle: Puzzle;
       let substitute = false;
@@ -761,6 +811,7 @@ export function createSession(deps: SessionDeps): Session {
     onPaint: (cells, mode) => boardInput({ type: 'PAINT', cells: [...cells], mode, t: clock.now() }),
     onBulb: () => helpers.onBulb(),
     onPaw: () => helpers.onPaw(),
+    onMouse: () => helpers.onMouse(),
     onHintApply() {
       if (game()?.status !== 'hint') return;
       dispatch({ type: 'HINT_APPLY', t: clock.now() });

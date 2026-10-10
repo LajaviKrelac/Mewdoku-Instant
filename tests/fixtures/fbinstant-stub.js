@@ -7,6 +7,12 @@
 //      window.__FB_STUB_CONFIG__ = { presets: ['slow-rewarded'], ... } }) or with ?fbstub=<preset,…>.
 //   2. Unit tests: evaluate this file with a fake `window` and call window.__createFbStub(config).
 // Every SDK call is recorded in order in control.calls ({ seq, name, args, t, beforeInit }).
+// Phase 2d (G1, docs/phase2d/look-spec.md §1.12, §1.16): the app's rewarded placements (hint, kitty,
+// revive, group_double and now 'mouse') all load the ONE rewarded placement ID the adapter passes
+// (VITE_FB_PLACEMENT_REWARDED), so the mouse's video needs nothing new here: getRewardedVideoAsync
+// accepts any non-empty ID and records it. The banner bar stays at the viewport's bottom edge, where
+// Meta's native banner overlays the webview (fb-dashboard B5, unverified); on the game screen the band
+// (toolsToBanner + bannerPx above the bottom gap) keeps the helpers clear of it.
 //
 // Config (all optional; deep-merged over DEFAULTS):
 //   supportedAPIs   string[]                 returned by getSupportedAPIs()

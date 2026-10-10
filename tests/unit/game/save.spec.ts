@@ -3,6 +3,8 @@
 // packs compensated once), the streak and period validation (a changed period kind starts fresh) and
 // their merge rows. Phase 2c.1 (G1): the in-progress slot's optional points / catStreak / scoredRows
 // (still v3; a bad field is dropped and reported, the slot kept) and the frozen streak (last block).
+// Phase 2d (G1, docs/phase2d/look-spec.md §1.15): ext.settingsSeen (the settings-dot marker): kept when
+// valid, dropped and reported when not, merged by max, set by markSettingsSeen; the save stays v3.
 // Save schema (phase2b §9; v1 = 04 §4.3, §7): defaults, migrate (garbage, partial, wrong
 // types, v1 → v3), merge table (§7.3 + phase2b §9.3), in-progress validation (§7.2), cells codec, size bound.
 import { describe, expect, it } from 'vitest';
@@ -13,10 +15,14 @@ import {
   decodeCells,
   defaults,
   encodeCells,
+  markSettingsSeen,
   merge,
   migrate,
   migrateReport,
   SAVE_VERSION,
+  settingsDotOn,
+  settingsSeenOf,
+  SETTINGS_SEEN_KEY,
   validateInProgress,
 } from '../../../src/game/save';
 import type { InProgressV2, SaveData, SaveDataV1, SaveDataV2 } from '../../../src/game/types';
@@ -700,5 +706,75 @@ describe('phase2c.1 §3.2.3–§3.2.4: the slot\'s level-points fields; the save
     const r = migrateReport(doc, NOW);
     expect(r.outcome).toBe('ok');
     expect(r.save.streak).toEqual({ current: 3, best: 9 });
+  });
+});
+
+describe('phase 2d §1.15: ext.settingsSeen (the settings dot); the save stays v3', () => {
+  const withExt = (ext: unknown): Record<string, unknown> => ({ ...(JSON.parse(JSON.stringify(full())) as Record<string, unknown>), ext });
+
+  it('a valid marker (a finite number ≥ 0) is kept with the other ext keys; absent reads as 0', () => {
+    expect(SETTINGS_SEEN_KEY).toBe('settingsSeen');
+    for (const v of [0, 1, 2, 1.5, 1_000_000]) {
+      const r = migrateReport(withExt({ coins: 3, settingsSeen: v }), NOW);
+      expect(r.save.ext).toEqual({ coins: 3, settingsSeen: v });
+      expect(r.repairedFields).not.toContain('ext.settingsSeen');
+      expect(settingsSeenOf(r.save)).toBe(v);
+    }
+    const none = migrate(withExt({ coins: 3 }), NOW);
+    expect(none.ext).toEqual({ coins: 3 });
+    expect(settingsSeenOf(none)).toBe(0);
+    expect(SAVE_VERSION).toBe(3);
+    expect(none.v).toBe(3);
+  });
+
+  it('an invalid marker is dropped and reported; the rest of ext stays', () => {
+    for (const bad of [-1, 'x', null, true, [1], { a: 1 }]) {
+      const r = migrateReport(withExt({ coins: 3, settingsSeen: bad }), NOW);
+      expect(r.save.ext).toEqual({ coins: 3 });
+      expect(r.repairedFields).toContain('ext.settingsSeen');
+      expect(r.outcome).toBe('repaired');
+    }
+    // NaN and Infinity do not survive JSON; as in-memory values they are dropped too.
+    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY]) {
+      const r = migrateReport({ ...withExt({}), ext: { settingsSeen: bad } }, NOW);
+      expect(r.save.ext).toEqual({});
+      expect(r.repairedFields).toContain('ext.settingsSeen');
+    }
+  });
+
+  it('merge keeps the larger marker whichever copy is newer; absent in both stays absent', () => {
+    const a = { ...full(), updatedAt: NOW, ext: { coins: 1, settingsSeen: 1 } };
+    const b = { ...full(), updatedAt: NOW + 1, ext: { coins: 2 } };
+    expect(merge(a, b).ext).toEqual({ coins: 2, settingsSeen: 1 }); // newer ext, the larger marker
+    expect(merge(b, a).ext).toEqual({ coins: 2, settingsSeen: 1 });
+    const c = { ...b, ext: { coins: 2, settingsSeen: 3 } };
+    expect(merge(a, c).ext).toEqual({ coins: 2, settingsSeen: 3 });
+    const older = { ...c, updatedAt: NOW - 10 };
+    expect(merge(older, a).ext).toEqual({ coins: 1, settingsSeen: 3 }); // the older copy's larger marker wins
+    const none = merge({ ...full(), ext: {} }, { ...full(), updatedAt: NOW + 5, ext: { coins: 9 } });
+    expect(none.ext).toEqual({ coins: 9 });
+    expect(SETTINGS_SEEN_KEY in none.ext).toBe(false);
+  });
+
+  it('markSettingsSeen sets the marker to settingsDot.version (never lowers it); settingsDotOn compares', () => {
+    const s = { ...full(), ext: { coins: 3 } };
+    expect(settingsDotOn(s)).toBe(true);
+    const seen = markSettingsSeen(s);
+    expect(seen.ext).toEqual({ coins: 3, settingsSeen: 1 });
+    expect(settingsDotOn(seen)).toBe(false);
+    expect(markSettingsSeen(seen)).toBe(seen); // nothing to change: the same object
+    const later = { ...s, ext: { settingsSeen: 5 } };
+    expect(markSettingsSeen(later)).toBe(later); // never lowered
+    const v2 = mergeConfig({ settingsDot: { version: 2 } });
+    expect(settingsDotOn(seen, v2)).toBe(true);
+    expect(markSettingsSeen(seen, v2).ext).toEqual({ coins: 3, settingsSeen: 2 });
+    const off = mergeConfig({ settingsDot: { version: 0 } });
+    expect(settingsDotOn(s, off)).toBe(false);
+    expect(markSettingsSeen(s, off)).toBe(s);
+  });
+
+  it('a migrated and saved marker round-trips (JSON)', () => {
+    const seen = markSettingsSeen(full());
+    expect(migrate(JSON.stringify(seen), NOW).ext).toEqual(seen.ext);
   });
 });

@@ -26,7 +26,7 @@ function sparkles(points: readonly (readonly [number, number, number])[]): strin
 
 /** Our fish on the 200 grid: the icon's 24-grid art at `s`×, centred at (cx, cy), turned `rot`°. */
 function bigFish(cx: number, cy: number, s: number, rot = 0): string {
-  return `<g transform="translate(${cx} ${cy}) rotate(${rot}) scale(${s}) translate(-11.6 -12)">${fishMarkup(W / s)}</g>`;
+  return `<g transform="translate(${cx} ${cy}) rotate(${rot}) scale(${s}) translate(-12.6 -13)">${fishMarkup()}</g>`;
 }
 
 function winMarkup(): string {

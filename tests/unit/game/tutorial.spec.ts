@@ -48,17 +48,20 @@ describe('tutorial board (02 §11.5)', () => {
     expect(grade(4, p.regions).grade).toBe(1);
   });
 
-  it('fixed colours A Mint, B Violet, C Mustard, D Coral; region B is the single tile (1,2)', () => {
-    expect(TUTORIAL_COLORS).toEqual([4, 7, 2, 0]);
-    expect(getMode('tutorial').fixedColors).toEqual([4, 7, 2, 0]);
-    expect(fixedColorsFor('tutorial', tutorialPuzzle())).toEqual(Uint8Array.from([4, 7, 2, 0]));
+  it('fixed colours A Lime, B Violet, C Mustard, D Coral (phase 2d §1.9: all core); region B is the single tile (1,2)', () => {
+    expect(TUTORIAL_COLORS).toEqual([3, 7, 2, 0]);
+    expect(getMode('tutorial').fixedColors).toEqual([3, 7, 2, 0]);
+    expect(fixedColorsFor('tutorial', tutorialPuzzle())).toEqual(Uint8Array.from([3, 7, 2, 0]));
+    // Every tutorial colour is one of the 10 measured core colours (look-spec §1.9, PALETTE_CORE).
+    for (const i of TUTORIAL_COLORS) expect([0, 1, 2, 3, 5, 6, 7, 8, 10, 11]).toContain(i);
+    expect(tutorialStep(1).colorParam).toBe(TUTORIAL_COLORS[1]);
     expect(fixedColorsFor('level', tutorialPuzzle())).toBeNull();
     const p = tutorialPuzzle();
     expect([...p.regions.keys()].filter((i) => p.regions[i] === 1)).toEqual([at(1, 2)]);
   });
 
   it('script targets: (1,2), (2,1)–(2,3), (2,4), (3,1), (4,3); every cat target is a solution cell', () => {
-    expect(TUTORIAL_CELLS).toEqual({ lavender: 1, swipe: [4, 5, 6], row2Cat: 7, hintCat: 8, lastCat: 14 });
+    expect(TUTORIAL_CELLS).toEqual({ violet: 1, swipe: [4, 5, 6], row2Cat: 7, hintCat: 8, lastCat: 14 });
     const sol = tutorialPuzzle().solution;
     for (const c of [1, 7, 8, 14]) expect(sol[Math.floor(c / 4)]).toBe(c % 4);
   });
@@ -73,10 +76,11 @@ describe('tutorial board (02 §11.5)', () => {
     expect(() => tutorialStep(7 as TutorialStepIndex)).toThrow();
   });
 
-  it('tools: the bulb only in step 5, the paw never', () => {
+  it('tools: the bulb only in step 5, the paw and the mouse never (phase 2d §1.12)', () => {
     for (const s of [1, 2, 3, 4, 5, 6] as const) {
       expect(tutorialAllowsTool(s, 'bulb')).toBe(s === 5);
       expect(tutorialAllowsTool(s, 'paw')).toBe(false);
+      expect(tutorialAllowsTool(s, 'mouse')).toBe(false);
     }
   });
 
@@ -114,6 +118,9 @@ const FILTER: FilterRow[] = [
   { step: 1, action: { type: 'KITTY', cell: 1, t: 0 }, out: null },
   { step: 1, action: { type: 'REVIVE', t: 0 }, out: null },
   { step: 1, action: { type: 'RETRY' }, out: null },
+  { step: 1, action: { type: 'MOUSE', cells: [2], t: 0 }, out: null },
+  { step: 3, action: { type: 'MOUSE', cells: [4, 5, 6], t: 0 }, out: null },
+  { step: 5, action: { type: 'MOUSE', cells: [2], t: 0 }, out: null },
   // step 2: the board is locked (Got it only)
   { step: 2, action: T(0), out: PULSE(0) },
   { step: 2, action: D(7), out: PULSE(7) },

@@ -5,7 +5,16 @@
 import { describe, expect, it } from 'vitest';
 import { createFakeClock } from '../../../src/app/clock';
 import { cfg } from '../../../src/app/config';
-import { createMockAds, createMockBanner, MOCK_AD_TEST_ID, MOCK_BANNER_HEIGHT_PX, MOCK_BANNER_TEST_ID, readMockAdMode } from '../../../src/platform/web/mock-ads';
+import {
+  createMockAds,
+  createMockBanner,
+  MOCK_AD_TEST_ID,
+  MOCK_BANNER_GAME_WIDTH_PX,
+  MOCK_BANNER_HEIGHT_PX,
+  MOCK_BANNER_TEST_ID,
+  mockBannerStyle,
+  readMockAdMode,
+} from '../../../src/platform/web/mock-ads';
 import { drain, track } from './helpers';
 
 const overlay = (): Element | null => document.querySelector(`[data-testid="${MOCK_AD_TEST_ID}"]`);
@@ -94,10 +103,32 @@ describe('createMockBanner (phase2b §3.3)', () => {
     expect(document.querySelectorAll(`[data-testid="${MOCK_BANNER_TEST_ID}"]`)).toHaveLength(1);
     const el = bar()!;
     expect(el.textContent).toBe('Banner placeholder');
-    expect([el.style.position, el.style.bottom, el.style.height]).toEqual(['fixed', '0px', `${MOCK_BANNER_HEIGHT_PX}px`]);
+    // Phase 2d §1.16: its bottom edge follows the game screen's band (0 without it: the 2b bar).
+    expect([el.style.position, el.style.bottom, el.style.height]).toEqual(['fixed', 'var(--play-band-bottom, 0px)', `${MOCK_BANNER_HEIGHT_PX}px`]);
     await banner.hide();
     expect(bar()).toBeNull();
     await banner.hide(); // nothing up: fine
+  });
+
+  it('phase 2d §1.16: 320 × 50 and centred at the game band (--play-band / --play-band-bottom); full width elsewhere', () => {
+    const css = mockBannerStyle();
+    expect(MOCK_BANNER_GAME_WIDTH_PX).toBe(320);
+    // Centred: both edges pinned with an auto margin; never wider than the viewport.
+    expect(css).toContain('left:0');
+    expect(css).toContain('right:0');
+    expect(css).toContain('margin:0 auto');
+    expect(css).toContain('max-width:100%');
+    // The width: 100 % while --play-band is absent or 0, 320 px once the game screen publishes a band.
+    expect(css).toContain('width:max(320px, calc(100% - var(--play-band, 0px) * 100000))');
+    expect(css).toContain('bottom:var(--play-band-bottom, 0px)');
+    expect(css).toContain(`height:${MOCK_BANNER_HEIGHT_PX}px`);
+    // The resolved width for a few cases, by the same formula (max(320, vw − band × 1e5)).
+    const width = (vw: number, band: number): number => Math.min(vw, Math.max(320, vw - band * 100000));
+    expect(width(402, 0)).toBe(402);
+    expect(width(1280, 0)).toBe(1280);
+    expect(width(402, 73.4)).toBe(320);
+    expect(width(1280, 66.5)).toBe(320);
+    expect(width(300, 60)).toBe(300); // max-width: 100 %
   });
 
   it('nofill answers no_fill without a bar; unsupported has no banner at all', async () => {

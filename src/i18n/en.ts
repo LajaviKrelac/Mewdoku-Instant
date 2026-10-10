@@ -7,6 +7,7 @@
 // spread into `en` below, so the workstreams never edit the same file:
 //   en/art.ts (A) · en/ui-2b.ts (B) · en/events.ts (C) · en/platform.ts (D) · en/i18n.ts (E).
 // Phase 2c (fish-lives-spec §1.5, Appendix A): G2 owns every file here; the 2c keys are in en/ui-2c.ts.
+// Phase 2d (look-spec Appendix A): G3 owns every file here; the 2d keys are in en/ui-2d.ts.
 // The lives are fish: the 2b "heart" values changed (same keys, A.1), the fish-currency keys went (A.3).
 // A key must exist in exactly one file (tests/unit/sanity.spec.ts checks it).
 import { enArt } from './en/art';
@@ -15,6 +16,7 @@ import { enI18n } from './en/i18n';
 import { enPlatform } from './en/platform';
 import { enUi2b } from './en/ui-2b';
 import { enUi2c } from './en/ui-2c';
+import { enUi2d } from './en/ui-2d';
 
 /** The Phase 2 catalogue (02 §21), E-owned. Values may change; keys and placeholders never do. */
 export const enCore = {
@@ -171,7 +173,7 @@ export const enCore = {
   'settings.sound': 'Sound',
   'settings.vibration': 'Vibration',
   'settings.patterns': 'Colour patterns',
-  'settings.patterns.note': 'Adds a small symbol to every colour.',
+  'settings.patterns.note': 'Adds a small symbol to every colour and outlines the crosses.',
   'settings.reduceMotion': 'Reduce motion',
   'settings.reduceMotion.system': 'System',
   'settings.reduceMotion.on': 'On',
@@ -192,7 +194,7 @@ export const enCore = {
   'howto.rule.space': 'Cats like their space: two cats *never touch, not even at the corners*.',
   'howto.controls': 'Tap a tile to cross it out. Double-tap to place a cat. Swipe across tiles to cross out several at once.',
   'howto.hearts': 'Your fish are your lives. A cat on the wrong tile costs a fish. Lose all three and you can try the level again.',
-  'howto.helpers': 'Stuck? The bulb explains one step. The paw finds a cat for you.',
+  'howto.helpers': 'Stuck? The bulb explains one step. The kitty finds a cat for you. The mouse crosses out a few tiles that have no cat.',
   'howto.skip': 'I know how to play',
   'howto.replay': 'Replay tutorial',
 
@@ -298,10 +300,10 @@ export const enCore = {
 } as const;
 
 /** The English catalogue: the Phase 2 keys plus every owner's Phase 2b file. */
-export const en = { ...enCore, ...enArt, ...enUi2b, ...enUi2c, ...enEvents, ...enPlatform, ...enI18n } as const;
+export const en = { ...enCore, ...enArt, ...enUi2b, ...enUi2c, ...enUi2d, ...enEvents, ...enPlatform, ...enI18n } as const;
 
 /** The per-owner parts of `en`, for the disjointness check (sanity.spec.ts). */
-export const EN_PARTS = { enCore, enArt, enUi2b, enUi2c, enEvents, enPlatform, enI18n } as const;
+export const EN_PARTS = { enCore, enArt, enUi2b, enUi2c, enUi2d, enEvents, enPlatform, enI18n } as const;
 
 export type En = typeof en;
 export type I18nKey = keyof En;

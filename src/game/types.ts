@@ -4,6 +4,7 @@
 // Phase 2c.1 (G1): per-cat level points (PointsRule, RuleFlags.points, GameState.levelPoints /
 // catStreak / scoredRows, the POINTS event, the optional in-progress slot fields), fish-lives-spec
 // §3.1–§3.2, §10.10. The save stays v3; StreakRecord / SaveDataV3.streak are @deprecated (frozen).
+// Phase 2d (G1, docs/phase2d/look-spec.md §1.12): the mouse helper's MOUSE action and MARKED.source.
 // Game state, actions, events (04 §4.2) and save data (04 §4.3, phase2b §9). PURE types.
 import type { LocaleId, ProductId } from '../app/config';
 import type { CellIndex, HintStep, Puzzle, PuzzleId } from '../engine/types';
@@ -102,12 +103,18 @@ export type Action =
   | { type: 'KITTY_DONE' } // session, kitty.revealMs after KITTY
   | { type: 'REVIVE'; t: number }
   | { type: 'RETRY' }
-  | { type: 'TICK'; dtMs: number };
+  | { type: 'TICK'; dtMs: number }
+  /**
+   * Phase 2d §1.12: the mouse helper's X marks (cells from game/mouse.ts pickMouseCells). Allowed only
+   * while playing; a listed cell that is no longer Empty, or that is a solution cell, is skipped.
+   */
+  | { type: 'MOUSE'; cells: CellIndex[]; t: number };
 
 export type ActionType = Action['type'];
 
 export type GameEvent =
-  | { type: 'MARKED' | 'UNMARKED'; cells: CellIndex[] }
+  /** Phase 2d §1.12, §4.4: `source: 'mouse'` only on the MARKED of a MOUSE action (the board staggers its pops). */
+  | { type: 'MARKED' | 'UNMARKED'; cells: CellIndex[]; source?: 'mouse' }
   | { type: 'CAT_PLACED'; cell: CellIndex; source: CatSource }
   | { type: 'CAT_REMOVED'; cell: CellIndex }
   | { type: 'MISTAKE'; cell: CellIndex; heartsLeft: number }

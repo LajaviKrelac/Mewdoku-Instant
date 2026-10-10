@@ -2,7 +2,7 @@
 // as a truth table driven by the fake clock.
 import { describe, expect, it } from 'vitest';
 import { createFakeClock } from '../../../src/app/clock';
-import { mergeConfig } from '../../../src/app/config';
+import { cfg, mergeConfig } from '../../../src/app/config';
 import {
   bannerGate,
   canShowInterstitial,
@@ -219,7 +219,11 @@ describe('phase2b §3: cadence parity and the banner gate', () => {
     { screen: 'home', ...ok, want: 'ok' },
     { screen: 'victory', ...ok, want: 'ok' },
     { screen: 'event', ...ok, want: 'ok' },
-    { screen: 'game', ...ok, want: 'screen' },
+    // Phase 2d §1.16: the game screen qualifies while ads.banner.duringPlay (on by default), then the same checks.
+    { screen: 'game', ...ok, want: 'ok' },
+    { screen: 'game', ...ok, completed: 9, want: 'min_levels' },
+    { screen: 'game', ...ok, noAds: true, want: 'no_ads' },
+    { screen: 'game', ...ok, tutorial: true, want: 'tutorial' },
     { screen: 'ranking', ...ok, want: 'screen' },
     { screen: 'boot', ...ok, want: 'screen' },
     { screen: 'overlay', ...ok, want: 'screen' },
@@ -244,5 +248,22 @@ describe('phase2b §3: cadence parity and the banner gate', () => {
     expect(bannerGate(base, mergeConfig({ ads: { enabled: false } }))).toBe('disabled');
     expect(bannerGate(base, mergeConfig({ ads: { banner: { screens: ['victory'] } } }))).toBe('screen');
     expect(bannerGate(base, mergeConfig({ ads: { banner: { fromCompletedLevels: 31 } } }))).toBe('min_levels');
+  });
+
+  it("phase 2d §1.16: 'game' qualifies exactly when ads.banner.duringPlay is on (off restores the 2b rule)", () => {
+    const save = { progress: { level: 31, completed: 30, best: {} }, purchases: { noAds: false, tokens: [] } };
+    const game = { screen: 'game' as const, save, bannerSupported: true, firstRunTutorial: false };
+    expect(cfg.ads.banner.duringPlay).toBe(true);
+    expect(cfg.ads.banner.screens).not.toContain('game'); // not through the screens list
+    expect(bannerGate(game)).toBe('ok');
+    const off = mergeConfig({ ads: { banner: { duringPlay: false } } });
+    expect(bannerGate(game, off)).toBe('screen');
+    // The other screens are unchanged by duringPlay.
+    for (const screen of ['home', 'victory', 'event'] as const) expect(bannerGate({ ...game, screen }, off)).toBe('ok');
+    // Listing 'game' in screens does not let it in without duringPlay.
+    expect(bannerGate(game, mergeConfig({ ads: { banner: { duringPlay: false, screens: ['home', 'game'] } } }))).toBe('screen');
+    // The same checks after the screen: capability, levels, No Ads, the tutorial, disabled.
+    expect(bannerGate({ ...game, bannerSupported: false })).toBe('unsupported');
+    expect(bannerGate(game, mergeConfig({ ads: { banner: { enabled: false } } }))).toBe('disabled');
   });
 });

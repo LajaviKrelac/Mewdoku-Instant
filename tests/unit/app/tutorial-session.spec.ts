@@ -6,7 +6,7 @@ import { CellState } from '../../../src/game/types';
 import { createHarness, slice, type Harness, last } from './harness';
 
 // 4×4 tutorial: cats at (1,2), (2,4), (3,1), (4,3) in 1-based coordinates.
-const LAVENDER = 1;
+const VIOLET = 1;
 const ROW2_CAT = 7;
 const HINT_CAT = 8;
 const LAST_CAT = 14;
@@ -24,7 +24,7 @@ async function begin(h: Harness, replay = false): Promise<void> {
 const step = (h: Harness): number | null => h.store.get().session?.tutorialStep ?? null;
 
 async function playThrough(h: Harness): Promise<void> {
-  h.session.onCellDoubleTap(LAVENDER);
+  h.session.onCellDoubleTap(VIOLET);
   expect(step(h)).toBe(2);
   h.session.onCoachGotIt();
   expect(step(h)).toBe(3);
@@ -98,7 +98,7 @@ describe('tutorial session', () => {
   it('scripted marks bypass the filter (step 2 "Got it" crosses out row 1 and column 2)', async () => {
     const h = firstRun();
     await begin(h);
-    h.session.onCellDoubleTap(LAVENDER);
+    h.session.onCellDoubleTap(VIOLET);
     h.session.onCoachGotIt();
     const marks = [0, 2, 3, 5, 9, 13];
     for (const c of marks) expect(h.game().cells[c]).toBe(CellState.Mark);
@@ -140,7 +140,7 @@ describe('tutorial: the coach lives in the lazy overlay chunk (04 §9)', () => {
   it('a coach that cannot load never dead-ends the tutorial: the "Got it" step moves on by itself', async () => {
     const h = firstRun();
     await begin(h);
-    h.session.onCellDoubleTap(LAVENDER);
+    h.session.onCellDoubleTap(VIOLET);
     expect(step(h)).toBe(2);
     h.log.length = 0;
     h.bus.emit('overlay:failed', { id: 'coach' }); // the chunk failed after its retries
@@ -153,7 +153,7 @@ describe('tutorial: the coach lives in the lazy overlay chunk (04 §9)', () => {
   it('step 5 cannot dead-end: when the hint card cannot load, the bulb applies the step directly', async () => {
     const h = firstRun();
     await begin(h);
-    h.session.onCellDoubleTap(LAVENDER);
+    h.session.onCellDoubleTap(VIOLET);
     h.session.onCoachGotIt();
     h.session.onPaint([4, 5, 6], 'mark');
     h.session.onCellDoubleTap(ROW2_CAT);
@@ -175,7 +175,7 @@ describe('tutorial: the coach lives in the lazy overlay chunk (04 §9)', () => {
     h.bus.emit('overlay:failed', { id: 'coach' });
     expect(step(h)).toBe(1);
     expect(h.game().status).toBe('playing');
-    h.session.onCellDoubleTap(LAVENDER); // still playable
+    h.session.onCellDoubleTap(VIOLET); // still playable
     expect(step(h)).toBe(2);
   });
 });

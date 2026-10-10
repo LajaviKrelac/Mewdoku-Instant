@@ -1,5 +1,7 @@
 // Owner: A (Phase 2b); G2 (Phase 2c: icon-fish-empty; the heart icons and their clip paths went;
-// Phase 2c.1: icon-points, the level-points sparkle)
+// Phase 2c.1: icon-points, the level-points sparkle; Phase 2d: the back arrow, the filled gear, the play
+// mark, the three helpers' art, the heads' silhouette, the flexed arm and the X's rects, look-spec
+// Appendix C, each drawn by us from its written description)
 // One hidden inline SVG sprite of <symbol>s (04 §5.3): Tux's moods, the white X with its edge, the
 // wrong X, 12 pattern glyphs, our icon set (02 §17.6, phase2b §1.7), the fish and the board cats'
 // ear-flick overlay (phase2b §1.6, §2.9). All drawn by us: the cat on a 100-unit grid, icons and the
@@ -9,6 +11,7 @@
 // bundle column), so they cost the first load nothing.
 import { CAT, catBlink, catEarFlick, catHead } from './cat-parts';
 import { fishMarkup, fishOutlineMarkup } from './fish';
+import { cfg, type GameConfig } from '../../app/config';
 import { TOKENS } from './palette';
 
 export type CatSymbol = 'cat-idle' | 'cat-happy' | 'cat-sad' | 'cat-surprised';
@@ -29,8 +32,11 @@ export type IconSymbol =
   | 'icon-play-video'
   | 'icon-close'
   | 'icon-chevron'
+  /** @deprecated phase2d: the rule cards use ruleDiagram (rule-art.ts); removed at I-3. */
   | 'icon-rule-colours'
+  /** @deprecated phase2d: see icon-rule-colours. */
   | 'icon-rule-lines'
+  /** @deprecated phase2d: see icon-rule-colours. */
   | 'icon-rule-space'
   // phase2b §1.7: the fish and the new icons (same 24-grid LINE style)
   | 'icon-fish'
@@ -42,11 +48,21 @@ export type IconSymbol =
   | 'icon-shop'
   | 'icon-globe'
   | 'icon-crown'
-  | 'icon-users';
+  | 'icon-users'
+  // Phase 2d (look-spec §1.4, §1.6, §1.11, §1.14, Appendix C): the back arrow, the video badge's play
+  // mark, the three helpers' full-colour art, the heads pill's head and the start toast's arm.
+  | 'icon-back'
+  | 'icon-play'
+  | 'tool-kitty'
+  | 'tool-bulb'
+  | 'tool-mouse'
+  | 'cat-head-flat'
+  | 'art-flex';
 export type GlyphIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
 /** Pattern glyphs by palette index: dot, ring, triangle, square, diamond, star, plus, bar, chevron, heart, drop, moon (02 §18). */
 export type GlyphSymbol = `glyph-${GlyphIndex}`;
 /** `cat-blink` is the eyelid overlay the board stacks on idle cats (02 §17.3 blink). */
+/** `wrong-x` is @deprecated phase2d: its drawing is gone (it was unused; the wrong X is the board's rects); the id stays for dev/** until I-3. */
 export type SymbolId = CatSymbol | IconSymbol | GlyphSymbol | 'mark-x' | 'wrong-x' | 'cat-blink' | CatOverlaySymbol | AccessorySymbol;
 
 /** id of the sprite's <svg> element. */
@@ -60,19 +76,6 @@ const SOFT_FILL = 'style="fill:var(--icon-fill,none)"';
 
 const sym = (id: string, viewBox: string, body: string): string => `<symbol id="${id}" viewBox="${viewBox}">${body}</symbol>`;
 const icon24 = (id: IconSymbol, body: string): string => sym(id, '0 0 24 24', body);
-
-function gearPath(): string {
-  const pts: string[] = [];
-  const at = (r: number, deg: number): string => {
-    const a = ((deg - 90) * Math.PI) / 180;
-    return `${(12 + r * Math.cos(a)).toFixed(2)} ${(12 + r * Math.sin(a)).toFixed(2)}`;
-  };
-  for (let k = 0; k < 8; k++) {
-    const a = k * 45;
-    pts.push(at(9.6, a - 10), at(9.6, a + 10), at(7.2, a + 17), at(7.2, a + 28));
-  }
-  return `M${pts.join('L')}Z`;
-}
 
 function starPath(cx: number, cy: number, ro: number, ri: number): string {
   const pts: string[] = [];
@@ -118,30 +121,42 @@ function catSymbols(): string {
   );
 }
 
-/** The X mark: white, round caps, 23→77, stroke 12, over a 20-unit edge in --xe (phase2b §1.5). */
-export const MARK_X_PATH = 'M23 23 77 77M77 23 23 77';
+/**
+ * The X's rect geometry on the 100-unit slot box (look-spec §1.10, measured): [x, y, width, height, rx]
+ * of each white bar (layout.mark: armFraction long, barFraction thick, cornerFraction corners) and of
+ * its edge (grown by edgeFraction per side; drawn only with Colour patterns on). Each pair is rotated
+ * ±45° about (50, 50). Defaults: 15.5 40.9 69 18.2 6 and 12 37.4 76 25.2 9.5.
+ */
+export function markRects(c: GameConfig = cfg): { readonly bar: readonly number[]; readonly edge: readonly number[] } {
+  const M = c.layout.mark;
+  const len = M.armFraction * 100;
+  const w = M.barFraction * 100;
+  const r = M.cornerFraction * 100;
+  const e = M.edgeFraction * 100;
+  const box = (l: number, t: number, rx: number): number[] => [50 - l / 2, 50 - t / 2, l, t, rx].map((v) => Math.round(v * 10) / 10);
+  return { bar: box(len, w, r), edge: box(len + 2 * e, w + 2 * e, r + e) };
+}
 
+/** Two rects of `b` ([x, y, w, h, rx]) crossed at ±45° about (cx, cy). */
+export function crossRects(b: readonly number[], cx = 50, cy = 50): string {
+  return [45, -45].map((d) => `<rect x="${b[0]}" y="${b[1]}" width="${b[2]}" height="${b[3]}" rx="${b[4]}" transform="rotate(${d} ${cx} ${cy})"/>`).join('');
+}
+
+/** mark-x (How to play): the board's white X, two rounded bars on the slot's 100-unit box (look-spec §1.10). */
 function markSymbols(): string {
-  return (
-    sym(
-      'mark-x',
-      '0 0 100 100',
-      `<path d="${MARK_X_PATH}" fill="none" style="stroke:var(--xe,var(--ink,${TOKENS.ink}))" stroke-width="20" stroke-linecap="round"/>` +
-        `<path d="${MARK_X_PATH}" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/>`,
-    ) +
-    sym(
-      'wrong-x',
-      '0 0 100 100',
-      `<circle cx="50" cy="50" r="43" fill="none" style="stroke:var(--wrong,${TOKENS.wrong})" stroke-width="6"/>` +
-        `<path d="M29 29 71 71M71 29 29 71" fill="none" style="stroke:var(--wrong,${TOKENS.wrong})" stroke-width="11" stroke-linecap="round"/>`,
-    )
-  );
+  return sym('mark-x', '0 0 100 100', `<g fill="#fff">${crossRects(markRects().bar)}</g>`);
 }
 
 function iconSymbols(): string {
   return [
     icon24('icon-house', `<path d="M6.2 9.8V18.6a1.6 1.6 0 0 0 1.6 1.6H10v-5h4v5h2.2a1.6 1.6 0 0 0 1.6-1.6V9.8" ${SOFT_FILL}/><path d="M6.2 9.8V18.6a1.6 1.6 0 0 0 1.6 1.6H10v-5h4v5h2.2a1.6 1.6 0 0 0 1.6-1.6V9.8M3.4 11.4 12 4l8.6 7.4" ${LINE}/>`),
-    icon24('icon-gear', `<path d="${gearPath()}" ${LINE} ${SOFT_FILL}/><circle cx="12" cy="12" r="3.1" ${LINE}/>`),
+    // Phase 2d (Appendix C, ours): a filled cog, six round-ended teeth on a thick ring whose open
+    // centre (Ø 7.8) lets the white disc show through; currentColor (--ink-icon in the round buttons).
+    icon24(
+      'icon-gear',
+      `<g fill="none" stroke="currentColor"><circle cx="12" cy="12" r="6" stroke-width="4.2"/>` +
+        `<path d="M12 4.2v-.6m0 16.2v.6m6.8-12.3.5-.3m-.5 8.1.5.3M5.2 8.1l-.5-.3m.5 8.1-.5.3" stroke-width="5.4" stroke-linecap="round"/></g>`,
+    ),
     icon24(
       'icon-bulb',
       `<path d="M9 16.4C6.9 15.1 5.6 12.9 5.6 10.4a6.4 6.4 0 0 1 12.8 0c0 2.5-1.3 4.7-3.4 6v1.4H9z" ${LINE} ${SOFT_FILL}/>` +
@@ -169,6 +184,8 @@ function iconSymbols(): string {
     icon24('icon-play-video', `<rect x="3" y="5.6" width="18" height="12.8" rx="3.2" ${LINE} ${SOFT_FILL}/><path d="M10.2 9.2v5.6l4.8-2.8z" fill="currentColor" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>`),
     icon24('icon-close', `<path d="M6.6 6.6 17.4 17.4M17.4 6.6 6.6 17.4" ${LINE} stroke-width="2.4"/>`),
     icon24('icon-chevron', `<path d="M9.4 5.8 15.6 12l-6.2 6.2" ${LINE} stroke-width="2.4"/>`),
+    // @deprecated phase2d: the rule cards draw ruleDiagram() (rule-art.ts); deleted once rule-chips.ts
+    // no longer uses these (look-spec §6.2; at I-3 at the latest).
     icon24(
       'icon-rule-colours',
       `<rect x="2.6" y="4.6" width="9" height="14.8" rx="2.6" style="fill:var(--r7,#B9A7EC)"/><rect x="12.4" y="4.6" width="9" height="14.8" rx="2.6" style="fill:var(--r2,#F2DC7C)"/>` +
@@ -217,6 +234,70 @@ function newIcons(): string {
   ].join('');
 }
 
+/** Grey of the mouse helper (look-spec §1.11): head, muzzle, ink of the whiskers and teeth edge. */
+const MOUSE = { head: '#B8B4BC', muzzle: '#D9D6DC', line: '#8E8994', eye: '#1E1A22' };
+
+/**
+ * Phase 2d art (look-spec §1.4, §1.6, §1.11, §1.14, Appendix C), each drawn by us as SVG from its
+ * written description, never from a frame (D-2d-0 c; provenance-G2.md):
+ * - icon-back: a left arrow, a shaft and two head strokes meeting at the left, stroke 3.1, round ends;
+ * - icon-play: a rounded triangle pointing right (the video badge's mark);
+ * - tool-kitty: our Tux head (cat-parts), winking: the left iris open, the right eye a closed arc,
+ *   an open smile with a pink tongue, the asymmetric blaze and the notched left ear;
+ * - tool-bulb: a glossy yellow bulb (highlight, soft orange lower shade), a short neck and a screw base
+ *   of two violet rings with a lighter ring between;
+ * - tool-mouse: a grey mouse face: big round ears with pink insides, a lighter muzzle, bead eyes with
+ *   catchlights, a pink nose, two white teeth, three whiskers a side;
+ * - cat-head-flat: a plain cat-head silhouette, wide and soft, two pointed ears with softly rounded
+ *   tips set a little outward, no notch, no face (D-2d-18), one shape in currentColor;
+ * - art-flex: a flexed arm, a rounded upper arm and a raised fist, gold with a darker shade.
+ * The three tool-* symbols share one square box (the art centred: kitty 99 × 98 %, bulb 62 × 97 %,
+ * mouse 100 × 89 % of it), so the tool row draws each at one size (35 s px, look-spec §1.11).
+ */
+function art2d(): string {
+  // One theme (look-spec §2.2): the full-colour art takes the token values directly (no var()).
+  const { gold, hard: violet, fish, 'fish-deep': deep, 'fish-hi': hi } = TOKENS;
+  const ear = (cx: number): string => `<circle cx="${cx}" cy="27" r="20" fill="${MOUSE.head}"/><circle cx="${cx}" cy="28" r="12.5" fill="${CAT.earIn}"/>`;
+  const eye = (cx: number): string => `<circle cx="${cx}" cy="55" r="5.4" fill="${MOUSE.eye}"/><circle cx="${cx + 1.8}" cy="53.2" r="1.8" fill="#fff"/>`;
+  return [
+    icon24('icon-back', `<path d="M20.5 12H3.6m6.9-7L3.6 12l6.9 7" fill="none" stroke="currentColor" stroke-width="3.1" stroke-linecap="round" stroke-linejoin="round"/>`),
+    icon24('icon-play', `<path d="M8.6 6.2v11.6L18 12Z" fill="currentColor" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/>`),
+    sym('tool-kitty', '6 3 88 88', catHead({ eyes: 'wink', mouth: 'open' })),
+    sym(
+      'tool-bulb',
+      '0 0 100 100',
+      `<path d="M50 2C67.7 2 81 15.4 81 33c0 11.5-5.8 19.8-12.6 26.4C64.6 63 63 66.8 63 71H37c0-4.2-1.6-8-5.4-11.6C24.8 52.8 19 44.5 19 33 19 15.4 32.3 2 50 2Z" fill="${gold}"/>` +
+        `<path d="M20 38c2.5 10 10.5 16.5 15.1 24 1.4 2.6 1.9 5.4 1.9 9h26c0-3.6.5-6.4 1.9-9 4.6-7.5 12.6-14 15.1-24-6 12-17 18.5-30 18.5S26 50 20 38Z" fill="${fish}"/>` +
+        `<ellipse cx="36" cy="22" rx="6.5" ry="11" transform="rotate(38 36 22)" fill="#fff" opacity=".75"/>` +
+        `<rect x="35" y="69" width="30" height="10" rx="5" fill="${violet}"/><rect x="36.5" y="77.5" width="27" height="9" rx="4.5" fill="#A68BDF"/>` +
+        `<rect x="38" y="85" width="24" height="9" rx="4.5" fill="${violet}"/><path d="M44 92h12c-.8 4.6-3 6.6-6 6.6S44.8 96.6 44 92Z" fill="${violet}"/>`,
+    ),
+    sym(
+      'tool-mouse',
+      '0 0 100 100',
+      ear(23) + ear(77) +
+        `<ellipse cx="50" cy="60" rx="36" ry="33" fill="${MOUSE.head}"/><ellipse cx="50" cy="75" rx="21" ry="15.5" fill="${MOUSE.muzzle}"/>` +
+        eye(36) + eye(64) +
+        `<g fill="none" stroke="${MOUSE.line}" stroke-width="1.3" stroke-linecap="round"><path d="M32 70 8 64M31.5 74.5H6M32 79 9 85.5M68 70l24-6m-23.5 10.5H94M68 79l23 6.5"/>` +
+        `<path d="M50 69v4.5m-7 .8q7 4.6 14 0"/></g>` +
+        `<path d="M46 77.2h3.6v6.4a1 1 0 0 1-1 1H47a1 1 0 0 1-1-1Zm4.4 0H54v6.4a1 1 0 0 1-1 1h-1.6a1 1 0 0 1-1-1Z" fill="#fff" stroke="${MOUSE.line}" stroke-width=".9"/>` +
+        `<ellipse cx="50" cy="67.4" rx="4.8" ry="3.4" fill="${CAT.nose}"/>`,
+    ),
+    sym(
+      'cat-head-flat',
+      '0 0 100 100',
+      `<path d="M50 26c-6 0-11 .4-15 1.3L21 7.6Q17 3 15.2 9.4L10 39.5C6 46 4 54 4 62c0 21 20 34 46 34s46-13 46-34c0-8-2-16-6-22.5L84.8 9.4Q83 3 79 7.6L65 27.3c-4-.9-9-1.3-15-1.3Z" fill="currentColor"/>`,
+    ),
+    icon24(
+      'art-flex',
+      `<path d="M1.5 22v-5.8c0-3.8 2.9-6.2 6.3-5.6 1.9.3 3.3 1.5 4 3.1l1.8-4.2c-1.2-.9-1.8-2.4-1.4-4 .5-2.1 2.6-3.4 4.7-2.9l1.5.4c2.1.5 3.4 2.6 2.9 4.7-.3 1.2-1.1 2.2-2.2 2.7l-1.2 9c-.3 1.4-1.5 2.4-2.9 2.4Z" fill="${fish}"/>` +
+        `<path d="M1.5 22v-3c3.6 1.4 8.4 1.6 13 .6 1.5-.3 2.8-1 3.7-2l-.4 2.4c-.3 1.2-1.5 2-2.8 2Zm11.8-12.8c1.4.8 3 1.1 4.6.8l-.3 1.4c-1.6.3-3.2 0-4.8-.7Z" fill="${deep}"/>` +
+        `<ellipse cx="6.4" cy="13.2" rx="2.5" ry="1.1" transform="rotate(-24 6.4 13.2)" fill="${hi}"/>` +
+        `<path d="M14.2 4.2c.8-.7 1.9-.9 2.9-.7" fill="none" stroke="${hi}" stroke-linecap="round"/>`,
+    ),
+  ].join('');
+}
+
 let cached: string | null = null;
 
 /** The sprite's inner markup (symbols). Built once. Phase 2c: the heart clip paths (defs) went with the heart break. */
@@ -226,7 +307,8 @@ export function spriteMarkup(): string {
     markSymbols() +
     GLYPHS.map((g, i) => sym(`glyph-${i}`, '0 0 24 24', `<g fill="currentColor" transform="${GLYPH_FILL}">${g}</g>`)).join('') +
     iconSymbols() +
-    newIcons();
+    newIcons() +
+    art2d();
   return cached;
 }
 

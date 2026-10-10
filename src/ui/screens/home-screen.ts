@@ -105,6 +105,8 @@ export interface HomeView {
   readonly event: HomeEventCardView | null;
   /** phase2b §3.2: the banner band is reserved (root data-banner). */
   readonly bannerReserved: boolean;
+  /** Phase 2d §1.15: the gear's red dot (save.ext.settingsSeen < cfg.settingsDot.version). Required at I-3. */
+  readonly settingsDot?: boolean;
 }
 
 export interface HomeCallbacks {

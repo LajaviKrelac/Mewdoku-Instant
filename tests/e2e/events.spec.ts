@@ -7,6 +7,9 @@
 // gets the "Opens after level 10" toast.
 // Phase 2c.1 (G1, §3.3 D17, §10.8): event puzzles score level points with the same rule: the HUD
 // counter shows during play and the victory shows the puzzle's total.
+// Phase 2d (G1, docs/phase2d/look-spec.md §1.4, §5.3): the game bar splits the event title into its
+// Level column ("Lantern Walk" over "1"), the whole name visible at 390 (the column widens instead of
+// cutting it, §1.4 Fit), with the Score column beside it.
 import { expect, test, type Page } from '@playwright/test';
 import type { E2EHooks } from '../../src/app/boot';
 import { defaults } from '../../src/game/save';
@@ -57,10 +60,33 @@ test('Lantern Walk: card → event screen → puzzle 1 → win → victory 1 / 2
   expect(id).toBe('Elantern-walk-2026/0');
   const app = await page.evaluate(() => (window as TestWindow).__mewdoku?.app());
   expect(app?.session?.mode).toBe('event');
-  // D17: the level-points counter shows on an event puzzle, from 0.
-  const pts = page.locator('.pills .points-pill');
+  // D17: the level-points counter shows on an event puzzle, from 0 (2d: the bar's Score column).
+  const pts = page.locator('.top-bar--game .points-pill');
   await expect(pts).toBeVisible();
   await expect(pts).toHaveAttribute('aria-label', 'Level points: 0');
+  await expect(pts.locator('.points-pill__label')).toHaveText('Score');
+  // 2d §1.4: the title split: the name over the puzzle number, the whole title as the heading's name.
+  const title = page.locator('.top-bar--game h1.top-bar__text');
+  await expect(title).toHaveAttribute('aria-label', 'Lantern Walk · 1');
+  await expect(title.locator('.top-bar__name')).toHaveText('Lantern Walk');
+  await expect(title.locator('.top-bar__suffix')).toHaveText('1');
+  // The whole name is visible (no ellipsis): the column widened instead (§1.4 Fit, critic C5).
+  const cut = await title.locator('.top-bar__name').evaluate((el) => el.scrollWidth > el.clientWidth + 0.5);
+  expect(cut).toBe(false);
+  // The Level and Score columns never overlap, and both stay between the back and gear discs.
+  const r = await page.evaluate(() => {
+    const b = (q: string) => document.querySelector(q)?.getBoundingClientRect() ?? null;
+    return {
+      level: b('.top-bar--game .top-bar__text'),
+      score: b('.top-bar--game .points-pill'),
+      back: b('.top-bar--game .top-bar__btn--home'),
+      gear: b('.top-bar--game .top-bar__btn--settings'),
+    };
+  });
+  if (!r.level || !r.score || !r.back || !r.gear) throw new Error(`missing a bar part: ${JSON.stringify(r)}`);
+  expect(r.level.right).toBeLessThanOrEqual(r.score.left + 0.5);
+  expect(r.level.left).toBeGreaterThanOrEqual(r.back.right - 0.5);
+  expect(r.score.right).toBeLessThanOrEqual(r.gear.left + 0.5);
   const n = (await page.evaluate(() => (window as TestWindow).__mewdoku?.state()?.puzzle.n)) ?? 0;
   const total = runTotal(n, pointsRuleFor('event'));
 

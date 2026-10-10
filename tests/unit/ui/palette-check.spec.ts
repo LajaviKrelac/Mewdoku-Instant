@@ -1,4 +1,5 @@
-// Owner: A (Phase 2b; was ui-board). scripts/palette-check.ts: CIEDE2000, CVD simulation, contrast, and the shipped palette passes.
+// Owner: A (Phase 2b; was ui-board); G2 (Phase 2d: the measured palette and tokens, look-spec §1.2, §2.3).
+// scripts/palette-check.ts: CIEDE2000, CVD simulation, contrast, and the shipped palette passes.
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,6 +14,7 @@ import {
   hexToLab,
   main,
   MIN_CONTRAST,
+  parityExceptions,
   MIN_DE00,
   MIN_TEXT_CONTRAST,
   pairwise,
@@ -47,10 +49,17 @@ describe('palette-check', () => {
     }
   });
 
-  it('PALETTE_DE00 matches the palette and every pair is ≥ 10', () => {
+  it('PALETTE_DE00 matches the palette and every pair is ≥ 10 (min Sky / Slate 10.40, look-spec §1.9)', () => {
     const m = computeMatrix(PALETTE);
     m.forEach((v, k) => expect(Math.abs(v - (PALETTE_DE00[k] as number))).toBeLessThanOrEqual(1));
-    expect((pairwise(PALETTE)[0]?.de ?? 0) >= MIN_DE00).toBe(true);
+    const min = pairwise(PALETTE)[0];
+    expect((min?.de ?? 0) >= MIN_DE00).toBe(true);
+    expect(min?.de).toBeCloseTo(10.4, 2);
+    expect([min?.i, min?.j]).toEqual([6, 10]);
+    // the two colours of ours sit far from every other: Mint ≥ 13.5, Cocoa ≥ 16.5
+    const from = (i: number): number => Math.min(...pairwise(PALETTE).filter((p) => p.i === i || p.j === i).map((p) => p.de));
+    expect(from(4)).toBeGreaterThanOrEqual(13.5);
+    expect(from(9)).toBeGreaterThanOrEqual(16.5);
   });
 
   it('every glyph passes 3:1 on every tile, faded or not', () => {
@@ -72,12 +81,20 @@ describe('palette-check', () => {
     const large = rows.filter((r) => r.min === MIN_CONTRAST).map((r) => r.what);
     expect(text).toContain('secondary text (--ink-2 on --page-2)');
     expect(text).toContain('accent text (--accent-text on --page)');
-    expect(text).toContain('count badge (white on --accent-text)');
+    expect(text).toContain('count badge on primary buttons (white on --accent-text)');
+    expect(text).toContain('count badge (white on --badge)');
+    expect(text).toContain('rule text (--ink on --rule-card)');
+    expect(text).toContain('toast text (--ink on --toast-fill)');
+    expect(text).toContain('free tool badge (--ink-deep on --gold)');
     expect(text).toContain('"Tap to keep going" (--tap-text on --scrim over --page)');
     // White on the orange accent is only a LARGE-text pair: valid because labels are ≥ 1.5rem (css-rules.spec.ts).
     expect(large).toContain('primary button label, large text (white on --accent)');
     expect(contrastRatio('#FFFFFF', TOKENS.accent)).toBeLessThan(MIN_TEXT_CONTRAST);
     expect(large).toContain('focus ring (--focus on --page)');
+    for (const g of ['round-button icon (--ink-icon on --card)', 'video badge mark (white on --badge-video)', 'settings dot (--dot on --card)', 'mini-diagram X (white on --rule-mark)', 'fish shade (--fish-deep on --card)']) expect(large).toContain(g);
+    // retired rows (look-spec §2.3): no fish outline, the kitty is full-colour art
+    expect(rows.some((r) => r.what.startsWith('fish outline'))).toBe(false);
+    expect(rows.some((r) => r.what.startsWith('kitty tool icon'))).toBe(false);
   });
 
   it('checks the dark victory screen\'s text and graphics on --stage (review PAR-3) and the keyword colour (PAR-7)', () => {
@@ -95,52 +112,86 @@ describe('palette-check', () => {
     expect(rows.find((r) => r.what.startsWith('rule keyword'))?.fg).toBe(TOKENS['accent-text']);
   });
 
-  it('reproduces the §1.4 table values (computed 2026-10-08)', () => {
+  it('reproduces the look-spec §1.2 table values (computed 2026-10-10)', () => {
     const r = (fg: string, bg: string): number => Math.round(contrastRatio(fg, bg) * 100) / 100;
-    expect(r(TOKENS.ink, TOKENS.page)).toBe(12.97);
-    expect(r(TOKENS['ink-2'], TOKENS['page-2'])).toBe(5.2);
-    expect(r(TOKENS['ink-2'], TOKENS.page)).toBe(5.77);
+    expect(r(TOKENS.ink, TOKENS.page)).toBe(4.91);
+    expect(r(TOKENS.ink, TOKENS.card)).toBe(5.45);
+    expect(r(TOKENS.ink, TOKENS['page-2'])).toBe(4.62);
+    expect(r(TOKENS.ink, TOKENS['accent-soft'])).toBe(4.62);
+    expect(r(TOKENS.ink, TOKENS['rule-card'])).toBe(5.01);
+    expect(r(TOKENS.ink, TOKENS['toast-fill'])).toBe(4.81);
+    expect(r('#FFFFFF', TOKENS.ink)).toBe(5.45);
+    expect(TOKENS['ink-2']).toBe(TOKENS.ink);
+    expect(r(TOKENS['ink-icon'], TOKENS.card)).toBe(4.68);
+    expect(r('#FFFFFF', TOKENS.badge)).toBe(4.68);
+    expect(r('#FFFFFF', TOKENS['badge-video'])).toBe(3.13);
+    expect(r(TOKENS.dot, TOKENS.card)).toBe(3.48);
+    expect(r(TOKENS.dot, TOKENS.page)).toBe(3.13);
+    expect(r('#FFFFFF', TOKENS['rule-mark'])).toBe(4.12);
+    expect(r(TOKENS['rule-mark'], TOKENS['rule-card'])).toBe(3.78);
+    expect(r(TOKENS['fish-deep'], TOKENS.card)).toBe(3.09);
+    expect(r(TOKENS['ink-deep'], TOKENS.gold)).toBe(8.67);
+    expect(r(TOKENS.focus, TOKENS.page)).toBe(4.42);
+    expect(r(TOKENS['accent-text'], TOKENS.page)).toBe(5.14);
+    expect(r(TOKENS['accent-title'], TOKENS.page)).toBe(3.44);
+    // unchanged pairs
     expect(r('#FFFFFF', TOKENS.accent)).toBe(3.15);
-    expect(r(TOKENS['accent-title'], TOKENS.page)).toBe(3.55);
     expect(r(TOKENS['accent-title'], TOKENS.card)).toBe(3.82);
-    expect(r(TOKENS['accent-text'], TOKENS.page)).toBe(5.31);
-    expect(r(TOKENS['accent-text'], TOKENS['page-2'])).toBe(4.78);
     expect(r('#FFFFFF', TOKENS['accent-text'])).toBe(5.71);
-    expect(r(TOKENS.focus, TOKENS.page)).toBe(4.56);
     expect(r(TOKENS.focus, TOKENS.card)).toBe(4.91);
     expect(r(TOKENS['title-on-dark'], TOKENS.stage)).toBe(4.78);
-    expect(r(TOKENS['tap-text'], rgbaOver(TOKENS.scrim, TOKENS.page))).toBe(7.26);
     expect(r('#FFFFFF', TOKENS.stage)).toBe(15.07);
-    expect(r('#FFFFFF', rgbaOver(TOKENS.scrim, TOKENS.page))).toBe(10.28);
     expect(r('#FFFFFF', TOKENS.hard)).toBe(6.96);
+    expect(r(TOKENS['tap-text'], rgbaOver(TOKENS.scrim, TOKENS.page))).toBe(7.36);
   });
 
-  it('the white X carries WCAG 1.4.11 through its edge on every tile, normal and faded (phase2b §1.5)', () => {
-    // plain white alone is far below 3:1 on our pastels
+  it('the recorded parity exceptions stay informational (look-spec §1.2, D-2d-6)', () => {
+    const rows = parityExceptions();
+    expect(rows.filter((x) => x.what.startsWith('head tint'))).toHaveLength(PALETTE.length);
+    const tints = rows.filter((x) => x.what.startsWith('head tint')).map((x) => x.ratio);
+    expect(Math.min(...tints)).toBeCloseTo(1.25, 2);
+    expect(Math.max(...tints)).toBeCloseTo(1.76, 2);
+    expect(rows.find((x) => x.what.startsWith('fish body'))?.ratio).toBeCloseTo(2.0, 2);
+    expect(rows.find((x) => x.what.startsWith('toast border'))?.ratio).toBeCloseTo(2.32, 2);
+    for (const x of rows) expect(x.min).toBe(0);
+  });
+
+  it('the default white X is an informational row; with Colour patterns on its edge carries WCAG 1.4.11 on every tile, normal and faded (look-spec §1.10)', () => {
+    // the plain white X of the original: 1.60 (Lime) … 3.52 (Violet), faded 1.36–2.00 (D-2d-6)
     const w = whiteOnTiles();
-    expect(w.max).toBeLessThan(MIN_CONTRAST);
+    expect(w.min).toBeCloseTo(1.6, 2);
+    expect(w.max).toBeCloseTo(3.52, 2);
+    expect(w.fadedMin).toBeCloseTo(1.36, 2);
+    expect(w.fadedMax).toBeCloseTo(2.0, 2);
     const rows = glyphContrast();
-    const edge = rows.filter((r) => r.what === 'X edge (--xe) vs tile');
-    const white = rows.filter((r) => r.what === 'white X vs its edge');
+    const edge = rows.filter((r) => r.what === 'X edge (--xe, patterns on) vs tile');
+    const white = rows.filter((r) => r.what === 'white X vs its edge (patterns on)');
     expect(edge).toHaveLength(PALETTE.length * 2);
     expect(white).toHaveLength(PALETTE.length * 2);
     for (const r of [...edge, ...white]) expect(r.ratio).toBeGreaterThanOrEqual(MIN_CONTRAST);
-    expect(Math.min(...edge.map((r) => r.ratio))).toBeCloseTo(3.32, 2); // worst: Slate
-    expect(Math.min(...white.map((r) => r.ratio))).toBeCloseTo(6.27, 2);
+    expect(Math.min(...edge.map((r) => r.ratio))).toBeCloseTo(3.24, 2); // worst: Violet
+    expect(Math.min(...edge.filter((r) => r.faded).map((r) => r.ratio))).toBeCloseTo(5.69, 2);
+    expect(Math.min(...white.map((r) => r.ratio))).toBeCloseTo(9.82, 2);
     // a faded tile is lighter, so its edge contrast is higher than the normal tile's
     for (let t = 0; t < PALETTE.length; t++) {
       const [n, f] = edge.filter((r) => r.tile === t);
       expect((f as { ratio: number }).ratio).toBeGreaterThan((n as { ratio: number }).ratio);
     }
     expect(xEdgeColor(10)).toMatch(/^#[0-9a-f]{6}$/);
+    // the wrong X in --wrong: ≥ 3.41 on every tile, 6.00 faded; the pattern glyph in --ink-deep ≥ 3.24 (faded 3.30)
+    const min = (what: string, faded: boolean): number => Math.min(...rows.filter((r) => r.what === what && r.faded === faded).map((r) => r.ratio));
+    expect(min('wrong X (--wrong)', false)).toBeCloseTo(3.41, 2);
+    expect(min('wrong X (--wrong)', true)).toBeCloseTo(6.0, 2);
+    expect(min('pattern glyph (--ink-deep @ patternOpacity)', false)).toBeCloseTo(3.24, 2);
+    expect(min('pattern glyph (--ink-deep @ patternOpacity)', true)).toBeCloseTo(3.3, 2);
   });
 
-  it("Tux reads as a dark shape on every tile: fur ≥ 5.87, outline ≥ 7.68 (phase2b §1.6)", () => {
+  it("Tux reads as a dark shape on every tile: fur ≥ 4.00, outline ≥ 5.23 (phase2b §1.6, look-spec §2.3)", () => {
     const rows = glyphContrast();
     const fur = rows.filter((r) => r.what === 'cat fur').map((r) => r.ratio);
     const outline = rows.filter((r) => r.what === 'cat outline').map((r) => r.ratio);
-    expect(Math.min(...fur)).toBeCloseTo(5.87, 2);
-    expect(Math.min(...outline)).toBeCloseTo(7.68, 2);
+    expect(Math.min(...fur)).toBeCloseTo(4.0, 2);
+    expect(Math.min(...outline)).toBeCloseTo(5.23, 2);
     expect(CAT_COLORS.fur).toBe('#2E2A33');
   });
 
@@ -152,14 +203,16 @@ describe('palette-check', () => {
       expect(glyphs.filter((r) => r.page === id)).toHaveLength(PALETTE.length * 6);
     }
     const min = (pred: (w: string) => boolean): number => Math.min(...ui.filter((r) => pred(r.what)).map((r) => r.ratio));
-    // the spec's numbers on the event pages (§1.12)
-    expect(min((w) => w.startsWith('--ink-2 on') && w.endsWith('page'))).toBeCloseTo(5.65, 2);
+    // the spec's numbers on the event pages (§1.12; look-spec §1.2: the new ink ≥ 4.97)
+    expect(min((w) => w.startsWith('--ink-2 on') && w.endsWith('page'))).toBeCloseTo(4.97, 2);
     expect(min((w) => w.startsWith('--accent-text on') && w.endsWith('page'))).toBeCloseTo(5.21, 2);
     expect(min((w) => w.startsWith('--accent-title') && w.endsWith('page'))).toBeCloseTo(3.48, 2);
     expect(min((w) => w.startsWith('focus ring on') && w.endsWith('page'))).toBeCloseTo(4.48, 2);
+    // the motif colours were lightened (Phase 2d, look-spec §2.3) so --ink keeps 4.5 on them
+    expect(min((w) => w.startsWith('--ink on') && w.includes('motif'))).toBeGreaterThanOrEqual(4.5);
     const g = (what: string): number => Math.min(...glyphs.filter((r) => r.what === what).map((r) => r.ratio));
-    expect(g('wrong X (--wrong)')).toBeGreaterThanOrEqual(4.62);
-    expect(g('pattern glyph (--ink @ patternOpacity)')).toBeCloseTo(3.63, 2);
+    expect(g('wrong X (--wrong)')).toBeGreaterThanOrEqual(6.0);
+    expect(g('pattern glyph (--ink-deep @ patternOpacity)')).toBeCloseTo(3.32, 2);
   });
 
   it('EVENT_THEME_TOKENS match the shipped event definitions (src/data/events/events.json)', () => {

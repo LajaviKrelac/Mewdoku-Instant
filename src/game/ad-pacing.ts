@@ -1,6 +1,8 @@
 // Owner: C (Phase 2b)
 // Interstitial gate (02 §13.2) and the banner gate (phase2b §3.2). PURE: clock values and
 // capabilities are passed in.
+// Phase 2d (G1, docs/phase2d/look-spec.md §1.16): the game screen qualifies for a banner during play
+// only while ads.banner.duringPlay is on (then the same checks as every banner screen).
 import { cfg, type BannerScreen, type GameConfig } from '../app/config';
 import type { SaveData } from './types';
 
@@ -68,7 +70,10 @@ export function cooldownSecFor(tenure: number, c: GameConfig = cfg): number {
 // ─────────────────────────────── banners (phase2b §3.2) ───────────────────────────────
 
 export interface BannerGateInput {
-  /** The screen about to show; only ads.banner.screens qualify (never the game screen, a full-screen overlay or the boot screen). */
+  /**
+   * The screen about to show; ads.banner.screens qualify, and phase 2d the game screen ('game') while
+   * ads.banner.duringPlay is on; never a full-screen overlay, the ranking panel or the boot screen.
+   */
   readonly screen: BannerScreen | 'game' | 'ranking' | 'boot' | 'overlay';
   readonly save: Pick<SaveData, 'progress' | 'purchases'>;
   /** capabilities().banner: both banner APIs and a placement id. */
@@ -80,7 +85,8 @@ export interface BannerGateInput {
 export type BannerGateDecision = 'ok' | 'disabled' | 'unsupported' | 'screen' | 'min_levels' | 'no_ads' | 'tutorial';
 
 /**
- * phase2b §3.2 truth table: ads.banner.enabled → capability → screen in ads.banner.screens →
+ * phase2b §3.2 truth table: ads.banner.enabled → capability → screen in ads.banner.screens (phase 2d
+ * §1.16: 'game' qualifies exactly when ads.banner.duringPlay is on, whatever the list says) →
  * progress.completed ≥ ads.banner.fromCompletedLevels → not purchases.noAds → not the first-run
  * tutorial. The 60 s reload window is banner-flow's (it needs the clock).
  */
@@ -88,7 +94,8 @@ export function bannerGate(input: BannerGateInput, c: GameConfig = cfg): BannerG
   const b = c.ads.banner;
   if (!c.ads.enabled || !b.enabled) return 'disabled';
   if (!input.bannerSupported) return 'unsupported';
-  if (!(b.screens as readonly string[]).includes(input.screen)) return 'screen';
+  const screenOk = input.screen === 'game' ? b.duringPlay : (b.screens as readonly string[]).includes(input.screen);
+  if (!screenOk) return 'screen';
   if (input.save.progress.completed < b.fromCompletedLevels) return 'min_levels';
   if (input.save.purchases.noAds) return 'no_ads';
   if (input.firstRunTutorial) return 'tutorial';

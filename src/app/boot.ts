@@ -12,6 +12,8 @@
 // retried once (PLAT-8); a second failure rejects, and main.ts shows an honest error with a retry.
 // Save copies that arrive after launch (FB late cloud read, another web tab) are merged into the
 // live save (restore.ts mergeArrived).
+// Phase 2d (G1, docs/phase2d/look-spec.md §1.16, §5.3): e2e builds read ?bannerPlay=0 (the banner
+// flow then runs with ads.banner.duringPlay off: the 2b "never in play" rule) for the fbig e2e.
 import { createAudioEngine, type AudioEngine } from '../audio/audio-engine';
 import { createLazySfx } from '../audio/lazy-sfx';
 import type { Sfx } from '../audio/sfx';
@@ -38,7 +40,7 @@ import type { RankHubFlow } from './rank-hub-flow';
 import { createRankingFlow } from './ranking-flow';
 import { createShopFlow } from './shop-flow';
 import { delay, systemClock, type Clock } from './clock';
-import { cfg } from './config';
+import { cfg, mergeConfig, type GameConfig } from './config';
 import { createEventBus, type AnalyticsEvent, type AppBus, type AppEventMap } from './events';
 import { isFlagOn, parseFlagParam, setFlagOverrides } from './flags';
 import { fetchJsonWithTimeout } from './fetch-json';
@@ -76,6 +78,20 @@ export interface BootOptions {
   readonly sfx?: Sfx;
   readonly announcer?: Announcer;
   readonly fetchJson?: (url: string) => Promise<unknown>;
+}
+
+/**
+ * Phase 2d §5.3 (fbig e2e): `?bannerPlay=0` turns ads.banner.duringPlay off for the banner flow, so the
+ * same e2e build also checks the 2b rule ("never in play"). Read only in e2e builds (__E2E__).
+ */
+export function e2eBannerConfig(search: string, base: GameConfig = cfg): GameConfig {
+  let off = false;
+  try {
+    off = new URLSearchParams(search).get('bannerPlay') === '0';
+  } catch {
+    off = false;
+  }
+  return off ? mergeConfig({ ads: { banner: { duringPlay: false } } }, base) : base;
 }
 
 /** e2e-only test hooks (04 §11), installed as window.__mewdoku when __E2E__. */
@@ -266,7 +282,13 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
       const next = fn(s.save);
       return next === s.save ? s : { ...s, save: next };
     });
-  const banners = createBannerFlow({ platform, store, clock, onError: (error) => bus.emit('error', { where: 'banner', error }) });
+  const banners = createBannerFlow({
+    platform,
+    store,
+    clock,
+    onError: (error) => bus.emit('error', { where: 'banner', error }),
+    ...(__E2E__ ? { config: e2eBannerConfig(opts.search ?? win?.location?.search ?? '') } : {}),
+  });
   const adFlow = createAdFlow({
     platform,
     clock,

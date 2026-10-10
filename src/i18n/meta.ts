@@ -1,5 +1,6 @@
 // Owner: E (Phase 2b); G2 (Phase 2c: lives are fish, the period and streak keys, the fish currency went;
-// Phase 2c.1: the level points per cat, the perfect-streak keys went)
+// Phase 2c.1: the level points per cat, the perfect-streak keys went); G3 (Phase 2d: the Score column,
+// the mouse, the video badge's name, the level-start toast, the gear's dot)
 // Translator notes per key (phase2b §6.7 step 1): a description, a max length where the layout needs
 // one (chips ≤ 18 chars, buttons ≤ 22, titles ≤ 28) and placeholder notes. The AI-draft brief carries
 // only our English, this file and docs/i18n/glossary.md (never the original game or its strings).
@@ -74,6 +75,7 @@ export const PLACEHOLDER_NOTES: Readonly<Record<string, string>> = {
   at: 'a number of puzzles solved (a milestone)',
   wins: 'puzzles won so far in a group challenge',
   needed: 'puzzles to win for the reward',
+  tool: "a helper's name: 'Kitty' (game.tool.kitty) or 'Hint' (game.tool.hint)",
 };
 
 /** Descriptions by key prefix (the longest matching prefix wins). */
@@ -87,8 +89,9 @@ const GROUPS: readonly (readonly [prefix: string, description: string, maxLength
   ['game.', 'Game screen'],
   ['game.title.', 'Game: the title in the top bar, centred between the safe zone and two round buttons (tight at 320 px)', 18],
   ['game.chip.', 'Game: a rule chip above the board (short, no full stop)', 18],
-  ['game.tool.', 'Game: the hint (bulb) and kitty (paw) buttons under the board'],
+  ['game.tool.', 'Game: the kitty, hint (bulb) and mouse buttons under the board'],
   ['kitty.', 'Toast when the kitty booster cannot run'],
+  ['mouse.', 'Toast when the mouse helper cannot run (the mouse is a small animal, never the computer device)'],
   ['hint.', 'Hint card: explanation sentences (02 §9.1). Rows and columns are numbered from 1'],
   ['unit.', 'Names of rows, columns and colours inside hint sentences (lower case unless your language capitalises nouns)'],
   ['list.', 'List joining for hint sentences: "A and B", "A, B and C"'],
@@ -148,6 +151,18 @@ const NOTES: Readonly<Partial<Record<I18nKey, Partial<KeyMeta>>>> = {
   'home.daily.size': { description: 'Board size', translatable: false },
   'home.daily.sub': { description: 'Daily card second line: size · status', translatable: false },
   'game.cats': { description: 'Cat counter pill: placed / total', translatable: false },
+  // Phase 2d (look-spec Appendix A).
+  'game.score': { description: 'The top bar\'s label over the level points of this level (one short word, about 19 px, centred over the number; never "fish")', maxLength: 10 },
+  'common.settings.new': { description: 'Screen-reader name of the gear button while its red dot shows (something in Settings is new)', maxLength: 40 },
+  'game.tool.mouse': { description: 'Name of the third helper: a little mouse that crosses out a few tiles that cannot hold a cat (an animal, never the computer device)', maxLength: 12 },
+  'game.tool.mouse.a11y': { description: 'Screen-reader name of the mouse button; {count} is 3' },
+  'game.tool.video.a11y': { description: 'Screen-reader name of the kitty or hint button at 0 when a short video can refill it' },
+  'a11y.mouse.one': { description: 'Read once after the mouse crossed out tiles' },
+  'rewarded.title.mouse': { description: 'Title of the pop-up before the mouse helps (a friendly question)', maxLength: 24 },
+  'rewarded.video.mouse': { description: 'Pop-up text: a video, then the mouse crosses out {count} (3) tiles without a cat' },
+  'toast.start.level': { description: 'Level-start toast: a short honest encouragement (never a statistic, never "N % of players")', maxLength: 32 },
+  'toast.start.hard': { description: 'Level-start toast on a Hard level: a short honest encouragement (never a statistic)', maxLength: 32 },
+  'toast.start.retry': { description: 'Level-start toast after Retry: a short honest encouragement (never a statistic)', maxLength: 32 },
   'game.tool.hint': { description: 'Name of the bulb button (screen reader, settings)', maxLength: 14 },
   'game.tool.kitty': { description: 'Name of the paw booster that places one correct cat. Always the same cute word for a little cat, distinct from "cat"', maxLength: 14 },
   'game.tool.free': { description: 'Tiny badge on the bulb when a free hint is available', maxLength: 7 },
@@ -172,7 +187,7 @@ const NOTES: Readonly<Partial<Record<I18nKey, Partial<KeyMeta>>>> = {
   'fail.continue.bonus': { description: 'Badge on the Continue button', translatable: false },
   'fail.retry': { maxLength: 22 },
   'settings.title': { maxLength: 20 },
-  'settings.patterns.note': { maxLength: 60 },
+  'settings.patterns.note': { maxLength: 72 },
   'settings.reduceMotion.system': { description: 'Segment of a three-way switch: follow the device setting', maxLength: 9 },
   'settings.reduceMotion.on': { description: 'Segment of a three-way switch', maxLength: 6 },
   'settings.reduceMotion.off': { description: 'Segment of a three-way switch', maxLength: 6 },
@@ -254,9 +269,10 @@ export const SAME_AS_ENGLISH: Readonly<Partial<Record<LocaleId, readonly I18nKey
   de: ['about.version', 'common.ok', 'home.play', 'game.title.level', 'victory.next', 'shop.title', 'settings.shop', 'glyph.1', 'glyph.6', 'rank.tab.event'],
   fr: ['about.version', 'common.ok', 'points.count.one', 'points.count.other', 'a11y.points.one', 'a11y.points.other', 'glyph.2', 'glyph.8', 'ads.placeholder.title'],
   it: ['common.ok', 'color.3', 'shop.owned'],
-  'pt-BR': [],
-  es: [],
-  id: ['rank.tab.event', 'color.2', 'color.4', 'color.7', 'game.title.level', 'home.play', 'victory.next'],
+  // Phase 2d: "Coral" is the Portuguese and Spanish word too.
+  'pt-BR': ['color.0'],
+  es: ['color.0'],
+  id: ['rank.tab.event', 'color.4', 'game.title.level', 'home.play', 'victory.next'],
   tr: [],
   pl: ['common.ok'],
   vi: [],

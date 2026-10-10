@@ -1,9 +1,12 @@
-// Owner: A (Phase 2b)
+// Owner: A (Phase 2b); G2 (Phase 2d: the X is two white rounded bars, look-spec §1.10)
 // Cell DOM for the board (04 §5.3, 02 §17.4, §18): one <button class="cell"> per cell holding a
-// coloured tile (inset per the even gutters, phase2b §1.5) and one inline SVG with the X strokes, plus
+// coloured tile (inset gap / 2 on every side, look-spec §1.8) and one inline SVG with the X, plus
 // the cat, blink lid and pattern glyph <use>s created on demand. State lives in data-s (e|m|c|w|g).
-// The X (phase2b §1.5): two white strokes (.cell__x) over two edge strokes (.cell__xe) in --xe, the
-// tile colour mixed 70 % toward --ink (xEdgeColor), set per cell. The edge carries WCAG 1.4.11.
+// The X (look-spec §1.10, measured): two white rounded rects (.cell__x) in g.cell__xg (the pop
+// scales the group), layout.mark.armFraction long and barFraction thick on the slot's 100-unit box,
+// corner cornerFraction, rotated ±45° about the centre. Under them two edge rects (.cell__xe), grown by
+// edgeFraction per side and filled with --xe (the tile mixed toward --ink-deep, xEdgeColor), drawn
+// only with Colour patterns on (board.css, D-2d-5). Default: plain white, as the original.
 // Two inert nodes B animates (phase2b §12.3 A → B), styled in board.css: `span.cell__glow` behind the
 // cat (every cell; the solved-board glow) and `use.cell__ear` (href #cat-ear-flick) in the cat group
 // (every cat cell; shown only on .cell.is-flick).
@@ -21,6 +24,7 @@ import type { CellIndex } from '../../engine/types';
 import { CellState } from '../../game/types';
 import { colorName, glyphName, t } from '../../i18n';
 import { xEdgeColor } from '../art/palette';
+import { markRects } from '../art/sprite';
 import type { CatMood } from './board-types';
 import type { CellInsets } from './layout';
 
@@ -150,26 +154,37 @@ export function buildCell(cell: CellIndex, paletteIndex: number, insets: CellIns
   svg.setAttribute('aria-hidden', 'true');
   svg.setAttribute('focusable', 'false');
   svg.style.setProperty('--diag', String(diag));
-  const a = Math.round(((1 - cfg.layout.markScale) / 2) * 100); // 54 % of the cell → 23..77
-  const b = 100 - a;
-  const strokes = [`M${a} ${a} ${b} ${b}`, `M${b} ${a} ${a} ${b}`];
-  // The edge underlay first (both strokes), then the white X: `.cell__x + .cell__x` stays the second stroke.
-  const edgeW = String(Math.round((cfg.layout.markStrokeFraction + 2 * cfg.layout.markEdgeFraction) * 1000) / 10); // 12 + 2 × 4 = 20
-  for (const cls of ['cell__xe', 'cell__x']) {
-    for (const d of strokes) {
-      const p = doc.createElementNS(SVG_NS, 'path');
-      p.setAttribute('class', cls);
-      p.setAttribute('d', d);
-      if (cls === 'cell__xe') p.setAttribute('stroke-width', edgeW);
-      svg.appendChild(p);
-    }
-  }
+  svg.appendChild(markGroup(doc));
   // phase2b §2.2 glow node (inert until B animates it; A styles it in board.css).
   const glow = doc.createElement('span');
   glow.className = 'cell__glow';
   glow.setAttribute('aria-hidden', 'true');
   el.append(tile, glow, svg);
   return { el, tile, svg, index: cell, cat: null, pattern: null };
+}
+
+/** One decimal, no trailing zero (compact attribute values). */
+const num = (v: number): string => String(Math.round(v * 10) / 10);
+
+/** g.cell__xg: two edge rects (.cell__xe, shown with Colour patterns on) under the two white bars (.cell__x). */
+function markGroup(doc: Document): SVGGElement {
+  const g = doc.createElementNS(SVG_NS, 'g');
+  g.setAttribute('class', 'cell__xg');
+  const { bar, edge } = markRects();
+  for (const [cls, b] of [['cell__xe', edge], ['cell__x', bar]] as const) {
+    for (const deg of [45, -45]) {
+      const rect = doc.createElementNS(SVG_NS, 'rect');
+      rect.setAttribute('class', cls);
+      rect.setAttribute('x', num(b[0] as number));
+      rect.setAttribute('y', num(b[1] as number));
+      rect.setAttribute('width', num(b[2] as number));
+      rect.setAttribute('height', num(b[3] as number));
+      rect.setAttribute('rx', num(b[4] as number));
+      rect.setAttribute('transform', `rotate(${deg} 50 50)`);
+      g.appendChild(rect);
+    }
+  }
+  return g;
 }
 
 function makeUse(cls: string, href: string, box: readonly [number, number, number]): SVGUseElement {

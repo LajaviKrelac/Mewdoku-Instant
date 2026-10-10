@@ -220,20 +220,34 @@ svg {
 }
 
 .btn--icon {
-  width: 44px;
-  height: 44px;
-  min-height: 44px;
+  /* Phase 2d (look-spec §1.4, §2.2; measured): a white disc, no border, the warm --shadow-btn and an
+     --ink-icon glyph. Home and the event screen use it at a fixed Ø 37 px; the game bar scales it by
+     s (hud.css). The ::before keeps a transparent 44 × 44 hit area centred on the disc. */
+  width: 37px;
+  height: 37px;
+  min-height: 0;
   padding: 0;
   border-radius: 50%;
   background: var(--card);
-  color: var(--ink);
-  box-shadow: var(--shadow-1);
+  color: var(--ink-icon);
+  box-shadow: var(--shadow-btn);
   --icon-fill: var(--accent-soft);
 }
 
+.btn--icon::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: max(100%, 44px);
+  height: max(100%, 44px);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+}
+
 .btn--icon .btn__icon {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
 }
 
 .btn--icon:active:not([aria-disabled='true']):not(:disabled) {

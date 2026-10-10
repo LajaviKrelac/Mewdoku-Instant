@@ -3,9 +3,11 @@
 // and the in-progress validation against a puzzle. PURE. Re-exported through save.ts.
 // Phase 2c.1 (G1, fish-lives-spec §3.2.3): the in-progress slot's optional level-points fields
 // (points, catStreak, scoredRows); a slot without them is still valid (the save stays v3).
+// Phase 2d (G1, docs/phase2d/look-spec.md §1.15): SaveData.ext.settingsSeen, the settings-dot marker
+// (a finite number ≥ 0, absent = 0; an invalid value is dropped on read; the merge keeps the larger).
 import { cfg, type GameConfig } from '../app/config';
 import type { Puzzle, PuzzleId } from '../engine/types';
-import { CellState, type DailyRecord, type InProgressV2, type LevelBest } from './types';
+import { CellState, type DailyRecord, type InProgressV2, type LevelBest, type SaveData } from './types';
 
 // ─────────────────────────────── guards ───────────────────────────────
 
@@ -122,6 +124,59 @@ export function copySlot(s: InProgressV2, rep?: string[], path = 'inProgress'): 
     if (isNonNegSafeInt(v)) out[k] = v;
     else rep?.push(`${path}.${k}`);
   }
+  return out;
+}
+
+// ─────────────────────────── ext.settingsSeen (phase 2d §1.15) ───────────────────────────
+
+/** The SaveData.ext key of the settings-dot marker (no schema bump: ext is the 04 §4.3 hook). */
+export const SETTINGS_SEEN_KEY = 'settingsSeen';
+
+/** A valid marker: a finite number ≥ 0. */
+export function isSettingsSeen(x: unknown): x is number {
+  return typeof x === 'number' && Number.isFinite(x) && x >= 0;
+}
+
+/**
+ * A copy of a stored `ext` with an invalid settingsSeen dropped (reported as `ext.settingsSeen`);
+ * every other ext key is kept as it is.
+ */
+export function readExt(ext: Record<string, unknown>, rep?: string[]): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...ext };
+  if (SETTINGS_SEEN_KEY in out && !isSettingsSeen(out[SETTINGS_SEEN_KEY])) {
+    delete out[SETTINGS_SEEN_KEY];
+    rep?.push(`ext.${SETTINGS_SEEN_KEY}`);
+  }
+  return out;
+}
+
+/** The settings version the player has seen (absent or invalid = 0). */
+export function settingsSeenOf(save: Pick<SaveData, 'ext'>): number {
+  const v = save.ext[SETTINGS_SEEN_KEY];
+  return isSettingsSeen(v) ? v : 0;
+}
+
+/** The gear's red dot: something in Settings is newer than what the player has seen (settingsDot.version 0: never). */
+export function settingsDotOn(save: Pick<SaveData, 'ext'>, c: GameConfig = cfg): boolean {
+  return settingsSeenOf(save) < c.settingsDot.version;
+}
+
+/** Settings were opened: the marker becomes settingsDot.version (never lowered); the same save when nothing changes. */
+export function markSettingsSeen(save: SaveData, c: GameConfig = cfg): SaveData {
+  const version = c.settingsDot.version;
+  if (!isSettingsSeen(version) || settingsSeenOf(save) >= version) return save;
+  return { ...save, ext: { ...save.ext, [SETTINGS_SEEN_KEY]: version } };
+}
+
+/**
+ * The cloud merge of `ext` (04 §7.3 + phase 2d §1.15): the newer copy's keys, with settingsSeen the
+ * larger of the two copies' valid markers (absent when neither has one).
+ */
+export function mergeExt(local: Pick<SaveData, 'ext'>, cloud: Pick<SaveData, 'ext'>, newer: Pick<SaveData, 'ext'>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...newer.ext };
+  const has = (e: Record<string, unknown>): boolean => isSettingsSeen(e[SETTINGS_SEEN_KEY]);
+  if (has(local.ext) || has(cloud.ext)) out[SETTINGS_SEEN_KEY] = Math.max(settingsSeenOf(local), settingsSeenOf(cloud));
+  else delete out[SETTINGS_SEEN_KEY];
   return out;
 }
 

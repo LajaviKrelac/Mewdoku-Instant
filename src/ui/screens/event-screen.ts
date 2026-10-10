@@ -45,6 +45,8 @@ export interface EventScreenView {
   readonly reducedMotion: boolean;
   /** phase2b §3.2: the banner band is reserved on this screen. */
   readonly bannerReserved: boolean;
+  /** Phase 2d §1.15: the gear's red dot. Required at I-3. */
+  readonly settingsDot?: boolean;
 }
 
 export interface EventScreenCallbacks {

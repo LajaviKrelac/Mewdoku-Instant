@@ -9,12 +9,18 @@
 // Phase 2b: the Home fish pill, event card and banner reserve; the game's event title; and the three
 // new selectors (C → B contract, CONTRACTS-2b §4.3): victory, ranking panel and event screen, plus the
 // personal records shown whenever other players' rankings cannot be (never fabricated, §5.1).
+// Phase 2d (G1, docs/phase2d/look-spec.md §4.3): the game view's helper pulse (§1.11, rule 'auto'),
+// the mouse (§1.12), the video badge (videoRefill), the banner band (§1.16) and the gear's dot
+// (§1.15, also on Home and the event screen).
 import { activeEvent, eventEnd, eventRecord, eventStart, sumRewards, teaserEvent, type EventDef } from '../game/events';
 import { getMode } from '../game/modes';
+import { hasMouseCandidate } from '../game/mouse';
+import { settingsDotOn } from '../game/save';
 import { dailyCardState, isHard, localDateKey, localMidnightAfter, msUntilLocalMidnight } from '../game/progression';
 import { dailySlotFor } from '../game/ramp';
 import { periodTotal } from '../game/scoring';
 import { tutorialAllowsTool, tutorialStep, TUTORIAL_STEP_COUNT, type TutorialStepIndex } from '../game/tutorial';
+import { CellState, type GameState } from '../game/types';
 import type { Capabilities, PlatformId } from '../platform/types';
 import type { BoardHighlight } from '../ui/board/board-view';
 import type { RuleChip } from '../ui/hud/rule-chips';
@@ -78,6 +84,7 @@ export function selectHomeView(state: AppState, ctx: ViewContext, c: GameConfig 
     period: { kind: c.period.kind, total: periodTotal(save, ctx.now, c) },
     event: selectEventCard(state, ctx, c),
     bannerReserved: state.ui.bannerReserved,
+    settingsDot: settingsDotOn(save, c),
   };
 }
 
@@ -126,8 +133,36 @@ export function boardLocked(state: AppState): boolean {
   return modalOverlayOpen(state) || state.ui.inputLocked || state.ui.adShowing;
 }
 
+/** Nothing marked or placed yet: every cell Empty (a given cat is part of the puzzle, not a move). */
+export function untouchedBoard(game: Pick<GameState, 'cells'>): boolean {
+  for (const v of game.cells) if (v !== CellState.Empty && v !== CellState.Given) return false;
+  return true;
+}
+
+/**
+ * Phase 2d §1.11 (D-2d-11): which helper pulses, from fx.helperPulse.target. Never while the attempt
+ * is not playing, an overlay (a modal, the hint card, O2, the coach) is open, in the tutorial, from
+ * the win flow on (status won, chromeLocked), or with reduced motion. 'auto': the kitty while the
+ * board is untouched, otherwise the bulb; 'kitty' / 'bulb' pin one; 'off' none. The chosen helper
+ * pulses only while it is enabled (no fallback to the other one).
+ */
+export function selectPulse(
+  state: AppState,
+  ctx: Pick<ViewContext, 'chromeLocked'>,
+  enabled: { readonly paw: boolean; readonly bulb: boolean },
+  c: GameConfig = cfg,
+): 'paw' | 'bulb' | null {
+  const { game, session, ui } = state;
+  const target = c.fx.helperPulse.target;
+  if (!game || !session || target === 'off') return null;
+  if (game.status !== 'playing' || state.overlays.length > 0 || session.mode === 'tutorial') return null;
+  if (ctx.chromeLocked === true || ui.reducedMotion) return null;
+  const pick: 'paw' | 'bulb' = target === 'kitty' ? 'paw' : target === 'bulb' ? 'bulb' : untouchedBoard(game) ? 'paw' : 'bulb';
+  return enabled[pick] ? pick : null;
+}
+
 /** null when no game is mounted. */
-export function selectGameView(state: AppState, ctx: ViewContext): GameView | null {
+export function selectGameView(state: AppState, ctx: ViewContext, c: GameConfig = cfg): GameView | null {
   const { game, session, save, ui } = state;
   if (!game || !session) return null;
   const mode = getMode(session.mode);
@@ -137,6 +172,10 @@ export function selectGameView(state: AppState, ctx: ViewContext): GameView | nu
   const toolsReady = game.status === 'playing' && !modalOverlayOpen(state) && !ui.inputLocked && !ui.adShowing;
   const bulbAllowed = step === null ? mode.id !== 'tutorial' : tutorialAllowsTool(step, 'bulb');
   const pawAllowed = mode.kittyAllowed && (step === null || tutorialAllowsTool(step, 'paw'));
+  const bulbEnabled = toolsReady && bulbAllowed;
+  const pawEnabled = toolsReady && pawAllowed;
+  // §1.12: shown with cfg.mouse.enabled where the mode allows the kitty, never in the tutorial (any step).
+  const mouseShown = c.mouse.enabled && mode.mouseAllowed && step === null && session.mode !== 'tutorial';
 
   let highlight: BoardHighlight | null = null;
   if (game.status === 'hint' && game.openHint) {
@@ -161,8 +200,8 @@ export function selectGameView(state: AppState, ctx: ViewContext): GameView | nu
     hints: save.stock.hints,
     kitties: save.stock.kitties,
     hintsFree: !mode.chargesHelpers,
-    bulbEnabled: toolsReady && bulbAllowed,
-    pawEnabled: toolsReady && pawAllowed,
+    bulbEnabled,
+    pawEnabled,
     inputLocked: locked,
     board: {
       puzzleId: game.puzzle.id,
@@ -179,6 +218,12 @@ export function selectGameView(state: AppState, ctx: ViewContext): GameView | nu
     reducedMotion: ui.reducedMotion,
     event: session.mode === 'event' && session.event ? { def: session.event.def, index: session.event.index } : null,
     chromeLocked: ctx.chromeLocked === true,
+    // ── phase 2d (§4.3) ──
+    pulse: selectPulse(state, ctx, { paw: pawEnabled, bulb: bulbEnabled }, c),
+    mouse: { shown: mouseShown, enabled: mouseShown && toolsReady && hasMouseCandidate(game) },
+    videoRefill: c.ads.enabled && ctx.capabilities.rewarded,
+    bannerBand: session.bannerBand === true && !save.purchases.noAds,
+    settingsDot: settingsDotOn(save, c),
   };
 }
 
@@ -326,7 +371,7 @@ export function personalRecords(state: AppState, ctx: ViewContext, input: Record
 }
 
 /** The event screen's view (phase2b §4.4), or null when there is no such event running. */
-export function selectEventView(state: AppState, ctx: ViewContext, def?: EventDef | null): EventScreenView | null {
+export function selectEventView(state: AppState, ctx: ViewContext, def?: EventDef | null, c: GameConfig = cfg): EventScreenView | null {
   const ev = def ?? (ctx.events ? activeEvent(ctx.events, ctx.now) : null);
   if (!ev) return null;
   const rec = eventRecord(state.save, ev.id);
@@ -343,5 +388,6 @@ export function selectEventView(state: AppState, ctx: ViewContext, def?: EventDe
     fbSafeZone: ctx.platformId === 'fbig',
     reducedMotion: state.ui.reducedMotion,
     bannerReserved: state.ui.bannerReserved,
+    settingsDot: settingsDotOn(state.save, c),
   };
 }

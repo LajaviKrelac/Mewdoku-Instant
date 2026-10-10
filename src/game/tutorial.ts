@@ -1,13 +1,18 @@
 // Owner: C (Phase 2b; was game)
 // The tutorial board, fixed colours and the six-step script (02 §11.5, 04 §4.2 "Tutorial input filter").
+// Phase 2d (G1, docs/phase2d/look-spec.md §1.9, §1.12): the fixed colours are four of the core
+// (measured) colours; the mouse helper is never offered and its MOUSE action is ignored.
 import type { CellIndex, LevelRecord, Puzzle } from '../engine/types';
 import { CellState, type Action, type GameState } from './types';
 
 export const TUTORIAL_ID = 'T1' as const;
 /** Record for Level 1 (02 §11.5); pack-000 holds the same record with i = 1. */
 export const TUTORIAL_RECORD: LevelRecord = Object.freeze({ i: 1, n: 4, r: 'ABCCAACCADDCDDDD', s: '1302', g: 1, e: 8, h: 0, gv: '', tut: 1 });
-/** Palette indices for regions A, B, C, D: Mint, Violet, Mustard, Coral (02 §11.5). */
-export const TUTORIAL_COLORS: readonly number[] = Object.freeze([4, 7, 2, 0]);
+/**
+ * Palette indices for regions A, B, C, D: Lime, Violet, Mustard, Coral (02 §11.5; phase 2d §1.9: all
+ * four in PALETTE_CORE, the colours measured on the user's recording; step 1 names index 7, Violet).
+ */
+export const TUTORIAL_COLORS: readonly number[] = Object.freeze([3, 7, 2, 0]);
 export const TUTORIAL_STEP_COUNT = 6;
 
 export type TutorialStepIndex = 1 | 2 | 3 | 4 | 5 | 6;
@@ -38,7 +43,7 @@ const at = (row: number, col: number): CellIndex => (row - 1) * N + (col - 1);
 
 /** Targets of the script (02 §11.5 table). */
 export const TUTORIAL_CELLS = Object.freeze({
-  lavender: at(1, 2), // step 1
+  violet: at(1, 2), // step 1 (the Violet region, TUTORIAL_COLORS[1])
   swipe: Object.freeze([at(2, 1), at(2, 2), at(2, 3)]), // step 3
   row2Cat: at(2, 4), // step 4
   hintCat: at(3, 1), // step 5 (placed by the hint's Apply)
@@ -80,7 +85,7 @@ function colCells(col: number): CellIndex[] {
 }
 
 const STEPS: readonly TutorialStepDef[] = Object.freeze([
-  { index: 1, focusCells: [TUTORIAL_CELLS.lavender], target: 'cells', hand: 'double_tap', gotIt: false, colorParam: 7 },
+  { index: 1, focusCells: [TUTORIAL_CELLS.violet], target: 'cells', hand: 'double_tap', gotIt: false, colorParam: 7 },
   {
     index: 2,
     focusCells: [...new Set([...rowCells(0), ...colCells(1)])].sort((a, b) => a - b),
@@ -132,7 +137,8 @@ function pulseFirst(cells: readonly CellIndex[]): TutorialFilterResult {
  * Runs BEFORE reduce() while the mode is tutorial (02 §11.5 "Accepted input"). Board actions outside
  * the step's accepted input only pulse (no state change, no heart lost). Non-board actions: START,
  * TICK and KITTY_DONE always pass; the hint actions pass only in step 5 (HINT_OPEN forced uncharged,
- * 02 §9.3; HINT_CLOSE ignored: "then Apply only"); KITTY, REVIVE and RETRY are ignored.
+ * 02 §9.3; HINT_CLOSE ignored: "then Apply only"); KITTY, REVIVE, RETRY and MOUSE (phase 2d §1.12:
+ * the tutorial never offers the mouse) are ignored.
  */
 export function filterTutorialAction(step: TutorialStepIndex, state: GameState, action: Action): TutorialFilterResult {
   switch (action.type) {
@@ -148,13 +154,14 @@ export function filterTutorialAction(step: TutorialStepIndex, state: GameState, 
     case 'KITTY':
     case 'REVIVE':
     case 'RETRY':
+    case 'MOUSE':
       return null;
     default:
       break;
   }
   switch (step) {
     case 1:
-      return singleTarget(TUTORIAL_CELLS.lavender, action);
+      return singleTarget(TUTORIAL_CELLS.violet, action);
     case 3:
       return filterSwipeStep(state, action);
     case 4:
@@ -221,7 +228,7 @@ export function advance(
   }
   switch (step) {
     case 1:
-      return isCat(state, TUTORIAL_CELLS.lavender) ? { next: 2, scriptedMarks: [] } : null;
+      return isCat(state, TUTORIAL_CELLS.violet) ? { next: 2, scriptedMarks: [] } : null;
     case 2:
       return null; // waits for 'got_it'
     case 3:
@@ -241,7 +248,7 @@ export function advance(
   }
 }
 
-/** Whether the bulb / paw may be used at this step (bulb only in step 5; paw never). */
-export function tutorialAllowsTool(step: TutorialStepIndex, tool: 'bulb' | 'paw'): boolean {
+/** Whether the bulb / paw / mouse may be used at this step (bulb only in step 5; paw and mouse never). */
+export function tutorialAllowsTool(step: TutorialStepIndex, tool: 'bulb' | 'paw' | 'mouse'): boolean {
   return tool === 'bulb' && step === 5;
 }

@@ -88,10 +88,10 @@
   box-shadow: inset 0 0 0 1px rgba(var(--ink-rgb), 0.3); vertical-align: -0.06em; }
 
 /* O2 rewarded prompt */
+/* Phase 2d: the helper's full-colour art on a white disc with the round buttons' warm shadow. */
 .rewarded__icon { display: flex; align-items: center; justify-content: center; width: 72px; height: 72px; margin: 0 auto 12px;
-  border-radius: 50%; background: var(--accent-soft); color: var(--accent-deep); }
-.rewarded__icon .icon { width: 40px; height: 40px; }
-.rewarded[data-placement='hint'] .rewarded__icon { background: var(--gold-soft); color: var(--gold-deep); }
+  border-radius: 50%; background: var(--card); box-shadow: var(--shadow-btn); }
+.rewarded__icon .icon { width: 44px; height: 44px; }
 
 /* O4 fail: content on the dark scrim (the Phase 2 O3 win overlay was replaced by the ranking panel
    and the victory screen in 2b and removed at integration). */
@@ -158,7 +158,10 @@
 .howto__note-icon--fish { flex: none; width: 22px; margin-inline-start: -1px; margin-inline-end: 9px; }
 .howto__note-icon--trophy,
 .howto__note-icon--points { color: var(--ink); --icon-fill: var(--gold); }
-.howto__note-icon--bulb { color: var(--gold-deep); }
+/* Phase 2d: the helpers note shows the three helpers' art in a column (kitty, bulb, mouse). */
+.howto__helper-art { display: flex; flex-direction: column; height: auto; }
+.howto__helper-art .icon { width: 20px; height: 20px; }
+.howto__helper-art .icon + .icon { margin-top: 3px; }
 /* Keyboard controls: only where a keyboard is likely (a mouse or trackpad is present). */
 .howto__notes .howto__keys { display: none; }
 @media (any-pointer: fine) { .howto__notes .howto__keys { display: flex; } }
@@ -191,6 +194,12 @@
 /* A modal above the coach (hint card in step 5, Settings, How to play): the router makes the coach
    inert; its card, hand, rings and dim disappear until the modal closes (UX-01, UX-07, SPEC-04). */
 .coach[inert] { visibility: hidden; }
+
+/* Phase 2d §1.16 (critic C11): while a banner may show in play (game-screen.ts publishes the band on
+   <html>), the hint card, the rewarded prompt and the fail overlay keep their controls above it. */
+:root[data-play-band='1'] .overlay[data-overlay='hint'],
+:root[data-play-band='1'] .overlay[data-overlay='rewarded'],
+:root[data-play-band='1'] .overlay[data-overlay='fail'] { padding-bottom: calc(12px + var(--play-band) + var(--play-band-bottom)); }
 
 /* FBIG (review UX-9): a card flipped to the top starts its content below the FB safe zone; the
    flip decision counts the taller card (hint-card.ts fbTopInset). */

@@ -30,8 +30,11 @@ export interface Capabilities {
 export type AdKind = 'interstitial' | 'rewarded';
 /** phase2b §3.2 adds `event_next` (lead-approved F0 widening). */
 export type InterstitialPlacement = 'next_level' | 'retry' | 'daily_done' | 'event_next';
-/** phase2b §5.6 adds `group_double` (lead-approved F0 widening). */
-export type RewardedPlacement = 'hint' | 'kitty' | 'revive' | 'group_double';
+/**
+ * phase2b §5.6 adds `group_double` (lead-approved F0 widening). Phase 2d (look-spec §1.12): + 'mouse',
+ * the third helper (one video per use; the FB adapter uses the one rewarded placement ID for all).
+ */
+export type RewardedPlacement = 'hint' | 'kitty' | 'revive' | 'group_double' | 'mouse';
 export type AdPlacement = InterstitialPlacement | RewardedPlacement;
 export type AdFailReason = 'unsupported' | 'no_fill' | 'not_ready' | 'skipped' | 'rate_limited' | 'timeout' | 'error';
 export type AdResult =
@@ -110,7 +113,7 @@ export interface PlatformAds {
    * (loadBannerAdAsync + hideBannerAdAsync supported, VITE_FB_PLACEMENT_BANNER set); capabilities().banner
    * mirrors it. `show` loads and shows in one call (Meta's API); a call inside Meta's 45 s window answers
    * { ok: false, reason: 'rate_limited' }. `unsupported` latches the banner off for the session. Never rejects.
-   * The app (banner-flow.ts) owns where and when: never on the game screen.
+   * The app (banner-flow.ts) owns where and when (phase 2d §1.16: the game screen too, with ads.banner.duringPlay).
    */
   banner?: {
     show(position: 'bottom'): Promise<AdResult>;

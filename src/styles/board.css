@@ -1,14 +1,16 @@
-/* Owner: A (Phase 2b)
-   The Classic board (phase2b §1.5): a white card (padding 10, radius 18, soft shadow), rounded flat
-   tiles (radius 20 % of the slot) with even white gutters (2 px insets, 1.5 px below a 30 px slot), no
-   grid lines or region strokes; the white X over its tinted edge; Tux at 0.84 × slot; the solved-board
-   glow. Glyph states (data-s), region fade (data-done) (02 §17.4, 04 §5.3). Tokens only.
+/* Owner: A (Phase 2b); G2 (Phase 2d: the measured card, tiles and X, look-spec §1.8, §1.10)
+   The board (look-spec §1.8): a white card with NO shadow and no border (padding --pad and radius
+   --board-radius from computeLayout × s), flat tiles with even white gutters (every tile inset
+   gap / 2, gap = 7.9 % of the slot) and a corner radius of 11 % of the tile, no grid lines or region
+   strokes; the X as two plain white rounded bars (its dark edge only with Colour patterns on); Tux at
+   0.84 × slot; the solved-board glow. Glyph states (data-s), region fade (data-done) (02 §17.4,
+   04 §5.3). Tokens only.
    DOM (ui/board/board-view.ts, board-cells.ts):
      .board[role=grid][data-mood][data-hl][data-patterns][aria-disabled]
-         (--n --slot --pad --it --ir --ib --il --entry-*; ::after = the input-lock layer)
+         (--n --slot --pad --gap --cell-r --board-radius --it --ir --ib --il --entry-*; ::after = the input-lock layer)
        > .board__row[role=row] > button.cell[data-i][data-s=e|m|c|w|g][data-done][data-f][data-ghost][data-mood] (--xe)
            > .cell__tile (--c --diag) + .cell__glow + svg.cell__g (--diag --breathe-delay)
-               > .cell__pat? .cell__xe ×2 .cell__x ×2 .cell__catg?(.cell__cat .cell__blink (--blink-dur --blink-delay) .cell__ear)
+               > .cell__pat? g.cell__xg(rect.cell__xe ×2, rect.cell__x ×2) .cell__catg?(.cell__cat .cell__blink (--blink-dur --blink-delay) .cell__ear)
    Custom properties sit on the element that uses them (review PERF-1): the even insets and the entry
    timing once on .board; --diag, --breathe-delay, --blink-dur and --blink-delay are registered as
    non-inherited (board-cells.ts registerCellProperties: 0 / 0ms / 5s / 0ms), and their var()
@@ -25,9 +27,9 @@
   width: calc(var(--slot) * var(--n) + 2 * var(--pad));
   height: calc(var(--slot) * var(--n) + 2 * var(--pad));
   padding: var(--pad);
-  border-radius: var(--board-radius, 18px);
+  border-radius: var(--board-radius, 11.6px);
   background: var(--board-card);
-  box-shadow: var(--shadow-card);
+  /* Phase 2d: no shadow and no border (measured, look-spec §1.8). */
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
@@ -67,7 +69,8 @@
   right: var(--ir);
   bottom: var(--ib);
   left: var(--il);
-  border-radius: calc(var(--slot) * var(--cell-r, 0.2));
+  /* --cell-r = tileRadiusFraction × (slot − gap) / slot (board-view setSlot): 11 % of the tile edge. */
+  border-radius: calc(var(--slot) * var(--cell-r, 0.1));
   background: var(--c);
 }
 
@@ -118,59 +121,61 @@
   z-index: 2;
 }
 
-/* The X mark (phase2b §1.5): a white X, round caps, 54 % of the cell (23→77), stroke 12 units, over an
-   edge stroke of 12 + 2 × 4 = 20 units in --xe (the tile mixed 70 % toward --ink; its stroke-width is
-   set from cfg.layout by board-cells.ts). White alone is only 1.23–2.39:1 on our tiles, so the edge
-   carries WCAG 1.4.11 (≥ 3.32:1 on every tile; white vs edge ≥ 6.27, scripts/palette-check.ts).
-   --mark-w, --mark-op and --x-len come from cfg.layout (board-view.ts applyRenderVars). */
+/* The X (look-spec §1.10, measured on the user's recording): two white rounded bars (board-cells.ts
+   markRects: 69 × 18.2 units on the slot's 100-unit box, corner 6, rotated ±45°), opaque, no outline
+   and no shadow. With Colour patterns on, two edge rects grown by 3.5 units per side sit under them in
+   --xe (the tile mixed toward --ink-deep: ≥ 3.24:1 on every tile, white on it ≥ 9.82; D-2d-5); without
+   patterns the white X alone is a recorded parity exception (D-2d-6), the cell's name says "crossed out". */
 .cell__x,
 .cell__xe {
   display: none;
-  fill: none;
-  stroke-linecap: round;
-  stroke-dasharray: var(--x-len, 77);
-  stroke-dashoffset: 0;
 }
 
 .cell__x {
-  stroke: #fff;
-  stroke-width: var(--mark-w, 12);
-  opacity: var(--mark-op, 1);
+  fill: #fff;
 }
 
 .cell__xe {
-  stroke: var(--xe, var(--ink));
+  fill: var(--xe, var(--ink-deep));
 }
 
 .cell[data-s='m'] .cell__x,
-.cell[data-s='m'] .cell__xe {
+.board[data-patterns] .cell[data-s='m'] .cell__xe {
   display: inline;
 }
 
-/* The edge draws in with the white X (same timing as fx.css's x-draw on .cell__x). */
-.cell.fx-draw .cell__xe {
-  animation: xe-draw var(--x-draw-ms, 85ms) ease-out both;
+/* The pop (look-spec §1.10): a new X scales 0.6 → 1.06 → 1 over fx.markPopMs about the cell centre
+   (board-view.ts adds .fx-pop; the mouse's X's are staggered there, waiting under .fx-pend). Reduced
+   motion: no pop. */
+.cell__xg {
+  transform-box: view-box;
+  transform-origin: 50px 50px;
 }
 
-.cell.fx-draw .cell__xe + .cell__xe {
-  animation-delay: var(--x-draw-gap, 35ms);
+.cell.fx-pop .cell__xg {
+  animation: x-pop var(--x-pop-ms, 140ms) ease-out both;
 }
 
-@keyframes xe-draw {
-  from {
-    stroke-dashoffset: var(--x-len, 77);
+.cell.fx-pend .cell__xg {
+  visibility: hidden;
+}
+
+@keyframes x-pop {
+  0% {
+    transform: scale(0.6);
   }
-  to {
-    stroke-dashoffset: 0;
+  60% {
+    transform: scale(1.06);
+  }
+  100% {
+    transform: scale(1);
   }
 }
 
-/* Wrong: --wrong X at full opacity plus a 2 px inner ring (02 §17.4, contrast-checked); no white X. */
+/* Wrong: the same two bars in --wrong (≥ 3.41:1 on every tile) plus a 2 px inner ring; no white X. */
 .cell[data-s='w'] .cell__x {
   display: inline;
-  stroke: var(--wrong);
-  stroke-width: 11;
-  opacity: 1;
+  fill: var(--wrong);
 }
 
 .cell[data-s='w'] .cell__tile {
@@ -209,12 +214,12 @@
 }
 
 /* Colour patterns (02 §18): a 22 % glyph in the tile's top-left corner, ≥ 3:1 against every tile,
-   faded or not (WCAG 1.4.11; opacities from cfg.layout via --pat-op / --pat-op-done, checked by
-   scripts/palette-check.ts). On small slots (11×11, 12×12 on a phone) --pat-k scales the glyph up
+   faded or not (WCAG 1.4.11; --ink-deep at the opacities from cfg.layout via --pat-op / --pat-op-done,
+   checked by scripts/palette-check.ts). On small slots (11×11, 12×12 on a phone) --pat-k scales the glyph up
    to cfg.layout.patternMinPx so the shapes stay tellable apart (board-view.ts setSlot). */
 .cell__pat {
   display: none;
-  color: var(--ink);
+  color: var(--ink-deep);
   opacity: var(--pat-op, 0.85);
   transform-box: view-box;
   transform-origin: 12px 12px;
@@ -307,9 +312,10 @@
   animation: coach-ring 1.3s ease-in-out infinite;
 }
 
-/* Ghost X on Empty effect cells: what Apply would cross out (the white X and its edge, faint). */
+/* Ghost X on Empty effect cells: what Apply would cross out (the white bars, faint; their edge too
+   with Colour patterns on). */
 .cell[data-ghost='x'][data-s='e'] .cell__x,
-.cell[data-ghost='x'][data-s='e'] .cell__xe {
+.board[data-patterns] .cell[data-ghost='x'][data-s='e'] .cell__xe {
   display: inline;
   opacity: 0.4;
   animation: ghost-pulse 1.2s ease-in-out infinite;

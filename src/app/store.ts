@@ -136,6 +136,12 @@ export interface SessionMeta {
   readonly substitute: boolean;
   /** Event mode (phase2b §4.4): the event and the puzzle index (0-based); absent or null otherwise. */
   readonly event?: { readonly def: EventDef; readonly index: number } | null;
+  /**
+   * Phase 2d §1.16: the banner gate said a banner may show on this game screen when it mounted
+   * (BannerFlow.eligible('game')), so the band is reserved from the first frame and the board never
+   * jumps mid-level; only No Ads (bought meanwhile) takes the band away. Absent = false.
+   */
+  readonly bannerBand?: boolean;
 }
 
 export interface UiState {

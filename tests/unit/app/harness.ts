@@ -15,7 +15,7 @@ import { defaults } from '../../../src/game/save';
 import { tutorialPuzzle } from '../../../src/game/tutorial';
 import type { SaveData } from '../../../src/game/types';
 import type { AdResult, Capabilities, PlatformAdapter, RawSave } from '../../../src/platform/types';
-import type { GameScreen, GameScreenCallbacks, GameView } from '../../../src/ui/screens/game-screen';
+import type { GameScreen, GameScreenCallbacks, GameView, StartToastKind } from '../../../src/ui/screens/game-screen';
 import type { EventScreenCallbacks, EventScreenView } from '../../../src/ui/screens/event-screen';
 import type { HomeCallbacks, HomeView } from '../../../src/ui/screens/home-screen';
 import { createEngineClient, type EngineClient } from '../../../src/workers/engine-client';
@@ -147,6 +147,8 @@ export interface FakeGameScreen extends GameScreen {
   readonly departed: number[];
   /** phase2c §2.2: showPeriodCounter(total) calls, in order. */
   readonly counters: number[];
+  /** Phase 2d §1.14: playStartToast(kind) calls, in order. */
+  readonly startToasts: StartToastKind[];
 }
 
 export interface FakeRouter extends Router {
@@ -227,6 +229,7 @@ export function createFakeRouter(bus: AppBus, log: Log): FakeRouter {
         scrims: 0,
         departed: [],
         counters: [],
+        startToasts: [],
         update: (v) => void (g.last = v),
         destroy: () => undefined,
         playEvent: (ev) => void g.played.push(ev.type),
@@ -243,6 +246,10 @@ export function createFakeRouter(bus: AppBus, log: Log): FakeRouter {
         periodLabel: () => undefined,
         glow: () => ({ done: Promise.resolve(), cancel: () => undefined, finish: () => undefined }),
         showScrim: () => void g.scrims++,
+        playStartToast: (kind) => {
+          g.startToasts.push(kind);
+          log.push(`startToast:${kind}`);
+        },
       };
       r.game = g;
       bus.emit('screen', { screen: 'game' });

@@ -1,21 +1,25 @@
-/* Owner: A (Phase 2b; was ui-board)
-   The one token set of the Classic look (phase2b §1.3, §1.4): our own values (R6: nothing sampled
-   from the original). Mirrors ui/art/palette.ts (TOKENS, PALETTE, CAT_COLORS, EVENT_THEME_TOKENS);
+/* Owner: A (Phase 2b; was ui-board); G2 (Phase 2d: the measured page, ink and palette, look-spec §1.2)
+   The one token set (phase2b §1.3, §1.4; look-spec §1.2, §1.9). Phase 2d (D-2d-0, user decision
+   2026-10-10): the page, card, ink, icon ink, region, fish, badge, dot, toast and rule-card colours
+   are sampled from the user's own screenshot of the original's game screen (darkened only where a
+   contrast floor needs it, D-2d-17); the rest are ours. Mirrors ui/art/palette.ts (TOKENS, PALETTE, CAT_COLORS, EVENT_THEME_TOKENS);
    scripts/palette-check.ts validates the pairs. This is the ONLY stylesheet with colour literals
    (tests/unit/ui/css-rules.spec.ts): every other file uses these tokens. Tinted shadows and glows use
    the RGB triplets, as rgba(var(--accent-rgb), .28). Region palette as --r0…--r11 (palette index).
    Also here: the per-script display stacks (§6.6) and the [data-event-theme] blocks (§4.4). */
 :root {
-  /* ── Page, cards, ink (phase2b §1.4) ─────────────────────────────────── */
-  --page: #faf6f0; /* off-white page */
-  --page-2: #f1eadf; /* wells, desktop side fill */
-  --card: #ffffff; /* board card, pills, sheets */
+  /* ── Page, cards, ink (look-spec §1.2) ───────────────────────────────── */
+  --page: #f7f2ef; /* measured page */
+  --page-2: #f2ebe6; /* wells, desktop side fill (one step below the page) */
+  --card: #ffffff; /* board card, pills, rules container, discs, sheets */
   --board-card: var(--card); /* the board card (an event may tint it) */
-  --ink: #2f2a35; /* text, outlines: 12.97:1 on --page */
-  --ink-2: #665e6c; /* secondary text: 5.77 on --page, 5.20 on --page-2 */
-  --ink-3: #b2aab4; /* disabled, hairlines (no text) */
-  --line: rgba(47, 42, 53, 0.1);
-  --line-2: rgba(47, 42, 53, 0.16);
+  --ink: #935a5a; /* measured mauve-brown: every text, 4.91 on --page, 5.45 on --card */
+  --ink-2: #935a5a; /* secondary text (the original shows one text colour) */
+  --ink-3: #cdbab6; /* disabled, hairlines (no text) */
+  --ink-icon: #996767; /* measured: icons in the white round buttons, 4.68 on --card (graphic) */
+  --ink-deep: #2f2a35; /* the 2c.1 ink: pattern glyphs, the X edge (patterns on), "Free" on gold */
+  --line: rgba(147, 90, 90, 0.14);
+  --line-2: rgba(147, 90, 90, 0.22);
 
   /* ── Orange accent ───────────────────────────────────────────────────── */
   --accent: #e57010; /* primary fill, hint ring; white labels on it only at ≥ 24 px (3.15:1) */
@@ -40,39 +44,52 @@
   --gold-deep: #dd9a12; /* icon strokes on gold */
   --gold-soft: #fff4d6; /* gold icon wells */
   --amber-text: #8a5a00; /* gold-family text on white (≥ 4.5:1) */
-  --fish: #ffb81f;
-  --fish-deep: #c98200;
-  --fish-hi: #ffe08a;
+  --fish: #f1aa22; /* measured fish body */
+  --fish-deep: #d47e18; /* measured #d8811a, one step darker for 3:1 on white */
+  --fish-hi: #fed95d; /* measured highlight */
   --glow: rgba(255, 194, 61, 0.65); /* the solved-board glow */
   --glow-0: rgba(255, 194, 61, 0); /* the same, transparent (gradient end) */
 
   /* ── Status ──────────────────────────────────────────────────────────── */
   --life-empty: #ede8e2; /* Phase 2c: the pale wash inside an empty life (icon-fish-empty) */
   --danger: #d33a4a; /* error flash */
-  --wrong: #a3193a; /* wrong-X glyph + ring: ≥ 3.18:1 on every tile */
+  --wrong: #6e0e25; /* wrong-X glyph + ring: ≥ 3.41:1 on every tile, 6.00 faded */
   --hard: #6c3fb5; /* Hard badge: white on it 6.96 */
 
+  /* ── Phase 2d HUD colours (look-spec §1.2; measured unless noted) ─────── */
+  --badge: #dc2f2f; /* count badges: measured #e93636 darkened for white digits 4.68 */
+  --badge-video: #03a84a; /* "watch a video" badge: measured #02be52 darkened, white mark 3.13 */
+  --dot: #f34f4f; /* the gear's red dot */
+  --toast-fill: #fef0c7; /* level-start toast */
+  --toast-line: #dd9045;
+  --rule-card: #fbf4ee; /* rule card fill: --ink on it 5.01 */
+  --rule-tile: #ddbeaa; /* mini-diagram tile (decorative) */
+  --rule-tile-2: #eee1d7; /* ours: the lighter "other region" tile */
+  --rule-mark: #af6d44; /* mini-diagram X box: white X on it 4.12 */
+
   /* ── RGB triplets for tinted shadows and glows ───────────────────────── */
-  --ink-rgb: 47, 42, 53;
+  --ink-rgb: 147, 90, 90;
   --accent-rgb: 229, 112, 16;
   --accent-shadow-rgb: 120, 50, 0; /* primary label text-shadow at .35 */
   --gold-rgb: 255, 194, 61;
-  --page-rgb: 250, 246, 240;
+  --page-rgb: 247, 242, 239;
   --scrim-rgb: 28, 23, 32;
+  --warm-rgb: 239, 134, 39; /* measured fit: the round buttons' warm shadow */
+  --pulse-rgb: 255, 165, 30; /* measured fit: the helper pulse glow */
 
-  /* ── Region palette (02 §17.2), by palette index ─────────────────────── */
-  --r0: #f49aae; /* Coral */
-  --r1: #f7b98b; /* Apricot */
-  --r2: #f2dc7c; /* Mustard */
-  --r3: #bfdb86; /* Lime */
-  --r4: #8fd6b8; /* Mint */
-  --r5: #7cc6d6; /* Lagoon */
-  --r6: #9bbdf0; /* Sky */
-  --r7: #b9a7ec; /* Violet */
-  --r8: #e3a6df; /* Orchid */
-  --r9: #c7a58c; /* Cocoa */
-  --r10: #9aa9bc; /* Slate */
-  --r11: #a3b57f; /* Pink */
+  /* ── Region palette (look-spec §1.9), by palette index: 10 measured, Mint and Cocoa ours ── */
+  --r0: #d57374; /* Coral */
+  --r1: #ffaa6d; /* Apricot */
+  --r2: #e4bb49; /* Mustard */
+  --r3: #aed994; /* Lime */
+  --r4: #52a982; /* Mint (ours, 12×12 only) */
+  --r5: #48b5b2; /* Lagoon */
+  --r6: #6bbce7; /* Sky */
+  --r7: #9778d6; /* Violet */
+  --r8: #eb85b7; /* Orchid */
+  --r9: #b0855a; /* Cocoa (ours, 11×11 and 12×12) */
+  --r10: #a7bfd7; /* Slate */
+  --r11: #fab4d0; /* Pink */
 
   /* ── Tux (phase2b §1.6; the art itself carries these in ui/art/palette.ts CAT_COLORS) ── */
   --cat-fur: #2e2a33;
@@ -114,7 +131,11 @@
   --shadow-1: 0 1px 2px rgba(var(--ink-rgb), 0.06), 0 2px 8px rgba(var(--ink-rgb), 0.07);
   --shadow-2: 0 2px 4px rgba(var(--ink-rgb), 0.05), 0 10px 28px rgba(var(--ink-rgb), 0.1);
   --shadow-3: 0 18px 50px rgba(var(--scrim-rgb), 0.28);
-  --shadow-card: 0 2px 0 rgba(var(--ink-rgb), 0.05), 0 10px 26px rgba(var(--ink-rgb), 0.08); /* board card (§1.5) */
+  --shadow-card: 0 2px 0 rgba(var(--ink-rgb), 0.05), 0 10px 26px rgba(var(--ink-rgb), 0.08); /* sheets (not the board, 2d) */
+  /* Phase 2d (look-spec §1.2, measured fits): the round buttons' warm shadow (× s on the game screen
+     through its --s) and the heads pill's faint one. */
+  --shadow-btn: 0 calc(3px * var(--s, 1)) calc(7px * var(--s, 1)) calc(-2px * var(--s, 1)) rgba(var(--warm-rgb), 0.25);
+  --shadow-pill: 0 2px 6px rgba(var(--ink-rgb), 0.06);
 
   /* ── Layout (02 §19; the game screen overwrites these from computeLayout) ── */
   --gutter: 16px;
@@ -127,8 +148,11 @@
   --fb-safe: 64px;
   --focus-ring: 3px;
   --banner-reserve: 58px; /* = cfg.ads.banner.reservePx (phase2b §3.2; a test keeps them equal) */
-  --safe-top: env(safe-area-inset-top, 0px);
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  /* Phase 2d (look-spec §1.1): dev and e2e builds may set --dev-safe-top / --dev-safe-bottom on :root
+     to stand in for a device's safe areas (layout.ts readViewport's probe does the same); never set in
+     production. */
+  --safe-top: max(env(safe-area-inset-top, 0px), var(--dev-safe-top, 0px));
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--dev-safe-bottom, 0px));
 
   /* ── Motion (02 §17.5) ───────────────────────────────────────────────── */
   --t-draw: 120ms;
@@ -190,21 +214,21 @@
    the faded tiles on each page. */
 [data-event-theme='lantern-walk-2026'] {
   --page: #fff4e6;
-  --page-art: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='72' viewBox='0 0 72 72'%3E%3Cpath d='M18 9V14' stroke='%23FDEDDC' stroke-width='1.4'/%3E%3Cellipse cx='18' cy='22' rx='6.4' ry='7.6' fill='%23FCE3CA'/%3E%3Crect x='14.4' y='12.6' width='7.2' height='2.6' rx='1' fill='%23FDEDDC'/%3E%3Crect x='14.4' y='28.8' width='7.2' height='2.6' rx='1' fill='%23FDEDDC'/%3E%3Cpath d='M18 15V29' stroke='%23FDEDDC' stroke-width='1'/%3E%3Cpath d='M54 45.6V49.6' stroke='%23FDEDDC' stroke-width='1.11'/%3E%3Cellipse cx='54' cy='56' rx='5.12' ry='6.08' fill='%23FCE3CA'/%3E%3Crect x='51.12' y='48.48' width='5.76' height='2.08' rx='0.8' fill='%23FDEDDC'/%3E%3Crect x='51.12' y='61.44' width='5.76' height='2.08' rx='0.8' fill='%23FDEDDC'/%3E%3Cpath d='M54 50.4V61.6' stroke='%23FDEDDC' stroke-width='0.8'/%3E%3Ccircle cx='52' cy='16' r='1.6' fill='%23FDEDDC'/%3E%3Ccircle cx='16' cy='58' r='1.3' fill='%23FDEDDC'/%3E%3C/svg%3E");
+  --page-art: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='72' viewBox='0 0 72 72'%3E%3Cpath d='M18 9V14' stroke='%23FDEDDC' stroke-width='1.4'/%3E%3Cellipse cx='18' cy='22' rx='6.4' ry='7.6' fill='%23FCE7D2'/%3E%3Crect x='14.4' y='12.6' width='7.2' height='2.6' rx='1' fill='%23FDEDDC'/%3E%3Crect x='14.4' y='28.8' width='7.2' height='2.6' rx='1' fill='%23FDEDDC'/%3E%3Cpath d='M18 15V29' stroke='%23FDEDDC' stroke-width='1'/%3E%3Cpath d='M54 45.6V49.6' stroke='%23FDEDDC' stroke-width='1.11'/%3E%3Cellipse cx='54' cy='56' rx='5.12' ry='6.08' fill='%23FCE7D2'/%3E%3Crect x='51.12' y='48.48' width='5.76' height='2.08' rx='0.8' fill='%23FDEDDC'/%3E%3Crect x='51.12' y='61.44' width='5.76' height='2.08' rx='0.8' fill='%23FDEDDC'/%3E%3Cpath d='M54 50.4V61.6' stroke='%23FDEDDC' stroke-width='0.8'/%3E%3Ccircle cx='52' cy='16' r='1.6' fill='%23FDEDDC'/%3E%3Ccircle cx='16' cy='58' r='1.3' fill='%23FDEDDC'/%3E%3C/svg%3E");
   --board-card: #ffffff;
   --glow: rgba(255, 170, 60, 0.65);
   --glow-0: rgba(255, 170, 60, 0);
 }
 [data-event-theme='snow-paws-2026'] {
   --page: #f3f6fa;
-  --page-art: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='72' viewBox='0 0 72 72'%3E%3Cpath d='M18 20L28.0 20.0M23.5 20.0L25.8 21.9M23.5 20.0L25.8 18.1M18 20L23.0 28.7M20.8 24.8L20.2 27.7M20.8 24.8L23.6 25.8M18 20L13.0 28.7M15.3 24.8L12.4 25.8M15.3 24.8L15.8 27.7M18 20L8.0 20.0M12.5 20.0L10.2 18.1M12.5 20.0L10.2 21.9M18 20L13.0 11.3M15.2 15.2L15.8 12.3M15.2 15.2L12.4 14.2M18 20L23.0 11.3M20.8 15.2L23.6 14.2M20.8 15.2L20.2 12.3' stroke='%23E0E8F3' stroke-width='1.8' stroke-linecap='round' fill='none'/%3E%3Cpath d='M54 54L61.5 54.0M58.1 54.0L59.8 55.4M58.1 54.0L59.8 52.6M54 54L57.8 60.5M56.1 57.6L55.7 59.8M56.1 57.6L58.2 58.3M54 54L50.3 60.5M51.9 57.6L49.8 58.3M51.9 57.6L52.3 59.8M54 54L46.5 54.0M49.9 54.0L48.2 52.6M49.9 54.0L48.2 55.4M54 54L50.3 47.5M51.9 50.4L52.3 48.2M51.9 50.4L49.8 49.7M54 54L57.8 47.5M56.1 50.4L58.2 49.7M56.1 50.4L55.7 48.2' stroke='%23E0E8F3' stroke-width='1.8' stroke-linecap='round' fill='none'/%3E%3Ccircle cx='50' cy='18' r='2' fill='%23E9EEF6'/%3E%3Ccircle cx='20' cy='54' r='2.4' fill='%23E9EEF6'/%3E%3Ccircle cx='36' cy='38' r='1.4' fill='%23E0E8F3'/%3E%3C/svg%3E");
+  --page-art: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='72' viewBox='0 0 72 72'%3E%3Cpath d='M18 20L28.0 20.0M23.5 20.0L25.8 21.9M23.5 20.0L25.8 18.1M18 20L23.0 28.7M20.8 24.8L20.2 27.7M20.8 24.8L23.6 25.8M18 20L13.0 28.7M15.3 24.8L12.4 25.8M15.3 24.8L15.8 27.7M18 20L8.0 20.0M12.5 20.0L10.2 18.1M12.5 20.0L10.2 21.9M18 20L13.0 11.3M15.2 15.2L15.8 12.3M15.2 15.2L12.4 14.2M18 20L23.0 11.3M20.8 15.2L23.6 14.2M20.8 15.2L20.2 12.3' stroke='%23E5EBF5' stroke-width='1.8' stroke-linecap='round' fill='none'/%3E%3Cpath d='M54 54L61.5 54.0M58.1 54.0L59.8 55.4M58.1 54.0L59.8 52.6M54 54L57.8 60.5M56.1 57.6L55.7 59.8M56.1 57.6L58.2 58.3M54 54L50.3 60.5M51.9 57.6L49.8 58.3M51.9 57.6L52.3 59.8M54 54L46.5 54.0M49.9 54.0L48.2 52.6M49.9 54.0L48.2 55.4M54 54L50.3 47.5M51.9 50.4L52.3 48.2M51.9 50.4L49.8 49.7M54 54L57.8 47.5M56.1 50.4L58.2 49.7M56.1 50.4L55.7 48.2' stroke='%23E5EBF5' stroke-width='1.8' stroke-linecap='round' fill='none'/%3E%3Ccircle cx='50' cy='18' r='2' fill='%23E9EEF6'/%3E%3Ccircle cx='20' cy='54' r='2.4' fill='%23E9EEF6'/%3E%3Ccircle cx='36' cy='38' r='1.4' fill='%23E5EBF5'/%3E%3C/svg%3E");
   --board-card: #ffffff;
   --glow: rgba(150, 200, 255, 0.6);
   --glow-0: rgba(150, 200, 255, 0);
 }
 [data-event-theme='yarn-hearts-2027'] {
   --page: #fff1f3;
-  --page-art: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='72' viewBox='0 0 72 72'%3E%3Ccircle cx='19' cy='21' r='8.5' fill='%23FCE0E6'/%3E%3Cpath d='M13.05 16.75Q19 22.7 24.1 27.37M11.77 22.27Q18.15 26.1 19.85 29.07M17.3 12.92Q23.25 19.3 27.07 21.85' stroke='%23FDEAEE' stroke-width='1.3' fill='none' stroke-linecap='round'/%3E%3Cpath d='M24.95 26.95q5.1 7.65 11.89 4.25' stroke='%23FDEAEE' stroke-width='1.2' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='55' cy='55' r='6.5' fill='%23FCE0E6'/%3E%3Cpath d='M50.45 51.75Q55 56.3 58.9 59.87M49.47 55.97Q54.35 58.9 55.65 61.17M53.7 48.82Q58.25 53.7 61.17 55.65' stroke='%23FDEAEE' stroke-width='1.3' fill='none' stroke-linecap='round'/%3E%3Cpath d='M59.55 59.55q3.9 5.85 9.1 3.25' stroke='%23FDEAEE' stroke-width='1.2' fill='none' stroke-linecap='round'/%3E%3Cpath d='M54 22C48 18 48 13.4 51 13.4C52.6 13.4 53.6 14.4 54 15.4C54.4 14.4 55.4 13.4 57 13.4C60 13.4 60 18 54 22Z' fill='%23FDEAEE'/%3E%3Cpath d='M18 57.2C13.2 54 13.2 50.32 15.6 50.32C16.88 50.32 17.68 51.12 18 51.92C18.32 51.12 19.12 50.32 20.4 50.32C22.8 50.32 22.8 54 18 57.2Z' fill='%23FDEAEE'/%3E%3C/svg%3E");
+  --page-art: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='72' viewBox='0 0 72 72'%3E%3Ccircle cx='19' cy='21' r='8.5' fill='%23FCE5EA'/%3E%3Cpath d='M13.05 16.75Q19 22.7 24.1 27.37M11.77 22.27Q18.15 26.1 19.85 29.07M17.3 12.92Q23.25 19.3 27.07 21.85' stroke='%23FDEAEE' stroke-width='1.3' fill='none' stroke-linecap='round'/%3E%3Cpath d='M24.95 26.95q5.1 7.65 11.89 4.25' stroke='%23FDEAEE' stroke-width='1.2' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='55' cy='55' r='6.5' fill='%23FCE5EA'/%3E%3Cpath d='M50.45 51.75Q55 56.3 58.9 59.87M49.47 55.97Q54.35 58.9 55.65 61.17M53.7 48.82Q58.25 53.7 61.17 55.65' stroke='%23FDEAEE' stroke-width='1.3' fill='none' stroke-linecap='round'/%3E%3Cpath d='M59.55 59.55q3.9 5.85 9.1 3.25' stroke='%23FDEAEE' stroke-width='1.2' fill='none' stroke-linecap='round'/%3E%3Cpath d='M54 22C48 18 48 13.4 51 13.4C52.6 13.4 53.6 14.4 54 15.4C54.4 14.4 55.4 13.4 57 13.4C60 13.4 60 18 54 22Z' fill='%23FDEAEE'/%3E%3Cpath d='M18 57.2C13.2 54 13.2 50.32 15.6 50.32C16.88 50.32 17.68 51.12 18 51.92C18.32 51.12 19.12 50.32 20.4 50.32C22.8 50.32 22.8 54 18 57.2Z' fill='%23FDEAEE'/%3E%3C/svg%3E");
   --board-card: #ffffff;
   --glow: rgba(255, 140, 170, 0.6);
   --glow-0: rgba(255, 140, 170, 0);

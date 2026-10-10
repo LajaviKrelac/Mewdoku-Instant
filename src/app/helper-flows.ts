@@ -7,10 +7,14 @@
 // No Ads (phase2b §8.3) turns interstitials off; rewarded ads stay (opt-in).
 // A flow that needs a lazily loaded card (O1, O2) first checks router.overlaysReady(): when the chunk
 // cannot be loaded it toasts and charges nothing, so the game stays playable (04 §8).
+// Phase 2d (G1, docs/phase2d/look-spec.md §1.12, D-2d-12): the mouse helper. No stock: every use is
+// O2 ('mouse') → one rewarded video, or the free fallback (sharing the hint / kitty cooldown, with
+// its countdown) → pickMouseCells (seeded per attempt and use) → MOUSE → mouse_used.
 import type { RewardedVariant } from '../ui/overlays/rewarded-prompt';
 import { interstitialGate, type InterstitialTrigger } from '../game/ad-pacing';
 import { fallbackAvailable, fallbackReadyAt, grant, recordAdShown, recordFallbackGrant, spend } from '../game/economy';
 import { getMode } from '../game/modes';
+import { hasMouseCandidate, mouseSeed, pickMouseCells } from '../game/mouse';
 import { canRevive } from '../game/reducer';
 import { encodeCells } from '../game/save';
 import { tutorialAllowsTool } from '../game/tutorial';
@@ -62,8 +66,16 @@ export interface HelperHost {
 export interface HelperFlows {
   onBulb(): Promise<void>;
   onPaw(): Promise<void>;
-  /** 'hint' and 'kitty' ask through O2 first; for 'revive' the O4 button is the prompt. */
-  /** hint, kitty and revive (02 §13.3). group_double has its own flow (group-flow.ts, phase2b §5.6). */
+  /**
+   * Phase 2d §1.12: O2 → rewarded video (or the free fallback) → pickMouseCells → MOUSE. Nothing
+   * happens when the mouse is off (cfg.mouse.enabled, the mode, the tutorial) or no tile is left to
+   * cross out; nothing is dispatched when the player declines or the video fails.
+   */
+  onMouse(): Promise<void>;
+  /** Phase 2d: a new attempt began (a new board or a Retry): the mouse's use counter (its seed) restarts. */
+  newAttempt(): void;
+  /** 'hint', 'kitty' and 'mouse' ask through O2 first; for 'revive' the O4 button is the prompt. */
+  /** hint, kitty, revive and (phase 2d) mouse (02 §13.3). group_double has its own flow (group-flow.ts, phase2b §5.6). */
   rewardedOrFallback(p: HelperPlacement): Promise<boolean>;
   /** O4 Continue offer (02 §10.2): 'video', 'free' or hidden. */
   continueOffer(): 'video' | 'free' | null;
@@ -91,7 +103,7 @@ export function createHelperFlows(host: HelperHost): HelperFlows {
   }
 
   /** O2 as a question (02 §13.3, phase2c §5.4): true = accept (never for the countdown variant), false = "Not now". */
-  function askO2(placement: 'hint' | 'kitty', variant: RewardedVariant): Promise<boolean> {
+  function askO2(placement: 'hint' | 'kitty' | 'mouse', variant: RewardedVariant): Promise<boolean> {
     return new Promise((resolve) => {
       let done = false;
       let off: () => void = () => undefined;
@@ -139,8 +151,9 @@ export function createHelperFlows(host: HelperHost): HelperFlows {
    */
   async function rewardedOrFallback(p: HelperPlacement): Promise<boolean> {
     const asks = p !== 'revive';
-    if (asks && !(await cardsReady(() => true, t(p === 'hint' ? 'hint.unavailable' : 'kitty.unavailable')))) return false;
-    const ask = async (variant: RewardedVariant): Promise<boolean> => (asks ? askO2(p as 'hint' | 'kitty', variant) : true);
+    const unavailable = p === 'hint' ? 'hint.unavailable' : p === 'mouse' ? 'mouse.unavailable' : 'kitty.unavailable';
+    if (asks && !(await cardsReady(() => true, t(unavailable)))) return false;
+    const ask = async (variant: RewardedVariant): Promise<boolean> => (asks ? askO2(p as 'hint' | 'kitty' | 'mouse', variant) : true);
     if (rewardedAvailable()) {
       if (!(await ask('video'))) return false;
       const r = await host.adFlow.rewarded(p);
@@ -271,6 +284,28 @@ export function createHelperFlows(host: HelperHost): HelperFlows {
     });
   }
 
+  /** Uses of the mouse in this attempt: part of the seed, so a second use picks other cells. */
+  let mouseUses = 0;
+
+  async function onMouse(): Promise<void> {
+    const cur = playable();
+    if (!cur || !c.mouse.enabled || !getMode(cur.meta.mode).mouseAllowed) return;
+    const step = asTutorialStep(cur.meta.tutorialStep);
+    if (step !== null && !tutorialAllowsTool(step, 'mouse')) return;
+    if (!hasMouseCandidate(cur.game)) return;
+    await host.runBusy(async (alive) => {
+      if (!(await rewardedOrFallback('mouse')) || !alive()) return;
+      const s1 = host.game();
+      const meta = host.meta();
+      if (!s1 || !meta || s1.status !== 'playing') return;
+      const cells = pickMouseCells(s1, c.mouse.cells, mouseSeed(s1.puzzle.id, mouseUses));
+      mouseUses++;
+      if (cells.length === 0) return;
+      host.dispatch({ type: 'MOUSE', cells, t: host.clock.now() });
+      host.log({ name: 'mouse_used', params: { mode: meta.mode, cells: cells.length } });
+    });
+  }
+
   function continueOffer(): 'video' | 'free' | null {
     const game = host.game();
     if (!game || !canRevive(game)) return null;
@@ -304,6 +339,10 @@ export function createHelperFlows(host: HelperHost): HelperFlows {
   return {
     onBulb,
     onPaw,
+    onMouse,
+    newAttempt: () => {
+      mouseUses = 0;
+    },
     rewardedOrFallback,
     continueOffer,
     interstitial,

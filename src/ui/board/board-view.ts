@@ -1,10 +1,11 @@
-// Owner: B (Phase 2b)
+// Owner: B (Phase 2b); G2 (Phase 2d: the card frame and tile radius from the layout, the X pop and
+// the mouse's staggered X's, look-spec §1.8, §1.10, §1.12)
 // The board card (04 §5.3): a role="grid" of <button class="cell"> built once per puzzle; state in
 // data-s (e|m|c|w|g); data-done for faded regions; diff-only updates. Owns gestures + keyboard wiring
 // and the board's transient FX.
 // PERF-1 (2b review): every custom property that is the same for all cells lives on the board, set
-// once — the even insets (--it --ir --ib --il, re-set when the slot crosses
-// layout.insetSmallBelowSlot) and the entry timing (--entry-*, set at build for n, so playEntry on the
+// once — the even insets (--it --ir --ib --il = gap / 2), the gap and tile radius (--gap, --cell-r),
+// all re-set by setSlot, the card frame (--pad, --board-radius) and the entry timing (--entry-*, set at build for n, so playEntry on the
 // attached board only adds .fx-entry and the new board's first style pass is the only one). The
 // per-cell ones sit on the element that reads them (board-cells.ts), never on the cell button.
 // Phase 2b (B, §2.9): the board entry (card rise + diagonal tile wave; playEntry returns
@@ -22,10 +23,10 @@ import { cellNoise, createFxTimers, earFlickDelayMs, entryEndMs, entryTiming, fl
 import { attachGestures } from './gestures';
 import { attachKeyboard, type KeyboardHandle } from './keyboard';
 import { applyHighlight } from './board-highlight';
-import type { BoardHighlight, BoardInput, BoardModel, BoardView, BoardViewOptions, CatMood } from './board-types';
-import { evenInsets, type CellInsets } from './layout';
+import type { BoardFrame, BoardHighlight, BoardInput, BoardModel, BoardView, BoardViewOptions, CatMood } from './board-types';
+import { evenInsets, gapFor, type CellInsets } from './layout';
 
-export type { BoardHighlight, BoardInput, BoardModel, BoardView, BoardViewOptions, CatMood } from './board-types';
+export type { BoardFrame, BoardHighlight, BoardInput, BoardModel, BoardView, BoardViewOptions, CatMood } from './board-types';
 
 const sameBytes = (a: ArrayLike<number>, b: ArrayLike<number>): boolean => {
   if (a.length !== b.length) return false;
@@ -39,11 +40,10 @@ const isCatState = (s: number): boolean => s === CellState.Cat || s === CellStat
 function applyRenderVars(el: HTMLElement): void {
   const L = cfg.layout;
   const vars: Record<string, string> = {
+    // The 2b card radius until setSlot brings the layout's frame (look-spec §1.8).
     '--board-radius': `${L.boardRadius}px`,
-    '--cell-r': String(L.cellRadiusFraction),
-    '--mark-op': String(L.markOpacity),
-    '--mark-w': String(L.markStrokeFraction * 100),
-    '--x-len': String(Math.ceil(L.markScale * 100 * Math.SQRT2)),
+    // Phase 2d (look-spec §1.10): the X pop's length (board.css .fx-pop).
+    '--x-pop-ms': `${cfg.fx.markPopMs}ms`,
     '--wrong-ring': `${L.wrongRingPx}px`,
     '--hint-dim': String(1 - L.hintDim),
     '--pat-op': String(L.patternOpacity),
@@ -75,7 +75,8 @@ export function createBoardView(model: BoardModel, input: BoardInput, opts: Boar
   el.className = 'board';
   el.setAttribute('role', 'grid');
   el.dataset.mood = 'idle';
-  const pad = cfg.layout.boardPad;
+  /** Card edge → first slot edge (Phase 2d: from setSlot's frame; the 2b boardPad until one is given). */
+  let pad = cfg.layout.boardPad;
   el.style.setProperty('--pad', `${pad}px`);
   applyRenderVars(el);
 
@@ -306,7 +307,23 @@ export function createBoardView(model: BoardModel, input: BoardInput, opts: Boar
     const rm = reduced();
     switch (ev.type) {
       case 'MARKED':
-        if (!rm) for (const i of ev.cells) if (cells[i]) flashClass(cells[i].el, 'fx-draw', cfg.fx.markDrawMs + 60, timers);
+        // Phase 2d (look-spec §1.10, §1.12): every new X pops (no stagger when painting several); the
+        // mouse's X's pop fx.mouseStaggerMs apart, each hidden (.fx-pend) until its turn. Reduced
+        // motion: all at once, no pop.
+        if (rm) break;
+        if (ev.source === 'mouse') {
+          ev.cells.forEach((i, k) => {
+            const refs = cells[i];
+            if (!refs) return;
+            if (k > 0) refs.el.classList.add('fx-pend');
+            timers.later(k * cfg.fx.mouseStaggerMs, () => {
+              refs.el.classList.remove('fx-pend');
+              flashClass(refs.el, 'fx-pop', cfg.fx.markPopMs + 60, timers);
+            });
+          });
+        } else {
+          for (const i of ev.cells) if (cells[i]) flashClass(cells[i].el, 'fx-pop', cfg.fx.markPopMs + 60, timers);
+        }
         break;
       case 'CAT_PLACED': {
         const refs = cells[ev.cell];
@@ -383,12 +400,22 @@ export function createBoardView(model: BoardModel, input: BoardInput, opts: Boar
         diff(next);
       }
     },
-    setSlot(px) {
+    setSlot(px, frame) {
+      // Phase 2d (look-spec §1.8): the card's padding and radius come with the slot from computeLayout.
+      if (frame) {
+        pad = frame.pad;
+        setVar('--pad', `${frame.pad}px`);
+        setVar('--board-radius', `${frame.radius}px`);
+      }
       if (px === slotPx && el.style.getPropertyValue('--slot') !== '') return;
       slotPx = px;
-      // The inset size depends on the slot (phase2b §1.5): crossing layout.insetSmallBelowSlot
-      // changes the board's one inset value (no per-cell writes, PERF-1).
+      // The gap follows the slot (gapFor): every tile is inset gap / 2 on every side, one board-level
+      // value (no per-cell writes, PERF-1). The tile radius is tileRadiusFraction of the tile edge
+      // (slot − gap), published as a fraction of the slot (--cell-r).
+      const gap = gapFor(px);
       applyInsets(evenInsets(1, slotPx)[0] as CellInsets);
+      setVar('--gap', `${gap}px`);
+      setVar('--cell-r', px > gap ? ((cfg.layout.game.tileRadiusFraction * (px - gap)) / px).toFixed(4) : '0');
       el.style.setProperty('--slot', `${px}px`);
       el.style.setProperty('--pat-k', patternScaleFor(px).toFixed(3));
     },

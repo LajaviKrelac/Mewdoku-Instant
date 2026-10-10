@@ -1,4 +1,4 @@
-/* Owner: B (Phase 2b; was ui-board)
+/* Owner: B (Phase 2b; was ui-board); G3 (Phase 2d: the game screen's stack, overlays above the band)
    Toasts, the loading indicator and the rotate notice (02 §5), plus the screen layouts (boot, home,
    game) whose DOM ui-shell builds. The overlay/screen rules started as ui-shell's proposal
    (dev/shell-styles.ts) and were reviewed and adopted here.
@@ -6,49 +6,39 @@
    ui/overlays/overlay-base.ts, O1, O2, O4–O8) moved unchanged to overlay-chunk.css, which loads
    with the lazy overlay chunk. */
 
-/* ── S2 Game (02 §5, §19): vars from game-screen.ts relayout() ─────────── */
-.screen--game {
-  padding-bottom: 0; /* --tools already includes the bottom safe area */
+/* ── S2 Game (look-spec §1.1): the measured stack, top-down, from game-screen.ts relayout() ──
+   y0 (--y-top, safe top included) → bar · pills · rules · board · tools (· band); the column is
+   refWidth × s wide, centred. The band is in computeLayout, so base.css's banner padding is reset
+   (critic C12). */
+.screen.screen--game {
+  padding-top: 0;
+  padding-bottom: var(--safe-bottom);
 }
 
 .game__col {
+  position: relative;
   display: flex;
   flex-direction: column;
-  flex: 1 1 auto;
-  width: var(--col-w, calc(100% - 2 * var(--gutter)));
-  max-width: var(--col-max);
-  min-height: 0;
-}
-
-.game__hud {
   flex: none;
-  padding-top: var(--vgap);
-}
-
-.game__hud > .rule-chips {
-  margin-top: var(--vgap);
+  width: var(--col-w);
 }
 
 .game__stage {
   position: relative;
-  flex: 1 1 auto;
   display: flex;
-  align-items: center;
   justify-content: center;
-  min-height: 0;
-  padding: var(--vgap) 0;
+  height: var(--board);
+  margin-top: var(--g-rb);
 }
 
 .game__tools {
-  flex: none;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
   height: var(--tools);
+  margin-top: var(--g-bt);
 }
 
-/* O9 toast, O10 rotate notice */
-.toast-layer { position: fixed; left: 0; right: 0; bottom: calc(104px + var(--safe-bottom)); z-index: 60; display: flex; justify-content: center;
+/* O9 toast, O10 rotate notice. On the game screen (Phase 2d §1.16) it sits just above the helper row's
+   badges (--toast-bottom, published with the band on <html>), so it is above the banner too. */
+.toast-layer { position: fixed; left: 0; right: 0; bottom: var(--toast-bottom, calc(104px + var(--safe-bottom))); z-index: 60; display: flex; justify-content: center;
   padding: 0 16px; pointer-events: none; }
 /* While a modal is open: at the very bottom, below the centred card (never over the fail overlay's
    Retry / Home or its title, UX-03). Short screens without a modal: under the top bar (below). */
@@ -91,7 +81,7 @@
 .boot__label { margin-top: 10px; color: var(--ink-2); font-size: var(--fs-s); }
 
 /* ── S1 home ── */
-.screen--home > :first-child, .screen--game > :first-child { width: 100%; flex: none; }
+.screen--home > :first-child { width: 100%; flex: none; }
 .home__body { display: flex; flex: 1; flex-direction: column; width: 100%; max-width: 512px; min-height: 0; padding: 0 16px 16px; }
 /* Centred with auto margins, not justify-content: when the hero is taller than its space it overflows
    downward only (home-screen.ts fitHero() then shrinks the mascot), never up under the top bar
@@ -152,5 +142,5 @@
 @media (max-height: 639px) {
   .home__wordmark { font-size: min(2.5rem, 13vw); }
   .home__mascot > svg { width: 150px; height: 150px; }
-  .toast-layer { top: calc(64px + var(--safe-top)); bottom: auto; }
+  :root:not([data-play-band]) .toast-layer { top: calc(64px + var(--safe-top)); bottom: auto; }
 }

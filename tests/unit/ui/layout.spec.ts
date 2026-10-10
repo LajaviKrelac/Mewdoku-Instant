@@ -1,68 +1,130 @@
-// Owner: A. Layout math (02 §19) over a grid of viewports, insets (phase2b §1.5 even gutters; the
-// region-aware insets of 02 §17.4 are deleted, §1.8), hit-testing and drag interpolation (02 §6.1).
+// Owner: A; G2 (Phase 2d: the measured stack scaled by s, look-spec §1.1). Layout math over a grid of
+// viewports, insets (even gutters: every tile inset gap / 2, look-spec §1.8), hit-testing and drag
+// interpolation (02 §6.1).
 // phase2b F0: readViewport / large-text computeLayout cases moved here from ui/review-fixes.spec.ts (B).
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cfg } from '../../../src/app/config';
+import { cfg, mergeConfig } from '../../../src/app/config';
 import * as layout from '../../../src/ui/board/layout';
-import { cellsAlongSegment, computeLayout, evenInsets, hitTest, readViewport } from '../../../src/ui/board/layout';
+import { cellsAlongSegment, computeLayout, evenInsets, gapFor, hitTest, readViewport, type GameLayout } from '../../../src/ui/board/layout';
 
-const L = cfg.layout;
+const G = cfg.layout.game;
 
-describe('computeLayout (02 §19)', () => {
-  it('matches the reference phone 390×844, N = 8', () => {
-    const g = computeLayout({ vw: 390, vh: 844, safeTop: 0, safeBottom: 0, n: 8 });
-    // phase2b §1.5 / §10: card padding 10 (was 12).
-    expect(g).toMatchObject({ colW: 358, compact: false, topBar: 56, pills: 44, chips: 40, tools: 80, boardMax: 358, pad: 10 });
-    expect(g.slot).toBe(Math.floor((358 - 20) / 8)); // 42
-    expect(g.board).toBe(42 * 8 + 20);
+/** Row tops in viewport px, from the layout (look-spec §1.1 table columns). */
+function rows(g: GameLayout): { pills: number; board: number; discs: number; banner: number } {
+  const pills = g.top + g.bar + g.gaps.barToPills;
+  const board = pills + g.pills + g.gaps.pillsToRules + g.rules + g.gaps.rulesToBoard;
+  const discs = board + g.board + g.gaps.boardToTools;
+  return { pills, board, discs, banner: discs + g.tools + g.gaps.toolsToBanner };
+}
+
+describe('computeLayout (look-spec §1.1)', () => {
+  // [label, vw, vh, safeTop, safeBottom, band, n] → [s, colW, compact, slot, gap, board, y0, pills y, board y, discs y, banner y | null]
+  type Row = [string, number, number, number, number, boolean, number, [number, number, boolean, number, number, number, number, number, number, number, number | null]];
+  const TABLE: Row[] = [
+    ['402 × 874 (62/34, band): the recording', 402, 874, 62, 34, true, 10, [1.0, 402, false, 38, 3, 390, 62.6, 124.9, 250.5, 693.5, 777.2]],
+    ['402 × 874 web', 402, 874, 0, 0, false, 10, [1.0, 402, false, 38, 3, 390, 62.0, 124.3, 249.9, 692.9, null]],
+    ['390 × 844 (47/34, band)', 390, 844, 47, 34, true, 10, [0.97, 390, false, 36, 3, 370, 55.1, 115.5, 237.4, 658.8, 740.0]],
+    ['390 × 844 web', 390, 844, 0, 0, false, 10, [0.97, 390, false, 36, 3, 370, 60.1, 120.6, 242.4, 663.9, null]],
+    ['360 × 640 web', 360, 640, 0, 0, false, 10, [0.896, 360, false, 33, 3, 340, 9.6, 65.4, 177.9, 565.4, null]],
+    ['360 × 640 FBIG (band)', 360, 640, 0, 0, true, 10, [0.811, 326, true, 30, 2, 308, 4.4, 54.9, 156.8, 507.8, 575.6]],
+    ['320 × 568 web', 320, 568, 0, 0, false, 10, [0.796, 320, true, 30, 2, 308, 5.2, 54.8, 154.8, 505.0, null]],
+    ['320 × 568 web, 12 × 12', 320, 568, 0, 0, false, 12, [0.796, 320, true, 25, 2, 308, 5.2, 54.8, 154.8, 505.0, null]],
+    ['320 × 568 FBIG (band)', 320, 568, 0, 0, true, 10, [0.712, 286, true, 27, 2, 278, 0.1, 44.4, 133.8, 449.6, 509.2]],
+    ['320 × 568 FBIG (band), 12 × 12', 320, 568, 0, 0, true, 12, [0.712, 286, true, 22, 2, 272, 3.1, 47.4, 136.8, 446.6, 506.2]],
+    ['1280 × 800 desktop web', 1280, 800, 0, 0, false, 10, [1.136, 457, false, 43, 3, 442, 0.9, 71.7, 214.4, 716.6, null]],
+    ['1280 × 800 desktop web, 12 × 12', 1280, 800, 0, 0, false, 12, [1.136, 457, false, 35, 3, 432, 5.9, 76.7, 219.4, 711.6, null]],
+    ['320 × 568 FBIG (band), 12 × 12, safe top 20', 320, 568, 20, 0, true, 12, [0.684, 275, true, 21, 2, 260, 23.7, 66.3, 152.3, 448.6, 505.9]],
+    ['375 × 667 FBIG (band), 12 × 12, safe top 20', 375, 667, 20, 0, true, 12, [0.821, 330, true, 26, 2, 320, 20.3, 71.4, 174.5, 537.9, 606.6]],
+  ];
+
+  it.each(TABLE)('%s matches the look-spec §1.1 table', (_label, vw, vh, safeTop, safeBottom, banner, n, want) => {
+    const g = computeLayout({ vw, vh, safeTop, safeBottom, n, banner });
+    const [s, colW, compact, slot, gap, board, y0, pillsY, boardY, discsY, bannerY] = want;
+    expect(g.s).toBeCloseTo(s, 2);
+    expect(Math.abs(g.colW - colW)).toBeLessThanOrEqual(0.5);
+    expect(g.compact).toBe(compact);
+    expect(g.slot).toBe(slot);
+    expect(g.gap).toBe(gap);
+    expect(g.board).toBe(board);
+    const r = rows(g);
+    for (const [got, exp] of [[g.top, y0], [r.pills, pillsY], [r.board, boardY], [r.discs, discsY]] as const) expect(Math.abs(got - exp)).toBeLessThanOrEqual(0.5);
+    if (bannerY === null) expect(g.band).toBe(0);
+    else {
+      expect(g.band).toBe(cfg.ads.banner.bannerPx);
+      expect(Math.abs(r.banner - bannerY)).toBeLessThanOrEqual(0.5);
+    }
   });
 
-  it('minimum viewport 320×568 with a 12×12 board is compact and fits', () => {
-    const g = computeLayout({ vw: 320, vh: 568, safeTop: 0, safeBottom: 0, n: 12 });
+  it('at the recording\'s size the measured boxes come out: card 390, tile 35, gap 3, radius 11.6, pad 5, discs 60.3', () => {
+    const g = computeLayout({ vw: 402, vh: 874, safeTop: 62, safeBottom: 34, n: 10, banner: true });
+    expect(g).toMatchObject({ s: 1, pad: 5, slot: 38, gap: 3, board: 390, radius: G.cardRadius });
+    expect(g.slot - g.gap).toBe(35);
+    expect(g.tools).toBeCloseTo(60.3, 5);
+    expect(g.bar).toBe(52);
+    expect(g.pills).toBeCloseTo(31.3, 5);
+    expect(g.rules).toBeCloseTo(60.3, 5);
+    expect(g.gaps).toMatchObject({ barToPills: 10.3, pillsToRules: 8.3, rulesToBoard: 25.7, boardToTools: 53, toolsToBanner: 23.4, bottom: 12.3 });
+    // the 2b names carry the 2d values until I-3
+    expect(g.topBar).toBe(g.bar);
+    expect(g.chips).toBe(g.rules);
+    // without the band the toolsToBanner gap is gone too
+    expect(computeLayout({ vw: 402, vh: 874, safeTop: 62, safeBottom: 34, n: 10 }).gaps.toolsToBanner).toBe(0);
+  });
+
+  it('one scale s for everything: rows, gaps, pad and radius follow s; compact below layout.game.compactScale', () => {
+    const g = computeLayout({ vw: 320, vh: 568, safeTop: 0, safeBottom: 0, n: 10 });
+    expect(g.s).toBeCloseTo(320 / 402, 6);
+    expect(g.bar).toBeCloseTo(G.bar * g.s, 6);
+    expect(g.pills).toBeCloseTo(G.pills * g.s, 6);
+    expect(g.tools).toBeCloseTo(G.tools * g.s, 6);
+    expect(g.gaps.boardToTools).toBeCloseTo(G.boardToTools * g.s, 6);
+    expect(g.radius).toBeCloseTo(G.cardRadius * g.s, 6);
+    expect(g.pad).toBe(Math.max(3, Math.round(G.cardPad * g.s)));
     expect(g.compact).toBe(true);
-    expect(g.pills).toBe(L.compactPills);
-    expect(g.chips).toBe(L.compactChips);
-    expect(g.boardMax).toBe(288);
-    expect(g.slot).toBe(22); // floor((288 − 2 × 10) / 12)
-    expect(g.board).toBe(22 * 12 + 20); // 284 (phase2b boardPad 10)
+    expect(computeLayout({ vw: 402, vh: 874, safeTop: 0, safeBottom: 0, n: 10 }).compact).toBe(false);
+    // s is clamped to [minScale, maxScale]
+    expect(computeLayout({ vw: 3000, vh: 3000, safeTop: 0, safeBottom: 0, n: 8 }).s).toBe(G.maxScale);
+    expect(computeLayout({ vw: 100, vh: 200, safeTop: 0, safeBottom: 0, n: 8 }).s).toBe(G.minScale);
   });
 
-  it('desktop column is capped at 480 px', () => {
-    const g = computeLayout({ vw: 1280, vh: 800, safeTop: 0, safeBottom: 0, n: 8 });
-    expect(g.colW).toBe(480);
-    expect(g.boardMax).toBe(480);
-    expect(g.slot).toBe(57);
+  it('the spare height goes above the bar up to topSpareMax × s, the rest below', () => {
+    const tall = computeLayout({ vw: 402, vh: 1200, safeTop: 10, safeBottom: 0, n: 10 });
+    expect(tall.top).toBeCloseTo(10 + G.topSpareMax * tall.s, 6);
+    const tight = computeLayout({ vw: 402, vh: 874, safeTop: 62, safeBottom: 34, n: 10, banner: true });
+    expect(tight.top - 62).toBeLessThan(1);
   });
 
-  it('safe areas shrink the board when height is the constraint', () => {
+  it('safe areas and the banner band shrink the board when height binds', () => {
     const a = computeLayout({ vw: 430, vh: 640, safeTop: 0, safeBottom: 0, n: 9 });
     const b = computeLayout({ vw: 430, vh: 640, safeTop: 47, safeBottom: 34, n: 9 });
-    expect(b.tools).toBe(L.tools + L.toolsGap + 34);
-    expect(b.boardMax).toBe(a.boardMax - 47 - 34);
+    const c = computeLayout({ vw: 430, vh: 640, safeTop: 47, safeBottom: 34, n: 9, banner: true });
+    expect(b.s).toBeLessThan(a.s);
     expect(b.slot).toBeLessThan(a.slot);
+    expect(c.slot).toBeLessThan(b.slot);
   });
 
-  it('compact switches exactly at layout.compactHeight', () => {
-    expect(computeLayout({ vw: 400, vh: L.compactHeight - 1, safeTop: 0, safeBottom: 0, n: 6 }).compact).toBe(true);
-    expect(computeLayout({ vw: 400, vh: L.compactHeight, safeTop: 0, safeBottom: 0, n: 6 }).compact).toBe(false);
-  });
-
-  it('never overflows across a grid of viewports and board sizes', () => {
+  it('never overflows across a grid of viewports, board sizes, safe areas and the band', () => {
     for (let vw = 320; vw <= 1440; vw += 37) {
       for (let vh = 568; vh <= 1200; vh += 29) {
         for (const safe of [0, 24]) {
-          for (let n = 4; n <= 12; n++) {
-            const g = computeLayout({ vw, vh, safeTop: safe, safeBottom: safe, n });
-            const ctx = `${vw}×${vh} n=${n} safe=${safe}`;
-            expect(g.compact, ctx).toBe(vh < L.compactHeight);
-            expect(g.slot, ctx).toBeGreaterThanOrEqual(1);
-            expect(g.board, ctx).toBe(g.slot * n + 2 * g.pad);
-            expect(g.board, ctx).toBeLessThanOrEqual(g.boardMax);
-            expect(g.board, ctx).toBeLessThanOrEqual(vw - 2 * L.gutter);
-            const column = safe + g.topBar + g.pills + g.chips + g.board + g.tools + L.vGap * L.vGapCount;
-            expect(column, ctx).toBeLessThanOrEqual(vh);
-            // A 12×12 board on a 360 px phone still gets ≥ 22 px cells (02 §18 touch targets).
-            if (safe === 0 && n === 12) expect(g.slot, ctx).toBeGreaterThanOrEqual(22);
+          for (const banner of [false, true]) {
+            for (let n = 4; n <= 12; n++) {
+              const g = computeLayout({ vw, vh, safeTop: safe, safeBottom: safe, n, banner });
+              const ctx = `${vw}×${vh} n=${n} safe=${safe} band=${banner}`;
+              expect(g.compact, ctx).toBe(g.s < G.compactScale);
+              expect(g.slot, ctx).toBeGreaterThanOrEqual(1);
+              expect(g.board, ctx).toBe(g.slot * n + 2 * g.pad);
+              expect(g.board, ctx).toBeLessThanOrEqual(g.boardMax);
+              expect(g.board, ctx).toBeLessThanOrEqual(g.colW);
+              expect(g.colW, ctx).toBeLessThanOrEqual(vw + 1e-9);
+              const g2 = g.gaps;
+              const bottom = rows(g).discs + g.tools + g2.toolsToBanner + g.band + g2.bottom;
+              expect(bottom, ctx).toBeLessThanOrEqual(vh - safe + 1e-6);
+              expect(g.top, ctx).toBeGreaterThanOrEqual(safe);
+              // a 12×12 board on a 320 px phone with no safe areas still gets ≥ 22 px cells (look-spec §1.1;
+              // 21 px with a 20 px safe top, the table row above)
+              if (n === 12 && safe === 0) expect(g.slot, ctx).toBeGreaterThanOrEqual(22);
+            }
           }
         }
       }
@@ -70,9 +132,32 @@ describe('computeLayout (02 §19)', () => {
   });
 
   it('clamps degenerate viewports instead of returning zero or negative sizes', () => {
-    const g = computeLayout({ vw: 100, vh: 200, safeTop: 0, safeBottom: 0, n: 10 });
+    const g = computeLayout({ vw: 100, vh: 150, safeTop: 0, safeBottom: 0, n: 10 });
+    expect(g.s).toBe(G.minScale);
     expect(g.slot).toBe(1);
     expect(g.boardMax).toBe(0);
+    expect(g.gap).toBe(1);
+    expect(computeLayout({ vw: 0, vh: 0, safeTop: 0, safeBottom: 0, n: 0 }).slot).toBe(1);
+  });
+
+  it('reads every value from layout.game (a config variant moves the stack)', () => {
+    const c = mergeConfig({ layout: { game: { cardPad: 10, gapFraction: 0.2 } } } as never);
+    const g = computeLayout({ vw: 402, vh: 874, safeTop: 0, safeBottom: 0, n: 10 }, c);
+    expect(g.pad).toBe(10);
+    expect(g.gap).toBe(Math.round(g.slot * 0.2));
+  });
+});
+
+describe('gapFor (look-spec §1.8)', () => {
+  it('is max(1, round(slot × gapFraction)): 3 at the measured slot 38, 2 at the 320 px slots', () => {
+    expect(G.gapFraction).toBe(0.079);
+    expect(gapFor(38)).toBe(3);
+    expect(gapFor(30)).toBe(2);
+    expect(gapFor(21)).toBe(2);
+    expect(gapFor(12)).toBe(1);
+    expect(gapFor(1)).toBe(1);
+    expect(gapFor(0)).toBe(1);
+    expect(gapFor(57)).toBe(5);
   });
 });
 
@@ -127,27 +212,24 @@ describe('readViewport', () => {
   });
 });
 
-describe('evenInsets (phase2b §1.5)', () => {
-  it('every inset equals layout.insetPx from a 30 px slot, layout.insetSmallPx below, whatever the regions', () => {
-    const big = evenInsets(8, 36);
-    expect(big).toHaveLength(64);
-    for (const ins of big) expect(ins).toEqual({ top: 2, right: 2, bottom: 2, left: 2 });
-    expect(evenInsets(4, 30)[0]).toEqual({ top: cfg.layout.insetPx, right: 2, bottom: 2, left: 2 });
-    for (const ins of evenInsets(12, 29.9)) expect(ins).toEqual({ top: 1.5, right: 1.5, bottom: 1.5, left: 1.5 });
+describe('evenInsets (look-spec §1.8)', () => {
+  it('every inset is gapFor(slot) / 2 on all four sides, whatever the regions', () => {
+    const big = evenInsets(10, 38);
+    expect(big).toHaveLength(100);
+    for (const ins of big) expect(ins).toEqual({ top: 1.5, right: 1.5, bottom: 1.5, left: 1.5 });
+    for (const ins of evenInsets(12, 22)) expect(ins).toEqual({ top: 1, right: 1, bottom: 1, left: 1 });
     expect(evenInsets(0, 36)).toEqual([]);
   });
 
-  it('gives the same inset on all four sides of every tile, so every gutter is even (2 × inset)', () => {
-    for (const slot of [22, 29, 30, 36, 42, 57]) {
-      const v = slot >= L.insetSmallBelowSlot ? L.insetPx : L.insetSmallPx;
+  it('gives the same inset on all four sides of every tile, so every gutter is even (2 × inset = the gap)', () => {
+    for (const slot of [21, 22, 25, 30, 33, 36, 38, 43, 57]) {
+      const v = gapFor(slot) / 2;
       for (const n of [4, 9, 12]) {
         const ins = evenInsets(n, slot);
         expect(ins).toHaveLength(n * n);
         for (const i of ins) expect([i.top, i.right, i.bottom, i.left]).toEqual([v, v, v, v]);
       }
     }
-    expect(L.insetPx * 2).toBe(4); // a 4 px white gutter (§1.5)
-    expect(L.insetSmallPx * 2).toBe(3); // 3 px below a 30 px slot
   });
 
   it('the region-aware insets are gone (phase2b §1.8)', () => {
@@ -209,18 +291,34 @@ describe('readViewport (A11Y-2, A11Y-6, RP-3)', () => {
   });
 });
 
-describe('computeLayout with large text (A11Y-6)', () => {
-  it('grows the rule-chip row with the text scale (room for a third line, at most 2.4×), leaving compact mode alone', () => {
-    const base = { vw: 390, vh: 844, safeTop: 0, safeBottom: 0, n: 8 };
-    expect(computeLayout(base).chips).toBe(cfg.layout.chips);
-    expect(computeLayout({ ...base, textScale: 1 }).chips).toBe(cfg.layout.chips);
-    expect(computeLayout({ ...base, textScale: 2 }).chips).toBe(Math.round(cfg.layout.chips * 2.3));
-    expect(computeLayout({ ...base, textScale: 3 }).chips).toBe(Math.round(cfg.layout.chips * 2.4));
-    expect(computeLayout({ ...base, textScale: 0.5 }).chips).toBe(cfg.layout.chips);
-    // 200 % text on the reference phone: the board keeps its full width.
-    expect(computeLayout({ ...base, textScale: 2 }).board).toBe(computeLayout(base).board);
-    const compact = computeLayout({ ...base, vh: 568, textScale: 2 });
+describe('computeLayout with large text (A11Y-6, look-spec §1.1 barH / rulesH)', () => {
+  it('grows the rules row by min(rulesGrowMax, textScale × 1.15) and the bar by min(rulesGrowMax, textScale); compact keeps the rules row', () => {
+    // the recording's phone: height-bound, so a taller bar and rules row take room from the board
+    const base = { vw: 402, vh: 874, safeTop: 62, safeBottom: 34, n: 10, banner: true };
+    const one = computeLayout(base);
+    expect(one.rules).toBeCloseTo(G.rules * one.s, 6);
+    expect(computeLayout({ ...base, textScale: 1 }).rules).toBe(one.rules);
+    expect(computeLayout({ ...base, textScale: 0.5 }).rules).toBe(one.rules);
+    const two = computeLayout({ ...base, textScale: 2 });
+    expect(two.rules).toBeCloseTo(G.rules * two.s * Math.min(G.rulesGrowMax, 2 * 1.15), 6);
+    expect(two.bar).toBeCloseTo(G.bar * two.s * Math.min(G.rulesGrowMax, 2), 6);
+    expect(computeLayout({ ...base, textScale: 1.5 }).bar).toBeCloseTo(G.bar * one.s * 1.5, 6);
+    // the board gives up the space
+    expect(two.board).toBeLessThan(one.board);
+    const compact = computeLayout({ ...base, vw: 320, vh: 568, safeTop: 0, safeBottom: 0, textScale: 2 });
     expect(compact.compact).toBe(true);
-    expect(compact.chips).toBe(cfg.layout.compactChips); // icons only: no taller row
+    expect(compact.rules).toBeCloseTo(G.rules * compact.s, 6); // diagrams only: no taller row
+    expect(compact.bar).toBeCloseTo(G.bar * compact.s * 2, 6); // the bar's text is rem-based: it grows in compact too
+  });
+});
+
+describe('the dev safe-area override (look-spec §1.1)', () => {
+  it('the probe reads max(env(safe-area-inset-*), var(--dev-safe-*)) for the top and the bottom', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { dirname, resolve } = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const src = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../../../src/ui/board/layout.ts'), 'utf8');
+    expect(src).toContain('max(env(safe-area-inset-top,0px),var(--dev-safe-top,0px))');
+    expect(src).toContain('max(env(safe-area-inset-bottom,0px),var(--dev-safe-bottom,0px))');
   });
 });

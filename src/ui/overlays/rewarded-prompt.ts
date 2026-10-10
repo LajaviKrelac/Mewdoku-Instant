@@ -1,13 +1,16 @@
-// Owner: B (Phase 2b); G2 (Phase 2c: no swap)
+// Owner: B (Phase 2b); G2 (Phase 2c: no swap); G3 (Phase 2d: the mouse)
 // O2 rewarded-ad prompt (02 §5 O2, §13.3). Revive does not use it (the O4 button is the prompt).
 // The variant is chosen by the app when the dialog opens; the countdown variant ticks live.
 // Phase 2c (fish-lives-spec §5.4): back to the Phase 2 card, [Watch video] [Not now] / "Here's a free
 // hint." [Take it] / the countdown with [OK]: no swap row, no balance (fish are lives, not a currency).
+// Phase 2d (look-spec §1.12): placement 'mouse' ("Call the mouse?"; every use is one video or one free
+// grant, no stock); the art is the helper's own (tool-kitty, tool-bulb, tool-mouse, G2).
 //
 // Classes: .overlay[data-overlay=rewarded] > .overlay__panel--dialog.rewarded[data-variant]
 //          .rewarded__icon .overlay__title .overlay__body .overlay__actions(.rewarded__accept
 //          .rewarded__ok .rewarded__decline)
-import { formatClock, t } from '../../i18n';
+import { cfg } from '../../app/config';
+import { formatClock, formatNumber, t } from '../../i18n';
 import { icon } from '../art/sprite';
 import { clear, h, setText, type OverlayView } from '../dom';
 import { createOverlayShell, createTicker, makeButton, setButtonLabel } from './overlay-base';
@@ -18,7 +21,8 @@ export type RewardedVariant =
   | 'countdown'; // "Next free hint in m:ss" (live), [OK] only
 
 export interface RewardedPromptProps {
-  readonly placement: 'hint' | 'kitty';
+  /** Phase 2d §1.12: 'mouse' (the third helper; no stock, every use is one video or one free grant). */
+  readonly placement: 'hint' | 'kitty' | 'mouse';
   readonly variant: RewardedVariant;
   /** Epoch ms when the free fallback opens again (countdown variant). */
   readonly nextFreeAt: number;
@@ -40,18 +44,22 @@ export function countdownText(at: number, now: number): string {
 }
 
 function bodyText(p: RewardedPromptProps): string {
-  const hint = p.placement === 'hint';
+  const at = p.placement;
   switch (p.variant) {
     case 'video':
-      return hint ? t('rewarded.video.hint') : t('rewarded.video.kitty');
+      return at === 'hint' ? t('rewarded.video.hint') : at === 'kitty' ? t('rewarded.video.kitty') : t('rewarded.video.mouse', { count: formatNumber(cfg.mouse.cells) });
     case 'free':
-      return hint ? t('rewarded.free.hint') : t('rewarded.free.kitty');
+      return at === 'hint' ? t('rewarded.free.hint') : at === 'kitty' ? t('rewarded.free.kitty') : t('rewarded.free.mouse');
     case 'countdown': {
       const time = countdownText(p.nextFreeAt, p.now());
-      return hint ? t('rewarded.countdown.hint', { time }) : t('rewarded.countdown.kitty', { time });
+      return at === 'hint' ? t('rewarded.countdown.hint', { time }) : at === 'kitty' ? t('rewarded.countdown.kitty', { time }) : t('rewarded.countdown.mouse', { time });
     }
   }
 }
+
+/** The prompt's art and title per placement (Phase 2d: the helpers' own full-colour art). */
+const ART = { hint: 'tool-bulb', kitty: 'tool-kitty', mouse: 'tool-mouse' } as const;
+const TITLE = { hint: 'rewarded.title.hint', kitty: 'rewarded.title.kitty', mouse: 'rewarded.title.mouse' } as const;
 
 export function createRewardedPrompt(): OverlayView<RewardedPromptProps> {
   let props: RewardedPromptProps | null = null;
@@ -100,8 +108,8 @@ export function createRewardedPrompt(): OverlayView<RewardedPromptProps> {
     shell.panel.dataset.variant = p.variant;
     shell.panel.dataset.placement = p.placement;
     clear(iconSlot);
-    iconSlot.appendChild(icon(p.placement === 'hint' ? 'icon-bulb' : 'icon-paw'));
-    setText(title, p.placement === 'hint' ? t('rewarded.title.hint') : t('rewarded.title.kitty'));
+    iconSlot.appendChild(icon(ART[p.placement]));
+    setText(title, t(TITLE[p.placement]));
     setText(body, bodyText(p));
 
     const countdown = p.variant === 'countdown';

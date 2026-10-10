@@ -9,6 +9,10 @@
 // rule (two cats 1,248; a mistake changes nothing; the next cat 1,824; a reload resumes the points and
 // the run: the next cat 2,496; Retry 0); the tutorial has no counter; the victory shows the level's
 // total and no "Perfect ×N"; the web records show Total points.
+// Phase 2d (G1, docs/phase2d/look-spec.md §5.3): the heads pill replaces "N / 10" (one head per colour,
+// [data-done] = the cats placed); the Score sits in the game bar (.top-bar--game .points-pill__n);
+// the mouse (a tap → O2 → 3 more X marks, none on a cat's tile; the M key); the level-start toast on a
+// fresh level, not on a resumed one.
 import { expect, test, type Page } from '@playwright/test';
 import type { E2EHooks } from '../../src/app/boot';
 import { defaults } from '../../src/game/save';
@@ -427,8 +431,8 @@ test('17 · the event screen stylesheet failing once: it is re-fetched and the e
 
 // ── Phase 2c.1: level points per cat (fish-lives-spec §3.1, §10.2, §10.8) ──
 
-/** The HUD counter's number, as shown (the last number in the box is the one rolling in). */
-const points = (page: Page) => page.locator('.pills .points-pill');
+/** The HUD counter's number, as shown (the last number in the box is the one rolling in). Phase 2d: the bar's Score column. */
+const points = (page: Page) => page.locator('.top-bar--game .points-pill');
 async function pointsShow(page: Page, text: string): Promise<void> {
   await expect(points(page)).toHaveAttribute('aria-label', `Level points: ${text}`);
   await expect(points(page).locator('.points-pill__n').last()).toHaveText(text);
@@ -470,12 +474,106 @@ test('18 · level points: two cats 1,248; a mistake keeps them; the next cat 1,8
   await pointsShow(page, '0');
 });
 
-test('19 · the tutorial shows no level-points counter; a level shows it in the pills row', async ({ page }) => {
+test('19 · the tutorial shows no Score column; a level shows it in the game bar', async ({ page }) => {
   await open(page);
   expect((await app(page))?.session?.mode).toBe('tutorial');
   await playing(page);
   await dbl(page, 1);
-  await expect(page.locator('.pills .pill--cats')).toBeVisible();
+  await expect(page.locator('.pills .pill--heads')).toBeVisible();
   await expect(points(page)).toBeHidden();
   expect(await page.evaluate(() => (window as TestWindow).__mewdoku?.state()?.levelPoints)).toBe(0);
+  await expect(page.locator('.pills .pill--cats, .pills .points-pill')).toHaveCount(0); // 2d: gone from the row
+});
+
+// ── Phase 2d (look-spec §5.3): heads, the mouse, the start toast ──
+
+test('20 · the heads pill: one head per colour, [data-done] follows the cats placed (no "N / 10")', async ({ page }) => {
+  await open(page, '?ads=unsupported', returning());
+  await playLevel(page);
+  const sol = await solution(page);
+  const n = sol.length;
+  const heads = page.locator('.pills .pill--heads .head');
+  await expect(heads).toHaveCount(n);
+  await expect(page.locator('.pills .pill--heads .head[data-done]')).toHaveCount(0);
+  await expect(page.locator('.pills .pill--heads')).toHaveAttribute('aria-label', `0 of ${n} cats placed`);
+  await dbl(page, 0 * n + (sol[0] as number));
+  await dbl(page, 1 * n + (sol[1] as number));
+  await expect(page.locator('.pills .pill--heads .head[data-done]')).toHaveCount(2);
+  await expect(page.locator('.pills .pill--heads')).toHaveAttribute('aria-label', `2 of ${n} cats placed`);
+  // Every head names a palette colour of the board.
+  const colors = await heads.evaluateAll((els) => els.map((e) => Number(e.getAttribute('data-color'))));
+  expect(new Set(colors).size).toBe(n);
+  await expect(page.locator('.pills .pill--cats, .pill__count')).toHaveCount(0);
+});
+
+/** The X marks on the board now, by cell index. */
+const markCells = async (page: Page): Promise<number[]> => ((await game(page))?.cells ?? []).flatMap((v, i) => (v === 1 ? [i] : []));
+
+test('21 · the mouse (web, free): a tap → O2 → 3 more X marks, none on a cat\'s tile; then the shared countdown', async ({ page }) => {
+  await open(page, '?ads=unsupported', returning());
+  await playLevel(page);
+  const mouse = page.locator('.tool-bar .tool--mouse');
+  await expect(mouse).toBeVisible();
+  await expect(mouse).toBeEnabled();
+  await expect(mouse).toHaveAttribute('aria-label', 'Mouse: crosses out 3 tiles that have no cat');
+  const before = await markCells(page);
+  expect(before).toEqual([]);
+  await mouse.click();
+  const prompt = page.locator('[data-overlay="rewarded"]');
+  await expect(prompt).toBeVisible();
+  await expect(prompt).toContainText('Call the mouse?');
+  await prompt.getByRole('button', { name: 'Take it' }).click();
+  await expect(page.locator('.cell[data-s="m"]')).toHaveCount(3);
+  const sol = await solution(page);
+  const n = sol.length;
+  for (const i of await markCells(page)) expect(sol[Math.floor(i / n)]).not.toBe(i % n);
+  expect((await app(page))?.save.stock).toEqual(returning().stock); // no stock spent or granted
+  // The free grant started the shared cooldown: the next tap only shows the countdown.
+  await mouse.click();
+  await expect(page.getByText(/The mouse is back in \d+:\d\d/)).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.cell[data-s="m"]')).toHaveCount(3);
+});
+
+test('22 · the M key calls the mouse (a video with the mock ads); the X marks stay on a reload', async ({ page }) => {
+  await open(page, '', returning());
+  await playLevel(page);
+  await cell(page, 0).focus();
+  await page.keyboard.press('m');
+  const prompt = page.locator('[data-overlay="rewarded"]');
+  await expect(prompt).toBeVisible();
+  await prompt.getByRole('button', { name: 'Watch video' }).click();
+  await expect(page.locator('.cell[data-s="m"]')).toHaveCount(3, { timeout: 10_000 });
+  const marks = await markCells(page);
+  await page.waitForTimeout(800); // the debounced local save
+  await page.reload();
+  await ready(page, 'home');
+  await page.locator('.home__play').click();
+  await playing(page);
+  expect(await markCells(page)).toEqual(marks);
+});
+
+test('23 · the level-start toast shows on a fresh level and on Retry, never on a resumed board', async ({ page }) => {
+  await open(page, '?ads=unsupported', returning());
+  await page.locator('.home__play').click();
+  const toast = page.locator('.start-toast');
+  await expect(toast).toHaveAttribute('data-kind', 'level', { timeout: 3000 });
+  await expect(toast).toHaveAttribute('aria-hidden', 'true');
+  await playing(page);
+  await cell(page, (await wrongCells(page, 1))[0] as number).click(); // a mark: the board is saved
+  await page.waitForTimeout(800);
+  await page.reload();
+  await ready(page, 'home');
+  await page.locator('.home__play').click();
+  await playing(page);
+  await page.waitForTimeout(800); // past the toast's delay and entry
+  await expect(page.locator('.start-toast')).toHaveCount(0);
+  // Retry after a loss: 'retry'.
+  for (const w of await wrongCells(page, 4)) {
+    if ((await game(page))?.status !== 'playing') break;
+    await dbl(page, w);
+  }
+  await expect(page.getByRole('button', { name: 'Retry level' })).toBeEnabled();
+  await page.getByRole('button', { name: 'Retry level' }).click();
+  await expect(page.locator('.start-toast')).toHaveAttribute('data-kind', 'retry', { timeout: 3000 });
 });

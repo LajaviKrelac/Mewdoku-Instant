@@ -9,8 +9,14 @@
 // `events` chunk), the trophy's rankings hub (§5.5), the Settings Language / Shop / Remove ads rows
 // (§6.8, §8.5), and the banner rules on Home and the event screen (§3.2: shown after the screen
 // mounts, hidden before it goes and while a modal is open).
+// Phase 2d (G1, docs/phase2d/look-spec.md §1.15, §1.16): opening Settings from anywhere (the game's
+// gear, Home's, the event screen's; every router.open('settings')) marks it seen (save.ext.settingsSeen
+// = cfg.settingsDot.version, saved at once), which clears the gear's red dot; the game screen with its
+// banner band is a banner screen too (the listed modals hide the banner; closing them does not
+// re-show it there).
 import type { AudioEngine } from '../audio/audio-engine';
 import { isEventLive, type EventDef } from '../game/events';
+import { markSettingsSeen } from '../game/save';
 import { dailyCardState, dateKeyOf, localDateKey, localMidnightAfter, msUntilLocalMidnight } from '../game/progression';
 import type { LocaleId, SaveData, Settings } from '../game/types';
 import type { PlatformAdapter } from '../platform/types';
@@ -137,13 +143,26 @@ export function createShell(deps: ShellDeps): Shell {
    * (reviews L2B-1, FB2B-2: the shop opened from its fish pill "+" left the banner over its Buy buttons).
    */
   const MODALS: readonly OverlayId[] = ['settings', 'how_to_play', 'shop', 'rank_hub', 'ranking', 'group_result', 'daily_result'];
-  const bannerScreen = (): boolean => router.screen() === 'home' || router.screen() === 'event' || router.isOpen('victory');
+  // Phase 2d §1.16: the game screen too (its band; O4, O1, O2 and the coach are not in MODALS).
+  const bannerScreen = (): boolean =>
+    router.screen() === 'home' || router.screen() === 'event' || router.screen() === 'game' || router.isOpen('victory');
   const offOpen = deps.bus.on('overlay:open', ({ id }) => {
     if (MODALS.includes(id) && bannerScreen()) void deps.banners?.hide().catch(() => undefined);
+    // §1.15 (critic C16): every path that opens Settings goes through router.open('settings').
+    if (id === 'settings') settingsSeen();
   });
   const offClose = deps.bus.on('overlay:close', ({ id }) => {
     if (MODALS.includes(id) && bannerScreen() && !router.stack().some((o) => MODALS.includes(o))) void deps.banners?.modalClosed().catch(() => undefined);
   });
+
+  /** §1.15: Settings opened: the dot's marker becomes cfg.settingsDot.version, saved at once (no-op when already seen). */
+  function settingsSeen(): void {
+    const before = save();
+    const next = markSettingsSeen(before, c);
+    if (next === before) return;
+    updateSave(() => next);
+    saves.now();
+  }
 
   function openSolvedDaily(today: string): void {
     const rec = save().daily[today];
@@ -234,7 +253,7 @@ export function createShell(deps: ShellDeps): Shell {
     unbindEvent = store.select(
       (s) => [s.save, s.ui.bannerReserved, s.ui.reducedMotion] as const,
       () => {
-        const v = selectEventView(store.get(), ctx(), def);
+        const v = selectEventView(store.get(), ctx(), def, c);
         if (v && eventScreen === view) view.update(v);
       },
       { equals: shallowEqual },
@@ -300,7 +319,7 @@ export function createShell(deps: ShellDeps): Shell {
       // §4.4 "After the end: the card and screen are gone" (review L2B-4): "Back to event" after an
       // event ended mid-puzzle lands on Home, not on a dead event screen.
       if (!isEventLive(ev, clock.now())) return shell.showHome();
-      const view = selectEventView(store.get(), ctx(), ev);
+      const view = selectEventView(store.get(), ctx(), ev, c);
       if (!view) return shell.showHome();
       const mine = ++navGen;
       void deps.banners?.hide().catch(() => undefined);
@@ -308,7 +327,7 @@ export function createShell(deps: ShellDeps): Shell {
         onPlay: () => {
           // The screen was left open across the event's end (L2B-4): Home, not an error toast.
           if (!isEventLive(ev, clock.now())) return shell.showHome();
-          const v = selectEventView(store.get(), ctx(), ev);
+          const v = selectEventView(store.get(), ctx(), ev, c);
           if (v && v.nextIndex !== null) void deps.session().start({ mode: 'event', eventId: ev.id, index: v.nextIndex });
         },
         onTopList: () => deps.rankHub?.openEventTopList(ev),
@@ -322,7 +341,7 @@ export function createShell(deps: ShellDeps): Shell {
       store.update((s) => ({ ...s, screen: 'event', game: null, session: null }));
       bindEventScreen(screen, ev);
       // The reserve may have changed while the screen was built: render once with the latest state.
-      const fresh = selectEventView(store.get(), ctx(), ev);
+      const fresh = selectEventView(store.get(), ctx(), ev, c);
       if (fresh) screen.update(fresh);
       void deps.banners?.screenShown('event').catch(() => undefined);
     },

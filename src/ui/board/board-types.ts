@@ -1,4 +1,4 @@
-// Owner: B (Phase 2b)
+// Owner: B (Phase 2b); G2 (Phase 2d: setSlot's card frame, BoardInput.mouse)
 // Board view contract types (04 §5.3), re-exported by board-view.ts (the module callers import).
 import type { CellIndex, HintStep, PuzzleId } from '../../engine/types';
 import type { EventAccessory } from '../../game/events';
@@ -25,13 +25,21 @@ export type BoardHighlight =
   | { readonly kind: 'hint'; readonly step: HintStep } // focus outlined; effect cells show ghost Xs / ghost clear; placeCell a ghost cat
   | { readonly kind: 'coach'; readonly cells: readonly CellIndex[] }; // pulsing outline on the focus cells
 
-/** Board input, wired to the session by game-screen. Keyboard H/K map to bulb/paw. */
+/** Board input, wired to the session by game-screen. Keyboard H/K/M map to bulb/paw/mouse. */
 export interface BoardInput {
   tap(cell: CellIndex): void;
   doubleTap(cell: CellIndex): void;
   paint(cells: CellIndex[], mode: PaintMode): void;
   bulb(): void;
   paw(): void;
+  /** Phase 2d (look-spec §1.11): the M key on a focused cell. Optional until I-3. */
+  mouse?(): void;
+}
+
+/** Phase 2d (look-spec §1.8): the board card's padding (card edge → first slot edge) and corner radius, from computeLayout. */
+export interface BoardFrame {
+  readonly pad: number;
+  readonly radius: number;
 }
 
 export interface BoardViewOptions {
@@ -44,8 +52,11 @@ export interface BoardView {
   /** The board card element (role="grid"); game-screen places it. */
   readonly el: HTMLElement;
   update(model: BoardModel): void;
-  /** Slot size from layout.computeLayout (re-applied on resize). */
-  setSlot(slotPx: number): void;
+  /**
+   * Slot size from layout.computeLayout (re-applied on resize). Phase 2d: `frame` = the card padding
+   * and corner radius from computeLayout (absent: the 2b layout.boardPad / layout.boardRadius).
+   */
+  setSlot(slotPx: number, frame?: BoardFrame): void;
   geometry(): BoardGeometry;
   cellElement(cell: CellIndex): HTMLElement | null;
   /** Client rect of a cell's tile (coach positioning). */
@@ -57,7 +68,8 @@ export interface BoardView {
   /** Event mode (phase2b §4.4): layer the accessory symbol acc-<name> over every cat; null removes it. */
   setAccessory(accessory: EventAccessory | null): void;
   /**
-   * Transient FX for reducer events: MARKED draw-in, CAT_PLACED drop, MISTAKE flash + shake + sad
+   * Transient FX for reducer events: MARKED pop (Phase 2d: every new Mark pops over fx.markPopMs; the
+   * mouse's MARKED pops its cells fx.mouseStaggerMs apart), CAT_PLACED drop, MISTAKE flash + shake + sad
    * cats for fx.sadCatsMs, REGION_DONE fade, PULSE, WON happy cats after fx.winHappyDelayMs, KITTY sparkle.
    */
   playEvent(ev: GameEvent): void;

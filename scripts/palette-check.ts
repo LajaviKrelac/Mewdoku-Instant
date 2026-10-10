@@ -1,11 +1,13 @@
-// Owner: A (Phase 2b; was ui-board); G2 (Phase 2c.1: the level-points counter rows)
-// Palette validation for the one token set of the Classic look (02 §17.2, §18; phase2b §1.4, §1.5,
-// §1.12): pairwise CIEDE2000 ≥ 10, simulated deuteranopia/protanopia/tritanopia ΔE report; on every
-// tile, normal and faded: the white X's edge vs the tile ≥ 3 AND white vs that edge ≥ 3, Tux's outline
-// and fur ≥ 3, the wrong X ≥ 3, the colour-pattern glyph ≥ 3; the UI pairs of §1.4 at 4.5:1 (WCAG
-// 1.4.3) or 3:1 for the listed large-text and graphic pairs; every event theme (§4.3): the text pairs on
-// its page and on its pattern's motif colours, and the faded-tile checks with its page; PALETTE_DE00
-// matches PALETTE.
+// Owner: A (Phase 2b; was ui-board); G2 (Phase 2c.1: the level-points counter rows; Phase 2d: the
+// measured palette and tokens, look-spec §2.3)
+// Palette validation for the one token set (02 §17.2, §18; phase2b §1.4, §1.5, §1.12; look-spec §1.2,
+// §1.9, §2.3): pairwise CIEDE2000 ≥ 10, simulated deuteranopia/protanopia/tritanopia ΔE report; on every
+// tile, normal and faded: the X's edge (drawn with Colour patterns on) vs the tile ≥ 3 AND white vs
+// that edge ≥ 3, Tux's outline and fur ≥ 3, the wrong X ≥ 3, the colour-pattern glyph (--ink-deep) ≥ 3;
+// the plain white X of the default look is an informational row (a recorded parity exception, D-2d-6);
+// the UI pairs of §1.2 at 4.5:1 (WCAG 1.4.3) or 3:1 for the listed large-text and graphic pairs, plus
+// the informational parity exceptions; every event theme (§4.3): the text pairs on its page and on its
+// pattern's motif colours, and the faded-tile checks with its page; PALETTE_DE00 matches PALETTE.
 // Run: npx tsx scripts/palette-check.ts [--quiet]. Exits non-zero when a hard check fails.
 import { pathToFileURL } from 'node:url';
 import { cfg } from '../src/app/config';
@@ -32,7 +34,7 @@ export const MIN_TEXT_CONTRAST = 4.5;
 /** PALETTE_DE00 entries are ΔE × 100 rounded; allow one unit of rounding drift. */
 const MATRIX_TOLERANCE = 1;
 
-const NAMES = ['Strawberry', 'Apricot', 'Lemon', 'Lime', 'Mint', 'Lagoon', 'Sky', 'Lavender', 'Orchid', 'Cocoa', 'Slate', 'Moss'];
+const NAMES = ['Coral', 'Apricot', 'Mustard', 'Lime', 'Mint', 'Lagoon', 'Sky', 'Violet', 'Orchid', 'Cocoa', 'Slate', 'Pink'];
 
 function parseHex(hex: string): [number, number, number] {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
@@ -210,9 +212,11 @@ export interface ContrastRow {
 
 /**
  * Glyph-vs-tile contrast on every tile, normal and faded (faded = mixed toward `page` by
- * fx.regionFadeMix, as the board's veil does): the white X carries WCAG 1.4.11 through its edge, so
- * both the edge vs the tile and the white vs the edge must reach 3:1 (phase2b §1.5); Tux's outline and
- * fur, the wrong X (its ring stays outside the veil, board.css) and the colour-pattern glyph (02 §18).
+ * fx.regionFadeMix, as the board's veil does): with Colour patterns on, the white X carries WCAG
+ * 1.4.11 through its edge, so both the edge vs the tile and the white vs the edge must reach 3:1
+ * (look-spec §1.10, D-2d-5); Tux's outline and fur, the wrong X (its ring stays outside the veil,
+ * board.css) and the colour-pattern glyph in --ink-deep (02 §18). The default plain white X is
+ * reported by whiteOnTiles() (informational: a recorded parity exception, D-2d-6).
  */
 export function glyphContrast(page: string = TOKENS.page, pageName?: string): ContrastRow[] {
   const rows: ContrastRow[] = [];
@@ -224,22 +228,27 @@ export function glyphContrast(page: string = TOKENS.page, pageName?: string): Co
       const row = (what: string, ratio: number): void => {
         rows.push(pageName ? { what, tile, faded, ratio, page: pageName } : { what, tile, faded, ratio });
       };
-      row('X edge (--xe) vs tile', contrastRatio(edge, bg));
-      row('white X vs its edge', contrastRatio('#FFFFFF', edge));
+      row('X edge (--xe, patterns on) vs tile', contrastRatio(edge, bg));
+      row('white X vs its edge (patterns on)', contrastRatio('#FFFFFF', edge));
       row('cat outline', contrastRatio(CAT_COLORS.outline, bg));
       row('cat fur', contrastRatio(CAT_COLORS.fur, bg));
       row('wrong X (--wrong)', contrastRatio(TOKENS.wrong, bg));
       const patOp = faded ? L.patternOpacityDone : L.patternOpacity;
-      row('pattern glyph (--ink @ patternOpacity)', contrastRatio(over(TOKENS.ink, bg, patOp), bg));
+      row('pattern glyph (--ink-deep @ patternOpacity)', contrastRatio(over(TOKENS['ink-deep'], bg, patOp), bg));
     }
   });
   return rows;
 }
 
-/** How plain white fares on the tiles (informational: why the X needs its edge, phase2b §1.5). */
-export function whiteOnTiles(): { readonly min: number; readonly max: number } {
+/**
+ * The default plain white X on the tiles (informational, look-spec §1.2 D-2d-6: the user asked for
+ * the original's X; Colour patterns on restores the edge, and the cell's name says "crossed out"):
+ * normal tiles and faded ones (toward --page).
+ */
+export function whiteOnTiles(): { readonly min: number; readonly max: number; readonly fadedMin: number; readonly fadedMax: number } {
   const r = PALETTE.map((t) => contrastRatio('#FFFFFF', t));
-  return { min: Math.min(...r), max: Math.max(...r) };
+  const f = PALETTE.map((t) => contrastRatio('#FFFFFF', mixHex(t, TOKENS.page, cfg.fx.regionFadeMix)));
+  return { min: Math.min(...r), max: Math.max(...r), fadedMin: Math.min(...f), fadedMax: Math.max(...f) };
 }
 
 export interface UiContrastRow {
@@ -262,18 +271,20 @@ export function uiContrast(): UiContrastRow[] {
   const pairs: readonly (readonly [what: string, fg: string, bg: string, min: number])[] = [
     ['body text (--ink on --page)', T.ink, T.page, MIN_TEXT_CONTRAST],
     ['body text (--ink on --page-2)', T.ink, T['page-2'], MIN_TEXT_CONTRAST],
+    ['body text (--ink on --card)', T.ink, T.card, MIN_TEXT_CONTRAST],
+    ['body text (--ink on --accent-soft)', T.ink, T['accent-soft'], MIN_TEXT_CONTRAST],
     ['secondary text (--ink-2 on --page)', T['ink-2'], T.page, MIN_TEXT_CONTRAST],
     ['secondary text (--ink-2 on --page-2)', T['ink-2'], T['page-2'], MIN_TEXT_CONTRAST],
     ['secondary text (--ink-2 on --card)', T['ink-2'], T.card, MIN_TEXT_CONTRAST],
+    ['O9 toast (white on --ink)', white, T.ink, MIN_TEXT_CONTRAST],
     ['primary button label, large text (white on --accent)', white, T.accent, MIN_CONTRAST],
     ['accent as a graphic (--accent on --card)', T.accent, T.card, MIN_CONTRAST],
-    ['kitty tool icon (--accent on --card)', T.accent, T.card, MIN_CONTRAST],
     ['large title (--accent-title on --page)', T['accent-title'], T.page, MIN_CONTRAST],
     ['large title (--accent-title on --card)', T['accent-title'], T.card, MIN_CONTRAST],
     ['accent text (--accent-text on --page)', T['accent-text'], T.page, MIN_TEXT_CONTRAST],
     ['accent text (--accent-text on --page-2)', T['accent-text'], T['page-2'], MIN_TEXT_CONTRAST],
     ['accent text (--accent-text on --card)', T['accent-text'], T.card, MIN_TEXT_CONTRAST],
-    ['count badge (white on --accent-text)', white, T['accent-text'], MIN_TEXT_CONTRAST],
+    ['count badge on primary buttons (white on --accent-text)', white, T['accent-text'], MIN_TEXT_CONTRAST],
     ['focus ring (--focus on --page)', T.focus, T.page, MIN_CONTRAST],
     ['focus ring (--focus on --card)', T.focus, T.card, MIN_CONTRAST],
     ['ranking title, large text (--title-on-dark on --stage)', T['title-on-dark'], T.stage, MIN_CONTRAST],
@@ -282,14 +293,24 @@ export function uiContrast(): UiContrastRow[] {
     ['"Tap to keep going" (--tap-text on --scrim over --page)', T['tap-text'], scrimOnPage, MIN_TEXT_CONTRAST],
     ['Hard badge (white on --hard)', white, T.hard, MIN_TEXT_CONTRAST],
     ['empty tool badge (white on --ink-2)', white, T['ink-2'], MIN_TEXT_CONTRAST],
-    ['free tool badge (--ink on --gold)', T.ink, T.gold, MIN_TEXT_CONTRAST],
+    ['free tool badge (--ink-deep on --gold)', T['ink-deep'], T.gold, MIN_TEXT_CONTRAST],
     ['"In progress" (--amber-text on --card)', T['amber-text'], T.card, MIN_TEXT_CONTRAST],
-    ['fish outline (--ink on --fish)', T.ink, T.fish, MIN_CONTRAST],
-    // Phase 2c.1 §10.2 (G2): the level-points counter: digits on the white pill and, at the win, on
-    // --accent-soft ([data-final]); the icon-points outline (--ink) on the white pill (WCAG 1.4.11).
+    // Phase 2c.1 §10.2: the level points; Phase 2d §1.13: the Score column on the page, --accent-text at the win.
     ['level points (--ink on --card)', T.ink, T.card, MIN_TEXT_CONTRAST],
     ['level points at the win (--ink on --accent-soft)', T.ink, T['accent-soft'], MIN_TEXT_CONTRAST],
+    ['score at the win (--accent-text on --page)', T['accent-text'], T.page, MIN_TEXT_CONTRAST],
     ['points sparkle outline (--ink on --card)', T.ink, T.card, MIN_CONTRAST],
+    // Phase 2d (look-spec §1.2, §2.3): the round buttons, badges, the dot, rule cards, the toast, the fish shade.
+    ['round-button icon (--ink-icon on --card)', T['ink-icon'], T.card, MIN_CONTRAST],
+    ['count badge (white on --badge)', white, T.badge, MIN_TEXT_CONTRAST],
+    ['video badge mark (white on --badge-video)', white, T['badge-video'], MIN_CONTRAST],
+    ['settings dot (--dot on --card)', T.dot, T.card, MIN_CONTRAST],
+    ['settings dot (--dot on --page)', T.dot, T.page, MIN_CONTRAST],
+    ['rule text (--ink on --rule-card)', T.ink, T['rule-card'], MIN_TEXT_CONTRAST],
+    ['toast text (--ink on --toast-fill)', T.ink, T['toast-fill'], MIN_TEXT_CONTRAST],
+    ['mini-diagram X (white on --rule-mark)', white, T['rule-mark'], MIN_CONTRAST],
+    ['mini-diagram X box (--rule-mark on --rule-card)', T['rule-mark'], T['rule-card'], MIN_CONTRAST],
+    ['fish shade (--fish-deep on --card)', T['fish-deep'], T.card, MIN_CONTRAST],
     // The dark victory screen (review PAR-3): light text on opaque --stage, like the fail card.
     ['victory praise, large text (--title-on-dark on --stage)', T['title-on-dark'], T.stage, MIN_CONTRAST],
     ['victory lines (white .82 on --stage)', over(white, T.stage, 0.82), T.stage, MIN_TEXT_CONTRAST],
@@ -302,6 +323,23 @@ export function uiContrast(): UiContrastRow[] {
     ['rule keyword (--accent-text on --card)', T['accent-text'], T.card, MIN_TEXT_CONTRAST],
   ];
   return pairs.map(([what, fg, bg, min]) => ({ what, fg, bg, min, ratio: contrastRatio(fg, bg) }));
+}
+
+/**
+ * The recorded parity exceptions of look-spec §1.2 (D-2d-6), informational: each carries its
+ * information another way (the pill's or the cell's accessible name, the rule text, the toast text).
+ */
+export function parityExceptions(): UiContrastRow[] {
+  const T = TOKENS;
+  const rows: UiContrastRow[] = [];
+  const add = (what: string, fg: string, bg: string): void => {
+    rows.push({ what, fg, bg, min: 0, ratio: contrastRatio(fg, bg) });
+  };
+  for (let i = 0; i < PALETTE.length; i++) add(`head tint (${NAMES[i]} at 50 % on --card)`, over(PALETTE[i] as string, T.card, 0.5), T.card);
+  add('fish body on the white pill (--fish on --card)', T.fish, T.card);
+  add('mini-diagram tile (--rule-tile on --rule-card)', T['rule-tile'], T['rule-card']);
+  add('toast border (--toast-line on --page)', T['toast-line'], T.page);
+  return rows;
 }
 
 /**
@@ -375,7 +413,10 @@ export function main(argv: readonly string[]): void {
 
   // 4. Non-text contrast of the glyphs on every tile, normal and faded (WCAG 1.4.11).
   const white = whiteOnTiles();
-  log(`plain white on the tiles ${fmt(white.min)}–${fmt(white.max)}:1 (why the X carries an edge)`);
+  log(
+    `default white X on the tiles ${fmt(white.min)}–${fmt(white.max)}:1, faded ${fmt(white.fadedMin)}–${fmt(white.fadedMax)}:1 ` +
+      '(informational: parity exception D-2d-6; Colour patterns on adds the edge)',
+  );
   const events = eventContrast();
   const rows = [...glyphContrast(), ...events.glyphs];
   const byWhat = new Map<string, ContrastRow>();
@@ -394,6 +435,9 @@ export function main(argv: readonly string[]): void {
     log(`${r.what.padEnd(58)} ${fmt(r.ratio)}:1 (min ${r.min})`);
     if (r.ratio < r.min) failures.push(`${r.what}: ${fmt(r.ratio)}:1 < ${r.min}:1`);
   }
+
+  // 6. The recorded parity exceptions (informational, look-spec §1.2 D-2d-6).
+  for (const r of parityExceptions()) log(`${r.what.padEnd(58)} ${fmt(r.ratio)}:1 (informational, D-2d-6)`);
 
   if (failures.length) {
     console.error(`palette-check: ${failures.length} failure(s)`);

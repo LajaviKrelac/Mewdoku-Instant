@@ -13,6 +13,13 @@
 // banner up through play with no hide at all. Owning No Ads (a purchase, the boot restore or a late
 // cloud merge) takes a banner on show down at once (entitlementChanged, L2B-2).
 // C-internal module: platform.ads.banner (D) and bannerReserved (B) are fixed.
+// Phase 2d (G1, docs/phase2d/look-spec.md §1.16, D-2d-15): with ads.banner.duringPlay the game screen
+// is a banner screen too. Its band is reserved from mount when the gate says a banner MAY show
+// (eligible(), no load needed); the banner shows when the board entry ends (screenShown('game'))
+// under the same 60 s window. A banner that is up when the next game screen mounts stays up (no
+// screenGone + hide pair on a banner-to-banner transition: the session skips its hide). Over the game
+// screen the listed modals hide it and it is not re-shown on close: after a hide it shows again only
+// on the next eligible screen mount after the window. O4, O1, O2's prompt and the coach keep it.
 import { bannerGate } from '../game/ad-pacing';
 import type { BannerScreen, GameConfig } from './config';
 import { cfg } from './config';
@@ -33,11 +40,23 @@ export interface BannerFlowDeps {
 export interface BannerFlow {
   /** An eligible screen finished its entry. Sets the reserve synchronously when a load is attempted. */
   screenShown(screen: BannerScreen, opts?: { readonly firstRunTutorial?: boolean }): Promise<void>;
+  /**
+   * Phase 2d §1.16: whether the gate lets `screen` carry a banner now (enabled, capability, the screen
+   * — 'game' only with ads.banner.duringPlay —, levels completed, No Ads, the tutorial), without the
+   * 60 s window and without any side effect. The game screen reserves its band from this at mount.
+   */
+  eligible(screen: BannerScreen, opts?: { readonly firstRunTutorial?: boolean }): boolean;
   /** Before unmount, a transition to the game screen, an interstitial or rewarded ad, or a modal overlay. */
   hide(): Promise<void>;
-  /** The current screen unmounted: drop the reserve (and remember it no longer shows a banner). */
+  /**
+   * The current screen unmounted: drop the reserve (and remember it no longer shows a banner). Not a
+   * hide: the caller hides first unless the next screen keeps the banner (phase 2d §1.16).
+   */
   screenGone(): void;
-  /** A modal closed over `screen`: show again only when the reload window has passed. */
+  /**
+   * A modal closed over `screen`: show again only when the reload window has passed. Phase 2d: never
+   * on the game screen (it shows again only on the next eligible screen mount).
+   */
   modalClosed(): Promise<void>;
   /**
    * The No Ads entitlement may have changed (a purchase, the boot restore, a merged cloud save): when
@@ -85,17 +104,21 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
     }
   };
 
+  const gateOk = (screen: BannerScreen, firstRunTutorial: boolean): boolean =>
+    bannerGate({ screen, save: store.get().save, bannerSupported: supported(), firstRunTutorial }, c) === 'ok';
+
   async function attempt(): Promise<void> {
     const cur = current;
     const banner = api();
     if (!cur || !banner) return;
-    const gate = bannerGate(
-      { screen: cur.screen, save: store.get().save, bannerSupported: supported(), firstRunTutorial: cur.firstRunTutorial },
-      c,
-    );
-    if (gate !== 'ok') return;
+    if (!gateOk(cur.screen, cur.firstRunTutorial)) return;
     const now = clock.perf();
-    if (lastLoadAt !== null && now - lastLoadAt < c.ads.banner.minReloadSec * 1000) return; // skip this screen
+    if (lastLoadAt !== null && now - lastLoadAt < c.ads.banner.minReloadSec * 1000) {
+      // Skip this screen's load. Phase 2d: a banner still up (or loading) from the previous banner
+      // screen stayed (no hide in between), so this screen reserves its band for it.
+      if (shown || pending) setReserved(true);
+      return;
+    }
     lastLoadAt = now;
     setReserved(true);
     const mine = ++gen;
@@ -111,7 +134,9 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
     if (r.ok) {
       shown = true;
       pending = false;
-      // The screen went away (or a modal opened) while the banner was loading: hide it again at once.
+      // A hide (a modal, an ad, leaving to a non-banner screen) came while the banner was loading, or
+      // the screen went away and no banner screen took over: hide it again at once (FB2B-1). Phase
+      // 2d: a load that lands on the next banner screen (no hide in between) stays up there.
       if (mine !== gen || current === null) await flow.hide();
       return;
     }
@@ -127,6 +152,9 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
       current = { screen, firstRunTutorial: opts?.firstRunTutorial === true };
       await attempt();
     },
+    eligible(screen, opts) {
+      return !!api() && gateOk(screen, opts?.firstRunTutorial === true);
+    },
     async hide() {
       gen++;
       const banner = api();
@@ -141,12 +169,12 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
       }
     },
     screenGone() {
-      gen++;
+      // Not a hide (phase 2d): a banner screen that follows without a hide keeps a banner that is up.
       current = null;
       setReserved(false);
     },
     async modalClosed() {
-      if (current && !shown) await attempt();
+      if (current && current.screen !== 'game' && !shown) await attempt();
     },
     async entitlementChanged() {
       if (!store.get().save.purchases.noAds) return;

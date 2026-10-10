@@ -39,6 +39,7 @@ const ACTIONS: Record<ActionType, Action> = {
   REVIVE: { type: 'REVIVE', t: 9 },
   RETRY: { type: 'RETRY' },
   TICK: { type: 'TICK', dtMs: 1000 },
+  MOUSE: { type: 'MOUSE', cells: [cell(1, 1)], t: 9 },
 };
 
 const STATUSES: Status[] = ['ready', 'playing', 'hint', 'kitty', 'won', 'lost'];
@@ -57,6 +58,7 @@ const NEXT: Partial<Record<ActionType, Partial<Record<Status, Status>>>> = {
   REVIVE: { lost: 'playing' },
   RETRY: { lost: 'ready' },
   TICK: { playing: 'playing', hint: 'hint', kitty: 'kitty' },
+  MOUSE: { playing: 'playing' },
 };
 
 const MATRIX = STATUSES.flatMap((status) =>
@@ -78,6 +80,7 @@ describe('04 §4.2 status × action matrix', () => {
       REVIVE: ['lost'],
       RETRY: ['lost'],
       TICK: ['playing', 'hint', 'kitty'],
+      MOUSE: ['playing'],
     });
     expect(isActionAllowed('hint', 'TICK')).toBe(true);
     expect(isActionAllowed('won', 'TICK')).toBe(false);

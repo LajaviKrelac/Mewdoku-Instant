@@ -15,6 +15,15 @@
 // never overlap and stay inside the pills row, with the points counter centred; during the win flow
 // the period counter (in the cat counter's place) never overlaps the points counter; the counter is
 // not focusable.
+// Phase 2d (G1, docs/phase2d/look-spec.md §1.1, §1.16, §5.3): the game screen is the measured top-down
+// stack (bar, pills, rules, board, tools, then the banner band): every row inside the viewport, in
+// that order, never overlapping, the board centred, at 320 × 568, 360 × 640, 390 × 844, 1280 × 800 and
+// with 2× text; 12 × 12 keeps whole cells, also at 320 × 568 with a 20 px safe top and the band (slot
+// ≥ 21); every round button keeps a 44 × 44 hit area (elementFromPoint at its corners); the banner and
+// the helpers never overlap; Tab goes back → gear → board → kitty → bulb → mouse. On the web the game
+// screen's back disc sits where the original's is (top left): the FB safe zone is checked on Home here
+// and on the game screen in the FBIG build (fbig.spec.ts). The 2c.1 pills test now checks the heads
+// pill, the fish pill and the bar's Score column.
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -66,10 +75,16 @@ async function boardVisible(page: Page): Promise<void> {
   }
 }
 
+/**
+ * Nothing interactive in the top-left 64 × 64. Phase 2d: on the web the game screen's back disc sits
+ * where the original's does (the FB shift is FBIG-only, look-spec §1.1), so the game screen is skipped
+ * here (fbig.spec.ts checks it in the FBIG build).
+ */
 async function safeZoneClear(page: Page): Promise<void> {
   const hits = await page.evaluate((zone) => {
     const out: string[] = [];
     for (const el of Array.from(document.querySelectorAll<HTMLElement>('button, a[href], [role="button"]'))) {
+      if (el.closest('.screen--game')) continue;
       const r = el.getBoundingClientRect();
       if (r.width === 0 || r.height === 0 || el.closest('[hidden]')) continue;
       if (r.left < zone && r.top < zone) out.push(el.className || el.tagName);

@@ -7,10 +7,14 @@
 // Phase 2c.1 (G1, fish-lives-spec §3.2.3–§3.2.4): still v3. The in-progress slots may carry the
 // optional points / catStreak / scoredRows (copySlot keeps the valid ones, reports and drops a bad
 // one); merge takes inProgress whole from the newer document, fields included. `streak` is frozen.
+// Phase 2d (G1, docs/phase2d/look-spec.md §1.15): still v3. ext.settingsSeen (the settings-dot marker)
+// is validated on read (an invalid value is dropped and reported) and merged by max.
 import { cfg, type GameConfig } from '../app/config';
 import {
   copySlot,
   isInProgressShape,
+  mergeExt,
+  readExt,
   isNonNegInt,
   isPosInt,
   isRecord,
@@ -25,6 +29,7 @@ import type { DailyRecord, InProgressV2, LevelBest, ReduceMotionSetting, SaveDat
 
 export type { InProgressV1, InProgressV2, PeriodRecord, SaveData, SaveDataV1, SaveDataV2, SaveDataV3, StreakRecord } from './types';
 export { decodeCells, encodeCells, validateInProgress, validateSlot, slotLimitsOf, isInProgressShape } from './save-fields';
+export { markSettingsSeen, settingsDotOn, settingsSeenOf, SETTINGS_SEEN_KEY } from './save-fields';
 export type { SlotCheck, SlotLimits } from './save-fields';
 
 /** Current schema version (phase2c §3.8). Storage keys stay `mewdoku.save.v1` / cloud `save` [DECISION]. */
@@ -188,7 +193,7 @@ function validateV3(d: Record<string, unknown>, now: number, c: GameConfig, rep:
     settings,
     ads,
     inProgress: { level: slot('level'), daily: slot('daily'), event: slot('event') },
-    ext: isRecord(d.ext) ? { ...d.ext } : (rep.push('ext'), {}),
+    ext: isRecord(d.ext) ? readExt(d.ext, rep) : (rep.push('ext'), {}),
     ...readV2Fields(d, c, rep),
     ...readV3Fields(d, c, rep),
   };
@@ -224,7 +229,7 @@ export function merge(local: SaveData, cloud: SaveData, c: GameConfig = cfg): Sa
     settings: { ...newer.settings },
     ads: { ...newer.ads },
     inProgress: { level: newer.inProgress.level, daily: newer.inProgress.daily, event: newer.inProgress.event },
-    ext: { ...newer.ext },
+    ext: mergeExt(local, cloud, newer),
     ...mergeV2Fields(local, cloud, newer, c),
     ...mergeV3Fields(local, cloud, newer),
   };

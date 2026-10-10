@@ -1,6 +1,7 @@
 // Owner: C (Phase 2b; F0 added the 2b bus events and analytics rows: add entries, never change existing payloads).
 // Phase 2c (G1): analytics row win_points (§3.9); the bus event `wallet` is removed (no fish wallet).
 // Phase 2c.1 (G1, §10.5): win_points.streak becomes `run` (the cat run at WON); points = the level's total.
+// Phase 2d (G1, docs/phase2d/look-spec.md §1.12): mouse_used (the mouse helper crossed out `cells` tiles).
 // Typed event bus (04 §3) and the analytics event table (02 §20). Phase 3 hook: achievements,
 // quests and stats subscribe here without touching the session.
 import type { HintKind } from '../engine/types';
@@ -106,6 +107,9 @@ export interface AnalyticsParamsMap {
    * the correct cats in a row since the last mistake; the cats found for a mistake-free level).
    */
   win_points: { mode: ModeId; fish: number; total: number; points: number; run: number };
+  // ── phase2d §1.12: once per use of the mouse helper (after its video or free grant) ──
+  /** cells = the X marks the mouse placed (≤ cfg.mouse.cells). */
+  mouse_used: { mode: ModeId; cells: number };
 }
 export type AnalyticsName = keyof AnalyticsParamsMap;
 export type AnalyticsEvent = { [K in AnalyticsName]: { name: K; params: AnalyticsParamsMap[K] } }[AnalyticsName];
@@ -135,6 +139,7 @@ export const ANALYTICS_PARAM_KEYS: { readonly [K in AnalyticsName]: readonly (ke
   group_result: ['mode', 'place', 'wins', 'doubled'],
   iap: ['product', 'result', 'platform'],
   win_points: ['mode', 'fish', 'total', 'points', 'run'],
+  mouse_used: ['mode', 'cells'],
 };
 
 // ─────────────────────────────── App events ───────────────────────────────

@@ -1,6 +1,7 @@
 // Owner: C (Phase 2b)
 // GameMode registry (02 §22 Phase 3 hook): rules flags, save slot, helper charging, win flow.
 // Phase 2c.1 (G1): RuleFlags.points, what a correct cat is worth in the mode (fish-lives-spec §3.2.1).
+// Phase 2d (G1, docs/phase2d/look-spec.md §1.12): mouseAllowed (the third helper) = kittyAllowed.
 import { cfg, type GameConfig } from '../app/config';
 import type { Puzzle } from '../engine/types';
 import { pointsRuleFor } from './scoring';
@@ -16,6 +17,8 @@ export interface GameMode {
   readonly chargesHelpers: boolean;
   /** Paw usable in this mode (false in the tutorial). */
   readonly kittyAllowed: boolean;
+  /** Phase 2d §1.12: the mouse helper is offered in this mode (= kittyAllowed; never in the tutorial). */
+  readonly mouseAllowed: boolean;
   /** O3 for levels and the tutorial, O7 for dailies (02 §10.1). phase2b §2.6 adds 'event' (victory, event variant). */
   readonly winFlow: 'level' | 'daily' | 'tutorial' | 'event';
   /** Interstitial trigger after the win flow's button, or null (tutorial: no gate). phase2b §3.2 adds 'event_next'. */
@@ -56,6 +59,7 @@ function buildModes(c: GameConfig): Readonly<Record<ModeId, GameMode>> {
     saveSlot: null,
     chargesHelpers: false,
     kittyAllowed: false,
+    mouseAllowed: false,
     winFlow: 'tutorial',
     winGate: null,
     fixedColors: TUTORIAL_COLORS,
@@ -69,6 +73,7 @@ function buildModes(c: GameConfig): Readonly<Record<ModeId, GameMode>> {
     saveSlot: 'level',
     chargesHelpers: true,
     kittyAllowed: true,
+    mouseAllowed: true,
     winFlow: 'level',
     winGate: 'next_level',
     fixedColors: null,
@@ -82,6 +87,7 @@ function buildModes(c: GameConfig): Readonly<Record<ModeId, GameMode>> {
     saveSlot: 'daily',
     chargesHelpers: true,
     kittyAllowed: true,
+    mouseAllowed: true,
     winFlow: 'daily',
     winGate: 'daily_done',
     fixedColors: null,
@@ -98,6 +104,7 @@ function buildModes(c: GameConfig): Readonly<Record<ModeId, GameMode>> {
     saveSlot: 'event',
     chargesHelpers: true,
     kittyAllowed: true,
+    mouseAllowed: true,
     winFlow: 'event',
     winGate: 'event_next',
     fixedColors: null,

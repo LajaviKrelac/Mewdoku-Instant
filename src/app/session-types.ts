@@ -31,6 +31,8 @@ export interface GameCommands {
   onBulb(): Promise<void>;
   /** 02 §9.2 flow: stock → O2 → pickKittyCell → debit → KITTY → KITTY_DONE after kitty.revealMs. */
   onPaw(): Promise<void>;
+  /** Phase 2d §1.12: O2 → rewarded video or the free fallback → pickMouseCells → MOUSE (no stock). */
+  onMouse(): Promise<void>;
   onHintApply(): void;
   onHintClose(): void;
   /** Tutorial step 2 "Got it". */
@@ -106,7 +108,11 @@ export interface SessionDeps {
   readonly rankings?: RankingFlow;
   /** Group challenges (§5.6; phase2c §4.8): a counted win's fish kept. */
   readonly groups?: Pick<GroupFlow, 'onWin'>;
-  /** Banners (§3.2): the victory screen shows one; hidden before every new board. */
+  /**
+   * Banners (§3.2): the victory screen shows one. Phase 2d §1.16: the game screen too while
+   * ads.banner.duringPlay (band from mount, shown at the entry's end); hidden before a board that
+   * may not carry one.
+   */
   readonly banners?: BannerFlow;
   /** The app root for the fish layer (§2.3); null without a DOM. */
   root?(): HTMLElement | null;

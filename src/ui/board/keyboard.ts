@@ -1,6 +1,8 @@
-// Owner: B (Phase 2b; was ui-board)
+// Owner: B (Phase 2b; was ui-board); G2 (Phase 2d: M = the mouse helper)
 // Keyboard play (02 §6.3, §18): roving tabindex on the cell buttons, arrows move, Space = tap,
-// Enter = double-tap, H = hint, K = kitty. Esc is handled globally by the router.
+// Enter = double-tap, H = hint, K = kitty, M = mouse (Phase 2d, look-spec §1.11: forwarded to
+// BoardInput.mouse, which the screen ignores while the mouse is not shown and enabled). Esc is handled
+// globally by the router.
 // Like a pointer double-tap, Enter locks its cell for input.cellLockAfterCatMs (02 §6.2): a quick
 // second Enter (or Space) must not undo the cat that was just placed.
 import { cfg, type GameConfig } from '../../app/config';
@@ -12,6 +14,8 @@ export interface KeyboardCallbacks {
   doubleTap(cell: CellIndex): void;
   bulb(): void;
   paw(): void;
+  /** Phase 2d: the M key (optional until I-3, like BoardInput.mouse). */
+  mouse?(): void;
 }
 
 export interface KeyboardOptions {
@@ -102,7 +106,7 @@ export function attachKeyboard(boardEl: HTMLElement, cb: KeyboardCallbacks, opts
       return;
     }
     const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-    const act = key === ' ' || key === 'Spacebar' ? 'tap' : key === 'Enter' ? 'double' : key === 'h' ? 'bulb' : key === 'k' ? 'paw' : null;
+    const act = key === ' ' || key === 'Spacebar' ? 'tap' : key === 'Enter' ? 'double' : key === 'h' ? 'bulb' : key === 'k' ? 'paw' : key === 'm' && cb.mouse ? 'mouse' : null;
     if (!act) return;
     e.preventDefault(); // no page scroll on Space, no synthetic click on Enter
     if (e.repeat || opts.isLocked()) return;
@@ -114,6 +118,7 @@ export function attachKeyboard(boardEl: HTMLElement, cb: KeyboardCallbacks, opts
     if (act === 'tap') cb.tap(current);
     else if (act === 'double') cb.doubleTap(current);
     else if (act === 'bulb') cb.bulb();
+    else if (act === 'mouse') cb.mouse?.();
     else cb.paw();
   };
 

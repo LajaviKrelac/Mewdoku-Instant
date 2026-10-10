@@ -1,4 +1,4 @@
-// Owner: B (Phase 2b; was ui-shell); G2 (Phase 2c: the lives are fish, plus the points note; 2c.1: level points)
+// Owner: B (Phase 2b; was ui-shell); G2 (Phase 2c: the lives are fish, plus the points note; 2c.1: level points); G3 (Phase 2d: the helpers note)
 // O6 how to play (02 §4.2, §14): three illustrated rules, controls, plus "I know how to play"
 // (only while the first-run tutorial runs) or "Replay tutorial" (after it is done).
 // Phase 2c (fish-lives-spec §1.5): the lives note shows our fish (icon-fish, howto.hearts "Your fish
@@ -6,6 +6,8 @@
 // fish go to this period's ranking). Phase 2c.1 (§10.7): the perfect-streak sentence went from that
 // note, and a level-points note with icon-points follows it (howto.levelPoints: every cat found earns
 // points, more for each cat in a row without a mistake; hint and kitty cats count too).
+// Phase 2d (look-spec Appendix A): the helpers note names the kitty, the bulb and the mouse, next to
+// their own art (tool-kitty, tool-bulb, tool-mouse) in a small column.
 // The three rule pictures are small SVG boards drawn here (our own art, 06 §5).
 //
 // Classes: .overlay[data-overlay=how_to_play] > .overlay__panel--dialog.howto
@@ -130,7 +132,12 @@ export function createHowToPlay(): OverlayView<HowToPlayProps> {
         L.text(h('span'), () => howtoPointsText(cfg.period.kind)),
       ),
       h('p', { class: 'howto__level-points' }, icon('icon-points', { class: 'howto__note-icon howto__note-icon--points' }), note('howto.levelPoints')),
-      h('p', null, icon('icon-bulb', { class: 'howto__note-icon howto__note-icon--bulb' }), note('howto.helpers')),
+      h(
+        'p',
+        { class: 'howto__helpers' },
+        h('span', { class: 'howto__note-icon howto__helper-art', 'aria-hidden': 'true' }, icon('tool-kitty'), icon('tool-bulb'), icon('tool-mouse')),
+        note('howto.helpers'),
+      ),
     ),
     extra,
   );

@@ -1,9 +1,16 @@
 // Owner: C (Phase 2b; was app). Feature flags (02 §22) and the AppState → view-model selectors.
+// Phase 2d (G1, docs/phase2d/look-spec.md §4.3, §5.1): the game view's pulse (rule 'auto' and the
+// pinned targets), the mouse (shown / enabled), videoRefill, bannerBand and the gear's dot (game,
+// Home, event screen).
 import { afterEach, describe, expect, it } from 'vitest';
+import { mergeConfig } from '../../../src/app/config';
 import { DEFAULT_FLAGS, isFlagOn, parseFlagParam, setFlagOverrides } from '../../../src/app/flags';
 import { initialAppState, type AppState, type SessionMeta } from '../../../src/app/store';
-import { personalRecords, selectGameView, selectHomeView, selectVictoryView, type ViewContext } from '../../../src/app/views';
+import { personalRecords, selectEventView, selectGameView, selectHomeView, selectPulse, selectVictoryView, untouchedBoard, type ViewContext } from '../../../src/app/views';
+import { bundledEventDefs } from '../../../src/app/event-flow';
+import { CellState, type GameState } from '../../../src/game/types';
 import type { WinSummary } from '../../../src/app/session-effects';
+import { eventStart } from '../../../src/game/events';
 import { newGame } from '../../../src/game/factory';
 import { defaults } from '../../../src/game/save';
 import type { SaveData } from '../../../src/game/types';
@@ -112,7 +119,7 @@ describe('selectGameView', () => {
       level: 1,
       dateKey: null,
       hard: false,
-      colors: Uint8Array.from([4, 7, 2, 0]),
+      colors: Uint8Array.from([3, 7, 2, 0]),
       tutorialStep: 1,
       substitute: false,
     };
@@ -189,5 +196,167 @@ describe('phase2c.1 §3.2.5: the victory and the records (no streak anywhere)', 
     const r = personalRecords(app({ points: { total: 13_248 }, streak: { current: 4, best: 9 }, period: { key: '2026-10-05', total: 12, bestKey: '2026-09-28', bestTotal: 30 } }), ctx, { board: 'period', n: 8, thisMs: 1000 });
     expect(r).toMatchObject({ board: 'period', totalPoints: 13_248, period: { kind: 'week', total: 12, best: 30 } });
     expect(r).not.toHaveProperty('streak');
+  });
+});
+
+// ─────────────────────────── phase 2d §4.3: the new game-view fields ───────────────────────────
+
+describe('phase 2d §4.3: pulse, mouse, videoRefill, bannerBand, settingsDot', () => {
+  const base = (patch: Partial<AppState> = {}): AppState => {
+    const init = initialAppState({ ...defaults(NOW), tutorialDone: true, progress: { level: 15, completed: 14, best: {} } });
+    return { ...init, ui: { ...init.ui, inputLocked: false }, ...patch };
+  };
+  const meta = (patch: Partial<SessionMeta> = {}): SessionMeta => ({
+    request: { mode: 'level', level: 15 },
+    mode: 'level',
+    puzzleId: 'L15',
+    level: 15,
+    dateKey: null,
+    hard: false,
+    colors: Uint8Array.from([0, 1, 2, 3, 5]),
+    tutorialStep: null,
+    substitute: false,
+    ...patch,
+  });
+  const playingGame = (): GameState => ({ ...newGame(levelPuzzle(15), 'level'), status: 'playing' });
+  const marked = (g: GameState, cell: number, v: number = CellState.Mark): GameState => {
+    const cells = g.cells.slice();
+    cells[cell] = v;
+    return { ...g, cells };
+  };
+  const view = (st: AppState, c = ctx, config = mergeConfig({})) => selectGameView(st, c, config);
+  const rewardCtx: ViewContext = { ...ctx, capabilities: { ...caps, rewarded: true } };
+
+  describe("pulse (§1.11, D-2d-11): rule 'auto'", () => {
+    it('the kitty while the board is untouched; the bulb after a mark, a cat or a wrong cell', () => {
+      const g = playingGame();
+      expect(untouchedBoard(g)).toBe(true);
+      expect(view(base({ game: g, session: meta() }))?.pulse).toBe('paw');
+      expect(view(base({ game: marked(g, 1), session: meta() }))?.pulse).toBe('bulb');
+      expect(view(base({ game: marked(g, 0, CellState.Cat), session: meta() }))?.pulse).toBe('bulb');
+      expect(view(base({ game: marked(g, 1, CellState.Wrong), session: meta() }))?.pulse).toBe('bulb');
+      // A given cat is part of the puzzle, not a move: the board is still untouched.
+      expect(untouchedBoard(marked(g, 0, CellState.Given))).toBe(true);
+      // Clearing every mark makes it untouched again (the rule reads the board, not the move log).
+      expect(view(base({ game: { ...marked(g, 1), cells: g.cells }, session: meta() }))?.pulse).toBe('paw');
+    });
+
+    it('null outside PLAYING, under any overlay (modal, hint card, O2, coach), in the tutorial and in the win flow', () => {
+      const g = playingGame();
+      for (const status of ['ready', 'hint', 'kitty', 'won', 'lost'] as const) {
+        expect(view(base({ game: { ...g, status }, session: meta() }))?.pulse).toBeNull();
+      }
+      for (const id of ['settings', 'hint', 'rewarded', 'coach', 'fail', 'ranking', 'victory'] as const) {
+        expect(view(base({ game: g, session: meta(), overlays: [id] }))?.pulse).toBeNull();
+      }
+      const tut = { ...newGame(tutorialPuzzle(), 'tutorial'), status: 'playing' as const };
+      const tutMeta = meta({ request: { mode: 'tutorial', replay: false }, mode: 'tutorial', puzzleId: 'T1', level: 1, tutorialStep: 5 });
+      expect(view(base({ game: tut, session: tutMeta }))?.pulse).toBeNull();
+      expect(view(base({ game: tut, session: { ...tutMeta, tutorialStep: null, request: { mode: 'tutorial', replay: true } } }))?.pulse).toBeNull();
+      // From WON until the ranking panel the chrome is locked: no pulse either.
+      expect(view(base({ game: g, session: meta() }), { ...ctx, chromeLocked: true })?.pulse).toBeNull();
+    });
+
+    it('only while the target is enabled: an ad, a helper flow (input lock) or the kitty not allowed → none', () => {
+      const g = playingGame();
+      expect(view(base({ game: g, session: meta(), ui: { ...base().ui, adShowing: true } }))?.pulse).toBeNull();
+      expect(view(base({ game: g, session: meta(), ui: { ...base().ui, inputLocked: true } }))?.pulse).toBeNull();
+      // The chosen helper disabled: no fallback to the other one.
+      expect(selectPulse(base({ game: g, session: meta() }), {}, { paw: false, bulb: true })).toBeNull();
+      expect(selectPulse(base({ game: marked(g, 1), session: meta() }), {}, { paw: true, bulb: false })).toBeNull();
+      expect(selectPulse(base({ game: marked(g, 1), session: meta() }), {}, { paw: true, bulb: true })).toBe('bulb');
+    });
+
+    it('reduced motion: no pulse', () => {
+      const g = playingGame();
+      expect(view(base({ game: g, session: meta(), ui: { ...base().ui, reducedMotion: true } }))?.pulse).toBeNull();
+    });
+
+    it("'kitty', 'bulb' pin one helper and 'off' stops it (fx.helperPulse.target via mergeConfig)", () => {
+      const g = playingGame();
+      const m = marked(g, 1);
+      const at = (target: 'kitty' | 'bulb' | 'off' | 'auto', game: GameState) =>
+        view(base({ game, session: meta() }), ctx, mergeConfig({ fx: { helperPulse: { target } } }))?.pulse;
+      expect([at('kitty', g), at('kitty', m)]).toEqual(['paw', 'paw']);
+      expect([at('bulb', g), at('bulb', m)]).toEqual(['bulb', 'bulb']);
+      expect([at('off', g), at('off', m)]).toEqual([null, null]);
+      expect([at('auto', g), at('auto', m)]).toEqual(['paw', 'bulb']);
+    });
+  });
+
+  describe('mouse (§1.12)', () => {
+    it('shown in levels, dailies and events (the modes that allow the kitty); enabled while the tools are ready and a tile is left', () => {
+      const g = playingGame();
+      expect(view(base({ game: g, session: meta() }))?.mouse).toEqual({ shown: true, enabled: true });
+      const daily = meta({ request: { mode: 'daily', dateKey: TODAY }, mode: 'daily', level: null, dateKey: TODAY });
+      expect(view(base({ game: { ...g, mode: 'daily' }, session: daily }))?.mouse).toEqual({ shown: true, enabled: true });
+      const def = bundledEventDefs()[0];
+      const ev = meta({ mode: 'event', level: null, ...(def ? { request: { mode: 'event', eventId: def.id, index: 0 }, event: { def, index: 0 } } : {}) });
+      expect(view(base({ game: { ...g, mode: 'event' }, session: ev }))?.mouse).toEqual({ shown: true, enabled: true });
+    });
+
+    it('shown but disabled: not playing, a modal or the hint card open, an ad, a flow running, no tile left to cross out', () => {
+      const g = playingGame();
+      expect(view(base({ game: { ...g, status: 'ready' }, session: meta() }))?.mouse).toEqual({ shown: true, enabled: false });
+      expect(view(base({ game: g, session: meta(), overlays: ['settings'] }))?.mouse).toEqual({ shown: true, enabled: false });
+      expect(view(base({ game: g, session: meta(), overlays: ['rewarded'] }))?.mouse?.enabled).toBe(false);
+      expect(view(base({ game: g, session: meta(), ui: { ...base().ui, adShowing: true } }))?.mouse?.enabled).toBe(false);
+      expect(view(base({ game: g, session: meta(), ui: { ...base().ui, inputLocked: true } }))?.mouse?.enabled).toBe(false);
+      // Every non-solution tile crossed out: nothing left for the mouse.
+      const cells = g.cells.slice();
+      const { n, solution } = g.puzzle;
+      for (let i = 0; i < cells.length; i++) if (solution[Math.floor(i / n)] !== i % n) cells[i] = CellState.Mark;
+      expect(view(base({ game: { ...g, cells }, session: meta() }))?.mouse).toEqual({ shown: true, enabled: false });
+    });
+
+    it('never in the tutorial (any step, first run or replay); hidden everywhere with cfg.mouse.enabled off', () => {
+      const tut = { ...newGame(tutorialPuzzle(), 'tutorial'), status: 'playing' as const };
+      const tutMeta = meta({ request: { mode: 'tutorial', replay: false }, mode: 'tutorial', puzzleId: 'T1', level: 1 });
+      for (const step of [1, 2, 3, 4, 5, 6, null]) {
+        expect(view(base({ game: tut, session: { ...tutMeta, tutorialStep: step } }))?.mouse).toEqual({ shown: false, enabled: false });
+      }
+      expect(view(base({ game: tut, session: { ...tutMeta, request: { mode: 'tutorial', replay: true } } }))?.mouse?.shown).toBe(false);
+      const off = mergeConfig({ mouse: { enabled: false } });
+      expect(view(base({ game: playingGame(), session: meta() }), ctx, off)?.mouse).toEqual({ shown: false, enabled: false });
+    });
+  });
+
+  it('videoRefill: a rewarded video can refill (ads.enabled and capabilities().rewarded)', () => {
+    const st = base({ game: playingGame(), session: meta() });
+    expect(view(st)?.videoRefill).toBe(false); // web: no rewarded ads
+    expect(view(st, rewardCtx)?.videoRefill).toBe(true);
+    expect(view(st, rewardCtx, mergeConfig({ ads: { enabled: false } }))?.videoRefill).toBe(false);
+  });
+
+  it('bannerBand: decided at mount (SessionMeta.bannerBand); No Ads takes it away', () => {
+    const g = playingGame();
+    expect(view(base({ game: g, session: meta() }))?.bannerBand).toBe(false);
+    expect(view(base({ game: g, session: meta({ bannerBand: false }) }))?.bannerBand).toBe(false);
+    const st = base({ game: g, session: meta({ bannerBand: true }) });
+    expect(view(st)?.bannerBand).toBe(true);
+    expect(view({ ...st, save: { ...st.save, purchases: { noAds: true, tokens: [] } } })?.bannerBand).toBe(false);
+  });
+
+  it('settingsDot: save.ext.settingsSeen below settingsDot.version, on the game, Home and the event screen', () => {
+    const g = playingGame();
+    const def = bundledEventDefs()[0];
+    const evCtx: ViewContext = { ...ctx, now: def ? eventStart(def) + 1 : NOW };
+    const at = (ext: Record<string, unknown>, config = mergeConfig({})) => {
+      const st = base({ game: g, session: meta() });
+      const s2 = { ...st, save: { ...st.save, ext } };
+      return [
+        view(s2, ctx, config)?.settingsDot,
+        selectHomeView(s2, ctx, config).settingsDot,
+        def ? selectEventView(s2, evCtx, def, config)?.settingsDot : undefined,
+      ];
+    };
+    const both = (v: boolean) => (def ? [v, v, v] : [v, v, undefined]);
+    expect(at({})).toEqual(both(true)); // never opened (absent = 0) < version 1
+    expect(at({ settingsSeen: 0 })).toEqual(both(true));
+    expect(at({ settingsSeen: 1 })).toEqual(both(false));
+    expect(at({ settingsSeen: 2 })).toEqual(both(false));
+    expect(at({ settingsSeen: 'x' })).toEqual(both(true)); // invalid counts as 0
+    expect(at({ settingsSeen: 1 }, mergeConfig({ settingsDot: { version: 2 } }))).toEqual(both(true)); // a newer Settings change
+    expect(at({}, mergeConfig({ settingsDot: { version: 0 } }))).toEqual(both(false)); // 0 turns the dot off
   });
 });

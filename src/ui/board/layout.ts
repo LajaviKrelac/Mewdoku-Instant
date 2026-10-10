@@ -1,7 +1,10 @@
-// Owner: A (Phase 2b)
-// Pure sizing math (02 §19), tile insets (phase2b §1.5: even gutters, like the original; the Phase 2
-// region-aware insets are deleted, §1.8), hit-testing and drag interpolation (02 §6.1, 04 §5.4).
-// No DOM access except readViewport().
+// Owner: A (Phase 2b); G2 (Phase 2d: the measured stack, one scale s, gapFor, insets = gap / 2)
+// Pure sizing math (look-spec §1.1, §1.8), tile insets (even gutters, every side gap / 2), hit-testing
+// and drag interpolation (02 §6.1, 04 §5.4). No DOM access except readViewport().
+// Phase 2d (look-spec §1.1): the game screen is a top-down stack of the rows and gaps measured on the
+// user's recording at 402 CSS px (layout.game), all scaled by one factor s (width- or height-bound),
+// with the square board card in it; the spare height goes above the bar (at most topSpareMax × s) and
+// the rest below. The 2b row names (topBar, pills, chips, tools) stay until I-3 with 2d values.
 import { cfg, type GameConfig } from '../../app/config';
 import type { CellIndex } from '../../engine/types';
 
@@ -13,52 +16,132 @@ export interface LayoutInput {
   readonly safeBottom: number;
   readonly n: number;
   /**
-   * Root font size ÷ 16 (user text scaling, 02 §18 "rem-based sizes"). Above 1 the rule-chip row
-   * grows with it (×1.15 for a third line, at most 2.4×) so its rem text is not truncated; the board
-   * gives up the space. Compact mode hides the chip text (icons only), so its row does not grow.
+   * Root font size ÷ 16 (user text scaling, 02 §18 "rem-based sizes"). Above 1 the rules row grows by
+   * min(rulesGrowMax, textScale × 1.15) (not in compact mode) and the bar by min(rulesGrowMax,
+   * textScale) (look-spec §1.1 barH, rulesH); the board gives up the space.
    */
   readonly textScale?: number;
+  /** Phase 2d: the banner band is reserved on this game screen (GameView.bannerBand). Default false. */
+  readonly banner?: boolean;
 }
 
-/** Result of the 02 §19 formulas. All values in CSS px. */
+/** Result of the look-spec §1.1 formulas. All values in CSS px. */
 export interface GameLayout {
+  /** Phase 2d: the screen's scale s (look-spec §1.1). */
+  readonly s: number;
+  /** refWidth × s: the game column, centred in the viewport. */
   readonly colW: number;
-  readonly compact: boolean; // vh < layout.compactHeight → 36 px pills/chips, chip text hidden
-  readonly topBar: number;
+  /** s < layout.game.compactScale: the rule cards show diagrams only. */
+  readonly compact: boolean;
+  /** y0: the top of the bar band in viewport px (safeTop + spare above). */
+  readonly top: number;
+  /** Row heights in px: bar and rules (both grown by the text scale: barH, rulesH of look-spec §1.1), pills, tools (the disc diameter). */
+  readonly bar: number;
   readonly pills: number;
-  readonly chips: number;
-  readonly tools: number; // 64 + 16 + safeBottom
+  readonly rules: number;
+  readonly tools: number;
+  /** Gaps in px; toolsToBanner is 0 without the band. */
+  readonly gaps: {
+    readonly barToPills: number;
+    readonly pillsToRules: number;
+    readonly rulesToBoard: number;
+    readonly boardToTools: number;
+    readonly toolsToBanner: number;
+    readonly bottom: number;
+  };
+  /** The banner itself: ads.banner.bannerPx with the band, else 0. */
+  readonly band: number;
   readonly boardMax: number;
+  /** Card edge → first slot edge, whole px ≥ 3. */
   readonly pad: number;
-  readonly slot: number; // floor((boardMax − 2·pad) / n)
-  readonly board: number; // slot·n + 2·pad
+  /** Whole px: floor((boardMax − 2·pad) / n), at least 1. */
+  readonly slot: number;
+  /** slot × n + 2 × pad. */
+  readonly board: number;
+  /** gapFor(slot). */
+  readonly gap: number;
+  /** Board card corner radius: layout.game.cardRadius × s. */
+  readonly radius: number;
+  /** 2b names kept until I-3, with 2d values from S0: topBar = bar, chips = rules (and `pills`, `tools` above). */
+  readonly topBar: number;
+  readonly chips: number;
 }
+
+const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 
 /**
- * 02 §19:
- *   colW = min(W − 2·gutter, 480); boardMax = min(colW, H − safeTop − topBar − pills − chips − tools − 12·4)
- *   slot = floor((boardMax − 2·pad) / N); board = slot·N + 2·pad; compact = H < 640.
+ * look-spec §1.1 (all values from layout.game; A = vh − safeTop − safeBottom; B = the banner when
+ * the band is reserved):
+ *   fixed = every row and gap but the board (toolsToBanner only with the band); card = refWidth − 2·cardMargin
+ *   s = clamp(min(min(vw, refWidth·maxScale) / refWidth, (A − B) / (fixed + card)), minScale, maxScale)
+ *   boardMax = min(colW − 2·cardMargin·s, A − B − rest·s − barH − rulesH)
+ *   pad = max(3, round(cardPad·s)); slot = max(1, floor((boardMax − 2·pad) / n)); gap = gapFor(slot)
+ *   y0 = safeTop + min(max(0, spare) / 2, topSpareMax·s)
  * Degenerate viewports clamp the slot to ≥ 1 px so callers never see 0 or negative sizes.
  */
 export function computeLayout(input: LayoutInput, c: GameConfig = cfg): GameLayout {
-  const L = c.layout;
+  const G = c.layout.game;
   const n = Math.max(1, Math.floor(input.n));
   const safeTop = Math.max(0, input.safeTop || 0);
   const safeBottom = Math.max(0, input.safeBottom || 0);
-  const colW = Math.max(0, Math.min(input.vw - 2 * L.gutter, L.colMax));
-  const compact = input.vh < L.compactHeight;
-  const topBar = L.topBar;
-  const pills = compact ? L.compactPills : L.pills;
+  const vw = Math.max(0, input.vw || 0);
+  const A = Math.max(0, (input.vh || 0) - safeTop - safeBottom);
+  const banner = input.banner === true;
+  const B = banner ? c.ads.banner.bannerPx : 0;
+  const toolsToBanner = banner ? G.toolsToBanner : 0;
+  const fixed =
+    G.bar + G.barToPills + G.pills + G.pillsToRules + G.rules + G.rulesToBoard + G.boardToTools + G.tools + toolsToBanner + G.bottom;
+  const card = G.refWidth - 2 * G.cardMargin;
+  const sW = Math.min(vw, G.refWidth * G.maxScale) / G.refWidth;
+  const sH = (A - B) / (fixed + card);
+  const s = clamp(Math.min(sW, sH), G.minScale, G.maxScale);
+  const colW = G.refWidth * s;
+  const compact = s < G.compactScale;
   const textScale = input.textScale ?? 1;
-  const chipScale = compact || !(textScale > 1) ? 1 : Math.min(2.4, textScale * 1.15);
-  const chips = Math.round((compact ? L.compactChips : L.chips) * chipScale);
-  const tools = L.tools + L.toolsGap + safeBottom;
-  const vGaps = L.vGap * L.vGapCount;
-  const boardMax = Math.max(0, Math.min(colW, input.vh - safeTop - topBar - pills - chips - tools - vGaps));
-  const pad = L.boardPad;
+  const big = textScale > 1;
+  const rules = G.rules * s * (big && !compact ? Math.min(G.rulesGrowMax, textScale * 1.15) : 1);
+  const bar = G.bar * s * (big ? Math.min(G.rulesGrowMax, textScale) : 1);
+  const rest = (fixed - G.rules - G.bar) * s; // the rows and gaps that never grow
+  const boardMax = Math.max(0, Math.min(colW - 2 * G.cardMargin * s, A - B - rest - bar - rules));
+  const pad = Math.max(3, Math.round(G.cardPad * s));
   const slot = Math.max(1, Math.floor((boardMax - 2 * pad) / n));
   const board = slot * n + 2 * pad;
-  return { colW, compact, topBar, pills, chips, tools, boardMax, pad, slot, board };
+  const spare = A - rest - bar - rules - board - B;
+  const top = safeTop + Math.min(Math.max(0, spare) / 2, G.topSpareMax * s);
+  const pills = G.pills * s;
+  const tools = G.tools * s;
+  return {
+    s,
+    colW,
+    compact,
+    top,
+    bar,
+    pills,
+    rules,
+    tools,
+    gaps: {
+      barToPills: G.barToPills * s,
+      pillsToRules: G.pillsToRules * s,
+      rulesToBoard: G.rulesToBoard * s,
+      boardToTools: G.boardToTools * s,
+      toolsToBanner: toolsToBanner * s,
+      bottom: G.bottom * s,
+    },
+    band: B,
+    boardMax,
+    pad,
+    slot,
+    board,
+    gap: gapFor(slot, c),
+    radius: G.cardRadius * s,
+    topBar: bar,
+    chips: rules,
+  };
+}
+
+/** Gap between tiles for a slot (look-spec §1.8): max(1, round(slot × layout.game.gapFraction)). */
+export function gapFor(slotPx: number, c: GameConfig = cfg): number {
+  return Math.max(1, Math.round(Math.max(0, slotPx) * c.layout.game.gapFraction));
 }
 
 /** Inset of a tile inside its slot per side (CSS px). With even gutters all four sides are equal. */
@@ -70,13 +153,11 @@ export interface CellInsets {
 }
 
 /**
- * Even gutters (phase2b §1.5): every tile gets the same inset on all sides, layout.insetPx (2 px, a
- * 4 px white gutter) or layout.insetSmallPx (1.5 px) when the slot is below layout.insetSmallBelowSlot
- * (30 px). Nothing depends on regions. One entry per cell, in today's CellInsets shape.
+ * Even gutters (look-spec §1.8): every tile is inset gapFor(slot) / 2 on every side (slot 38 → a 3 px
+ * gap, 1.5 px insets). Nothing depends on regions. One entry per cell, in the CellInsets shape.
  */
 export function evenInsets(n: number, slotPx: number, c: GameConfig = cfg): CellInsets[] {
-  const L = c.layout;
-  const v = slotPx >= L.insetSmallBelowSlot ? L.insetPx : L.insetSmallPx;
+  const v = gapFor(slotPx, c) / 2;
   const one: CellInsets = Object.freeze({ top: v, right: v, bottom: v, left: v });
   return Array.from({ length: Math.max(0, n * n) }, () => one);
 }
@@ -151,7 +232,10 @@ function safeAreaProbe(doc: Document): HTMLElement | null {
   probe.setAttribute('aria-hidden', 'true');
   probe.style.cssText =
     'position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;font-size:1rem;' +
-    'padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px);';
+    // Phase 2d (look-spec §1.1): dev and e2e builds may stand in for a device's safe areas with
+    // --dev-safe-top / --dev-safe-bottom on :root (never set in production; tokens.css does the same).
+    'padding:max(env(safe-area-inset-top,0px),var(--dev-safe-top,0px)) env(safe-area-inset-right,0px) ' +
+    'max(env(safe-area-inset-bottom,0px),var(--dev-safe-bottom,0px)) env(safe-area-inset-left,0px);';
   doc.body.appendChild(probe);
   probes.set(doc, probe);
   return probe;

@@ -4,6 +4,8 @@
 // Phase 2c.1 (G1, fish-lives-spec §3.2.2): the attempt's level points. Every correct cat (player,
 // hint, kitty) in a row that has not scored yet adds catIncrement(catStreak + 1) and emits POINTS
 // right after its CAT_PLACED; a MISTAKE (with the penalty) resets the run; RETRY starts at 0.
+// Phase 2d (G1, docs/phase2d/look-spec.md §1.12): MOUSE marks the mouse helper's cells (only Empty
+// non-solution cells) and emits MARKED with source 'mouse'; no points, mistake, heart or stat.
 import { newGame } from './factory';
 import { catIncrement } from './scoring';
 import {
@@ -33,6 +35,7 @@ export const ALLOWED_STATUSES: Readonly<Record<ActionType, readonly Status[]>> =
   REVIVE: ['lost'],
   RETRY: ['lost'],
   TICK: ['playing', 'hint', 'kitty'],
+  MOUSE: ['playing'],
 });
 
 /** Whether `type` is allowed in `status` (REVIVE additionally needs a revive left; see canRevive). */
@@ -76,6 +79,8 @@ export function reduce(s: GameState, a: Action): ReduceResult {
       return { state: newGame(s.puzzle, s.mode, s.rules), events: [] };
     case 'TICK':
       return tick(s, a.dtMs);
+    case 'MOUSE':
+      return mouse(s, a.cells, a.t);
   }
 }
 
@@ -98,12 +103,15 @@ function isSolutionCell(s: GameState, cell: CellIndex): boolean {
   return s.puzzle.solution[Math.floor(cell / n)] === cell % n;
 }
 
-/** Sets every cell in `list` to Mark or Empty, logging one move and one MARKED/UNMARKED event. */
-function withMarks(s: GameState, list: CellIndex[], to: 0 | 1, t: number, events: GameEvent[]): GameState {
+/**
+ * Sets every cell in `list` to Mark or Empty, logging one move and one MARKED/UNMARKED event
+ * (phase 2d: with `source` on the mouse's MARKED).
+ */
+function withMarks(s: GameState, list: CellIndex[], to: 0 | 1, t: number, events: GameEvent[], source?: 'mouse'): GameState {
   const cells = s.cells.slice();
   for (const c of list) cells[c] = to;
   const marking = to === CellState.Mark;
-  events.push({ type: marking ? 'MARKED' : 'UNMARKED', cells: list });
+  events.push(source && marking ? { type: 'MARKED', cells: list, source } : { type: marking ? 'MARKED' : 'UNMARKED', cells: list });
   return { ...s, cells, moves: [...s.moves, { t, kind: marking ? 'mark' : 'unmark', cells: list }] };
 }
 
@@ -275,6 +283,20 @@ function kitty(s: GameState, cell: CellIndex, t: number): ReduceResult {
   const events: GameEvent[] = [];
   const base: GameState = { ...s, status: 'kitty', kittiesUsed: s.kittiesUsed + 1 };
   return { state: withCat(base, cell, 'kitty', t, events), events };
+}
+
+/**
+ * Phase 2d §1.12: the mouse helper's X marks. Each listed cell that is still Empty and is not a
+ * solution cell (the picker only offers those; this keeps a stale or bad list from misleading the
+ * player) becomes a Mark, as one 'mark' move and one MARKED { source: 'mouse' }. Nothing else
+ * changes: no points, no mistake, no heart, no helper counter. Nothing to mark: no change, no event.
+ */
+function mouse(s: GameState, list: readonly CellIndex[], t: number): ReduceResult {
+  if (!Array.isArray(list)) return none(s);
+  const cells = uniqueCells(s, list, (c) => s.cells[c] === CellState.Empty && !isSolutionCell(s, c));
+  if (cells.length === 0) return none(s);
+  const events: GameEvent[] = [];
+  return { state: withMarks(s, cells, CellState.Mark, t, events, 'mouse'), events };
 }
 
 /**

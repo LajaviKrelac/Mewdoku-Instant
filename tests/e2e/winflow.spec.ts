@@ -10,6 +10,11 @@
 // hook → rewards saved at once → the in-game period counter counts +3 → the ranking panel → tap → the
 // victory screen with the wide "Level 3" → the next board, input locked until its entry ends. Home and
 // Gear do nothing before the panel.
+// Phase 2d (G1, docs/phase2d/look-spec.md §1.13, §5.3): the Score lives in the game bar
+// (.top-bar--game .points-pill, [data-final] at the win); the period counter takes the heads pill's
+// place (.pills .period-pill[data-in-game]); the fish still fly with the 2c times; Back and Gear are
+// aria-disabled until the panel; UX-12 becomes "the +N chip never covers the period total or the bar's
+// Level and Score columns".
 import { expect, test, type Page } from '@playwright/test';
 import type { E2EHooks } from '../../src/app/boot';
 import { defaults } from '../../src/game/save';
@@ -86,6 +91,9 @@ async function fullRun(page: Page): Promise<{ total: number; text: string }> {
   return { total, text: total.toLocaleString('en-US') };
 }
 
+/** Phase 2d: the bar's Score column (the 2c.1 points counter, moved out of the pills row). */
+const score = (page: Page) => page.locator('.top-bar--game .points-pill');
+
 const stored = (page: Page) =>
   page.evaluate(() => {
     const raw = localStorage.getItem('mewdoku.save.v1');
@@ -97,7 +105,7 @@ test('win with 3 fish kept: rewards at once, the lives fly to "this week" (+3), 
   await playNext(page);
   await expect(page.locator('.pill--lives .life[data-full]')).toHaveCount(3);
   const run = await fullRun(page);
-  const catBox = await page.locator('.pills .pill--cats').boundingBox();
+  const headsBox = await page.locator('.pills .pill--heads').boundingBox();
   const t0 = await solve(page);
 
   // t = 0: the period points, the level's points total and progress are already saved (the critical save).
@@ -108,22 +116,29 @@ test('win with 3 fish kept: rewards at once, the lives fly to "this week" (+3), 
   expect(s?.progress.level).toBe(3);
   expect(s?.points.total).toBe(run.total);
 
-  // 2c.1 §10.3: the level's total stays on screen, marked final, through the win flow.
-  const pts = page.locator('.pills .points-pill');
+  // 2c.1 §10.3 / 2d §1.13: the level's total stays on screen in the bar's Score column, marked final.
+  const pts = score(page);
   await expect(pts).toHaveAttribute('data-final', '');
   await expect(pts).toHaveAttribute('aria-label', `Level points: ${run.text}`);
 
-  // Home and Gear do nothing before the panel.
-  await page.locator('.top-bar').getByRole('button', { name: 'Home' }).click({ force: true });
+  // Back and Gear do nothing before the panel (aria-disabled, §1.4 win-flow lock).
+  const back = page.locator('.top-bar--game .top-bar__btn--home');
+  const gear = page.locator('.top-bar--game .top-bar__btn--settings');
+  await expect(back).toHaveAttribute('aria-disabled', 'true');
+  await expect(gear).toHaveAttribute('aria-disabled', 'true');
+  await back.click({ force: true });
+  await gear.click({ force: true });
   expect(await page.evaluate(() => (window as TestWindow).__mewdoku?.app().screen)).toBe('game');
+  expect(await page.evaluate(() => (window as TestWindow).__mewdoku?.app().overlays.includes('settings'))).toBe(false);
 
   // The in-game period counter counts up to +3; each life empties as its fish leaves.
   const counter = page.locator('.pills .period-pill[data-in-game]');
   await expect(counter).toBeVisible({ timeout: 2000 });
-  // 2c.1 §10.3: the period counter takes the cat counter's place (column 1); the points counter stays.
+  // 2d §1.13: the period counter takes the heads pill's place (the same grid cell); the Score stays in the bar.
   const periodBox = await counter.boundingBox();
-  expect(catBox && periodBox ? Math.abs(periodBox.x - catBox.x) : Infinity).toBeLessThanOrEqual(2);
-  await expect(page.locator('.pills .pill--cats')).toBeHidden({ timeout: 1000 });
+  expect(headsBox && periodBox ? Math.abs(periodBox.x - headsBox.x) : Infinity).toBeLessThanOrEqual(2);
+  expect(headsBox && periodBox ? Math.abs(periodBox.y - headsBox.y) : Infinity).toBeLessThanOrEqual(2);
+  await expect(page.locator('.pills .pill--heads')).toBeHidden({ timeout: 1000 });
   await expect(counter).toHaveAttribute('aria-label', '3 fish this week', { timeout: 4000 });
   await expect(counter.locator('.period-pill__n').last()).toHaveText('3');
   await expect(page.locator('.pill--lives .life[data-full]')).toHaveCount(0);
@@ -192,7 +207,7 @@ test('2c.1: the points counter stays visible with the level\'s total until the s
   const rule = pointsRuleFor('level');
   const total = rule.first + runTotal(n - 1, rule);
   const text = total.toLocaleString('en-US');
-  const pts = page.locator('.pills .points-pill');
+  const pts = score(page);
   await expect(pts).toHaveAttribute('data-final', '');
   await expect(pts).toHaveAttribute('aria-label', `Level points: ${text}`);
   // Sample the counter every frame until the scrim: always there and never hidden.
@@ -202,7 +217,7 @@ test('2c.1: the points counter stays visible with the level\'s total until the s
       const step = (): void => {
         const app = (window as TestWindow).__mewdoku?.app();
         const scrim = document.querySelector('.screen--game .game__scrim') as HTMLElement | null;
-        const pill = document.querySelector('.pills .points-pill') as HTMLElement | null;
+        const pill = document.querySelector('.top-bar--game .points-pill') as HTMLElement | null;
         out.frames++;
         if (!pill || pill.hidden || pill.getBoundingClientRect().width === 0) out.hidden++;
         if (app?.overlays.includes('ranking') || (scrim && !scrim.hidden)) resolve();
@@ -244,8 +259,10 @@ test('two wins: save.period.total = 6 and points.total = both levels\' totals; s
   await primary.click();
   await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing', undefined, { timeout: 5000 });
   // F5.1: the next level starts at 0.
-  await expect(page.locator('.pills .points-pill')).toHaveAttribute('aria-label', 'Level points: 0');
-  await expect(page.locator('.pills .points-pill')).not.toHaveAttribute('data-final', '');
+  await expect(score(page)).toHaveAttribute('aria-label', 'Level points: 0');
+  await expect(score(page)).not.toHaveAttribute('data-final', '');
+  await expect(page.locator('.pills .pill--heads')).toBeVisible(); // a new board brings the heads back
+  await expect(page.locator('.pills .period-pill[data-in-game]')).toBeHidden();
   const second = await fullRun(page);
   await solve(page);
   await tapPanel(page);
@@ -287,7 +304,8 @@ async function startSampler(page: Page): Promise<void> {
         rank: op(document.querySelector('[data-overlay="ranking"]')),
         vic: op(document.querySelector('[data-overlay="victory"]')),
         games: Array.from(document.querySelectorAll('.app-screen > .screen--game')).map((g) => ({
-          title: g.querySelector('.top-bar__title')?.textContent ?? '',
+          // 2d: the Level column's h1 carries the whole title as its name ("Level 2").
+          title: g.querySelector('.top-bar__text')?.getAttribute('aria-label') ?? g.querySelector('.top-bar__title')?.textContent ?? '',
           op: op(g),
         })),
       });
@@ -353,10 +371,11 @@ test('PAR-6: Home from the victory never shows the solved board again', async ({
   expect(stale).toEqual([]);
 });
 
-// ── review UX-12: the rising "+3" starts above the in-game period counter, never over its icon and count ──
+// ── review UX-12, re-based in 2d (§1.13 critic C10): the in-game "+3" sits inside the period counter, at the
+// inline end of its total; it never covers that total, the bar's Level column or its Score column ──
 
 for (const size of [null, { width: 320, height: 568 }] as const) {
-  test(`UX-12: the "+3" chip stays above the in-game period counter (and on screen) while it rises${size ? ` at ${size.width}×${size.height}` : ''}`, async ({ page }) => {
+  test(`UX-12 (2d): the "+3" chip never covers the period total or the bar's columns, and stays on screen${size ? ` at ${size.width}×${size.height}` : ''}`, async ({ page }) => {
     if (size) await page.setViewportSize(size);
     await open(page, atLevel(2));
     await playNext(page);
@@ -369,14 +388,29 @@ for (const size of [null, { width: 320, height: 568 }] as const) {
       await new Promise<void>((resolve) => {
         const step = (): void => {
           const t = performance.now() - t0;
-          const chip = document.querySelector('.period-pill__label .period-pill__chip');
           const pill = document.querySelector('.pills .period-pill[data-in-game]');
-          if (t >= 1500 && chip && pill) {
+          const chip = pill?.querySelector('.period-pill__chip') ?? document.querySelector('.period-pill__chip');
+          const visible = (e: Element | null | undefined): e is Element => {
+            if (!e || (e as HTMLElement).hidden) return false;
+            const r = e.getBoundingClientRect();
+            return r.width > 0 && r.height > 0 && Number(getComputedStyle(e).opacity) > 0.05;
+          };
+          if (t >= 1500 && visible(chip) && pill) {
             seen++;
             const c = chip.getBoundingClientRect();
-            const p = pill.getBoundingClientRect();
-            if (c.bottom > p.top + 1) bad.push(`t=${Math.round(t)}: chip bottom ${c.bottom.toFixed(1)} > pill top ${p.top.toFixed(1)}`);
+            const hit = (name: string, q: string): void => {
+              const e = document.querySelector(q);
+              if (!visible(e)) return;
+              const b = e.getBoundingClientRect();
+              const x = Math.min(c.right, b.right) - Math.max(c.left, b.left);
+              const y = Math.min(c.bottom, b.bottom) - Math.max(c.top, b.top);
+              if (x > 1 && y > 1) bad.push(`t=${Math.round(t)}: chip over ${name}`);
+            };
+            hit('the period total', '.pills .period-pill[data-in-game] .period-pill__n');
+            hit('the Level column', '.top-bar--game .top-bar__text');
+            hit('the Score column', '.top-bar--game .points-pill');
             if (c.top < 0) bad.push(`t=${Math.round(t)}: chip top ${c.top.toFixed(1)} < 0`);
+            if (c.right > window.innerWidth + 0.5 || c.left < -0.5) bad.push(`t=${Math.round(t)}: chip off screen`);
           }
           if (t >= 4200) resolve();
           else requestAnimationFrame(step);

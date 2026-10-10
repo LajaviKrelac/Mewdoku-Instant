@@ -1,4 +1,5 @@
-// Owner: B (Phase 2b; was ui-board). Board view: build once, diff-only updates, region fade, highlights, moods, keyboard (04 §5.3).
+// Owner: B (Phase 2b; was ui-board); G2 (Phase 2d: the card frame, gap / 2 insets, the X pop, the mouse's
+// staggered X's, the M key). Board view: build once, diff-only updates, region fade, highlights, moods, keyboard (04 §5.3).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cfg } from '../../../src/app/config';
 import type { HintStep } from '../../../src/engine/types';
@@ -48,14 +49,14 @@ describe('createBoardView', () => {
     expect(cell(0).dataset.s).toBe('e');
     // The region colour sits on the tile that paints it (PERF-1: never on the cell button).
     expect((cell(0).querySelector('.cell__tile') as HTMLElement).style.getPropertyValue('--c')).toBe('var(--r4)');
-    // phase2b §1.5 even gutters (no region dependence): 1.5 px below a 30 px slot, 2 px from 30 px —
-    // one board-level value that every tile inherits (PERF-1).
-    expect(board.el.style.getPropertyValue('--ir')).toBe('1.5px');
-    expect(board.el.style.getPropertyValue('--ib')).toBe('1.5px');
-    board.setSlot(36);
-    for (const k of ['--it', '--ir', '--ib', '--il']) expect(board.el.style.getPropertyValue(k)).toBe('2px');
+    // look-spec §1.8 even gutters (no region dependence): every tile inset gap / 2 with gap =
+    // round(slot × 7.9 %) — one board-level value that every tile inherits (PERF-1).
+    board.setSlot(38);
+    for (const k of ['--it', '--ir', '--ib', '--il']) expect(board.el.style.getPropertyValue(k)).toBe('1.5px');
+    expect(board.el.style.getPropertyValue('--gap')).toBe('3px');
     board.setSlot(24);
-    expect(board.el.style.getPropertyValue('--il')).toBe('1.5px');
+    expect(board.el.style.getPropertyValue('--il')).toBe('1px');
+    expect(board.el.style.getPropertyValue('--gap')).toBe('2px');
     // roving tabindex: only the first cell is tabbable
     expect(Array.from(buttons).filter((b) => b.getAttribute('tabindex') === '0')).toHaveLength(1);
   });
@@ -84,7 +85,7 @@ describe('createBoardView', () => {
 
   it('PERF-1: setSlot changes one board-level inset value, never a per-cell one', () => {
     const spy = vi.spyOn(CSSStyleDeclaration.prototype, 'setProperty');
-    board.setSlot(36); // crosses layout.insetSmallBelowSlot: 1.5 px → 2 px
+    board.setSlot(36, { pad: 5, radius: 11.6 }); // a new gap (3 px): 1.5 px insets, the frame too
     const targets = spy.mock.contexts.filter((st) => st !== board.el.style);
     spy.mockRestore();
     expect(targets).toHaveLength(0);
@@ -224,20 +225,43 @@ describe('createBoardView', () => {
     board.playEvent({ type: 'PULSE', cell: 3 });
     board.playEvent({ type: 'MARKED', cells: [4, 5] });
     expect(cell(3).classList.contains('fx-pulse')).toBe(true);
-    expect(cell(4).classList.contains('fx-draw')).toBe(true);
+    // look-spec §1.10: every new X pops, all at once when several are painted
+    expect(cell(4).classList.contains('fx-pop')).toBe(true);
+    expect(cell(5).classList.contains('fx-pop')).toBe(true);
     board.playEntry();
     expect(board.el.classList.contains('fx-entry')).toBe(true);
     vi.advanceTimersByTime(1000);
-    expect(board.el.querySelectorAll('.fx-pulse,.fx-draw')).toHaveLength(0);
+    expect(board.el.querySelectorAll('.fx-pulse,.fx-pop')).toHaveLength(0);
     expect(board.el.classList.contains('fx-entry')).toBe(false);
   });
 
-  it('reduced motion skips draw-in, drop and sparkle', () => {
+  it('the mouse\'s X\'s pop one after another, fx.mouseStaggerMs apart, each hidden until its turn (look-spec §1.12)', () => {
+    vi.useFakeTimers();
+    const step = cfg.fx.mouseStaggerMs;
+    board.playEvent({ type: 'MARKED', cells: [6, 9, 14], source: 'mouse' });
+    // the first pops now (a 0 ms timer); the others wait under .fx-pend
+    expect(cell(9).classList.contains('fx-pend')).toBe(true);
+    expect(cell(14).classList.contains('fx-pend')).toBe(true);
+    vi.advanceTimersByTime(0);
+    expect(cell(6).classList.contains('fx-pop')).toBe(true);
+    expect(cell(9).classList.contains('fx-pop')).toBe(false);
+    vi.advanceTimersByTime(step);
+    expect(cell(9).classList.contains('fx-pop')).toBe(true);
+    expect(cell(9).classList.contains('fx-pend')).toBe(false);
+    expect(cell(14).classList.contains('fx-pop')).toBe(false);
+    vi.advanceTimersByTime(step);
+    expect(cell(14).classList.contains('fx-pop')).toBe(true);
+    vi.advanceTimersByTime(cfg.fx.markPopMs + 100);
+    expect(board.el.querySelectorAll('.fx-pop,.fx-pend')).toHaveLength(0);
+  });
+
+  it('reduced motion skips the pop, the mouse stagger, the drop and the sparkle', () => {
     board.destroy();
     board = createBoardView(model(), input as unknown as BoardInput, { reducedMotion: () => true });
     board.playEvent({ type: 'MARKED', cells: [4] });
+    board.playEvent({ type: 'MARKED', cells: [5, 6], source: 'mouse' });
     board.playEvent({ type: 'CAT_PLACED', cell: 1, source: 'kitty' });
-    expect(board.el.querySelectorAll('.fx-draw,.fx-drop,.cell__spark')).toHaveLength(0);
+    expect(board.el.querySelectorAll('.fx-pop,.fx-pend,.fx-drop,.cell__spark')).toHaveLength(0);
     board.playEntry();
     expect(board.el.style.getPropertyValue('--entry-stagger')).toBe('0ms');
   });
@@ -249,6 +273,21 @@ describe('createBoardView', () => {
     expect(g).toMatchObject({ pad: cfg.layout.boardPad, slot: 40, n: 4 });
     expect(board.cellRect(0)).not.toBeNull();
     expect(board.cellRect(99)).toBeNull();
+  });
+
+  it('setSlot(slot, frame) sets the card padding and radius from computeLayout; the tile radius is 11 % of the tile (look-spec §1.8)', () => {
+    board.setSlot(38, { pad: 5, radius: 11.6 });
+    expect(board.el.style.getPropertyValue('--pad')).toBe('5px');
+    expect(board.el.style.getPropertyValue('--board-radius')).toBe('11.6px');
+    expect(board.geometry().pad).toBe(5);
+    // tile 35, radius 0.11 × 35 = 3.85 px = 0.1013 of the 38 px slot
+    expect(Number(board.el.style.getPropertyValue('--cell-r')) * 38).toBeCloseTo(cfg.layout.game.tileRadiusFraction * 35, 2);
+    // a new frame with the same slot still applies
+    board.setSlot(38, { pad: 4, radius: 9 });
+    expect(board.geometry().pad).toBe(4);
+    expect(board.el.style.getPropertyValue('--board-radius')).toBe('9px');
+    // the X pop's length comes from fx.markPopMs
+    expect(board.el.style.getPropertyValue('--x-pop-ms')).toBe(`${cfg.fx.markPopMs}ms`);
   });
 
   it('destroy detaches the element', () => {
@@ -266,7 +305,7 @@ describe('board keyboard (02 §6.3)', () => {
   };
 
   beforeEach(() => {
-    input = { tap: vi.fn(), doubleTap: vi.fn(), paint: vi.fn(), bulb: vi.fn(), paw: vi.fn() };
+    input = { tap: vi.fn(), doubleTap: vi.fn(), paint: vi.fn(), bulb: vi.fn(), paw: vi.fn(), mouse: vi.fn() };
     board = createBoardView(model(), input as unknown as BoardInput, { reducedMotion: () => false });
     document.body.appendChild(board.el);
     board.focusCell(0);
@@ -301,6 +340,21 @@ describe('board keyboard (02 §6.3)', () => {
     expect(input.doubleTap).toHaveBeenCalledWith(1);
     expect(input.bulb).toHaveBeenCalledTimes(1);
     expect(input.paw).toHaveBeenCalledTimes(1);
+  });
+
+  it('M calls the mouse (look-spec §1.11); without a mouse callback the key does nothing', () => {
+    key('m');
+    key('M');
+    key('m', { repeat: true });
+    expect(input.mouse).toHaveBeenCalledTimes(2);
+    board.destroy();
+    const { mouse: _gone, ...rest } = input;
+    board = createBoardView(model(), rest as unknown as BoardInput, { reducedMotion: () => false });
+    document.body.appendChild(board.el);
+    board.focusCell(0);
+    const ev = new KeyboardEvent('keydown', { key: 'm', bubbles: true, cancelable: true });
+    board.cellElement(0)?.dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(false);
   });
 
   it('prevents default for handled keys and ignores modified keys', () => {

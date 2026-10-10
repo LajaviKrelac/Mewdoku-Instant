@@ -2,6 +2,7 @@
 // fb-ads (05 §6, 04 §6.3): readiness timeout vs long show, error mapping, reload after every show or
 // failure with a bounded backoff, empty placement → unsupported; 'unsupported' latches the kind off,
 // preload respects the backoff, a load that never settles is capped.
+// Phase 2d (G1, look-spec §1.12): the mouse's video ('mouse') uses the one rewarded placement ID.
 import { describe, expect, it } from 'vitest';
 import { createFakeClock } from '../../../src/app/clock';
 import { cfg } from '../../../src/app/config';
@@ -302,5 +303,20 @@ describe('createFbAds', () => {
     const ads = createFbAds(broken, { placements: PLACEMENTS, timers: clock });
     await expect(ads.showInterstitial('next_level')).resolves.toEqual({ ok: false, reason: 'unsupported' });
     expect(clock.pending()).toBe(0); // unsupported → no reload timer
+  });
+});
+
+describe("phase 2d §1.12: the mouse's rewarded video", () => {
+  it("'mouse' is one more rewarded placement on the same FB placement ID (no new ID), shown like the others", async () => {
+    const { ads, clock, control } = setup({ ads: { rewarded: { loadDelayMs: 0, showDelayMs: 0 } } });
+    const res = track(ads.showRewarded('mouse'));
+    await clock.advanceAsync(10);
+    await drain();
+    expect(res.value).toEqual({ ok: true });
+    const loads = control.calls.filter((c: { name: string }) => c.name === 'getRewardedVideoAsync');
+    expect(loads.length).toBeGreaterThanOrEqual(1);
+    for (const c of loads as { args: unknown[] }[]) expect(c.args).toEqual([PLACEMENTS.rewarded]);
+    expect(control.count('ad.showAsync')).toBe(1);
+    expect(cfg.ads.rewarded.placements).toContain('mouse');
   });
 });

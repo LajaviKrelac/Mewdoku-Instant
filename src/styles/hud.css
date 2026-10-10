@@ -1,9 +1,12 @@
-/* Owner: A (Phase 2b; was ui-board); G2 (Phase 2c: the lives pill; Phase 2c.1: the grid row and the points counter)
-   Top bar (with the phase2b lead slot), pills, rule chips, tool bar, compact mode (02 §5, §19).
-   Classic look (phase2b §1.4): white pills and round tools with soft shadows, orange accents, count
-   badges with white text on --accent-text (small white text never sits on --accent). Tokens only. */
+/* Owner: A (Phase 2b; was ui-board); G2 (Phase 2c: the lives pill); G3 (Phase 2d: the measured HUD)
+   Home's and the event screen's top bar (2b layout), and the game screen's HUD (look-spec §1.3–§1.7,
+   §1.11, §1.13): the game bar, the pills row (heads, fish), the rule cards and the helper row with its
+   badges and idle pulse. Every size is the recording's at 402 px times the screen's scale --s (set by
+   game-screen.ts with the row heights and gaps, §4.7); font sizes are rem × s (critic C4) with a
+   10 px floor on the small texts. Tokens only; logical properties, the physical offsets mirror in
+   i18n.css. Browser baseline (04 §1): no flex gap, no inset, no :has(). */
 
-/* ── Top bar (56 px; FB safe zone = empty top-left 64×64) ──────────────── */
+/* ── Top bar: Home and the event screen (2b layout; FB safe zone = empty top-left 64×64) ── */
 .top-bar {
   flex: none;
   display: grid;
@@ -41,9 +44,6 @@
 .top-bar__title {
   grid-column: 2;
   grid-row: 1;
-}
-
-.top-bar__title {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -89,91 +89,229 @@
   margin-left: var(--sp-2);
 }
 
-/* ── Pills: cat counter · level points · lives (fish) ─────────────────────
-   Phase 2c.1 §10.2 (D21): a three-column grid, 1fr auto 1fr, so the level-points counter sits exactly
-   in the middle whatever the side pills show. Column 1: the cat counter, and from the win flow's
-   counter beat the period counter in the same cell (§10.3); column 3: the lives. RTL mirrors with the
-   grid. A hidden counter collapses the middle column (the 2c row). */
-.pills {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  grid-template-rows: 100%;
-  column-gap: 6px;
-  align-items: center;
-  height: var(--pills);
+/* The gear's red dot (§1.15): Ø 11.3 / 36.8 of the disc, its centre at the disc centre + (15.0, −14.7)
+   (as shares of the disc, so it follows Home's fixed 37 px disc and the game bar's scaled one). */
+.top-bar__dot {
+  position: absolute;
+  top: -5.3%;
+  left: 75.4%;
+  width: 30.7%;
+  height: 30.7%;
+  border-radius: 50%;
+  background: var(--dot);
+  pointer-events: none;
 }
 
-.pill--cats,
-.pills > .period-pill {
-  grid-area: 1 / 1;
-  justify-self: start;
-}
-
-.pills > .points-pill {
-  grid-column: 2;
-}
-
-.pill--lives {
-  grid-column: 3;
-  justify-self: end;
-}
-
-.pill {
-  display: inline-flex;
-  align-items: center;
-  height: 100%;
+/* ── The game bar (§1.4): back disc · Level / Score · gear disc ────────────── */
+.top-bar--game {
+  position: relative;
+  display: block;
+  width: var(--col-w);
+  height: var(--bar);
+  margin-top: var(--y-top);
   padding: 0;
-  padding-inline-start: 10px;
-  padding-inline-end: 16px;
-  border-radius: var(--radius-pill);
-  background: var(--card);
-  box-shadow: var(--shadow-1);
-  font-family: var(--font-num);
-  font-weight: 600;
-  font-size: var(--fs-l);
+  color: var(--ink);
+}
+
+.top-bar--game .top-bar__btn {
+  position: absolute;
+  top: calc(var(--s) * 7.6px);
+  left: calc(var(--s) * 351.6px);
+  width: calc(var(--s) * 36.8px);
+  height: calc(var(--s) * 36.8px);
+  box-shadow: 0 calc(var(--s) * 3px) calc(var(--s) * 7px) calc(var(--s) * -2px) rgba(var(--warm-rgb), 0.25);
+}
+
+/* The FB safe zone (§1.1): --fb-l moves the disc at the physical left out of the top-left 64 × 64. */
+.top-bar--game .top-bar__btn--back {
+  left: calc(var(--s) * 13.1px + var(--fb-l, 0px));
+}
+
+.top-bar--game .btn__icon {
+  width: calc(var(--s) * 24px);
+  height: calc(var(--s) * 24px);
+}
+
+/* The two columns, centred in the span between the discs (each disc's inner edge + 4 px; critic C5):
+   short content lands on the measured centres 150 s and 252 s. */
+.top-bar__mid {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--s) * 49.9px + 4px + var(--fb-l, 0px));
+  right: calc(var(--s) * 50.4px + 4px);
+  display: flex;
+  justify-content: center;
+}
+
+.top-bar--game .top-bar__text,
+.top-bar--game .points-pill {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  align-items: center;
+  min-width: calc(var(--s) * 102px);
+  overflow: visible;
+  padding-top: calc(var(--s) * 1.2px);
+  font-size: calc(var(--s) * 1.206rem);
+  line-height: 1;
   white-space: nowrap;
 }
 
-.pill__icon {
-  width: 32px;
-  height: 32px;
-  margin-inline-end: 6px;
-  margin-top: -2px;
-  transform-origin: 50% 80%;
+/* "Level" / "Score" (19.3 px): they ellipsize only after the values stepped down (data-fit). */
+.top-bar--game .top-bar__name,
+.points-pill__name {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.pill__count {
-  font-variant-numeric: tabular-nums;
+/* "96" / "0" (22 px): heavier through a 0.04 em stroke in their own colour (D-2d-7); never cut. */
+.top-bar__val,
+.points-pill__val {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-top: calc(var(--s) * 1.7px);
+  font-size: calc(var(--s) * 1.375rem);
 }
 
-.pill--cats[data-complete] {
-  background: var(--accent-soft);
+.top-bar--game .top-bar__suffix,
+.points-pill__count {
+  -webkit-text-stroke: 0.04em currentColor;
 }
 
-/* ── Lives (Phase 2c §1.1): three fish where the hearts were, same pill and icon box ──
+.top-bar--game .top-bar__suffix {
+  white-space: nowrap;
+}
+
+.top-bar--game[data-fit='1'] .top-bar__val,
+.top-bar--game[data-fit='1'] .points-pill__val {
+  font-size: calc(var(--s) * 1.183rem);
+}
+
+.top-bar--game[data-fit='2'] .top-bar__val,
+.top-bar--game[data-fit='2'] .points-pill__val {
+  font-size: calc(var(--s) * 1.0175rem);
+}
+
+/* The Hard badge after the value, 4 s apart (floors: critic C19). */
+.top-bar--game .badge--hard {
+  height: max(14px, calc(var(--s) * 16px));
+  margin-inline-start: calc(var(--s) * 4px);
+  padding: 0 calc(var(--s) * 5px);
+  box-shadow: none;
+  font-size: max(10px, calc(var(--s) * 0.6875rem));
+}
+
+/* The Score number: tabular digits, the roll box of screens.css; --accent-text at the win (§1.13). */
+.points-pill {
+  position: relative;
+  color: var(--ink);
+  --bump-scale: 1.12;
+}
+
+.points-pill[data-final] .points-pill__count {
+  color: var(--accent-text);
+}
+
+/* The "+576" chip (§1.13): at the number's inline end, vertically centred on it; game-bar.ts moves it
+   back (--chip-dx) when it would reach the gear (critic C9). */
+.points-pill__label {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + var(--s) * 4px + var(--chip-dx, 0px));
+  z-index: 2;
+  margin-top: calc(var(--s) * -9px);
+  pointer-events: none;
+}
+
+.points-pill__chip {
+  display: block;
+  padding: calc(var(--s) * 2px) calc(var(--s) * 6px);
+  border-radius: var(--radius-pill);
+  background: var(--accent-text);
+  color: #fff;
+  font-weight: 600;
+  font-size: max(10px, calc(var(--s) * 0.8125rem));
+  line-height: 1.1;
+  -webkit-text-stroke: 0;
+}
+
+/* ── Pills row (§1.5): heads pill · fish pill ──────────────────────────────
+   A two-column grid (1fr auto) 12 s in from the column's edges; the period counter takes the heads
+   pill's cell in the win flow (§1.13). RTL mirrors with the grid. */
+.pills {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: 100%;
+  column-gap: calc(var(--s) * 11.3px);
+  height: var(--pills);
+  margin: var(--g-bp) calc(var(--s) * 12px) 0;
+}
+
+.pill--heads,
+.pills > .period-pill {
+  grid-area: 1 / 1;
+}
+
+.pill--lives {
+  grid-column: 2;
+}
+
+.pill {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--card);
+}
+
+/* One head per colour (§1.6): 21.3 × 21.7, 4 apart, shrunk together by --hk when n heads do not fit
+   (pills.ts headScale); the colour at 50 % on the white pill until its cat is found. */
+.pill--heads {
+  justify-content: center;
+  box-shadow: var(--shadow-pill);
+}
+
+.head {
+  width: calc(var(--s) * 21.33px * var(--hk, 1));
+  height: calc(var(--s) * 21.67px * var(--hk, 1));
+  margin: 0 calc(var(--s) * 2px * var(--hk, 1));
+  opacity: 0.5;
+}
+
+.head[data-done] {
+  opacity: 1;
+}
+
+/* ── Lives (Phase 2c §1.1; 2d §1.5): three fish, 24.7 × 23.3 at a 25.3 pitch, no shadow ──
    Each slot stacks the empty outline (icon-fish-empty) under the full fish (icon-fish); a full slot
    hides the outline. The fish loss and the revive pop are in fx.css. */
 .pill--lives {
-  padding: 0 10px;
+  padding-inline-start: calc(var(--s) * 10.7px);
+  padding-inline-end: calc(var(--s) * 10.3px);
 }
 
 .life {
   position: relative;
   display: inline-block;
-  width: 28px;
-  height: 28px;
-  margin: 0 1px;
+  width: calc(var(--s) * 24.7px);
+  height: calc(var(--s) * 23.3px);
 }
 
-/* The fish is wide and shallow (the body is 10 of the 24 grid units tall), so each slot draws its
-   icons at 114 % of the slot box, centred: the same box and pill width as the 2b hearts. */
+.life + .life {
+  margin-inline-start: calc(var(--s) * 0.6px);
+}
+
 .life .icon,
 .life__splash {
   position: absolute;
-  top: -7%;
-  left: -7%;
-  width: 114%;
-  height: 114%;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
 }
 
 .life__empty {
@@ -212,235 +350,241 @@
   opacity: 0;
 }
 
-.pills[data-compact] .pill {
-  font-size: var(--fs-m);
-  padding: 0 12px 0 8px;
-}
-
-.pills[data-compact] .pill__icon {
-  width: 26px;
-  height: 26px;
-}
-
-.pills[data-compact] .life {
-  width: 23px;
-  height: 23px;
-}
-
-/* ── Level points (Phase 2c.1 §10.2; our design): the same white pill as its neighbours (it is a
-   .pill too: box, shadow, digits), a gold sparkle (icon-points) and the running total of this attempt
-   in tabular digits. The roll, the bump and the rising "+576" share the period counter's rules
-   (screens.css, fx.css). Sizes: fs-m digits and a 20 px icon in a regular row (≤ 86 px at "13,248"),
-   the row's fs-l and a 24 px icon from 390 px (≤ 99 px), fs-s and 18 px in a compact row (≤ 78 px). */
-.points-pill {
-  position: relative;
-  padding-inline-start: 8px;
-  padding-inline-end: 14px;
-  color: var(--ink);
-  font-size: var(--fs-m);
-  line-height: 1;
-  transition: background-color 200ms ease;
-  --bump-scale: 1.18;
-}
-
-.points-pill__icon {
-  flex: none;
-  width: 20px;
-  height: 20px;
-  margin-inline-end: 5px;
-  color: var(--ink);
-  --icon-fill: var(--gold);
-  transform-origin: 50% 55%;
-}
-
-/* The level's total at the win (catsPlaced = n): highlighted like the complete cat counter. */
-.points-pill[data-final] {
-  background: var(--accent-soft);
-}
-
-@media (min-width: 390px) {
-  .pills:not([data-compact]) .points-pill {
-    font-size: var(--fs-l);
-  }
-
-  .pills:not([data-compact]) .points-pill__icon {
-    width: 24px;
-    height: 24px;
-  }
-}
-
-.pills[data-compact] .points-pill {
-  padding-inline-start: 6px;
-  padding-inline-end: 11px;
-  font-size: var(--fs-s);
-}
-
-.pills[data-compact] .points-pill__icon {
-  width: 18px;
-  height: 18px;
-  margin-inline-end: 4px;
-}
-
-/* The tight fallback (pills.ts measures the row): 1 drops the icon, 2 also steps the digits down.
-   The number never wraps and is never cut. */
-.pills[data-tight] .points-pill {
-  padding-inline-start: 11px;
-}
-
-.pills[data-tight] .points-pill__icon {
-  display: none;
-}
-
-.pills[data-tight='2'] .points-pill {
-  font-size: var(--fs-xs);
-}
-
-/* ── Rule chips ────────────────────────────────────────────────────────── */
+/* ── Rule cards (§1.7): one white container, three --rule-card cards ─────── */
 .rule-chips {
   display: flex;
-  height: var(--chips);
-  margin: 0;
-  padding: 0;
+  height: var(--rules);
+  margin: var(--g-pr) calc(var(--s) * 13.3px) 0;
+  padding: calc(var(--s) * 8.3px) calc(var(--s) * 7.5px) calc(var(--s) * 7.3px);
+  border-radius: calc(var(--s) * 10.7px);
+  background: var(--card);
   list-style: none;
 }
 
 .chip {
+  position: relative;
   flex: 1 1 0;
   display: flex;
   align-items: center;
-  justify-content: center;
   min-width: 0;
-  padding: 0 8px;
-  border: 1.5px solid var(--line-2);
-  border-radius: var(--radius-m);
-  background: rgba(255, 255, 255, 0.6);
-  color: var(--ink-2);
-  font-size: var(--fs-xs);
-  font-weight: 600;
+  padding-inline-start: calc(var(--s) * 46px);
+  padding-inline-end: calc(var(--s) * 6px);
+  border-radius: calc(var(--s) * 5.6px);
+  background: var(--rule-card);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  font-size: max(10px, calc(var(--s) * 0.725rem));
   line-height: 1.15;
-  transition: border-color 200ms ease, background-color 200ms ease, box-shadow 200ms ease;
 }
 
 .chip + .chip {
-  margin-inline-start: var(--sp-2);
+  margin-inline-start: calc(var(--s) * 7px);
 }
 
-.chip__icon {
-  width: 22px;
-  height: 22px;
-  margin-inline-end: 6px;
-  color: var(--ink);
+/* The 3 × 3 diagram: 32.7 square, 5.6 from the card's inline start, vertically centred. */
+.chip__art {
+  position: absolute;
+  top: 50%;
+  left: calc(var(--s) * 5.6px);
+  width: calc(var(--s) * 32.7px);
+  height: calc(var(--s) * 32.7px);
+  margin-top: calc(var(--s) * -16.35px);
 }
 
 .chip__text {
   min-width: 0;
   overflow: hidden;
   display: -webkit-box;
-  -webkit-line-clamp: 3; /* large text (200 %) takes three lines; the row grows for it (layout.ts) */
+  -webkit-line-clamp: 3; /* large text takes three lines; the row grows for it (layout.ts) */
   -webkit-box-orient: vertical;
 }
 
 .chip[data-hl] {
-  border-color: var(--accent);
-  background: var(--card);
-  color: var(--ink);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+/* Compact (s < 0.85): diagrams only, centred; the screen-reader text stays. */
+.rule-chips[data-compact] .chip__art {
+  left: 50%;
+  margin-left: calc(var(--s) * -16.35px);
 }
 
 .rule-chips[data-compact] .chip__text {
   display: none;
 }
 
-.rule-chips[data-compact] .chip__icon {
-  margin-inline-end: 0;
-}
-
-@media (min-width: 400px) {
-  .chip {
-    font-size: var(--fs-s);
-  }
-}
-
-/* Wide screens (the 480 px column): chips size to their text, so each fits on one line. */
-@media (min-width: 600px) {
-  .chip {
-    flex: 1 1 auto;
-  }
-}
-
-/* ── Tool bar: bulb · paw (64 px, count badges) ────────────────────────── */
+/* ── Helper row (§1.11): kitty · bulb · mouse ─────────────────────────────
+   Discs Ø 60.3 s on a 103.1 s pitch centred in the column; each button is its disc (the 44 × 44 hit
+   area is a ::before, critic C6); the badge does not move with the pulse. */
 .tool-bar {
   display: flex;
   justify-content: center;
-  align-items: center;
-  height: var(--tool);
+  height: 100%;
 }
 
 .tool {
   position: relative;
-  width: var(--tool);
-  height: var(--tool);
+  flex: none;
+  width: var(--tools);
+  height: var(--tools);
+  margin: 0 calc(var(--s) * 21.4px);
   padding: 0;
   border: 0;
-  border-radius: 50%;
-  background: var(--card);
-  color: var(--ink);
-  box-shadow: 0 4px 0 var(--line-2), var(--shadow-1);
+  background: none;
+  color: inherit;
   cursor: pointer;
   touch-action: manipulation;
-  transition: transform 90ms ease, box-shadow 90ms ease, opacity 150ms ease;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.tool + .tool {
-  margin-inline-start: 44px;
+.tool::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: max(100%, 44px);
+  height: max(100%, 44px);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
 }
 
-.tool__icon {
-  width: 36px;
-  height: 36px;
+.tool__disc {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: 0 calc(var(--s) * 3px) calc(var(--s) * 7px) calc(var(--s) * -2px) rgba(var(--warm-rgb), 0.25);
+  transition: transform 90ms ease;
 }
 
-.tool--bulb {
-  --icon-fill: var(--gold);
+/* The pulse's warm glow: its own layer whose opacity follows the scale (no box-shadow animation). */
+.tool__disc::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 50%;
+  box-shadow: 0 0 calc(var(--s) * 9px) calc(var(--s) * 2px) rgba(var(--pulse-rgb), 0.9);
+  opacity: 0;
+  pointer-events: none;
 }
 
-.tool--paw {
-  color: var(--accent); /* the kitty paw: 3.15:1 on the white button (WCAG 1.4.11, palette-check) */
+.tool:active:not(:disabled) .tool__disc {
+  transform: scale(0.94);
 }
 
-.tool:active:not(:disabled) {
-  transform: translateY(3px);
-  box-shadow: 0 1px 0 var(--line-2), var(--shadow-1);
+.tool--paw .tool__icon {
+  width: calc(var(--s) * 34.7px);
+  height: calc(var(--s) * 34.3px);
+}
+
+.tool--bulb .tool__icon {
+  width: calc(var(--s) * 21.3px);
+  height: calc(var(--s) * 34px);
+}
+
+.tool--mouse .tool__icon {
+  width: calc(var(--s) * 35px);
+  height: calc(var(--s) * 31.3px);
 }
 
 .tool:disabled {
   cursor: default;
-  opacity: 0.5;
+  opacity: 0.45;
 }
 
+/* A mouse that is not shown keeps its slot (the kitty and bulb never move) but is invisible and inert. */
+.tool[data-off] {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* The idle pulse (§1.11, measured): 1.5 s; 0 → 32 % up to --pulse-scale with the glow, hold to 36 %,
+   back down by 69 %, rest to 100 %. Reduced motion: the global rule ends it at rest (fx.css). */
+.tool[data-pulse]:not(:disabled) .tool__disc {
+  animation: tool-pulse var(--pulse-ms, 1500ms) ease-in-out infinite;
+}
+
+.tool[data-pulse]:not(:disabled) .tool__disc::after {
+  animation: tool-glow var(--pulse-ms, 1500ms) ease-in-out infinite;
+}
+
+@keyframes tool-pulse {
+  0%,
+  69%,
+  100% {
+    transform: none;
+  }
+  32%,
+  36% {
+    transform: scale(var(--pulse-scale, 1.08));
+  }
+}
+
+@keyframes tool-glow {
+  0%,
+  69%,
+  100% {
+    opacity: 0;
+  }
+  32%,
+  36% {
+    opacity: 1;
+  }
+}
+
+/* Badges (§1.11; critic C7): the count 28 × 21.3 at the disc centre + (26, −28.3), growing toward the
+   inline end from its inline-start edge; "Free" alike in gold; the video badge 35.3 × 21 at
+   + (25.7, −28.8) with a white play mark. White digits on --badge 4.68:1. */
 .tool__badge {
   position: absolute;
-  top: -4px;
-  right: -8px;
-  min-width: 26px;
-  height: 26px;
-  padding: 0 7px;
-  border-radius: var(--radius-pill);
-  background: var(--accent-text); /* white 14 px text: 5.71:1 */
-  box-shadow: 0 0 0 3px var(--page);
+  top: calc(var(--s) * -8.8px);
+  left: calc(var(--s) * 42.15px);
+  min-width: calc(var(--s) * 28px);
+  height: calc(var(--s) * 21.3px);
+  padding: 0 calc(var(--s) * 5px);
+  border-radius: calc(var(--s) * 7.5px);
+  background: var(--badge);
   color: #fff;
   font-family: var(--font-num);
   font-weight: 600;
-  font-size: var(--fs-s);
-  line-height: 26px;
+  font-size: max(10px, calc(var(--s) * 1.1rem));
+  line-height: calc(var(--s) * 21.3px);
   text-align: center;
+  white-space: nowrap;
 }
 
-.tool[data-empty] .tool__badge {
+.tool[data-empty] .tool__badge--count {
   background: var(--ink-2);
 }
 
-.tool[data-free] .tool__badge {
+.tool__badge--free {
   background: var(--gold);
-  color: var(--ink);
+  color: var(--ink-deep);
+}
+
+.tool__badge--video {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  top: calc(var(--s) * -9.15px);
+  left: calc(var(--s) * 38.2px);
+  width: calc(var(--s) * 35.3px);
+  height: calc(var(--s) * 21px);
+  padding: 0;
+  background: var(--badge-video);
+}
+
+.tool__play {
+  width: calc(var(--s) * 16px);
+  height: calc(var(--s) * 16px);
+  color: #fff;
 }

@@ -1,7 +1,7 @@
-/* Owner: B (Phase 2b; was ui-board); G2 (Phase 2c: the fish loss, the revive pop, the period counter)
-   Keyframes (drop, draw-in, the fish loss, board entry, idle loops, the win-flow fish) and
-   reduced-motion overrides (02 §17.5, phase2b §2.2, §2.7, §2.9). Only transform and opacity are
-   animated (04 §5.3), plus stroke-dashoffset for the X draw-in.
+/* Owner: B (Phase 2b; was ui-board); G2 (Phase 2c: the fish loss, the revive pop, the period counter); G3 (Phase 2d: the head pop, the start toast)
+   Keyframes (drop, the fish loss, board entry, idle loops, the win-flow fish, the heads, the start
+   toast) and reduced-motion overrides (02 §17.5, phase2b §2.2, §2.7, §2.9). Only transform and opacity
+   are animated (04 §5.3). Phase 2d: the X pop replaced the stroke draw-in (board.css, G2).
    Durations that JS also reads come from cfg through custom properties set by the components
    (--entry-*, --breathe-*, --flick-ms, --t-life-loss, --t-life-hurt, --bump-ms, --label-ms, --rays-ms, --pop-ms, …);
    keyframe percentages, angles and scales are CSS-only constants (phase2b §0.4).
@@ -102,25 +102,6 @@
 .cell[data-s='c'] .cell__acc,
 .cell[data-s='g'] .cell__acc {
   display: inline;
-}
-
-/* X stroke draw-in: 85 ms ease-out, the second stroke 35 ms behind the first. board.css draws the
-   X edge (.cell__xe) with the same two custom properties, so the edge and the white X stay in step. */
-.cell.fx-draw .cell__x {
-  animation: x-draw var(--x-draw-ms, 85ms) ease-out both;
-}
-
-.cell.fx-draw .cell__x + .cell__x {
-  animation-delay: var(--x-draw-gap, 35ms);
-}
-
-@keyframes x-draw {
-  from {
-    stroke-dashoffset: var(--x-len, 74);
-  }
-  to {
-    stroke-dashoffset: 0;
-  }
 }
 
 /* Cat drop with overshoot: 280 ms cubic-bezier(.2, 1.4, .4, 1). */
@@ -437,7 +418,6 @@
   }
 }
 
-.pill--bump .pill__icon,
 .tool__badge--bump {
   animation: bump 360ms var(--ease-drop);
 }
@@ -573,14 +553,14 @@
 }
 
 /* ── Period counter (Phase 2c §2.2; was the 2b fish pill): fade-in, number roll, icon bump, rising label ──
-   Phase 2c.1 §10.2: the level-points counter shares the roll, the bump (1.18 there, --bump-scale) and
-   the rising chip; its durations come from fx.levelPoints (pills.ts). §10.3: the cat counter fades out
-   in its cell while the period counter fades in. */
+   Phase 2c.1 §10.2: the level-points counter (Phase 2d: the game bar's Score) shares the roll, the bump
+   (1.12 there, --bump-scale, on the number) and the rising chip; its durations come from
+   fx.levelPoints (pills.ts). Phase 2d §1.13: the heads fade out while the period counter fades in. */
 .period-pill--in {
   animation: mw-fade-in var(--fade-ms, 200ms) ease-out both;
 }
 
-.pill--cats[data-out] {
+.pill--heads[data-out] {
   animation: pill-fade-out var(--fade-ms, 200ms) ease-out both;
 }
 
@@ -591,7 +571,7 @@
 }
 
 .period-pill--bump .period-pill__icon,
-.points-pill--bump .points-pill__icon {
+.points-pill--bump .points-pill__count {
   animation: bump var(--bump-ms, 360ms) var(--ease-drop);
 }
 
@@ -648,6 +628,61 @@
     opacity: 0;
     transform: translateY(var(--label-rise, -24px));
   }
+}
+
+/* ── The heads pill (Phase 2d §1.6): a found colour's head pops (1 → 1.25 → 1 over fx.headFoundMs);
+   a head whose cat was taken back fades to the tint (fx.reducedMotionFadeMs, pills.ts). ── */
+.head--pop {
+  animation: bump var(--head-ms, 300ms) ease-out;
+}
+
+.head--out {
+  animation: head-out 150ms ease both;
+}
+
+@keyframes head-out {
+  from {
+    opacity: 1;
+  }
+}
+
+/* ── The level-start toast (Phase 2d §1.14; start-toast.ts moves it on WAAPI) ──
+   A cream pill 29 s tall over the pills row's lower edge and the rules container's top, 12 s from the
+   column's inline start; our text, then our flexed arm. Decorative: no pointer events. */
+.game__fx {
+  position: absolute;
+  top: calc(var(--g-bp) + var(--pills) + var(--g-pr) - var(--s) * 12.6px);
+  left: 0;
+  right: 0;
+  z-index: 4;
+  height: 0;
+  pointer-events: none;
+}
+
+.start-toast {
+  position: absolute;
+  top: 0;
+  left: calc(var(--s) * 12px);
+  display: flex;
+  align-items: center;
+  height: calc(var(--s) * 29px);
+  padding-inline-start: calc(var(--s) * 12px);
+  padding-inline-end: calc(var(--s) * 4px);
+  border: calc(var(--s) * 1.5px) solid var(--toast-line);
+  border-radius: var(--radius-pill);
+  background: var(--toast-fill);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  font-size: calc(var(--s) * 1.019rem);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.start-toast__art {
+  width: calc(var(--s) * 24px);
+  height: calc(var(--s) * 24px);
+  margin-inline-start: calc(var(--s) * 4px);
 }
 
 /* ── Reduced motion (02 §17.5): no shake, stagger or loops; fades ≤ 150 ms ──
