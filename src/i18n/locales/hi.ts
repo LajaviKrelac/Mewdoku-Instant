@@ -46,7 +46,6 @@ export const catalog: LocaleCatalog = {
   // ── Game ───────────────────────────────────────────────────────────────────
   'game.title.level': 'लेवल {level}',
   'game.title.daily': 'दैनिक · {date}',
-  'game.cats': '{placed} / {n}',
   'game.cats.a11y': '{n} में से {placed} बिल्लियाँ रखी गईं',
   'game.hearts.a11y': 'बची मछलियाँ: {max} में से {hearts}',
   'game.chip.colours': 'हर रंग में 1 बिल्ली',

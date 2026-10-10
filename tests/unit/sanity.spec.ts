@@ -125,6 +125,43 @@ describe('Phase 2c.1 English: level points per cat (fish-lives-spec §10.4, §10
   });
 });
 
+describe('Phase 2d English (look-spec Appendix A; G3)', () => {
+  it('the new keys read as specified; {count} is the mouse\'s cells', () => {
+    expect(t('game.score')).toBe('Score');
+    expect(t('game.tool.mouse')).toBe('Mouse');
+    expect(t('game.tool.mouse.a11y', { count: formatNumber(cfg.mouse.cells) })).toBe('Mouse: crosses out 3 tiles that have no cat');
+    expect(t('game.tool.video.a11y', { tool: t('game.tool.kitty') })).toBe('Kitty: watch a video for more');
+    expect(tn('a11y.mouse', 1, { count: formatNumber(1) })).toBe('The mouse crossed out 1 tile.');
+    expect(tn('a11y.mouse', 3, { count: formatNumber(3) })).toBe('The mouse crossed out 3 tiles.');
+    expect(t('rewarded.title.mouse')).toBe('Call the mouse?');
+    expect(t('rewarded.video.mouse', { count: '3' })).toBe('Watch a short video and the mouse crosses out 3 tiles that have no cat.');
+    expect(t('rewarded.free.mouse')).toBe('The mouse is free this time.');
+    expect(t('rewarded.countdown.mouse', { time: '1:05' })).toBe('The mouse is back in 1:05');
+    expect(t('common.settings.new')).toBe('Settings, something new');
+    expect(t('mouse.unavailable')).toBe('The mouse is hiding. Try again in a moment.');
+    expect(en['howto.helpers']).toBe('Stuck? The bulb explains one step. The kitty finds a cat for you. The mouse crosses out a few tiles that have no cat.');
+    expect(en['settings.patterns.note']).toBe('Adds a small symbol to every colour and outlines the crosses.');
+    expect(EN_PARTS.enUi2d['game.score']).toBe('Score');
+  });
+
+  it('the start-toast lines are honest: no number, no percentage, ≤ 32 characters', () => {
+    for (const k of ['toast.start.level', 'toast.start.hard', 'toast.start.retry'] as const) {
+      expect(en[k], k).not.toMatch(/\d|%|players?/i);
+      expect(en[k].length, k).toBeLessThanOrEqual(32);
+    }
+  });
+
+  it('the cat counter\'s "3 / 8" is gone from every catalogue; its screen-reader name stays (the heads pill\'s)', () => {
+    expect('game.cats' in en).toBe(false);
+    expect(t('game.cats.a11y', { placed: 3, n: 10 })).toBe('3 of 10 cats placed');
+    for (const [file, mod] of Object.entries(LOCALE_MODULES)) {
+      expect('game.cats' in (mod.catalog ?? {}), file).toBe(false);
+      expect(mod.catalog?.['game.cats.a11y'], file).toBeTruthy();
+      expect(mod.catalog?.['game.score'], file).toBeTruthy();
+    }
+  });
+});
+
 describe('config', () => {
   it('holds the 02 §3 values and is frozen', () => {
     expect(cfg.hearts.perAttempt).toBe(3);

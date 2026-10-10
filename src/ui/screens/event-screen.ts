@@ -1,4 +1,4 @@
-// Owner: B (Phase 2b); G2 (Phase 2c: milestone rewards are hints and kitties only)
+// Owner: B (Phase 2b); G2 (Phase 2c: milestone rewards are hints and kitties only); G3 (Phase 2d: the settings dot)
 // Event screen (new screen `event`, phase2b §4.4), in the lazy `events` chunk: header art (A's
 // eventArt(def, 'header'): pattern + Tux with the accessory), name and tagline, "Ends in …", the
 // milestone track (5 nodes on a bar; reached nodes filled with the reward icon), the primary
@@ -85,6 +85,8 @@ export function createEventScreen(view: EventScreenView, cb: EventScreenCallback
     showSettings: true,
     showTrophy: false,
     fbSafeZone: v.fbSafeZone,
+    // Phase 2d §1.15, §2.2: the red dot on the gear (something in Settings not seen yet).
+    settingsDot: v.settingsDot === true,
   });
   const topBar = createTopBar(topBarProps(view), { onHome: () => cb.onHome(), onSettings: () => cb.onSettings(), onTrophy: () => undefined });
 

@@ -45,7 +45,6 @@ export const catalog: LocaleCatalog = {
   // ── Game ───────────────────────────────────────────────────────────────────
   'game.title.level': '第{level}关',
   'game.title.daily': '每日 · {date}',
-  'game.cats': '{placed} / {n}',
   'game.cats.a11y': '已放置{placed}只猫，共{n}只',
   'game.hearts.a11y': '剩余{hearts}条小鱼，共{max}条',
   'game.chip.colours': '每种颜色1只猫',

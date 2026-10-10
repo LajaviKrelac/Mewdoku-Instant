@@ -1,4 +1,4 @@
-// Owner: B (Phase 2b; was ui-shell)
+// Owner: B (Phase 2b; was ui-shell); G3 (Phase 2d: the badge in the spotlight, the hidden mouse, the band)
 // O8 tutorial coach (02 §5 O8, §11.5): dims everything except the focus, pulsing outline, animated
 // hand, text card (+ "Got it" in step 2). NON-modal: the board stays interactive under it.
 // The root ignores pointer events (only the card takes them); the dimmer is an SVG mask with one
@@ -22,6 +22,9 @@
 // light soft obstacle, so the card takes the gap between the board and the tools when there is one,
 // and a card left over the tools reaches up past their count badges instead of cutting them in half
 // (UX-14); the texts follow the language (A11Y-I18N-1).
+// Phase 2d (look-spec §1.11, critic C8, §1.16): the bulb's round spotlight takes in its whole badge (the
+// new badge sits further out than the old one), the tool row skips the hidden mouse ([data-off]), and
+// the card and the spotlight stay above the banner band when one is reserved.
 import { tutorialStep, type CoachHand, type TutorialStepIndex } from '../../game/tutorial';
 import { colorName, onLocaleChanged, t, translate, translateMarked, TUTORIAL_STEP_KEYS } from '../../i18n';
 import { clear, h, s, type OverlayView } from '../dom';
@@ -169,9 +172,14 @@ export function placeCard(
  * button's corner. Near the bottom edge the circle moves up (keeping the button inside it), then
  * shrinks, so the ring is never clipped by the screen edge.
  */
-export function roundSpot(r: RectLike & { readonly width: number; readonly height: number }, vh: number): { cx: number; cy: number; rad: number } {
+export function roundSpot(
+  r: RectLike & { readonly width: number; readonly height: number },
+  vh: number,
+  reach = 0,
+): { cx: number; cy: number; rad: number } {
   const base = Math.min(r.width, r.height) / 2 + HOLE_PAD;
-  let rad = base + SPOT_EXTRA;
+  // Phase 2d (critic C8): wide enough for the badge's far corner (`reach` from the button's centre).
+  let rad = Math.max(base + SPOT_EXTRA, reach + HOLE_PAD);
   const cx = r.left + r.width / 2;
   let cy = r.top + r.height / 2;
   if (vh > 0) {
@@ -205,7 +213,8 @@ function screenSoftRects(doc: Document): SoftRect[] {
 
 /** The tool row with its count badges (which stick out above the buttons), and the badges' top. */
 function toolRow(doc: Document): { readonly rect: RectLike; readonly badgeTop: number | null } | null {
-  const els = Array.from(doc.querySelectorAll('.screen--game .tool, .screen--game .tool__badge'));
+  // Phase 2d (critic C8): a hidden mouse ([data-off]) keeps its slot and a rect, but is not in the row.
+  const els = Array.from(doc.querySelectorAll('.screen--game .tool:not([data-off]), .screen--game .tool:not([data-off]) .tool__badge:not([hidden])'));
   let rect: RectLike | null = null;
   let badgeTop: number | null = null;
   for (const el of els) {
@@ -217,6 +226,32 @@ function toolRow(doc: Document): { readonly rect: RectLike; readonly badgeTop: n
     if (el.classList.contains('tool__badge')) badgeTop = badgeTop === null ? r.top : Math.min(badgeTop, r.top);
   }
   return rect ? { rect, badgeTop } : null;
+}
+
+/**
+ * How far the badge of the tool button at `r` reaches from the button's centre (its farthest corner),
+ * or 0 when there is none (critic C8).
+ */
+export function badgeReach(doc: Document, r: RectLike & { readonly width: number; readonly height: number }): number {
+  const cx = r.left + r.width / 2;
+  const cy = r.top + r.height / 2;
+  let reach = 0;
+  for (const tool of Array.from(doc.querySelectorAll('.tool:not([data-off])'))) {
+    const t = tool.getBoundingClientRect();
+    if (Math.abs(t.left + t.width / 2 - cx) > 1 || Math.abs(t.top + t.height / 2 - cy) > 1) continue;
+    const b = tool.querySelector('.tool__badge:not([hidden])')?.getBoundingClientRect();
+    if (!b || b.width === 0) continue;
+    for (const x of [b.left, b.right]) for (const y of [b.top, b.bottom]) reach = Math.max(reach, Math.hypot(x - cx, y - cy));
+  }
+  return reach;
+}
+
+/** The banner band at the bottom of the game screen (§1.16), px; 0 without one. */
+function bandHeight(doc: Document): number {
+  const root = doc.documentElement;
+  if (root.getAttribute('data-play-band') !== '1') return 0;
+  const px = (k: string): number => parseFloat(root.style.getPropertyValue(k)) || 0;
+  return px('--play-band') + px('--play-band-bottom');
 }
 
 /** Our own pointing hand (48×48, fingertip at TIP_X, TIP_Y). */
@@ -260,10 +295,11 @@ export function createCoach(): OverlayView<CoachProps> {
     if (!props || el.hidden) return;
     const rects = props.targetRects();
     const doc = el.ownerDocument;
-    const vh = doc.defaultView?.innerHeight ?? 0;
+    // Phase 2d §1.16: the screen ends at the banner band when one is reserved.
+    const vh = Math.max(0, (doc.defaultView?.innerHeight ?? 0) - bandHeight(doc));
     // The bulb is a round button: a round spotlight; cells get rounded squares.
     const round = tutorialStep(props.step).target === 'bulb';
-    const spots = round ? rects.map((r) => roundSpot(r, vh)) : [];
+    const spots = round ? rects.map((r) => roundSpot(r, vh, badgeReach(doc, r))) : [];
     clear(holes);
     if (round) {
       // A circle around the button, wide enough for the badge on its top-right corner.
@@ -301,7 +337,7 @@ export function createCoach(): OverlayView<CoachProps> {
     // A round target keeps the card clear of its whole spotlight, not just of the button.
     const avoid: readonly RectLike[] = round
       ? rects.map((r, i) => {
-          const sp = spots[i] ?? roundSpot(r, vh);
+          const sp = spots[i] ?? roundSpot(r, vh, badgeReach(doc, r));
           return { left: r.left, right: r.right, top: sp.cy - sp.rad, bottom: sp.cy + sp.rad };
         })
       : rects;

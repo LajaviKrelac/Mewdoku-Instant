@@ -209,7 +209,8 @@ describe('a language switch relabels every view, open or cached (A11Y-I18N-1)', 
     document.body.appendChild(g.el);
     const board = q(g.el, '.board');
     await setLocale('de');
-    expect(q(g.el, '.top-bar__btn--home').getAttribute('aria-label')).toBe(de['common.home']);
+    // Phase 2d §1.4: the game bar's back disc is "Back" (it does what Home did).
+    expect(q(g.el, '.top-bar__btn--back').getAttribute('aria-label')).toBe(de['common.back']);
     expect(q(g.el, '.top-bar__btn--settings').getAttribute('aria-label')).toBe(de['common.settings']);
     expect(text(q(g.el, '.chip--colours .chip__text'))).toBe(de['game.chip.colours']);
     expect(q(g.el, '.tool--bulb').getAttribute('aria-label')).toBe(stripIsolates(t('game.tool.hint.a11y', { count: 5 })));

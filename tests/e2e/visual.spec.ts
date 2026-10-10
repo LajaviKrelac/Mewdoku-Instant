@@ -1,6 +1,6 @@
 // Owner: A (phase2b §1.12); G2 (Phase 2c: the lives are fish, the period pill and counter, the 2c victory;
 // Phase 2c.1: the level-points counter, its "+N", the period counter in the cat counter's cell, the
-// victory's points row); G3 (Phase 2d)
+// victory's points row); G3 (Phase 2d: the game screen's measured look, look-spec §5.3)
 // Visual review screenshots of the Classic look at 320, 390 and 1280 (the web-320, web-390 and
 // web-1280 projects): Home, the fish loss, the win flight, ranking, victory, fail, settings and event.
 // Phase 2d L0 (look-spec §3.2 item 1): the board capture (mid-game) moved, unchanged, to
@@ -14,6 +14,13 @@
 // a 5-digit total (points-hud-<width>.png), a "+N" mid-rise (points-plus-<width>.png) and the win flow
 // with the period counter in column 1 (points-winflow-<width>.png) at 320, 390 and 1280; the counter
 // stays centred and clear of its neighbours.
+// Phase 2d (G3, look-spec §1, §5.3): the screenshots go to docs/phase2d/screenshots/ as
+// G3-visual-<screen>-<width>.png (VISUAL_OUT overrides the folder). The full game screen in the
+// recording's state (a 10×10 level, five X's on row 0, 3 fish, Score 0, hints 2, kitties 2) at every
+// project size, and at 402 × 874 with the recording's safe areas (62 / 34) and the banner band, its rows
+// checked against the measured positions (±2 px, look-spec §1.1 / §5.4); the bulb at its pulse peak;
+// the start toast mid-drift; the win flow with the period counter over the heads pill; the Score's
+// "+N" on a 12×12 level, clear of the gear; Home and Settings with the 2d tokens and the gear's dot.
 import { mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,7 +32,7 @@ import type { SaveData } from '../../src/game/types';
 
 type TestWindow = Window & { __mewdoku?: E2EHooks };
 
-const OUT = process.env.VISUAL_OUT ?? resolve(dirname(fileURLToPath(import.meta.url)), '../../docs/phase2c/screenshots');
+const OUT = process.env.VISUAL_OUT ?? resolve(dirname(fileURLToPath(import.meta.url)), '../../docs/phase2d/screenshots');
 mkdirSync(OUT, { recursive: true });
 
 const NOW = Date.now();
@@ -65,62 +72,63 @@ async function open(page: Page, save: SaveData): Promise<void> {
 
 async function shot(page: Page, name: string): Promise<void> {
   const width = page.viewportSize()?.width ?? 0;
-  await page.screenshot({ path: join(OUT, `G2-visual-${name}-${width}.png`) });
+  await page.screenshot({ path: join(OUT, `G3-visual-${name}-${width}.png`) });
 }
 
-/** Phase 2c.1 review set: docs/phase2c/screenshots/points-<name>-<width>.png (VISUAL_OUT overrides the folder). */
-async function pointsShot(page: Page, name: string, hudOnly = false): Promise<void> {
-  const width = page.viewportSize()?.width ?? 0;
-  const clip = hudOnly
-    ? await page.evaluate(() => {
-        const top = (document.querySelector('.screen--game .top-bar') as HTMLElement).getBoundingClientRect();
-        const row = (document.querySelector('.pills') as HTMLElement).getBoundingClientRect();
-        return { x: 0, y: Math.max(0, top.top), width: window.innerWidth, height: row.bottom - Math.max(0, top.top) + 8 };
-      })
-    : undefined;
-  await page.screenshot({ path: join(OUT, `points-${name}-${width}.png`), ...(clip ? { clip } : {}) });
-}
-
-interface PillBox {
+interface Box {
+  readonly top: number;
+  readonly bottom: number;
   readonly left: number;
   readonly right: number;
 }
-/** The pills row's parts (hidden ones are null). */
-const pillsRow = (page: Page) =>
+
+/** Client rects of the game screen's rows and parts (null when hidden). */
+const hud = (page: Page) =>
   page.evaluate(() => {
     const box = (sel: string) => {
-      const el = document.querySelector<HTMLElement>(sel);
-      if (!el || el.hidden || el.getClientRects().length === 0) return null;
+      const el = Array.from(document.querySelectorAll<HTMLElement>(sel)).find((e) => !e.hidden && e.getClientRects().length > 0);
+      if (!el) return null;
       const r = el.getBoundingClientRect();
-      return { left: r.left, right: r.right };
+      return { top: r.top, bottom: r.bottom, left: r.left, right: r.right };
     };
-    const row = document.querySelector('.pills') as HTMLElement;
     return {
-      row: box('.pills'),
-      cats: box('.pill--cats'),
-      period: box('.pills .period-pill'),
-      points: box('.points-pill'),
+      vw: window.innerWidth,
+      vh: window.innerHeight,
+      back: box('.top-bar--game .top-bar__btn--back'),
+      gear: box('.top-bar--game .top-bar__btn--settings'),
+      dot: box('.top-bar--game .top-bar__dot'),
+      level: box('.top-bar__text'),
+      score: box('.top-bar--game .points-pill'),
+      pills: box('.pills'),
+      heads: box('.pill--heads'),
       lives: box('.pill--lives'),
-      scroll: row.scrollWidth,
-      client: row.clientWidth,
+      rules: box('.rule-chips'),
+      board: box('.board'),
+      tools: box('.tool-bar .tool--paw'),
+      mouse: box('.tool-bar .tool--mouse'),
+      chip: box('.points-pill__label'),
     };
   });
 
-/** §10.8: start | points | lives are disjoint, inside the row, and the points counter is centred (± 1 px). */
-function expectRow(g: Awaited<ReturnType<typeof pillsRow>>, start: 'cats' | 'period'): void {
-  const row = g.row as PillBox;
-  const first = g[start] as PillBox;
-  const mid = g.points as PillBox;
-  const end = g.lives as PillBox;
-  expect(first, start).not.toBeNull();
-  expect(mid, 'points').not.toBeNull();
-  // Inline order does not matter (RTL mirrors): sort by position and check the gaps.
-  const parts = [first, mid, end].sort((a, b) => a.left - b.left);
-  for (let k = 1; k < parts.length; k++) expect((parts[k] as PillBox).left, 'pills overlap').toBeGreaterThanOrEqual((parts[k - 1] as PillBox).right - 0.5);
-  expect((parts[0] as PillBox).left).toBeGreaterThanOrEqual(row.left - 0.5);
-  expect((parts[2] as PillBox).right).toBeLessThanOrEqual(row.right + 0.5);
-  expect(Math.abs((mid.left + mid.right) / 2 - (row.left + row.right) / 2), 'points counter centred').toBeLessThanOrEqual(1);
-  expect(g.scroll, 'row overflows').toBeLessThanOrEqual(g.client + 1);
+/** The rows top-down, inside the viewport, none overlapping the next (look-spec §1.1). */
+async function expectStack(page: Page): Promise<Awaited<ReturnType<typeof hud>>> {
+  const g = await hud(page);
+  const rows = [g.back, g.pills, g.rules, g.board, g.tools] as (Box | null)[];
+  for (const r of rows) expect(r, 'row shown').not.toBeNull();
+  for (let k = 1; k < rows.length; k++) expect((rows[k] as Box).top, `row ${k} below row ${k - 1}`).toBeGreaterThanOrEqual((rows[k - 1] as Box).bottom - 0.5);
+  for (const r of rows as Box[]) {
+    expect(r.top).toBeGreaterThanOrEqual(-0.5);
+    expect(r.bottom).toBeLessThanOrEqual(g.vh + 0.5);
+    expect(r.left).toBeGreaterThanOrEqual(-0.5);
+    expect(r.right).toBeLessThanOrEqual(g.vw + 0.5);
+  }
+  return g;
+}
+
+/** The recording's state (look-spec §5.4 step 1): row 0 columns 0–4 crossed out. */
+async function markRow0(page: Page): Promise<void> {
+  for (let c = 0; c < 5; c++) await cell(page, c).click();
+  await page.waitForTimeout(400);
 }
 
 const solution = (page: Page) => page.evaluate(() => (window as TestWindow).__mewdoku?.solution() ?? []);
@@ -132,6 +140,9 @@ async function startLevel(page: Page): Promise<number[]> {
   await page.waitForTimeout(300);
   return solution(page);
 }
+
+/** Level 96 (10×10) as in the recording: a returning player with 2 hints and 2 kitties. */
+const recordingSave = (): SaveData => returning({ progress: { level: 96, completed: 95, best: {} }, stock: { hints: 2, kitties: 2 } });
 
 async function placeCat(page: Page, i: number): Promise<void> {
   await cell(page, i).dblclick();
@@ -152,7 +163,10 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
       const cs = getComputedStyle(document.documentElement);
       return { page: cs.getPropertyValue('--page').trim(), accent: cs.getPropertyValue('--accent').trim() };
     });
-    expect(vars).toEqual({ page: '#faf6f0', accent: '#e57010' });
+    expect(vars).toEqual({ page: '#f7f2ef', accent: '#e57010' });
+    // Phase 2d §1.15, §2.2: the gear's red dot (Settings never opened); white round buttons.
+    await expect(page.locator('.screen--home .top-bar__btn--settings .top-bar__dot')).toBeVisible();
+    await expect(page.locator('.screen--home .top-bar__btn--settings')).toHaveAttribute('aria-label', 'Settings, something new');
     // Phase 2c §2.8: the period pill (this week's fish), not a fish pill with a shop "+".
     const pill = page.locator('.screen--home .top-bar .period-pill');
     await expect(pill).toBeVisible();
@@ -194,9 +208,14 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
   test('the win flight, the ranking panel and the victory', async ({ page }) => {
     await open(page, returning());
     await solve(page);
-    // §2.2: the period counter shows this week's total before the win, the kept fish fly to it.
+    // §2.2: the period counter shows this week's total before the win, the kept fish fly to it;
+    // Phase 2d §1.13: in the heads pill's place (the heads fade out).
     const counter = page.locator('.pills .period-pill[data-in-game]');
     await expect(counter).toBeVisible({ timeout: 4000 });
+    await expect(page.locator('.pill--heads')).toBeHidden({ timeout: 1000 });
+    const over = await hud(page);
+    const cb = (await counter.boundingBox()) as { x: number; width: number };
+    expect(Math.abs(cb.x - (over.pills as Box).left), 'over the heads pill').toBeLessThanOrEqual(1);
     await expect(page.locator('.fx-layer .fx-fish').first()).toBeAttached({ timeout: 4000 });
     await page.waitForTimeout(450);
     await shot(page, 'win-flight');
@@ -221,47 +240,152 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
     await shot(page, 'victory');
   });
 
-  test('level points: the counter on a 12×12 board with 11 cats, a "+N" mid-rise, and the win flow', async ({ page }) => {
-    // Level 310 is 12×12 (the widest cat counter, "11 / 12"); 11 cats in a row reach 11,616.
+  test('the game screen in the recording\'s state: bar, heads, fish, cards, helpers, the pulse and the start toast', async ({ page }) => {
+    await open(page, recordingSave());
+    await page.locator('.home__play').click();
+    await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
+    // §1.14: the start toast on a fresh level, with our honest line; it is decorative.
+    const toast = page.locator('.start-toast[data-kind="level"]');
+    await expect(toast).toBeAttached();
+    await expect(toast).toHaveText('You can solve this one!');
+    await expect(toast).toHaveAttribute('aria-hidden', 'true');
+    await page.waitForTimeout(150 + 300 + 1200 + 500); // delay, in, hold, then half a second of drift
+    await shot(page, 'toast');
+    await markRow0(page);
+    await expect(page.locator('.cell[data-s="m"]')).toHaveCount(5);
+    const g = await expectStack(page);
+    // The bar (§1.4): back · Level / 96 · Score / 0 · gear with the dot; the pair between the discs.
+    await expect(page.locator('.top-bar__text')).toHaveAttribute('aria-label', 'Level 96');
+    await expect(page.locator('.top-bar__text .top-bar__suffix')).toHaveText('96');
+    await expect(page.locator('.points-pill__name')).toHaveText('Score');
+    await expect(page.locator('.points-pill__n')).toHaveText('0');
+    await expect(page.locator('.top-bar--game .top-bar__dot')).toBeVisible();
+    for (const col of [g.level, g.score] as Box[]) {
+      expect(col.left).toBeGreaterThanOrEqual((g.back as Box).right + 4 - 1);
+      expect(col.right).toBeLessThanOrEqual((g.gear as Box).left - 4 + 1);
+    }
+    // The pills (§1.5, §1.6): ten heads, none found yet; three fish.
+    await expect(page.locator('.pill--heads .head')).toHaveCount(10);
+    await expect(page.locator('.pill--heads .head[data-done]')).toHaveCount(0);
+    await expect(page.locator('.pill--lives .life[data-full]')).toHaveCount(3);
+    // The cards (§1.7) and the helpers (§1.11): kitty 2, bulb 2, the mouse with its video badge; the bulb pulses (X's on the board).
+    await expect(page.locator('.rule-chips .chip .chip__art')).toHaveCount(3);
+    await expect(page.locator('.tool--paw .tool__badge')).toHaveText('2');
+    await expect(page.locator('.tool--bulb .tool__badge')).toHaveText('2');
+    await expect(page.locator('.tool--mouse')).not.toHaveAttribute('data-off', '');
+    await expect(page.locator('.tool--mouse .tool__badge--video')).toBeVisible();
+    await expect(page.locator('.tool--bulb')).toHaveAttribute('data-pulse', '');
+    await expect(page.locator('.tool--paw')).not.toHaveAttribute('data-pulse', '');
+    // Every round button keeps a 44 × 44 hit area at every s (critic C6): the area's corners hit the button.
+    for (const sel of ['.top-bar--game .top-bar__btn--back', '.top-bar--game .top-bar__btn--settings', '.tool--paw', '.tool--bulb', '.tool--mouse']) {
+      const hit = await page.evaluate((q) => {
+        const el = document.querySelector<HTMLElement>(q) as HTMLElement;
+        const r = el.getBoundingClientRect();
+        const cx = r.left + r.width / 2;
+        const cy = r.top + r.height / 2;
+        return [[-21.5, -21.5], [21.5, -21.5], [-21.5, 21.5], [21.5, 21.5]].every(([dx, dy]) => el.contains(document.elementFromPoint(cx + (dx as number), cy + (dy as number))));
+      }, sel);
+      expect(hit, `${sel} hit area`).toBe(true);
+    }
+    await shot(page, 'game');
+    // The bulb at its pulse peak (32 % of the 1.5 s cycle, §1.11).
+    await page.evaluate(() => {
+      for (const a of document.getAnimations()) {
+        const t = (a.effect as KeyframeEffect | null)?.target as Element | null;
+        if (t?.closest('.tool--bulb')) {
+          a.pause();
+          a.currentTime = 480;
+        }
+      }
+    });
+    await page.waitForTimeout(100);
+    await shot(page, 'pulse-peak');
+  });
+
+  test('402 × 874 with the recording\'s safe areas and the banner: the rows at the measured positions (±2 px)', async ({ browser }, info) => {
+    test.skip(info.project.name !== 'web-390', 'one phone size: the recording\'s');
+    const ctx = await browser.newContext({ viewport: { width: 402, height: 874 }, deviceScaleFactor: 3, hasTouch: true, isMobile: true });
+    const page = await ctx.newPage();
+    await page.goto('/?ads=ok');
+    await ready(page);
+    await page.evaluate((json) => (window as TestWindow).__mewdoku?.seedSave(json), JSON.stringify(recordingSave()));
+    await page.reload();
+    await ready(page, 'home');
+    await page.addStyleTag({ content: ':root{--dev-safe-top:62px;--dev-safe-bottom:34px}' });
+    await page.evaluate(() => window.dispatchEvent(new Event('resize')));
+    await page.locator('.home__play').click();
+    await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
+    await page.waitForTimeout(1200);
+    await markRow0(page);
+    const g = await expectStack(page);
+    const near = (got: number, want: number, what: string): void => expect(Math.abs(got - want), `${what}: ${got.toFixed(1)} vs ${want}`).toBeLessThanOrEqual(2);
+    const b = (x: Box | null): Box => x as Box;
+    // look-spec §1.1, §1.4–§1.11 (the original's measured positions at 402 × 874).
+    near((b(g.back).left + b(g.back).right) / 2, 31.5, 'back centre x');
+    near((b(g.back).top + b(g.back).bottom) / 2, 88.0, 'back centre y');
+    near((b(g.gear).left + b(g.gear).right) / 2, 370.0, 'gear centre x');
+    near((b(g.dot).left + b(g.dot).right) / 2, 384.8, 'dot centre x');
+    near((b(g.dot).top + b(g.dot).bottom) / 2, 73.3, 'dot centre y');
+    near((b(g.level).left + b(g.level).right) / 2, 149.5, 'Level column centre');
+    near((b(g.score).left + b(g.score).right) / 2, 252.0, 'Score column centre');
+    near(b(g.heads).left, 12.0, 'heads pill left');
+    near(b(g.heads).right, 282.0, 'heads pill right');
+    near(b(g.heads).top, 124.3, 'pills top');
+    near(b(g.lives).left, 293.3, 'fish pill left');
+    near(b(g.rules).top, 164.0, 'rules top');
+    near(b(g.rules).left, 13.3, 'rules left');
+    near(b(g.board).top, 250.0, 'board top');
+    near(b(g.board).left, 5.67, 'board left');
+    near(b(g.tools).top, 694.0, 'helpers top');
+    near((b(g.tools).left + b(g.tools).right) / 2, 98.8, 'kitty centre x');
+    near((b(g.mouse).left + b(g.mouse).right) / 2, 305.0, 'mouse centre x');
+    const banner = await page.locator('[data-testid="mock-banner"]').boundingBox();
+    if (banner) near(banner.y, 777.7, 'banner top');
+    await page.screenshot({ path: join(OUT, 'G3-visual-recording-402.png') });
+    await ctx.close();
+  });
+
+  test('the Score on a 12×12 level: 11 cats in a row, a "+N" mid-rise clear of the gear, and the win flow', async ({ page }) => {
+    // Level 310 is 12×12; 11 cats in a row reach 11,616, the winning cat 13,248.
     await open(page, returning({ progress: { level: 310, completed: 309, best: {} } }));
     const sol = await startLevel(page);
     const n = sol.length;
     expect(n).toBe(12);
     await expect(page.locator('.points-pill__n')).toHaveText('0');
-    expectRow(await pillsRow(page), 'cats');
+    await expect(page.locator('.pill--heads .head')).toHaveCount(12);
     for (let r = 0; r < n - 1; r++) {
       await cell(page, r * n + (sol[r] as number)).dblclick();
       if (r < n - 2) await page.waitForTimeout(350);
     }
-    // The 11th cat: the roll and its "+1,536" chip, about a fifth of the way through its rise.
+    // The 11th cat: the roll and its "+1,536" chip, at the number's inline end, before the gear.
     await expect(page.locator('.points-pill__chip')).toHaveText('+1,536');
     await page.waitForTimeout(140);
-    await pointsShot(page, 'plus', true);
+    const mid = await hud(page);
+    expect((mid.chip as Box).right, '"+N" clear of the gear').toBeLessThanOrEqual((mid.gear as Box).left - 4 + 1);
+    expect((mid.chip as Box).top, '"+N" inside the bar').toBeGreaterThanOrEqual(-0.5);
+    await shot(page, 'score-plus');
     await page.waitForTimeout(900);
     await expect(page.locator('.points-pill__n')).toHaveText('11,616');
-    await expect(page.locator('.pill--cats .pill__count')).toHaveText('11 / 12');
+    await expect(page.locator('.pill--heads .head[data-done]')).toHaveCount(11);
     await expect(page.locator('.points-pill__chip')).toHaveCount(0);
-    expectRow(await pillsRow(page), 'cats');
-    await pointsShot(page, 'hud');
-    // The winning cat: 13,248 (the largest level total), highlighted, still centred.
+    await shot(page, 'score-hud');
     await cell(page, (n - 1) * n + (sol[n - 1] as number)).dblclick();
     await expect(page.locator('.points-pill[data-final] .points-pill__n:not(.is-out)')).toHaveText('13,248');
-    expectRow(await pillsRow(page), 'cats');
-    // §10.3: the period counter fades in where the cat counter was; the points counter stays.
     const counter = page.locator('.pills .period-pill[data-in-game]');
     await expect(counter).toBeVisible({ timeout: 4000 });
-    await expect(page.locator('.pill--cats')).toBeHidden({ timeout: 1000 });
-    expectRow(await pillsRow(page), 'period');
+    await expect(page.locator('.pill--heads')).toBeHidden({ timeout: 1000 });
     await expect(page.locator('.fx-layer .fx-fish').first()).toBeAttached({ timeout: 4000 });
     await page.waitForTimeout(450);
-    await pointsShot(page, 'winflow');
+    await shot(page, 'score-winflow');
+    // Critic C10: a running "+3" sits inside the period counter, never over the bar's columns.
+    const label = page.locator('.pills .period-pill__label');
+    if (await label.count()) {
+      const lb = (await label.boundingBox()) as { y: number; height: number };
+      const pills = (await hud(page)).pills as Box;
+      expect(lb.y).toBeGreaterThanOrEqual(pills.top - 8);
+    }
     await expect(page.locator('.points-pill[data-final]')).toBeVisible();
     await expect(page.locator('.overlay[data-overlay="ranking"]')).toBeVisible({ timeout: 8000 });
-    await page.waitForTimeout(2000);
-    await page.mouse.click(10, (page.viewportSize()?.height ?? 600) - 10);
-    await expect(page.locator('.overlay[data-overlay="victory"] .victory__points')).toHaveText('13,248 points', { timeout: 4000 });
-    await page.waitForTimeout(900);
-    await pointsShot(page, 'victory');
   });
 
   test('settings', async ({ page }) => {
@@ -274,7 +398,7 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
     await shot(page, 'settings');
   });
 
-  test('how to play: the lives are fish, then the weekly points note', async ({ page }) => {
+  test('how to play: the lives are fish, the weekly points note, and the three helpers', async ({ page }) => {
     await open(page, returning());
     await page.locator('.top-bar__btn--settings').click();
     await page.locator('.overlay[data-overlay="settings"] .settings__howto-link').click();
@@ -284,6 +408,9 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
     // 2c.1 §10.7: the level-points note with our sparkle follows it.
     await expect(page.locator('.overlay[data-overlay="how_to_play"] .howto__level-points use')).toHaveAttribute('href', '#icon-points');
     await expect(page.locator('.overlay[data-overlay="how_to_play"] .howto__level-points')).toContainText('Every cat you find earns points');
+    // Phase 2d: the helpers note names the kitty, the bulb and the mouse, next to their art.
+    await expect(page.locator('.overlay[data-overlay="how_to_play"] .howto__helpers')).toContainText('The mouse crosses out a few tiles that have no cat.');
+    await expect(page.locator('.overlay[data-overlay="how_to_play"] .howto__helper-art use')).toHaveCount(3);
     await page.locator('.overlay[data-overlay="how_to_play"] .howto__points').scrollIntoViewIfNeeded();
     await page.waitForTimeout(300);
     await shot(page, 'howto');

@@ -351,8 +351,12 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
       '--safe-bottom': px(vp.safeBottom),
       '--pulse-ms': `${P.periodMs}ms`,
       '--pulse-scale': String(P.peakScale),
-      '--fb-l': px(fbShift({ vw: vp.vw, colW: next.colW, s: next.s, rtl, fb: current.fbSafeZone })),
     };
+    // The FB safe zone (§1.1): the disc at the physical left moves right; that is the bar's inline
+    // start in LTR (the back disc, --fb-s) and its inline end in RTL (the gear, --fb-e).
+    const fb = px(fbShift({ vw: vp.vw, colW: next.colW, s: next.s, rtl, fb: current.fbSafeZone }));
+    vars[rtl ? '--fb-e' : '--fb-s'] = fb;
+    vars[rtl ? '--fb-s' : '--fb-e'] = '0px';
     for (const [k, v] of Object.entries(vars)) el.style.setProperty(k, v);
     el.dataset.compact = String(next.compact);
     el.toggleAttribute('data-banner', next.band > 0);

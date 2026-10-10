@@ -648,7 +648,8 @@
 
 /* ── The level-start toast (Phase 2d §1.14; start-toast.ts moves it on WAAPI) ──
    A cream pill 29 s tall over the pills row's lower edge and the rules container's top, 12 s from the
-   column's inline start; our text, then our flexed arm. Decorative: no pointer events. */
+   column's inline start (its static position + margin: mirrors in RTL); our text, then our flexed
+   arm. Decorative: no pointer events. */
 .game__fx {
   position: absolute;
   top: calc(var(--g-bp) + var(--pills) + var(--g-pr) - var(--s) * 12.6px);
@@ -662,10 +663,10 @@
 .start-toast {
   position: absolute;
   top: 0;
-  left: calc(var(--s) * 12px);
   display: flex;
   align-items: center;
   height: calc(var(--s) * 29px);
+  margin-inline-start: calc(var(--s) * 12px);
   padding-inline-start: calc(var(--s) * 12px);
   padding-inline-end: calc(var(--s) * 4px);
   border: calc(var(--s) * 1.5px) solid var(--toast-line);

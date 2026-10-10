@@ -145,9 +145,9 @@ test('a 12×12 board (fetched pack) fits with whole cells', async ({ page }) => 
   await noHorizontalOverflow(page);
   await boardVisible(page);
   await safeZoneClear(page);
-  // 02 §18: about 26 px cells on a 360 px phone; never below 22 px at the 320 px minimum.
+  // 02 §18 / look-spec §1.1: never below 22 px at the 320 px minimum (with the banner band: slot 22).
   const box = await page.locator('.cell').first().boundingBox();
-  expect(box?.width ?? 0).toBeGreaterThanOrEqual(22);
+  expect(box?.width ?? 0).toBeGreaterThanOrEqual(22 - 0.5);
 });
 
 
@@ -220,9 +220,10 @@ test('a short desktop window (a 200 % zoomed browser) plays without the rotate n
   await page.locator('.home__play').click();
   await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
   await noHorizontalOverflow(page);
-  // The column keeps the 568 px minimum and the page scrolls: whole cells of at least 24 px.
+  // The column keeps the 568 px minimum and the page scrolls: whole cells of at least 22 px (2d §1.1:
+  // a 12 × 12 board in a 568 px column with the banner band, s = 0.712, slot 22).
   const cell = await page.locator('.cell').first().boundingBox();
-  expect(cell?.width ?? 0).toBeGreaterThanOrEqual(24);
+  expect(cell?.width ?? 0).toBeGreaterThanOrEqual(22 - 0.5);
   await page.locator('.cell').last().scrollIntoViewIfNeeded();
   await page.locator('.cell').last().click();
   expect(await page.evaluate(() => (window as TestWindow).__mewdoku?.state()?.status)).toBe('playing');
@@ -293,7 +294,8 @@ test('the banner reserve never overlaps the victory screen\'s primary button', a
   // straight into a level (no Home banner first): Play is pressed before any banner can load.
   await page.locator('.home__play').click();
   await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
-  await expect(page.locator('[data-testid="mock-banner"]')).toHaveCount(0); // never during play
+  // Phase 2d §1.16: the game screen reserves its band (the e2e mock follows the FB rules).
+  await expect(page.locator('.screen--game')).toHaveAttribute('data-banner', '');
   await page.clock.install();
   await page.clock.fastForward(61_000);
   await page.evaluate(() => (window as TestWindow).__mewdoku?.solve());
@@ -328,7 +330,8 @@ test('keyboard only: Enter continues the panel, Enter on "Level N", and Settings
   await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.puzzle.id === 'L6');
   await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
   // Home → Settings, all by keyboard: the web has nothing to sell, so there is no Shop row (§5.2).
-  await page.locator('.top-bar').getByRole('button', { name: 'Home' }).focus();
+  // 2d §1.4: the game bar's back disc ("Back") does what Home did.
+  await page.locator('.top-bar--game').getByRole('button', { name: 'Back' }).focus();
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');
   await expect(page.locator('.screen--home .fish-pill__plus')).toHaveCount(0);
@@ -383,7 +386,7 @@ test('keyboard only: focus moves into every new screen (event card → event, ev
   expect(await focusIn('.screen--home')).toBe(true);
 });
 
-// ── Phase 2c.1: the level-points counter in the pills row (§10.2 D21, §10.3) ──
+// ── Phase 2c.1 → 2d: the pills row (heads + fish) and the bar's Score column (§10.2 D21, look-spec §1.4–§1.5, §1.13) ──
 
 /** Level 310 (12×12) from the bundled pack: its solution columns (base 36, one per row). */
 function level310(): { level: number; n: number; sol: number[] } {
@@ -398,7 +401,7 @@ function level310(): { level: number; n: number; sol: number[] } {
 
 type Rect = { left: number; right: number; top: number; bottom: number };
 
-test('the pills row on a 12×12 board with 11 cats and 11,616 points: three disjoint pills, the points counter centred, not focusable', async ({ page }) => {
+test('12×12 with 11 cats and 11,616 points: 12 heads and the fish pill disjoint in the row, the Score in the bar between the columns, not focusable', async ({ page }) => {
   const { level, n, sol } = level310();
   expect(n).toBe(12);
   const rule = pointsRuleFor('level');
@@ -422,9 +425,10 @@ test('the pills row on a 12×12 board with 11 cats and 11,616 points: three disj
   await boot(page, { ...defaults(Date.now()), tutorialDone: true, progress: { level, completed: level - 1, best: {} }, inProgress: { level: slot, daily: null, event: null } });
   await page.locator('.home__play').click();
   await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
-  const pts = page.locator('.pills .points-pill');
+  const pts = page.locator('.top-bar--game .points-pill');
   await expect(pts).toHaveAttribute('aria-label', 'Level points: 11,616');
-  await expect(page.locator('.pills .pill--cats')).toContainText('11');
+  await expect(page.locator('.pills .pill--heads .head')).toHaveCount(12);
+  await expect(page.locator('.pills .pill--heads .head[data-done]')).toHaveCount(11);
   await noHorizontalOverflow(page);
 
   const rects = await page.evaluate(() => {
@@ -434,30 +438,54 @@ test('the pills row on a 12×12 board with 11 cats and 11,616 points: three disj
       const b = e.getBoundingClientRect();
       return { left: b.left, right: b.right, top: b.top, bottom: b.bottom };
     };
-    return { row: r('.pills'), cats: r('.pills .pill--cats'), points: r('.pills .points-pill'), lives: r('.pills .pill--lives') };
+    const heads = Array.from(document.querySelectorAll('.pills .pill--heads .head')).map((e) => {
+      const b = e.getBoundingClientRect();
+      return { left: b.left, right: b.right, top: b.top, bottom: b.bottom };
+    });
+    return {
+      row: r('.pills'),
+      headsPill: r('.pills .pill--heads'),
+      lives: r('.pills .pill--lives'),
+      heads,
+      level: r('.top-bar--game .top-bar__text'),
+      score: r('.top-bar--game .points-pill'),
+      back: r('.top-bar--game .top-bar__btn--home'),
+      gear: r('.top-bar--game .top-bar__btn--settings'),
+    };
   });
-  const { row, cats, points, lives } = rects;
-  if (!row || !cats || !points || !lives) throw new Error(`missing a pill: ${JSON.stringify(rects)}`);
-  // Left to right in LTR: cats, points, lives, with no overlap, all inside the row.
-  expect(cats.right).toBeLessThanOrEqual(points.left + 0.5);
-  expect(points.right).toBeLessThanOrEqual(lives.left + 0.5);
-  for (const [name, b] of Object.entries({ cats, points, lives })) {
+  const { row, headsPill, lives, heads, level: lvl, score, back, gear } = rects;
+  if (!row || !headsPill || !lives || !lvl || !score || !back || !gear) throw new Error(`missing a box: ${JSON.stringify(rects)}`);
+  // LTR: heads, then fish, no overlap, both inside the row; every head inside its pill, none overlapping.
+  expect(headsPill.right).toBeLessThanOrEqual(lives.left + 0.5);
+  for (const [name, b] of Object.entries({ headsPill, lives })) {
     expect(b.left, name).toBeGreaterThanOrEqual(row.left - 0.5);
     expect(b.right, name).toBeLessThanOrEqual(row.right + 0.5);
   }
-  expect(Math.abs((points.left + points.right) / 2 - (row.left + row.right) / 2)).toBeLessThanOrEqual(1);
+  heads.forEach((h, i) => {
+    expect(h.left, `head ${i}`).toBeGreaterThanOrEqual(headsPill.left - 0.5);
+    expect(h.right, `head ${i}`).toBeLessThanOrEqual(headsPill.right + 0.5);
+    const next = heads[i + 1];
+    if (next) expect(h.right, `head ${i} / ${i + 1}`).toBeLessThanOrEqual(next.left + 0.5);
+  });
+  // The bar: back · Level · Score · gear, left to right, without overlap.
+  expect(back.right).toBeLessThanOrEqual(lvl.left + 0.5);
+  expect(lvl.right).toBeLessThanOrEqual(score.left + 0.5);
+  expect(score.right).toBeLessThanOrEqual(gear.left + 0.5);
+  // The 5-digit number is never cut (I18N-TEXT-2).
+  const cut = await pts.locator('.points-pill__n').last().evaluate((el) => el.scrollWidth > el.clientWidth + 0.5);
+  expect(cut).toBe(false);
 
-  // Not focusable (§10.2 A11y): no tab stop on the counter or inside it, so the Tab order is unchanged.
+  // Not focusable (§10.2 A11y, §1.4 Heading): no tab stop on the Score column or inside it.
   const focusable = await page.evaluate(() => {
-    const el = document.querySelector('.pills .points-pill') as HTMLElement | null;
+    const el = document.querySelector('.top-bar--game .points-pill') as HTMLElement | null;
     if (!el) return -1;
     const inside = el.querySelectorAll('button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])').length;
     return inside + (el.tabIndex >= 0 ? 1 : 0);
   });
   expect(focusable).toBe(0);
 
-  // The win (the 12th cat): 13,248, the largest level total. From the period counter's beat until the
-  // scrim, the period counter (in the cat counter's place) never overlaps the points counter or the lives.
+  // The win (the 12th cat): 13,248. From the period counter's beat until the scrim, the period counter
+  // (in the heads pill's place) never overlaps the fish pill, and the Score stays in the bar.
   await page.locator('.cell').nth(11 * n + (sol[11] as number)).dblclick();
   await expect(pts).toHaveAttribute('aria-label', 'Level points: 13,248');
   const bad = await page.evaluate(async () => {
@@ -472,12 +500,12 @@ test('the pills row on a 12×12 board with 11 cats and 11,616 points: three disj
       const step = (): void => {
         const t = performance.now() - t0;
         const period = box('.pills .period-pill[data-in-game]');
-        const p = box('.pills .points-pill');
         const l = box('.pills .pill--lives');
-        if (period && p) {
+        const p = box('.top-bar--game .points-pill');
+        if (period) {
           seen++;
-          if (period.right > p.left + 0.5 && period.left < p.right - 0.5) out.push(`t=${Math.round(t)} period [${period.left}, ${period.right}] × points [${p.left}, ${p.right}]`);
           if (l && period.right > l.left + 0.5 && period.left < l.right - 0.5) out.push(`t=${Math.round(t)} period × lives`);
+          if (!p) out.push(`t=${Math.round(t)} no Score`);
         }
         const scrim = document.querySelector('.screen--game .game__scrim') as HTMLElement | null;
         if (t > 4600 || (scrim && !scrim.hidden)) done();
@@ -489,4 +517,180 @@ test('the pills row on a 12×12 board with 11 cats and 11,616 points: three disj
   });
   expect(bad.out).toEqual([]);
   expect(bad.seen).toBeGreaterThan(0);
+});
+
+// ── Phase 2d: the measured stack (look-spec §1.1), hit areas, the banner band, keyboard order ──
+
+type Row = { name: string; top: number; bottom: number; left: number; right: number };
+
+/** The game screen's rows, top to bottom (§1.1), and the mock banner when it shows. */
+async function stackRows(page: Page): Promise<{ rows: Row[]; banner: Row | null; vw: number; vh: number }> {
+  return page.evaluate(() => {
+    const r = (name: string, q: string): Row | null => {
+      const e = document.querySelector(q) as HTMLElement | null;
+      if (!e || e.closest('[hidden]') || e.getClientRects().length === 0) return null;
+      const b = e.getBoundingClientRect();
+      return { name, top: b.top, bottom: b.bottom, left: b.left, right: b.right };
+    };
+    const rows = [
+      r('bar', '.screen--game header.top-bar--game'),
+      r('pills', '.screen--game .pills'),
+      r('rules', '.screen--game ul.rule-chips'),
+      r('board', '.screen--game .board'),
+      r('tools', '.screen--game .tool-bar'),
+    ].filter((x): x is Row => x !== null);
+    return { rows, banner: r('banner', '[data-testid="mock-banner"]'), vw: window.innerWidth, vh: window.innerHeight };
+  });
+}
+
+/** Every row inside the viewport, in the §1.1 order, no two overlapping; the board centred; the banner below the tools. */
+async function stackOk(page: Page, label: string): Promise<void> {
+  const { rows, banner, vw, vh } = await stackRows(page);
+  expect(rows.map((x) => x.name), label).toEqual(['bar', 'pills', 'rules', 'board', 'tools']);
+  for (const x of rows) {
+    expect(x.top, `${label}: ${x.name} top`).toBeGreaterThanOrEqual(-0.5);
+    expect(x.bottom, `${label}: ${x.name} bottom`).toBeLessThanOrEqual(vh + 0.5);
+    expect(x.left, `${label}: ${x.name} left`).toBeGreaterThanOrEqual(-0.5);
+    expect(x.right, `${label}: ${x.name} right`).toBeLessThanOrEqual(vw + 0.5);
+  }
+  for (let i = 1; i < rows.length; i++) {
+    const a = rows[i - 1] as Row;
+    const b = rows[i] as Row;
+    expect(a.bottom, `${label}: ${a.name} over ${b.name}`).toBeLessThanOrEqual(b.top + 0.5);
+  }
+  const board = rows.find((x) => x.name === 'board') as Row;
+  expect(Math.abs((board.left + board.right) / 2 - vw / 2), `${label}: board centred`).toBeLessThanOrEqual(1);
+  if (banner) {
+    const tools = rows.find((x) => x.name === 'tools') as Row;
+    expect(tools.bottom, `${label}: the helpers over the banner`).toBeLessThanOrEqual(banner.top + 0.5);
+    expect(banner.bottom, `${label}: banner on screen`).toBeLessThanOrEqual(vh + 0.5);
+  }
+}
+
+async function playAt(page: Page, level: number, query = ''): Promise<void> {
+  await page.goto(`/${query}`);
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen !== 'boot');
+  await page.evaluate((json) => (window as TestWindow).__mewdoku?.seedSave(json), JSON.stringify(veteranSave(level)));
+  await page.reload();
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');
+  await page.locator('.home__play').click();
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
+  await page.waitForTimeout(250); // the layout settles after the entry
+}
+
+test('2d stack: bar, pills, rules, board, tools in order, inside the viewport, no overlap, the board centred (also 360 × 640)', async ({ page }, info) => {
+  // Without ads (no band) and with the mock banner's band (level ≥ 11: the gate reserves it from mount).
+  await playAt(page, 15, '?ads=unsupported');
+  await stackOk(page, `${info.project.name} no band`);
+  await noHorizontalOverflow(page);
+  await playAt(page, 15);
+  await expect(page.locator('.screen--game')).toHaveAttribute('data-banner', '');
+  await expect(page.locator('[data-testid="mock-banner"]')).toBeVisible();
+  await stackOk(page, `${info.project.name} band`);
+  if (info.project.name === 'web-390') {
+    await page.setViewportSize({ width: 360, height: 640 });
+    await page.waitForTimeout(250);
+    await stackOk(page, '360 × 640 band');
+    await noHorizontalOverflow(page);
+  }
+});
+
+test('2d stack with 2× text: the rows grow, still inside, in order and without overlap', async ({ page }, info) => {
+  await page.addInitScript(() => {
+    document.addEventListener('DOMContentLoaded', () => {
+      const st = document.createElement('style');
+      st.textContent = 'html { font-size: 200% !important; }';
+      document.head.appendChild(st);
+    });
+  });
+  await playAt(page, 15, '?ads=unsupported');
+  await stackOk(page, `${info.project.name} 2× text`);
+  await noHorizontalOverflow(page);
+});
+
+test('2d: the mock banner sits in the band, 320 × 50 and centred, and never over the helpers', async ({ page }) => {
+  await playAt(page, 15);
+  const bar = page.locator('[data-testid="mock-banner"]');
+  await expect(bar).toBeVisible();
+  const b = await bar.boundingBox();
+  const vw = page.viewportSize()?.width ?? 0;
+  if (!b) throw new Error('no banner');
+  expect(b.height).toBeCloseTo(50, 0);
+  expect(b.width).toBeCloseTo(Math.min(320, vw), 0);
+  expect(Math.abs(b.x + b.width / 2 - vw / 2)).toBeLessThanOrEqual(1);
+  // Every helper disc and its badge stay above the banner.
+  const tools = await page.locator('.tool-bar .tool:not([data-off]), .tool-bar .tool__badge').evaluateAll((els) =>
+    els.map((e) => e.getBoundingClientRect().bottom),
+  );
+  for (const bottom of tools) expect(bottom).toBeLessThanOrEqual(b.y + 0.5);
+});
+
+test('2d: 12×12 whole cells at 320 × 568 with a 20 px safe top and the band (slot ≥ 21)', async ({ page }, info) => {
+  test.skip(info.project.name !== 'web-320', 'the small phone');
+  await page.addInitScript(() => {
+    document.addEventListener('DOMContentLoaded', () => document.documentElement.style.setProperty('--dev-safe-top', '20px'));
+  });
+  const level = first12();
+  await playAt(page, level);
+  expect(await page.evaluate(() => (window as TestWindow).__mewdoku?.state()?.puzzle.n ?? 0)).toBe(12);
+  await expect(page.locator('.screen--game')).toHaveAttribute('data-banner', '');
+  await boardVisible(page);
+  await noHorizontalOverflow(page);
+  await stackOk(page, '320 × 568, safe top 20, band, 12 × 12');
+  const box = await page.locator('.cell').first().boundingBox();
+  expect(box?.width ?? 0).toBeGreaterThanOrEqual(21 - 0.5);
+  // The bar starts below the safe top.
+  const bar = await page.locator('.screen--game header.top-bar--game').boundingBox();
+  expect(bar?.y ?? 0).toBeGreaterThanOrEqual(20 - 0.5);
+  // A whole cell still takes a tap and a drag (the gesture thresholds hold at 21 px).
+  await page.locator('.cell').nth(1).click();
+  expect(await page.evaluate(() => (window as TestWindow).__mewdoku?.state()?.cells[1])).toBe(1);
+});
+
+test('2d: every round button keeps a 44 × 44 hit area (elementFromPoint at its corners)', async ({ page }, info) => {
+  await playAt(page, 15);
+  const misses = await page.evaluate(() => {
+    const out: string[] = [];
+    const buttons = Array.from(
+      document.querySelectorAll<HTMLElement>('.screen--game .top-bar--game .top-bar__btn, .screen--game .tool-bar .tool:not([data-off])'),
+    );
+    if (buttons.length < 5) out.push(`only ${buttons.length} round buttons`);
+    for (const el of buttons) {
+      const r = el.getBoundingClientRect();
+      const cx = r.left + r.width / 2;
+      const cy = r.top + r.height / 2;
+      const h = 21.5; // just inside a 44 × 44 square around the centre
+      for (const [dx, dy] of [[-h, -h], [h, -h], [-h, h], [h, h], [0, 0]] as const) {
+        const hit = document.elementFromPoint(cx + dx, cy + dy);
+        if (!hit || !(hit === el || el.contains(hit))) out.push(`${el.className} at (${dx}, ${dy}): ${hit ? hit.className || hit.tagName : 'nothing'}`);
+      }
+    }
+    return out;
+  });
+  expect(misses, info.project.name).toEqual([]);
+});
+
+test('2d keyboard order: back → gear → board → kitty → bulb → mouse', async ({ page }, info) => {
+  test.skip(info.project.name !== 'web-1280', 'desktop keyboard only');
+  await playAt(page, 15, '?ads=unsupported');
+  await page.locator('.top-bar--game .top-bar__btn--home').focus();
+  const order: string[] = [];
+  const which = (): Promise<string> =>
+    page.evaluate(() => {
+      const a = document.activeElement as HTMLElement | null;
+      if (!a) return 'none';
+      if (a.matches('.top-bar__btn--home')) return 'back';
+      if (a.matches('.top-bar__btn--settings')) return 'gear';
+      if (a.closest('.board')) return 'board';
+      if (a.matches('.tool--paw')) return 'kitty';
+      if (a.matches('.tool--bulb')) return 'bulb';
+      if (a.matches('.tool--mouse')) return 'mouse';
+      return a.className || a.tagName;
+    });
+  order.push(await which());
+  for (let i = 0; i < 5; i++) {
+    await page.keyboard.press('Tab');
+    order.push(await which());
+  }
+  expect(order).toEqual(['back', 'gear', 'board', 'kitty', 'bulb', 'mouse']);
 });

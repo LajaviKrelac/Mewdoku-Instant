@@ -13,11 +13,11 @@
 //   the values step to 0.86 × and 0.74 × (data-fit 1, 2), then the labels ellipsize. Checked a frame
 //   after a render that can widen it, on resize and on a language change (fit()).
 // - The FB safe zone: the game screen moves the physically-left disc out of the top-left 64 × 64 with
-//   --fb-l (game-screen.ts); the columns re-centre between the discs on their own.
+//   --fb-s / --fb-e (game-screen.ts); the columns re-centre between the discs on their own.
 // Classes: header.top-bar.top-bar--game[data-fb-safe][data-fit]
 //            > button.top-bar__btn--home.top-bar__btn--back
 //              .top-bar__mid > h1.top-bar__text > .top-bar__name + .top-bar__val > .top-bar__suffix .badge--hard
-//                              .points-pill[data-final] > .points-pill__name + .points-pill__val > .points-pill__count > .points-pill__n ; .points-pill__label > .points-pill__chip
+//                              .points-pill[data-final] > .points-pill__name + .points-pill__val.top-bar__val > .points-pill__count > .points-pill__n ; .points-pill__label > .points-pill__chip
 //              button.top-bar__btn--settings > .top-bar__dot
 import type { GameEvent } from '../../game/types';
 import { formatNumber, onLocaleChanged, t } from '../../i18n';
@@ -93,7 +93,8 @@ export function createGameBar(props: GameBarProps, cb: GameBarCallbacks): GameBa
     label: (n) => t('game.points.a11y', { count: formatNumber(n) }),
     motion: pointsMotion,
     reduced: () => current.reducedMotion,
-    chipHost: wrapCount('points-pill__val'),
+    // The number's box: .points-pill__val (the contract's name) and .top-bar__val (the value line's look).
+    chipHost: wrapCount('points-pill__val top-bar__val'),
     placed: (chip) => clampChip(chip),
   });
   const scoreName = L.text(document.createElement('span'), () => t('game.score'));
@@ -120,14 +121,16 @@ export function createGameBar(props: GameBarProps, cb: GameBarCallbacks): GameBa
     const left = host.getBoundingClientRect().left + chip.offsetLeft;
     const rtl = getComputedStyle(el).direction === 'rtl';
     const over = rtl ? g.right + GEAR_CLEAR - left : left + chip.offsetWidth - (g.left - GEAR_CLEAR);
-    if (over > 0) chip.style.setProperty('--chip-dx', `${rtl ? over : -over}px`);
+    // --chip-dx is an inline offset (hud.css margin-inline-start): negative moves it toward the start.
+    if (over > 0) chip.style.setProperty('--chip-dx', `${-over}px`);
   };
 
   // ── fit (critic C5) ──
   const win = el.ownerDocument.defaultView;
   let fitRaf = 0;
+  let fitQueued = false;
   const measureFit = (): void => {
-    fitRaf = 0;
+    fitQueued = false;
     const span = mid.clientWidth;
     if (!el.isConnected || span <= 0) return;
     el.removeAttribute('data-fit');
@@ -145,7 +148,8 @@ export function createGameBar(props: GameBarProps, cb: GameBarCallbacks): GameBa
     for (let step = 1; step <= 2 && need() > span + 1; step++) el.dataset.fit = String(step);
   };
   const fit = (): void => {
-    if (fitRaf || !win?.requestAnimationFrame) return;
+    if (fitQueued || !win?.requestAnimationFrame) return;
+    fitQueued = true;
     fitRaf = win.requestAnimationFrame(measureFit);
   };
 
@@ -205,7 +209,7 @@ export function createGameBar(props: GameBarProps, cb: GameBarCallbacks): GameBa
     destroy() {
       offLocale();
       L.dispose();
-      if (fitRaf) win?.cancelAnimationFrame(fitRaf);
+      if (fitQueued) win?.cancelAnimationFrame(fitRaf);
       score.destroy();
       el.parentNode?.removeChild(el);
     },

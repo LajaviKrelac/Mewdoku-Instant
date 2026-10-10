@@ -1,4 +1,4 @@
-// Owner: B (Phase 2b); G2 (Phase 2c: the period pill replaces the fish pill)
+// Owner: B (Phase 2b); G2 (Phase 2c: the period pill replaces the fish pill); G3 (Phase 2d: the settings dot)
 // S1 Home (02 §5): top bar (Trophy*, Gear), wordmark + mascot, primary level button, daily card,
 // stock readout. Phase 3 hook: extra cards array (02 §22).
 // Phase 2b (B): the event card above the Level
@@ -166,6 +166,8 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
     showSettings: true,
     showTrophy: v.showTrophy,
     fbSafeZone: v.fbSafeZone,
+    // Phase 2d §1.15, §2.2: the red dot on the gear (something in Settings not seen yet).
+    settingsDot: v.settingsDot === true,
   });
   // Phase 2c §2.8: the period pill at the top bar's lead, after the FB safe zone (not a button).
   const periodOf = (v: HomeView): { readonly kind: PeriodKind; readonly total: number } => v.period ?? { kind: cfg.period.kind, total: 0 };

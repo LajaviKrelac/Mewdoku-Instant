@@ -120,8 +120,9 @@
   top: 50%;
   right: auto;
   bottom: auto;
-  left: calc(100% + var(--s) * 4px);
-  margin-top: calc(var(--s) * -9px);
+  left: auto;
+  margin: calc(var(--s) * -9px) 0 0;
+  margin-inline-start: calc(100% + var(--s) * 4px);
   padding: 0;
 }
 

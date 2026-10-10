@@ -13,10 +13,27 @@ Status: living list · Owner: G2 · Spec: [look-spec §3](look-spec.md#3-workstr
 
 | # | From → to | What | Why |
 |---|---|---|---|
+| R1 | G2 → lead | `dev/{art,b,board,shell}-harness.html`: `<meta name="theme-color">` `#FAF6F0` → `#F7F2EF` (the new `--page`). Afterwards, remove `PENDING_R1` from `tests/unit/ui/css-rules.spec.ts` ("theme-color is --page"); G2 does that if it is done before I-2, otherwise the lead at I-2. | look-spec §1.2 (`index.html`'s theme-color follows `--page`; G2 changed it). css-rules checks the dev pages too and tolerates only the old value until then. |
+| R2 | G2 → lead | At I-1: `dev/art-harness.ts:117` drops `'wrong-x'` and `dev/board-harness.ts:205` drops `'icon-rule-colours'`, `'icon-rule-lines'` and `'icon-rule-space'`, because their drawings are deleted in 2d. Then at I-3, delete those ids from `SymbolId` / `IconSymbol` in `src/ui/art/sprite.ts`; they are marked `@deprecated phase2d`. The harnesses' `board.setSlot(L.slot)` should become `board.setSlot(L.slot, { pad: L.pad, radius: L.radius })` so they show the 2d card. | look-spec §6.2 (dead art deleted); the ids stay only so `tsc` over `dev/**` stays green until I-1 |
+| R3 | G2 → G3 | `src/ui/overlays/how-to-play.ts` `miniBoard()`: the redrawn `mark-x` is the board's X on the **slot's** 100-unit box, so the X spans 69 % of the box. Draw it over the tile's slot (`x − GAP / 2`, `y − GAP / 2`, size `TILE + GAP`) instead of the 2b inset 4, so the X has the board's proportions; it is 8 px wide today. Optional, for the same look: mini-tile `rx` = 11 % of the tile (2.2 at `TILE` 20). | look-spec §1.10 (`mark-x` redrawn; How to play uses it), §1.8 |
 
 ## Done for other workstreams' requests
 
-(none yet)
+(none filed to G2 so far)
+
+## Notes from G2 for the others (no action needed)
+
+- **Tool art boxes.** Each `tool-*` symbol's viewBox is fitted to its art, so `hud.css`' measured icon sizes draw the art edge to edge: kitty `6 3 88 88` (34.7 × 34.3), bulb `18.5 1.5 63 97.5` (21.3 × 34), mouse `1 4.5 98 88` (35 × 31.3).
+- **`cat-head-flat`.** One path in `currentColor` on a 100 box. Its colour and its 0.5 opacity come from the heads pill (look-spec §1.6).
+- **`icon-gear`.** Filled with `currentColor`, with no `--icon-fill`; the round buttons set `color: var(--ink-icon)` (`.btn--icon`).
+- **`icon-fish`** faces left and has no outline (look-spec §1.5). **`icon-fish-empty`** keeps the same box; its outline is `--ink` at 40 %.
+- **New G2 exports beyond CONTRACTS.**
+  - `paletteTier(n)` in `palette.ts`: the tier of §1.9.
+  - `markRects()` and `crossRects()` in `sprite.ts`: the X geometry.
+  - The `BoardFrame` type, re-exported by `board-view.ts`.
+- **`computeLayout` already returns the final §1.1 values.** The 2b names (`topBar`, `pills`, `chips`, `tools`) carry the 2d values. `tools` is now the disc diameter; the safe bottom is no longer added.
+- **`--shadow-btn` scales on the game screen.** It is re-declared on `.screen--game`, so `box-shadow: var(--shadow-btn)` there uses the screen's `--s`; on `:root` it resolves with `s = 1`. `hud.css` can use the token for the top discs and the helper discs.
+- **Dev safe-area override.** `--dev-safe-top` and `--dev-safe-bottom` on `:root` feed both `readViewport`'s probe and the `--safe-top` / `--safe-bottom` tokens (look-spec §1.1). Nothing in `src/` sets them.
 
 ## L0 (lead, 2026-10-10): what changed in G2's files
 

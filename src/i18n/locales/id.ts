@@ -44,7 +44,6 @@ export const catalog: LocaleCatalog = {
   // ── Game ───────────────────────────────────────────────────────────────────
   'game.title.level': 'Level {level}',
   'game.title.daily': 'Harian · {date}',
-  'game.cats': '{placed} / {n}',
   'game.cats.a11y': '{placed} dari {n} kucing sudah ditempatkan',
   'game.hearts.a11y': 'Sisa {hearts} dari {max} ikan',
   'game.chip.colours': '1 kucing per warna',

@@ -64,7 +64,7 @@ test('Lantern Walk: card → event screen → puzzle 1 → win → victory 1 / 2
   const pts = page.locator('.top-bar--game .points-pill');
   await expect(pts).toBeVisible();
   await expect(pts).toHaveAttribute('aria-label', 'Level points: 0');
-  await expect(pts.locator('.points-pill__label')).toHaveText('Score');
+  await expect(pts).toContainText('Score'); // the column's label (game.score)
   // 2d §1.4: the title split: the name over the puzzle number, the whole title as the heading's name.
   const title = page.locator('.top-bar--game h1.top-bar__text');
   await expect(title).toHaveAttribute('aria-label', 'Lantern Walk · 1');

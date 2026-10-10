@@ -150,7 +150,6 @@ const NOTES: Readonly<Partial<Record<I18nKey, Partial<KeyMeta>>>> = {
   'home.daily.title': { maxLength: 30 },
   'home.daily.size': { description: 'Board size', translatable: false },
   'home.daily.sub': { description: 'Daily card second line: size · status', translatable: false },
-  'game.cats': { description: 'Cat counter pill: placed / total', translatable: false },
   // Phase 2d (look-spec Appendix A).
   'game.score': { description: 'The top bar\'s label over the level points of this level (one short word, about 19 px, centred over the number; never "fish")', maxLength: 10 },
   'common.settings.new': { description: 'Screen-reader name of the gear button while its red dot shows (something in Settings is new)', maxLength: 40 },

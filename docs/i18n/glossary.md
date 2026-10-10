@@ -1,6 +1,6 @@
 # Translation glossary
 
-Status: Phase 2b AI-draft glossary, Phase 2c fish update, Phase 2c.1 level-points update · Date: 2026-10-09 (2c.1: 2026-10-10) · Owner: workstream E (localization); Phase 2c and 2c.1 rows: workstream G2 · Used with [`src/i18n/meta.ts`](../../src/i18n/meta.ts) (per-key notes and max lengths) and the English catalogue [`src/i18n/en.ts`](../../src/i18n/en.ts)
+Status: Phase 2b AI-draft glossary, Phase 2c fish update, Phase 2c.1 level-points update, Phase 2d HUD update · Date: 2026-10-09 (2c.1 and 2d: 2026-10-10) · Owner: workstream E (localization); Phase 2c and 2c.1 rows: workstream G2; Phase 2d rows: workstream G3 · Used with [`src/i18n/meta.ts`](../../src/i18n/meta.ts) (per-key notes and max lengths) and the English catalogue [`src/i18n/en.ts`](../../src/i18n/en.ts)
 
 This glossary is part of the translation brief (phase2b §6.7 step 2). The brief contains **only our own English copy, `meta.ts` and this file**. It never names, quotes or describes any other game, and translators must not look at any other game's localized UI (06 §2 step 6).
 
@@ -14,13 +14,16 @@ This glossary is part of the translation brief (phase2b §6.7 step 2). The brief
 | Keyword markers | Teaching copy (`tutorial.step1`–`step4`, `howto.rule.*`) wraps its rule keyword in `*…*` ("Every colour hides `*exactly one cat*`"); the game prints it in the accent colour. Keep exactly as many marked spans as the English has, around the words that carry the same rule in your sentence, and never add markers elsewhere (`npm run i18n:check` enforces both; review PAR-7). |
 | Plurals | Keys ending in `.one` / `.other` are plural pairs. Add `.zero`, `.two`, `.few` or `.many` where your language uses them (the catalogue test lists what `Intl.PluralRules` requires). `{count}` may be left out only in a form that stands for one exact number (Arabic one, two and zero). |
 | Numbers in non-plural keys | `{hours}`, `{kitties}`, `{total}`, `{count}` outside `.one`/`.other` keys can be any number. In languages with case or number agreement (ru, pl, ar, hi), use a label + colon construction so any number reads correctly: ru «За неделю: {total}», pl «W tym tygodniu: {total}». (Phase 2c.1: `{points}` and `{best}` went with the retired keys.) |
-| Colour names in sentences | `{color}` is a proper name. Use it **in apposition** ("the colour Lavender", «цвет «Лаванда»», *la couleur Lavande*) so adjectives never need to agree with it. |
+| Colour names in sentences | `{color}` is a proper name. Use it **in apposition** ("the colour Violet", «цвет «Фиалка»», *la couleur Violette*) so adjectives never need to agree with it. Colour names are **tile names**, not cosmetic or fashion words. |
 | Rows, columns and colours as `{unit}` | `{unit}` is a row ("row 3"), a column ("column 5") or a colour name. In languages with grammatical case, build the sentence so `{unit}` stays in the nominative, usually with a colon: «{unit}: осталась одна свободная клетка…». |
 | Digits | Latin digits everywhere, including Arabic and Hindi. |
 | Banned | Never write "golden fish" (or its translation); fish are just fish. Never use another game's rule names or slogans. |
 | Fish are lives and points, never money (Phase 2c) | A fish is a life in a level; the fish left at a win are added to the period ranking total. Never write coins, wallet, balance, price, "buy with fish", "spend" or "earn" for fish, and never call them hearts. Key names such as `game.hearts.a11y`, `howto.hearts`, `fail.*` and the `{hearts}` placeholder are code names only: the copy says fish. The only heart left in the game is the pattern glyph 9 (section 4) and our event's yarn heart. |
 | Points are level points (Phase 2c.1) | "Points" are always **level points**: earned for each cat found inside one level, more for each cat found in a row without a mistake, and 0 again at the start of every level and every retry. A mistake never takes points away. The ranking's unit stays **fish**: never call fish "points" or "score", and never call points fish. Never a currency word (coins, money). Hint and kitty cats score like the player's own. |
 | Period words (Phase 2c) | The ranking period resets at 00:00 UTC (`cfg.period.kind`: day, week by default, or month). "This week" in a pill or a tab is the current period, never "the last 7 days". Keep the three kinds parallel (Today / This week / This month). |
+| Score (Phase 2d) | "Score" is the game screen's **label over the level points** (`game.score`, one short word, at most 10 characters). It is the same quantity as "points" above: never fish, never a currency. A language may use its word for points when that is how games label a score. |
+| The mouse (Phase 2d) | The third helper is a **small animal**: a little mouse that crosses out a few tiles that cannot hold a cat. Never the computer device. Use the same word in the button name, the pop-up title and the screen-reader lines; a diminutive is welcome where the kitty has one. |
+| Level-start toast (Phase 2d) | `toast.start.*` are short, **honest** encouragements (at most 32 characters): never a statistic, never a number, never "N % of players". Every level can be solved, so "you can solve this one" is true. |
 | Length | Respect `maxLength` in `meta.ts` (chips 18, buttons 22, titles 28, badges 6–9). Abbreviate units ("h", "min") freely. |
 
 ## 2. Core terms
@@ -46,6 +49,8 @@ This glossary is part of the translation brief (phase2b §6.7 step 2). The brief
 | shop | real-money packs only; there is no swap and no fish for sale (Phase 2c) | Shop | tienda | boutique | negozio | loja | toko | mağaza | sklep |
 | Settings | | Einstellungen | Ajustes | Réglages | Impostazioni | Ajustes | Pengaturan | Ayarlar | Ustawienia |
 | colour patterns | small symbols on the colours | Farbmuster | patrones de color | motifs de couleur | motivi colore | padrões de cor | pola warna | renk desenleri | wzory kolorów |
+| Score (Phase 2d) | the top bar's label over the level points | Punkte | Puntos | Points | Punti | Pontos | Skor | Puan | Punkty |
+| mouse (Phase 2d helper) | a small animal, never the computer device | Maus | ratoncito | souris | topo | ratinho | tikus | fare | myszka |
 
 | English | ru | vi | th | ja | ko | zh-Hans | hi | ar |
 |---|---|---|---|---|---|---|---|---|
@@ -68,40 +73,42 @@ This glossary is part of the translation brief (phase2b §6.7 step 2). The brief
 | shop | магазин | cửa hàng | ร้านค้า | ショップ | 상점 | 商店 | दुकान | المتجر |
 | Settings | Настройки | Cài đặt | การตั้งค่า | 設定 | 설정 | 设置 | सेटिंग्स | الإعدادات |
 | colour patterns | узоры на цветах | họa tiết màu | ลวดลายสี | 色の模様 | 색상 무늬 | 颜色图案 | रंग पैटर्न | نقوش الألوان |
+| Score (Phase 2d) | Очки | Điểm | คะแนน | スコア | 점수 | 得分 | स्कोर | النقاط |
+| mouse (Phase 2d helper) | мышка | chuột | หนู | ねずみ | 생쥐 | 小老鼠 | चूहा | الفأر |
 
 ## 3. Colour names (palette index 0–11)
 
-Short proper names, each distinct from the other eleven in the same language. Where the fruit word is ambiguous locally, another word for the same hue is used (pt-BR: *Banana* for Lemon and *Limão* for Lime, because Brazilian *limão* is green).
+Short proper names, each distinct from the other eleven in the same language. Where a word is ambiguous locally, another word for the same hue is used (pt-BR *Limão* for Lime, because Brazilian *limão* is green). Phase 2d (look-spec §1.9): four colours changed hue and name, so colours 0, 2, 7 and 11 are now **Coral** (a salmon red), **Mustard** (a deep yellow), **Violet** (a purple) and **Pink** (a light pink; distinct from Orchid, a magenta pink). "Coral" is also the Spanish and Portuguese word (listed in `SAME_AS_ENGLISH`).
 
 | # | English | de | es | fr | it | pt-BR | id | tr | pl |
 |---|---|---|---|---|---|---|---|---|---|
-| 0 | Strawberry | Erdbeere | Fresa | Fraise | Fragola | Morango | Stroberi | Çilek | Truskawka |
+| 0 | Coral | Koralle | Coral | Corail | Corallo | Coral | Koral | Mercan | Koral |
 | 1 | Apricot | Aprikose | Durazno | Abricot | Albicocca | Damasco | Aprikot | Kayısı | Morela |
-| 2 | Lemon | Zitrone | Limón | Citron | Limone | Banana | Lemon | Limon | Cytryna |
+| 2 | Mustard | Senf | Mostaza | Moutarde | Senape | Mostarda | Mustar | Hardal | Musztarda |
 | 3 | Lime | Limette | Lima | Citron vert | Lime | Limão | Limau | Misket | Limonka |
 | 4 | Mint | Minze | Menta | Menthe | Menta | Hortelã | Mint | Nane | Mięta |
 | 5 | Lagoon | Lagune | Laguna | Lagon | Laguna | Lagoa | Laguna | Lagün | Laguna |
 | 6 | Sky | Himmel | Cielo | Ciel | Cielo | Céu | Langit | Gök | Niebo |
-| 7 | Lavender | Lavendel | Lavanda | Lavande | Lavanda | Lavanda | Lavender | Lavanta | Lawenda |
+| 7 | Violet | Veilchen | Violeta | Violette | Viola | Violeta | Ungu | Menekşe | Fiołek |
 | 8 | Orchid | Orchidee | Orquídea | Orchidée | Orchidea | Orquídea | Anggrek | Orkide | Orchidea |
 | 9 | Cocoa | Kakao | Cacao | Cacao | Cacao | Cacau | Kakao | Kakao | Kakao |
 | 10 | Slate | Schiefer | Pizarra | Ardoise | Ardesia | Ardósia | Sabak | Arduvaz | Łupek |
-| 11 | Moss | Moos | Musgo | Mousse | Muschio | Musgo | Lumut | Yosun | Mech |
+| 11 | Pink | Rosa | Rosa | Rose | Rosa | Rosa | Merah muda | Pembe | Róż |
 
 | # | English | ru | vi | th | ja | ko | zh-Hans | hi | ar |
 |---|---|---|---|---|---|---|---|---|---|
-| 0 | Strawberry | Клубника | Dâu tây | สตรอว์เบอร์รี | いちご | 딸기 | 草莓 | स्ट्रॉबेरी | فراولة |
+| 0 | Coral | Коралл | San hô | ปะการัง | さんご | 산호 | 珊瑚 | मूंगा | مرجان |
 | 1 | Apricot | Абрикос | Mơ | แอปริคอต | あんず | 살구 | 杏子 | खुबानी | مشمش |
-| 2 | Lemon | Лимон | Chanh vàng | เลมอน | レモン | 레몬 | 柠檬 | नींबू | ليمون |
+| 2 | Mustard | Горчица | Mù tạt | มัสตาร์ด | からし | 겨자 | 芥末 | सरसों | خردل |
 | 3 | Lime | Лайм | Chanh xanh | มะนาว | ライム | 라임 | 青柠 | लाइम | لايم |
 | 4 | Mint | Мята | Bạc hà | มินต์ | ミント | 민트 | 薄荷 | पुदीना | نعناع |
 | 5 | Lagoon | Лагуна | Đầm phá | ลากูน | ラグーン | 라군 | 泻湖 | लैगून | بحيرة |
 | 6 | Sky | Небо | Bầu trời | ท้องฟ้า | そら | 하늘 | 天空 | आसमान | سماء |
-| 7 | Lavender | Лаванда | Oải hương | ลาเวนเดอร์ | ラベンダー | 라벤더 | 薰衣草 | लैवेंडर | خزامى |
+| 7 | Violet | Фиалка | Tím | ไวโอเล็ต | すみれ | 제비꽃 | 紫罗兰 | बैंगनी | بنفسج |
 | 8 | Orchid | Орхидея | Phong lan | กล้วยไม้ | ラン | 난초 | 兰花 | ऑर्किड | أوركيد |
 | 9 | Cocoa | Какао | Ca cao | โกโก้ | ココア | 코코아 | 可可 | कोको | كاكاو |
 | 10 | Slate | Сланец | Đá phiến | หินชนวน | スレート | 슬레이트 | 石板 | स्लेटी | أردواز |
-| 11 | Moss | Мох | Rêu | ตะไคร่ | こけ | 이끼 | 苔藓 | काई | طحلب |
+| 11 | Pink | Роза | Hồng | ชมพู | ピンク | 분홍 | 粉红 | गुलाबी | وردي |
 
 ## 4. Pattern glyph names (palette index 0–11)
 

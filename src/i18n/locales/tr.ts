@@ -46,7 +46,6 @@ export const catalog: LocaleCatalog = {
   // ── Game ───────────────────────────────────────────────────────────────────
   'game.title.level': 'Bölüm {level}',
   'game.title.daily': 'Günlük · {date}',
-  'game.cats': '{placed} / {n}',
   'game.cats.a11y': '{n} kediden {placed} tanesi yerleşti',
   'game.hearts.a11y': '{max} balıktan {hearts} tanesi kaldı',
   'game.chip.colours': 'Her renge 1 kedi',

@@ -45,7 +45,6 @@ export const catalog: LocaleCatalog = {
   // ── Game ───────────────────────────────────────────────────────────────────
   'game.title.level': 'ด่าน {level}',
   'game.title.daily': 'รายวัน · {date}',
-  'game.cats': '{placed} / {n}',
   'game.cats.a11y': 'วางแมวแล้ว {placed} จาก {n} ตัว',
   'game.hearts.a11y': 'เหลือปลา {hearts} จาก {max} ตัว',
   'game.chip.colours': 'สีละ 1 ตัว',

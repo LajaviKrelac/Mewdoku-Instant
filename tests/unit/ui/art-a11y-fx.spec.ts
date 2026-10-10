@@ -53,8 +53,9 @@ describe('sprite', () => {
     expect(document.body.firstChild).toBe(sprite);
     for (const id of ids) expect(sprite.querySelector(`symbol[id="${id}"]`), id).not.toBeNull();
     for (const gone of ['icon-heart', 'icon-heart-empty', 'clip-heart-l', 'clip-heart-r']) expect(sprite.querySelector(`[id="${gone}"]`), gone).toBeNull();
-    // Phase 2d: the unused wrong-x drawing is deleted (the wrong X is the board's rects in --wrong).
-    expect(sprite.querySelector('symbol[id="wrong-x"]')).toBeNull();
+    // Phase 2d: the unused wrong-x drawing and the 2b rule-chip icons are deleted (the wrong X is the
+    // board's rects in --wrong; the rule cards draw ruleDiagram), look-spec §6.2.
+    for (const gone of ['wrong-x', 'icon-rule-colours', 'icon-rule-lines', 'icon-rule-space']) expect(sprite.querySelector(`symbol[id="${gone}"]`), gone).toBeNull();
     // The colour-pattern glyph 9 is still a heart shape (a pattern, not a life).
     expect(sprite.querySelector('symbol[id="glyph-9"] path')).not.toBeNull();
   });
@@ -504,8 +505,9 @@ describe('Phase 2d symbols (look-spec Appendix C)', () => {
     expect(k.innerHTML).toContain(earOuterPath(24, true)); // the notched left ear
   });
 
-  it('tool-bulb, tool-mouse: full-colour art on a square 100 box; cat-head-flat one flat currentColor shape', () => {
-    expect(sym('tool-bulb').getAttribute('viewBox')).toBe('0 0 100 100');
+  it('tool-bulb, tool-mouse: full-colour art in a viewBox fitted to the measured box; cat-head-flat one flat currentColor shape', () => {
+    expect(sym('tool-bulb').getAttribute('viewBox')).toBe('18.5 1.5 63 97.5'); // the art's box: 21.3 × 34 at s = 1
+    expect(sym('tool-mouse').getAttribute('viewBox')).toBe('1 4.5 98 88'); // 35 × 31.3
     expect(sym('tool-bulb').innerHTML).toContain(TOKENS.gold);
     expect(sym('tool-bulb').innerHTML).toContain(TOKENS.hard);
     const m = sym('tool-mouse').innerHTML;

@@ -300,7 +300,7 @@ test('11 · a level and a daily in progress are both restored', async ({ page })
   await open(page, '', returning({ progress: { level: 25, completed: 24, best: {} } }));
   await playLevel(page);
   const ln = (await game(page))?.n ?? 0;
-  await page.getByRole('button', { name: 'Home' }).click();
+  await page.locator('.top-bar--game').getByRole('button', { name: 'Back' }).click();
   await page.locator('.daily-card').click();
   await playing(page);
   const dn = (await game(page))?.n ?? 0;
@@ -311,7 +311,7 @@ test('11 · a level and a daily in progress are both restored', async ({ page })
   await open(page, '', seeded);
   await playLevel(page);
   expect((await game(page))?.cells[0]).toBe(1);
-  await page.getByRole('button', { name: 'Home' }).click();
+  await page.locator('.top-bar--game').getByRole('button', { name: 'Back' }).click();
   await page.locator('.daily-card').click();
   await playing(page);
   expect((await game(page))?.cells[0]).toBe(1);

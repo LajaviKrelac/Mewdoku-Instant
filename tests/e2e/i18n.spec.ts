@@ -13,6 +13,11 @@
 // total ("13,248" in each locale's number format) and check that the pills row never overflows (the
 // counter centred, clear of the cat counter and the lives, also while the period counter takes the cat
 // counter's cell) and that the victory's points row fits.
+// Phase 2d (G3, look-spec §1.4–§1.13, §5.3): the game screen's new HUD per locale: the game bar's
+// Level / Score columns fit between the discs (the fit steps), the level number is never cut, the
+// heads and fish pills fit, the rule cards (diagrams only at 320 px) and the score's "+N" chip stays
+// clear of the gear; in Arabic the game bar mirrors (back at the right, the gear and its dot at the
+// left) while the board stays left to right.
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -167,27 +172,30 @@ for (const c of CASES) {
       if (!c.pseudo) expect(strip((await page.locator('.pill--lives').getAttribute('aria-label')) ?? '')).toBe(strip(c.livesLabel));
       await shot(page, info, c, 'game');
 
-      if (c.rtl) {
-        // The board stays left to right: column 1 (cell 0) is left of column 2 (cell 1).
-        const geo = await page.evaluate(() => {
-          const board = document.querySelector<HTMLElement>('.board');
-          const cells = document.querySelectorAll<HTMLElement>('.cell');
-          const actions = document.querySelector<HTMLElement>('.top-bar__actions');
-          return {
-            boardDir: board ? getComputedStyle(board).direction : '',
-            x0: cells[0]?.getBoundingClientRect().left ?? 0,
-            x1: cells[1]?.getBoundingClientRect().left ?? 0,
-            actionsLeft: actions?.getBoundingClientRect().left ?? 0,
-            width: window.innerWidth,
-          };
-        });
-        expect(geo.boardDir).toBe('ltr');
-        expect(geo.x0).toBeLessThan(geo.x1);
-        expect(geo.actionsLeft, 'top-bar actions on the right').toBeGreaterThan(geo.width / 2);
-      }
+      // Phase 2d §1.4: the game bar's columns fit between the discs; the level number is whole.
+      await barFits(page);
+      const geo = await page.evaluate(() => {
+        const board = document.querySelector<HTMLElement>('.board');
+        const cells = document.querySelectorAll<HTMLElement>('.cell');
+        const x = (sel: string): number => document.querySelector<HTMLElement>(sel)?.getBoundingClientRect().left ?? 0;
+        return {
+          boardDir: board ? getComputedStyle(board).direction : '',
+          x0: cells[0]?.getBoundingClientRect().left ?? 0,
+          x1: cells[1]?.getBoundingClientRect().left ?? 0,
+          back: x('.screen--game .top-bar__btn--back'),
+          gear: x('.screen--game .top-bar__btn--settings'),
+          width: window.innerWidth,
+        };
+      });
+      // The board stays left to right in every language: column 1 (cell 0) is left of column 2 (cell 1).
+      expect(geo.boardDir).toBe('ltr');
+      expect(geo.x0).toBeLessThan(geo.x1);
+      // The game bar mirrors in Arabic (§1.18): back at the right, the gear at the left.
+      if (c.rtl) expect(geo.back, 'back disc on the right').toBeGreaterThan(geo.gear);
+      else expect(geo.back, 'back disc on the left').toBeLessThan(geo.gear);
 
-      // Settings (the gear is the last top-bar action).
-      await page.locator('.top-bar__actions button').last().click();
+      // Settings (the gear).
+      await page.locator('.screen--game .top-bar__btn--settings').click();
       const title = page.locator('.overlay__title').first();
       await expect(title).toBeVisible();
       const text = strip((await title.textContent()) ?? '');
@@ -377,8 +385,10 @@ test.describe('review fixes: Russian at the small phone (I18N-TEXT-2)', () => {
       const b = suffix.getBoundingClientRect();
       return { text: suffix.textContent, inside: b.left >= a.left - 1 && b.right <= a.right + 1 && b.width > 0 };
     });
-    expect(title.text?.replace(/[⁦-⁩]/g, '')).toBe(' · 1');
+    // Phase 2d §1.4: the Level column's value is the suffix without its separator.
+    expect(title.text?.replace(/[⁦-⁩]/g, '')).toBe('1');
     expect(title.inside).toBe(true);
+    await barFits(page);
   });
 });
 
@@ -396,15 +406,19 @@ test.describe('2c.1 integration N1: Arabic Hard-level title at the small phone',
     const title = await page.evaluate(() => {
       const h1 = document.querySelector<HTMLElement>('.screen--game .top-bar__text') as HTMLElement;
       const suffix = h1.querySelector<HTMLElement>('.top-bar__suffix') as HTMLElement;
-      const badge = document.querySelector<HTMLElement>('.screen--game .top-bar__title .badge--hard') as HTMLElement;
+      const badge = h1.querySelector<HTMLElement>('.badge--hard') as HTMLElement;
       const a = h1.getBoundingClientRect();
       const b = suffix.getBoundingClientRect();
-      return { whole: h1.textContent, text: suffix.textContent, hard: !badge.hidden, inside: b.left >= a.left - 1 && b.right <= a.right + 1 && b.width > 0 };
+      const c = badge.getBoundingClientRect();
+      return { whole: h1.getAttribute('aria-label'), text: suffix.textContent, hard: !badge.hidden, inside: b.left >= a.left - 1 && b.right <= a.right + 1 && b.width > 0, apart: c.right <= b.left + 0.5 || c.left >= b.right - 0.5 };
     });
     expect(title.hard).toBe(true);
+    // Phase 2d §1.4: the h1's name is the whole title; the value line holds "310" and the badge beside it.
     expect(title.whole?.replace(/[⁦-⁩]/g, '')).toBe('المستوى 310');
-    expect(title.text?.replace(/[⁦-⁩]/g, '')).toBe(' 310');
+    expect(title.text?.replace(/[⁦-⁩]/g, '')).toBe('310');
     expect(title.inside).toBe(true);
+    expect(title.apart, 'the Hard badge never covers the number').toBe(true);
+    await barFits(page);
   });
 });
 
@@ -446,8 +460,8 @@ const POINTS_CASES: readonly PointsCase[] = [
   { name: 'ar', browser: 'ar-EG', lang: 'ar', rtl: true, row: ar['points.count.many'] ?? '', label: ar['game.points.a11y'] ?? '' },
 ];
 
-/** The cat counter (or the period counter), the points counter and the lives: disjoint, in the row, centred. */
-async function rowFits(page: Page, start: '.pill--cats' | '.pills .period-pill'): Promise<void> {
+/** Phase 2d §1.5: the heads pill (or the win flow's period counter over it) and the fish pill: disjoint, inside the row. */
+async function rowFits(page: Page, start: '.pill--heads' | '.pills .period-pill'): Promise<void> {
   const g = await page.evaluate((first) => {
     const box = (sel: string) => {
       const el = document.querySelector<HTMLElement>(sel);
@@ -456,21 +470,62 @@ async function rowFits(page: Page, start: '.pill--cats' | '.pills .period-pill')
       return { l: r.left, r: r.right };
     };
     const row = document.querySelector('.pills') as HTMLElement;
-    return { row: box('.pills'), parts: [box(first), box('.points-pill'), box('.pill--lives')], scroll: row.scrollWidth, client: row.clientWidth };
+    return { row: box('.pills'), parts: [box(first), box('.pill--lives')], scroll: row.scrollWidth, client: row.clientWidth };
   }, start);
   const row = g.row as { l: number; r: number };
-  for (const p of g.parts) expect(p, `${start} / points / lives shown`).not.toBeNull();
+  for (const p of g.parts) expect(p, `${start} / lives shown`).not.toBeNull();
   const parts = (g.parts as { l: number; r: number }[]).slice().sort((a, b) => a.l - b.l);
-  for (let k = 1; k < 3; k++) expect((parts[k] as { l: number }).l, 'pills overlap').toBeGreaterThanOrEqual((parts[k - 1] as { r: number }).r - 0.5);
+  expect((parts[1] as { l: number }).l, 'pills overlap').toBeGreaterThanOrEqual((parts[0] as { r: number }).r - 0.5);
   expect((parts[0] as { l: number }).l).toBeGreaterThanOrEqual(row.l - 0.5);
-  expect((parts[2] as { r: number }).r).toBeLessThanOrEqual(row.r + 0.5);
-  const mid = g.parts[1] as { l: number; r: number };
-  expect(Math.abs((mid.l + mid.r) / 2 - (row.l + row.r) / 2), 'points counter centred').toBeLessThanOrEqual(1);
+  expect((parts[1] as { r: number }).r).toBeLessThanOrEqual(row.r + 0.5);
   expect(g.scroll, 'pills row overflows').toBeLessThanOrEqual(g.client + 1);
 }
 
+/**
+ * Phase 2d §1.4 (critic C5, C9): the Level and Score columns sit between the two discs with 4 px to
+ * spare and never overlap; the level number is whole (never cut, never ellipsized); a running "+N"
+ * chip ends before the gear's inner edge − 4 px.
+ */
+async function barFits(page: Page): Promise<void> {
+  const g = await page.evaluate(() => {
+    const rect = (sel: string) => {
+      const el = document.querySelector<HTMLElement>(sel);
+      if (!el || el.hidden || el.getClientRects().length === 0) return null;
+      const r = el.getBoundingClientRect();
+      return { l: r.left, r: r.right };
+    };
+    const value = document.querySelector<HTMLElement>('.screen--game .top-bar__text .top-bar__suffix') as HTMLElement;
+    const chip = document.querySelector<HTMLElement>('.screen--game .points-pill__label');
+    return {
+      back: rect('.screen--game .top-bar__btn--back'),
+      gear: rect('.screen--game .top-bar__btn--settings') as { l: number; r: number },
+      level: rect('.screen--game .top-bar__text') as { l: number; r: number },
+      levelValue: rect('.screen--game .top-bar__text .top-bar__suffix') as { l: number; r: number },
+      score: rect('.screen--game .top-bar--game .points-pill'),
+      valueWhole: value.scrollWidth <= value.clientWidth + 1,
+      chip: chip ? { l: chip.getBoundingClientRect().left, r: chip.getBoundingClientRect().right } : null,
+    };
+  });
+  const discs = [g.back, g.gear].filter((d): d is { l: number; r: number } => d !== null).sort((a, b) => a.l - b.l);
+  const left = discs.length === 2 ? (discs[0] as { r: number }).r : -Infinity;
+  const right = (discs[discs.length - 1] as { l: number }).l;
+  const cols = [g.level, g.score].filter((c): c is { l: number; r: number } => c !== null).sort((a, b) => a.l - b.l);
+  for (const c of cols) {
+    expect(c.l, 'a column under the left disc').toBeGreaterThanOrEqual(left + 4 - 1);
+    expect(c.r, 'a column under the right disc').toBeLessThanOrEqual(right - 4 + 1);
+  }
+  if (cols.length === 2) expect((cols[1] as { l: number }).l, 'Level and Score overlap').toBeGreaterThanOrEqual((cols[0] as { r: number }).r - 0.5);
+  expect(g.levelValue.r - g.levelValue.l, 'the level value shows').toBeGreaterThan(0);
+  expect(g.valueWhole, 'the level value is whole').toBe(true);
+  if (g.chip) {
+    const gearInner = g.gear.l > (g.back?.l ?? 0) ? g.gear.l - 4 : g.gear.r + 4;
+    if (g.gear.l > (g.back?.l ?? 0)) expect(g.chip.r, '"+N" before the gear').toBeLessThanOrEqual(gearInner + 1);
+    else expect(g.chip.l, '"+N" before the gear').toBeGreaterThanOrEqual(gearInner - 1);
+  }
+}
+
 for (const c of POINTS_CASES) {
-  test.describe(`level points in ${c.name} at 320 px (2c.1 §10.8)`, () => {
+  test.describe(`level points in ${c.name} at 320 px (2c.1 §10.8; Phase 2d: the Score column)`, () => {
     test.use({ locale: c.browser });
 
     test('the row fits with "13,248" in the locale\'s format, and the victory points row fits', async ({ page }, info) => {
@@ -481,7 +536,9 @@ for (const c of POINTS_CASES) {
       await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
       await page.waitForTimeout(900);
       expect(await page.evaluate(() => (window as TestWindow).__mewdoku?.solution()?.length)).toBe(12);
-      await rowFits(page, '.pill--cats');
+      await rowFits(page, '.pill--heads');
+      await expect(page.locator('.pill--heads .head')).toHaveCount(12);
+      await barFits(page);
       // Twelve cats in a row (through the session, as double taps): the largest level total.
       await page.evaluate(() => (window as TestWindow).__mewdoku?.solve());
       const n = page.locator('.points-pill[data-final] .points-pill__n:not(.is-out)');
@@ -491,12 +548,13 @@ for (const c of POINTS_CASES) {
       const want = new Intl.NumberFormat(c.lang === 'ar' ? 'ar-u-nu-latn' : c.lang).format(13248);
       expect(shown.replace(/[\u00a0\u202f]/g, ' ')).toBe(want.replace(/[\u00a0\u202f]/g, ' '));
       expect(strip((await page.locator('.points-pill').getAttribute('aria-label')) ?? '')).toBe(strip(c.label.replace('{count}', shown)));
-      await rowFits(page, '.pill--cats');
+      await rowFits(page, '.pill--heads');
+      await barFits(page);
       await noOverflow(page);
       await noClipping(page);
-      // §10.3: the period counter takes the cat counter's cell; the row still fits.
+      // Phase 2d §1.13: the period counter takes the heads pill's place; the row still fits.
       await expect(page.locator('.pills .period-pill[data-in-game]')).toBeVisible({ timeout: 4000 });
-      await expect(page.locator('.pill--cats')).toBeHidden({ timeout: 1000 });
+      await expect(page.locator('.pill--heads')).toBeHidden({ timeout: 1000 });
       await rowFits(page, '.pills .period-pill');
       await shot(page, info, { name: c.name, browser: c.browser, lang: c.lang, settingsTitle: '', livesLabel: '' }, 'points-winflow');
       const tap = page.locator('[data-overlay="ranking"] .ranking__tap');

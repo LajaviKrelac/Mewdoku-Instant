@@ -1,4 +1,4 @@
-// Owner: B (Phase 2b; was ui-shell). O2 rewarded prompt variants (02 §13.3) and O5 settings callbacks (02 §14).
+// Owner: B (Phase 2b; was ui-shell); G3 (Phase 2d: the mouse). O2 rewarded prompt variants (02 §13.3) and O5 settings callbacks (02 §14).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Settings } from '../../../src/game/types';
 import { countdownText, createRewardedPrompt, type RewardedPromptProps } from '../../../src/ui/overlays/rewarded-prompt';
@@ -48,6 +48,27 @@ describe('O2 rewarded prompt', () => {
     expect(o2.dismiss()).toBe(true);
     press(q(o2.el, '.overlay__scrim'));
     expect(p.onDecline).toHaveBeenCalledTimes(3);
+  });
+
+  it('Phase 2d §1.12: the mouse — "Call the mouse?", its video, free and countdown lines, and the helpers\' own art', () => {
+    const o2 = createRewardedPrompt();
+    document.body.append(o2.el);
+    o2.open(props({ placement: 'mouse', variant: 'video' }));
+    expect(q(o2.el, '.overlay__title').textContent).toBe('Call the mouse?');
+    expect(q(o2.el, '.overlay__body').textContent).toBe('Watch a short video and the mouse crosses out 3 tiles that have no cat.');
+    expect(q(o2.el, '.rewarded').dataset.placement).toBe('mouse');
+    expect(q(o2.el, '.rewarded__icon use').getAttribute('href')).toBe('#tool-mouse');
+    o2.update(props({ placement: 'mouse', variant: 'free' }));
+    expect(q(o2.el, '.overlay__body').textContent).toBe('The mouse is free this time.');
+    expect(q(o2.el, '.rewarded__accept').textContent).toBe('Take it');
+    o2.update(props({ placement: 'mouse', variant: 'countdown', nextFreeAt: 65_000 }));
+    expect(q(o2.el, '.overlay__body').textContent).toBe('The mouse is back in 1:05');
+    // Phase 2d: every placement shows its helper's full-colour art.
+    o2.update(props({ placement: 'hint' }));
+    expect(q(o2.el, '.rewarded__icon use').getAttribute('href')).toBe('#tool-bulb');
+    o2.update(props({ placement: 'kitty' }));
+    expect(q(o2.el, '.rewarded__icon use').getAttribute('href')).toBe('#tool-kitty');
+    o2.destroy();
   });
 
   it('free fallback variant for the kitty: Take it + Not now, no video icon', () => {

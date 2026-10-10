@@ -1,14 +1,26 @@
-// Owner: A. HUD components A owns: top bar (with the phase2b lead slot), rule chips, tool bar.
-// phase2b F0 split: the pills cases moved to pills.spec.ts (B).
+// Owner: A (Phase 2b); G3 (Phase 2d). HUD components: Home's top bar (with the phase2b lead slot and the
+// Phase 2d settings dot), the game bar (look-spec §1.4, §1.13: back · Level / Score · gear; the fit
+// steps; the Score roll and its "+N" chip kept clear of the gear), the rule cards (§1.7) and the helper
+// row (§1.11, §1.12: kitty · bulb · mouse, the count / Free / video / muted-0 badges, the pulse, the
+// hidden mouse). phase2b F0 split: the pills cases live in pills.spec.ts.
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cfg } from '../../../src/app/config';
+import type { GameEvent } from '../../../src/game/types';
 import { en } from '../../../src/i18n/en';
+import { barValue, createGameBar, type GameBarProps } from '../../../src/ui/hud/game-bar';
 import { createRuleChips } from '../../../src/ui/hud/rule-chips';
-import { createToolBar } from '../../../src/ui/hud/tool-bar';
-import { createTopBar, type TopBarProps } from '../../../src/ui/hud/top-bar';
+import { createToolBar, type ToolBarProps } from '../../../src/ui/hud/tool-bar';
+import { createTopBar, splitTitle, type TopBarProps } from '../../../src/ui/hud/top-bar';
 
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+  document.body.textContent = '';
+});
 
-describe('top bar', () => {
+const uses = (el: Element | null | undefined): string[] => Array.from(el?.querySelectorAll('use') ?? []).map((u) => u.getAttribute('href') ?? '');
+
+describe('top bar (Home, event screen)', () => {
   const props: TopBarProps = { title: 'Level 37', hard: false, showHome: true, showSettings: true, showTrophy: false, fbSafeZone: false };
 
   it('renders the title, Hard badge and the right-hand buttons', () => {
@@ -36,6 +48,20 @@ describe('top bar', () => {
     bar.destroy();
   });
 
+  it('Phase 2d §1.15: the red dot on the gear while settingsDot, and the gear\'s name says so', () => {
+    const bar = createTopBar({ ...props, settingsDot: true }, { onHome: vi.fn(), onSettings: vi.fn(), onTrophy: vi.fn() });
+    const gear = bar.el.querySelector('.top-bar__btn--settings') as HTMLElement;
+    const dot = gear.querySelector('.top-bar__dot');
+    expect(dot).not.toBeNull();
+    expect(dot?.getAttribute('aria-hidden')).toBe('true');
+    expect(gear.getAttribute('aria-label')).toBe(en['common.settings.new']);
+    bar.update({ ...props, settingsDot: false });
+    expect(gear.querySelector('.top-bar__dot')).toBeNull();
+    expect(gear.getAttribute('aria-label')).toBe('Settings');
+    // Absent (a harness from before 2d) = no dot.
+    expect(createTopBar(props, { onHome: vi.fn(), onSettings: vi.fn(), onTrophy: vi.fn() }).el.querySelector('.top-bar__dot')).toBeNull();
+  });
+
   it('keeps every control out of the top-left lead (FB safe zone) by DOM order', () => {
     const bar = createTopBar({ ...props, fbSafeZone: true }, { onHome: vi.fn(), onSettings: vi.fn(), onTrophy: vi.fn() });
     const lead = bar.el.firstElementChild as HTMLElement;
@@ -52,45 +78,326 @@ describe('top bar', () => {
     expect(slot?.className).toBe('top-bar__slot');
     expect(slot?.firstElementChild).toBe(pill);
     expect(title?.className).toBe('top-bar__title');
-    // Without the slot the bar is unchanged.
     expect(createTopBar(props, { onHome: vi.fn(), onSettings: vi.fn(), onTrophy: vi.fn() }).el.querySelector('.top-bar__slot')).toBeNull();
   });
 });
 
-describe('rule chips', () => {
-  it('uses our own wording, hides text in compact mode and highlights one chip', () => {
+// ─────────────────────────── the game bar (look-spec §1.4, §1.13) ───────────────────────────
+
+const barProps: GameBarProps = { title: 'Level 96', hard: false, showBack: true, fbSafeZone: false, settingsDot: false, points: 0, final: false, reducedMotion: false };
+const pts = (gained: number, total: number, streak = 1): GameEvent => ({ type: 'POINTS', cell: 0, gained, total, streak });
+const nums = (el: HTMLElement): string[] => Array.from(el.querySelectorAll('.points-pill__n')).map((e) => e.textContent ?? '');
+
+describe('the game bar: back · Level / Score · gear (§1.4)', () => {
+  it('splits the title into the Level column\'s label and value; the h1 carries the whole title', () => {
+    const bar = createGameBar(barProps, { onBack: vi.fn(), onSettings: vi.fn() });
+    const h1 = bar.el.querySelector('h1.top-bar__text') as HTMLElement;
+    expect(bar.el.classList.contains('top-bar--game')).toBe(true);
+    expect(h1.getAttribute('aria-label')).toBe('Level 96');
+    expect(h1.querySelector('.top-bar__name')?.textContent).toBe('Level');
+    expect(h1.querySelector('.top-bar__suffix')?.textContent).toBe('96');
+    expect(h1.querySelector<HTMLElement>('.badge--hard')?.hidden).toBe(true);
+    bar.update({ ...barProps, title: 'Daily · Tue 6 Oct', hard: true });
+    expect(h1.querySelector('.top-bar__name')?.textContent).toBe('Daily');
+    expect(h1.querySelector('.top-bar__suffix')?.textContent).toBe('Tue 6 Oct');
+    expect(h1.querySelector<HTMLElement>('.badge--hard')?.hidden).toBe(false);
+    expect(h1.getAttribute('aria-label')).toBe('Daily · Tue 6 Oct');
+    bar.update({ ...barProps, title: 'Lantern Walk · 13' });
+    expect(h1.querySelector('.top-bar__name')?.textContent).toBe('Lantern Walk');
+    expect(h1.querySelector('.top-bar__suffix')?.textContent).toBe('13');
+    // A title with no split point (zh "第96关") shows whole as the value, with no label.
+    bar.update({ ...barProps, title: '第96关' });
+    expect(h1.querySelector<HTMLElement>('.top-bar__name')?.hidden).toBe(true);
+    expect(h1.querySelector('.top-bar__suffix')?.textContent).toBe('第96关');
+    expect(barValue(splitTitle('Level 310').suffix)).toBe('310');
+    expect(barValue(' · 13')).toBe('13');
+    bar.destroy();
+  });
+
+  it('back (Back, does what Home did) at the inline start, the gear at the end; the dot and its name; the safe zone', () => {
+    const cb = { onBack: vi.fn(), onSettings: vi.fn() };
+    const bar = createGameBar({ ...barProps, settingsDot: true, fbSafeZone: true }, cb);
+    const [back, mid, gear] = Array.from(bar.el.children) as HTMLElement[];
+    expect(back?.classList.contains('top-bar__btn--back')).toBe(true);
+    expect(back?.classList.contains('top-bar__btn--home')).toBe(true); // the chrome lock's class (§4.6)
+    expect(back?.getAttribute('aria-label')).toBe('Back');
+    expect(uses(back)).toEqual(['#icon-back']);
+    expect(mid?.className).toBe('top-bar__mid');
+    expect(gear?.classList.contains('top-bar__btn--settings')).toBe(true);
+    expect(uses(gear)).toEqual(['#icon-gear']);
+    expect(gear?.querySelector('.top-bar__dot')).not.toBeNull();
+    expect(gear?.getAttribute('aria-label')).toBe('Settings, something new');
+    expect(bar.el.hasAttribute('data-fb-safe')).toBe(true);
+    expect(document.documentElement.hasAttribute('data-fb-safe')).toBe(true);
+    back?.click();
+    gear?.click();
+    expect(cb.onBack).toHaveBeenCalledTimes(1);
+    expect(cb.onSettings).toHaveBeenCalledTimes(1);
+    // The tutorial: no back disc (its place stays empty; the columns do not move).
+    bar.update({ ...barProps, showBack: false });
+    expect(back?.hidden).toBe(true);
+    expect(gear?.querySelector('.top-bar__dot')).toBeNull();
+    expect(document.documentElement.hasAttribute('data-fb-safe')).toBe(false);
+    // Tab order (§1.18): back, then gear; the columns are not focusable.
+    expect(mid?.querySelector('button, [tabindex]')).toBeNull();
+    bar.destroy();
+  });
+
+  it('the Score column: "Score" over the level points, an image "Level points: N", hidden for null (tutorial), final at the win', () => {
+    const bar = createGameBar(barProps, { onBack: vi.fn(), onSettings: vi.fn() });
+    const score = bar.el.querySelector('.points-pill') as HTMLElement;
+    expect(score.parentElement?.className).toBe('top-bar__mid');
+    expect(score.querySelector('.points-pill__name')?.textContent).toBe('Score');
+    expect(score.querySelector('.points-pill__icon')).toBeNull(); // no icon (§1.13)
+    expect(nums(score)).toEqual(['0']);
+    expect(score.getAttribute('role')).toBe('img');
+    expect(score.getAttribute('aria-label')).toBe('Level points: 0');
+    expect(score.hasAttribute('aria-live')).toBe(false);
+    expect(score.hasAttribute('tabindex')).toBe(false);
+    bar.update({ ...barProps, points: 2016 });
+    expect(nums(score)).toEqual(['2,016']);
+    expect(score.getAttribute('aria-label')).toBe('Level points: 2,016');
+    expect(score.hasAttribute('data-final')).toBe(false);
+    bar.update({ ...barProps, points: 7296, final: true });
+    expect(score.hasAttribute('data-final')).toBe(true);
+    bar.update({ ...barProps, points: null });
+    expect(score.hidden).toBe(true);
+    expect(score.hasAttribute('data-final')).toBe(false);
+    bar.playEvent(pts(576, 576));
+    expect(score.querySelector('.points-pill__chip')).toBeNull();
+    bar.destroy();
+  });
+
+  it('POINTS rolls from total − gained to total, bumps the number and raises one "+576" at the number\'s inline end', () => {
+    vi.useFakeTimers();
+    const P = cfg.fx.levelPoints;
+    const bar = createGameBar(barProps, { onBack: vi.fn(), onSettings: vi.fn() });
+    document.body.appendChild(bar.el);
+    const score = bar.el.querySelector('.points-pill') as HTMLElement;
+    // Props first (the session updates the store before it plays the events): the roll still starts at total − gained.
+    bar.update({ ...barProps, points: 576 });
+    bar.playEvent(pts(576, 576));
+    expect(score.querySelector('.points-pill__n.is-out')?.textContent).toBe('0');
+    expect(score.querySelector('.points-pill__n.is-in')?.textContent).toBe('576');
+    expect(score.classList.contains('points-pill--bump')).toBe(true);
+    const label = score.querySelector('.points-pill__label') as HTMLElement;
+    expect(label.textContent).toBe('+576');
+    expect(label.getAttribute('aria-hidden')).toBe('true');
+    // Inside the number's own box (hud.css places it at its inline end).
+    expect(label.parentElement?.classList.contains('points-pill__val')).toBe(true);
+    expect(label.style.getPropertyValue('--label-ms')).toBe(`${P.plusMs}ms`);
+    vi.advanceTimersByTime(P.rollMs);
+    expect(nums(score)).toEqual(['576']);
+    expect(score.classList.contains('points-pill--bump')).toBe(false);
+    // A newer event keeps one chip and never more than two numbers.
+    bar.playEvent(pts(672, 1248, 2));
+    bar.playEvent(pts(768, 2016, 3));
+    expect(Array.from(score.querySelectorAll('.points-pill__chip')).map((e) => e.textContent)).toEqual(['+768']);
+    expect(score.querySelectorAll('.points-pill__n').length).toBeLessThanOrEqual(2);
+    vi.advanceTimersByTime(P.plusMs);
+    expect(score.querySelector('.points-pill__label')).toBeNull();
+    // A mistake shows nothing on the counter (D23).
+    bar.playEvent({ type: 'MISTAKE', cell: 1, heartsLeft: 2 });
+    expect(score.querySelector('.points-pill__chip')).toBeNull();
+    bar.destroy();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('reduced motion: the number changes in place; the chip fades in and out on WAAPI', () => {
+    vi.useFakeTimers();
+    const animate = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, 'animate', { value: animate, configurable: true, writable: true });
+    try {
+      const bar = createGameBar({ ...barProps, points: 576, reducedMotion: true }, { onBack: vi.fn(), onSettings: vi.fn() });
+      bar.playEvent(pts(672, 1248, 2));
+      const score = bar.el.querySelector('.points-pill') as HTMLElement;
+      expect(nums(score)).toEqual(['1,248']);
+      expect(score.querySelector('.is-in, .is-out')).toBeNull();
+      expect(score.querySelector('.points-pill__label')?.hasAttribute('data-reduced')).toBe(true);
+      expect(animate).toHaveBeenCalledTimes(1);
+    } finally {
+      delete (HTMLElement.prototype as { animate?: unknown }).animate;
+    }
+  });
+
+  it('critic C9: a "+N" that would reach the gear\'s inner edge − 4 px moves back toward the inline start', () => {
+    const bar = createGameBar(barProps, { onBack: vi.fn(), onSettings: vi.fn() });
+    document.body.appendChild(bar.el);
+    const gear = bar.el.querySelector('.top-bar__btn--settings') as HTMLElement;
+    const val = bar.el.querySelector('.points-pill__val') as HTMLElement;
+    const rect = (left: number, width: number) => ({ left, right: left + width, top: 0, bottom: 20, width, height: 20, x: left, y: 0, toJSON: () => ({}) }) as DOMRect;
+    gear.getBoundingClientRect = () => rect(300, 37);
+    val.getBoundingClientRect = () => rect(250, 30);
+    vi.spyOn(HTMLElement.prototype, 'offsetLeft', 'get').mockReturnValue(34);
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(40);
+    bar.playEvent(pts(576, 576));
+    // The chip would end at 250 + 34 + 40 = 324; it must end by 300 − 4 = 296: 28 px back.
+    expect((bar.el.querySelector('.points-pill__label') as HTMLElement).style.getPropertyValue('--chip-dx')).toBe('-28px');
+    // Clear of the gear: no shift.
+    gear.getBoundingClientRect = () => rect(340, 37);
+    bar.playEvent(pts(96, 672, 2));
+    expect((bar.el.querySelector('.points-pill__label') as HTMLElement).style.getPropertyValue('--chip-dx')).toBe('');
+    bar.destroy();
+  });
+
+  it('critic C5: the values step to data-fit 1, then 2, when the pair is wider than the span between the discs', () => {
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb: FrameRequestCallback) => {
+      cb(0);
+      return 1;
+    });
+    const bar = createGameBar(barProps, { onBack: vi.fn(), onSettings: vi.fn() });
+    const mid = bar.el.querySelector('.top-bar__mid') as HTMLElement;
+    let span = 300;
+    Object.defineProperty(mid, 'clientWidth', { get: () => span, configurable: true });
+    // Each column needs 102 at rest, 180 / 160 / 140 for its value by fit step.
+    const valueW: Record<string, number> = { none: 180, '1': 160, '2': 140 };
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(102);
+    vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(function (this: HTMLElement) {
+      // The Level column's value line; the Score's (also a .top-bar__val) stays narrow.
+      return this.classList.contains('top-bar__val') && this.parentElement?.tagName === 'H1' ? (valueW[bar.el.dataset.fit ?? 'none'] ?? 0) : 50;
+    });
+    document.body.appendChild(bar.el);
+    bar.fit();
+    // 180 + 102 = 282 fits in 300.
+    expect(bar.el.hasAttribute('data-fit')).toBe(false);
+    span = 270;
+    bar.fit();
+    expect(bar.el.dataset.fit).toBe('1');
+    span = 200;
+    bar.update({ ...barProps, title: 'Daily · Tue 6 Oct' });
+    expect(bar.el.dataset.fit).toBe('2');
+    bar.destroy();
+  });
+});
+
+// ─────────────────────────── the rule cards (§1.7) ───────────────────────────
+
+describe('rule cards', () => {
+  it('our own wording next to G2\'s diagram; text hidden in compact; one card highlighted', () => {
     const c = createRuleChips({ compact: false, highlight: null });
     const chips = c.el.querySelectorAll('.chip');
     expect(chips).toHaveLength(3);
+    expect(Array.from(chips).map((li) => li.className)).toEqual(['chip chip--colours', 'chip chip--lines', 'chip chip--space']);
+    for (const li of Array.from(chips)) {
+      const art = li.firstElementChild as SVGElement;
+      expect(art.tagName.toLowerCase()).toBe('svg');
+      expect(art.classList.contains('chip__art')).toBe(true);
+      expect(art.getAttribute('aria-hidden')).toBe('true');
+    }
     expect(chips[0]?.querySelector('.chip__text')?.textContent).toBe(en['game.chip.colours']);
+    expect(chips[0]?.querySelector('.chip__text')?.getAttribute('aria-hidden')).toBe('true');
+    expect(chips[0]?.getAttribute('title')).toBe(en['game.chip.colours.a11y']);
     expect(chips[2]?.querySelector('.sr-only')?.textContent).toBe(en['game.chip.space.a11y']);
+    // No 2b chip icons any more.
+    expect(c.el.querySelector('use[href^="#icon-rule-"]')).toBeNull();
     c.update({ compact: true, highlight: 'lines' });
     expect(c.el.hasAttribute('data-compact')).toBe(true);
     expect(chips[1]?.hasAttribute('data-hl')).toBe(true);
     expect(chips[0]?.hasAttribute('data-hl')).toBe(false);
+    c.destroy();
   });
 });
 
-describe('tool bar', () => {
-  it('shows counts, Free in the tutorial, and disables tools', () => {
-    const cb = { onBulb: vi.fn(), onPaw: vi.fn() };
-    const tb = createToolBar({ hints: 5, kitties: 0, bulbEnabled: true, pawEnabled: true, hintsFree: false }, cb);
+// ─────────────────────────── the helper row (§1.11, §1.12) ───────────────────────────
+
+const tools: ToolBarProps = { hints: 2, kitties: 2, bulbEnabled: true, pawEnabled: true, hintsFree: false, mouse: { shown: true, enabled: true }, videoRefill: true, pulse: null };
+const badgeOf = (tb: { el: HTMLElement }, k: string): HTMLElement => tb.el.querySelector(`.tool--${k} .tool__badge`) as HTMLElement;
+const kindOf = (b: HTMLElement): string => (b.hidden ? 'none' : ['count', 'free', 'video'].find((k) => b.classList.contains(`tool__badge--${k}`)) ?? '?');
+
+describe('tool row: kitty · bulb · mouse', () => {
+  it('three discs in order with the helpers\' art, the count badges, and the callbacks', () => {
+    const cb = { onBulb: vi.fn(), onPaw: vi.fn(), onMouse: vi.fn() };
+    const tb = createToolBar(tools, cb);
     document.body.appendChild(tb.el);
-    const bulb = tb.el.querySelector('.tool--bulb') as HTMLButtonElement;
-    const paw = tb.el.querySelector('.tool--paw') as HTMLButtonElement;
-    expect(bulb.querySelector('.tool__badge')?.textContent).toBe('5');
-    expect(bulb.getAttribute('aria-label')).toBe('Hint, 5 left');
-    expect(paw.hasAttribute('data-empty')).toBe(true);
-    bulb.click();
-    paw.click();
-    expect(cb.onBulb).toHaveBeenCalledTimes(1);
+    const btns = Array.from(tb.el.children) as HTMLButtonElement[];
+    expect(btns.map((b) => b.className)).toEqual(['tool tool--paw', 'tool tool--bulb', 'tool tool--mouse']);
+    expect(btns.map((b) => uses(b.querySelector('.tool__disc'))[0])).toEqual(['#tool-kitty', '#tool-bulb', '#tool-mouse']);
+    for (const b of btns) expect(b.querySelector('.tool__disc > svg.tool__icon')).not.toBeNull();
+    expect(badgeOf(tb, 'paw').textContent).toBe('2');
+    expect(kindOf(badgeOf(tb, 'paw'))).toBe('count');
+    expect(kindOf(badgeOf(tb, 'bulb'))).toBe('count');
+    // The badge is the disc's sibling: it never scales with the pulse.
+    expect(badgeOf(tb, 'paw').parentElement?.classList.contains('tool')).toBe(true);
+    expect(btns[0]?.getAttribute('aria-label')).toBe('Kitty, 2 left');
+    expect(btns[1]?.getAttribute('aria-label')).toBe('Hint, 2 left');
+    expect(btns[2]?.getAttribute('aria-label')).toBe(`Mouse: crosses out ${cfg.mouse.cells} tiles that have no cat`);
+    for (const b of btns) b.click();
     expect(cb.onPaw).toHaveBeenCalledTimes(1);
-    tb.update({ hints: 5, kitties: 1, bulbEnabled: true, pawEnabled: false, hintsFree: true });
-    expect(bulb.querySelector('.tool__badge')?.textContent).toBe('Free');
-    expect(paw.disabled).toBe(true);
-    expect(paw.querySelector('.tool__badge')?.classList.contains('tool__badge--bump')).toBe(true);
-    expect(tb.toolRect('bulb')).not.toBeNull();
+    expect(cb.onBulb).toHaveBeenCalledTimes(1);
+    expect(cb.onMouse).toHaveBeenCalledTimes(1);
+    expect(tb.toolRect('mouse')).not.toBeNull();
     tb.destroy();
-    expect(tb.el.isConnected).toBe(false);
+  });
+
+  it('badges: the count; "Free" on the tutorial bulb; at 0 the video badge when a video can refill, else a muted 0; the mouse: video or none', () => {
+    const tb = createToolBar(tools, { onBulb: vi.fn(), onPaw: vi.fn() });
+    expect(kindOf(badgeOf(tb, 'mouse'))).toBe('video');
+    expect(uses(badgeOf(tb, 'mouse'))).toEqual(['#icon-play']);
+    tb.update({ ...tools, kitties: 0, hints: 0 });
+    expect(kindOf(badgeOf(tb, 'paw'))).toBe('video');
+    expect(kindOf(badgeOf(tb, 'bulb'))).toBe('video');
+    expect(tb.el.querySelector('.tool--paw')?.getAttribute('aria-label')).toBe('Kitty: watch a video for more');
+    expect(tb.el.querySelector('.tool--bulb')?.getAttribute('aria-label')).toBe('Hint: watch a video for more');
+    // The web: no rewarded video. A muted 0; the mouse has no badge.
+    tb.update({ ...tools, kitties: 0, hints: 0, videoRefill: false });
+    expect(kindOf(badgeOf(tb, 'paw'))).toBe('count');
+    expect(badgeOf(tb, 'paw').textContent).toBe('0');
+    expect(tb.el.querySelector('.tool--paw')?.hasAttribute('data-empty')).toBe(true);
+    expect(tb.el.querySelector('.tool--paw')?.getAttribute('aria-label')).toBe('Kitty, 0 left');
+    expect(kindOf(badgeOf(tb, 'mouse'))).toBe('none');
+    // The tutorial bulb.
+    tb.update({ ...tools, hintsFree: true, hints: 0 });
+    expect(kindOf(badgeOf(tb, 'bulb'))).toBe('free');
+    expect(badgeOf(tb, 'bulb').textContent).toBe('Free');
+    expect(tb.el.querySelector('.tool--bulb')?.hasAttribute('data-free')).toBe(true);
+    expect(tb.el.querySelector('.tool--bulb')?.getAttribute('aria-label')).toBe('Hint, Free');
+    // Growth (critic C7): a long count is text, never cut (CSS min-width + padding).
+    tb.update({ ...tools, hints: 100 });
+    expect(badgeOf(tb, 'bulb').textContent).toBe('100');
+  });
+
+  it('a stock increase bumps its badge (2b), a re-render with the same props does not', () => {
+    const tb = createToolBar(tools, { onBulb: vi.fn(), onPaw: vi.fn() });
+    tb.update({ ...tools, kitties: 3 });
+    expect(badgeOf(tb, 'paw').classList.contains('tool__badge--bump')).toBe(true);
+    expect(badgeOf(tb, 'bulb').classList.contains('tool__badge--bump')).toBe(false);
+  });
+
+  it('[data-pulse] follows GameView.pulse on an enabled helper only; never on the mouse', () => {
+    const tb = createToolBar(tools, { onBulb: vi.fn(), onPaw: vi.fn() });
+    const pulsing = (): string[] => Array.from(tb.el.querySelectorAll('.tool[data-pulse]')).map((b) => b.className);
+    expect(pulsing()).toEqual([]);
+    tb.update({ ...tools, pulse: 'paw' });
+    expect(pulsing()).toEqual(['tool tool--paw']);
+    tb.update({ ...tools, pulse: 'bulb' });
+    expect(pulsing()).toEqual(['tool tool--bulb']);
+    tb.update({ ...tools, pulse: 'bulb', bulbEnabled: false });
+    expect(pulsing()).toEqual([]);
+    expect((tb.el.querySelector('.tool--bulb') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('a mouse that is not shown keeps its slot: data-off, inert, hidden from screen readers, out of the Tab order', () => {
+    const cb = { onBulb: vi.fn(), onPaw: vi.fn(), onMouse: vi.fn() };
+    const tb = createToolBar({ ...tools, mouse: { shown: false, enabled: false } }, cb);
+    document.body.appendChild(tb.el);
+    const mouse = tb.el.querySelector('.tool--mouse') as HTMLButtonElement;
+    expect(tb.el.children).toHaveLength(3);
+    expect(mouse.hasAttribute('data-off')).toBe(true);
+    expect(mouse.hasAttribute('inert')).toBe(true);
+    expect(mouse.getAttribute('aria-hidden')).toBe('true');
+    expect(mouse.tabIndex).toBe(-1);
+    expect(mouse.disabled).toBe(true);
+    expect(tb.toolRect('mouse')).toBeNull();
+    // Absent (a harness from before 2d) = not shown.
+    expect(createToolBar({ hints: 5, kitties: 3, bulbEnabled: true, pawEnabled: true, hintsFree: false }, cb).el.querySelector('.tool--mouse')?.hasAttribute('data-off')).toBe(true);
+    // Shown but not enabled (no candidate cell): a disabled button.
+    tb.update({ ...tools, mouse: { shown: true, enabled: false } });
+    expect(mouse.hasAttribute('data-off')).toBe(false);
+    expect(mouse.hasAttribute('inert')).toBe(false);
+    expect(mouse.hasAttribute('aria-hidden')).toBe(false);
+    expect(mouse.hasAttribute('tabindex')).toBe(false);
+    expect(mouse.disabled).toBe(true);
+    tb.update(tools);
+    expect(mouse.disabled).toBe(false);
   });
 });

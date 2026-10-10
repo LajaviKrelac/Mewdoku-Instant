@@ -37,7 +37,7 @@ describe('the catalogue set', () => {
     const fixed = Object.keys(SOURCE).filter((k) => META[k as keyof typeof META]?.translatable === false && !k.startsWith('locale.name.') && !k.startsWith('date.'));
     expect(fixed.sort()).toEqual(
       [
-        'app.name', 'boot.progress', 'event.title.game', 'fail.continue.bonus', 'fish.plus', 'game.cats', 'home.daily.size',
+        'app.name', 'boot.progress', 'event.title.game', 'fail.continue.bonus', 'fish.plus', 'home.daily.size',
         'home.daily.sub', 'list.separator', 'time.daysHours', 'time.hoursMinutes', 'time.minutes', 'unit.colorWithGlyph',
       ].sort(),
     );

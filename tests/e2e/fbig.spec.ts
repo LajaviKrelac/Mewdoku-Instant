@@ -26,6 +26,13 @@
 // board is off by default (rank.dailyBoard), so the FB2B-4 daily-band test became the period-band test
 // (the daily band reader keeps its unit tests).
 // Needs VITE_FB_LEADERBOARDS with period_points → e2e_period_points in the fbig-e2e build (lead, I-1).
+// Phase 2d (G1, docs/phase2d/look-spec.md §1.16, §5.3): the banner during play (ads.banner.duringPlay,
+// on by default): none before 10 completed levels; from 10 the game screen reserves its band from mount
+// and shows the banner when the board entry ends; a banner up on Home or the victory stays into the
+// next board when nothing hid it; it is hidden before an interstitial, the mouse's video and Settings.
+// The 2b "never in play" tests (incl. FB2B-1) run with ?bannerPlay=0 (an e2e-only switch that turns
+// duringPlay off), which restores that rule. On FBIG the game screen keeps every control out of the
+// top-left 64 × 64 (the back disc moves; in Arabic the gear does) and the Level column clear of it.
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -86,7 +93,10 @@ function seededSave(level: number, completed: number, patch: (s: SaveData) => Sa
   });
 }
 
-async function loadGame(page: Page, stubConfig: Record<string, unknown>, opts: { clockAt?: number } = {}): Promise<void> {
+/** Phase 2d: `query` (e.g. '?bannerPlay=0', e2e builds only) is appended to the page URL. */
+type LoadOpts = { clockAt?: number; query?: string };
+
+async function loadGame(page: Page, stubConfig: Record<string, unknown>, opts: LoadOpts = {}): Promise<void> {
   await page.route('https://connect.facebook.net/**', (route) =>
     route.fulfill({ status: 200, contentType: 'application/javascript', body: STUB_SRC }),
   );
@@ -94,10 +104,13 @@ async function loadGame(page: Page, stubConfig: Record<string, unknown>, opts: {
     (window as TestWindow).__FB_STUB_CONFIG__ = config;
   }, stubConfig);
   if (opts.clockAt !== undefined) await page.clock.install({ time: opts.clockAt });
-  await page.goto('/');
+  await page.goto(`/${opts.query ?? ''}`);
 }
 
-async function openGame(page: Page, stubConfig: Record<string, unknown>, opts: { clockAt?: number } = {}): Promise<void> {
+/** Phase 2d: the 2b banner rule ("never in play"), through the e2e-only ads.banner.duringPlay switch. */
+const NO_PLAY_BANNER = '?bannerPlay=0';
+
+async function openGame(page: Page, stubConfig: Record<string, unknown>, opts: LoadOpts = {}): Promise<void> {
   await loadGame(page, stubConfig, opts);
   await page.waitForFunction(() => (window as TestWindow).__fbStub?.state.started === true && !!(window as TestWindow).__mewdoku);
 }
@@ -413,11 +426,12 @@ const screenBand = (page: Page): Promise<{ banner: boolean; pad: number } | null
   });
 
 test.describe('FBIG banners (phase2b §3)', () => {
-  test('no banner call before 10 completed levels, on Home or on the victory screen', async ({ page }) => {
+  test('no banner call before 10 completed levels, on Home, the game screen (no band) or the victory screen', async ({ page }) => {
     await openGame(page, { data: { save: seededSave(6, 5) } });
     await expect(sel.playButton(page)).toBeVisible();
     await page.waitForTimeout(800);
     await startLevel(page);
+    await expect(page.locator('.screen--game')).not.toHaveAttribute('data-banner', '');
     await solve(page);
     await toVictory(page);
     await page.waitForTimeout(800);
@@ -425,10 +439,10 @@ test.describe('FBIG banners (phase2b §3)', () => {
     await expect(page.getByTestId('fb-stub-banner')).toHaveCount(0);
   });
 
-  test('banner on Home and on the victory screen from level 11, with the 58 px reserve; none while the game screen shows', async ({ page }) => {
+  test('duringPlay off (?bannerPlay=0, the 2b rule): banner on Home and on the victory screen from level 11, with the 58 px reserve; none while the game screen shows', async ({ page }) => {
     test.setTimeout(90_000);
     const t0 = Date.UTC(2026, 9, 7, 10, 0, 0);
-    await openGame(page, { data: { save: seededSave(11, 10) } }, { clockAt: t0 });
+    await openGame(page, { data: { save: seededSave(11, 10) } }, { clockAt: t0, query: NO_PLAY_BANNER });
     // Home: one load, at the bottom, with the reserve band.
     await expect.poll(() => count(page, 'loadBannerAdAsync')).toBe(1);
     expect((await stub(page, (s) => s.find('loadBannerAdAsync')[0]?.args)) ?? []).toEqual(['e2e-banner', 'bottom']);
@@ -644,13 +658,13 @@ const seqOf = (page: Page, name: string, filter?: string): Promise<number[]> =>
     [name, filter ?? ''] as const,
   );
 
-test.describe('FBIG banners never in play (review FB2B-1)', () => {
+test.describe('FBIG banners never in play with duringPlay off (?bannerPlay=0; review FB2B-1)', () => {
   // Real time on purpose: Playwright's clock.fastForward can fire the stub's slow-load timer before the
   // adapter's ads.readyTimeoutMs timeout and hide the bug.
   for (const playAfterMs of [1_000, 5_000]) {
     test(`a 6 s banner load (over ads.readyTimeoutMs): Play after ${playAfterMs / 1000} s, the late banner never shows on the game screen`, async ({ page }) => {
       test.setTimeout(60_000);
-      await openGame(page, { persist: false, banner: { loadDelayMs: 6_000 }, data: { save: seededSave(12, 11) } });
+      await openGame(page, { persist: false, banner: { loadDelayMs: 6_000 }, data: { save: seededSave(12, 11) } }, { query: NO_PLAY_BANNER });
       await expect.poll(() => count(page, 'loadBannerAdAsync')).toBe(1);
       const loadAt = Date.now();
       await page.waitForTimeout(Math.max(0, playAfterMs - (Date.now() - loadAt)));
@@ -664,7 +678,7 @@ test.describe('FBIG banners never in play (review FB2B-1)', () => {
   }
 
   test('a hideBannerAdAsync that fails once is retried: no banner stays on the game screen', async ({ page }) => {
-    await openGame(page, { persist: false, errors: { hideBannerAdAsync: ['NETWORK_FAILURE'] }, data: { save: seededSave(12, 11) } });
+    await openGame(page, { persist: false, errors: { hideBannerAdAsync: ['NETWORK_FAILURE'] }, data: { save: seededSave(12, 11) } }, { query: NO_PLAY_BANNER });
     await expect(stubBanner(page)).toBeVisible();
     await startLevel(page);
     await expect.poll(() => count(page, 'hideBannerAdAsync'), { timeout: 5_000 }).toBeGreaterThanOrEqual(2);
@@ -675,7 +689,7 @@ test.describe('FBIG banners never in play (review FB2B-1)', () => {
   test('a load that never settles is given up: the victory screen loads a banner again, and it is down before the interstitial', async ({ page }) => {
     test.setTimeout(90_000);
     const t0 = Date.UTC(2026, 9, 7, 10, 0, 0);
-    await openGame(page, { persist: false, banner: { load: 'never' }, data: { save: seededSave(12, 11) } }, { clockAt: t0 });
+    await openGame(page, { persist: false, banner: { load: 'never' }, data: { save: seededSave(12, 11) } }, { clockAt: t0, query: NO_PLAY_BANNER });
     await expect.poll(() => count(page, 'loadBannerAdAsync')).toBe(1);
     await startLevel(page);
     await configureStub(page, { banner: { load: 'ok' } });
@@ -845,3 +859,175 @@ for (const locale of ['en_US', 'ar_AR'] as const) {
   });
 }
 
+
+// ─────────────────────────── Phase 2d §1.16: the banner during play ───────────────────────────
+
+/** The game screen's helper row and the FB stub's bar (the native banner overlays the webview's bottom). */
+const helpersClearOfStubBanner = async (page: Page): Promise<void> => {
+  const bar = await stubBanner(page).boundingBox();
+  if (!bar) throw new Error('no stub banner');
+  const bottoms = await page.locator('.screen--game .tool-bar .tool:not([data-off])').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().bottom));
+  expect(bottoms.length).toBeGreaterThanOrEqual(3);
+  for (const b of bottoms) expect(b).toBeLessThanOrEqual(bar.y + 0.5);
+};
+
+test.describe('FBIG banner during play (phase 2d §1.16, D-2d-15)', () => {
+  test('from 10 completed levels: the band from mount, the banner after the board entry; a Home banner stays into the board', async ({ page }) => {
+    await openGame(page, { persist: false, data: { save: seededSave(11, 10) } });
+    await expect.poll(() => count(page, 'loadBannerAdAsync')).toBe(1); // Home
+    await expect(stubBanner(page)).toBeVisible();
+    await stub(page, (s) => s.clearCalls());
+    await startLevel(page);
+    await expect(page.locator('.screen--game')).toHaveAttribute('data-banner', '');
+    expect((await appState(page)).session?.bannerBand).toBe(true);
+    // Banner to banner: no hide on the way in, and no second load inside the 60 s window.
+    expect(await count(page, 'hideBannerAdAsync')).toBe(0);
+    expect(await count(page, 'loadBannerAdAsync')).toBe(0);
+    await expect(stubBanner(page)).toBeVisible();
+    await helpersClearOfStubBanner(page);
+  });
+
+  test('a fresh banner on the game screen once the reload window has passed; Settings hides it and closing does not bring it back', async ({ page }) => {
+    test.setTimeout(90_000);
+    const t0 = Date.UTC(2026, 9, 7, 10, 0, 0);
+    await openGame(page, { persist: false, data: { save: seededSave(12, 11) } }, { clockAt: t0 });
+    await expect.poll(() => count(page, 'loadBannerAdAsync')).toBe(1);
+    // Home → Settings hides it (a modal), then 61 s later the board loads its own.
+    await sel.homeSettings(page).click();
+    await expect.poll(() => count(page, 'hideBannerAdAsync')).toBeGreaterThanOrEqual(1);
+    await closeOverlays(page);
+    await page.clock.fastForward(61_000);
+    await stub(page, (s) => s.clearCalls());
+    await startLevel(page);
+    await expect.poll(() => count(page, 'loadBannerAdAsync')).toBe(1); // at the entry's end
+    await expect(stubBanner(page)).toBeVisible();
+    await helpersClearOfStubBanner(page);
+    // Settings over the game hides it; closing it, even after the window, does not reload on this screen.
+    await page.locator('.screen--game .top-bar__btn--settings').click();
+    await expect(page.locator('[data-overlay="settings"]')).toBeVisible();
+    await expect.poll(() => count(page, 'hideBannerAdAsync')).toBeGreaterThanOrEqual(1);
+    await expect(stubBanner(page)).toHaveCount(0);
+    await page.clock.fastForward(61_000);
+    await closeOverlays(page);
+    await page.waitForTimeout(300);
+    expect(await count(page, 'loadBannerAdAsync')).toBe(1);
+    await expect(stubBanner(page)).toHaveCount(0);
+  });
+
+  test("the mouse's video: the banner is hidden before the rewarded ad shows", async ({ page }) => {
+    await openGame(page, { persist: false, data: { save: seededSave(12, 11) } });
+    await expect(stubBanner(page)).toBeVisible();
+    await startLevel(page);
+    await expect(stubBanner(page)).toBeVisible();
+    await stub(page, (s) => s.clearCalls());
+    await page.locator('.screen--game .tool--mouse').click();
+    await sel.watchVideo(page).click();
+    const marks = (): Promise<number> =>
+      page.evaluate(() => Array.from((window as TestWindow).__mewdoku?.state()?.cells ?? []).filter((v) => v === 1).length);
+    await expect.poll(marks, { timeout: 15_000 }).toBe(3);
+    const shows = await seqOf(page, 'ad.showAsync', 'rewarded');
+    const hides = await seqOf(page, 'hideBannerAdAsync');
+    expect(shows.length).toBe(1);
+    expect(hides.some((h) => h < (shows[0] ?? 0))).toBe(true);
+    await expect(stubBanner(page)).toHaveCount(0);
+  });
+
+  test('persistence from the victory into the next board (the interstitial gated by its cooldown): no hide, no reload', async ({ page }) => {
+    test.setTimeout(120_000);
+    const t0 = Date.UTC(2026, 9, 7, 10, 0, 0);
+    // lastAdAt now: the 90 s cooldown gates the next_level interstitial during this test.
+    await openGame(page, { persist: false, data: { save: seededSave(12, 11, (s) => ({ ...s, ads: { ...s.ads, lastAdAt: t0 } })) } }, { clockAt: t0 });
+    await expect.poll(() => count(page, 'loadBannerAdAsync')).toBe(1);
+    await startLevel(page);
+    await page.clock.fastForward(61_000);
+    await solve(page, { clock: true });
+    await page.clock.fastForward(5_000);
+    await toVictory(page);
+    await expect.poll(() => count(page, 'loadBannerAdAsync')).toBe(2); // the victory's own
+    await expect(stubBanner(page)).toBeVisible();
+    await stub(page, (s) => s.clearCalls());
+    await sel.victoryNext(page).click();
+    await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
+    expect(await count(page, 'ad.showAsync')).toBe(0); // gated
+    expect(await count(page, 'hideBannerAdAsync')).toBe(0); // banner to banner: kept
+    await expect(stubBanner(page)).toBeVisible();
+    await expect(page.locator('.screen--game')).toHaveAttribute('data-banner', '');
+  });
+
+  test('an interstitial between the victory and the next board: the banner is down before it shows', async ({ page }) => {
+    test.setTimeout(120_000);
+    const t0 = Date.UTC(2026, 9, 7, 10, 0, 0);
+    await openGame(page, { persist: false, data: { save: seededSave(12, 11) } }, { clockAt: t0 });
+    await expect.poll(() => count(page, 'loadBannerAdAsync')).toBe(1);
+    await startLevel(page);
+    await page.clock.fastForward(61_000); // past the session grace and the banner window
+    await solve(page, { clock: true });
+    await page.clock.fastForward(5_000);
+    await toVictory(page);
+    await expect(stubBanner(page)).toBeVisible();
+    await stub(page, (s) => s.clearCalls());
+    await sel.victoryNext(page).click();
+    await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
+    const shows = await seqOf(page, 'ad.showAsync', 'interstitial');
+    const hides = await seqOf(page, 'hideBannerAdAsync');
+    expect(shows.length).toBe(1);
+    expect(hides.some((h) => h < (shows[0] ?? 0))).toBe(true);
+  });
+
+  test('FB2B-1 kept: a slow load still in flight when Settings opens over the game is hidden when it lands', async ({ page }) => {
+    test.setTimeout(60_000);
+    await openGame(page, { persist: false, banner: { loadDelayMs: 6_000 }, data: { save: seededSave(12, 11) } });
+    await expect.poll(() => count(page, 'loadBannerAdAsync')).toBe(1);
+    await startLevel(page);
+    await page.locator('.screen--game .top-bar__btn--settings').click();
+    await expect(page.locator('[data-overlay="settings"]')).toBeVisible();
+    await page.waitForTimeout(7_000); // the load lands at about 6 s
+    expect(await count(page, 'hideBannerAdAsync')).toBeGreaterThanOrEqual(1);
+    await expect(stubBanner(page)).toHaveCount(0);
+  });
+});
+
+// ── Phase 2d §1.1: the game screen keeps the FB safe zone clear (the back disc moves; in Arabic the gear) ──
+
+for (const locale of ['en_US', 'ar_AR'] as const) {
+  for (const viewport of [
+    { width: 320, height: 568 },
+    { width: 390, height: 844 },
+  ] as const) {
+    test(`FBIG game screen at ${viewport.width} × ${viewport.height} (${locale}): no control in the top-left 64 × 64; the Level column clear of the discs`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await openGame(page, { locale, persist: false, data: { save: seededSave(12, 11) } });
+      await page.locator('.home__play').click();
+      await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
+      await page.waitForTimeout(300);
+      const r = await page.evaluate(() => {
+        const hits: string[] = [];
+        for (const el of Array.from(document.querySelectorAll<HTMLElement>('.screen--game button, .screen--game [role="button"], .screen--game a[href]'))) {
+          if (el.closest('[hidden], [inert], [data-off]')) continue;
+          const b = el.getBoundingClientRect();
+          if (b.width === 0 || b.height === 0) continue;
+          if (b.left < 64 && b.top < 64) hits.push(`${el.className} [${Math.round(b.left)},${Math.round(b.top)}]`);
+        }
+        const box = (q: string) => document.querySelector(q)?.getBoundingClientRect() ?? null;
+        return {
+          hits,
+          level: box('.screen--game .top-bar__text'),
+          score: box('.screen--game .top-bar--game .points-pill'),
+          back: box('.screen--game .top-bar__btn--home'),
+          gear: box('.screen--game .top-bar__btn--settings'),
+          rtl: document.documentElement.dir === 'rtl',
+        };
+      });
+      expect(r.hits).toEqual([]);
+      if (!r.level || !r.back || !r.gear) throw new Error('missing a bar part');
+      // The Level column never overlaps either disc (LTR: back at the left; RTL: mirrored).
+      const overlaps = (a: DOMRect, b: DOMRect): boolean => a.left < b.right - 0.5 && b.left < a.right - 0.5;
+      expect(overlaps(r.level, r.back)).toBe(false);
+      expect(overlaps(r.level, r.gear)).toBe(false);
+      if (r.score) {
+        expect(overlaps(r.score, r.back)).toBe(false);
+        expect(overlaps(r.score, r.gear)).toBe(false);
+      }
+    });
+  }
+}

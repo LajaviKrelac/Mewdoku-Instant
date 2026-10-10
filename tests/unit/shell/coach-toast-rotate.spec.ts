@@ -1,7 +1,7 @@
 // Owner: B (Phase 2b; was ui-shell). O8 coach (non-modal), O9 toast layer, O10 rotate notice.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cfg } from '../../../src/app/config';
-import { coachText, createCoach, LIVE_SETTLE_MS, placeCard, roundSpot, type CoachProps } from '../../../src/ui/overlays/coach';
+import { badgeReach, coachText, createCoach, LIVE_SETTLE_MS, placeCard, roundSpot, type CoachProps } from '../../../src/ui/overlays/coach';
 import { mountRotateNotice, shouldShowRotateNotice } from '../../../src/ui/overlays/rotate-notice';
 import { createToastLayer } from '../../../src/ui/overlays/toast';
 
@@ -95,6 +95,44 @@ describe('O8 tutorial coach', () => {
     // A target near the top and the bottom both: no room above, so below (clamped to the bottom slot).
     expect(placeCard([rect(0, 40, 50, 760)], 120, 844)).toBe(712);
     expect(coachText(6, null)).toBe('Place the last cat.');
+  });
+});
+
+describe('O8 coach, Phase 2d (critic C8)', () => {
+  const rect = (left: number, top: number, w: number, h: number): DOMRect => ({ left, top, width: w, height: h, right: left + w, bottom: top + h, x: left, y: top, toJSON: () => ({}) }) as DOMRect;
+
+  it('the bulb\'s round spotlight takes in its badge\'s far corner (55.8 px out at s = 1)', () => {
+    // The disc Ø 60.3 at (170.8, 693.4); its badge 28 × 21.3 at the centre + (26, −28.3).
+    const disc = rect(170.8, 693.4, 60.3, 60.3);
+    const base = roundSpot(disc, 874);
+    expect(base.rad).toBeCloseTo(30.15 + 4 + 18, 1); // the 2b radius: too small for the new badge
+    const spot = roundSpot(disc, 874, 55.8);
+    expect(spot.rad).toBeCloseTo(59.8, 1);
+    expect(spot.cx).toBeCloseTo(200.95, 1);
+  });
+
+  it('badgeReach measures the badge of the tool at the target; a hidden mouse ([data-off]) is never one', () => {
+    const tool = (cls: string, r: DOMRect, badge: DOMRect | null, off = false): HTMLElement => {
+      const b = document.createElement('button');
+      b.className = `tool ${cls}`;
+      b.toggleAttribute('data-off', off);
+      b.getBoundingClientRect = () => r;
+      if (badge) {
+        const s = document.createElement('span');
+        s.className = 'tool__badge';
+        s.getBoundingClientRect = () => badge;
+        b.append(s);
+      }
+      document.body.append(b);
+      return b;
+    };
+    const disc = rect(170.8, 693.4, 60.3, 60.3);
+    tool('tool--bulb', disc, rect(212.95, 684.6, 28, 21.3));
+    tool('tool--mouse', disc, rect(300, 600, 35, 21), true);
+    const reach = badgeReach(document, disc);
+    // Far corner (240.95, 684.6) from the centre (200.95, 723.55).
+    expect(reach).toBeCloseTo(Math.hypot(40, 38.95), 1);
+    expect(badgeReach(document, rect(0, 0, 10, 10))).toBe(0);
   });
 });
 

@@ -58,7 +58,6 @@ export const enCore = {
   // ── Game (S2) ──────────────────────────────────────────────────────────────
   'game.title.level': 'Level {level}',
   'game.title.daily': 'Daily · {date}',
-  'game.cats': '{placed} / {n}',
   'game.cats.a11y': '{placed} of {n} cats placed',
   'game.hearts.a11y': '{hearts} of {max} fish left',
   'game.chip.colours': '1 cat each colour',

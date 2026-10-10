@@ -32,7 +32,7 @@ export type IconSymbol =
   | 'icon-play-video'
   | 'icon-close'
   | 'icon-chevron'
-  /** @deprecated phase2d: the rule cards use ruleDiagram (rule-art.ts); removed at I-3. */
+  /** @deprecated phase2d: the drawing is gone (the rule cards draw ruleDiagram, rule-art.ts); the id stays for dev/** until I-3. */
   | 'icon-rule-colours'
   /** @deprecated phase2d: see icon-rule-colours. */
   | 'icon-rule-lines'
@@ -184,24 +184,6 @@ function iconSymbols(): string {
     icon24('icon-play-video', `<rect x="3" y="5.6" width="18" height="12.8" rx="3.2" ${LINE} ${SOFT_FILL}/><path d="M10.2 9.2v5.6l4.8-2.8z" fill="currentColor" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>`),
     icon24('icon-close', `<path d="M6.6 6.6 17.4 17.4M17.4 6.6 6.6 17.4" ${LINE} stroke-width="2.4"/>`),
     icon24('icon-chevron', `<path d="M9.4 5.8 15.6 12l-6.2 6.2" ${LINE} stroke-width="2.4"/>`),
-    // @deprecated phase2d: the rule cards draw ruleDiagram() (rule-art.ts); deleted once rule-chips.ts
-    // no longer uses these (look-spec §6.2; at I-3 at the latest).
-    icon24(
-      'icon-rule-colours',
-      `<rect x="2.6" y="4.6" width="9" height="14.8" rx="2.6" style="fill:var(--r7,#B9A7EC)"/><rect x="12.4" y="4.6" width="9" height="14.8" rx="2.6" style="fill:var(--r2,#F2DC7C)"/>` +
-        `<circle cx="7.1" cy="12" r="2.2" fill="currentColor"/><circle cx="16.9" cy="12" r="2.2" fill="currentColor"/>`,
-    ),
-    icon24(
-      'icon-rule-lines',
-      `<rect x="9" y="2.6" width="6" height="18.8" rx="2.2" style="fill:var(--r6,#9BBDF0)"/><rect x="2.6" y="9" width="18.8" height="6" rx="2.2" style="fill:var(--r6,#9BBDF0)" fill-opacity=".75"/>` +
-        `<circle cx="12" cy="12" r="2.4" fill="currentColor"/>`,
-    ),
-    icon24(
-      'icon-rule-space',
-      `<rect x="3.4" y="3.4" width="17.2" height="17.2" rx="4" style="fill:var(--r4,#8FD6B8)" fill-opacity=".55"/>` +
-        `<rect x="3.4" y="3.4" width="17.2" height="17.2" rx="4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="2.6 2.4"/>` +
-        `<circle cx="12" cy="12" r="2.6" fill="currentColor"/>`,
-    ),
   ].join('');
 }
 
@@ -251,8 +233,8 @@ const MOUSE = { head: '#B8B4BC', muzzle: '#D9D6DC', line: '#8E8994', eye: '#1E1A
  * - cat-head-flat: a plain cat-head silhouette, wide and soft, two pointed ears with softly rounded
  *   tips set a little outward, no notch, no face (D-2d-18), one shape in currentColor;
  * - art-flex: a flexed arm, a rounded upper arm and a raised fist, gold with a darker shade.
- * The three tool-* symbols share one square box (the art centred: kitty 99 × 98 %, bulb 62 × 97 %,
- * mouse 100 × 89 % of it), so the tool row draws each at one size (35 s px, look-spec §1.11).
+ * Each tool-* symbol's viewBox is its art's box, so the tool row draws it at the measured size
+ * (look-spec §1.11: kitty 34.7 × 34.3, bulb 21.3 × 34, mouse 35 × 31.3 at s = 1).
  */
 function art2d(): string {
   // One theme (look-spec §2.2): the full-colour art takes the token values directly (no var()).
@@ -265,7 +247,7 @@ function art2d(): string {
     sym('tool-kitty', '6 3 88 88', catHead({ eyes: 'wink', mouth: 'open' })),
     sym(
       'tool-bulb',
-      '0 0 100 100',
+      '18.5 1.5 63 97.5',
       `<path d="M50 2C67.7 2 81 15.4 81 33c0 11.5-5.8 19.8-12.6 26.4C64.6 63 63 66.8 63 71H37c0-4.2-1.6-8-5.4-11.6C24.8 52.8 19 44.5 19 33 19 15.4 32.3 2 50 2Z" fill="${gold}"/>` +
         `<path d="M20 38c2.5 10 10.5 16.5 15.1 24 1.4 2.6 1.9 5.4 1.9 9h26c0-3.6.5-6.4 1.9-9 4.6-7.5 12.6-14 15.1-24-6 12-17 18.5-30 18.5S26 50 20 38Z" fill="${fish}"/>` +
         `<ellipse cx="36" cy="22" rx="6.5" ry="11" transform="rotate(38 36 22)" fill="#fff" opacity=".75"/>` +
@@ -274,7 +256,7 @@ function art2d(): string {
     ),
     sym(
       'tool-mouse',
-      '0 0 100 100',
+      '1 4.5 98 88',
       ear(23) + ear(77) +
         `<ellipse cx="50" cy="60" rx="36" ry="33" fill="${MOUSE.head}"/><ellipse cx="50" cy="75" rx="21" ry="15.5" fill="${MOUSE.muzzle}"/>` +
         eye(36) + eye(64) +

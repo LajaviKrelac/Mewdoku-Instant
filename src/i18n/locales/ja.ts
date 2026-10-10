@@ -45,7 +45,6 @@ export const catalog: LocaleCatalog = {
   // ── Game ───────────────────────────────────────────────────────────────────
   'game.title.level': 'レベル {level}',
   'game.title.daily': 'デイリー · {date}',
-  'game.cats': '{placed} / {n}',
   'game.cats.a11y': '{n}匹中{placed}匹のねこを配置',
   'game.hearts.a11y': 'さかな残り{hearts}匹（全{max}匹）',
   'game.chip.colours': '各色にねこ1匹',

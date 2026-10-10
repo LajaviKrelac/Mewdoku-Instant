@@ -45,7 +45,6 @@ export const catalog: LocaleCatalog = {
   // ── Game ───────────────────────────────────────────────────────────────────
   'game.title.level': 'Уровень {level}',
   'game.title.daily': 'Пазл дня · {date}',
-  'game.cats': '{placed} / {n}',
   'game.cats.a11y': 'Кошек на поле: {placed} из {n}',
   'game.hearts.a11y': 'Осталось рыбок: {hearts} из {max}',
   'game.chip.colours': '1 кошка на цвет',

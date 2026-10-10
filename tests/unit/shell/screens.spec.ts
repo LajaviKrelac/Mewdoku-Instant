@@ -1,4 +1,5 @@
-// Owner: B (Phase 2b; was ui-shell). S0 boot, S1 home (daily card states, level button) and S2 game composition.
+// Owner: B (Phase 2b; was ui-shell); G3 (Phase 2d: the game bar, the stack variables, M, the start toast, the band).
+// S0 boot, S1 home (daily card states, level button) and S2 game composition.
 // ui-board's HUD and board are replaced by recording fakes: this checks the wiring, not their DOM.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -36,6 +37,9 @@ function fakeView(name: string, extra: Record<string, unknown> = {}) {
     };
   };
 }
+vi.mock('../../../src/ui/hud/game-bar', () => ({
+  createGameBar: fakeView('topbar', { fit: () => rec.calls.push(['topbar', 'fit', null]) }),
+}));
 vi.mock('../../../src/ui/hud/pills', () => ({
   createPills: fakeView('pills'),
   createPeriodPill: fakeView('periodPill'),
@@ -244,7 +248,7 @@ describe('S2 game', () => {
     const cb = callbacks();
     const game = createGameScreen(view(), cb);
     document.body.append(game.el);
-    expect(callsOf('topbar', 'create')[0]).toMatchObject({ title: 'Level 37', showHome: true, showSettings: true });
+    expect(callsOf('topbar', 'create')[0]).toMatchObject({ title: 'Level 37', showBack: true, settingsDot: false, points: null, final: false });
     expect(callsOf('board', 'setSlot').length).toBeGreaterThan(0);
     expect(game.el.style.getPropertyValue('--board')).toMatch(/px$/);
     rec.cb.get('board')?.tap?.(4);
@@ -252,7 +256,7 @@ describe('S2 game', () => {
     rec.cb.get('board')?.paint?.([1, 2], 'mark');
     rec.cb.get('board')?.bulb?.();
     rec.cb.get('tools')?.onPaw?.();
-    rec.cb.get('topbar')?.onHome?.();
+    rec.cb.get('topbar')?.onBack?.();
     rec.cb.get('topbar')?.onSettings?.();
     expect(cb.onTap).toHaveBeenCalledWith(4);
     expect(cb.onDoubleTap).toHaveBeenCalledWith(5);
@@ -289,21 +293,86 @@ describe('S2 game', () => {
     game.destroy();
   });
 
-  it('Phase 2c.1 §10.10: GameView.points (required since I-3) goes to the pills (null hides the counter); a POINTS event reaches the pills', () => {
+  it('Phase 2d §1.13: GameView.points goes to the game bar\'s Score column (null hides it), final at the win; a POINTS event reaches the bar', () => {
     const game = createGameScreen(view(), callbacks());
-    // Absent (a G1 view from before 2c.1) means hidden.
-    expect(callsOf('pills', 'create')[0]).toMatchObject({ points: null });
+    expect(callsOf('topbar', 'create')[0]).toMatchObject({ points: null });
     game.update(view({ points: 1248 }));
-    expect(lastOf('pills', 'update')).toMatchObject({ points: 1248, catsPlaced: 2, n: 5 });
-    game.update(view({ points: null }));
-    expect(lastOf('pills', 'update')).toMatchObject({ points: null });
+    expect(lastOf('topbar', 'update')).toMatchObject({ points: 1248, final: false });
     game.update(view({ points: 0 }));
-    expect(lastOf('pills', 'update')).toMatchObject({ points: 0 });
+    expect(lastOf('topbar', 'update')).toMatchObject({ points: 0 });
+    game.update(view({ points: 4000, catsPlaced: 5 }));
+    expect(lastOf('topbar', 'update')).toMatchObject({ points: 4000, final: true });
+    // The pills get the board's colours and found regions for the heads (§1.6).
+    game.update(view({ board: { ...view().board, regionsDone: 0b101 } }));
+    expect(lastOf('pills', 'update')).toMatchObject({ regionsDone: 0b101, boardId: 'L37', n: 5 });
     const ev = { type: 'POINTS', cell: 7, gained: 672, total: 1248, streak: 2 } as const;
     game.playEvent(ev);
+    expect(callsOf('topbar', 'playEvent')).toEqual([ev]);
     expect(callsOf('pills', 'playEvent')).toEqual([ev]);
     expect(callsOf('board', 'playEvent')).toEqual([ev]);
     game.destroy();
+  });
+
+  it('Phase 2d §4.7: publishes the stack as CSS variables, the band on <html> while mounted (§1.16), the pulse and the dot', () => {
+    const game = createGameScreen(view({ bannerBand: true, settingsDot: true, pulse: 'bulb', videoRefill: true, mouse: { shown: true, enabled: true } }), callbacks());
+    document.body.append(game.el);
+    for (const k of ['--s', '--col-w', '--y-top', '--bar', '--pills', '--rules', '--chips', '--tools', '--g-bp', '--g-pr', '--g-rb', '--g-bt', '--g-tb', '--g-bottom', '--band', '--board', '--pulse-ms', '--pulse-scale', '--fb-s', '--fb-e']) {
+      expect(game.el.style.getPropertyValue(k), k).not.toBe('');
+    }
+    expect(game.el.style.getPropertyValue('--pulse-ms')).toBe('1500ms');
+    expect(game.el.hasAttribute('data-banner')).toBe(true);
+    const root = document.documentElement;
+    expect(root.getAttribute('data-play-band')).toBe('1');
+    expect(parseFloat(root.style.getPropertyValue('--play-band'))).toBeGreaterThan(50);
+    expect(root.style.getPropertyValue('--play-band-bottom')).toMatch(/px$/);
+    expect(callsOf('topbar', 'create')[0]).toMatchObject({ settingsDot: true });
+    expect(callsOf('tools', 'create')[0]).toMatchObject({ pulse: 'bulb', videoRefill: true, mouse: { shown: true, enabled: true } });
+    // Without the band: no reserve, and the attribute says so ('0').
+    game.update(view({ bannerBand: false }));
+    expect(game.el.hasAttribute('data-banner')).toBe(false);
+    expect(root.getAttribute('data-play-band')).toBe('0');
+    expect(root.style.getPropertyValue('--play-band')).toBe('0px');
+    // A new game screen publishes before the old one goes; the old one's destroy leaves it alone.
+    const next = createGameScreen(view({ bannerBand: true }), callbacks());
+    game.destroy();
+    expect(root.getAttribute('data-play-band')).toBe('1');
+    next.destroy();
+    expect(root.hasAttribute('data-play-band')).toBe(false);
+    expect(root.style.getPropertyValue('--play-band')).toBe('');
+  });
+
+  it('Phase 2d §1.12: the mouse button and M call onMouse only while the mouse is shown and enabled', () => {
+    const cb: GameScreenCallbacks = { ...callbacks(), onMouse: vi.fn() };
+    const game = createGameScreen(view(), cb);
+    document.body.append(game.el);
+    const key = (k: string): boolean => document.body.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+    rec.cb.get('tools')?.onMouse?.();
+    expect(key('m')).toBe(false); // handled (preventDefault) even when it does nothing
+    expect(cb.onMouse).not.toHaveBeenCalled();
+    game.update(view({ mouse: { shown: true, enabled: false } }));
+    key('m');
+    expect(cb.onMouse).not.toHaveBeenCalled();
+    game.update(view({ mouse: { shown: true, enabled: true } }));
+    key('M');
+    rec.cb.get('tools')?.onMouse?.();
+    rec.cb.get('board')?.mouse?.();
+    expect(cb.onMouse).toHaveBeenCalledTimes(3);
+    game.destroy();
+  });
+
+  it('Phase 2d §1.14: playStartToast shows the toast in the column\'s fx layer, one at a time', () => {
+    const game = createGameScreen(view(), callbacks());
+    document.body.append(game.el);
+    game.playStartToast?.('hard');
+    const toast = q(game.el, '.game__col .game__fx .start-toast');
+    expect(toast.dataset.kind).toBe('hard');
+    expect(toast.getAttribute('aria-hidden')).toBe('true');
+    expect(toast.textContent).toBe("A hard one. You've got this!");
+    game.playStartToast?.('retry');
+    expect(game.el.querySelectorAll('.start-toast')).toHaveLength(1);
+    expect(q(game.el, '.start-toast').textContent).toBe('Fresh start. You can do it!');
+    game.destroy();
+    expect(game.el.querySelector('.start-toast')).toBeNull();
   });
 
   it('H / K work anywhere on the screen while no modal is open; never twice, never from an overlay (SPEC-01, A11Y-8)', () => {

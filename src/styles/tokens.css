@@ -99,7 +99,7 @@
   /* ── Page art and side fill ──────────────────────────────────────────── */
   --page-art: none; /* an event's tileable pattern (phase2b §4.4) */
   --side-dot-a: rgba(229, 112, 16, 0.1); /* desktop side pattern */
-  --side-dot-b: rgba(47, 42, 53, 0.06);
+  --side-dot-b: rgba(147, 90, 90, 0.06);
 
   /* ── Type (02 §17.6, phase2b §6.6): one OFL display face + system UI ─── */
   --font-display: 'Mewdoku Display', 'Fredoka', ui-rounded, system-ui, sans-serif;
@@ -133,7 +133,7 @@
   --shadow-3: 0 18px 50px rgba(var(--scrim-rgb), 0.28);
   --shadow-card: 0 2px 0 rgba(var(--ink-rgb), 0.05), 0 10px 26px rgba(var(--ink-rgb), 0.08); /* sheets (not the board, 2d) */
   /* Phase 2d (look-spec §1.2, measured fits): the round buttons' warm shadow (× s on the game screen
-     through its --s) and the heads pill's faint one. */
+     through its --s; see the .screen--game block below) and the heads pill's faint one. */
   --shadow-btn: 0 calc(3px * var(--s, 1)) calc(7px * var(--s, 1)) calc(-2px * var(--s, 1)) rgba(var(--warm-rgb), 0.25);
   --shadow-pill: 0 2px 6px rgba(var(--ink-rgb), 0.06);
 
@@ -163,6 +163,12 @@
   --ease-drop: cubic-bezier(0.2, 1.4, 0.4, 1);
   --ease-out: cubic-bezier(0.22, 0.8, 0.3, 1);
   --hint-dim: 0.45; /* 1 − layout.hintDim (dimmed 55 %) */
+}
+
+/* A custom property's var() resolves where it is declared: re-declared where the game screen sets
+   --s (look-spec §4.7), so the round buttons' shadow scales with the screen (look-spec §1.2). */
+.screen--game {
+  --shadow-btn: 0 calc(3px * var(--s, 1)) calc(7px * var(--s, 1)) calc(-2px * var(--s, 1)) rgba(var(--warm-rgb), 0.25);
 }
 
 /* Per-script display stacks (phase2b §6.6): no Fredoka for these scripts, so system faces at 700.

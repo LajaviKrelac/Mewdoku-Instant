@@ -44,7 +44,6 @@ export const catalog: LocaleCatalog = {
   // ── Game ───────────────────────────────────────────────────────────────────
   'game.title.level': 'Màn {level}',
   'game.title.daily': 'Mỗi ngày · {date}',
-  'game.cats': '{placed} / {n}',
   'game.cats.a11y': 'Đã đặt {placed} trên {n} mèo',
   'game.hearts.a11y': 'Còn {hearts} trên {max} cá',
   'game.chip.colours': 'Mỗi màu 1 mèo',

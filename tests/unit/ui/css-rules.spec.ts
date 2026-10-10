@@ -6,6 +6,8 @@
 // - tokens.css stays in sync with config, the event data and the event art.
 // Phase 2d L0 (look-spec §3.2 item 1): the "Phase 2c.1: the pills row" block and the .tool__badge
 // check moved to hud-css.spec.ts (G3); this file is G2's in Phase 2d.
+// Phase 2d (G2, look-spec §1.2, §1.8, §1.10, §2.3): the measured tokens, the retired 2c.1 values,
+// the board card without a shadow, the X as filled white bars with its edge only under [data-patterns].
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,7 +15,7 @@ import { describe, expect, it } from 'vitest';
 import { cfg } from '../../../src/app/config';
 import { en } from '../../../src/i18n/en';
 import { eventPatternUrl } from '../../../src/ui/art/event-art';
-import { EVENT_THEME_TOKENS } from '../../../src/ui/art/palette';
+import { EVENT_THEME_TOKENS, PALETTE } from '../../../src/ui/art/palette';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const STYLES = join(ROOT, 'src/styles');
@@ -79,20 +81,37 @@ describe('colour literals live only in tokens.css (phase2b §1.3, §1.12)', () =
     expect(colourLiterals(read(join(STYLES, file))), file).toEqual([]);
   });
 
-  it('tokens.css defines the §1.4 colour tokens', () => {
+  it('tokens.css defines the look-spec §1.2 colour tokens', () => {
     const css = read(join(STYLES, 'tokens.css'));
     const want: Record<string, string> = {
-      page: '#faf6f0', 'page-2': '#f1eadf', card: '#ffffff', ink: '#2f2a35', 'ink-2': '#665e6c', 'ink-3': '#b2aab4',
+      page: '#f7f2ef', 'page-2': '#f2ebe6', card: '#ffffff', ink: '#935a5a', 'ink-2': '#935a5a', 'ink-3': '#cdbab6',
+      'ink-icon': '#996767', 'ink-deep': '#2f2a35',
       accent: '#e57010', 'accent-deep': '#b4560a', 'accent-title': '#d2620c', 'accent-text': '#a84b08', 'accent-soft': '#fde9d6',
       focus: '#b9520a', 'title-on-dark': '#e57010', 'tap-text': '#ffd45c', stage: '#2a2430', gold: '#ffc23d',
-      // Phase 2c: --life-empty replaces the 2b --heart / --heart-empty / --heart-empty-line tokens.
-      fish: '#ffb81f', 'fish-deep': '#c98200', 'fish-hi': '#ffe08a', 'life-empty': '#ede8e2', danger: '#d33a4a', wrong: '#a3193a', hard: '#6c3fb5',
+      fish: '#f1aa22', 'fish-deep': '#d47e18', 'fish-hi': '#fed95d', 'life-empty': '#ede8e2', danger: '#d33a4a', wrong: '#6e0e25', hard: '#6c3fb5',
+      badge: '#dc2f2f', 'badge-video': '#03a84a', dot: '#f34f4f', 'toast-fill': '#fef0c7', 'toast-line': '#dd9045',
+      'rule-card': '#fbf4ee', 'rule-tile': '#ddbeaa', 'rule-tile-2': '#eee1d7', 'rule-mark': '#af6d44',
     };
     for (const [name, hex] of Object.entries(want)) expect(new RegExp(`--${name}:\\s*${hex};`, 'i').test(css), `--${name}`).toBe(true);
     expect(css).toMatch(/--scrim:\s*rgba\(28, 23, 32, 0\.82\);/);
     expect(css).toMatch(/--glow:\s*rgba\(255, 194, 61, 0\.65\);/);
-    for (const rgb of ['ink-rgb: 47, 42, 53', 'accent-rgb: 229, 112, 16', 'gold-rgb: 255, 194, 61']) expect(css).toContain(`--${rgb};`);
+    for (const rgb of ['ink-rgb: 147, 90, 90', 'page-rgb: 247, 242, 239', 'warm-rgb: 239, 134, 39', 'pulse-rgb: 255, 165, 30', 'accent-rgb: 229, 112, 16', 'gold-rgb: 255, 194, 61']) expect(css).toContain(`--${rgb};`);
+    expect(css).toMatch(/--line:\s*rgba\(147, 90, 90, 0\.14\);/);
+    expect(css).toMatch(/--line-2:\s*rgba\(147, 90, 90, 0\.22\);/);
+    expect(css).toContain('--shadow-btn: 0 calc(3px * var(--s, 1)) calc(7px * var(--s, 1)) calc(-2px * var(--s, 1)) rgba(var(--warm-rgb), 0.25);');
+    expect(css).toContain('--shadow-pill: 0 2px 6px rgba(var(--ink-rgb), 0.06);');
+    // re-declared where the game screen sets --s, so it scales with s there (var() resolves where declared)
+    expect(/\.screen--game\s*\{([^}]*)\}/.exec(stripComments(css))?.[1]).toContain('--shadow-btn: 0 calc(3px * var(--s, 1))');
+    // the region palette equals PALETTE (look-spec §1.9)
+    PALETTE.forEach((hex, i) => expect(css, `--r${i}`).toMatch(new RegExp(`--r${i}:\\s*${hex.toLowerCase()};`)));
     for (const gone of ['--heart:', '--heart-empty:', '--heart-empty-line:', '--t-crack:']) expect(css, gone).not.toContain(gone);
+  });
+
+  it('the safe-area tokens take the dev override (look-spec §1.1): max(env(), var(--dev-safe-*)), never set in src', () => {
+    const css = read(join(STYLES, 'tokens.css'));
+    expect(css).toContain('--safe-top: max(env(safe-area-inset-top, 0px), var(--dev-safe-top, 0px));');
+    expect(css).toContain('--safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--dev-safe-bottom, 0px));');
+    for (const f of cssFiles) expect(stripComments(read(join(STYLES, f))), f).not.toMatch(/--dev-safe-(top|bottom)\s*:/);
   });
 });
 
@@ -189,6 +208,17 @@ const RETIRED = [
   'rgba(242,154,74', // ginger side-pattern dots
 ];
 
+/**
+ * The 2c.1 values Phase 2d retires (look-spec §2.3), checked in src/ and index.html: the page, the
+ * secondary ink, the crimson wrong X, the fish, the 2c.1 palette, the old line tint and the event motif
+ * colours before they were lightened. #2F2A35 lives on as --ink-deep, so it is not listed.
+ */
+const RETIRED_2D = [
+  '#FAF6F0', '#F1EADF', '#665E6C', '#A3193A', '#FFB81F', '#C98200', '#FFE08A',
+  '#F49AAE', '#F7B98B', '#F2DC7C', '#BFDB86', '#8FD6B8', '#7CC6D6', '#9BBDF0', '#B9A7EC', '#E3A6DF', '#C7A58C', '#9AA9BC', '#A3B57F',
+  'rgba(47,42,53', '#FCE3CA', '#E0E8F3', '#FCE0E6',
+];
+
 describe('retired-look guard (phase2b §1.8, §1.12)', () => {
   const files = walk(join(ROOT, 'src'), ['.ts', '.css', '.html', '.json']);
 
@@ -198,6 +228,15 @@ describe('retired-look guard (phase2b §1.8, §1.12)', () => {
     for (const f of files) {
       const text = read(f).replace(/\s+/g, '').toLowerCase();
       for (const v of RETIRED) if (text.includes(v.toLowerCase())) hits.push(`${relative(ROOT, f)}: ${v}`);
+    }
+    expect(hits).toEqual([]);
+  });
+
+  it('no 2c.1 value that Phase 2d retires appears in src/ or index.html (look-spec §2.3)', () => {
+    const hits: string[] = [];
+    for (const f of [...files, join(ROOT, 'index.html')]) {
+      const text = read(f).replace(/\s+/g, '').toLowerCase();
+      for (const v of RETIRED_2D) if (text.includes(v.toLowerCase())) hits.push(`${relative(ROOT, f)}: ${v}`);
     }
     expect(hits).toEqual([]);
   });
@@ -212,9 +251,14 @@ describe('retired-look guard (phase2b §1.8, §1.12)', () => {
     expect(hits).toEqual([]);
     const page = /--page:\s*(#[0-9a-fA-F]{6})/.exec(read(join(STYLES, 'tokens.css')))?.[1]?.toLowerCase();
     expect(page).toBeTruthy();
-    for (const f of [join(ROOT, 'index.html'), ...walk(join(ROOT, 'dev'), ['.html'])]) {
+    expect(page).toBe('#f7f2ef');
+    expect(/<meta name="theme-color" content="(#[0-9a-fA-F]{6})"/.exec(read(join(ROOT, 'index.html')))?.[1]?.toLowerCase()).toBe(page);
+    // The dev harness pages are the lead's (look-spec §3.1): until requests-G2.md R1 lands they may still
+    // carry the 2c.1 page colour. Remove PENDING_R1 once it is done.
+    const PENDING_R1 = '#faf6f0';
+    for (const f of walk(join(ROOT, 'dev'), ['.html'])) {
       const meta = /<meta name="theme-color" content="(#[0-9a-fA-F]{6})"/.exec(read(f))?.[1]?.toLowerCase();
-      if (meta) expect(meta, relative(ROOT, f)).toBe(page);
+      if (meta) expect([page, PENDING_R1], relative(ROOT, f)).toContain(meta);
     }
   });
 
@@ -227,11 +271,44 @@ describe('retired-look guard (phase2b §1.8, §1.12)', () => {
     for (const [key, value] of Object.entries(en)) expect(/ginger/i.test(String(value)), key).toBe(false);
   });
 
-  it('the dark-ink X is gone: the board X is white over its edge', () => {
+  it('the X is two filled white bars; its edge shows only with Colour patterns on; no stroke draw-in (look-spec §1.10)', () => {
     expect(cfg.layout.markOpacity).toBe(1);
     const board = stripComments(read(join(STYLES, 'board.css')));
-    expect(/\}\s*\.cell__x\s*\{([^}]*)\}/.exec(board)?.[1]).toMatch(/stroke:\s*#fff;/);
-    expect(/\}\s*\.cell__xe\s*\{([^}]*)\}/.exec(board)?.[1]).toMatch(/stroke:\s*var\(--xe/);
+    expect(/\}\s*\.cell__x\s*\{([^}]*)\}/.exec(board)?.[1]).toMatch(/fill:\s*#fff;/);
+    expect(/\}\s*\.cell__xe\s*\{([^}]*)\}/.exec(board)?.[1]).toMatch(/fill:\s*var\(--xe/);
+    // the edge's only "show" rules sit under [data-patterns]
+    for (const m of board.matchAll(/([^{}]*\.cell__xe[^{}]*)\{([^{}]*)\}/g)) {
+      if (!/display:\s*inline/.test(m[2] ?? '')) continue;
+      for (const sel of (m[1] ?? '').split(',').filter((x) => x.includes('.cell__xe'))) expect(sel, sel.trim()).toContain('[data-patterns]');
+    }
+    for (const gone of ['stroke-dasharray', 'xe-draw', '--x-len', 'fx-draw']) expect(board, gone).not.toContain(gone);
+    // the pop (fx.markPopMs) and the wrong X filled in --wrong
+    expect(board).toMatch(/\.cell\.fx-pop \.cell__xg\s*\{[^}]*animation:\s*x-pop var\(--x-pop-ms, 140ms\)/);
+    expect(cfg.fx.markPopMs).toBe(140);
+    expect(/\.cell\[data-s='w'\] \.cell__x\s*\{([^}]*)\}/.exec(board)?.[1]).toMatch(/fill:\s*var\(--wrong\)/);
+    expect(/\.cell__pat\s*\{([^}]*)\}/.exec(board)?.[1]).toMatch(/color:\s*var\(--ink-deep\)/);
+  });
+
+  it('the board card has no shadow and no border (look-spec §1.8)', () => {
+    const board = stripComments(read(join(STYLES, 'board.css')));
+    for (const m of board.matchAll(/([^{}]*)\{([^{}]*)\}/g)) {
+      const sels = (m[1] ?? '').split(',').map((x) => x.trim());
+      if (!sels.includes('.board')) continue;
+      expect(m[2], '.board').not.toMatch(/box-shadow|border\s*:/);
+    }
+    expect(board).toMatch(/border-radius:\s*var\(--board-radius/);
+  });
+
+  it('.btn--icon is the measured white disc: --shadow-btn, --ink-icon, Ø 37 with a 44 px hit area (look-spec §1.4, §2.2)', () => {
+    const base = stripComments(read(join(STYLES, 'base.css')));
+    const rule = /\.btn--icon\s*\{([^}]*)\}/.exec(base)?.[1] ?? '';
+    expect(rule).toMatch(/background:\s*var\(--card\)/);
+    expect(rule).toMatch(/box-shadow:\s*var\(--shadow-btn\)/);
+    expect(rule).toMatch(/color:\s*var\(--ink-icon\)/);
+    expect(rule).toMatch(/width:\s*37px/);
+    const hit = /\.btn--icon::before\s*\{([^}]*)\}/.exec(base)?.[1] ?? '';
+    expect(hit).toMatch(/width:\s*max\(100%, 44px\)/);
+    expect(hit).toMatch(/height:\s*max\(100%, 44px\)/);
   });
 });
 

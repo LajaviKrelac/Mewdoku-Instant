@@ -258,7 +258,10 @@ describe('game screen: win-flow hooks and event mode (phase2b §2.2, §4.4)', ()
     const v = gameView({ mode: 'event', level: null, event: { def: lantern, index: 12 } });
     expect(gameTitle(v)).toBe('Lantern Walk · 13');
     const g = createGameScreen(v, gameCb());
-    expect(q(g.el, '.top-bar__text').textContent).toBe('Lantern Walk · 13');
+    // Phase 2d §1.4: the game bar's Level column splits the title (label / value); the h1's name is the whole title.
+    expect(q(g.el, '.top-bar__text').getAttribute('aria-label')).toBe('Lantern Walk · 13');
+    expect(q(g.el, '.top-bar__text .top-bar__name').textContent).toBe('Lantern Walk');
+    expect(q(g.el, '.top-bar__text .top-bar__suffix').textContent).toBe('13');
     expect(g.el.dataset.eventTheme).toBe(lantern.id);
     expect(Array.from(g.el.querySelectorAll('use.cell__acc')).map((u) => u.getAttribute('href'))).toEqual(Array(4).fill('#acc-lantern'));
     g.update(gameView());

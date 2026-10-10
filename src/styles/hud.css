@@ -97,6 +97,7 @@
   left: 75.4%;
   width: 30.7%;
   height: 30.7%;
+  margin: 0;
   border-radius: 50%;
   background: var(--dot);
   pointer-events: none;
@@ -110,21 +111,27 @@
   height: var(--bar);
   margin-top: var(--y-top);
   padding: 0;
-  color: var(--ink);
 }
 
+/* The discs and the span between them sit at their static position (the inline start) moved by
+   margin-inline-start, so the bar mirrors in RTL on its own. The FB safe zone (§1.1): the disc at the
+   physical left moves right by --fb-s (LTR: back) or --fb-e (RTL: gear), set by game-screen.ts. */
 .top-bar--game .top-bar__btn {
   position: absolute;
   top: calc(var(--s) * 7.6px);
-  left: calc(var(--s) * 351.6px);
   width: calc(var(--s) * 36.8px);
   height: calc(var(--s) * 36.8px);
+  margin-inline-start: calc(var(--s) * 351.6px - var(--fb-e, 0px));
+}
+
+/* The round buttons' warm shadow (--shadow-btn's values) scaled by s: the game bar's and the helpers' discs. */
+.top-bar--game .top-bar__btn,
+.tool__disc {
   box-shadow: 0 calc(var(--s) * 3px) calc(var(--s) * 7px) calc(var(--s) * -2px) rgba(var(--warm-rgb), 0.25);
 }
 
-/* The FB safe zone (§1.1): --fb-l moves the disc at the physical left out of the top-left 64 × 64. */
 .top-bar--game .top-bar__btn--back {
-  left: calc(var(--s) * 13.1px + var(--fb-l, 0px));
+  margin-inline-start: calc(var(--s) * 13.1px + var(--fb-s, 0px));
 }
 
 .top-bar--game .btn__icon {
@@ -138,14 +145,14 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  left: calc(var(--s) * 49.9px + 4px + var(--fb-l, 0px));
-  right: calc(var(--s) * 50.4px + 4px);
   display: flex;
   justify-content: center;
+  width: calc(var(--s) * 301.7px - 8px - var(--fb-s, 0px) - var(--fb-e, 0px));
+  margin-inline-start: calc(var(--s) * 49.9px + 4px + var(--fb-s, 0px));
+  pointer-events: none; /* no controls; the discs' 44 px hit areas may reach under it */
 }
 
-.top-bar--game .top-bar__text,
-.top-bar--game .points-pill {
+.top-bar__mid > * {
   display: flex;
   flex: 0 1 auto;
   flex-direction: column;
@@ -153,6 +160,8 @@
   min-width: calc(var(--s) * 102px);
   overflow: visible;
   padding-top: calc(var(--s) * 1.2px);
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
   font-size: calc(var(--s) * 1.206rem);
   line-height: 1;
   white-space: nowrap;
@@ -167,14 +176,15 @@
   text-overflow: ellipsis;
 }
 
-/* "96" / "0" (22 px): heavier through a 0.04 em stroke in their own colour (D-2d-7); never cut. */
-.top-bar__val,
-.points-pill__val {
+/* "96" / "0" (22 px; the Score's box is a .top-bar__val too): heavier through a 0.04 em stroke in
+   their own colour (D-2d-7); never cut. The fit steps scale them by --vf (critic C5: 0.86, 0.74). */
+.top-bar__val {
   position: relative;
   display: flex;
   align-items: center;
-  margin-top: calc(var(--s) * 1.7px);
-  font-size: calc(var(--s) * 1.375rem);
+  margin-top: calc(var(--s) * 0.6px);
+  font-size: calc(var(--s) * 1.375rem * var(--vf, 1));
+  line-height: 1.1;
 }
 
 .top-bar--game .top-bar__suffix,
@@ -186,14 +196,12 @@
   white-space: nowrap;
 }
 
-.top-bar--game[data-fit='1'] .top-bar__val,
-.top-bar--game[data-fit='1'] .points-pill__val {
-  font-size: calc(var(--s) * 1.183rem);
+[data-fit='1'] {
+  --vf: 0.86;
 }
 
-.top-bar--game[data-fit='2'] .top-bar__val,
-.top-bar--game[data-fit='2'] .points-pill__val {
-  font-size: calc(var(--s) * 1.0175rem);
+[data-fit='2'] {
+  --vf: 0.74;
 }
 
 /* The Hard badge after the value, 4 s apart (floors: critic C19). */
@@ -205,10 +213,14 @@
   font-size: max(10px, calc(var(--s) * 0.6875rem));
 }
 
-/* The Score number: tabular digits, the roll box of screens.css; --accent-text at the win (§1.13). */
+/* The Score number: tabular digits in the roll box of screens.css, on the Level value's line; --accent-text at the win (§1.13). */
+.points-pill__val .points-pill__count {
+  height: 1.1em;
+  line-height: 1.1;
+}
+
 .points-pill {
   position: relative;
-  color: var(--ink);
   --bump-scale: 1.12;
 }
 
@@ -216,14 +228,15 @@
   color: var(--accent-text);
 }
 
-/* The "+576" chip (§1.13): at the number's inline end, vertically centred on it; game-bar.ts moves it
-   back (--chip-dx) when it would reach the gear (critic C9). */
+/* The "+576" chip (§1.13): at the number's inline end (its static inline start + the box's width),
+   vertically centred on it; game-bar.ts moves it back (--chip-dx < 0) when it would reach the gear
+   (critic C9). Mirrors in RTL on its own. */
 .points-pill__label {
   position: absolute;
   top: 50%;
-  left: calc(100% + var(--s) * 4px + var(--chip-dx, 0px));
   z-index: 2;
   margin-top: calc(var(--s) * -9px);
+  margin-inline-start: calc(100% + var(--s) * 4px + var(--chip-dx, 0px));
   pointer-events: none;
 }
 
@@ -371,7 +384,6 @@
   padding-inline-end: calc(var(--s) * 6px);
   border-radius: calc(var(--s) * 5.6px);
   background: var(--rule-card);
-  color: var(--ink);
   font-family: var(--font-display);
   font-weight: var(--display-weight);
   font-size: max(10px, calc(var(--s) * 0.725rem));
@@ -382,14 +394,15 @@
   margin-inline-start: calc(var(--s) * 7px);
 }
 
-/* The 3 × 3 diagram: 32.7 square, 5.6 from the card's inline start, vertically centred. */
+/* The 3 × 3 diagram: 32.7 square, 5.6 from the card's inline start (its static position is after the
+   46 s padding, so −40.4 s; mirrors in RTL), vertically centred. */
 .chip__art {
   position: absolute;
   top: 50%;
-  left: calc(var(--s) * 5.6px);
   width: calc(var(--s) * 32.7px);
   height: calc(var(--s) * 32.7px);
   margin-top: calc(var(--s) * -16.35px);
+  margin-inline-start: calc(var(--s) * -40.4px);
 }
 
 .chip__text {
@@ -408,7 +421,7 @@
 /* Compact (s < 0.85): diagrams only, centred; the screen-reader text stays. */
 .rule-chips[data-compact] .chip__art {
   left: 50%;
-  margin-left: calc(var(--s) * -16.35px);
+  margin: calc(var(--s) * -16.35px) 0 0 calc(var(--s) * -16.35px);
 }
 
 .rule-chips[data-compact] .chip__text {
@@ -433,7 +446,6 @@
   padding: 0;
   border: 0;
   background: none;
-  color: inherit;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
@@ -447,7 +459,11 @@
   width: max(100%, 44px);
   height: max(100%, 44px);
   transform: translate(-50%, -50%);
-  border-radius: 50%;
+}
+
+/* The game bar's discs: the same square 44 × 44 area (base.css draws it round; its corners count too). */
+.top-bar--game .top-bar__btn::before {
+  border-radius: 0;
 }
 
 .tool__disc {
@@ -459,7 +475,6 @@
   height: 100%;
   border-radius: 50%;
   background: var(--card);
-  box-shadow: 0 calc(var(--s) * 3px) calc(var(--s) * 7px) calc(var(--s) * -2px) rgba(var(--warm-rgb), 0.25);
   transition: transform 90ms ease;
 }
 

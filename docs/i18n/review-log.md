@@ -84,6 +84,27 @@ Points a reviewer should check first:
 | `th` | no full stop, like the other Thai screen-reader lines |
 | `tr`, `hi` | the same noun for one and many (puan, पॉइंट) |
 
+## Phase 2d redraft: the game screen's new HUD (2026-10-10, workstream G3)
+
+The 16 catalogues were redrafted on 2026-10-10 by Claude (AI) for [`docs/phase2d/look-spec.md`](../phase2d/look-spec.md) Appendix A, again from our own English copy, `meta.ts` and the [glossary](glossary.md) only (its new "Score", "The mouse" and "Level-start toast" rules and the new colour names). Every change below is an **unreviewed AI draft**; the release still ships English only.
+
+- **New, in a block headed "Phase 2d" at the end of each catalogue:** `game.score` (the top bar's label over the level points), `common.settings.new` (the gear's name while its red dot shows), `game.tool.mouse` and `game.tool.mouse.a11y` (the third helper), `game.tool.video.a11y` (a helper at 0 that a video can refill), `a11y.mouse.*` (every plural form the language needs), `rewarded.title.mouse`, `rewarded.video.mouse`, `rewarded.free.mouse`, `rewarded.countdown.mouse` (the pop-up before the mouse helps), `mouse.unavailable`, `toast.start.level`, `toast.start.hard`, `toast.start.retry` (the level-start toast).
+- **Changed in place:** `color.0`, `color.2`, `color.7`, `color.11` (Coral, Mustard, Violet, Pink: the hues changed, see the glossary §3); `howto.helpers` (now names the kitty, the bulb and the mouse); `settings.patterns.note` (Colour patterns also outline the crosses).
+- **Removed from all 17 catalogues, `meta.ts` and `drafted-from.json`:** `game.cats` (the "3 / 8" counter; the heads pill replaced it, and `game.cats.a11y` stays as its name).
+- `SAME_AS_ENGLISH`: `es` and `pt-BR` now list `color.0` ("Coral" is the local word); `id` no longer lists `color.2` and `color.7` (Mustar, Ungu).
+
+Points a reviewer should check first:
+
+| Locale | Check |
+|---|---|
+| all | the mouse is an animal (never the computer device); the start-toast lines stay short, encouraging and free of numbers; "Score" is the level points, never fish |
+| `de`, `fr`, `es`, `tr` | the word for the computer mouse is the same as the animal's (Maus, souris, ratón, fare): the copy must read as the animal (es uses the diminutive *ratoncito*) |
+| `it` | *Topo* rather than *Topolino* (a well-known cartoon name) |
+| `ru`, `pl` | `game.tool.mouse.a11y` and `rewarded.video.mouse` are written for 3 tiles («клетки», «pola»); re-check if `cfg.mouse.cells` changes |
+| `ar` | six forms of `a11y.mouse`; zero/one/two leave the number out; `{count}` tiles with *few* (خانات) for 3 |
+| `ja`, `ko`, `zh-Hans` | counters for tiles (マス, 칸, 个格子) in the mouse lines; the toast lines fit 32 display columns |
+| `id`, `vi` | the new colour names (Ungu, Merah muda; Tím, Hồng) are distinct from Orchid (Anggrek, Phong lan) |
+
 ## Known limits of the drafts
 
 - Event names, product names and praise words are our own and were translated for meaning and tone, not literally; reviewers may propose better local names (they must stay our own, never another game's).

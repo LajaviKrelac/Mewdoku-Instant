@@ -1,4 +1,4 @@
-/* Owner: E (phase2b §6.5)
+/* Owner: E (phase2b §6.5); G3 (Phase 2d: the game screen mirrors, look-spec §1.18)
    Right-to-left (Arabic) overrides. <html dir="rtl"> is set by i18n setLocale(); flex rows, grids
    and inline text mirror on their own. This file holds what direction alone gets wrong:
 
@@ -16,9 +16,15 @@
 }
 
 /* The FB safe zone is the top-left 64×64, so Home and Settings stay at the top right and the lead
-   slot (the Home period pill) stays after the safe zone. Only the title text runs right to left. */
+   slot (the Home period pill) stays after the safe zone. Only the title text runs right to left.
+   Phase 2d (§1.1, §1.18): the game bar mirrors (back at the right, the gear and its dot at the left;
+   the disc at the physical left keeps the safe zone clear, game-screen.ts --fb-s / --fb-e). */
 [dir='rtl'] .top-bar {
   direction: ltr;
+}
+
+[dir='rtl'] .top-bar--game {
+  direction: rtl;
 }
 
 [dir='rtl'] .top-bar__title {
@@ -27,7 +33,6 @@
 
 /* Digits and counters ("3 / 8", "128", clocks) read left to right, with Latin digits (§6.4). */
 [dir='rtl'] .num,
-[dir='rtl'] .pill__count,
 [dir='rtl'] .boot__pct,
 [dir='rtl'] .tool__badge {
   direction: ltr;
@@ -45,6 +50,11 @@
 /* A sub-view's Back chevron (overlays.css turns it 180° to point left) points right, the way back. */
 [dir='rtl'] .overlay__back .btn__icon {
   transform: none;
+}
+
+/* Phase 2d: the game bar's back arrow points the way back (to the right). */
+[dir='rtl'] .top-bar__btn--back .btn__icon {
+  transform: scaleX(-1);
 }
 
 /* The coach hand is art; its swipe path comes from board geometry (LTR) and is unchanged. */
@@ -69,10 +79,21 @@
    04 §1 baseline (iOS 14). .boot__pct is direction: ltr (section 1), so a logical margin on it would
    not mirror either. The values are the source rules' values, mirrored. */
 
-/* hud.css (A): the count badge on a tool. */
+/* hud.css (G3, Phase 2d): the gear's dot mirrors with the gear. The bar's discs, the span between them,
+   the "+N" chips, the cards' diagrams and the start toast sit at their static inline start moved by
+   margin-inline-start, so they mirror on their own. */
+[dir='rtl'] .top-bar--game .top-bar__dot {
+  left: -6.1%;
+}
+
+/* hud.css (G3): the badges on the helpers sit at the disc's upper inline end. */
 [dir='rtl'] .tool__badge {
-  right: auto;
-  left: -8px;
+  left: auto;
+  right: calc(var(--s) * 42.15px);
+}
+
+[dir='rtl'] .tool__badge--video {
+  right: calc(var(--s) * 38.2px);
 }
 
 /* overlays.css (B): the boot percentage (forced LTR) and Home's Play chevron. */

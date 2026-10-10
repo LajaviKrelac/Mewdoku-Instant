@@ -45,7 +45,6 @@ export const catalog: LocaleCatalog = {
   // ── Game ───────────────────────────────────────────────────────────────────
   'game.title.level': 'Poziom {level}',
   'game.title.daily': 'Dnia · {date}',
-  'game.cats': '{placed} / {n}',
   'game.cats.a11y': 'Postawione koty: {placed} z {n}',
   'game.hearts.a11y': 'Pozostałe rybki: {hearts} z {max}',
   'game.chip.colours': '1 kot na kolor',
