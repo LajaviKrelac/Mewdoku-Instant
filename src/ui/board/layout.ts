@@ -4,7 +4,7 @@
 // Phase 2d (look-spec §1.1): the game screen is a top-down stack of the rows and gaps measured on the
 // user's recording at 402 CSS px (layout.game), all scaled by one factor s (width- or height-bound),
 // with the square board card in it; the spare height goes above the bar (at most topSpareMax × s) and
-// the rest below. The 2b row names (topBar, pills, chips, tools) stay until I-3 with 2d values.
+// the rest below. (The 2b row names topBar and chips were deleted at 2d I-3; pills and tools carry the 2d rows.)
 import { cfg, type GameConfig } from '../../app/config';
 import type { CellIndex } from '../../engine/types';
 

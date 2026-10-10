@@ -295,7 +295,7 @@ describe('attachKeyboard: Enter honours cellLockAfterCatMs (logic-4, 02 §6.2)',
     log = [];
     kb = attachKeyboard(
       board,
-      { tap: (c) => log.push(`tap:${c}`), doubleTap: (c) => log.push(`double:${c}`), bulb: () => log.push('bulb'), paw: () => log.push('paw') },
+      { tap: (c) => log.push(`tap:${c}`), doubleTap: (c) => log.push(`double:${c}`), bulb: () => log.push('bulb'), paw: () => log.push('paw'), mouse: () => log.push('mouse') },
       { n: N, cellElement: (i) => board.querySelector<HTMLElement>(`[data-i="${i}"]`), isLocked: () => false, now: () => now },
     );
   });

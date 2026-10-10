@@ -370,12 +370,12 @@ describe('S2 game', () => {
   it('Phase 2d §1.14: playStartToast shows the toast in the column\'s fx layer, one at a time', () => {
     const game = createGameScreen(view(), callbacks());
     document.body.append(game.el);
-    game.playStartToast?.('hard');
+    game.playStartToast('hard');
     const toast = q(game.el, '.game__col .game__fx .start-toast');
     expect(toast.dataset.kind).toBe('hard');
     expect(toast.getAttribute('aria-hidden')).toBe('true');
     expect(toast.textContent).toBe("A hard one. You've got this!");
-    game.playStartToast?.('retry');
+    game.playStartToast('retry');
     expect(game.el.querySelectorAll('.start-toast')).toHaveLength(1);
     expect(q(game.el, '.start-toast').textContent).toBe('Fresh start. You can do it!');
     game.destroy();

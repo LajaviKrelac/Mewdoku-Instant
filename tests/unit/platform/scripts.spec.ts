@@ -90,15 +90,15 @@ describe('size-check', () => {
     expect(r.maxFiles).toBeUndefined();
   });
 
-  it('has the recorded ceilings (measured + about 3 %: 2b lead decision 2026-10-09; main JS and the first-load totals re-set at 2c.1, L7, 04 §9)', () => {
+  it('has the recorded ceilings (measured + about 3 %: 2b lead decision 2026-10-09; main JS and the first-load totals re-set at 2c.1, L7; main JS, CSS, the first-load totals and the lazy CSS at 2d I-4, 04 §9)', () => {
     const max = (label: string) => BUDGETS.find((b) => b.label === label)?.maxBytes;
     expect([max('Main JS'), max('CSS'), max('Font'), max('index.html'), FIRST_LOAD_MAX, FIRST_LOAD_LOCALE_MAX, FIRST_LOAD_GZIP_MAX]).toEqual([
-      289_000, 43_500, 17_000, 1_000, 350_000, 377_000, 126_500,
+      307_000, 46_000, 17_000, 1_000, 370_000, 398_000, 136_500,
     ]);
     // The first-load total still binds: below the sum of its rows' ceilings.
     expect(FIRST_LOAD_MAX).toBeLessThan((max('Main JS') ?? 0) + (max('CSS') ?? 0) + (max('Font') ?? 0) + (max('index.html') ?? 0));
     expect([max('Worker JS (lazy)'), max('Lazy JS (core)'), max('Lazy JS (optional)'), max('Lazy CSS'), max('Locale chunk (each)')]).toEqual([
-      18_500, 74_000, 29_300, 31_200, 28_000,
+      18_500, 74_000, 29_300, 34_600, 28_000,
     ]);
     expect(FB_MAX_FILES).toBe(100);
   });
@@ -112,14 +112,14 @@ describe('size-check', () => {
     expect(row('CSS')?.bytes).toBe(15_000);
     expect(row('Lazy CSS')?.bytes).toBe(27_500);
     expect(row('First-load total')?.bytes).toBe(110_000 + 15_000 + 16_468 + HTML.length);
-    writeTree(d, { 'assets/overlay-chunk-a1.css': 27_701 }); // + 3 500 = 31 201 > 31.2 KB
+    writeTree(d, { 'assets/overlay-chunk-a1.css': 31_101 }); // + 3 500 = 34 601 > 34.6 KB
     expect(checkSizes(d, { fb: false }).rows.find((x) => x.label === 'Lazy CSS')?.ok).toBe(false);
   });
 
   it('the first load gzipped has its own ceiling (incompressible bytes go over it while every raw row passes)', () => {
     const d = tempDir('web');
     fakeBuild(d);
-    writeTree(d, { 'assets/index-abc.js': randomBytes(110_000) });
+    writeTree(d, { 'assets/index-abc.js': randomBytes(125_000) }); // incompressible: its gzip is over 136.5 KB with the rest
     const r = checkSizes(d, { fb: false });
     const gz = r.rows.find((x) => x.label === 'First load (gzip)');
     expect(gz?.bytes).toBeGreaterThan(FIRST_LOAD_GZIP_MAX);
@@ -130,10 +130,11 @@ describe('size-check', () => {
 
   it('fails when the first-load total or the lazy chunks are over budget', () => {
     const d = tempDir('web');
-    // shared-def.js (10 KB) is a modulepreload chunk, so main JS = its ceiling (289 KB since 2c.1): each row
-    // at its ceiling, the sum (350.5 KB) over the first-load total's 350 KB.
+    // shared-def.js (10 KB) is a modulepreload chunk, so main JS = its ceiling (307 KB since 2d I-4): each row
+    // at its ceiling, the sum (371 KB) over the first-load total's 370 KB.
     const mainMax = BUDGETS.find((b) => b.label === 'Main JS')?.maxBytes ?? 0;
-    fakeBuild(d, { main: mainMax - 10_000, css: 43_500, font: 17_000, html: 1_000 });
+    const cssMax = BUDGETS.find((b) => b.label === 'CSS')?.maxBytes ?? 0;
+    fakeBuild(d, { main: mainMax - 10_000, css: cssMax, font: 17_000, html: 1_000 });
     const r = checkSizes(d, { fb: false });
     expect(r.rows.find((x) => x.label === 'Main JS')?.ok).toBe(true);
     expect(r.rows.find((x) => x.label === 'CSS')?.ok).toBe(true);
@@ -147,7 +148,7 @@ describe('size-check', () => {
   it('fails when a budget is exceeded', () => {
     const d = tempDir('web');
     const mainMax = BUDGETS.find((b) => b.label === 'Main JS')?.maxBytes ?? 0;
-    fakeBuild(d, { main: mainMax - 10_000 + 1 }); // + the 10 KB modulepreload chunk = the ceiling + 1 byte (289.001 KB)
+    fakeBuild(d, { main: mainMax - 10_000 + 1 }); // + the 10 KB modulepreload chunk = the ceiling + 1 byte (307.001 KB)
     const r = checkSizes(d, { fb: false });
     expect(r.ok).toBe(false);
     expect(r.rows.find((x) => x.label === 'Main JS')?.ok).toBe(false);

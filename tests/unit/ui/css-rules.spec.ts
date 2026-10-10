@@ -98,10 +98,11 @@ describe('colour literals live only in tokens.css (phase2b §1.3, §1.12)', () =
     for (const rgb of ['ink-rgb: 147, 90, 90', 'page-rgb: 247, 242, 239', 'warm-rgb: 239, 134, 39', 'pulse-rgb: 255, 165, 30', 'accent-rgb: 229, 112, 16', 'gold-rgb: 255, 194, 61']) expect(css).toContain(`--${rgb};`);
     expect(css).toMatch(/--line:\s*rgba\(147, 90, 90, 0\.14\);/);
     expect(css).toMatch(/--line-2:\s*rgba\(147, 90, 90, 0\.22\);/);
-    expect(css).toContain('--shadow-btn: 0 calc(3px * var(--s, 1)) calc(7px * var(--s, 1)) calc(-2px * var(--s, 1)) rgba(var(--warm-rgb), 0.25);');
+    // 2d I-polish d: re-fitted to the recording's profile below the discs (blur 8, offset 3.5, alpha .22).
+    expect(css).toContain('--shadow-btn: 0 calc(3.5px * var(--s, 1)) calc(8px * var(--s, 1)) calc(-2px * var(--s, 1)) rgba(var(--warm-rgb), 0.22);');
     expect(css).toContain('--shadow-pill: 0 2px 6px rgba(var(--ink-rgb), 0.06);');
     // re-declared where the game screen sets --s, so it scales with s there (var() resolves where declared)
-    expect(/\.screen--game\s*\{([^}]*)\}/.exec(stripComments(css))?.[1]).toContain('--shadow-btn: 0 calc(3px * var(--s, 1))');
+    expect(/\.screen--game\s*\{([^}]*)\}/.exec(stripComments(css))?.[1]).toContain('--shadow-btn: 0 calc(3.5px * var(--s, 1)) calc(8px * var(--s, 1))');
     // the region palette equals PALETTE (look-spec §1.9)
     PALETTE.forEach((hex, i) => expect(css, `--r${i}`).toMatch(new RegExp(`--r${i}:\\s*${hex.toLowerCase()};`)));
     for (const gone of ['--heart:', '--heart-empty:', '--heart-empty-line:', '--t-crack:']) expect(css, gone).not.toContain(gone);
@@ -246,19 +247,17 @@ describe('retired-look guard (phase2b §1.8, §1.12)', () => {
     const hits: string[] = [];
     for (const f of shell) {
       const text = read(f).replace(/\s+/g, '').toLowerCase();
-      for (const v of RETIRED) if (text.includes(v.toLowerCase())) hits.push(`${relative(ROOT, f)}: ${v}`);
+      for (const v of [...RETIRED, ...RETIRED_2D]) if (text.includes(v.toLowerCase())) hits.push(`${relative(ROOT, f)}: ${v}`);
     }
     expect(hits).toEqual([]);
     const page = /--page:\s*(#[0-9a-fA-F]{6})/.exec(read(join(STYLES, 'tokens.css')))?.[1]?.toLowerCase();
     expect(page).toBeTruthy();
     expect(page).toBe('#f7f2ef');
     expect(/<meta name="theme-color" content="(#[0-9a-fA-F]{6})"/.exec(read(join(ROOT, 'index.html')))?.[1]?.toLowerCase()).toBe(page);
-    // The dev harness pages are the lead's (look-spec §3.1): until requests-G2.md R1 lands they may still
-    // carry the 2c.1 page colour. Remove PENDING_R1 once it is done.
-    const PENDING_R1 = '#faf6f0';
+    // The dev harness pages follow --page too (requests-G2.md R1, done at 2d I-1).
     for (const f of walk(join(ROOT, 'dev'), ['.html'])) {
       const meta = /<meta name="theme-color" content="(#[0-9a-fA-F]{6})"/.exec(read(f))?.[1]?.toLowerCase();
-      if (meta) expect([page, PENDING_R1], relative(ROOT, f)).toContain(meta);
+      if (meta) expect(meta, relative(ROOT, f)).toBe(page);
     }
   });
 
@@ -309,6 +308,8 @@ describe('retired-look guard (phase2b §1.8, §1.12)', () => {
     const hit = /\.btn--icon::before\s*\{([^}]*)\}/.exec(base)?.[1] ?? '';
     expect(hit).toMatch(/width:\s*max\(100%, 44px\)/);
     expect(hit).toMatch(/height:\s*max\(100%, 44px\)/);
+    // square, so a tap in its corners counts (requests-G3 R2): no border-radius on the hit area
+    expect(hit).not.toMatch(/border-radius/);
   });
 });
 
@@ -330,13 +331,17 @@ describe('tokens.css stays in sync with config, events and event art', () => {
 
   it('every [data-event-theme] block equals EVENT_THEME_TOKENS and eventPatternUrl()', () => {
     const arts: Record<string, 'lanterns' | 'snowflakes' | 'yarn'> = { 'lantern-walk-2026': 'lanterns', 'snow-paws-2026': 'snowflakes', 'yarn-hearts-2027': 'yarn' };
+    // 2d I-4: the patterns moved to the lazy events-chunk.css (an event screen or board starts that chunk).
+    const lazy = read(join(STYLES, 'events-chunk.css'));
+    const blockOf = (css: string, id: string): string => new RegExp(`\\[data-event-theme='${id}'\\]\\s*\\{([^}]*)\\}`).exec(css)?.[1] ?? '';
     for (const [id, t] of Object.entries(EVENT_THEME_TOKENS)) {
-      const block = new RegExp(`\\[data-event-theme='${id}'\\]\\s*\\{([^}]*)\\}`).exec(tokens)?.[1] ?? '';
+      const block = blockOf(tokens, id);
       expect(block, id).not.toBe('');
       expect(block).toContain(`--page: ${t.page.toLowerCase()};`);
       expect(block).toContain(`--board-card: ${t.boardCard.toLowerCase()};`);
       expect(block.replace(/\s/g, '')).toContain(`--glow:${t.glow.replace(/\s/g, '').replace(/,\./g, ',0.')};`);
-      expect(block).toContain(`--page-art: ${eventPatternUrl(arts[id] as 'lanterns')};`);
+      expect(block).not.toContain('--page-art');
+      expect(blockOf(lazy, id)).toContain(`--page-art: ${eventPatternUrl(arts[id] as 'lanterns')};`);
     }
   });
 

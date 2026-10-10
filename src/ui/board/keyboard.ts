@@ -14,8 +14,8 @@ export interface KeyboardCallbacks {
   doubleTap(cell: CellIndex): void;
   bulb(): void;
   paw(): void;
-  /** Phase 2d: the M key (optional until I-3, like BoardInput.mouse). */
-  mouse?(): void;
+  /** Phase 2d: the M key (BoardInput.mouse). */
+  mouse(): void;
 }
 
 export interface KeyboardOptions {
@@ -106,7 +106,7 @@ export function attachKeyboard(boardEl: HTMLElement, cb: KeyboardCallbacks, opts
       return;
     }
     const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-    const act = key === ' ' || key === 'Spacebar' ? 'tap' : key === 'Enter' ? 'double' : key === 'h' ? 'bulb' : key === 'k' ? 'paw' : key === 'm' && cb.mouse ? 'mouse' : null;
+    const act = key === ' ' || key === 'Spacebar' ? 'tap' : key === 'Enter' ? 'double' : key === 'h' ? 'bulb' : key === 'k' ? 'paw' : key === 'm' ? 'mouse' : null;
     if (!act) return;
     e.preventDefault(); // no page scroll on Space, no synthetic click on Enter
     if (e.repeat || opts.isLocked()) return;
@@ -118,7 +118,7 @@ export function attachKeyboard(boardEl: HTMLElement, cb: KeyboardCallbacks, opts
     if (act === 'tap') cb.tap(current);
     else if (act === 'double') cb.doubleTap(current);
     else if (act === 'bulb') cb.bulb();
-    else if (act === 'mouse') cb.mouse?.();
+    else if (act === 'mouse') cb.mouse();
     else cb.paw();
   };
 

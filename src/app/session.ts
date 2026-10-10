@@ -645,7 +645,7 @@ export function createSession(deps: SessionDeps): Session {
       fx.play({ sfx: 'board_in' });
       if (toast !== null && c.fx.startToast.enabled) {
         const scr = screen;
-        fx.guard(() => scr.playStartToast?.(toast));
+        fx.guard(() => scr.playStartToast(toast));
       }
     }
     timers.later(c.fx.boardEntryMs, () => {

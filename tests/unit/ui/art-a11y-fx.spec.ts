@@ -514,6 +514,8 @@ describe('Phase 2d symbols (look-spec Appendix C)', () => {
     for (const c of ['#B8B4BC', '#D9D6DC', CAT_COLORS.earIn, CAT_COLORS.nose]) expect(m).toContain(c);
     expect(sym('tool-mouse').querySelectorAll('circle[r="5.4"]')).toHaveLength(2); // bead eyes
     const head = sym('cat-head-flat');
+    // 2d I-polish e: the viewBox is the silhouette's own box (ear tips at y 5.7), so a head draws 21.3 wide.
+    expect(head.getAttribute('viewBox')).toBe('4 5.7 92 90.3');
     expect(head.children).toHaveLength(1);
     expect(head.querySelector('path')?.getAttribute('fill')).toBe('currentColor');
     expect(head.innerHTML).not.toContain('stroke');

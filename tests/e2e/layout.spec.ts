@@ -647,26 +647,44 @@ test('2d: 12×12 whole cells at 320 × 568 with a 20 px safe top and the band (s
   expect(await page.evaluate(() => (window as TestWindow).__mewdoku?.state()?.cells[1])).toBe(1);
 });
 
+/**
+ * Misses of the 44 × 44 hit areas of the round buttons matching `selector`: elementFromPoint at the
+ * corners of a 44 × 44 square around each centre (and the centre). A corner off the screen is clamped
+ * into the viewport (requests-G3 R3: at 320 × 568 with no safe area the bar's discs sit 5.5 px from the
+ * top, and a tap at the screen's edge lands there).
+ */
+async function hitAreaMisses(page: Page, selector: string, min: number): Promise<string[]> {
+  return page.evaluate(
+    ([sel, want]) => {
+      const out: string[] = [];
+      const buttons = Array.from(document.querySelectorAll<HTMLElement>(sel));
+      if (buttons.length < want) out.push(`only ${buttons.length} round buttons`);
+      const clamp = (v: number, hi: number): number => Math.min(hi - 0.5, Math.max(0.5, v));
+      for (const el of buttons) {
+        const r = el.getBoundingClientRect();
+        const cx = r.left + r.width / 2;
+        const cy = r.top + r.height / 2;
+        const h = 21.5; // just inside a 44 × 44 square around the centre
+        for (const [dx, dy] of [[-h, -h], [h, -h], [-h, h], [h, h], [0, 0]] as const) {
+          const hit = document.elementFromPoint(clamp(cx + dx, innerWidth), clamp(cy + dy, innerHeight));
+          if (!hit || !(hit === el || el.contains(hit))) out.push(`${el.className} at (${dx}, ${dy}): ${hit ? hit.className || hit.tagName : 'nothing'}`);
+        }
+      }
+      return out;
+    },
+    [selector, min] as const,
+  );
+}
+
 test('2d: every round button keeps a 44 × 44 hit area (elementFromPoint at its corners)', async ({ page }, info) => {
   await playAt(page, 15);
-  const misses = await page.evaluate(() => {
-    const out: string[] = [];
-    const buttons = Array.from(
-      document.querySelectorAll<HTMLElement>('.screen--game .top-bar--game .top-bar__btn, .screen--game .tool-bar .tool:not([data-off])'),
-    );
-    if (buttons.length < 5) out.push(`only ${buttons.length} round buttons`);
-    for (const el of buttons) {
-      const r = el.getBoundingClientRect();
-      const cx = r.left + r.width / 2;
-      const cy = r.top + r.height / 2;
-      const h = 21.5; // just inside a 44 × 44 square around the centre
-      for (const [dx, dy] of [[-h, -h], [h, -h], [-h, h], [h, h], [0, 0]] as const) {
-        const hit = document.elementFromPoint(cx + dx, cy + dy);
-        if (!hit || !(hit === el || el.contains(hit))) out.push(`${el.className} at (${dx}, ${dy}): ${hit ? hit.className || hit.tagName : 'nothing'}`);
-      }
-    }
-    return out;
-  });
+  const misses = await hitAreaMisses(page, '.screen--game .top-bar--game .top-bar__btn, .screen--game .tool-bar .tool:not([data-off])', 5);
+  expect(misses, info.project.name).toEqual([]);
+});
+
+test("2d: Home's round buttons keep a square 44 × 44 hit area too (requests-G3 R2)", async ({ page }, info) => {
+  await boot(page, veteranSave(15));
+  const misses = await hitAreaMisses(page, '.screen--home .top-bar .btn--icon', 1);
   expect(misses, info.project.name).toEqual([]);
 });
 

@@ -110,7 +110,7 @@ describe('level-start toast trigger (§1.14, D-2d-13)', () => {
     expect(toasts(h)).toEqual([]);
   });
 
-  it('a game screen without playStartToast (optional until I-3) is fine', async () => {
+  it('the toast does not hold the board entry: the board plays after fx.boardEntryMs', async () => {
     const h = createHarness();
     await h.session.start({ mode: 'level', level: 5 });
     const g = h.router.game;

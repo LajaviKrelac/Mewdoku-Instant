@@ -125,12 +125,6 @@
   margin-inline-start: calc(var(--s) * 351.6px - var(--fb-e, 0px));
 }
 
-/* The round buttons' warm shadow (--shadow-btn's values) scaled by s: the game bar's and the helpers' discs. */
-.top-bar--game .top-bar__btn,
-.tool__disc {
-  box-shadow: 0 calc(var(--s) * 3px) calc(var(--s) * 7px) calc(var(--s) * -2px) rgba(var(--warm-rgb), 0.25);
-}
-
 .top-bar--game .top-bar__btn--back {
   margin-inline-start: calc(var(--s) * 13.1px + var(--fb-s, 0px));
 }
@@ -168,17 +162,23 @@
   white-space: nowrap;
 }
 
-/* "Level" / "Score" (19.3 px): they ellipsize only after the values stepped down (data-fit). */
+/* "Level" / "Score" (19.3 px): they ellipsize only after the values stepped down (data-fit). Lighter
+   than the numbers, as measured (2d I-polish a; D-2d-7 keeps one display face): the system stacks
+   (weight 700) step down to their own 500; Fredoka, which ships one 600 face, is thinned by a text
+   stroke in the page colour painted over the glyphs (0.036 em: about 0.35 px off each side). */
 .top-bar--game .top-bar__name,
 .points-pill__name {
   display: block;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-weight: calc(var(--display-weight) - 200);
+  -webkit-text-stroke: calc((700 - var(--display-weight)) * 0.0004em) var(--page);
 }
 
-/* "96" / "0" (22 px; the Score's box is a .top-bar__val too): heavier through a 0.04 em stroke in
-   their own colour (D-2d-7); never cut. The fit steps scale them by --vf (critic C5: 0.86, 0.74). */
+/* "96" / "0" (22 px; the Score's box is a .top-bar__val too): Fredoka 600 as it is (2d I-polish a:
+   measured like for like, the original's numbers are no heavier, so the 2d text stroke is gone);
+   never cut. The fit steps scale them by --vf (critic C5: 0.86, 0.74). */
 .top-bar__val {
   position: relative;
   display: flex;
@@ -186,11 +186,6 @@
   margin-top: calc(var(--s) * 0.6px);
   font-size: calc(var(--s) * 1.375rem * var(--vf, 1));
   line-height: 1.1;
-}
-
-.top-bar--game .top-bar__suffix,
-.points-pill__count {
-  -webkit-text-stroke: 0.04em currentColor;
 }
 
 .top-bar--game .top-bar__suffix {
@@ -250,7 +245,6 @@
   font-weight: 600;
   font-size: max(10px, calc(var(--s) * 0.8125rem));
   line-height: 1.1;
-  -webkit-text-stroke: 0;
 }
 
 /* ── Pills row (§1.5): heads pill · fish pill ──────────────────────────────
@@ -319,13 +313,15 @@
   margin-inline-start: calc(var(--s) * 0.6px);
 }
 
+/* The fish's art (x 1.4–23.75, y 2.6–23.15 on its 24 grid) spans the slot's 24.7 width, centred on
+   its height (2d I-polish b: drawn 21.7 × 20.3 before, measured 24.7 × 23.3); the splash shares the grid. */
 .life .icon,
 .life__splash {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  top: calc(var(--s) * -2.58px);
+  left: calc(var(--s) * -1.55px);
+  width: calc(var(--s) * 26.5px);
+  height: calc(var(--s) * 26.5px);
 }
 
 .life__empty {
@@ -406,17 +402,25 @@
   margin-inline-start: calc(var(--s) * -40.4px);
 }
 
+/* Lighter than 600, as measured (2d I-polish e), the way the bar's labels are: a stroke in the card's
+   fill thins Fredoka's one face; the system stacks step down to 500. */
 .chip__text {
   min-width: 0;
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 3; /* large text takes three lines; the row grows for it (layout.ts) */
   -webkit-box-orient: vertical;
+  font-weight: calc(var(--display-weight) - 200);
+  -webkit-text-stroke: calc((700 - var(--display-weight)) * 0.0003em) var(--rule-card);
 }
 
 .chip[data-hl] {
   background: var(--accent-soft);
   box-shadow: 0 0 0 2px var(--accent);
+}
+
+.chip[data-hl] .chip__text {
+  -webkit-text-stroke-color: var(--accent-soft);
 }
 
 /* Compact (s < 0.85): diagrams only, centred; the screen-reader text stays. */
@@ -462,11 +466,6 @@
   transform: translate(-50%, -50%);
 }
 
-/* The game bar's discs: the same square 44 × 44 area (base.css draws it round; its corners count too). */
-.top-bar--game .top-bar__btn::before {
-  border-radius: 0;
-}
-
 .tool__disc {
   position: relative;
   display: flex;
@@ -476,6 +475,7 @@
   height: 100%;
   border-radius: 50%;
   background: var(--card);
+  box-shadow: var(--shadow-btn);
   transition: transform 90ms ease;
 }
 
@@ -497,19 +497,22 @@
   transform: scale(0.94);
 }
 
+/* The art boxes (2d I-polish c): sized so the drawn art measures like the original's at s = 1, kitty
+   34.7 × 34.3, bulb 21.3 × 34, mouse 35 × 31.3 (the symbols' antialiased edges and whisker tips draw
+   about 4 % inside their viewBox). */
 .tool--paw .tool__icon {
-  width: calc(var(--s) * 34.7px);
-  height: calc(var(--s) * 34.3px);
+  width: calc(var(--s) * 36px);
+  height: calc(var(--s) * 36px);
 }
 
 .tool--bulb .tool__icon {
-  width: calc(var(--s) * 21.3px);
+  width: calc(var(--s) * 21.9px);
   height: calc(var(--s) * 34px);
 }
 
 .tool--mouse .tool__icon {
-  width: calc(var(--s) * 35px);
-  height: calc(var(--s) * 31.3px);
+  width: calc(var(--s) * 36.2px);
+  height: calc(var(--s) * 32.4px);
 }
 
 .tool:disabled {

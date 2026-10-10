@@ -66,20 +66,32 @@ describe('Phase 2d: the stack (look-spec §1.1, §4.7)', () => {
     expect(ruleOf(hud, '.tool__badge')).toContain('font-size: max(10px, calc(var(--s) * 1.1rem))');
     expect(ruleOf(hud, '.top-bar--game .badge--hard')).toContain('font-size: max(10px, calc(var(--s) * 0.6875rem))');
     expect(ruleOf(hud, '.points-pill__chip')).toContain('font-size: max(10px, calc(var(--s) * 0.8125rem))');
-    // The numbers' heavier look: a 0.04 em stroke in their own colour (D-2d-7).
-    expect(ruleOf(hud, '.top-bar--game .top-bar__suffix')).toContain('-webkit-text-stroke: 0.04em currentColor');
+    // 2d I-polish a: the labels and the rule text are thinned by a stroke in their background's colour
+    // (Fredoka's one 600 face; 0 on the 700 system stacks, which step down to 500); the numbers carry
+    // no stroke any more (measured no heavier than Fredoka 600).
+    const label = ruleOf(hud, '.points-pill__name') ?? '';
+    expect(label).toContain('font-weight: calc(var(--display-weight) - 200)');
+    expect(label).toContain('-webkit-text-stroke: calc((700 - var(--display-weight)) * 0.0004em) var(--page)');
+    expect(ruleOf(hud, '.top-bar--game .top-bar__name')).toBe(label);
+    const rule = ruleOf(hud, '.chip__text') ?? '';
+    expect(rule).toContain('-webkit-text-stroke: calc((700 - var(--display-weight)) * 0.0003em) var(--rule-card)');
+    expect(ruleOf(hud, '.chip[data-hl] .chip__text')).toContain('-webkit-text-stroke-color: var(--accent-soft)');
+    expect(ruleOf(hud, '.top-bar--game .top-bar__suffix') ?? '').not.toContain('text-stroke');
+    expect(ruleOf(hud, '.points-pill__count') ?? '').not.toContain('text-stroke');
   });
 });
 
 describe('Phase 2d: the game bar (§1.4, §1.13, §1.15)', () => {
   it('discs Ø 36.8 s at the measured x; the pair centred in the span between them; the FB shift; the dot', () => {
     const btn = ruleOf(hud, '.top-bar--game .top-bar__btn') ?? '';
-    expect(ruleOf(hud, '.tool__disc')).toContain(btn.slice(btn.indexOf('box-shadow')));
+    // One shadow token (requests-G3 R1, 2d I-2): .btn--icon's var(--shadow-btn), which the game screen
+    // re-declares with its --s (tokens.css); no scaled copy here.
+    expect(btn).not.toContain('box-shadow');
+    expect(ruleOf(hud, '.tool__disc')).toContain('box-shadow: var(--shadow-btn)');
     expect(btn).toContain('width: calc(var(--s) * 36.8px)');
     // At the static inline start moved by margin-inline-start: the bar mirrors in RTL on its own.
     expect(btn).toContain('margin-inline-start: calc(var(--s) * 351.6px - var(--fb-e, 0px))');
     expect(btn).not.toMatch(/(^|[ ;])(left|right):/);
-    expect(btn).toMatch(/rgba\(var\(--warm-rgb\), 0\.25\)/);
     expect(ruleOf(hud, '.top-bar--game .top-bar__btn--back')).toContain('margin-inline-start: calc(var(--s) * 13.1px + var(--fb-s, 0px))');
     const mid = ruleOf(hud, '.top-bar__mid') ?? '';
     expect(mid).toContain('margin-inline-start: calc(var(--s) * 49.9px + 4px + var(--fb-s, 0px))');
@@ -137,6 +149,17 @@ describe('Phase 2d: the pills row (§1.5, §1.6)', () => {
     expect(ruleOf(hud, '.life')).toContain('height: calc(var(--s) * 23.3px)');
     expect(ruleOf(hud, '.life + .life')).toContain('margin-inline-start: calc(var(--s) * 0.6px)');
     expect(ruleOf(hud, '.pill--lives')).toContain('padding-inline-start: calc(var(--s) * 10.7px)');
+    // 2d I-polish b: the fish's art (x 1.4–23.75, y 2.6–23.15 of its 24 grid) spans the slot's width; the
+    // splash shares the grid, so the droplets still start at the fish.
+    const art = ruleOf(hud, '.life .icon') ?? '';
+    expect(ruleOf(hud, '.life__splash')).toContain(art);
+    for (const d of ['top: calc(var(--s) * -2.58px)', 'left: calc(var(--s) * -1.55px)', 'width: calc(var(--s) * 26.5px)', 'height: calc(var(--s) * 26.5px)']) expect(art, d).toContain(d);
+  });
+
+  it('2d I-polish c: the helper art boxes draw the art at the measured sizes (kitty 34.7 × 34.3, bulb 21.3 × 34, mouse 35 × 31.3)', () => {
+    expect(ruleOf(hud, '.tool--paw .tool__icon')).toBe('width: calc(var(--s) * 36px); height: calc(var(--s) * 36px);');
+    expect(ruleOf(hud, '.tool--bulb .tool__icon')).toBe('width: calc(var(--s) * 21.9px); height: calc(var(--s) * 34px);');
+    expect(ruleOf(hud, '.tool--mouse .tool__icon')).toBe('width: calc(var(--s) * 36.2px); height: calc(var(--s) * 32.4px);');
   });
 
   it('the period counter over the heads: white, centred, its "+3" inside the pill (critic C10); Home keeps the 2c chip', () => {
@@ -194,7 +217,7 @@ describe('Phase 2d: the helper row (§1.11)', () => {
     const hit = ruleOf(hud, '.tool::before') ?? '';
     expect(hit).toContain('width: max(100%, 44px)');
     expect(hit).toContain('height: max(100%, 44px)');
-    expect(ruleOf(hud, '.tool__disc')).toMatch(/rgba\(var\(--warm-rgb\), 0\.25\)/);
+    expect(ruleOf(hud, '.tool__disc')).toContain('box-shadow: var(--shadow-btn)');
     expect(stripComments(hud)).not.toMatch(/\.tool[^{]*\{[^}]*0 4px 0 var\(--line-2\)/);
     expect(stripComments(hud)).not.toContain('.tool + .tool');
     expect(ruleOf(hud, '.tool:disabled')).toContain('opacity: 0.45');

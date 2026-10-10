@@ -324,7 +324,14 @@ function discArt(img: Img, cx: number, cy: number, d: number, badge: Box | null)
  * below the edge.
  */
 function shadowBelow(img: Img, cx: number, cy: number, d: number, page: RGB): { strength: number; reach: number; at2: string; warmth: number } {
-  const ys = Math.round((cy + d / 2) * S) + 1;
+  // From the disc's own bottom edge in the pixels (a composited, animated disc may sit a pixel off its
+  // DOM rect): the first image row below the white disc.
+  let ys = Math.round((cy + d / 2 - 2) * S);
+  const isDisc = (y: number): boolean => {
+    const c = at(img, cx * S, y);
+    return 765 - c[0] - c[1] - c[2] < 15;
+  };
+  while (ys < Math.round((cy + d / 2 + 2) * S) && isDisc(ys)) ys++;
   const devs: number[] = [];
   let warm = 0;
   for (let k = 0; k < 45; k++) {
@@ -446,6 +453,7 @@ const dom = (page: Page) =>
     const xs = all('.cell')[0]?.querySelectorAll('rect.cell__x') ?? [];
     const xr = Array.from(xs).map((r) => R(r) as Box);
     const xbar = xs[0] ? Number(xs[0].getAttribute('height')) : 0;
+    const xa = (k: string): number => Number(xs[0]?.getAttribute(k) ?? 0);
     const tools = ['paw', 'bulb', 'mouse'].map((k) => ({
       disc: R(q(`.tool--${k} .tool__disc`)),
       icon: R(q(`.tool--${k} .tool__icon`)),
@@ -475,6 +483,7 @@ const dom = (page: Page) =>
       slot: parseFloat((q('.board') as HTMLElement | null)?.style.getPropertyValue('--slot') ?? '0'),
       xRects: xr,
       xBarUnits: xbar,
+      xRect: { w: xa('width'), h: xa('height'), rx: xa('rx') },
       tools,
       banner: R(q('[data-testid="mock-banner"]')),
     };
@@ -600,6 +609,7 @@ function measure402(g: Dom, ours: Img, ref: { frame: Img | null; still: Img | nu
   num('rules', 'container right', rules.right, REF.rules.right, T);
   num('rules', 'container top', rules.top, REF.rules.top, T);
   num('rules', 'container bottom', rules.bottom, REF.rules.bottom, T);
+  const cardBg = hexRgb('#FBF4EE');
   g.cards.forEach((c, i) => {
     const b = must(c, `card ${i}`);
     num('rules', `card ${i + 1} left`, b.left, REF.cards.lefts[i] as number, T);
@@ -608,6 +618,11 @@ function measure402(g: Dom, ours: Img, ref: { frame: Img | null; still: Img | nu
       num('rules', 'card bottom', b.bottom, REF.cards.bottom, T);
       num('rules', 'card width', w(b), REF.cards.w, T);
     }
+    // the rule text's weight, like for like (the text starts 46 from the card's inline start)
+    const textBox = (left: number, top: number): Box => ({ left: left + 45, top: top + 1, right: left + REF.cards.w - 3, bottom: top + REF.cards.h - 1 });
+    const o = inkStats(ours, textBox(b.left, b.top), ink, cardBg);
+    const r = ref.still ? inkStats(ref.still, textBox(REF.cards.lefts[i] as number, REF.cards.top), ink, cardBg) : null;
+    if (o) info('type', `rule card ${i + 1} text stroke (CSS px)`, f2(o.stroke), r ? f2(r.stroke) : '—', r ? `stroke ×${f2(o.stroke / r.stroke)}` : '');
   });
 
   // ── board ──
@@ -624,8 +639,12 @@ function measure402(g: Dom, ours: Img, ref: { frame: Img | null; still: Img | nu
   num('board', 'gap', t1.left - t0.right, REF.tile.gap, 0.5);
   num('board', 'tile radius', g.tileRadius, REF.tile.radius, 0.5);
   num('board', 'X bar thickness (rects)', (g.xBarUnits / 100) * g.slot, REF.x.bar, 0.4);
+  // The X's box from its rects' geometry: two rounded rects at ±45° (getBoundingClientRect would count
+  // their rounded-off corners): half extent = ((w/2 − r) + (h/2 − r)) / √2 + r, in slot units.
+  const { w: xw, h: xh, rx } = g.xRect;
+  if (xw > 0) num('board', 'X box (rect geometry)', ((2 * ((xw / 2 - rx + (xh / 2 - rx)) / Math.SQRT2 + rx)) / 100) * g.slot, REF.x.box, 0.6);
   const xb = g.xRects.reduce<Box | null>((m, r) => (m ? { left: Math.min(m.left, r.left), top: Math.min(m.top, r.top), right: Math.max(m.right, r.right), bottom: Math.max(m.bottom, r.bottom) } : r), null);
-  if (xb) num('board', 'X box (rects)', w(xb), REF.x.box, 0.6);
+  if (xb) info('board', 'X box (rects\' client boxes, corners included)', f1(w(xb)), f1(REF.x.box));
   // the white X inside the tile (inset: the tile's anti-aliased corners show the white card)
   const white = [...pixels(ours, grow(t0, -2))].filter((p) => p.c[0] >= 250 && p.c[1] >= 250 && p.c[2] >= 250);
   if (white.length) {

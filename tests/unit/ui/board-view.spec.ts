@@ -342,19 +342,16 @@ describe('board keyboard (02 §6.3)', () => {
     expect(input.paw).toHaveBeenCalledTimes(1);
   });
 
-  it('M calls the mouse (look-spec §1.11); without a mouse callback the key does nothing', () => {
+  it('M calls the mouse (look-spec §1.11; BoardInput.mouse is required since 2d I-3; the screen ignores it while the mouse is not ready)', () => {
     key('m');
     key('M');
     key('m', { repeat: true });
     expect(input.mouse).toHaveBeenCalledTimes(2);
-    board.destroy();
-    const { mouse: _gone, ...rest } = input;
-    board = createBoardView(model(), rest as unknown as BoardInput, { reducedMotion: () => false });
-    document.body.appendChild(board.el);
     board.focusCell(0);
     const ev = new KeyboardEvent('keydown', { key: 'm', bubbles: true, cancelable: true });
     board.cellElement(0)?.dispatchEvent(ev);
-    expect(ev.defaultPrevented).toBe(false);
+    expect(ev.defaultPrevented).toBe(true); // a handled key: no page action
+    expect(input.mouse).toHaveBeenCalledTimes(3);
   });
 
   it('prevents default for handled keys and ignores modified keys', () => {

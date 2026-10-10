@@ -11,10 +11,10 @@ Rules (as in 2b–2d): S0 lands every interface **additively**; a member another
 
 ```ts
 // src/app/config.ts — additions and changed values (helpers-spec §0.6)
-cfg.fx.helperPulse   // { target: 'auto', periodMs: 1500, peakScale: 1.08, idleMs: 5000, needsStock: true }  ('auto' = §4.6)
+cfg.fx.helperPulse   // { target: 'auto', periodMs: 1500, peakScale: 1.08, idleMs: 5000, needsStock: true, untilHelperUsed: true }  ('auto' = §4.6)
 cfg.fx.headFoundMs   // 280 (was 300)
 cfg.fx.markPopMs     // 170 (was 140): the mouse's X only, 1.15 → 1
-cfg.fx.markDraw      // { squishMs: 80, stroke1Ms: 60, gapMs: 10, stroke2Ms: 110 }
+cfg.fx.markDraw      // { squishMs: 80, stroke1Ms: 70, stroke2Ms: 130, overshoot: 1.1, settleMs: 250 }  (new group; the 2b fx.markDrawMs stays @deprecated, unread)
 cfg.fx.mouse         // { appearMs: 115, dwellMs: 850, exitMs: 85 }
 cfg.fx.catPlaced     // { celebrateUntilMs: 816, settleMs: 1400, shards: 10, shardLifeMs: 650 }
 cfg.fx.points        // { starAtMs: 783, flightMs: 530, countMs: 350, burstMs: 650 }
@@ -40,8 +40,11 @@ readonly helperPulse: {
   readonly idleMs: number;
   /** Phase 2d.1 §4.6: a helper at 0 (the video badge) never pulses, and the other one does not take its place. */
   readonly needsStock: boolean;
+  /** Phase 2d.1 §4.6 (critic): no pulse once a hint, the kitty or the mouse was used in this attempt. */
+  readonly untilHelperUsed: boolean;
 };
-readonly markDraw: { readonly squishMs: number; readonly stroke1Ms: number; readonly gapMs: number; readonly stroke2Ms: number };
+/** §4.4: "\" scales about the centre over stroke1Ms, then "/" grows from its top-right tip over stroke2Ms; the X group overshoots to `overshoot` and is back to 1 at settleMs (from the action). */
+readonly markDraw: { readonly squishMs: number; readonly stroke1Ms: number; readonly stroke2Ms: number; readonly overshoot: number; readonly settleMs: number };
 readonly mouse: { readonly appearMs: number; readonly dwellMs: number; readonly exitMs: number }; // under fx
 readonly catPlaced: { readonly celebrateUntilMs: number; readonly settleMs: number; readonly shards: number; readonly shardLifeMs: number };
 readonly points: { readonly starAtMs: number; readonly flightMs: number; readonly countMs: number; readonly burstMs: number };
@@ -74,7 +77,9 @@ export type GameEvent =
   /**
    * Phase 2d.1 §4.1: after MARKED / CAT_PLACED / POINTS / REGION_DONE and before WON. A unit is complete
    * when it holds its cat (Cat or Given) and every other tile is Mark or Wrong; listed once per unit
-   * that was not complete before the action: rows (ascending), then columns, then regions. Never on an unmark.
+   * that was not complete before the action: rows (ascending), then columns, then regions. Never on an unmark,
+   * never in an action that ends in LOST (a mistake that completes a unit otherwise emits it). In HINT_APPLY,
+   * HINT_APPLIED stays the first event (2b order) and UNITS_DONE follows the marks and the cat.
    */
   | { type: 'UNITS_DONE'; units: readonly DoneUnit[] };
 ```
@@ -102,7 +107,7 @@ export function mouseLandMs(k: number, c?: GameConfig): number;
 export function mouseRunMs(count: number, reduced: boolean, c?: GameConfig): number;
 ```
 
-Board (G2) plays the visits in **event order** of `MARKED.cells`; the game screen (G3) defers the `UNITS_DONE` effects of a mouse action to `mouseLandMs(indexOf(anchor))`; the session (G1) keeps the board locked for `mouseRunMs` and schedules the `mouse` / `mark` sounds at `k × mouseVisitMs` and `mouseLandMs(k)`.
+Board (G2) plays the visits in **event order** of `MARKED.cells` (the reducer keeps the action's order) and clears every `.fx-pend` once `mouseRunMs` has passed whatever the animation state; the game screen (G3) defers the `UNITS_DONE` effects of a mouse action to `mouseLandMs(indexOf(anchor))`; the session (G1) keeps the board locked for `mouseRunMs` and schedules the `mouse` / `mark` sounds at `k × mouseVisitMs` and `mouseLandMs(k)`, and that action's `unit_done` at the anchor's landing. G1-internal: `HelperHost` gains `reducedMotion(): boolean` (for `mouseRunMs`), and the view context gains the per-attempt mouse-use count and the last board-change / visibility time (the pulse, §4.6).
 
 ## 3. G1 internal: the kitty's target (workers)
 
@@ -140,7 +145,7 @@ export interface TickerLine {
   readonly key: TickerKey;
   /** Plural keys (ticker.cats, ticker.solved, ticker.points, period.pill.*): rendered with tn(key, count, { count: formatNumber(count) }). */
   readonly count?: number;
-  /** ticker.best: the stored best time in ms, rendered with formatDuration. */
+  /** ticker.best (level mode only): the stored best time in ms (LevelBest[0]), rendered with formatClock ("4:12"). */
   readonly ms?: number;
 }
 ```
@@ -195,7 +200,7 @@ export interface HintCardProps extends HintTextContext {
 export function hintCutouts(step: HintStep, cells: Readonly<Uint8Array>): CellIndex[];
 ```
 
-The banner flow (G1) hides the banner when the hint overlay opens (`ads.banner.hideDuringHint`) and re-loads it after close only when `minReloadSec` has passed since the last load.
+The banner flow (G1) hides the banner when the hint overlay opens (`ads.banner.hideDuringHint`); after close it re-loads at once when `minReloadSec` has passed since the last load, else one timer re-loads it when the window ends (if the game screen is still up, no modal is open and the board is not won). O1 is the only modal whose close re-shows the banner on the game screen.
 
 ## 5. G2 → G1 / G3: palette, art, board helpers (S0 with placeholders; final art in the build)
 
@@ -243,7 +248,9 @@ export interface GameBarView extends View<GameBarProps> {
   countTo(total: number): void;
 }
 // src/ui/fx/points-flight.ts, cat-burst.ts, done-label.ts (one lazy fx chunk, prefetched at idle), tickers.ts
-// src/audio/sfx.ts: SfxId gains 'mouse' | 'points' | 'unit_done'
+// src/audio/sfx.ts: SfxId gains 'mouse' | 'points' | 'unit_done' AT S0 (placeholder tones), because G1's session plays
+// all three: sounds are played by the app layer, never by ui/ (points at the star's landing, starAtMs + 17 + flightMs
+// after POINTS; unit_done skipped when the action has REGION_DONE).
 ```
 
 ## 7. Strings (G3, English final in S0, `src/i18n/en/ui-2d1.ts`)
@@ -252,15 +259,15 @@ New: `fx.done` ("Done!", ≤ 8 characters), `a11y.unitDone` ("{unit} complete.")
 
 ## 8. Which event plays what
 
-| Event (order within an action) | Board (G2) | Game screen / fx (G3) | Session (G1) |
+| Event (order within an action; `HINT_APPLY` emits `HINT_APPLIED` first, see the last row) | Board (G2) | Game screen / fx (G3) | Session (G1) |
 |---|---|---|---|
 | `MARKED` (tap, paint, Apply) | draw-in + squish on every new cell at once | — | `mark` sound, announcement (2d) |
 | `MARKED { source: 'mouse' }` | the visits in cell order; X pops at `mouseLandMs(k)` | defers this action's `UNITS_DONE` to the anchor's landing | lock for `mouseRunMs`; `mouse` / `mark` sounds per visit; `a11y.mouse` |
 | `CAT_PLACED` (any source) | cat pop / celebrate / wink / settle, tile flash, halo | shards, light, twinkles at `cellRect` | sounds and announcement (2d) |
-| `POINTS` | — | "+N" over the tile → star → `gameBar.countTo(total)` + burst | announcement (2c.1) |
+| `POINTS` | — | "+N" over the tile → star (from the "+N" centre + (−4, +9.5) s) → `gameBar.countTo(total)` + burst | announcement (2c.1); `points` sound at the landing (1 330 ms; at once with reduced motion) |
 | `REGION_DONE` | veil on the region's tiles except the cat's | the head becomes the face + dot | sound, announcement (2d) |
-| `UNITS_DONE` | waves | one label per anchor | `unit_done` sound, `a11y.unitDone` |
-| `HINT_APPLIED` | — (the overlay already closed) | — | `hint_apply` sound (2b) |
+| `UNITS_DONE` | waves | one label per anchor | `unit_done` sound (not with `REGION_DONE` in the same action; at the anchor's landing for a mouse action), `a11y.unitDone` (a region whose `REGION_DONE` is in the same action left out) |
+| `HINT_APPLIED` (first in `HINT_APPLY`'s events, before `MARKED`) | — (the overlay already closed) | — | `hint_apply` sound (2b) |
 
 ## 9. DOM contract (e2e)
 
@@ -270,7 +277,8 @@ New: `fx.done` ("Done!", ≤ 8 characters), `a11y.unitDone` ("{unit} complete.")
 | Ghost X | `.cell[data-ghost=x][data-s=e]` (inline `--gd`) with `path.cell__xo` |
 | Mouse | `.board > .board__mouse[data-cell][data-face=blink|glance|grin]`; pending X `.cell.fx-pend` |
 | Cat sequence, wave, dark tile | `.cell.fx-cat`, `.cell__flash`; `.cell.fx-wave` (inline `--wd`); `.cell[data-dark]` |
-| Fx layer | `.game-fx > .fx-plus`, `.fx-star`, `.fx-burst`, `.fx-shard`, `.fx-done-label[data-anchor]` |
+| Fx layer | `.game-fx > .fx-plus`, `.fx-star`, `.fx-burst`, `.fx-shard`, `.fx-done-label[data-anchor]`; `.game-fx[data-celebrate=ready]` once the lazy fx chunk has loaded |
+| Busy | `.tool-bar[data-busy]` (inputLocked, status `kitty` or `hint`: tools inert without the 0.45 disabled fade); `.board[aria-busy=true]` during the mouse run |
 | Score | `.top-bar--game .points-pill__n[data-counting]` |
 | Heads | `.pills > .pill.pill--heads > .head[data-color][data-done] > svg.head__shape` / `svg.head__face` + `span.head__dot` |
 | Hint overlay | `.overlay[data-overlay=hint][data-instant] > svg.hint-dim`, `.hint-card > .hint-card__text`, `button.hint-apply`, `button.hint-close` (visually hidden until focused) |
@@ -287,6 +295,17 @@ CSS custom properties: tokens `--plus`, `--done-top`, `--done-bottom`, `--done-l
 | `DoneUnit`, `UNITS_DONE` (emitted), `mouseVisitMs` / `mouseLandMs` / `mouseRunMs`, pick order | G1 | S0 | — |
 | `hint-chunk.ts` kitty picker | G1 | build | the 2b picker |
 | `ghostOrder`, `waveOrder`, `xOutlinePath`, `headOrderFor`, `isDarkTile`, tokens (final values), symbols (placeholders) | G2 | S0; final art in the build | placeholders behind the same ids |
-| `TickerLine`, `playTickers?`, `HintCardProps` new members, `hintCutouts`, English keys | G3 | S0 (copy freeze) | — |
+| `TickerLine`, `playTickers?`, `HintCardProps` new members, `hintCutouts`, English keys, `SfxId` additions (placeholder tones) | G3 | S0 (copy freeze) | — |
 | `pickTickerLines`, the session's calls, the pulse rule, the banner hide | G1 | after G3's S0 | 2d behaviour |
 | Required members, deletions | lead | I-3 | — |
+
+---
+
+## Critic changes (independent critic, 2026-10-10; details in helpers-spec "Critic changes")
+
+1. §1: `fx.markDraw` reshaped to `{ squishMs, stroke1Ms, stroke2Ms, overshoot, settleMs }` (the re-measured draw-in: "\" from the centre, "/" from its top-right tip, a 1.1 overshoot, 250 ms); `fx.helperPulse.untilHelperUsed` added.
+2. §2: the `UNITS_DONE` doc comment covers `LOST` (never) and the `HINT_APPLY` order; the mouse paragraph adds the `.fx-pend` finaliser, the deferred `unit_done`, `HelperHost.reducedMotion()` and the view-context additions (G1-internal).
+3. §4: `TickerLine.ms` is rendered with `formatClock`, level mode only; the banner re-show timer after the hint.
+4. §6, §10: `SfxId` additions land at G3's S0; sounds are played by G1 (`points` at the star's landing, `unit_done` skipped with `REGION_DONE`).
+5. §8: `HINT_APPLIED` is the first event of `HINT_APPLY` (the reducer's order), not the last; the `POINTS` and `UNITS_DONE` rows gain the sound rules and the star's start point.
+6. §9: `.game-fx[data-celebrate=ready]`, `.tool-bar[data-busy]`, `.board[aria-busy]`.

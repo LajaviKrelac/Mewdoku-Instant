@@ -6,7 +6,7 @@
 // the sprite's acc-lantern / acc-scarf / acc-yarn symbols on the head grid. B places the element; A
 // owns its look (art.css). Lives in the lazy `events` chunk (reached through src/app/events-chunk.ts):
 // never import it statically from a main-bundle module.
-// The same pattern URLs are written into the [data-event-theme] blocks of styles/tokens.css
+// The same pattern URLs are written into the [data-event-theme] blocks of styles/events-chunk.css (tokens.css until 2d I-4)
 // (tests/unit/ui/css-rules.spec.ts keeps them equal). Loading this module (the events chunk) adds the
 // accessory symbols to the sprite (art/accessories.ts), so the event board's cats can wear them too.
 import type { EventDef, EventPageArt } from '../../game/events';
