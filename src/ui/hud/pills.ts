@@ -42,21 +42,14 @@ export interface PillsProps {
   readonly hearts: number;
   /** Lives at the start of an attempt (3; an event may set another number). */
   readonly maxHearts: number;
-  /** @deprecated phase2d: the compact pill sizes are retired (look-spec §1.1); ignored. Removed at I-3. */
-  readonly compact: boolean;
   /** Reduced motion (§1.3): the fish loss becomes a 150 ms swap; no pop, roll or rise. Default false. */
   readonly reducedMotion?: boolean;
-  /**
-   * @deprecated phase2d: the level points moved to the game bar's Score column (look-spec §1.13);
-   * ignored here. Removed at I-3.
-   */
-  readonly points?: number | null;
-  /** Phase 2d §1.6: palette index per region label (BoardModel.colors). Absent: region r has colour r. */
-  readonly colors?: ArrayLike<number>;
-  /** Phase 2d §1.6: the regions whose cat is found (BoardModel.regionsDone, bit per region label). Absent = none. */
-  readonly regionsDone?: number;
+  /** Phase 2d §1.6: palette index per region label (BoardModel.colors). */
+  readonly colors: ArrayLike<number>;
+  /** Phase 2d §1.6: the regions whose cat is found (BoardModel.regionsDone, bit per region label). */
+  readonly regionsDone: number;
   /** Phase 2d §1.6: the board's identity (BoardModel.puzzleId); a new one sets the heads without motion. */
-  readonly boardId?: string;
+  readonly boardId: string;
 }
 
 /** A full life slot and its icon's client rect (the win flight's source, §2.3). */
@@ -457,7 +450,7 @@ export function createPills(props: PillsProps): PillsView {
 
   /** Rebuilds the heads for a new colour set; returns true when it did (a new board: no motion). */
   const ensureHeads = (p: PillsProps): boolean => {
-    const colors = p.colors ?? Array.from({ length: p.n }, (_, r) => r);
+    const colors = p.colors;
     const order = headColors(colors, p.n);
     colorOf = (r) => Number(colors[r] ?? r);
     const key = order.join(',');
@@ -504,7 +497,7 @@ export function createPills(props: PillsProps): PillsView {
     heads.style.setProperty('--hk', String(Math.round(headScale(headEls.size, Math.max(1, p.maxHearts)) * 1000) / 1000));
     // Found colours (§1.6): full colour; a head that lost its cat fades back to the tint (150 ms).
     const done = new Set<number>();
-    const bits = p.regionsDone ?? 0;
+    const bits = p.regionsDone;
     for (let r = 0; r < p.n; r++) if (bits & (1 << r)) done.add(colorOf(r));
     for (const [c, head] of headEls) {
       const was = head.hasAttribute('data-done');

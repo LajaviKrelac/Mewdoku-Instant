@@ -1,9 +1,10 @@
-// Owner: B (Phase 2b; was ui-board)
+// Owner: B (Phase 2b; was ui-board); lead (Phase 2d I-1: the game scene mounts the real 2d game screen)
 // Dev harness (not shipped): renders the board, HUD and art in isolation. Run
 // `npx vite --port 5174 --strictPort` and open /dev/board-harness.html?scene=…
-//   scene=game&n=5|9|12[&patterns=1][&hint=1][&coach=1][&hard=1][&fb=1][&mood=sad|happy][&rm=1]
+//   scene=game&n=5|9|12[&patterns=1][&hint=1][&coach=1][&hard=1][&fb=1][&rm=1][&fresh=1][&entry=1]
+//     [&video=1][&band=1][&dot=0][&toast=level|hard|retry]   (Phase 2d: the real game screen; M = mouse)
 //   scene=gallery (cat moods, icons, glyphs, marks)   scene=illus (illustrations)
-// The game scene is playable with the real reducer (tap, double-tap, drag; H = hint).
+// The game scene is playable with the real reducer (tap, double-tap, drag; H = hint, M = mouse).
 import '../src/styles/tokens.css';
 import '../src/styles/base.css';
 import '../src/styles/board.css';
@@ -17,20 +18,17 @@ import { recordToPuzzle } from '../src/engine/codec';
 import { getHintStep } from '../src/engine/hint';
 import type { CellIndex, LevelPack, Puzzle } from '../src/engine/types';
 import { newGame } from '../src/game/factory';
+import { hasMouseCandidate, mouseSeed, pickMouseCells } from '../src/game/mouse';
 import { reduce } from '../src/game/reducer';
 import { CellState, type Action, type GameState } from '../src/game/types';
 import { t } from '../src/i18n';
 import { illustration, type IllustrationKind } from '../src/ui/art/illustrations';
 import { regionColorsFor } from '../src/ui/art/palette';
 import { icon, mountSprite, type SymbolId } from '../src/ui/art/sprite';
-import { createBoardView, type BoardModel, type CatMood } from '../src/ui/board/board-view';
-import { computeLayout, readViewport } from '../src/ui/board/layout';
+import type { BoardModel } from '../src/ui/board/board-view';
 import { createAnnouncer } from '../src/ui/a11y/announcer';
 import { applyMotion } from '../src/ui/fx/motion';
-import { createPills } from '../src/ui/hud/pills';
-import { createRuleChips } from '../src/ui/hud/rule-chips';
-import { createToolBar } from '../src/ui/hud/tool-bar';
-import { createTopBar } from '../src/ui/hud/top-bar';
+import { createGameScreen, type GameView, type StartToastKind } from '../src/ui/screens/game-screen';
 
 const q = new URLSearchParams(location.search);
 const root = document.getElementById('app') as HTMLElement;
@@ -79,72 +77,11 @@ function gameScene(): void {
   const colors = regionColorsFor(puzzle, null);
   let state = q.get('fresh') === '1' ? reduce(newGame(puzzle, 'level'), { type: 'START' }).state : seedState(puzzle, newGame(puzzle, 'level'));
   const patterns = q.get('patterns') === '1';
+  const hard = q.get('hard') === '1';
+  const reducedMotion = q.get('rm') === '1';
   const announcer = createAnnouncer(document.body);
+  let mouseUses = 0;
   const model = (): BoardModel => ({ puzzleId: puzzle.id, n, regions: puzzle.regions, colors, cells: state.cells, regionsDone: state.regionsDone, patterns });
-
-  const dispatch = (a: Action): void => {
-    const r = reduce(state, a);
-    state = r.state;
-    render();
-    for (const ev of r.events) {
-      board.playEvent(ev);
-      pills.playEvent(ev);
-      if (ev.type === 'CAT_PLACED') announcer.say(t('a11y.catPlaced', { placed: state.catsPlaced, n }));
-    }
-  };
-
-  const topBar = createTopBar(
-    { title: t('game.title.level', { level: q.get('hard') === '1' ? 40 : 7 }), hard: q.get('hard') === '1', showHome: true, showSettings: true, showTrophy: false, fbSafeZone: q.get('fb') === '1' },
-    { onHome: () => undefined, onSettings: () => undefined, onTrophy: () => undefined },
-  );
-  const pills = createPills({ catsPlaced: state.catsPlaced, n, hearts: state.hearts, maxHearts: 3, compact: false, points: state.levelPoints });
-  const chips = createRuleChips({ compact: false, highlight: q.get('coach') === '1' ? 'space' : null });
-  const hint = (): void => {
-    if (state.status === 'playing') dispatch({ type: 'HINT_OPEN', step: getHintStep(puzzle, state.cells), charged: true });
-    else if (state.status === 'hint') dispatch({ type: 'HINT_APPLY', t: performance.now() });
-  };
-  const tools = createToolBar({ hints: 5, kitties: 0, bulbEnabled: true, pawEnabled: true, hintsFree: false }, { onBulb: hint, onPaw: () => undefined });
-  const board = createBoardView(
-    model(),
-    {
-      tap: (cell) => dispatch({ type: 'TAP', cell, t: performance.now() }),
-      doubleTap: (cell) => dispatch({ type: 'DOUBLE_TAP', cell, t: performance.now() }),
-      paint: (cells, mode) => dispatch({ type: 'PAINT', cells, mode, t: performance.now() }),
-      bulb: hint,
-      paw: () => undefined,
-    },
-    { reducedMotion: () => q.get('rm') === '1' },
-  );
-  const screen = document.createElement('div');
-  screen.className = 'screen screen--game';
-  const col = document.createElement('div');
-  col.className = 'game__col';
-  const hud = document.createElement('div');
-  hud.className = 'game__hud';
-  hud.append(pills.el, chips.el);
-  const stage = document.createElement('div');
-  stage.className = 'game__stage';
-  stage.appendChild(board.el);
-  const toolRow = document.createElement('div');
-  toolRow.className = 'game__tools';
-  toolRow.appendChild(tools.el);
-  col.append(hud, stage, toolRow);
-  screen.append(topBar.el, col);
-  root.appendChild(screen);
-
-  const relayout = (): void => {
-    const vp = readViewport(window);
-    const L = computeLayout({ vw: Math.min(vp.vw, 560), vh: vp.vh, safeTop: vp.safeTop, safeBottom: vp.safeBottom, n });
-    const vars: Record<string, string> = {
-      '--col-w': `${L.colW}px`, '--top-bar': `${L.topBar}px`, '--pills': `${L.pills}px`, '--chips': `${L.chips}px`,
-      '--tools': `${L.tools}px`, '--board': `${L.board}px`, '--vgap': `${cfg.layout.vGap}px`,
-    };
-    for (const [k, v] of Object.entries(vars)) screen.style.setProperty(k, v);
-    screen.dataset.compact = String(L.compact);
-    board.setSlot(L.slot);
-    pills.update({ catsPlaced: state.catsPlaced, n, hearts: state.hearts, maxHearts: 3, compact: L.compact, points: state.levelPoints });
-    chips.update({ compact: L.compact, highlight: q.get('coach') === '1' ? 'space' : null });
-  };
 
   const coachCells = (): CellIndex[] | null => {
     if (q.get('coach') !== '1') return null;
@@ -152,22 +89,69 @@ function gameScene(): void {
     return [r * n + (puzzle.solution[r] as number)];
   };
 
-  function render(): void {
-    board.update(model());
-    pills.update({ catsPlaced: state.catsPlaced, n, hearts: state.hearts, maxHearts: 3, compact: screen.dataset.compact === 'true', points: state.levelPoints });
+  /** Phase 2d (I-1): the real game screen (the 2d stack, bar, heads, cards, three helpers) on the reducer's state. */
+  const view = (): GameView => {
     const coach = coachCells();
-    board.setHighlight(state.openHint ? { kind: 'hint', step: state.openHint } : coach ? { kind: 'coach', cells: coach } : null);
-    board.setLocked(state.status !== 'playing' || coach !== null);
-  }
+    const playing = state.status === 'playing';
+    return {
+      mode: 'level',
+      level: hard ? 40 : 7,
+      dateKey: null,
+      hard,
+      showHome: true,
+      hearts: state.hearts,
+      maxHearts: 3,
+      catsPlaced: state.catsPlaced,
+      status: state.status,
+      hints: 5,
+      kitties: 3,
+      hintsFree: false,
+      bulbEnabled: playing,
+      pawEnabled: false,
+      inputLocked: !playing || coach !== null,
+      board: model(),
+      highlight: state.openHint ? { kind: 'hint', step: state.openHint } : coach ? { kind: 'coach', cells: coach } : null,
+      chipHighlight: q.get('coach') === '1' ? 'space' : null,
+      fbSafeZone: q.get('fb') === '1',
+      reducedMotion,
+      event: null,
+      points: state.levelPoints,
+      pulse: reducedMotion || !playing ? null : state.cells.some((c) => c !== CellState.Empty && c !== CellState.Given) ? 'bulb' : 'paw',
+      mouse: { shown: true, enabled: playing && hasMouseCandidate(state) },
+      videoRefill: q.get('video') === '1',
+      bannerBand: q.get('band') === '1',
+      settingsDot: q.get('dot') !== '0',
+    };
+  };
 
-  window.addEventListener('resize', relayout);
-  relayout();
+  const dispatch = (a: Action): void => {
+    const r = reduce(state, a);
+    state = r.state;
+    screen.update(view());
+    for (const ev of r.events) {
+      screen.playEvent(ev);
+      if (ev.type === 'CAT_PLACED') announcer.say(t('a11y.catPlaced', { placed: state.catsPlaced, n }));
+    }
+  };
+  const hint = (): void => {
+    if (state.status === 'playing') dispatch({ type: 'HINT_OPEN', step: getHintStep(puzzle, state.cells), charged: true });
+    else if (state.status === 'hint') dispatch({ type: 'HINT_APPLY', t: performance.now() });
+  };
+  const screen = createGameScreen(view(), {
+    onTap: (cell) => dispatch({ type: 'TAP', cell, t: performance.now() }),
+    onDoubleTap: (cell) => dispatch({ type: 'DOUBLE_TAP', cell, t: performance.now() }),
+    onPaint: (cells, mode) => dispatch({ type: 'PAINT', cells, mode, t: performance.now() }),
+    onBulb: hint,
+    onPaw: () => undefined,
+    onMouse: () => dispatch({ type: 'MOUSE', cells: pickMouseCells(state, cfg.mouse.cells, mouseSeed(puzzle.id, mouseUses++)), t: performance.now() }),
+    onHome: () => undefined,
+    onSettings: () => undefined,
+  });
+  root.appendChild(screen.el);
   if (q.get('hint') === '1') hint();
-  const mood = q.get('mood') as CatMood | null;
-  if (mood) board.setMood(mood);
-  render();
-  if (q.get('entry') === '1') board.playEntry();
-  (window as unknown as { __harness: unknown }).__harness = { dispatch, state: () => state, board, puzzle, CellState };
+  if (q.get('entry') === '1') screen.playEntry();
+  if (q.get('toast')) screen.playStartToast(q.get('toast') as StartToastKind);
+  (window as unknown as { __harness: unknown }).__harness = { dispatch, state: () => state, screen, puzzle, CellState };
 }
 
 function swatch(label: string, el: Element): HTMLElement {
@@ -202,7 +186,7 @@ function galleryScene(): void {
   section('Cats on tiles (36 px slot)', tiles);
   const ids: SymbolId[] = [
     'icon-house', 'icon-gear', 'icon-bulb', 'icon-paw', 'icon-fish', 'icon-fish-empty', 'icon-points', 'icon-trophy', 'icon-lock',
-    'icon-calendar', 'icon-play-video', 'icon-close', 'icon-chevron', 'icon-rule-colours', 'icon-rule-lines', 'icon-rule-space',
+    'icon-calendar', 'icon-play-video', 'icon-close', 'icon-chevron', 'icon-back', 'icon-play',
   ];
   section('Icons', ids.map((id) => swatch(id.slice(5), icon(id, { class: 'hx-icon' }))));
   section('Pattern glyphs', Array.from({ length: 12 }, (_, i) => {
@@ -212,7 +196,8 @@ function galleryScene(): void {
     tile.appendChild(icon(`glyph-${i}` as SymbolId, { class: 'hx-glyph' }));
     return swatch(String(i), tile);
   }));
-  section('Marks', (['mark-x', 'wrong-x'] as SymbolId[]).map((id) => {
+  section('Phase 2d art', (['tool-kitty', 'tool-bulb', 'tool-mouse', 'cat-head-flat', 'art-flex'] as SymbolId[]).map((id) => swatch(id, icon(id, { class: 'hx-cat' }))));
+  section('Marks', (['mark-x'] as SymbolId[]).map((id) => {
     const tile = document.createElement('div');
     tile.className = 'hx-tile';
     tile.style.background = 'var(--r10)';

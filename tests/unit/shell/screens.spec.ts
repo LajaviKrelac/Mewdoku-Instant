@@ -127,6 +127,7 @@ describe('S1 home', () => {
     period: { kind: 'week', total: 42 },
     event: null,
     bannerReserved: false,
+    settingsDot: false,
     ...over,
   });
   const callbacks = (): HomeCallbacks => ({
@@ -226,6 +227,11 @@ describe('S2 game', () => {
     reducedMotion: false,
     event: null,
     points: null,
+    pulse: null,
+    mouse: { shown: false, enabled: false },
+    videoRefill: false,
+    bannerBand: false,
+    settingsDot: false,
     ...over,
   });
   const callbacks = (): GameScreenCallbacks => ({
@@ -236,6 +242,7 @@ describe('S2 game', () => {
     onPaw: vi.fn(),
     onHome: vi.fn(),
     onSettings: vi.fn(),
+    onMouse: vi.fn(),
   });
 
   it('titles levels, the tutorial and dailies', () => {

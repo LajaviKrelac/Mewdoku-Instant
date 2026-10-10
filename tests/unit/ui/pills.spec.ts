@@ -17,13 +17,14 @@ afterEach(() => {
   document.body.textContent = '';
 });
 
-const base: PillsProps = { catsPlaced: 0, n: 8, hearts: 3, maxHearts: 3, compact: false };
+/** Region r has palette colour r (the 2d props are required since I-3). */
+const base: PillsProps = { catsPlaced: 0, n: 8, hearts: 3, maxHearts: 3, colors: [0, 1, 2, 3, 4, 5, 6, 7], regionsDone: 0, boardId: 'L0' };
 
 const uses = (el: Element | null | undefined): string[] => Array.from(el?.querySelectorAll('use') ?? []).map((u) => u.getAttribute('href') ?? '');
 
 describe('the lives pill (§1.1)', () => {
   it('shows the heads pill and maxHearts fish slots with accessible labels; no heart, no cat counter', () => {
-    const p = createPills({ catsPlaced: 3, n: 8, hearts: 2, maxHearts: 3, compact: false });
+    const p = createPills({ ...base, catsPlaced: 3, hearts: 2 });
     expect(p.el.querySelector('.pill--cats, .pill__count, .points-pill')).toBeNull();
     expect(p.el.querySelector('.pill--heads')?.getAttribute('aria-label')).toBe('3 of 8 cats placed');
     const lives = p.el.querySelector('.pill--lives') as HTMLElement;
@@ -38,8 +39,8 @@ describe('the lives pill (§1.1)', () => {
     }
     expect(p.el.querySelector('.pill--hearts, .heart')).toBeNull();
     expect(p.el.innerHTML).not.toContain('icon-heart');
-    // Phase 2d: the compact sizes are retired (the prop is ignored until I-3).
-    p.update({ catsPlaced: 4, n: 8, hearts: 2, maxHearts: 3, compact: true });
+    // Phase 2d: the compact sizes are retired (2d I-3: the prop is gone).
+    p.update({ ...base, catsPlaced: 4, hearts: 2 });
     expect(p.el.hasAttribute('data-compact')).toBe(false);
     expect(p.el.hasAttribute('data-tight')).toBe(false);
     expect(p.el.querySelector('.pill--heads')?.getAttribute('aria-label')).toBe('4 of 8 cats placed');

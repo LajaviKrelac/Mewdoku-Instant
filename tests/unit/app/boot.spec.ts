@@ -77,6 +77,7 @@ function fakeUi(log: string[]): Ui {
         periodRect: () => null,
         periodLabel: () => undefined,
         glow: () => ({ done: Promise.resolve(), cancel: () => undefined, finish: () => undefined }),
+        playStartToast: (kind) => void log.push(`startToast:${kind}`),
       };
     },
     toastLayer: () => ({ el: document.createElement('div'), show: (m) => void log.push(`toast:${m}`), clear: () => undefined, destroy: () => undefined }),

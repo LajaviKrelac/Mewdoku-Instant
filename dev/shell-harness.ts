@@ -81,6 +81,7 @@ const gameCallbacks = {
   onPaw: log('onPaw'),
   onHome: log('onHome'),
   onSettings: log('onSettings'),
+  onMouse: log('onMouse'),
 };
 
 function game(v: GameView): GameScreen {

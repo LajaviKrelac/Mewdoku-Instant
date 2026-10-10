@@ -1,4 +1,4 @@
-// Owner: B (Phase 2b); G2 (Phase 2d: setSlot's card frame, BoardInput.mouse)
+// Owner: B (Phase 2b); G2 (Phase 2d: setSlot's card frame, BoardInput.mouse; required since 2d I-3)
 // Board view contract types (04 §5.3), re-exported by board-view.ts (the module callers import).
 import type { CellIndex, HintStep, PuzzleId } from '../../engine/types';
 import type { EventAccessory } from '../../game/events';
@@ -32,8 +32,8 @@ export interface BoardInput {
   paint(cells: CellIndex[], mode: PaintMode): void;
   bulb(): void;
   paw(): void;
-  /** Phase 2d (look-spec §1.11): the M key on a focused cell. Optional until I-3. */
-  mouse?(): void;
+  /** Phase 2d (look-spec §1.11): the M key on a focused cell. */
+  mouse(): void;
 }
 
 /** Phase 2d (look-spec §1.8): the board card's padding (card edge → first slot edge) and corner radius, from computeLayout. */
@@ -53,10 +53,10 @@ export interface BoardView {
   readonly el: HTMLElement;
   update(model: BoardModel): void;
   /**
-   * Slot size from layout.computeLayout (re-applied on resize). Phase 2d: `frame` = the card padding
-   * and corner radius from computeLayout (absent: the 2b layout.boardPad / layout.boardRadius).
+   * Slot size from layout.computeLayout (re-applied on resize), with `frame`: the card padding and
+   * corner radius from computeLayout (Phase 2d, look-spec §1.8; required since 2d I-3).
    */
-  setSlot(slotPx: number, frame?: BoardFrame): void;
+  setSlot(slotPx: number, frame: BoardFrame): void;
   geometry(): BoardGeometry;
   cellElement(cell: CellIndex): HTMLElement | null;
   /** Client rect of a cell's tile (coach positioning). */

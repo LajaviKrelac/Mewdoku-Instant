@@ -46,6 +46,7 @@ const homeView = (over: Partial<HomeView> = {}): HomeView => ({
   period: { kind: 'week', total: 42 },
   event: null,
   bannerReserved: false,
+  settingsDot: false,
   ...over,
 });
 const homeCb = () => ({ onPlay: vi.fn(), onDaily: vi.fn(), onSettings: vi.fn(), onTrophy: vi.fn(), onCard: vi.fn(), onEvent: vi.fn() });
@@ -183,10 +184,15 @@ function gameView(over: Partial<GameView> = {}): GameView {
     reducedMotion: false,
     event: null,
     points: null,
+    pulse: null,
+    mouse: { shown: false, enabled: false },
+    videoRefill: false,
+    bannerBand: false,
+    settingsDot: false,
     ...over,
   };
 }
-const gameCb = () => ({ onTap: vi.fn(), onDoubleTap: vi.fn(), onPaint: vi.fn(), onBulb: vi.fn(), onPaw: vi.fn(), onHome: vi.fn(), onSettings: vi.fn() });
+const gameCb = () => ({ onTap: vi.fn(), onDoubleTap: vi.fn(), onPaint: vi.fn(), onBulb: vi.fn(), onPaw: vi.fn(), onHome: vi.fn(), onSettings: vi.fn(), onMouse: vi.fn() });
 
 describe('game screen: win-flow hooks and event mode (phase2b §2.2, §4.4)', () => {
   it('Phase 2c lift-off hooks (§2.2, §7.4): life slots, departures, the period counter and its "+N"', () => {
@@ -284,6 +290,7 @@ const eventView = (over: Partial<EventScreenView> = {}): EventScreenView => ({
   fbSafeZone: false,
   reducedMotion: false,
   bannerReserved: false,
+  settingsDot: false,
   ...over,
 });
 

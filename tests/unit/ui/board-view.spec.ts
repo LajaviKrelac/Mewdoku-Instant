@@ -27,7 +27,7 @@ describe('createBoardView', () => {
 
   beforeEach(() => {
     mountSprite();
-    input = { tap: vi.fn(), doubleTap: vi.fn(), paint: vi.fn(), bulb: vi.fn(), paw: vi.fn() };
+    input = { tap: vi.fn(), doubleTap: vi.fn(), paint: vi.fn(), bulb: vi.fn(), paw: vi.fn(), mouse: vi.fn() };
     board = createBoardView(model(), input as unknown as BoardInput, { reducedMotion: () => false });
     document.body.appendChild(board.el);
   });
@@ -51,10 +51,10 @@ describe('createBoardView', () => {
     expect((cell(0).querySelector('.cell__tile') as HTMLElement).style.getPropertyValue('--c')).toBe('var(--r4)');
     // look-spec §1.8 even gutters (no region dependence): every tile inset gap / 2 with gap =
     // round(slot × 7.9 %) — one board-level value that every tile inherits (PERF-1).
-    board.setSlot(38);
+    board.setSlot(38, { pad: 5, radius: 11.6 });
     for (const k of ['--it', '--ir', '--ib', '--il']) expect(board.el.style.getPropertyValue(k)).toBe('1.5px');
     expect(board.el.style.getPropertyValue('--gap')).toBe('3px');
-    board.setSlot(24);
+    board.setSlot(24, { pad: 3, radius: 7.3 });
     expect(board.el.style.getPropertyValue('--il')).toBe('1px');
     expect(board.el.style.getPropertyValue('--gap')).toBe('2px');
     // roving tabindex: only the first cell is tabbable
@@ -267,10 +267,10 @@ describe('createBoardView', () => {
   });
 
   it('setSlot and geometry report the slot size', () => {
-    board.setSlot(40);
+    board.setSlot(40, { pad: 6, radius: 13.2 });
     expect(board.el.style.getPropertyValue('--slot')).toBe('40px');
     const g = board.geometry(); // jsdom has no layout: falls back to the slot size
-    expect(g).toMatchObject({ pad: cfg.layout.boardPad, slot: 40, n: 4 });
+    expect(g).toMatchObject({ pad: 6, slot: 40, n: 4 });
     expect(board.cellRect(0)).not.toBeNull();
     expect(board.cellRect(99)).toBeNull();
   });

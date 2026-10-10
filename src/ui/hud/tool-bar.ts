@@ -24,19 +24,19 @@ export interface ToolBarProps {
   readonly pawEnabled: boolean;
   /** Tutorial: the bulb is free, so its badge reads "Free" (02 §9.3). */
   readonly hintsFree: boolean;
-  /** Phase 2d §1.12: the mouse helper; absent = not shown (its slot stays, data-off). */
-  readonly mouse?: { readonly shown: boolean; readonly enabled: boolean };
+  /** Phase 2d §1.12: the mouse helper; not shown = its slot stays, data-off. */
+  readonly mouse: { readonly shown: boolean; readonly enabled: boolean };
   /** Phase 2d §1.11: a rewarded video can refill a helper (the video badge at 0, and on the mouse). */
-  readonly videoRefill?: boolean;
-  /** Phase 2d §1.11: the helper that pulses now (GameView.pulse); null or absent = none. */
-  readonly pulse?: 'paw' | 'bulb' | null;
+  readonly videoRefill: boolean;
+  /** Phase 2d §1.11: the helper that pulses now (GameView.pulse); null = none. */
+  readonly pulse: 'paw' | 'bulb' | null;
 }
 
 export interface ToolBarCallbacks {
   onBulb(): void;
   onPaw(): void;
-  /** Phase 2d §1.12: the mouse button. Optional until I-3. */
-  onMouse?(): void;
+  /** Phase 2d §1.12: the mouse button. */
+  onMouse(): void;
 }
 
 export type ToolKind = 'paw' | 'bulb' | 'mouse';
@@ -88,7 +88,7 @@ export function createToolBar(props: ToolBarProps, cb: ToolBarCallbacks): ToolBa
   el.className = 'tool-bar';
   const paw = tool('paw', () => cb.onPaw());
   const bulb = tool('bulb', () => cb.onBulb());
-  const mouse = tool('mouse', () => cb.onMouse?.());
+  const mouse = tool('mouse', () => cb.onMouse());
   // DOM (and Tab) order: kitty · bulb · mouse (look-spec §1.11, §1.18).
   el.append(paw.btn, bulb.btn, mouse.btn);
 
@@ -103,8 +103,8 @@ export function createToolBar(props: ToolBarProps, cb: ToolBarCallbacks): ToolBa
       prev.hintsFree === p.hintsFree &&
       prev.videoRefill === p.videoRefill &&
       prev.pulse === p.pulse &&
-      prev.mouse?.shown === p.mouse?.shown &&
-      prev.mouse?.enabled === p.mouse?.enabled
+      prev.mouse.shown === p.mouse.shown &&
+      prev.mouse.enabled === p.mouse.enabled
     )
       return;
     const bump = (r: ToolRefs, before: number | undefined, now: number): void => {
@@ -117,7 +117,7 @@ export function createToolBar(props: ToolBarProps, cb: ToolBarCallbacks): ToolBa
     bump(bulb, prev?.hints, p.hints);
     bump(paw, prev?.kitties, p.kitties);
     prev = p;
-    const video = p.videoRefill === true;
+    const video = p.videoRefill;
     // Kitty and bulb (§1.11): the count; "Free" (tutorial bulb); at 0 the video badge or a muted 0.
     const stock = (r: ToolRefs, n: number, free: boolean, name: string, countName: string): void => {
       const empty = !free && n <= 0;
@@ -129,7 +129,7 @@ export function createToolBar(props: ToolBarProps, cb: ToolBarCallbacks): ToolBa
     stock(paw, p.kitties, false, t('game.tool.kitty'), t('game.tool.kitty.a11y', { count: p.kitties }));
     stock(bulb, p.hints, p.hintsFree, t('game.tool.hint'), t('game.tool.hint.a11y', { count: p.hints }));
     // The mouse (§1.12): no stock; the video badge when a video pays for it, else none.
-    const shown = p.mouse?.shown === true;
+    const shown = p.mouse.shown;
     setBadge(mouse, video ? { kind: 'video', text: '' } : null);
     mouse.btn.toggleAttribute('data-off', !shown);
     mouse.btn.toggleAttribute('inert', !shown);
@@ -143,7 +143,7 @@ export function createToolBar(props: ToolBarProps, cb: ToolBarCallbacks): ToolBa
     mouse.btn.setAttribute('aria-label', t('game.tool.mouse.a11y', { count: formatNumber(cfg.mouse.cells) }));
     paw.btn.disabled = !p.pawEnabled;
     bulb.btn.disabled = !p.bulbEnabled;
-    mouse.btn.disabled = !shown || p.mouse?.enabled !== true;
+    mouse.btn.disabled = !shown || !p.mouse.enabled;
     // The idle pulse (§1.11) only on an enabled helper.
     paw.btn.toggleAttribute('data-pulse', p.pulse === 'paw' && p.pawEnabled);
     bulb.btn.toggleAttribute('data-pulse', p.pulse === 'bulb' && p.bulbEnabled);

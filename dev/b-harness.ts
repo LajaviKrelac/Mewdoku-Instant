@@ -106,6 +106,7 @@ const gameCallbacks = {
   onPaw: log('onPaw'),
   onHome: log('onHome'),
   onSettings: log('onSettings'),
+  onMouse: log('onMouse'),
 };
 
 function game(v: GameView): GameScreen {
@@ -388,6 +389,7 @@ function eventScreen(solvedCount: number, nextIndex: number | null, over: Partia
     fbSafeZone: fb,
     reducedMotion: reduced,
     bannerReserved: banner,
+    settingsDot: false,
     ...over,
   };
   mountScreen(createEventScreen(v, { onPlay: log('onPlay'), onTopList: log('onTopList'), onHome: log('onHome'), onSettings: log('onSettings') }).el);

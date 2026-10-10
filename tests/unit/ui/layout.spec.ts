@@ -64,9 +64,9 @@ describe('computeLayout (look-spec §1.1)', () => {
     expect(g.pills).toBeCloseTo(31.3, 5);
     expect(g.rules).toBeCloseTo(60.3, 5);
     expect(g.gaps).toMatchObject({ barToPills: 10.3, pillsToRules: 8.3, rulesToBoard: 25.7, boardToTools: 53, toolsToBanner: 23.4, bottom: 12.3 });
-    // the 2b names carry the 2d values until I-3
-    expect(g.topBar).toBe(g.bar);
-    expect(g.chips).toBe(g.rules);
+    // 2d I-3: the 2b names (topBar, chips) are gone
+    expect(g).not.toHaveProperty('topBar');
+    expect(g).not.toHaveProperty('chips');
     // without the band the toolsToBanner gap is gone too
     expect(computeLayout({ vw: 402, vh: 874, safeTop: 62, safeBottom: 34, n: 10 }).gaps.toolsToBanner).toBe(0);
   });

@@ -81,16 +81,16 @@ export interface GameView {
    * levelPoints.modes). Required since 2c.1 I-3.
    */
   readonly points: number | null;
-  /** Phase 2d §1.11: which helper pulses now (fx.helperPulse.target); null or absent = none. Required at I-3. */
-  readonly pulse?: 'paw' | 'bulb' | null;
-  /** Phase 2d §1.12: the third helper, shown (cfg.mouse.enabled, not the tutorial, the mode allows the kitty) and enabled. Required at I-3. */
-  readonly mouse?: { readonly shown: boolean; readonly enabled: boolean };
-  /** Phase 2d §1.11: a rewarded video can refill a helper (the video badge at 0, always on the mouse). Required at I-3. */
-  readonly videoRefill?: boolean;
-  /** Phase 2d §1.16: the banner band is reserved on this game screen. Required at I-3. */
-  readonly bannerBand?: boolean;
-  /** Phase 2d §1.15: the gear's red dot. Required at I-3. */
-  readonly settingsDot?: boolean;
+  /** Phase 2d §1.11: which helper pulses now (fx.helperPulse.target); null = none. */
+  readonly pulse: 'paw' | 'bulb' | null;
+  /** Phase 2d §1.12: the third helper, shown (cfg.mouse.enabled, not the tutorial, the mode allows the kitty) and enabled. */
+  readonly mouse: { readonly shown: boolean; readonly enabled: boolean };
+  /** Phase 2d §1.11: a rewarded video can refill a helper (the video badge at 0, always on the mouse). */
+  readonly videoRefill: boolean;
+  /** Phase 2d §1.16: the banner band is reserved on this game screen. */
+  readonly bannerBand: boolean;
+  /** Phase 2d §1.15: the gear's red dot. */
+  readonly settingsDot: boolean;
 }
 
 /** Phase 2d: the three helpers of the tool row (kitty, bulb, mouse). */
@@ -104,8 +104,8 @@ export interface GameScreenCallbacks {
   onPaw(): void;
   onHome(): void;
   onSettings(): void;
-  /** Phase 2d §1.12: the mouse button or the M key. Optional until I-3. */
-  onMouse?(): void;
+  /** Phase 2d §1.12: the mouse button or the M key. */
+  onMouse(): void;
 }
 
 export interface GameScreen extends View<GameView> {
@@ -136,8 +136,8 @@ export interface GameScreen extends View<GameView> {
    * overlay is open (the overlay brings its own scrim). Optional (phase2b B addition).
    */
   showScrim?(): void;
-  /** Phase 2d §1.14: the level-start toast (G1 calls it from playBoardEntry on a fresh board or a Retry). Optional until I-3. */
-  playStartToast?(kind: StartToastKind): void;
+  /** Phase 2d §1.14: the level-start toast (G1 calls it from playBoardEntry on a fresh board or a Retry). */
+  playStartToast(kind: StartToastKind): void;
 }
 
 /** The top-bar title for a game view ("Level 37", "Daily · Tue 6 Oct", "Lantern Walk · 13"). */
@@ -208,14 +208,14 @@ export function fbShift(o: { readonly vw: number; readonly colW: number; readonl
 
 export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameScreen {
   let current = view;
-  let layout: GameLayout = computeLayout({ vw: 402, vh: 874, safeTop: 0, safeBottom: 0, n: view.board.n, banner: view.bannerBand === true });
+  let layout: GameLayout = computeLayout({ vw: 402, vh: 874, safeTop: 0, safeBottom: 0, n: view.board.n, banner: view.bannerBand });
 
   const barProps = (v: GameView): GameBarProps => ({
     title: gameTitle(v),
     hard: v.hard,
     showBack: v.showHome,
     fbSafeZone: v.fbSafeZone,
-    settingsDot: v.settingsDot === true,
+    settingsDot: v.settingsDot,
     points: v.points,
     final: v.catsPlaced >= v.board.n && v.board.n > 0,
     reducedMotion: v.reducedMotion,
@@ -225,7 +225,6 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
     n: v.board.n,
     hearts: v.hearts,
     maxHearts: v.maxHearts,
-    compact: layout.compact,
     reducedMotion: v.reducedMotion,
     colors: v.board.colors,
     regionsDone: v.board.regionsDone,
@@ -238,15 +237,15 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
     bulbEnabled: v.bulbEnabled,
     pawEnabled: v.pawEnabled,
     hintsFree: v.hintsFree,
-    mouse: v.mouse ?? { shown: false, enabled: false },
-    videoRefill: v.videoRefill === true,
-    pulse: v.pulse ?? null,
+    mouse: v.mouse,
+    videoRefill: v.videoRefill,
+    pulse: v.pulse,
   });
 
   const locked = (): boolean => current.chromeLocked === true;
-  const mouseReady = (): boolean => current.mouse?.shown === true && current.mouse.enabled;
+  const mouseReady = (): boolean => current.mouse.shown && current.mouse.enabled;
   const onMouse = (): void => {
-    if (mouseReady()) cb.onMouse?.();
+    if (mouseReady()) cb.onMouse();
   };
   const topBar = createGameBar(barProps(view), {
     onBack: () => {
@@ -322,7 +321,7 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
       safeBottom: vp.safeBottom,
       n: current.board.n,
       textScale: vp.remPx / 16,
-      banner: current.bannerBand === true,
+      banner: current.bannerBand,
     });
     const compactChanged = next.compact !== layout.compact;
     layout = next;
@@ -367,10 +366,7 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
       Math.max(vp.safeBottom + 12, vh - toolsTop + BADGE_REACH * next.s + 4),
     );
     board.setSlot(next.slot, { pad: next.pad, radius: next.radius });
-    if (compactChanged) {
-      pills.update(pillsProps(current));
-      chips.update(chipsProps(current));
-    }
+    if (compactChanged) chips.update(chipsProps(current));
     topBar.fit();
   };
 

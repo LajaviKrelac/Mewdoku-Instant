@@ -45,8 +45,8 @@ export interface EventScreenView {
   readonly reducedMotion: boolean;
   /** phase2b §3.2: the banner band is reserved on this screen. */
   readonly bannerReserved: boolean;
-  /** Phase 2d §1.15: the gear's red dot. Required at I-3. */
-  readonly settingsDot?: boolean;
+  /** Phase 2d §1.15: the gear's red dot. */
+  readonly settingsDot: boolean;
 }
 
 export interface EventScreenCallbacks {
@@ -86,7 +86,7 @@ export function createEventScreen(view: EventScreenView, cb: EventScreenCallback
     showTrophy: false,
     fbSafeZone: v.fbSafeZone,
     // Phase 2d §1.15, §2.2: the red dot on the gear (something in Settings not seen yet).
-    settingsDot: v.settingsDot === true,
+    settingsDot: v.settingsDot,
   });
   const topBar = createTopBar(topBarProps(view), { onHome: () => cb.onHome(), onSettings: () => cb.onSettings(), onTrophy: () => undefined });
 

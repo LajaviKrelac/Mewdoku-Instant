@@ -32,12 +32,6 @@ export type IconSymbol =
   | 'icon-play-video'
   | 'icon-close'
   | 'icon-chevron'
-  /** @deprecated phase2d: the drawing is gone (the rule cards draw ruleDiagram, rule-art.ts); the id stays for dev/** until I-3. */
-  | 'icon-rule-colours'
-  /** @deprecated phase2d: see icon-rule-colours. */
-  | 'icon-rule-lines'
-  /** @deprecated phase2d: see icon-rule-colours. */
-  | 'icon-rule-space'
   // phase2b §1.7: the fish and the new icons (same 24-grid LINE style)
   | 'icon-fish'
   // Phase 2c §1.2: a life that is gone (the lives pill, the victory's kept-fish row)
@@ -62,8 +56,7 @@ export type GlyphIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
 /** Pattern glyphs by palette index: dot, ring, triangle, square, diamond, star, plus, bar, chevron, heart, drop, moon (02 §18). */
 export type GlyphSymbol = `glyph-${GlyphIndex}`;
 /** `cat-blink` is the eyelid overlay the board stacks on idle cats (02 §17.3 blink). */
-/** `wrong-x` is @deprecated phase2d: its drawing is gone (it was unused; the wrong X is the board's rects); the id stays for dev/** until I-3. */
-export type SymbolId = CatSymbol | IconSymbol | GlyphSymbol | 'mark-x' | 'wrong-x' | 'cat-blink' | CatOverlaySymbol | AccessorySymbol;
+export type SymbolId = CatSymbol | IconSymbol | GlyphSymbol | 'mark-x' | 'cat-blink' | CatOverlaySymbol | AccessorySymbol;
 
 /** id of the sprite's <svg> element. */
 export const SPRITE_ID = 'mewdoku-sprite';

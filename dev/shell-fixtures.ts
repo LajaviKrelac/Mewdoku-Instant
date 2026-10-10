@@ -113,6 +113,11 @@ export function gameView(b: Board, over: Partial<GameView> = {}): GameView {
     reducedMotion: false,
     event: null,
     points,
+    pulse: null,
+    mouse: { shown: true, enabled: true },
+    videoRefill: false,
+    bannerBand: false,
+    settingsDot: false,
     ...over,
   };
 }
@@ -153,6 +158,7 @@ export function tutorialView(step: TutorialStepIndex): GameView {
     inputLocked: step === 2,
     highlight: def.focusCells.length ? { kind: 'coach', cells: def.focusCells } : null,
     chipHighlight: STEP_CHIPS[step],
+    mouse: { shown: false, enabled: false },
   });
 }
 
@@ -170,6 +176,7 @@ export function homeView(over: Partial<HomeView> = {}): HomeView {
     period: { kind: 'week', total: 42 },
     event: null,
     bannerReserved: false,
+    settingsDot: false,
     ...over,
   };
 }

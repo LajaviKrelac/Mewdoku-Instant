@@ -1,4 +1,4 @@
-// Owner: A (phase2b §1, §4.4)
+// Owner: A (phase2b §1, §4.4); lead (Phase 2d I-1: the 2d tile, X, board frame, helper row and art)
 // Dev harness for workstream A (not shipped): Tux, the board look, icons, poses and event art in
 // isolation, for screenshots and visual review. Run `npx vite --port 5181 --strictPort` and open
 // /dev/art-harness.html?scene=…
@@ -20,6 +20,7 @@ import '../src/styles/overlay-chunk.css';
 import '../src/styles/events-chunk.css';
 import { recordToPuzzle } from '../src/engine/codec';
 import type { CellIndex, LevelPack, Puzzle } from '../src/engine/types';
+import { cfg } from '../src/app/config';
 import type { EventDef } from '../src/game/events';
 import { newGame } from '../src/game/factory';
 import { reduce } from '../src/game/reducer';
@@ -31,10 +32,9 @@ import { mascotIllustration } from '../src/ui/art/mascot';
 import { PALETTE, regionColorsFor, xEdgeColor } from '../src/ui/art/palette';
 import { icon, mountSprite, type SymbolId } from '../src/ui/art/sprite';
 import { createBoardView, type BoardModel, type CatMood } from '../src/ui/board/board-view';
-import { computeLayout, readViewport } from '../src/ui/board/layout';
+import { computeLayout, gapFor, readViewport } from '../src/ui/board/layout';
 import { applyMotion } from '../src/ui/fx/motion';
 import { createPeriodPill } from '../src/ui/hud/pills';
-import { createRuleChips } from '../src/ui/hud/rule-chips';
 import { createToolBar } from '../src/ui/hud/tool-bar';
 import { createTopBar } from '../src/ui/hud/top-bar';
 import EVENTS from '../src/data/events/events.json';
@@ -66,14 +66,14 @@ function fig(label: string, ...content: Element[]): HTMLElement {
   return f;
 }
 
-/** A tile like the board's: inset, rounded 20 %, with a <use> stack on top. */
+/** A tile like the board's (Phase 2d §1.8): inset gap / 2, radius 11 % of the tile, with a <use> stack on top. */
 function tile(slot: number, palette: number, ids: SymbolId[], opts: { faded?: boolean; scale?: number } = {}): HTMLElement {
   const t = el('div', 'ax-tile');
   t.style.width = t.style.height = `${slot}px`;
-  const inset = slot >= 30 ? 2 : 1.5;
+  const inset = gapFor(slot) / 2;
   const bg = el('span', 'ax-tile__bg');
   bg.style.inset = `${inset}px`;
-  bg.style.borderRadius = `${slot * 0.2}px`;
+  bg.style.borderRadius = `${cfg.layout.game.tileRadiusFraction * (slot - 2 * inset)}px`;
   bg.style.background = `var(--r${palette})`;
   if (opts.faded) bg.classList.add('ax-faded');
   t.style.setProperty('--xe', xEdgeColor(palette));
@@ -107,17 +107,19 @@ function galleryScene(): void {
     section(wrap, `Moods on every tile, ${slot} px slot`, PALETTE.map((_, i) => tile(slot, i, [moods[i % 4] as SymbolId])), 'ax-tight');
   }
   section(wrap, 'Idle on every tile, 25 px slot', PALETTE.map((_, i) => tile(25, i, ['cat-idle'])), 'ax-tight');
+  // Phase 2d §1.10: the plain white X (the edge shows only with colour patterns on, on the board; the
+  // wrong X is the board's rects in --wrong: scene=board shows both).
   for (const slot of [42, 25]) {
-    section(wrap, `White X with edge, ${slot} px slot (top: normal, bottom: faded)`, PALETTE.map((_, i) => {
+    section(wrap, `White X, ${slot} px slot (top: normal, bottom: faded)`, PALETTE.map((_, i) => {
       const col = el('div', 'ax-col');
       col.append(tile(slot, i, ['mark-x']), tile(slot, i, ['mark-x'], { faded: true }));
       return col;
     }), 'ax-tight');
   }
-  section(wrap, 'Wrong X', [tile(42, 2, ['wrong-x']), tile(42, 10, ['wrong-x'])], 'ax-tight');
   const icons: SymbolId[] = [
     'icon-fish', 'icon-plus', 'icon-shop', 'icon-globe', 'icon-crown', 'icon-users', 'icon-house', 'icon-gear', 'icon-bulb', 'icon-paw',
     'icon-fish-empty', 'icon-points', 'icon-trophy', 'icon-lock', 'icon-calendar', 'icon-play-video', 'icon-close', 'icon-chevron',
+    'icon-back', 'icon-play',
   ];
   for (const px of [32, 24, 16]) {
     section(wrap, `Icons at ${px} px`, icons.map((id) => {
@@ -126,6 +128,13 @@ function galleryScene(): void {
       return px === 32 ? fig(id.slice(5), s) : s;
     }), 'ax-tight');
   }
+  // Phase 2d §1.6, §1.11, §1.14: the helpers' full-colour art, the tracker head and the toast's arm.
+  section(wrap, 'Phase 2d art (64 px)', (['tool-kitty', 'tool-bulb', 'tool-mouse', 'cat-head-flat', 'art-flex'] as SymbolId[]).map((id) => {
+    const s = icon(id, { class: 'ax-icon' });
+    s.style.width = s.style.height = '64px';
+    if (id === 'cat-head-flat') s.style.color = 'var(--r7)';
+    return fig(id, s);
+  }));
   const fishBig = icon('icon-fish', { class: 'ax-icon' });
   fishBig.style.width = fishBig.style.height = '96px';
   section(wrap, 'Fish at 96 px', [fishBig]);
@@ -208,21 +217,18 @@ function boardScene(): void {
     if (q.get('wrong') !== '0') act({ type: 'DOUBLE_TAP', cell: (n - 1) * n + (((p.solution[n - 1] as number) + 2) % n), t: 30 });
   }
   const model: BoardModel = { puzzleId: p.id, n, regions: p.regions, colors, cells: s.cells, regionsDone: s.regionsDone, patterns: q.get('patterns') === '1' };
-  const board = createBoardView(model, { tap: () => undefined, doubleTap: () => undefined, paint: () => undefined, bulb: () => undefined, paw: () => undefined }, { reducedMotion: () => q.get('rm') === '1' });
-  const screen = el('div', 'screen screen--game');
+  const board = createBoardView(model, { tap: () => undefined, doubleTap: () => undefined, paint: () => undefined, bulb: () => undefined, paw: () => undefined, mouse: () => undefined }, { reducedMotion: () => q.get('rm') === '1' });
+  // Phase 2d (I-1): the board card alone, framed as on the game screen (§1.8: the padding and radius
+  // from computeLayout); the HUD around it is the real game screen in the board, shell and b harnesses.
+  const screen = el('div', 'ax-board-page');
   if (q.get('theme')) screen.dataset.eventTheme = q.get('theme') as string;
-  const top = createTopBar({ title: `Level ${n * 7}`, hard: q.get('hard') === '1', showHome: true, showSettings: true, showTrophy: false, fbSafeZone: false }, { onHome: () => undefined, onSettings: () => undefined, onTrophy: () => undefined });
-  const chips = createRuleChips({ compact: false, highlight: null });
-  const tools = createToolBar({ hints: 5, kitties: 3, bulbEnabled: true, pawEnabled: true, hintsFree: false }, { onBulb: () => undefined, onPaw: () => undefined });
-  const col = el('div', 'ax-gamecol');
   const stage = el('div', 'ax-stage');
   stage.append(board.el);
-  col.append(chips.el, stage, tools.el);
-  screen.append(top.el, col);
+  screen.append(stage);
   root.append(screen);
   const vp = readViewport(window);
-  const L = computeLayout({ vw: Math.min(vp.vw, 560), vh: vp.vh, safeTop: 0, safeBottom: 0, n });
-  board.setSlot(L.slot);
+  const L = computeLayout({ vw: Math.min(vp.vw, 482), vh: vp.vh, safeTop: 0, safeBottom: 0, n });
+  board.setSlot(L.slot, { pad: L.pad, radius: L.radius });
   board.update(model);
   const mood = q.get('mood') as CatMood | null;
   if (mood) board.setMood(mood);
@@ -260,7 +266,13 @@ function uiScene(): void {
   const pill = createPeriodPill({ total: 42, kind: 'week' }).el;
   const top = createTopBar({ title: null, hard: false, showHome: false, showSettings: true, showTrophy: true, fbSafeZone: q.get('fb') === '1' }, { onHome: () => undefined, onSettings: () => undefined, onTrophy: () => undefined }, { lead: pill });
   section(wrap, 'Top bar with the lead slot (Home)', [top.el], 'ax-col-full');
-  section(wrap, 'Tools', [createToolBar({ hints: 5, kitties: 0, bulbEnabled: true, pawEnabled: true, hintsFree: false }, { onBulb: () => undefined, onPaw: () => undefined }).el]);
+  // Phase 2d §1.11: the three helpers at s = 1 (count, video and no badge; the bulb pulses).
+  const toolRow = el('div', 'ax-tools');
+  toolRow.append(createToolBar(
+    { hints: 5, kitties: 0, bulbEnabled: true, pawEnabled: true, hintsFree: false, mouse: { shown: true, enabled: true }, videoRefill: true, pulse: 'bulb' },
+    { onBulb: () => undefined, onPaw: () => undefined, onMouse: () => undefined },
+  ).el);
+  section(wrap, 'Tools', [toolRow], 'ax-col-full');
   const title = el('h1', 'ax-title', 'Purrfect!');
   section(wrap, 'Titles', [title]);
   const f = el('button', 'btn btn--secondary', 'Focused');
@@ -296,9 +308,9 @@ style.textContent = `
   .ax-event-card { display: flex; align-items: center; padding: 8px; border-radius: 18px; background: var(--card); box-shadow: var(--shadow-1); }
   .ax-event-card__text { display: flex; flex-direction: column; margin-left: 12px; font-size: 0.85rem; color: var(--ink-2); }
   .ax-event-card__text strong { color: var(--ink); font-family: var(--font-display); font-size: 1.1rem; text-transform: capitalize; }
-  .ax-gamecol { width: 100%; max-width: 480px; padding: 0 16px; display: flex; flex-direction: column; align-items: stretch; }
-  .ax-gamecol > * + * { margin-top: 12px; }
+  .ax-board-page { width: 100%; padding: 16px 0; }
   .ax-stage { display: flex; justify-content: center; }
+  .ax-tools { --s: 1; --tools: 60.3px; --pulse-ms: 1500ms; --pulse-scale: 1.08; width: 402px; padding-top: 12px; }
   .ax-title { color: var(--accent-title); font-size: 2.5rem; }
 `;
 document.head.appendChild(style);

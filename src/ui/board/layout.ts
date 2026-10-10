@@ -62,9 +62,6 @@ export interface GameLayout {
   readonly gap: number;
   /** Board card corner radius: layout.game.cardRadius × s. */
   readonly radius: number;
-  /** 2b names kept until I-3, with 2d values from S0: topBar = bar, chips = rules (and `pills`, `tools` above). */
-  readonly topBar: number;
-  readonly chips: number;
 }
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
@@ -134,8 +131,6 @@ export function computeLayout(input: LayoutInput, c: GameConfig = cfg): GameLayo
     board,
     gap: gapFor(slot, c),
     radius: G.cardRadius * s,
-    topBar: bar,
-    chips: rules,
   };
 }
 

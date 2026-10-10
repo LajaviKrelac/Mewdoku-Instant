@@ -80,6 +80,7 @@ const homeView = (over: Partial<HomeView> = {}): HomeView => ({
   period: { kind: 'week', total: 42 },
   event: null,
   bannerReserved: false,
+  settingsDot: false,
   ...over,
 });
 const homeCb = () => ({ onPlay: vi.fn(), onDaily: vi.fn(), onSettings: vi.fn(), onTrophy: vi.fn(), onCard: vi.fn(), onEvent: vi.fn() });
@@ -119,10 +120,15 @@ function gameView(over: Partial<GameView> = {}): GameView {
     reducedMotion: false,
     event: null,
     points: null,
+    pulse: null,
+    mouse: { shown: false, enabled: false },
+    videoRefill: false,
+    bannerBand: false,
+    settingsDot: false,
     ...over,
   };
 }
-const gameCb = () => ({ onTap: vi.fn(), onDoubleTap: vi.fn(), onPaint: vi.fn(), onBulb: vi.fn(), onPaw: vi.fn(), onHome: vi.fn(), onSettings: vi.fn() });
+const gameCb = () => ({ onTap: vi.fn(), onDoubleTap: vi.fn(), onPaint: vi.fn(), onBulb: vi.fn(), onPaw: vi.fn(), onHome: vi.fn(), onSettings: vi.fn(), onMouse: vi.fn() });
 
 const eventView = (over: Partial<EventScreenView> = {}): EventScreenView => ({
   def: lantern,
@@ -135,6 +141,7 @@ const eventView = (over: Partial<EventScreenView> = {}): EventScreenView => ({
   fbSafeZone: false,
   reducedMotion: false,
   bannerReserved: false,
+  settingsDot: false,
   ...over,
 });
 

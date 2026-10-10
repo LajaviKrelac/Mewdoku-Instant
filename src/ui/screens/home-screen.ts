@@ -105,8 +105,8 @@ export interface HomeView {
   readonly event: HomeEventCardView | null;
   /** phase2b §3.2: the banner band is reserved (root data-banner). */
   readonly bannerReserved: boolean;
-  /** Phase 2d §1.15: the gear's red dot (save.ext.settingsSeen < cfg.settingsDot.version). Required at I-3. */
-  readonly settingsDot?: boolean;
+  /** Phase 2d §1.15: the gear's red dot (save.ext.settingsSeen < cfg.settingsDot.version). */
+  readonly settingsDot: boolean;
 }
 
 export interface HomeCallbacks {
@@ -167,7 +167,7 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
     showTrophy: v.showTrophy,
     fbSafeZone: v.fbSafeZone,
     // Phase 2d §1.15, §2.2: the red dot on the gear (something in Settings not seen yet).
-    settingsDot: v.settingsDot === true,
+    settingsDot: v.settingsDot,
   });
   // Phase 2c §2.8: the period pill at the top bar's lead, after the FB safe zone (not a button).
   const periodOf = (v: HomeView): { readonly kind: PeriodKind; readonly total: number } => v.period ?? { kind: cfg.period.kind, total: 0 };

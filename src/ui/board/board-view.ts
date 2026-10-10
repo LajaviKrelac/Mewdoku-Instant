@@ -40,8 +40,8 @@ const isCatState = (s: number): boolean => s === CellState.Cat || s === CellStat
 function applyRenderVars(el: HTMLElement): void {
   const L = cfg.layout;
   const vars: Record<string, string> = {
-    // The 2b card radius until setSlot brings the layout's frame (look-spec §1.8).
-    '--board-radius': `${L.boardRadius}px`,
+    // The card radius at s = 1 until setSlot brings the layout's frame (look-spec §1.8).
+    '--board-radius': `${L.game.cardRadius}px`,
     // Phase 2d (look-spec §1.10): the X pop's length (board.css .fx-pop).
     '--x-pop-ms': `${cfg.fx.markPopMs}ms`,
     '--wrong-ring': `${L.wrongRingPx}px`,
@@ -75,8 +75,8 @@ export function createBoardView(model: BoardModel, input: BoardInput, opts: Boar
   el.className = 'board';
   el.setAttribute('role', 'grid');
   el.dataset.mood = 'idle';
-  /** Card edge → first slot edge (Phase 2d: from setSlot's frame; the 2b boardPad until one is given). */
-  let pad = cfg.layout.boardPad;
+  /** Card edge → first slot edge (Phase 2d: from setSlot's frame; the s = 1 value until the first one). */
+  let pad = Math.max(3, Math.round(cfg.layout.game.cardPad));
   el.style.setProperty('--pad', `${pad}px`);
   applyRenderVars(el);
 
@@ -402,11 +402,9 @@ export function createBoardView(model: BoardModel, input: BoardInput, opts: Boar
     },
     setSlot(px, frame) {
       // Phase 2d (look-spec §1.8): the card's padding and radius come with the slot from computeLayout.
-      if (frame) {
-        pad = frame.pad;
-        setVar('--pad', `${frame.pad}px`);
-        setVar('--board-radius', `${frame.radius}px`);
-      }
+      pad = frame.pad;
+      setVar('--pad', `${frame.pad}px`);
+      setVar('--board-radius', `${frame.radius}px`);
       if (px === slotPx && el.style.getPropertyValue('--slot') !== '') return;
       slotPx = px;
       // The gap follows the slot (gapFor): every tile is inset gap / 2 on every side, one board-level

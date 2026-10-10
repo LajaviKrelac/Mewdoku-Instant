@@ -330,7 +330,7 @@ describe('tool row: kitty · bulb · mouse', () => {
   });
 
   it('badges: the count; "Free" on the tutorial bulb; at 0 the video badge when a video can refill, else a muted 0; the mouse: video or none', () => {
-    const tb = createToolBar(tools, { onBulb: vi.fn(), onPaw: vi.fn() });
+    const tb = createToolBar(tools, { onBulb: vi.fn(), onPaw: vi.fn(), onMouse: vi.fn() });
     expect(kindOf(badgeOf(tb, 'mouse'))).toBe('video');
     expect(uses(badgeOf(tb, 'mouse'))).toEqual(['#icon-play']);
     tb.update({ ...tools, kitties: 0, hints: 0 });
@@ -357,14 +357,14 @@ describe('tool row: kitty · bulb · mouse', () => {
   });
 
   it('a stock increase bumps its badge (2b), a re-render with the same props does not', () => {
-    const tb = createToolBar(tools, { onBulb: vi.fn(), onPaw: vi.fn() });
+    const tb = createToolBar(tools, { onBulb: vi.fn(), onPaw: vi.fn(), onMouse: vi.fn() });
     tb.update({ ...tools, kitties: 3 });
     expect(badgeOf(tb, 'paw').classList.contains('tool__badge--bump')).toBe(true);
     expect(badgeOf(tb, 'bulb').classList.contains('tool__badge--bump')).toBe(false);
   });
 
   it('[data-pulse] follows GameView.pulse on an enabled helper only; never on the mouse', () => {
-    const tb = createToolBar(tools, { onBulb: vi.fn(), onPaw: vi.fn() });
+    const tb = createToolBar(tools, { onBulb: vi.fn(), onPaw: vi.fn(), onMouse: vi.fn() });
     const pulsing = (): string[] => Array.from(tb.el.querySelectorAll('.tool[data-pulse]')).map((b) => b.className);
     expect(pulsing()).toEqual([]);
     tb.update({ ...tools, pulse: 'paw' });
@@ -388,8 +388,6 @@ describe('tool row: kitty · bulb · mouse', () => {
     expect(mouse.tabIndex).toBe(-1);
     expect(mouse.disabled).toBe(true);
     expect(tb.toolRect('mouse')).toBeNull();
-    // Absent (a harness from before 2d) = not shown.
-    expect(createToolBar({ hints: 5, kitties: 3, bulbEnabled: true, pawEnabled: true, hintsFree: false }, cb).el.querySelector('.tool--mouse')?.hasAttribute('data-off')).toBe(true);
     // Shown but not enabled (no candidate cell): a disabled button.
     tb.update({ ...tools, mouse: { shown: true, enabled: false } });
     expect(mouse.hasAttribute('data-off')).toBe(false);
