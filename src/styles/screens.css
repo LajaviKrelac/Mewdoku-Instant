@@ -338,7 +338,7 @@
   background-size: var(--home-tile) var(--home-tile);
   pointer-events: none;
   transform: rotate(-27deg);
-  animation: home-bg-drift 48s linear infinite; /* fx.css */
+  animation: home-bg-drift 96s linear infinite; /* fx.css; 720 px in 96 s = 7.5 px/s */
   will-change: transform;
 }
 /* A soft light from the top, as on the icon. */
