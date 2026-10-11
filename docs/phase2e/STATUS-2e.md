@@ -159,7 +159,7 @@ Everything "same as Meowdoku" that your words or a confirmed fact do not settle 
 
 The probe is a tiny private Instant Game (no game in it) that checks, on a real phone, that the game can reach our ranking server from inside Facebook and that Facebook signs the player the way the server verifies. It shows six lines and never shows your player id, the signature or any token.
 
-**Before it:** the staging server must be deployed (spec §11.1–§11.2: your Cloudflare account, then `npm --prefix server run deploy:staging`); its URL looks like `https://mewdoku-rank-staging.<your account>.workers.dev`. Staging already allows `https://*.apps.fbsbx.com` (where Instant Games run).
+**Before it:** the staging server must be deployed (spec §11.1–§11.2: your Cloudflare account, then `npm --prefix server run deploy:staging`); its URL is `https://mewdoku-rank-staging.mewdoku-rank.workers.dev` (deployed 2026-10-11; see NEXT-SESSION.md). Staging already allows `https://*.apps.fbsbx.com` (where Instant Games run).
 
 1. Build it: `npm run probe -- --url https://mewdoku-rank-staging.<your account>.workers.dev`. It prints the file it made: `dist-zip/mewdoku-rank-probe-<sha>.zip` (index.html and fbapp-config.json at the root, about 9 KB).
 2. In the Meta App Dashboard → your game → Instant Games → **Web Hosting**: "Upload version", choose that zip, and when it shows as uploaded, **move it to Testing** (not Production). It does not replace your live game.
