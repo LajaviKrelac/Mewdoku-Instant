@@ -8,9 +8,7 @@
 // {unit} = unitName() ("row 1", "column 9", "Violet"); {time} = formatClock ("4:12"); {count} is
 // already formatted for the locale.
 export const enUi2d1 = {
-  // ── The completion label (§4.3) ────────────────────────────────────────────
-  // A short cheer under the last changed tile of a finished row, column or colour (≤ 8 characters).
-  'fx.done': 'Done!',
+  // Phase 2e I-4 (lead): the keys only lazy chunks show moved verbatim to ./lazy.ts (enLazyUi2d1); see src/i18n/en-first.ts.
   'a11y.unitDone': '{unit} complete.',
 
   // ── The level-start tickers (§5.4) ─────────────────────────────────────────

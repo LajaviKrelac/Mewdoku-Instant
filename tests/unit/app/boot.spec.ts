@@ -233,7 +233,7 @@ describe('boot', () => {
   it('Home: Play continues the level; the locked daily card toasts', async () => {
     const s = await start(returning({ progress: { level: 12, completed: 11, best: {} } }));
     s.ui.home?.cb.onDaily();
-    expect(s.log).toContain(`toast:${t('home.daily.lockedToast', { level: 20 })}`);
+    expect(s.log).toContain(`toast:${t('home.daily.lockedToast', { level: 21 })}`);
     s.ui.home?.cb.onPlay();
     await s.clock.advanceAsync(0);
     expect(s.log).toContain('screen:game:L12');

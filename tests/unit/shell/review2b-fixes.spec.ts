@@ -20,7 +20,6 @@ import { coachText, coverBadges, createCoach, placeCard, type CoachProps } from 
 import { createHintCard, hintText, type HintCardProps } from '../../../src/ui/overlays/hint-card';
 import { createHowToPlay } from '../../../src/ui/overlays/how-to-play';
 import { arrowStep } from '../../../src/ui/overlays/overlay-base';
-import { createRankHub, type RankHubProps } from '../../../src/ui/overlays/rank-hub';
 import { renderRankList } from '../../../src/ui/overlays/ranking-panel';
 import { createSettingsModal, type SettingsProps } from '../../../src/ui/overlays/settings-modal';
 import { createShopSheet, type ShopProps } from '../../../src/ui/overlays/shop-sheet';
@@ -74,16 +73,17 @@ const homeView = (over: Partial<HomeView> = {}): HomeView => ({
   daily: { state: 'not_played', dateKey: '2026-10-06', n: 8, solvedMs: null, unlockLevel: 20 },
   hints: 5,
   kitties: 3,
-  showTrophy: true,
   fbSafeZone: false,
   extraCards: [],
   period: { kind: 'week', total: 42 },
   event: null,
   bannerReserved: false,
   settingsDot: false,
+  ladder: null,
+  streak: null,
   ...over,
 });
-const homeCb = () => ({ onPlay: vi.fn(), onDaily: vi.fn(), onSettings: vi.fn(), onTrophy: vi.fn(), onCard: vi.fn(), onEvent: vi.fn() });
+const homeCb = () => ({ onPlay: vi.fn(), onDaily: vi.fn(), onSettings: vi.fn(), onCard: vi.fn(), onEvent: vi.fn(), onLadder: vi.fn() });
 
 function gameView(over: Partial<GameView> = {}): GameView {
   const n = 4;
@@ -158,6 +158,8 @@ function victoryProps(over: Partial<VictoryProps> = {}): VictoryProps {
     buttonDelayMs: cfg.fx.winButtonDelayMs,
     reducedMotion: false,
     bannerReserved: false,
+    streak: null,
+    dailyReward: null,
     now: () => 0,
     onPrimary: vi.fn(),
     onHome: vi.fn(),
@@ -210,7 +212,9 @@ describe('a language switch relabels every view, open or cached (A11Y-I18N-1)', 
     expect(text(q(home.el, '.home__tagline'))).toBe(de['app.tagline']);
     expect(text(q(home.el, '.home__play .badge--hard'))).toBe(de['common.hard']);
     expect(text(q(home.el, '.home__play .btn__label'))).toBe(stripIsolates(t('home.play', { level: 37 })));
-    expect(q(home.el, '.top-bar__btn--trophy').getAttribute('aria-label')).toBe(de['common.leaderboard']);
+    // Phase 2e I-3: the Home trophy is gone; the gear relabels instead.
+    expect(home.el.querySelector('.top-bar__btn--trophy')).toBeNull();
+    expect(q(home.el, '.top-bar__btn--settings').getAttribute('aria-label')).toBe(de['common.settings']);
   });
 
   it('the game screen under Settings: top bar, rule chips and tools relabel; the board is untouched', async () => {
@@ -412,44 +416,13 @@ describe('event personal records use a <dl> for their rows (A11Y-DL-1)', () => {
 
 // ─────────────────────────────── A11Y-HUB-1 ───────────────────────────────
 
-const hubProps = (over: Partial<RankHubProps> = {}): RankHubProps => ({
-  tabs: ['period', 'daily', 'event'],
-  tab: 'period',
-  eventNameKey: 'event.lantern.name' as I18nKey,
-  periodKind: 'week',
-  list: { kind: 'loading' },
-  groups: null,
-  now: () => 0,
-  onTab: vi.fn(),
-  onSeeTop: vi.fn(),
-  onListArea: vi.fn(),
-  onStartGroup: vi.fn(),
-  onClose: vi.fn(),
-  ...over,
-});
+// (Phase 2e I-3: the rankings hub, whose tabs this block first covered, is deleted; spec §2.10.)
 
 describe('arrow keys follow the visual order in right-to-left layouts (A11Y-HUB-1)', () => {
   it('arrowStep mirrors only the horizontal keys', () => {
     expect([arrowStep('ArrowRight', false), arrowStep('ArrowLeft', false)]).toEqual([1, -1]);
     expect([arrowStep('ArrowRight', true), arrowStep('ArrowLeft', true)]).toEqual([-1, 1]);
     expect([arrowStep('ArrowDown', true), arrowStep('ArrowUp', true), arrowStep('Home', true)]).toEqual([1, -1, 0]);
-  });
-
-  it('rankings hub in Arabic: ArrowRight moves to the tab on the right (the previous one)', () => {
-    document.documentElement.setAttribute('dir', 'rtl');
-    try {
-      const hub = createRankHub();
-      document.body.appendChild(hub.el);
-      const p = hubProps({ tab: 'daily' });
-      hub.open(p);
-      const tabs = Array.from(hub.el.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
-      tabs[1]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
-      expect(p.onTab).toHaveBeenLastCalledWith('period');
-      tabs[1]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
-      expect(p.onTab).toHaveBeenLastCalledWith('event');
-    } finally {
-      document.documentElement.setAttribute('dir', 'ltr');
-    }
   });
 
   it('Settings → Reduce motion in Arabic: ArrowRight picks the option on the right', () => {
@@ -482,15 +455,15 @@ describe('the top-bar title keeps its " · N" suffix (I18N-TEXT-2, UX-8)', () =>
   });
 
   it('renders a shrinking name and a separate suffix; the h1 reads the whole title', () => {
-    const bar = createTopBar({ title: 'Lantern Walk · 13', hard: false, showHome: true, showSettings: true, showTrophy: false, fbSafeZone: false }, { onHome: vi.fn(), onSettings: vi.fn(), onTrophy: vi.fn() });
+    const bar = createTopBar({ title: 'Lantern Walk · 13', hard: false, showHome: true, showSettings: true, fbSafeZone: false }, { onHome: vi.fn(), onSettings: vi.fn() });
     expect(q(bar.el, '.top-bar__text').textContent).toBe('Lantern Walk · 13');
     expect(q(bar.el, '.top-bar__name').textContent).toBe('Lantern Walk');
     expect(q(bar.el, '.top-bar__suffix').textContent).toBe(' · 13');
-    bar.update({ title: 'Level 38', hard: true, showHome: true, showSettings: true, showTrophy: false, fbSafeZone: false });
+    bar.update({ title: 'Level 38', hard: true, showHome: true, showSettings: true, fbSafeZone: false });
     expect(q(bar.el, '.top-bar__text').textContent).toBe('Level 38');
     expect(q(bar.el, '.top-bar__suffix').textContent).toBe(' 38');
     expect(q(bar.el, '.top-bar__suffix').hidden).toBe(false);
-    bar.update({ title: '第38关', hard: false, showHome: true, showSettings: true, showTrophy: false, fbSafeZone: false });
+    bar.update({ title: '第38关', hard: false, showHome: true, showSettings: true, fbSafeZone: false });
     expect(q(bar.el, '.top-bar__suffix').hidden).toBe(true);
   });
 });
@@ -499,10 +472,10 @@ describe('the top-bar title keeps its " · N" suffix (I18N-TEXT-2, UX-8)', () =>
 
 describe('the FB safe zone reaches the overlays (UX-3, UX-9)', () => {
   it('a top bar with fbSafeZone marks <html data-fb-safe>, which the overlay rules read', () => {
-    const bar = createTopBar({ title: null, hard: false, showHome: false, showSettings: true, showTrophy: false, fbSafeZone: true }, { onHome: vi.fn(), onSettings: vi.fn(), onTrophy: vi.fn() });
+    const bar = createTopBar({ title: null, hard: false, showHome: false, showSettings: true, fbSafeZone: true }, { onHome: vi.fn(), onSettings: vi.fn() });
     document.body.appendChild(bar.el);
     expect(document.documentElement.hasAttribute('data-fb-safe')).toBe(true);
-    const web = createTopBar({ title: null, hard: false, showHome: false, showSettings: true, showTrophy: false, fbSafeZone: false }, { onHome: vi.fn(), onSettings: vi.fn(), onTrophy: vi.fn() });
+    const web = createTopBar({ title: null, hard: false, showHome: false, showSettings: true, fbSafeZone: false }, { onHome: vi.fn(), onSettings: vi.fn() });
     void web;
     expect(document.documentElement.hasAttribute('data-fb-safe')).toBe(false);
   });

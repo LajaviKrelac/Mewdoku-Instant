@@ -46,6 +46,10 @@ import { defaults } from '../../src/game/save';
 import { pointsRuleFor, runTotal } from '../../src/game/scoring';
 import type { InProgressV2, SaveData } from '../../src/game/types';
 import { devAdvance, devCron, fillPool, LADDER_URL, ladderUp, newPool } from './helpers/rank-players';
+import { watchStrings } from './helpers/strings';
+
+// Phase 2e I-4: no screen of these tests may ask for an English string that no loaded table has.
+watchStrings(test);
 
 type TestWindow = Window & { __mewdoku?: E2EHooks };
 

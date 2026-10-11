@@ -49,11 +49,20 @@ describe('next_level (victory "Level N")', () => {
     expect(slice(h.log, AD)).toEqual(['screen:game:L16']);
   });
 
-  it('is gated by the tenure cooldown since the last ad', async () => {
-    const h = createHarness({ save: (s) => ({ ...veteran(s), ads: { lastAdAt: NOW - 30_000, lastFallbackGrantAt: 0 } }) });
+  it('is gated by the cooldown since the last ad (Phase 2e L1, P-I2: the 30 s floor)', async () => {
+    const h = createHarness({ save: (s) => ({ ...veteran(s), ads: { lastAdAt: NOW - 5_000, lastFallbackGrantAt: 0 } }) });
     await wonLevel(h);
+    expect(h.clock.now() - (NOW - 5_000)).toBeLessThan(30_000);
     await h.session.onNext();
     expect(slice(h.log, AD)).toEqual(['screen:game:L16']);
+    expect(h.analytics).toContainEqual({ name: 'ad_interstitial', params: { trigger: 'next_level', result: 'gated', gate: 'cooldown' } });
+  });
+
+  it('shows once the 30 s floor has passed since the last ad (every level, no tenure table)', async () => {
+    const h = createHarness({ save: (s) => ({ ...veteran(s), ads: { lastAdAt: NOW - 31_000, lastFallbackGrantAt: 0 } }) });
+    await wonLevel(h);
+    await h.session.onNext();
+    expect(slice(h.log, AD)).toEqual(['ad:interstitial:next_level', 'screen:game:L16']);
   });
 
   it('a failed interstitial never blocks the transition and does not reset the clock', async () => {

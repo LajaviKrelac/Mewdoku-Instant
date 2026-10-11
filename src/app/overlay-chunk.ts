@@ -9,11 +9,22 @@
 // styles the hint card and How to play share).
 // The toast layer (O9) and the loading indicator (O10) stay in the main bundle.
 // Phase 2b adds the win-flow UI and the shop (phase2b §2.11, §11 "core overlay chunk"): ranking,
-// victory, shop, rank_hub and group_result. The victory screen replaced the Phase 2 O3 win overlay,
+// victory, shop and group_result (Phase 2e I-3: the rankings hub is deleted, spec §2.10). The victory screen replaced the Phase 2 O3 win overlay,
 // which was removed at integration.
 // 2b integration (04 §9): the overlays' stylesheet comes with this chunk (Vite emits it as its own
 // CSS file and loads it before the chunk resolves), so the first-load stylesheet carries none of it.
 import '../styles/overlay-chunk.css';
+import '../i18n/en-lazy'; // the lazy English strings (I-4): registered before any overlay exists
+// Phase 2e I-4 (lead, spec §7.9's rule): Home's ranking chip and streak strip, and the streak art they, the victory's
+// streak row and How to play draw, come with this chunk (Home shows the period pill and the strip's empty row until
+// then, ui/screens/home-extras.ts). Registered when the chunk evaluates, before any of its views is created.
+import { mountStreakArt } from '../ui/art/streak-art';
+import { createLadderChip } from '../ui/hud/ladder-chip';
+import { createStreakStrip } from '../ui/hud/streak-strip';
+import { provideHomeExtras } from '../ui/screens/home-extras';
+
+mountStreakArt();
+provideHomeExtras({ createLadderChip, createStreakStrip });
 
 export { createDailyResult } from '../ui/overlays/daily-result';
 export { createFailOverlay } from '../ui/overlays/fail-overlay';
@@ -22,7 +33,6 @@ export { createHowToPlay } from '../ui/overlays/how-to-play';
 export { createRewardedPrompt } from '../ui/overlays/rewarded-prompt';
 export { createSettingsModal } from '../ui/overlays/settings-modal';
 export { createGroupResult } from '../ui/overlays/group-result';
-export { createRankHub } from '../ui/overlays/rank-hub';
 export { createRankingPanel } from '../ui/overlays/ranking-panel';
 export { createShopSheet } from '../ui/overlays/shop-sheet';
 export { createVictoryScreen } from '../ui/overlays/victory-screen';

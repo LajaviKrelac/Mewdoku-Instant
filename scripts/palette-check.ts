@@ -28,6 +28,8 @@ import {
   TOKENS,
   xEdgeColor,
 } from '../src/ui/art/palette';
+// Phase 2e I-2 (requests-G2 R5): the ranking art's colour table (pure data; layering lets scripts/ read it).
+import { AVATAR_COATS, avatarDisc, MEDAL_COLORS, MEDAL_NUMBER_INK } from '../src/ui/art/palette-2e';
 
 export type Lab = readonly [L: number, a: number, b: number];
 export type CvdKind = 'deuteranopia' | 'protanopia' | 'tritanopia';
@@ -370,7 +372,7 @@ export function parityExceptions(): UiContrastRow[] {
   return rows;
 }
 
-/** The ranking art's colour tables (src/ui/art/palette-2e.ts), passed in: scripts/ may import only palette.ts (layering). */
+/** The ranking art's colour tables (src/ui/art/palette-2e.ts; artTables() reads them for the CLI). */
 export interface ArtTables {
   readonly medals: readonly { readonly rim: string; readonly face: string; readonly emboss: string }[];
   readonly numberInk: string;
@@ -380,8 +382,7 @@ export interface ArtTables {
 /**
  * Phase 2e (spec Appendix C): the ranking art's hard rows, the rank number the UI draws on each medal (on the
  * face and on its paw emboss, as text: 4.5:1). The tables come from palette-2e.ts through the caller
- * (tests/unit/ui/palette-check.spec.ts; the CLI once the layering rule lets scripts/ read palette-2e.ts,
- * requests-G2 R5).
+ * (tests/unit/ui/palette-check.spec.ts, and the CLI's main() through artTables() since I-2, requests-G2 R5).
  */
 export function artContrast(t: ArtTables): UiContrastRow[] {
   return t.medals.flatMap((m, i) => [
@@ -451,6 +452,11 @@ export function eventContrast(): { readonly ui: UiContrastRow[]; readonly glyphs
 const fmt = (v: number): string => v.toFixed(2);
 const pairName = (p: PairResult): string => `${NAMES[p.i]}/${NAMES[p.j]}`;
 
+/** The shipped ranking-art tables from src/ui/art/palette-2e.ts (requests-G2 R5: scripts/ may read it since I-2). */
+export function artTables(): ArtTables {
+  return { medals: MEDAL_COLORS, numberInk: MEDAL_NUMBER_INK, avatars: AVATAR_COATS.map((c) => ({ name: c.name, coat: c.coat, disc: avatarDisc(c) })) };
+}
+
 export function main(argv: readonly string[]): void {
   const quiet = argv.includes('--quiet');
   const log = (s: string): void => {
@@ -516,8 +522,14 @@ export function main(argv: readonly string[]): void {
   // 6. The recorded parity exceptions (informational, look-spec §1.2 D-2d-6).
   for (const r of parityExceptions()) log(`${r.what.padEnd(58)} ${fmt(r.ratio)}:1 (informational, D-2d-6)`);
 
-  // 7. Phase 2e: the new art's decorative colours (informational, spec Appendix C).
-  for (const r of artInfo()) log(`${r.what.padEnd(58)} ${fmt(r.ratio)}:1 (informational, Phase 2e art)`);
+  // 7. Phase 2e: the rank number on each medal (hard, 4.5:1) and the new art's decorative colours (informational,
+  // spec Appendix C). Since I-2 (requests-G2 R5) the CLI reads palette-2e.ts's tables itself (layering allows it).
+  const art = artTables();
+  for (const r of artContrast(art)) {
+    log(`${r.what.padEnd(58)} ${fmt(r.ratio)}:1 (min ${r.min})`);
+    if (r.ratio < r.min) failures.push(`${r.what}: ${fmt(r.ratio)}:1 < ${r.min}:1`);
+  }
+  for (const r of artInfo(art)) log(`${r.what.padEnd(58)} ${fmt(r.ratio)}:1 (informational, Phase 2e art)`);
 
   if (failures.length) {
     console.error(`palette-check: ${failures.length} failure(s)`);

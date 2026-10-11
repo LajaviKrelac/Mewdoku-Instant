@@ -10,9 +10,12 @@
 // passes it in (HomeEventCardView.art) once that chunk has loaded; the card renders without it until then.
 //
 // Phase 2e (G3, spec §2.5, §5.3): with HomeView.ladder the lead slot holds the ranking CHIP (a button that
-// opens the ranking sheet, hud/ladder-chip.ts) instead of the period pill; without it (absent until G1
-// passes it) the period pill stays. HomeView.streak shows the streak strip (hud/streak-strip.ts) under the
-// Play button, above the daily card; null or absent hides it (first run, dayStreak.showOnHome off).
+// opens the ranking sheet, hud/ladder-chip.ts) instead of the period pill; null keeps the period pill.
+// HomeView.streak shows the streak strip (hud/streak-strip.ts) under the Play button, above the daily card; null
+// hides it (first run, dayStreak.showOnHome off).
+// Phase 2e I-4 (lead, spec §7.9): the chip and the strip come with the lazy overlay chunk (./home-extras.ts); until
+// it lands Home shows the period pill and keeps the strip's row (.streak-strip--pending, invisible), then renders
+// both in place.
 //
 // Classes: .screen.screen--home[data-banner][data-streak?] > .home__body > .home__hero(.home__wordmark .home__tagline .home__mascot)
 //          .home__actions(.home__cards > .event-card[data-state] .home__play .badge.badge--hard
@@ -29,9 +32,10 @@ import { formatClock, formatDuration, formatShortDate, onLocaleChanged, t, trans
 import { mascotIllustration } from '../art/mascot';
 import { icon } from '../art/sprite';
 import { clear, h, setText, type View } from '../dom';
-import { createLadderChip, type LadderChipView } from '../hud/ladder-chip';
+import type { LadderChipView, createLadderChip } from '../hud/ladder-chip';
 import { createPeriodPill } from '../hud/pills';
-import { createStreakStrip, type StreakStripView } from '../hud/streak-strip';
+import type { StreakStripView, createStreakStrip } from '../hud/streak-strip';
+import { homeExtras, whenHomeExtras } from './home-extras';
 import { createTopBar, type TopBarProps } from '../hud/top-bar';
 import { createLocaleText } from '../locale-text';
 import { setTextKeepTogether } from '../overlays/overlay-base';
@@ -104,8 +108,6 @@ export interface HomeView {
   readonly daily: DailyCardView;
   readonly hints: number;
   readonly kitties: number;
-  /** capabilities().leaderboards (hidden in Phase 2). */
-  readonly showTrophy: boolean;
   readonly fbSafeZone: boolean;
   readonly extraCards: readonly HomeCardView[];
   /** Phase 2c §2.8: this period's leaderboard points for the Home period pill (periodTotal(save, now); 0 after a rollover). */
@@ -116,11 +118,14 @@ export interface HomeView {
   readonly bannerReserved: boolean;
   /** Phase 2d §1.15: the gear's red dot (save.ext.settingsSeen < cfg.settingsDot.version). */
   readonly settingsDot: boolean;
-  // ── Phase 2e (spec §2.5, §5.3; optional until I-3) ──
-  /** The ranking chip in the top bar's lead slot (replaces the period pill). Absent: the period pill. */
-  readonly ladder?: LadderChipView;
-  /** The streak strip under the Play button; null or absent: hidden. */
-  readonly streak?: StreakStripView | null;
+  // ── Phase 2e (spec §2.5, §5.3; required since I-3) ──
+  /**
+   * The ranking chip in the top bar's lead slot (replaces the period pill; its `records` state carries the pill's
+   * content). null: the 2c period pill (not a button).
+   */
+  readonly ladder: LadderChipView | null;
+  /** The streak strip under the Play button; null: hidden. */
+  readonly streak: StreakStripView | null;
 }
 
 export interface HomeCallbacks {
@@ -128,12 +133,11 @@ export interface HomeCallbacks {
   /** Any daily card tap; the app shows the "locked" toast, opens O7 when solved, or starts the daily. */
   onDaily(): void;
   onSettings(): void;
-  onTrophy(): void;
   onCard(id: string): void;
   /** Event card tap (active, locked or done; a teaser is not tappable), phase2b §4.4. */
   onEvent(): void;
-  /** Phase 2e §2.5: the ranking chip (opens the ranking sheet, overlay `ladder`). Optional until I-3. */
-  onLadder?(): void;
+  /** Phase 2e §2.5: the ranking chip (opens the ranking sheet, overlay `ladder`). Required since I-3. */
+  onLadder(): void;
 }
 
 /** "3 d 4 h" for a day or more, else "7 h 48 min" / "12 min" (event countdowns, phase2b §4.4). */
@@ -180,7 +184,6 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
     hard: false,
     showHome: false,
     showSettings: true,
-    showTrophy: v.showTrophy,
     fbSafeZone: v.fbSafeZone,
     // Phase 2d §1.15, §2.2: the red dot on the gear (something in Settings not seen yet).
     settingsDot: v.settingsDot,
@@ -190,10 +193,18 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
   const periodPill = createPeriodPill(periodOf(view));
   // Phase 2e §2.5: the ranking chip takes the pill's place when the app passes HomeView.ladder.
   let chip: ReturnType<typeof createLadderChip> | null = null;
+  // Phase 2e I-4: the factories arrive with the overlay chunk; one re-render when they do.
+  let offExtras: (() => void) | null = null;
+  const awaitExtras = (): void => {
+    offExtras ??= whenHomeExtras(() => {
+      offExtras = null;
+      render(last);
+    });
+  };
   const lead = h('span', { class: 'home__lead' }, periodPill.el);
   const topBar = createTopBar(
     topBarProps(view),
-    { onHome: () => undefined, onSettings: () => cb.onSettings(), onTrophy: () => cb.onTrophy() },
+    { onHome: () => undefined, onSettings: () => cb.onSettings() },
     { lead },
   );
 
@@ -249,6 +260,8 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
   const cards = h('div', { class: 'home__cards' });
   // Phase 2e §5.3: the streak strip (created on the first view that carries one).
   let strip: ReturnType<typeof createStreakStrip> | null = null;
+  /** I-4: the strip's row while its factory is on its way (same box, invisible, hidden from assistive tech). */
+  let pendingStrip: HTMLElement | null = null;
   const hintsCount = h('span', { class: 'stock__count num' });
   const kittiesCount = h('span', { class: 'stock__count num' });
   const hintsItem = h('span', { class: 'stock__item stock__item--hints', role: 'img' }, icon('icon-bulb', { class: 'stock__icon' }), hintsCount);
@@ -317,14 +330,16 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
   let lastCards: readonly HomeCardView[] | null = null;
 
   /** Phase 2e §2.5: the chip when the app passes one, else the period pill. */
-  const renderLead = (v: LadderChipView | undefined): void => {
-    if (!v) {
+  const renderLead = (v: LadderChipView | null): void => {
+    const x = homeExtras();
+    if (!v || (!chip && !x)) {
       periodPill.el.hidden = false;
       if (chip) chip.el.hidden = true;
+      if (v) awaitExtras();
       return;
     }
     if (!chip) {
-      chip = createLadderChip(v, { onPress: () => cb.onLadder?.() });
+      chip = (x as NonNullable<typeof x>).createLadderChip(v, { onPress: () => cb.onLadder() });
       lead.appendChild(chip.el);
     } else chip.update(v);
     chip.el.hidden = false;
@@ -336,11 +351,22 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
     el.toggleAttribute('data-streak', v !== null);
     if (!v) {
       if (strip) strip.el.hidden = true;
+      if (pendingStrip) pendingStrip.hidden = true;
+      return;
+    }
+    const x = homeExtras();
+    if (!strip && !x) {
+      pendingStrip ??= h('div', { class: 'streak-strip streak-strip--pending', 'aria-hidden': 'true' });
+      if (!pendingStrip.isConnected) play.after(pendingStrip);
+      pendingStrip.hidden = false;
+      awaitExtras();
       return;
     }
     if (!strip) {
-      strip = createStreakStrip(v);
-      play.after(strip.el);
+      strip = (x as NonNullable<typeof x>).createStreakStrip(v);
+      (pendingStrip ?? play).after(strip.el);
+      pendingStrip?.remove();
+      pendingStrip = null;
     } else strip.update(v);
     strip.el.hidden = false;
   };
@@ -387,7 +413,7 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
     topBar.update(topBarProps(v));
     periodPill.update(periodOf(v));
     renderLead(v.ladder);
-    renderStreak(v.streak ?? null);
+    renderStreak(v.streak);
     renderEvent(v.event);
     el.toggleAttribute('data-banner', v.bannerReserved);
     el.style.setProperty('--banner-reserve', `${cfg.ads.banner.reservePx}px`);
@@ -450,6 +476,8 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
       periodPill.destroy();
       chip?.destroy();
       strip?.destroy();
+      offExtras?.();
+      offExtras = null;
       el.remove();
     },
   };

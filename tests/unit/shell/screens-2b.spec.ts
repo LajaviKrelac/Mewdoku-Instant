@@ -40,16 +40,17 @@ const homeView = (over: Partial<HomeView> = {}): HomeView => ({
   daily: { state: 'not_played', dateKey: '2026-10-06', n: 8, solvedMs: null, unlockLevel: 20 },
   hints: 5,
   kitties: 3,
-  showTrophy: false,
   fbSafeZone: false,
   extraCards: [],
   period: { kind: 'week', total: 42 },
   event: null,
   bannerReserved: false,
   settingsDot: false,
+  ladder: null,
+  streak: null,
   ...over,
 });
-const homeCb = () => ({ onPlay: vi.fn(), onDaily: vi.fn(), onSettings: vi.fn(), onTrophy: vi.fn(), onCard: vi.fn(), onEvent: vi.fn() });
+const homeCb = () => ({ onPlay: vi.fn(), onDaily: vi.fn(), onSettings: vi.fn(), onCard: vi.fn(), onEvent: vi.fn(), onLadder: vi.fn() });
 const card = (state: HomeEventCardView['state'], over: Partial<HomeEventCardView> = {}): HomeEventCardView => ({
   def: lantern,
   state,
@@ -560,7 +561,7 @@ describe('Settings rows (phase2b §6.8, §8.5)', () => {
 
 describe('O2 (Phase 2c §5.4): Watch video / Not now, the free hint, the countdown; no swap', () => {
   function prompt(over: Partial<RewardedPromptProps> = {}): RewardedPromptProps {
-    return { placement: 'hint', variant: 'video', nextFreeAt: 0, now: () => 0, onAccept: vi.fn(), onDecline: vi.fn(), ...over };
+    return { placement: 'hint', variant: 'video', nextFreeAt: 0, now: () => 0, onAccept: vi.fn(), onDecline: vi.fn(), buy: [], onBuy: vi.fn(), ...over };
   }
 
   it('shows only Watch video and Not now, even when a stray 2b swap is handed in', () => {

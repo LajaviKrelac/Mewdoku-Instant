@@ -201,11 +201,11 @@ export interface RankingPanelProps {
   onSeeTop(): void;
   /** 'overlay' mode: the list area's client rect once laid out (RankingProvider.showList(board, view, rect)). */
   onListArea(rect: DOMRect): void;
-  // ── Phase 2e (spec §2.4; optional until I-3) ──
+  // ── Phase 2e (spec §2.4; required since I-3) ──
   /** A heart button of the 'bracket' list (the app sends it; the panel never continues on it). */
-  onHeart?(slot: number): void;
+  onHeart(slot: number): void;
   /** The (i) button next to the title in the 'bracket' state: the app opens the ranking sheet's info view. */
-  onInfo?(): void;
+  onInfo(): void;
   /**
    * The bracket list's factory from the lazy `ladder` chunk (bracket-list.ts createBracketList). Absent:
    * a 'bracket' state shows the static skeleton until an update brings it (no fake rows meanwhile).
@@ -271,7 +271,7 @@ export function announcement(p: Pick<RankingPanelProps, 'list' | 'result'>): str
   return parts.map((s) => (/[.!?…]$/.test(s) ? s : `${s}.`)).join(' ');
 }
 
-// ─────────────────────────────── the list (shared with rank-hub.ts) ───────────────────────────────
+// ─────────────────────────────── the list ───────────────────────────────
 
 export interface RankListRenderOptions {
   /** 'see_top' mode's button. */
@@ -421,7 +421,7 @@ export function createRankingPanel(): OverlayView<RankingPanelProps> {
 
   const title = h('h2', { class: 'overlay__title ranking__title', id: shell.titleId });
   // Phase 2e: the (i) button next to the title in the 'bracket' state (opens the sheet's info view).
-  const info = makeButton({ variant: 'icon', icon: 'icon-info', ariaLabel: t('ladder.info'), className: 'ranking__info', onPress: () => props?.onInfo?.() });
+  const info = makeButton({ variant: 'icon', icon: 'icon-info', ariaLabel: t('ladder.info'), className: 'ranking__info', onPress: () => props?.onInfo() });
   info.hidden = true;
   const head = h('div', { class: 'ranking__head' }, title, info);
   // Worded ("+2 fish · Your total: 14", "Solved in 3:08"): no .num (it would force the whole line LTR in Arabic).
@@ -493,7 +493,7 @@ export function createRankingPanel(): OverlayView<RankingPanelProps> {
     }
     if (bracket && bracket.factory !== factory) dropBracket();
     if (!bracket) {
-      const handle = factory(view, { onHeart: (slot) => props?.onHeart?.(slot) });
+      const handle = factory(view, { onHeart: (slot) => props?.onHeart(slot) });
       bracket = { factory, handle };
       list.replaceWith(handle.el);
       centerAfterOpen = true;
@@ -548,7 +548,7 @@ export function createRankingPanel(): OverlayView<RankingPanelProps> {
     // Phase 2e: the worldwide ranking is the "Daily ranking" (rank.title.period.day), whatever period.kind is.
     setText(title, ladder ? t('rank.title.period.day') : rankTitle(p.board, p.eventNameKey, p.periodKind ?? (p.result.kind === 'period' ? p.result.periodKind : cfg.period.kind)));
     // Its glyph and the sheet it opens come with the lazy `ladder` chunk: no factory yet, no (i) (never a blank disc).
-    info.hidden = !(p.list.kind === 'bracket' && p.onInfo && p.bracketList);
+    info.hidden = !(p.list.kind === 'bracket' && p.bracketList);
     setText(sub, resultText(p.result));
     if (p.list.kind === 'bracket') {
       renderBracket(p, p.list.view);

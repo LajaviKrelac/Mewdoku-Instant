@@ -38,7 +38,7 @@ import type { EventFlow } from './event-flow';
 import type { LadderFlow } from './ladder-flow';
 import type { AppBus } from './events';
 import { isFlagOn } from './flags';
-import type { RankHubFlow } from './rank-hub-flow';
+import type { EventTopFlow } from './event-top-flow';
 import type { Router } from './router';
 import type { SaveScheduler } from './saves';
 import type { Session } from './session';
@@ -68,7 +68,8 @@ export interface ShellDeps {
   readonly events?: EventFlow;
   readonly shop?: ShopFlow;
   readonly banners?: BannerFlow;
-  readonly rankHub?: RankHubFlow;
+  /** The event screen's Top list (Phase 2e I-3: was the rankings hub's, now its own flow). */
+  readonly eventTop?: EventTopFlow;
   /** Board size of a shipped level when known (personal records). */
   levelSize?(level: number): number | null;
   /**
@@ -162,7 +163,7 @@ export function createShell(deps: ShellDeps): Shell {
    * window). The victory screen is a banner screen too, although it is an overlay on the game screen
    * (reviews L2B-1, FB2B-2: the shop opened from its fish pill "+" left the banner over its Buy buttons).
    */
-  const MODALS: readonly OverlayId[] = ['settings', 'how_to_play', 'shop', 'rank_hub', 'ranking', 'group_result', 'daily_result', 'ladder', 'ladder_result', 'nickname'];
+  const MODALS: readonly OverlayId[] = ['settings', 'how_to_play', 'shop', 'ranking', 'group_result', 'daily_result', 'ladder', 'ladder_result', 'nickname'];
   // Phase 2d §1.16: the game screen too (its band; O4, O1, O2 and the coach are not in MODALS).
   const bannerScreen = (): boolean =>
     router.screen() === 'home' || router.screen() === 'event' || router.screen() === 'game' || router.isOpen('victory');
@@ -315,8 +316,6 @@ export function createShell(deps: ShellDeps): Shell {
           else void deps.session().start({ mode: 'daily', dateKey: day });
         },
         onSettings: () => shell.openSettings(),
-        // §5.5: the trophy shows only when capabilities().leaderboards.
-        onTrophy: () => deps.rankHub?.open(),
         // Phase 2e §2.5: the ranking chip opens the ranking sheet (records mode without a server).
         onLadder: () => {
           const lf = ladderNow();
@@ -367,7 +366,7 @@ export function createShell(deps: ShellDeps): Shell {
           const v = selectEventView(store.get(), ctx(), ev, c);
           if (v && v.nextIndex !== null) void deps.session().start({ mode: 'event', eventId: ev.id, index: v.nextIndex });
         },
-        onTopList: () => deps.rankHub?.openEventTopList(ev),
+        onTopList: () => deps.eventTop?.open(ev),
         onHome: () => shell.showHome(),
         onSettings: () => shell.openSettings(),
       });

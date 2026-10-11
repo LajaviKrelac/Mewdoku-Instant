@@ -3,6 +3,7 @@
 // before proposing them to ui-board), &motion=reduced, &patterns=1 (hint text with glyph names).
 // A tiny router stand-in mounts overlays above the screen, traps focus for modal ones, makes the
 // screen inert and sends Esc to dismiss(). Callbacks show a toast with their name.
+import '../src/i18n/en-lazy'; // Phase 2e I-4: the harness shows lazy views without their chunk barrels
 import '../src/styles/tokens.css';
 import '../src/styles/base.css';
 import '../src/styles/board.css';
@@ -16,6 +17,10 @@ import '../src/styles/coach-chunk.css';
 import type { Settings } from '../src/game/types';
 import { setInert, trapFocus } from '../src/ui/a11y/focus-trap';
 import { mountSprite } from '../src/ui/art/sprite';
+import { mountStreakArt } from '../src/ui/art/streak-art';
+import { createLadderChip } from '../src/ui/hud/ladder-chip';
+import { createStreakStrip } from '../src/ui/hud/streak-strip';
+import { provideHomeExtras } from '../src/ui/screens/home-extras';
 import { mountLazyArt } from '../src/ui/art/lazy-art';
 import type { OverlayView } from '../src/ui/dom';
 import { applyMotion } from '../src/ui/fx/motion';
@@ -45,6 +50,9 @@ if (params.get('css') === 'proposed') {
 }
 
 mountSprite();
+// Phase 2e I-4: in the app these come with the lazy overlay chunk (app/overlay-chunk.ts).
+mountStreakArt();
+provideHomeExtras({ createLadderChip, createStreakStrip });
 mountLazyArt(); // Phase 2d.1: the symbols the lazy chunks mount (board mouse, star, shards, the tickers' art)
 const app = document.getElementById('app') as HTMLElement;
 applyMotion(app, params.get('motion') === 'reduced');
@@ -141,6 +149,8 @@ function rewarded(variant: RewardedVariant, placement: 'hint' | 'kitty'): void {
     now: () => Date.now(),
     onAccept: log('onAccept'),
     onDecline: log('onDecline'),
+    buy: [],
+    onBuy: log('onBuy'),
   });
 }
 
@@ -150,18 +160,18 @@ const VIEWS: Record<string, () => void> = {
     mountScreen(boot.el);
     boot.setProgress(62);
   },
-  home: () => mountScreen(createHomeScreen(homeView(), { onPlay: log('onPlay'), onDaily: log('onDaily'), onSettings: log('onSettings'), onTrophy: log('onTrophy'), onCard: log('onCard'), onEvent: log('onEvent') }).el),
+  home: () => mountScreen(createHomeScreen(homeView(), { onPlay: log('onPlay'), onDaily: log('onDaily'), onSettings: log('onSettings'), onCard: log('onCard'), onEvent: log('onEvent'), onLadder: log('onLadder') }).el),
   'home-locked': () =>
     mountScreen(
-      createHomeScreen(homeView({ level: 7, daily: { state: 'locked', dateKey: '2026-10-06', n: 8, solvedMs: null, unlockLevel: 20 } }), {
-        onPlay: log('onPlay'), onDaily: log('onDaily'), onSettings: log('onSettings'), onTrophy: log('onTrophy'), onCard: log('onCard'), onEvent: log('onEvent'),
+      createHomeScreen(homeView({ level: 7, daily: { state: 'locked', dateKey: '2026-10-06', n: 8, solvedMs: null, unlockLevel: 21 } }), {
+        onPlay: log('onPlay'), onDaily: log('onDaily'), onSettings: log('onSettings'), onCard: log('onCard'), onEvent: log('onEvent'), onLadder: log('onLadder'),
       }).el,
     ),
   'home-continue': () =>
     mountScreen(
       createHomeScreen(
-        homeView({ level: 40, hard: true, continueLevel: true, hints: 0, daily: { state: 'solved', dateKey: '2026-10-07', n: 9, solvedMs: 252_000, unlockLevel: 20 } }),
-        { onPlay: log('onPlay'), onDaily: log('onDaily'), onSettings: log('onSettings'), onTrophy: log('onTrophy'), onCard: log('onCard'), onEvent: log('onEvent') },
+        homeView({ level: 40, hard: true, continueLevel: true, hints: 0, daily: { state: 'solved', dateKey: '2026-10-07', n: 9, solvedMs: 252_000, unlockLevel: 21 } }),
+        { onPlay: log('onPlay'), onDaily: log('onDaily'), onSettings: log('onSettings'), onCard: log('onCard'), onEvent: log('onEvent'), onLadder: log('onLadder') },
       ).el,
     ),
   game: () => void game(gameView(midGame(37))),
@@ -205,7 +215,7 @@ const VIEWS: Record<string, () => void> = {
     modal.el.querySelector<HTMLElement>('.settings__about-link')?.click();
   },
   howto: () => {
-    mountScreen(createHomeScreen(homeView(), { onPlay: log('onPlay'), onDaily: log('onDaily'), onSettings: log('onSettings'), onTrophy: log('onTrophy'), onCard: log('onCard'), onEvent: log('onEvent') }).el);
+    mountScreen(createHomeScreen(homeView(), { onPlay: log('onPlay'), onDaily: log('onDaily'), onSettings: log('onSettings'), onCard: log('onCard'), onEvent: log('onEvent'), onLadder: log('onLadder') }).el);
     openOverlay(createHowToPlay(), { showSkip: false, showReplay: true, onSkip: log('onSkip'), onReplay: log('onReplay'), onClose: log('onClose') });
   },
   'howto-skip': () => {
@@ -226,7 +236,7 @@ const VIEWS: Record<string, () => void> = {
     toasts.show('No videos right now — try again soon.', { durationMs: 600_000 });
   },
   rotate: () => {
-    mountScreen(createHomeScreen(homeView(), { onPlay: log('onPlay'), onDaily: log('onDaily'), onSettings: log('onSettings'), onTrophy: log('onTrophy'), onCard: log('onCard'), onEvent: log('onEvent') }).el);
+    mountScreen(createHomeScreen(homeView(), { onPlay: log('onPlay'), onDaily: log('onDaily'), onSettings: log('onSettings'), onCard: log('onCard'), onEvent: log('onEvent'), onLadder: log('onLadder') }).el);
     mountRotateNotice(document.body);
   },
 };

@@ -18,6 +18,7 @@ describe('me and deletion (§1.11)', () => {
   it('delete: my rows vanish, hearts I gave are taken back, the count drops, the slot is never reused', async () => {
     const t = makeTestApp();
     const [a, b, c] = await playersWithWins(t, 3, 'del');
+    const oldName = a!.session?.player.nickname;
     const v = await a!.bracket();
     const id = v.bracketId!;
     const bSlot = (await b!.bracket()).me!.slot;
@@ -36,10 +37,13 @@ describe('me and deletion (§1.11)', () => {
     expect(vb.members).toBe(2);
     expect(vb.me?.hearts).toBe(0);
     expect(t.rows<{ members: number; next_slot: number }>('SELECT members, next_slot FROM brackets')[0]).toEqual({ members: 2, next_slot: 3 });
-    // signing in again later creates a fresh player with a new code
+    // signing in again later creates a fresh player with a new code and a new name (spec §1.11; requests-G1 R3)
+    t.clock.advance(60_000);
     const again = new TestPlayer(t, 'del0');
     await again.signIn();
     expect(again.code()).not.toBe(a!.code());
+    expect(again.session?.player.nickname).toBeTruthy();
+    expect(again.session?.player.nickname).not.toBe(oldName);
     expect((await again.bracket()).state).toBe('none');
   });
 

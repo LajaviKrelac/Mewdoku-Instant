@@ -1094,73 +1094,6 @@
   margin-inline-start: 0;
 }
 
-/* ── Rankings hub (§5.5) ───────────────────────────────────────────────── */
-.rank-hub {
-  text-align: start;
-}
-
-.rank-hub__tabs {
-  display: flex;
-  margin: 2px 0 14px;
-  padding: 3px;
-  border-radius: var(--radius-pill);
-  background: var(--page-2);
-}
-
-.rank-hub__tab {
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 44px; /* the codebase's touch-target minimum (review A11Y-HUB-1) */
-  padding: 0 8px;
-  overflow: hidden;
-  border: 0;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: var(--ink-2);
-  font-family: var(--font-display);
-  font-weight: var(--display-weight);
-  font-size: var(--fs-s);
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  cursor: pointer;
-}
-
-.rank-hub__tab[aria-selected='true'] {
-  background: var(--card);
-  color: var(--ink);
-  box-shadow: var(--shadow-1);
-}
-
-.rank-hub__panel {
-  outline: none;
-}
-
-.rank-hub__heading {
-  margin-bottom: 10px;
-  color: var(--ink);
-  font-size: var(--fs-l);
-}
-
-.rank-groups__body {
-  color: var(--ink-2);
-  line-height: 1.45;
-}
-
-.rank-groups__active {
-  display: inline-block;
-  margin-top: 10px;
-  padding: 6px 14px;
-  border-radius: var(--radius-pill);
-  background: var(--accent-soft);
-  color: var(--accent-text);
-  font-weight: 600;
-  font-size: var(--fs-s);
-}
-
-.rank-groups__start {
-  margin-top: 16px;
-}
-
 /* ── Group result (§5.6) ───────────────────────────────────────────────── */
 .group-result__icon {
   display: flex;
@@ -1248,11 +1181,6 @@
 
 /* Narrow phones (320–359 px). */
 @media (max-width: 359px) {
-  .rank-hub__tab {
-    padding: 0 6px;
-    font-size: var(--fs-xs);
-  }
-
   /* A little more room for the two-word button labels of German and Russian (review UX-8). */
   .overlay__panel--dialog {
     padding-right: 14px;
@@ -1452,6 +1380,42 @@
   .settings__view--confirm .overlay__title {
     font-size: var(--fs-xl);
   }
+}
+
+/* ── Phase 2e (G3, spec §2.5, §5.3): the Home ranking chip and the streak strip (moved here from screens.css at
+   I-4: both arrive with this chunk; screens.css keeps the lead slot and the strip's reserved row) ──
+   The chip is a button in the top bar's lead slot, in the period pill's look (a white pill, the trophy in
+   gold wash): "#5" and the fish, "Join", the trophy alone (off), or the period total (records). The strip
+   is a white card under the Play button: our flame, the day line with 7 paw steps, and one calm line. */
+.ladder-chip { display: inline-flex; flex: none; align-items: center; min-width: 44px; height: 44px; padding: 0 14px 0 6px; padding-inline-start: 6px; padding-inline-end: 14px;
+  border: 0; border-radius: var(--radius-pill); background: var(--card); box-shadow: var(--shadow-1);
+  color: var(--ink); font-family: var(--font-display); font-weight: var(--display-weight); font-size: var(--fs-l); cursor: pointer;
+  transition: transform 80ms ease-out; }
+.ladder-chip:active { transform: scale(0.95); }
+.ladder-chip__icon { width: 30px; height: 30px; color: var(--ink); --icon-fill: var(--gold); }
+.ladder-chip__rank { margin-inline-start: 3px; white-space: nowrap; }
+.ladder-chip[data-state='join'] .ladder-chip__rank { color: var(--accent-text); }
+.ladder-chip[data-state='off'] { padding-inline-end: 6px; }
+.ladder-chip[data-state='off'] .ladder-chip__icon { opacity: 0.5; }
+.ladder-chip__points { display: inline-flex; align-items: center; margin-inline-start: 8px; }
+.ladder-chip__points[data-plain] { margin-inline-start: 3px; }
+.ladder-chip__points[data-plain] .ladder-chip__fish { display: none; }
+.ladder-chip__fish { width: 22px; height: 22px; margin-inline-end: 2px; }
+.streak-strip { display: flex; align-items: center; width: 100%; min-height: 48px; padding: 5px 14px; border-radius: var(--radius-l);
+  background: var(--card); box-shadow: var(--shadow-1); color: var(--ink); text-align: start; }
+.streak-strip__flame { flex: none; width: 30px; height: 30px; margin-inline-end: 10px; }
+.streak-strip__body { flex: 1; min-width: 0; }
+.streak-strip__top { display: flex; flex-wrap: wrap; align-items: center; }
+.streak-strip__day { margin-inline-end: 8px; font-family: var(--font-display); font-weight: var(--display-weight); white-space: nowrap; }
+.streak-steps { display: inline-flex; align-items: center; }
+.streak-step { width: 18px; height: 18px; margin-inline-end: 2px; }
+.streak-step[data-kind='next'] { --step-line: var(--accent-deep); }
+.streak-strip[data-reward] .streak-step:last-child { --chest-open: 1; --chest-shut: 0; }
+.streak-strip__text { color: var(--ink-2); font-size: var(--fs-s); line-height: 1.25; }
+@media (max-width: 359px) {
+  .ladder-chip { font-size: var(--fs-m); }
+  .streak-strip { padding-inline-start: 10px; padding-inline-end: 10px; }
+  .streak-strip__flame { width: 24px; height: 24px; margin-inline-end: 8px; }
 }
 
 /* ── Victory: the daily reward line and the streak row (spec §5.3, §6.1) ── */

@@ -21,27 +21,27 @@ afterEach(() => {
 const uses = (el: Element | null | undefined): string[] => Array.from(el?.querySelectorAll('use') ?? []).map((u) => u.getAttribute('href') ?? '');
 
 describe('top bar (Home, event screen)', () => {
-  const props: TopBarProps = { title: 'Level 37', hard: false, showHome: true, showSettings: true, showTrophy: false, fbSafeZone: false };
+  const props: TopBarProps = { title: 'Level 37', hard: false, showHome: true, showSettings: true, fbSafeZone: false };
 
   it('renders the title, Hard badge and the right-hand buttons', () => {
-    const cb = { onHome: vi.fn(), onSettings: vi.fn(), onTrophy: vi.fn() };
+    const cb = { onHome: vi.fn(), onSettings: vi.fn() };
     const bar = createTopBar(props, cb);
     const text = bar.el.querySelector('.top-bar__text');
     const badge = bar.el.querySelector<HTMLElement>('.badge--hard');
     expect(text?.textContent).toBe('Level 37');
     expect(badge?.hidden).toBe(true);
     const btn = (n: string): HTMLButtonElement => bar.el.querySelector(`.top-bar__btn--${n}`) as HTMLButtonElement;
-    expect(btn('trophy').hidden).toBe(true);
+    // Phase 2e I-3 (spec §2.10): the Home trophy (the rankings hub) is gone; the bar has Home and the gear only.
+    expect(bar.el.querySelector('.top-bar__btn--trophy')).toBeNull();
     btn('home').click();
     btn('settings').click();
     expect(cb.onHome).toHaveBeenCalledTimes(1);
     expect(cb.onSettings).toHaveBeenCalledTimes(1);
     expect(btn('home').getAttribute('aria-label')).toBe('Home');
-    bar.update({ ...props, hard: true, showHome: false, showTrophy: true, fbSafeZone: true });
+    bar.update({ ...props, hard: true, showHome: false, fbSafeZone: true });
     expect(badge?.hidden).toBe(false);
     expect(badge?.textContent).toBe('Hard');
     expect(btn('home').hidden).toBe(true);
-    expect(btn('trophy').hidden).toBe(false);
     expect(bar.el.hasAttribute('data-fb-safe')).toBe(true);
     bar.update({ ...props, title: null });
     expect(bar.el.querySelector<HTMLElement>('.top-bar__title')?.hidden).toBe(true);
@@ -49,7 +49,7 @@ describe('top bar (Home, event screen)', () => {
   });
 
   it('Phase 2d §1.15: the red dot on the gear while settingsDot, and the gear\'s name says so', () => {
-    const bar = createTopBar({ ...props, settingsDot: true }, { onHome: vi.fn(), onSettings: vi.fn(), onTrophy: vi.fn() });
+    const bar = createTopBar({ ...props, settingsDot: true }, { onHome: vi.fn(), onSettings: vi.fn() });
     const gear = bar.el.querySelector('.top-bar__btn--settings') as HTMLElement;
     const dot = gear.querySelector('.top-bar__dot');
     expect(dot).not.toBeNull();
@@ -59,11 +59,11 @@ describe('top bar (Home, event screen)', () => {
     expect(gear.querySelector('.top-bar__dot')).toBeNull();
     expect(gear.getAttribute('aria-label')).toBe('Settings');
     // Absent (a harness from before 2d) = no dot.
-    expect(createTopBar(props, { onHome: vi.fn(), onSettings: vi.fn(), onTrophy: vi.fn() }).el.querySelector('.top-bar__dot')).toBeNull();
+    expect(createTopBar(props, { onHome: vi.fn(), onSettings: vi.fn() }).el.querySelector('.top-bar__dot')).toBeNull();
   });
 
   it('keeps every control out of the top-left lead (FB safe zone) by DOM order', () => {
-    const bar = createTopBar({ ...props, fbSafeZone: true }, { onHome: vi.fn(), onSettings: vi.fn(), onTrophy: vi.fn() });
+    const bar = createTopBar({ ...props, fbSafeZone: true }, { onHome: vi.fn(), onSettings: vi.fn() });
     const lead = bar.el.firstElementChild as HTMLElement;
     expect(lead.className).toBe('top-bar__lead');
     expect(lead.children).toHaveLength(0);
@@ -71,14 +71,14 @@ describe('top bar (Home, event screen)', () => {
 
   it('phase2b §2.5: the optional lead slot sits right after the safe zone, before the title', () => {
     const pill = document.createElement('span');
-    const bar = createTopBar({ ...props, title: null, fbSafeZone: true }, { onHome: vi.fn(), onSettings: vi.fn(), onTrophy: vi.fn() }, { lead: pill });
+    const bar = createTopBar({ ...props, title: null, fbSafeZone: true }, { onHome: vi.fn(), onSettings: vi.fn() }, { lead: pill });
     const [lead, slot, title] = Array.from(bar.el.children) as HTMLElement[];
     expect(lead?.className).toBe('top-bar__lead');
     expect(lead?.children).toHaveLength(0);
     expect(slot?.className).toBe('top-bar__slot');
     expect(slot?.firstElementChild).toBe(pill);
     expect(title?.className).toBe('top-bar__title');
-    expect(createTopBar(props, { onHome: vi.fn(), onSettings: vi.fn(), onTrophy: vi.fn() }).el.querySelector('.top-bar__slot')).toBeNull();
+    expect(createTopBar(props, { onHome: vi.fn(), onSettings: vi.fn() }).el.querySelector('.top-bar__slot')).toBeNull();
   });
 });
 

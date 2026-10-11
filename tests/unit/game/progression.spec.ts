@@ -170,9 +170,13 @@ describe('generated boards (02 §11.4, §12)', () => {
 describe('daily unlock and dates (02 §12)', () => {
   const at = (level: number): Pick<SaveData, 'progress'> => ({ progress: { level, completed: level - 1, best: {} } });
 
-  it('unlocked iff progress.level > 20', () => {
-    expect(isDailyUnlocked(at(20))).toBe(false);
-    expect(isDailyUnlocked(at(21))).toBe(true);
+  it('unlocked iff progress.level > 21 (Phase 2e L1, D-2e-13: unlockAfterLevel 20 → 21)', () => {
+    expect(isDailyUnlocked(at(21))).toBe(false);
+    expect(isDailyUnlocked(at(22))).toBe(true);
+    // The 2b rule (unlockAfterLevel 20) is one key away and still opens at 21.
+    const old = mergeConfig({ daily: { unlockAfterLevel: 20 } });
+    expect(isDailyUnlocked(at(20), old)).toBe(false);
+    expect(isDailyUnlocked(at(21), old)).toBe(true);
   });
 
   it('localDateKey uses the local calendar date', () => {
@@ -209,7 +213,8 @@ describe('daily unlock and dates (02 §12)', () => {
     const today = '2026-10-06';
     const base = defaults(0);
     expect(dailyCardState(base, today)).toBe('locked');
-    const open: SaveData = { ...base, progress: { ...base.progress, level: 21 } };
+    expect(dailyCardState({ ...base, progress: { ...base.progress, level: 21 } }, today)).toBe('locked'); // Phase 2e: after level 21
+    const open: SaveData = { ...base, progress: { ...base.progress, level: 22 } };
     expect(dailyCardState(open, today)).toBe('not_played');
     const slot = (id: InProgressV2['id']): InProgressV2 => ({
       id, mode: 'daily', cells: '0'.repeat(64), hearts: 3, revivesUsed: 0, mistakes: 0, hintsUsed: 0, kittiesUsed: 0, elapsedMs: 0, savedAt: 0,
@@ -253,10 +258,13 @@ describe('Phase 2e: the daily unlock after level 21 with earlier unlocks kept (s
     expect(dailyCardState(at(21), '2026-10-06', l1)).toBe('locked');
   });
 
-  it('today (unlockAfterLevel 20): unchanged behaviour (open at 21)', () => {
-    expect(cfg.daily.unlockAfterLevel).toBe(20);
-    expect(isDailyUnlocked(at(20))).toBe(false);
-    expect(isDailyUnlocked(at(21))).toBe(true);
+  it('the shipped default since I-2 (L1): unlockAfterLevel 21 with keepEarlierUnlock, so cfg behaves as l1', () => {
+    expect(cfg.daily.unlockAfterLevel).toBe(21);
+    expect(cfg.daily.keepEarlierUnlock).toBe(true);
+    expect(isDailyUnlocked(at(21))).toBe(false);
+    expect(isDailyUnlocked(at(22))).toBe(true);
+    expect(isDailyUnlocked(at(21, { daily: { '2026-10-05': [1, 0, 0, 0] } }))).toBe(true);
+    expect(isDailyUnlocked(at(21, { inProgress: { level: null, daily: slot, event: null } }))).toBe(true);
   });
 });
 

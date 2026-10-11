@@ -8,7 +8,7 @@
 // onReady (late onReady shows it, iOS never); a cancel is silent; grantBeforeConsume false.
 import { describe, expect, it } from 'vitest';
 import { createFakeClock } from '../../../src/app/clock';
-import { mergeConfig, type GameConfig } from '../../../src/app/config';
+import { cfg, mergeConfig, type GameConfig } from '../../../src/app/config';
 import type { AnalyticsEvent } from '../../../src/app/events';
 import { createShopFlow } from '../../../src/app/shop-flow';
 import { defaults } from '../../../src/game/save';
@@ -75,7 +75,7 @@ function setup(opts: { platformId?: PlatformId; caps?: boolean; provider?: boole
   const analytics: AnalyticsEvent[] = [];
   const flow = createShopFlow({
     payments: () => (opts.provider === false ? undefined : pay),
-    capabilities: () => ({ payments: opts.caps ?? true }),
+    capabilities: () => ({ payments: opts.caps ?? true, paymentsIos: false }),
     platformId: opts.platformId ?? 'fbig',
     save: () => state,
     updateSave: (fn) => {
@@ -107,9 +107,16 @@ const settle = async (): Promise<void> => {
   for (let i = 0; i < 10; i++) await Promise.resolve();
 };
 
+/** The 2b grant order (record + grant + save, then consume), one key away since Phase 2e's L1 flip (D-2e-10). */
+const GRANT_FIRST = mergeConfig({ iap: { grantBeforeConsume: true } });
+
 describe('purchase grant order (§8.4)', () => {
-  it('record + grant, critical save, then consume; toast thanks; iap ok (no price, no payment id)', async () => {
-    const s = setup();
+  it('the shipped default since I-2 (L1, D-2e-10) is consume first', () => {
+    expect(cfg.iap.grantBeforeConsume).toBe(false);
+  });
+
+  it('grantBeforeConsume true (2b): record + grant, critical save, then consume; toast thanks; iap ok (no price, no payment id)', async () => {
+    const s = setup({ config: GRANT_FIRST });
     await s.flow.buy('hints_15');
     expect(s.log).toEqual(['purchase:hints_15:P1', 'state:h15k0', 'save:critical', 'changed', 'consume:tok1']);
     expect(s.save().purchases.tokens).toEqual(['hints_15|tok1']);
@@ -125,15 +132,15 @@ describe('purchase grant order (§8.4)', () => {
     expect(s.save().stock.hints).toBe(15);
   });
 
-  it('an unconsumed purchase never delivered (died before saving) is granted, saved, then consumed', async () => {
-    const s = setup();
+  it('grantBeforeConsume true (2b): an unconsumed purchase never delivered (died before saving) is granted, saved, then consumed', async () => {
+    const s = setup({ config: GRANT_FIRST });
     s.pay.unconsumed = [{ productId: 'kitties_8', purchaseToken: 'tokY', paymentId: 'p', purchaseTime: 1 }];
     await s.flow.restore();
     expect(s.log).toEqual(['purchases', 'state:h0k8', 'save:critical', 'changed', 'consume:tokY']);
   });
 
-  it('a boot restore of an unconsumed RETIRED fish_250 grants 10 hints + 3 kitties once, records it and consumes it (phase2c §5.3)', async () => {
-    const s = setup();
+  it('grantBeforeConsume true (2b): a boot restore of an unconsumed RETIRED fish_250 grants 10 hints + 3 kitties once, records it and consumes it (phase2c §5.3)', async () => {
+    const s = setup({ config: GRANT_FIRST });
     s.pay.unconsumed = [{ productId: 'fish_250', purchaseToken: 'tokF', paymentId: 'p', purchaseTime: 1 }];
     await s.flow.restore();
     expect(s.log).toEqual(['purchases', 'state:h10k3', 'save:critical', 'changed', 'consume:tokF']);
@@ -193,11 +200,29 @@ describe('purchase grant order (§8.4)', () => {
     expect(s.analytics).toEqual([]);
   });
 
-  it('grantBeforeConsume false (Phase 2e, spec §4.2): intent + critical save, consume, then grant + critical save', async () => {
-    const s = setup({ config: mergeConfig({ iap: { grantBeforeConsume: false } }) });
-    await s.flow.buy('kitties_8');
-    expect(s.log).toEqual(['purchase:kitties_8:P1', 'state:h0k0', 'save:critical', 'consume:tok1', 'state:h0k8', 'save:critical', 'changed']);
-    expect(s.save().purchases).toEqual({ noAds: false, tokens: ['kitties_8|tok1'], pending: [] });
+  it('grantBeforeConsume false (Phase 2e, spec §4.2; the default since I-2): intent + critical save, consume, then grant + critical save', async () => {
+    for (const config of [undefined, mergeConfig({ iap: { grantBeforeConsume: false } })]) {
+      const s = setup(config ? { config } : {});
+      await s.flow.buy('kitties_8');
+      expect(s.log).toEqual(['purchase:kitties_8:P1', 'state:h0k0', 'save:critical', 'consume:tok1', 'state:h0k8', 'save:critical', 'changed']);
+      expect(s.save().purchases).toEqual({ noAds: false, tokens: ['kitties_8|tok1'], pending: [] });
+      expect(s.toasts).toEqual(['Thank you! Your items are in.']);
+    }
+  });
+
+  it('consume first (the default): a boot restore of an undelivered unconsumed purchase goes intent → consume → grant, once', async () => {
+    const s = setup();
+    s.pay.unconsumed = [{ productId: 'kitties_8', purchaseToken: 'tokY', paymentId: 'p', purchaseTime: 1 }];
+    await s.flow.restore();
+    expect(s.log).toEqual(['purchases', 'state:h0k0', 'save:critical', 'consume:tokY', 'state:h0k8', 'save:critical', 'changed']);
+    expect(s.save().purchases.tokens).toEqual(['kitties_8|tokY']);
+    expect(s.save().purchases.pending).toEqual([]);
+    // FB no longer lists it (consumed): the next boot does nothing.
+    s.pay.unconsumed = [];
+    s.log.length = 0;
+    await s.flow.restore();
+    expect(s.log).toEqual(['purchases']);
+    expect(s.save().stock.kitties).toBe(8);
   });
 
   it("removeAdsMode 'keep': No Ads is never consumed", async () => {

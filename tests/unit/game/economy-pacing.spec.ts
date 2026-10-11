@@ -30,6 +30,13 @@ import type { SaveData } from '../../../src/game/types';
 const T0 = Date.UTC(2026, 9, 6, 9, 0, 0);
 const SEC = 1000;
 const DAY = 86_400_000;
+/**
+ * The 2b tenure table (02 §13.2, phase2b §3.7) that Phase 2e's L1 flip replaced with a 30 s floor (D-2e-7, P-I2).
+ * The mechanism stays and the table is one key away (spec §0.6 "Alternative kept by a key"), so the tenure tests run
+ * against it explicitly; the shipped default is pinned separately below.
+ */
+const TENURE_TABLE = { ads: { interstitial: { cooldownSec: [{ fromDay: 0, sec: 120 }, { fromDay: 2, sec: 100 }, { fromDay: 7, sec: 90 }] } } } as const;
+const TENURE = mergeConfig(TENURE_TABLE);
 
 describe('economy ledger', () => {
   it('starts with 5 hints and 3 kitties; spend and grant return new saves', () => {
@@ -91,8 +98,12 @@ describe('free fallback cooldown (02 §13.3, shared by hint, kitty and revive)',
 describe('tenure and cooldown (02 §13.2)', () => {
   it.each([
     [0, 120], [1, 120], [2, 100], [6, 100], [7, 90], [400, 90],
-  ])('cooldownSecFor(%i days) = %i s', (d, sec) => {
-    expect(cooldownSecFor(d)).toBe(sec);
+  ])('the 2b tenure table: cooldownSecFor(%i days) = %i s', (d, sec) => {
+    expect(cooldownSecFor(d, TENURE)).toBe(sec);
+  });
+
+  it.each([0, 1, 2, 6, 7, 400])('Phase 2e default (L1, P-I2): cooldownSecFor(%i days) = the 30 s floor', (d) => {
+    expect(cooldownSecFor(d)).toBe(30);
   });
 
   it('tenureDays = floor((now − firstSeenAt) / 1 day), never negative', () => {
@@ -127,14 +138,20 @@ const TABLE: Scenario[] = [
   { name: '10 completed (tutorial counts)', tenure: 0, sessionSec: 600, sinceAdSec: null, completed: 10, trigger: 'retry', expect: 'ok' },
   { name: 'session grace 59.999 s', tenure: 3, sessionSec: 59.999, sinceAdSec: null, completed: 50, expect: 'grace' },
   { name: 'session grace 60 s', tenure: 3, sessionSec: 60, sinceAdSec: null, completed: 50, trigger: 'daily_done', expect: 'ok' },
-  { name: 'day 0: 119 s since the last ad', tenure: 0, sessionSec: 600, sinceAdSec: 119, completed: 50, expect: 'cooldown' },
-  { name: 'day 0: 120 s since the last ad', tenure: 0, sessionSec: 600, sinceAdSec: 120, completed: 50, expect: 'ok' },
-  { name: 'day 1: 119.999 s', tenure: 1, sessionSec: 600, sinceAdSec: 119.999, completed: 50, expect: 'cooldown' },
-  { name: 'day 2: 100 s', tenure: 2, sessionSec: 600, sinceAdSec: 100, completed: 50, expect: 'ok' },
-  { name: 'day 2: 99 s', tenure: 2, sessionSec: 600, sinceAdSec: 99, completed: 50, expect: 'cooldown' },
-  { name: 'day 6: 100 s', tenure: 6, sessionSec: 600, sinceAdSec: 100, completed: 50, expect: 'ok' },
-  { name: 'day 7: 90 s', tenure: 7, sessionSec: 600, sinceAdSec: 90, completed: 50, expect: 'ok' },
-  { name: 'day 7: 89 s', tenure: 7, sessionSec: 600, sinceAdSec: 89, completed: 50, expect: 'cooldown' },
+  // The 2b tenure table (one key away since Phase 2e).
+  { name: 'tenure table, day 0: 119 s since the last ad', tenure: 0, sessionSec: 600, sinceAdSec: 119, completed: 50, config: TENURE_TABLE, expect: 'cooldown' },
+  { name: 'tenure table, day 0: 120 s since the last ad', tenure: 0, sessionSec: 600, sinceAdSec: 120, completed: 50, config: TENURE_TABLE, expect: 'ok' },
+  { name: 'tenure table, day 1: 119.999 s', tenure: 1, sessionSec: 600, sinceAdSec: 119.999, completed: 50, config: TENURE_TABLE, expect: 'cooldown' },
+  { name: 'tenure table, day 2: 100 s', tenure: 2, sessionSec: 600, sinceAdSec: 100, completed: 50, config: TENURE_TABLE, expect: 'ok' },
+  { name: 'tenure table, day 2: 99 s', tenure: 2, sessionSec: 600, sinceAdSec: 99, completed: 50, config: TENURE_TABLE, expect: 'cooldown' },
+  { name: 'tenure table, day 6: 100 s', tenure: 6, sessionSec: 600, sinceAdSec: 100, completed: 50, config: TENURE_TABLE, expect: 'ok' },
+  { name: 'tenure table, day 7: 90 s', tenure: 7, sessionSec: 600, sinceAdSec: 90, completed: 50, config: TENURE_TABLE, expect: 'ok' },
+  { name: 'tenure table, day 7: 89 s', tenure: 7, sessionSec: 600, sinceAdSec: 89, completed: 50, config: TENURE_TABLE, expect: 'cooldown' },
+  // Phase 2e default (L1, D-2e-7): every level, a 30 s floor between full-screen ads whatever the tenure.
+  { name: 'day 0: 29.999 s since the last ad', tenure: 0, sessionSec: 600, sinceAdSec: 29.999, completed: 50, expect: 'cooldown' },
+  { name: 'day 0: 30 s since the last ad', tenure: 0, sessionSec: 600, sinceAdSec: 30, completed: 50, expect: 'ok' },
+  { name: 'day 7: 29 s', tenure: 7, sessionSec: 600, sinceAdSec: 29, completed: 50, expect: 'cooldown' },
+  { name: 'day 7: 31 s', tenure: 7, sessionSec: 600, sinceAdSec: 31, completed: 50, expect: 'ok' },
   { name: 'order: min levels before grace', tenure: 0, sessionSec: 1, sinceAdSec: 1, completed: 0, expect: 'min_levels' },
   { name: 'order: grace before cooldown', tenure: 0, sessionSec: 1, sinceAdSec: 1, completed: 50, expect: 'grace' },
 ];
@@ -155,7 +172,7 @@ describe('interstitial gate truth table (fake clock)', () => {
       ads: { ...base.ads, lastAdAt: row.sinceAdSec === null ? 0 : now - Math.round(row.sinceAdSec * 1000) },
     };
     const c = row.config ? mergeConfig(row.config) : undefined;
-    const input = { trigger: row.trigger ?? 'next_level', now, sessionStartedAt, save, interstitialSupported: row.supported ?? true };
+    const input = { trigger: row.trigger ?? 'next_level', now, sessionStartedAt, save, interstitialSupported: row.supported ?? true, retryIndex: null };
     expect(interstitialGate(input, c)).toBe(row.expect);
     expect(canShowInterstitial(input, c)).toBe(row.expect === 'ok');
   });
@@ -165,45 +182,54 @@ describe('interstitial gate truth table (fake clock)', () => {
     const sessionStartedAt = clock.now();
     let save: SaveData = { ...defaults(T0), progress: { level: 31, completed: 30, best: {} } };
     clock.advance(10 * 60 * SEC);
-    const gate = (): GateDecision => interstitialGate({ trigger: 'next_level', now: clock.now(), sessionStartedAt, save, interstitialSupported: true });
+    const gate = (): GateDecision => interstitialGate({ trigger: 'next_level', now: clock.now(), sessionStartedAt, save, interstitialSupported: true, retryIndex: null });
     expect(gate()).toBe('ok');
     save = recordAdShown(save, clock.now()); // rewarded hint ad completed
-    clock.advance(30 * SEC);
-    expect(gate()).toBe('cooldown');
-    clock.advance(90 * SEC);
+    clock.advance(29 * SEC);
+    expect(gate()).toBe('cooldown'); // Phase 2e: the 30 s floor (P-I2)
+    clock.advance(1 * SEC);
     expect(gate()).toBe('ok');
     save = recordAdShown(save, clock.now()); // interstitial shown
-    clock.advance(119 * SEC);
+    clock.advance(29 * SEC);
     expect(gate()).toBe('cooldown');
+    // The same reset under the 2b tenure table (day 0: 120 s).
+    const gateT = (): GateDecision => interstitialGate({ trigger: 'next_level', now: clock.now(), sessionStartedAt, save, interstitialSupported: true, retryIndex: null }, TENURE);
+    save = recordAdShown(save, clock.now());
+    clock.advance(119 * SEC);
+    expect(gateT()).toBe('cooldown');
+    clock.advance(1 * SEC);
+    expect(gateT()).toBe('ok');
   });
 
   it('dailies do not count: only progress.completed is read', () => {
     const base = defaults(T0);
     const save: SaveData = { ...base, progress: { ...base.progress, completed: 5 }, daily: { '2026-10-01': [1, 0, 0, 0], '2026-10-02': [1, 0, 0, 0], '2026-10-03': [1, 0, 0, 0], '2026-10-04': [1, 0, 0, 0], '2026-10-05': [1, 0, 0, 0] } };
-    expect(interstitialGate({ trigger: 'daily_done', now: T0 + DAY, sessionStartedAt: T0, save, interstitialSupported: true })).toBe('min_levels');
+    expect(interstitialGate({ trigger: 'daily_done', now: T0 + DAY, sessionStartedAt: T0, save, interstitialSupported: true, retryIndex: null })).toBe('min_levels');
   });
 });
 
 describe('phase2b §3: cadence parity and the banner gate', () => {
-  it('the interstitial cooldown stays the original\'s 120 / 100 / 90 s by tenure (§3.7)', () => {
-    expect(cooldownSecFor(0)).toBe(120);
-    expect(cooldownSecFor(1)).toBe(120);
-    expect(cooldownSecFor(2)).toBe(100);
-    expect(cooldownSecFor(6)).toBe(100);
-    expect(cooldownSecFor(7)).toBe(90);
-    expect(cooldownSecFor(400)).toBe(90);
+  it('Phase 2e (D-2e-7, P-I2): every level with a 30 s floor; the 2b tenure table (§3.7: 120 / 100 / 90 s) is one key away', () => {
+    expect(cfg.ads.interstitial.cooldownSec).toEqual([{ fromDay: 0, sec: 30 }]);
+    for (const d of [0, 1, 2, 6, 7, 400]) expect(cooldownSecFor(d)).toBe(30);
+    expect(cooldownSecFor(0, TENURE)).toBe(120);
+    expect(cooldownSecFor(1, TENURE)).toBe(120);
+    expect(cooldownSecFor(2, TENURE)).toBe(100);
+    expect(cooldownSecFor(6, TENURE)).toBe(100);
+    expect(cooldownSecFor(7, TENURE)).toBe(90);
+    expect(cooldownSecFor(400, TENURE)).toBe(90);
   });
 
   it('event_next is an interstitial trigger like next_level', () => {
     const save = { ...defaults(T0 - 10 * DAY), progress: { level: 30, completed: 29, best: {} } };
-    const input = { now: T0, sessionStartedAt: T0 - 600 * SEC, save, interstitialSupported: true };
+    const input = { now: T0, sessionStartedAt: T0 - 600 * SEC, save, interstitialSupported: true, retryIndex: null };
     expect(interstitialGate({ ...input, trigger: 'event_next' })).toBe('ok');
     expect(interstitialGate({ ...input, trigger: 'event_next' }, mergeConfig({ ads: { interstitial: { triggers: ['next_level'] } } }))).toBe('trigger');
   });
 
   it('owning No Ads turns interstitials off (§8.3)', () => {
     const save = { ...defaults(T0 - 10 * DAY), progress: { level: 30, completed: 29, best: {} }, purchases: { noAds: true, tokens: [] } };
-    const input = { trigger: 'next_level' as const, now: T0, sessionStartedAt: T0 - 600 * SEC, save, interstitialSupported: true };
+    const input = { trigger: 'next_level' as const, now: T0, sessionStartedAt: T0 - 600 * SEC, save, interstitialSupported: true, retryIndex: null };
     expect(interstitialGate(input)).toBe('no_ads');
     expect(canShowInterstitial({ ...input, save: { ...save, purchases: { ...save.purchases, noAds: false } } })).toBe(true);
   });
@@ -223,13 +249,15 @@ describe('phase2b §3: cadence parity and the banner gate', () => {
     { screen: 'event', ...ok, want: 'ok' },
     // Phase 2d §1.16: the game screen qualifies while ads.banner.duringPlay (on by default), then the same checks.
     { screen: 'game', ...ok, want: 'ok' },
-    { screen: 'game', ...ok, completed: 9, want: 'min_levels' },
+    // Phase 2e L1 (P-B1): fromCompletedLevels 9, so the first banner is on level 10's board.
+    { screen: 'game', ...ok, completed: 9, want: 'ok' },
+    { screen: 'game', ...ok, completed: 8, want: 'min_levels' },
     { screen: 'game', ...ok, noAds: true, want: 'no_ads' },
     { screen: 'game', ...ok, tutorial: true, want: 'tutorial' },
     { screen: 'ranking', ...ok, want: 'screen' },
     { screen: 'boot', ...ok, want: 'screen' },
     { screen: 'overlay', ...ok, want: 'screen' },
-    { screen: 'home', ...ok, completed: 9, want: 'min_levels' },
+    { screen: 'home', ...ok, completed: 8, want: 'min_levels' },
     { screen: 'home', ...ok, noAds: true, want: 'no_ads' },
     { screen: 'home', ...ok, supported: false, want: 'unsupported' },
     { screen: 'victory', ...ok, tutorial: true, want: 'tutorial' },
@@ -240,12 +268,12 @@ describe('phase2b §3: cadence parity and the banner gate', () => {
       progress: { level: row.completed + 1, completed: row.completed, best: {} },
       purchases: { noAds: row.noAds, tokens: [] },
     };
-    expect(bannerGate({ screen: row.screen, save, bannerSupported: row.supported, firstRunTutorial: row.tutorial })).toBe(row.want);
+    expect(bannerGate({ screen: row.screen, save, bannerSupported: row.supported, firstRunTutorial: row.tutorial, today: null })).toBe(row.want);
   });
 
   it('bannerGate: disabled in config, and a config variant for the screens and the start level', () => {
     const save = { progress: { level: 31, completed: 30, best: {} }, purchases: { noAds: false, tokens: [] } };
-    const base = { screen: 'home' as const, save, bannerSupported: true, firstRunTutorial: false };
+    const base = { screen: 'home' as const, save, bannerSupported: true, firstRunTutorial: false, today: null };
     expect(bannerGate(base, mergeConfig({ ads: { banner: { enabled: false } } }))).toBe('disabled');
     expect(bannerGate(base, mergeConfig({ ads: { enabled: false } }))).toBe('disabled');
     expect(bannerGate(base, mergeConfig({ ads: { banner: { screens: ['victory'] } } }))).toBe('screen');
@@ -254,7 +282,7 @@ describe('phase2b §3: cadence parity and the banner gate', () => {
 
   it("phase 2d §1.16: 'game' qualifies exactly when ads.banner.duringPlay is on (off restores the 2b rule)", () => {
     const save = { progress: { level: 31, completed: 30, best: {} }, purchases: { noAds: false, tokens: [] } };
-    const game = { screen: 'game' as const, save, bannerSupported: true, firstRunTutorial: false };
+    const game = { screen: 'game' as const, save, bannerSupported: true, firstRunTutorial: false, today: null };
     expect(cfg.ads.banner.duringPlay).toBe(true);
     expect(cfg.ads.banner.screens).not.toContain('game'); // not through the screens list
     expect(bannerGate(game)).toBe('ok');
@@ -286,7 +314,7 @@ describe('Phase 2e: the interstitial cadence (spec §3.2)', () => {
     sessionStartedAt: T0,
     save: veteranAt(now, lastAdAt),
     interstitialSupported: true,
-    ...extra,
+    retryIndex: extra.retryIndex ?? null,
   });
 
   it('the 30 s floor at every tenure (day 0, 2, 7, 40): 29 s gated, 30 s shown', () => {
@@ -326,7 +354,7 @@ describe('Phase 2e: the interstitial cadence (spec §3.2)', () => {
 
 describe('Phase 2e: the banner end date (spec §3.1, ads.banner.untilDate)', () => {
   const save = { progress: { level: 31, completed: 30, best: {} }, purchases: { noAds: false, tokens: [] } };
-  const game = { screen: 'game' as const, save, bannerSupported: true, firstRunTutorial: false };
+  const game = { screen: 'game' as const, save, bannerSupported: true, firstRunTutorial: false, today: null };
 
   it("'ended' from 2027-03-31 (a local date key), on every screen; before it the gate is unchanged", () => {
     expect(cfg.ads.banner.untilDate).toBe('2027-03-31');

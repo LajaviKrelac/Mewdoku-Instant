@@ -12,12 +12,13 @@ import { displayWidth, META, sampleText } from '../../../src/i18n/meta';
 import { NICK_WORDS_V1, RETIRED_V1 } from '../../../src/shared/nick-words';
 import { checkCatalog, loadCatalogs } from '../../../scripts/i18n-check';
 
-const E2 = EN_PARTS.enUi2e as Readonly<Record<string, string>>;
+// Phase 2e I-4: the 2e keys that only lazy chunks show moved verbatim to en/lazy.ts (enLazyUi2e); both parts are G3's 2e copy.
+const E2 = { ...EN_PARTS.enUi2e, ...EN_PARTS.enLazyUi2e } as Readonly<Record<string, string>>;
 const KEYS = Object.keys(E2);
 const CATALOGS = await loadCatalogs();
 
 describe('Phase 2e English (Appendix A, ours)', () => {
-  it('the keys live in en/ui-2e.ts and read as specified', () => {
+  it('the keys live in en/ui-2e.ts (first load) and en/lazy.ts (enLazyUi2e) and read as specified', () => {
     expect(KEYS.length).toBeGreaterThanOrEqual(110);
     expect(E2['ladder.alone']).toBe("You're the only player in this ranking so far.");
     expect(E2['ladder.offline']).toBe("You're offline. We'll try to send your fish when you're back online.");

@@ -22,6 +22,7 @@ const caps: Capabilities = {
   leaderboards: false,
   share: false,
   payments: false,
+  paymentsIos: false,
   haptics: true,
   overlayViews: false,
   groups: false,

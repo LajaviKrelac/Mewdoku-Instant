@@ -50,6 +50,7 @@ beforeEach(async () => {
   pending.clear();
   vi.resetModules();
   i18n = await import('../../../src/i18n');
+  await import('../../../src/i18n/en-lazy'); // Phase 2e I-4: the fresh module's English table, whole (as after a lazy chunk)
 });
 
 afterEach(async () => {

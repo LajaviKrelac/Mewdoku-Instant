@@ -64,8 +64,12 @@ describe('banner-flow (§3.2)', () => {
     }
   });
 
-  it('never before 10 completed levels, with No Ads, or on the first-run tutorial victory', async () => {
-    const early = setup({ completed: 9 });
+  it('never before the start level (Phase 2e L1: fromCompletedLevels 9, level 10\'s board), with No Ads, or on the first-run tutorial victory', async () => {
+    expect(cfg.ads.banner.fromCompletedLevels).toBe(9);
+    const first = setup({ completed: 9 });
+    await first.flow.screenShown('home');
+    expect(first.log).toEqual(['banner:show:bottom']);
+    const early = setup({ completed: 8 });
     await early.flow.screenShown('home');
     const owned = setup({ noAds: true });
     await owned.flow.screenShown('home');
@@ -84,12 +88,13 @@ describe('banner-flow (§3.2)', () => {
     expect(s.reserved()).toBe(false);
   });
 
-  it('skips a screen inside the 60 s reload window (no retry loop), shows again after it', async () => {
+  it('skips a screen inside the 46 s reload window (Phase 2e L1, P-B2; no retry loop), shows again after it', async () => {
+    expect(cfg.ads.banner.minReloadSec).toBe(46);
     const s = setup();
     await s.flow.screenShown('home');
     await s.flow.hide();
     s.flow.screenGone();
-    s.clock.advance(59_000);
+    s.clock.advance(45_000);
     await s.flow.screenShown('victory');
     expect(s.log).toEqual(['banner:show:bottom', 'banner:hide']);
     expect(s.reserved()).toBe(false);
@@ -248,10 +253,11 @@ describe('banner-flow (§3.2)', () => {
     const s = setup();
     await s.flow.screenShown('home');
     s.log.length = 0;
-    expect(s.flow.eligible('game')).toBe(true); // inside the 60 s window: still eligible
+    expect(s.flow.eligible('game')).toBe(true); // inside the 46 s window: still eligible
     expect(s.flow.eligible('game', { firstRunTutorial: true })).toBe(false);
     expect(s.log).toEqual([]);
-    expect(setup({ completed: 9 }).flow.eligible('game')).toBe(false);
+    expect(setup({ completed: 8 }).flow.eligible('game')).toBe(false);
+    expect(setup({ completed: 9 }).flow.eligible('game')).toBe(true);
     expect(setup({ noAds: true }).flow.eligible('game')).toBe(false);
     expect(setup({ banner: false }).flow.eligible('game')).toBe(false);
   });
@@ -479,7 +485,7 @@ describe('phase 2d §1.16: the banner on the game screen (ads.banner.duringPlay,
     h.router.close('how_to_play');
     await h.settle(0);
     expect(banner(h)).toEqual(['banner:show', 'banner:hide']); // never re-shown on this screen
-    for (const id of ['shop', 'rank_hub'] as const) {
+    for (const id of ['shop', 'ladder'] as const) {
       h.router.open(id, {} as never);
       h.router.close(id);
     }

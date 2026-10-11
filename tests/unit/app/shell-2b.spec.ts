@@ -1,15 +1,17 @@
 // Owner: C (Phase 2b). Phase 2c (G1): Home carries this period's total (no fish pill, no "+"), the
 // Settings Shop row only where the Buy section can show something (never on the web or FB iOS), and
-// the hub's first tab is the period board ("Today" only with rank.dailyBoard).
+// the hub's first tab is the period board ("Today" only with rank.dailyBoard). Phase 2e I-3 (spec §2.10, §8.4): the
+// rankings hub and the Home trophy are deleted (the ranking chip and the `ladder` sheet replace them); the event
+// screen's Top list is its own flow (app/event-top-flow.ts).
 // The shell's phase2b parts: the Home event card (tap → event screen, locked → toast,
 // teaser → nothing), the event screen's Play / Top list / Home, the
-// trophy (rankings hub with its tabs), the Settings rows (Language, Shop, Remove ads), and the banner
+// event Top list, the Settings rows (Language, Shop, Remove ads), and the banner
 // rules on Home and the event screen (shown after mount, hidden under modals and before leaving).
 import { afterEach, describe, expect, it } from 'vitest';
 import { createBannerFlow } from '../../../src/app/banner-flow';
 import { createEventFlow, bundledEventDefs, type EventsChunk } from '../../../src/app/event-flow';
 import { setFlagOverrides } from '../../../src/app/flags';
-import { createRankHubFlow } from '../../../src/app/rank-hub-flow';
+import { createEventTopFlow } from '../../../src/app/event-top-flow';
 import { createRankingFlow } from '../../../src/app/ranking-flow';
 import { createShell, type Shell } from '../../../src/app/shell';
 import { createShopFlow, type ShopFlow } from '../../../src/app/shop-flow';
@@ -52,7 +54,7 @@ function setup(
   const banners = createBannerFlow({ platform: h.platform, store: h.store, clock: h.clock });
   const rankings = createRankingFlow({ platform: h.platform, clock: h.clock, bus: h.bus, save: () => h.save(), updateSave, touch: () => h.saves.touch() });
   const viewCtx = () => ({ now: h.clock.now(), capabilities: h.platform.caps, platformId: h.platform.id, events: DEFS });
-  const rankHub = createRankHubFlow({ store: h.store, router: h.router, clock: h.clock, rankings, activeEvent: () => events.active(), viewCtx, ...(opts.config ? { config: opts.config } : {}) });
+  const eventTop = createEventTopFlow({ store: h.store, router: h.router, rankings, viewCtx, ...(opts.config ? { config: opts.config } : {}) });
   const shop = createShopFlow({
     payments: () => undefined,
     capabilities: () => h.platform.caps,
@@ -88,7 +90,7 @@ function setup(
     events,
     shop: opts.shop ? opts.shop(shop) : shop,
     banners,
-    rankHub,
+    eventTop,
     ...(opts.locales ? { applyLocale: opts.applyLocale ?? ((o: string) => void locales.push(o)) } : {}),
     ...(opts.config ? { config: opts.config } : {}),
   });
@@ -305,42 +307,24 @@ describe('shell: shop, hub, settings rows (§5.5, §6.8, §8.5; phase2c §5.2, �
     expect(owned.h.router.props.settings?.onRemoveAds).toBeUndefined();
   });
 
-  it('the trophy opens the rankings hub: "This week" first, then Event (no "Paw points", no "Today" while rank.dailyBoard is off); the web shows my period records', async () => {
-    const { h, shell } = setup((s) => ({ ...s, period: { key: '2026-11-09', total: 12, bestKey: '2026-11-02', bestTotal: 30 }, streak: { current: 2, best: 5 } }));
+  it('Phase 2e I-3 (spec §2.10, §8.4): Home has no trophy and no rankings hub; the ranking chip is the way in', () => {
+    const { h, shell } = setup();
     shell.showHome();
-    h.router.homeCb?.onTrophy();
-    await flush(h);
-    const p = h.router.props.rank_hub;
-    expect(p?.tabs).toEqual(['period', 'event']);
-    expect(p?.tab).toBe('period');
-    expect(p?.periodKind).toBe('week');
-    expect(p?.list.kind).toBe('records');
-    if (p?.list.kind === 'records') {
-      // eventStart(LANTERN) + 1 h = Friday 2026-11-13: this week is 2026-11-09.
-      // 2c.1 (D24): Total points (the lifetime points.total) instead of the retired perfect streak.
-      expect(p.list.records).toMatchObject({ board: 'period', period: { kind: 'week', total: 12, best: 30 }, totalPoints: 0 });
-      expect(p.list.records).not.toHaveProperty('streak');
-    }
-    p?.onTab('event');
-    await flush(h);
-    const q = h.router.props.rank_hub;
-    expect(q?.tab).toBe('event');
-    if (q?.list.kind === 'records') expect(q.list.records.event).toEqual({ solved: 0, total: 21, totalMs: 0 });
-    q?.onClose();
-    expect(h.router.isOpen('rank_hub')).toBe(false);
+    expect(h.router.homeCb).not.toHaveProperty('onTrophy');
+    expect(h.router.homeView).not.toHaveProperty('showTrophy');
+    expect(typeof h.router.homeCb?.onLadder).toBe('function');
+    expect(h.router.homeView?.ladder).toMatchObject({ state: 'records' }); // no ranking server in this harness
   });
 
-  it('the event Top list and the hub event tab never label the event total as "This puzzle" (review RANK-1)', async () => {
+  it('the event Top list never labels the event total as "This puzzle" (review RANK-1)', async () => {
     const { h, shell } = setup((s) => ({ ...s, events: { [LANTERN.id]: { solved: 2, ms: 400_000, lastAt: 1 } } }));
-    const hub = createRankHubFlow({
+    const top = createEventTopFlow({
       store: h.store,
       router: h.router,
-      clock: h.clock,
       rankings: createRankingFlow({ platform: h.platform, clock: h.clock, bus: h.bus, save: () => h.save(), updateSave: () => undefined, touch: () => undefined }),
-      activeEvent: () => LANTERN,
       viewCtx: () => ({ now: h.clock.now(), capabilities: h.platform.caps, platformId: h.platform.id, events: DEFS }),
     });
-    hub.openEventTopList(LANTERN);
+    top.open(LANTERN);
     await flush(h);
     const list = h.router.props.ranking?.list;
     expect(list?.kind).toBe('records');
@@ -349,22 +333,16 @@ describe('shell: shop, hub, settings rows (§5.5, §6.8, §8.5; phase2c §5.2, �
       expect(list.records.event).toEqual({ solved: 2, total: 21, totalMs: 400_000 });
     }
     h.router.props.ranking?.onContinue();
-    shell.showHome();
-    h.router.homeCb?.onTrophy();
-    await flush(h);
-    h.router.props.rank_hub?.onTab('event');
-    await flush(h);
-    const tab = h.router.props.rank_hub?.list;
-    expect(tab?.kind).toBe('records');
-    if (tab?.kind === 'records') expect(tab.records.thisMs).toBe(0);
+    expect(h.router.isOpen('ranking')).toBe(false);
+    void shell;
   });
 
-  it('with rank.dailyBoard on, the hub shows "Today" after "This week"', async () => {
-    const { h, shell } = setup((s) => s, { config: mergeConfig({ rank: { dailyBoard: true } }) });
-    shell.showHome();
-    h.router.homeCb?.onTrophy();
+  it('the event screen\'s Top list goes through the shell (deps.eventTop)', async () => {
+    const { h, shell } = setup();
+    await shell.showEvent(LANTERN);
+    h.router.eventCb?.onTopList();
     await flush(h);
-    expect(h.router.props.rank_hub?.tabs).toEqual(['period', 'daily', 'event']);
+    expect(h.router.props.ranking).toMatchObject({ board: 'event', tapMinMs: 0 });
   });
 
   it('Home has no shop entry and no fish pill: the lead slot shows this period\'s total (0 after a rollover)', () => {
@@ -380,15 +358,13 @@ describe('shell: shop, hub, settings rows (§5.5, §6.8, §8.5; phase2c §5.2, �
 
   it('the event screen top list opens the ranking panel for the event board, no tap gate', async () => {
     const { h } = setup();
-    const hub = createRankHubFlow({
+    const top = createEventTopFlow({
       store: h.store,
       router: h.router,
-      clock: h.clock,
       rankings: createRankingFlow({ platform: h.platform, clock: h.clock, bus: h.bus, save: () => h.save(), updateSave: () => undefined, touch: () => undefined }),
-      activeEvent: () => LANTERN,
       viewCtx: () => ({ now: h.clock.now(), capabilities: h.platform.caps, platformId: h.platform.id, events: DEFS }),
     });
-    hub.openEventTopList(LANTERN);
+    top.open(LANTERN);
     await flush(h);
     const p = h.router.props.ranking;
     expect(p).toMatchObject({ board: 'event', tapMinMs: 0, result: { kind: 'event', solved: 0, total: 21 } });

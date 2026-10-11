@@ -98,9 +98,18 @@ describe('i18n', () => {
     expect('rewarded.swap' in en).toBe(false);
   });
 
-  it('Phase 2c: the lives are fish in the English copy; "heart" survives only as the pattern glyph and an event name', () => {
-    const hearts = Object.entries(en).filter(([, v]) => /\bhearts?\b/i.test(v.replace(/\{\w+\}/g, ''))).map(([k]) => k);
+  it('Phase 2c: the lives are fish in the English copy; "heart" survives only as the pattern glyph, an event name and (2e) the ranking\'s cheer', () => {
+    // Phase 2e I-2 (requests-G3 R12; spec §2.8, D-2e-18, glossary): in the worldwide ranking a heart is a CHEER one
+    // player gives another, never a life (fish are lives). Those keys are exempt here and pinned by name, so a new
+    // "heart" anywhere else still fails; tests/unit/i18n/catalogs-2e.spec.ts checks they never use a life word.
+    const CHEER = /^ladder\.(?:hearts?\.|info\.hearts$)/;
+    const all = Object.entries(en).filter(([, v]) => /\bhearts?\b/i.test(v.replace(/\{\w+\}/g, ''))).map(([k]) => k);
+    const hearts = all.filter((k) => !CHEER.test(k));
     expect(hearts.sort()).toEqual(['event.yarn.name', 'glyph.9']);
+    expect(all.filter((k) => CHEER.test(k)).sort()).toEqual(
+      ['ladder.heart.error', 'ladder.heart.give.a11y', 'ladder.heart.received.one', 'ladder.heart.received.other', 'ladder.heart.self.a11y', 'ladder.hearts.one', 'ladder.hearts.other', 'ladder.info.hearts'].sort(),
+    );
+    for (const k of all.filter((x) => CHEER.test(x))) expect(en[k as keyof typeof en], k).not.toMatch(/\b(lives?|life|lose|lost)\b/i);
     expect(t('game.hearts.a11y', { hearts: 2, max: 3 })).toBe('2 of 3 fish left');
     expect(t('fail.title')).toBe('Out of fish');
     expect(t('a11y.lost')).toBe('Out of fish.');
@@ -176,7 +185,8 @@ describe('Phase 2d.1 English (helpers-spec Appendix A; G3)', () => {
     expect(t('ticker.unique')).toBe('Every puzzle has exactly one answer');
     expect(t('ticker.tip.cat')).toBe('Tip: double-tap a tile to place a cat');
     expect(t('ticker.tip.drag')).toBe('Tip: drag across tiles to cross out many');
-    expect(Object.keys(EN_PARTS.enUi2d1).sort()).toEqual(
+    // Phase 2e I-4: 'fx.done' (shown only by the fx chunk) moved verbatim to en/lazy.ts (enLazyUi2d1); the 2d.1 keys are both parts.
+    expect(Object.keys({ ...EN_PARTS.enUi2d1, ...EN_PARTS.enLazyUi2d1 }).sort()).toEqual(
       ['a11y.unitDone', 'fx.done', 'ticker.best', 'ticker.cats.one', 'ticker.cats.other', 'ticker.daily', 'ticker.points.one', 'ticker.points.other', 'ticker.solved.one', 'ticker.solved.other', 'ticker.tip.cat', 'ticker.tip.drag', 'ticker.unique'].sort(),
     );
     expect(t('color.4')).toBe('Denim');
@@ -201,7 +211,15 @@ describe('Phase 2d.1 English (helpers-spec Appendix A; G3)', () => {
 describe('config', () => {
   it('holds the 02 §3 values and is frozen', () => {
     expect(cfg.hearts.perAttempt).toBe(3);
-    expect(cfg.ads.interstitial.cooldownSec.map((s) => s.sec)).toEqual([120, 100, 90]);
+    // Phase 2e L1 (I-2, spec §7.2.2, D-2e-7): every level from the start level with a 30 s floor (was 120 / 100 / 90).
+    expect(cfg.ads.interstitial.cooldownSec).toEqual([{ fromDay: 0, sec: 30 }]);
+    expect(cfg.ads.interstitial.minCompletedLevels).toBe(10);
+    expect(cfg.ads.interstitial.retryEveryN).toBe(2);
+    expect([cfg.ads.banner.fromCompletedLevels, cfg.ads.banner.minReloadSec]).toEqual([9, 46]);
+    expect(cfg.ads.reloadDelaysMs).toEqual([30_000, 60_000, 120_000]);
+    expect(cfg.daily.unlockAfterLevel).toBe(21);
+    expect(cfg.daily.keepEarlierUnlock).toBe(true);
+    expect(cfg.iap.grantBeforeConsume).toBe(false);
     expect(Object.isFrozen(cfg.ads.interstitial)).toBe(true);
     expect(dragStartPx(26)).toBe(8);
     expect(dragStartPx(60)).toBe(12);

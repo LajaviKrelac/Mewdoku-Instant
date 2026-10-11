@@ -4,7 +4,7 @@
 // the hide-during-load race (a load that lands after hide() is hidden at once).
 import { describe, expect, it } from 'vitest';
 import { createFakeClock } from '../../../src/app/clock';
-import { cfg } from '../../../src/app/config';
+import { cfg, mergeConfig } from '../../../src/app/config';
 import { bannerSupported, createFbBanner, HIDE_RETRIES, HIDE_RETRY_MS, mapBannerError, stuckLoadMs } from '../../../src/platform/fb/fb-banner';
 import type { FBInstantSDK } from '../../../src/platform/fb/fbinstant';
 import { createStub, drain, track, type StubConfig } from './helpers';
@@ -203,7 +203,9 @@ describe('createFbBanner', () => {
     expect(control.state.bannerVisible).toBe(false);
   });
 
-  it('a load that never settles is given up after stuckLoadMs (under the 60 s window, over Meta\'s 45 s): a later show() loads again', async () => {
+  it('a load that never settles is given up after stuckLoadMs (under the 46 s window, over Meta\'s 45 s): a later show() loads again', async () => {
+    expect(stuckLoadMs()).toBe(45_500); // Phase 2e L1: minReloadSec 46
+    expect(stuckLoadMs(mergeConfig({ ads: { banner: { minReloadSec: 60 } } }))).toBe(56_000); // the 2b window
     expect(stuckLoadMs()).toBeGreaterThan(45_000);
     expect(stuckLoadMs()).toBeLessThan(cfg.ads.banner.minReloadSec * 1000);
     const { banner, control, clock } = setup({ banner: { load: 'never' } });

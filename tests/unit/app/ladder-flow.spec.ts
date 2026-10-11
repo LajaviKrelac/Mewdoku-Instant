@@ -655,6 +655,58 @@ describe('rows rendered = rows returned (spec §10.6 #1, H-2, H-3)', () => {
   });
 });
 
+describe('the sheet: a fresh answer is current, never "Last updated" (requests-G3 R16, spec §2.4, §2.9)', () => {
+  it('after an answer of this page load the sheet list is not stale; a failed refresh, the offline event or a boot from the stored cache make it stale', async () => {
+    const storage = new MemStorage();
+    const s = setup({ storage });
+    await s.flow.start();
+    s.fake.addOther({ nickname: 'Sleepy Whisker 27', avatarId: 1, points: 31 });
+    s.queue(1, 3);
+    s.flow.onWin({ winId: winId(1), mode: 'level', kept: 3 });
+    await s.settle(0);
+    s.flow.homeMounted();
+    await s.settle(0);
+    s.flow.openSheet('home');
+    await s.settle(0);
+    const sheet = (): { list: { stale: unknown; rows: { heartEnabled: boolean; me: boolean }[] } | null } => s.router.props.ladder as never;
+    expect(sheet().list?.stale).toBeNull();
+    expect(sheet().list?.rows.find((r) => !r.me)?.heartEnabled).toBe(true);
+    // A failed refresh: the same cached rows, now marked stale (hearts off).
+    s.fake.offline = true;
+    await s.settle(cfg.ladder.homeRefreshMs);
+    s.flow.homeMounted();
+    await s.settle(0);
+    s.flow.openSheet('home');
+    await s.settle(0);
+    expect(sheet().list?.stale).not.toBeNull();
+    expect(sheet().list?.rows.some((r) => r.heartEnabled)).toBe(false);
+    // A later answer makes it current again.
+    s.fake.offline = false;
+    await s.settle(cfg.ladder.homeRefreshMs);
+    s.flow.homeMounted();
+    await s.settle(0);
+    s.flow.openSheet('home');
+    await s.settle(0);
+    expect(sheet().list?.stale).toBeNull();
+    // The browser's offline event (where the environment has one).
+    if (typeof globalThis.addEventListener === 'function' && typeof globalThis.dispatchEvent === 'function') {
+      globalThis.dispatchEvent(new Event('offline'));
+      s.flow.openSheet('home');
+      await s.settle(0);
+      expect(sheet().list?.stale).not.toBeNull();
+    }
+    s.flow.dispose();
+    // A new page load with only the stored cache (offline): stale until the server answers.
+    const again = setup({ storage, online: () => true });
+    again.fake.offline = true;
+    again.flow.openSheet('home');
+    await again.settle(0);
+    const st = again.router.props.ladder as { list: { stale: unknown } | null } | undefined;
+    if (st?.list) expect(st.list.stale).not.toBeNull();
+    again.flow.dispose();
+  });
+});
+
 describe('the Home chip and its refresh (spec §2.5, §2.2)', () => {
   it('bracket state from the saved numbers (rank, count, fish, ends on the device clock); refreshed at most every ladder.homeRefreshMs', async () => {
     const s = setup();

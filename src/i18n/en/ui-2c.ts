@@ -9,6 +9,7 @@
 // literal key with a switch (src/ui/period-text.ts), never with a template string.
 // Same conventions as en.ts: {name} placeholders, `.one` / `.other` plural pairs.
 export const enUi2c = {
+  // Phase 2e I-4 (lead): the keys only lazy chunks show moved verbatim to ./lazy.ts (enLazyUi2c); see src/i18n/en-first.ts.
   // ── The period total (§2.5, §2.7, §2.8) ────────────────────────────────────
   'period.total.day': 'Today: {total}',
   'period.total.week': 'This week: {total}',
@@ -59,10 +60,4 @@ export const enUi2c = {
   // Appended to a scoring cat's announcement: "Cat placed. 3 of 8. 2,016 points." (§10.4).
   'a11y.points.one': '{count} point.',
   'a11y.points.other': '{count} points.',
-  // The victory's points row: the level's total ("7,296 points", §10.3).
-  'points.count.one': '{count} point',
-  'points.count.other': '{count} points',
-  // How to play: a note with icon-points after the period note.
-  'howto.levelPoints':
-    'Every cat you find earns points, and each cat you find in a row without a mistake earns more than the one before. A mistake never takes points away, but the next cat starts the count again. Cats placed by a hint or the kitty count too.',
 } as const;

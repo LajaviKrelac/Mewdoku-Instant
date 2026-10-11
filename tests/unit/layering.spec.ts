@@ -5,7 +5,8 @@
 // Phase 2e L0 (lead; spec §1.1, §8.2, CONTRACTS §1): the `shared` layer, src/shared/** (the ranking's wire
 // contract and the nickname words, compiled into both the client and the server Worker). shared/ imports
 // nothing and uses no DOM, Worker or Node globals; game/, platform/, app/ and main.ts may import it; ui/ (and
-// audio/) for types only; workers/, engine/, i18n/ and app/config.ts may not.
+// audio/) for types only; workers/, engine/, i18n/ and app/config.ts may not. Phase 2e I-2/I-4 (lead, requests-G1
+// R9): the one edge inside the layer, src/shared/rank-api-parse.ts (the response parsers, lazy) → rank-api.ts.
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -150,7 +151,11 @@ function checkSrcEdge(e: Edge): string | null {
   const from = layerOf(e.from) as Layer;
   // Phase 2e L0: a shared module is a leaf for both bundles (the client's and the server Worker's), so not
   // even a type import, a bare package or another shared module.
-  if (from === 'shared') return 'shared/ is a leaf: imports nothing (spec §1.1)';
+  // Phase 2e I-2/I-4 (lead, requests-G1 R9): the response parsers were split out of the contract so the first load
+  // does not carry them; rank-api-parse.ts may import rank-api.ts (and nothing else may import inside the layer).
+  if (from === 'shared') {
+    return e.from === 'src/shared/rank-api-parse.ts' && e.target === 'src/shared/rank-api.ts' ? null : 'shared/ is a leaf: imports nothing (spec §1.1; rank-api-parse.ts → rank-api.ts only)';
+  }
   if (e.target === null) {
     const owner = VIRTUAL_MODULES[e.spec];
     if (owner !== undefined) return from === owner ? null : `${e.spec} is imported only by ${owner}/`;
@@ -205,13 +210,15 @@ function checkScriptEdge(e: Edge): string | null {
     e.target.startsWith('src/game/') ||
     e.target === 'src/app/config.ts' ||
     e.target === 'src/ui/art/palette.ts' ||
+    // Phase 2e I-2 (requests-G2 R5): the ranking art's colour table (pure data, imports only palette.ts) for palette:check.
+    e.target === 'src/ui/art/palette-2e.ts' ||
     // phase2b F0 (lead): i18n-check reads the catalogues; palette-check and verify-levels read the event data.
     e.target.startsWith('src/i18n/') ||
     e.target.startsWith('src/data/') ||
     // Phase 2e L0 (lead): the shared wire contract and words are pure leaves too.
     e.target.startsWith('src/shared/');
   if (e.target === ORACLE) return null; // verify-levels may cross-check with the oracle
-  return ok ? null : 'scripts import src/engine, src/game, src/i18n, src/data, src/shared, src/app/config.ts, src/ui/art/palette.ts';
+  return ok ? null : 'scripts import src/engine, src/game, src/i18n, src/data, src/shared, src/app/config.ts, src/ui/art/palette.ts, src/ui/art/palette-2e.ts';
 }
 
 const srcFiles = walk(SRC);
@@ -336,6 +343,13 @@ describe('layering (04 §2)', () => {
       expect(checkSrcEdge(edge(from, API, true)), `${from} (type)`).not.toBeNull();
     }
     expect(checkSrcEdge(edge(API, 'src/shared/nick-words.ts'))).not.toBeNull();
+    // I-2/I-4: the parsers' module may import the contract, nothing else may import inside the layer.
+    expect(checkSrcEdge(edge('src/shared/rank-api-parse.ts', API))).toBeNull();
+    expect(checkSrcEdge(edge('src/shared/rank-api-parse.ts', 'src/shared/nick-words.ts'))).not.toBeNull();
+    expect(checkSrcEdge(edge(API, 'src/shared/rank-api-parse.ts'))).not.toBeNull();
+    expect(checkSrcEdge(edge('src/shared/nick-words.ts', API))).not.toBeNull();
+    expect(checkScriptEdge(edge('scripts/palette-check.ts', 'src/ui/art/palette-2e.ts'))).toBeNull();
+    expect(checkScriptEdge(edge('scripts/palette-check.ts', 'src/ui/art/sprite.ts'))).not.toBeNull();
     expect(checkSrcEdge(edge(API, 'src/app/config.ts', true))).not.toBeNull();
     expect(checkSrcEdge(edge(API, null, true))).not.toBeNull();
     expect(checkSrcEdge(edge('src/shared/nick-words.ts', 'src/game/types.ts', true))).not.toBeNull();

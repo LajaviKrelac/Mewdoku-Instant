@@ -1,6 +1,7 @@
 // Owner: G2 (Phase 2e)
 // The Phase 2e art (spec Appendix C, §10.1; CONTRACTS §9): every new symbol id exists where it belongs (the
-// first-load sprite: the streak flame and steps; the ranking art, lazy: medals, avatars, hearts, the reward
+// streak art — the flame and steps — lazy with the overlay chunk since I-4 (art/streak-art.ts, spec §7.9's rule;
+// it was in the first-load sprite); the ranking art, lazy: medals, avatars, hearts, the reward
 // chests, name tag, edit/shuffle/info; the 2d.1 lazy art is unchanged), has a viewBox and uses only registered palette colours; the
 // avatars cover 0 … AVATAR_COUNT − 1 and stay distinct; the ranking art is never reachable from the first load.
 import { existsSync, readFileSync } from 'node:fs';
@@ -13,10 +14,12 @@ import { AVATAR_COATS, AVATAR_DISC_MIX, avatarDisc, MEDAL_COLORS, MEDAL_NUMBER_I
 import { lazyArtSymbols } from '../../../src/ui/art/lazy-art';
 import { ART_AVATAR_COUNT, avatarSymbol, HEART_POP, HEART_POP_MS, ladderArtSymbols, MEDAL_FACE, mountLadderArt } from '../../../src/ui/art/ladder-art';
 import { icon, mountSprite, spriteMarkup, SPRITE_ID, type IconSymbol } from '../../../src/ui/art/sprite';
+import { mountStreakArt, streakArtSymbols } from '../../../src/ui/art/streak-art';
 import { deltaE2000, hexToLab } from '../../../scripts/palette-check';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 
+/** The streak art (Phase 2e I-4: lazy, art/streak-art.ts; the name is kept from when it was first-load art). */
 const FIRST_LOAD: readonly IconSymbol[] = ['icon-streak-flame', 'streak-step-empty', 'streak-step-done', 'streak-step-today', 'streak-step-chest'];
 const AVATARS = Array.from({ length: 12 }, (_, i) => `avatar-${i}`) as IconSymbol[];
 const LADDER: readonly IconSymbol[] = ['medal-1', 'medal-2', 'medal-3', ...AVATARS, 'icon-heart-line', 'icon-heart-fill', 'reward-chest', 'reward-chest-open', 'nick-tag', 'icon-pencil', 'icon-shuffle', 'icon-info'];
@@ -33,9 +36,12 @@ afterEach(() => {
 });
 
 describe('Phase 2e art: where each symbol lives (CONTRACTS §9, spec §7.9)', () => {
-  it('the streak flame and steps are in the first-load sprite; the ranking art and the chests are not, nor in the 2d.1 lazy art', () => {
+  it('the streak flame and steps are in the streak art (lazy since I-4, not the first-load sprite); the ranking art and the chests are in neither, nor in the 2d.1 lazy art', () => {
     const first = spriteMarkup();
-    for (const id of FIRST_LOAD) expect(first, id).toContain(`<symbol id="${id}" `);
+    for (const id of FIRST_LOAD) {
+      expect(streakArtSymbols(), id).toContain(`<symbol id="${id}" `);
+      expect(first, id).not.toContain(`id="${id}"`);
+    }
     for (const id of LADDER) {
       expect(first, id).not.toContain(`id="${id}"`);
       expect(lazyArtSymbols(), id).not.toContain(`id="${id}"`); // the lazy-art chunk keeps its size (its 4.4 KB row)
@@ -44,7 +50,7 @@ describe('Phase 2e art: where each symbol lives (CONTRACTS §9, spec §7.9)', ()
   });
 
   it('every new symbol has a viewBox (square for the steps, the flame, the icons, the medals and the avatars) and no text or external reference', () => {
-    const all = spriteMarkup() + ladderArtSymbols();
+    const all = spriteMarkup() + streakArtSymbols() + ladderArtSymbols();
     for (const id of ALL) {
       const s = symbolOf(all, id);
       expect(s, id).not.toBe('');
@@ -64,6 +70,16 @@ describe('Phase 2e art: where each symbol lives (CONTRACTS §9, spec §7.9)', ()
     const sprite = document.getElementById(SPRITE_ID) as Element;
     for (const id of LADDER) expect(sprite.querySelectorAll(`symbol[id="${id}"]`), id).toHaveLength(1);
     expect(sprite.querySelectorAll('[id="chest-glow"]')).toHaveLength(1);
+  });
+
+  it('mountStreakArt (I-4): a no-op before the sprite, then adds the flame and the steps once (idempotent)', () => {
+    mountStreakArt();
+    expect(document.getElementById('icon-streak-flame')).toBeNull();
+    mountSprite();
+    mountStreakArt();
+    mountStreakArt();
+    const sprite = document.getElementById(SPRITE_ID) as Element;
+    for (const id of FIRST_LOAD) expect(sprite.querySelectorAll(`symbol[id="${id}"]`), id).toHaveLength(1);
   });
 
   it('icon() draws them: class names and the decorative default', () => {
@@ -97,7 +113,10 @@ describe('Phase 2e art: where each symbol lives (CONTRACTS §9, spec §7.9)', ()
     for (const entry of ['src/main.ts', 'src/platform/web/index.ts', 'src/platform/fb/index.ts']) walk(resolve(ROOT, entry));
     expect(seen.size).toBeGreaterThan(30);
     expect(seen.has(resolve(ROOT, 'src/ui/art/sprite.ts'))).toBe(true);
-    for (const lazy of ['src/ui/art/ladder-art.ts', 'src/ui/art/palette-2e.ts', 'src/ui/art/lazy-art.ts']) expect(seen.has(resolve(ROOT, lazy)), lazy).toBe(false);
+    // Phase 2e I-4: the streak art, the chip and the strip are lazy too (the overlay chunk, spec §7.9's rule).
+    for (const lazy of ['src/ui/art/ladder-art.ts', 'src/ui/art/palette-2e.ts', 'src/ui/art/lazy-art.ts', 'src/ui/art/streak-art.ts', 'src/ui/hud/streak-strip.ts', 'src/ui/hud/ladder-chip.ts']) {
+      expect(seen.has(resolve(ROOT, lazy)), lazy).toBe(false);
+    }
   });
 });
 
@@ -119,7 +138,7 @@ describe('Phase 2e art: colours come from the registered palettes (palette-check
   );
 
   it('every colour literal in the new symbols is a token, a cat colour, a palette colour or a Phase 2e art colour', () => {
-    const all = spriteMarkup() + ladderArtSymbols();
+    const all = spriteMarkup() + streakArtSymbols() + ladderArtSymbols();
     for (const id of ALL) {
       const s = symbolOf(all, id);
       for (const hex of s.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []) expect(allowed.has(hex.toLowerCase()), `${id} ${hex}`).toBe(true);
@@ -127,7 +146,7 @@ describe('Phase 2e art: colours come from the registered palettes (palette-check
   });
 
   it('custom properties fall back to their token values: --cheer, --step-line, --icon-fill', () => {
-    const all = ladderArtSymbols() + spriteMarkup();
+    const all = ladderArtSymbols() + spriteMarkup() + streakArtSymbols();
     expect(symbolOf(all, 'icon-heart-fill')).toContain(`var(--cheer,${TOKENS.cheer})`);
     expect(symbolOf(all, 'streak-step-empty')).toContain(`var(--step-line,${TOKENS['step-line']})`);
     expect(symbolOf(all, 'icon-heart-line')).toContain('fill:var(--icon-fill,none)');
@@ -218,7 +237,7 @@ describe('Phase 2e art: the drawings (spec Appendix C)', () => {
   });
 
   it('streak steps: the paw as outline, fill and fill with a check; the chest step opens through --chest-open / --chest-shut', () => {
-    const m = spriteMarkup();
+    const m = streakArtSymbols();
     const paw = (s: string): number => (s.match(/<ellipse cx="(5\.6|9\.4|14\.6|18\.4)"/g) ?? []).length;
     for (const id of ['streak-step-empty', 'streak-step-done', 'streak-step-today']) expect(paw(symbolOf(m, id)), id).toBe(4);
     expect(symbolOf(m, 'streak-step-empty')).toContain('fill:var(--step-wash,#fff)');

@@ -28,6 +28,7 @@ describe('createWebPlatform', () => {
       leaderboards: false,
       share: false,
       payments: false,
+      paymentsIos: false,
       haptics: false,
       overlayViews: false, // phase2b: never on the web
       groups: false,

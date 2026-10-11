@@ -15,7 +15,8 @@
 // passed; the save keeps my numbers only (save.ladder.current).
 // Lazy: boot loads this module (with the client and the remote switches) only where the ranking origin is
 // in use; web-prod never does (no request at all).
-import { formatPlayerCode, parseBracketView, type BracketView, type ClaimResponse, type ResultView, type RulesView, type SessionResponse, AVATAR_COUNT, NICK_NUM_MAX, NICK_NUM_MIN } from '../shared/rank-api';
+import { formatPlayerCode, type BracketView, type ClaimResponse, type ResultView, type RulesView, type SessionResponse, AVATAR_COUNT, NICK_NUM_MAX, NICK_NUM_MIN } from '../shared/rank-api';
+import { parseBracketView } from '../shared/rank-api-parse';
 import { wireWin } from '../game/ladder';
 import {
   afterDelete,
@@ -166,6 +167,13 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
   let panelLogged: WinState | null = null;
   let heartLimit = false;
   let cardBusy = false;
+  /**
+   * The cached bracket came from a server answer of THIS page load and no call has failed since (requests-G3
+   * R16; spec §2.4 States, §2.9): the sheet and the panel show it as current (no "Last updated", hearts on).
+   * A cache read from storage at boot, a failed call (sign-in, submit, refresh), a win whose answer did not come
+   * in time, the browser's offline event or a dropped cache make it stale again.
+   */
+  let cacheFresh = false;
 
   const save = (): SaveData => store.get().save;
   const updateSave = (fn: (s: SaveData) => SaveData): void =>
@@ -225,6 +233,7 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
   }
   function dropCache(): void {
     cached = null;
+    cacheFresh = false;
     try {
       deps.storage?.removeItem(ROWS_KEY);
     } catch {
@@ -251,7 +260,10 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
     if (view) {
       const cur = currentFrom(view, now);
       updateLadder((l) => ({ ...l, current: cur }));
-      if (view.state === 'open') storeCache(view);
+      if (view.state === 'open') {
+        storeCache(view);
+        cacheFresh = true;
+      }
       if (view.result && !results.some((r) => r.bracketId === view.result?.bracketId)) results = [view.result, ...results];
     }
   }
@@ -279,6 +291,7 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
   }
 
   function noteFailure(code: LadderFailureCode): void {
+    cacheFresh = false;
     const a = failureToAuth(code);
     if (a) {
       auth = a;
@@ -437,6 +450,7 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
       auth = 'signing';
       const r = await client.signIn();
       if (!r.ok) {
+        cacheFresh = false;
         const a = failureToAuth(r.code);
         auth = a ?? 'error';
         const result = r.code === 'no_api' ? 'no_api' : r.code === 'timeout' ? 'timeout' : r.code === 'disabled' ? 'disabled' : a === 'rejected' || a === 'old' || a === 'suspended' ? 'rejected' : 'error';
@@ -603,12 +617,19 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
   }
 
   function currentList(): { list: BracketListView; stale: boolean } | null {
+    // requests-G3 R16: the cache holds the NEWEST answer (every answer with an open bracket is stored, the win's
+    // own included); it is current while it came from this page load and no call failed since, else it is the
+    // stale view ("Last updated …", hearts off). The win's answer is used only when it was not cached (a bracket
+    // that is no longer open).
+    const live = liveCache();
+    if (live) {
+      if (cacheFresh && online()) return { list: listView(live.view, null, live.offset), stale: false };
+      return { list: listView(live.view, { at: live.at }, live.offset), stale: true };
+    }
     const fresh = win?.view ?? null;
     if (fresh && fresh.state !== 'none' && fresh.bracketId !== null && win?.state === 'answered') {
       return { list: listView(fresh, null, client.offsetMs()), stale: false };
     }
-    const live = liveCache();
-    if (live) return { list: listView(live.view, { at: live.at }, live.offset), stale: true };
     return null;
   }
 
@@ -952,8 +973,12 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
 
   // ── the bus: flush when the device is online again ──
   const onOnline = (): void => void flush('online');
+  const onOffline = (): void => {
+    cacheFresh = false;
+  };
   try {
     globalThis.addEventListener?.('online', onOnline);
+    globalThis.addEventListener?.('offline', onOffline);
   } catch {
     // no window
   }
@@ -978,6 +1003,7 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
       void flush('win').then(() => {
         if (win && win.ref === ref && win.state === 'sending') {
           win.state = 'failed';
+          cacheFresh = false;
           emit('offline');
         }
       });
@@ -986,6 +1012,7 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
       clock.setTimeout(() => {
         if (win === mine && mine.state === 'sending') {
           mine.state = 'failed';
+          cacheFresh = false;
           emit('offline');
         }
       }, c.ladder.panelWaitMs);
@@ -1089,6 +1116,7 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
       clock.clearTimeout(retryTimer);
       try {
         globalThis.removeEventListener?.('online', onOnline);
+        globalThis.removeEventListener?.('offline', onOffline);
       } catch {
         // no window
       }

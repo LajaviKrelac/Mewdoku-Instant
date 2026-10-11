@@ -26,6 +26,8 @@ describe('O2 rewarded prompt', () => {
     now: () => 0,
     onAccept: vi.fn(),
     onDecline: vi.fn(),
+    buy: [],
+    onBuy: vi.fn(),
     ...over,
   });
 

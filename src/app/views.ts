@@ -120,7 +120,6 @@ export function selectHomeView(state: AppState, ctx: ViewContext, c: GameConfig 
     },
     hints: save.stock.hints,
     kitties: save.stock.kitties,
-    showTrophy: ctx.capabilities.leaderboards,
     fbSafeZone: ctx.platformId === 'fbig',
     extraCards: [],
     // phase2c §2.8: the non-interactive period pill in the lead slot (0 after a rollover).
@@ -373,14 +372,14 @@ export function selectVictoryView(
     buttonDelayMs: c.fx.winButtonDelayMs,
     reducedMotion: ui.reducedMotion,
     bannerReserved: ui.bannerReserved,
-    // Phase 2e §5.3: the streak row on the day's first counted win only (absent = no row); §6.1: the daily reward.
-    ...(win.streak && c.dayStreak.victoryRow && isFlagOn('dayStreak') ? { streak: win.streak } : {}),
-    ...(win.dailyReward ? { dailyReward: win.dailyReward } : {}),
+    // Phase 2e §5.3: the streak row on the day's first counted win only (null = no row); §6.1: the daily reward.
+    streak: win.streak && c.dayStreak.victoryRow && isFlagOn('dayStreak') ? win.streak : null,
+    dailyReward: win.dailyReward ?? null,
   };
 }
 
 /** The ranking panel's data (phase2b §2.4, phase2c §2.6); `list` follows the ranking-flow's result. */
-export type RankingData = Omit<RankingPanelProps, 'onContinue' | 'onSeeTop' | 'onListArea'>;
+export type RankingData = Omit<RankingPanelProps, 'onContinue' | 'onSeeTop' | 'onListArea' | 'onHeart' | 'onInfo'>;
 export function selectRankingView(
   state: AppState,
   ctx: ViewContext,

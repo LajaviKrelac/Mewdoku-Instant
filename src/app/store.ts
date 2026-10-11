@@ -96,7 +96,8 @@ export type ScreenId = 'boot' | 'home' | 'game' | 'event';
  * Stack overlays managed by the router. Toast (O9) and rotate notice (O10) are separate layers.
  * phase2b adds `ranking` (§2.4), `victory` (§2.5; replaces O3 `win`, removed at integration, and O7
  * `daily_result` after a daily win; O7 still shows a solved daily reopened from Home), `shop` (§8.5),
- * `rank_hub` (§5.5) and `group_result` (§5.6), all from the lazy overlay chunk.
+ * and `group_result` (§5.6), all from the lazy overlay chunk (Phase 2e I-3: the rankings hub `rank_hub` is deleted,
+ * spec §2.10).
  */
 export type OverlayId =
   | 'hint'
@@ -109,7 +110,6 @@ export type OverlayId =
   | 'ranking'
   | 'victory'
   | 'shop'
-  | 'rank_hub'
   | 'group_result'
   // Phase 2e (spec §2.5–§2.7): the ranking sheet, a ranking's result card and the name sheet (lazy `ladder` chunk).
   | 'ladder'

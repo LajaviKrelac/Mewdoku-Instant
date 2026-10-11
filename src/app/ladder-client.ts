@@ -20,6 +20,8 @@ import {
   parseProfileResponse,
   parseSessionResponse,
   parseWinsResponse,
+} from '../shared/rank-api-parse';
+import {
   type BracketView,
   type ClaimResponse,
   type ConfigResponse,

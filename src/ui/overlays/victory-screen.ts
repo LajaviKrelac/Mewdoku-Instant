@@ -110,11 +110,11 @@ export interface VictoryProps {
   /**
    * The streak row, on the day's first counted win only: day `day` of `total` (today's step fills in) and the
    * cycle reward when this win paid it (already granted). Absent or null: no row (the tutorial, a second win
-   * the same day, a restored board, the daily result reopened from Home).
+   * the same day, a restored board, the daily result reopened from Home). null: no row. Required since I-3.
    */
-  readonly streak?: { readonly day: number; readonly total: number; readonly reward: Reward | null } | null;
-  /** "Daily reward: +1 hint" (daily.reward, already granted); shown only when not null and not zero. */
-  readonly dailyReward?: Reward | null;
+  readonly streak: { readonly day: number; readonly total: number; readonly reward: Reward | null } | null;
+  /** "Daily reward: +1 hint" (daily.reward, already granted); shown only when not null and not zero. Required since I-3. */
+  readonly dailyReward: Reward | null;
   /** The orange primary: next level / Play Level 2 / Home (replay) / Done (daily) / next puzzle or back to event. */
   onPrimary(): void;
   onHome(): void;

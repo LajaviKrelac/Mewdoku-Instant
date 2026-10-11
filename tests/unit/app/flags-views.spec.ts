@@ -27,6 +27,7 @@ const caps: Capabilities = {
   leaderboards: false,
   share: false,
   payments: false,
+  paymentsIos: false,
   haptics: true,
   overlayViews: false,
   groups: false,
@@ -70,8 +71,9 @@ describe('selectHomeView', () => {
   it('maps level, hard badge, continue, stock and the daily card', () => {
     const save = { ...defaults(NOW), tutorialDone: true, progress: { level: 30, completed: 29, best: {} } };
     let v = selectHomeView({ ...initialAppState(save) }, ctx);
-    expect(v).toMatchObject({ level: 30, hard: true, continueLevel: false, hints: 5, kitties: 3, showTrophy: false, fbSafeZone: false });
-    expect(v.daily).toMatchObject({ state: 'not_played', dateKey: TODAY, n: 9, solvedMs: null, unlockLevel: 20 });
+    expect(v).toMatchObject({ level: 30, hard: true, continueLevel: false, hints: 5, kitties: 3, fbSafeZone: false });
+    expect(v).not.toHaveProperty('showTrophy'); // Phase 2e I-3: no Home trophy
+    expect(v.daily).toMatchObject({ state: 'not_played', dateKey: TODAY, n: 9, solvedMs: null, unlockLevel: 21 }); // Phase 2e L1 (D-2e-13)
     const withSlot = {
       ...save,
       inProgress: { level: { id: 'L30' as const, mode: 'level' as const, cells: '', hearts: 3, revivesUsed: 0, mistakes: 0, hintsUsed: 0, kittiesUsed: 0, elapsedMs: 0, savedAt: 0 }, daily: null, event: null },
@@ -191,7 +193,7 @@ describe('phase2c.1 §3.2.5: the victory and the records (no streak anywhere)', 
   it('selectVictoryView: pointsEarned is the level\'s total, counted or not; null for 0 and the tutorial; never a streak', () => {
     const v = selectVictoryView(app(), ctx, win(), { praise: 0 });
     expect(v.pointsEarned).toBe(7_296);
-    expect(v).not.toHaveProperty('streak');
+    expect(v.streak).toBeNull(); // the retired 2c perfect streak is gone; Phase 2e's day-streak row is null here
     expect(selectVictoryView(app(), ctx, win({ counted: false, period: { kind: 'week', key: '2026-10-05', gained: 0, before: 4, total: 4 } }), { praise: 0 }).pointsEarned).toBe(7_296);
     expect(selectVictoryView(app(), ctx, win({ pointsEarned: 0 }), { praise: 0 }).pointsEarned).toBeNull();
     expect(selectVictoryView(app(), ctx, win({ mode: 'tutorial', pointsEarned: 576, period: null }), { praise: 0 }).pointsEarned).toBeNull();

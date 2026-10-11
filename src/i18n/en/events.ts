@@ -3,6 +3,7 @@
 // and taglines (06 §3; never the original's event names). Owners may refine until the M1 copy freeze.
 // Wired into ../en.ts. EventDef.nameKey / taglineKey point here.
 export const enEvents = {
+  // Phase 2e I-4 (lead): the keys only lazy chunks show moved verbatim to ./lazy.ts (enLazyEvents); see src/i18n/en-first.ts.
   'event.lantern.name': 'Lantern Walk',
   'event.lantern.tagline': 'Light the way, one cat at a time.',
   'event.snow.name': 'Snow Paws',
@@ -15,13 +16,5 @@ export const enEvents = {
   'event.card.progress': '{solved} / {total} solved',
   'event.card.locked': 'Opens after level {level}',
   'event.card.done': 'All solved!',
-  'event.play': 'Play puzzle {index}',
-  'event.back': 'Back to event',
-  'event.topList': 'Top list',
   'event.title.game': '{event} · {index}',
-  'event.results.local': 'Your results: {solved} of {total}, total {time}',
-  'event.reward.hints.one': '{count} hint',
-  'event.reward.hints.other': '{count} hints',
-  'event.reward.kitties.one': '{count} kitty',
-  'event.reward.kitties.other': '{count} kitties',
 } as const;

@@ -71,7 +71,10 @@ export const HIDE_RETRIES = 3;
  * 45 s RATE_LIMITED window.
  */
 export function stuckLoadMs(c: GameConfig = cfg): number {
-  return Math.max(46_000, c.ads.banner.minReloadSec * 1000 - c.ads.readyTimeoutMs);
+  // Phase 2e I-2 (L1: minReloadSec 60 → 46): the window now sits 1 s above Meta's 45 s, so the floor is 45.5 s
+  // (was 46 s, which equalled the new window); the min keeps it inside the window for any minReloadSec ≥ 46.
+  const window = c.ads.banner.minReloadSec * 1000;
+  return Math.min(window, Math.max(45_500, window - c.ads.readyTimeoutMs));
 }
 
 /** PlatformAds.banner for the FB adapter. Never rejects. */

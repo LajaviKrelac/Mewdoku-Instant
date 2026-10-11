@@ -3,6 +3,7 @@
 // loads it with ONE dynamic import after start(), without blocking the first route (vite.config.ts
 // names the chunk assets/fb-social-*.js), through fb-social-glue.ts. Nothing in the main bundle may
 // import these modules statically (the probes they re-export live in the main-bundle fb-probe.ts).
+import '../../i18n/en-lazy'; // Phase 2e I-4: the lazy English strings (the ranking dialog's empty text)
 export { createFbGroups, groupsSupported } from './fb-groups';
 export { createFbOverlayViews } from './fb-overlay-views';
 export { createFbPayments, paymentsSupported } from './fb-payments';

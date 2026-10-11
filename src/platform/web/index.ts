@@ -79,6 +79,7 @@ function buildWebPlatform(opts: WebPlatformOptions, makeMock: MockFactory | null
     leaderboards: false,
     share: false,
     payments: false,
+    paymentsIos: false, // Phase 2e (required since I-3): never on the web
     haptics: canVibrate(nav),
     overlayViews: false, // phase2b: the web has no FB overlay views, tournaments or payments
     groups: false,

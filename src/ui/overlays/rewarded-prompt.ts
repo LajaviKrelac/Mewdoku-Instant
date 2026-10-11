@@ -58,11 +58,11 @@ export interface RewardedPromptProps {
   onAccept(): void;
   /** Not now / OK / Esc. */
   onDecline(): void;
-  // ── Phase 2e (spec §4.1; optional until I-3) ──
-  /** The Buy rows in iap.o2Products order; absent or [] = today's card. */
-  readonly buy?: readonly O2BuyView[];
+  // ── Phase 2e (spec §4.1; required since I-3) ──
+  /** The Buy rows in iap.o2Products order; [] = the card without Buy rows (the web, the mouse, iOS off, …). */
+  readonly buy: readonly O2BuyView[];
   /** A ready Buy row pressed (the app runs the purchase and re-renders the rows through update()). */
-  onBuy?(productId: ProductId): void;
+  onBuy(productId: ProductId): void;
 }
 
 const productKey = (id: ProductId, part: 'name' | 'desc'): I18nKey => `shop.product.${id}.${part}` as I18nKey;

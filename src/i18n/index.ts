@@ -13,23 +13,14 @@ import { buildLocaleIds, localeLoader, type LocaleCatalog } from './build-locale
 import { formatNumberFor, formatShortDateFor, isolate, pseudoLocalize, stripMarks } from './format';
 import { guessLocale, isLocaleId, isRtl, resolveLocale, type NavigatorLike } from './locale';
 import { pluralCategory } from './plural';
-import {
-  COLOR_KEYS,
-  en,
-  GLYPH_KEYS,
-  MONTH_KEYS,
-  PRAISE_KEYS,
-  WEEKDAY_KEYS,
-  type Catalog,
-  type En,
-  type I18nKey,
-  type PluralBase,
-} from './en';
+import { COLOR_KEYS, enFirst, GLYPH_KEYS, MONTH_KEYS, PRAISE_KEYS, WEEKDAY_KEYS } from './en-first';
+// Types only: ./en.ts is the whole catalogue (first-load + lazy strings); the bundle carries ./en-first.ts (I-4).
+import type { Catalog, En, I18nKey, PluralBase } from './en';
 
 export type { Catalog, I18nKey, PluralBase, PluralExtraKey } from './en';
 export type { LocaleId } from '../app/config';
 export type { LocaleCatalog } from './build-locales';
-export { COLOR_KEYS, GLYPH_KEYS, PRAISE_KEYS, TUTORIAL_STEP_KEYS } from './en';
+export { COLOR_KEYS, GLYPH_KEYS, PRAISE_KEYS, TUTORIAL_STEP_KEYS } from './en-first';
 export { isLocaleId, localeCandidates, normalizeTag, resolveLocale, guessLocale } from './locale';
 export { markCount, splitMarks, stripIsolates, stripMarks } from './format';
 
@@ -60,12 +51,24 @@ const PSEUDO: boolean = (() => {
   }
 })();
 
+/**
+ * The English table in use (Phase 2e I-4): the first-load strings (./en-first.ts), plus the strings only lazy chunks
+ * show once one of them has imported ./en-lazy.ts (registerEnglish). A key that is in neither shows as the key itself
+ * (and logs in dev and e2e builds): tests/unit/i18n/first-load-strings.spec.ts keeps that from happening.
+ */
+const english: Record<string, string> = { ...enFirst };
+
+/** Adds English strings (./en-lazy.ts registers the lazy table; nothing else calls it). */
+export function registerEnglish(part: Readonly<Record<string, string>>): void {
+  Object.assign(english, part);
+}
+
 /** Loaded catalogues by locale id ('en' is bundled). */
-const catalogs = new Map<string, LocaleCatalog>([['en', en]]);
+const catalogs = new Map<string, LocaleCatalog>([['en', english as LocaleCatalog]]);
 /** In-flight chunk loads, so a prefetch and a setLocale share one request. */
 const loading = new Map<string, Promise<LocaleCatalog | null>>();
 let activeLang: LocaleId = 'en';
-let active: Lookup = en;
+let active: Lookup = english;
 let activeDir: 'ltr' | 'rtl' = 'ltr';
 /** Bumped by every setLocale call: a slower, older load never overrides a newer choice. */
 let requestSeq = 0;
@@ -181,7 +184,7 @@ export interface SetLocaleOptions {
 function applyLocale(id: LocaleId, doc: Document | null | undefined): void {
   const prev = activeLang;
   activeLang = id;
-  active = (catalogs.get(id) ?? en) as Lookup;
+  active = (catalogs.get(id) ?? english) as Lookup;
   activeDir = isRtl(id) ? 'rtl' : 'ltr';
   const d = doc === undefined ? (typeof document !== 'undefined' ? document : null) : doc;
   const html = d?.documentElement;
@@ -261,9 +264,15 @@ export function t<K extends I18nKey>(key: K, ...args: ParamsArg<K>): string {
   return translate(key, args[0] as Params | undefined);
 }
 
+/** A key no loaded table has (a lazy chunk that shows it did not import ./en-lazy.ts): shown as the key. */
+function missingKey(key: string): string {
+  if (Boolean(import.meta.env?.DEV) || (typeof __E2E__ !== 'undefined' && __E2E__)) console.error(`i18n: no English string for '${key}' (import src/i18n/en-lazy.ts in the lazy chunk that shows it)`);
+  return key;
+}
+
 /** The active template of `key` (English fallback, pseudo-localized in ?i18n=pseudo builds), markers kept. */
 function template(key: I18nKey): string {
-  const raw = active[key] ?? en[key];
+  const raw = active[key] ?? english[key] ?? missingKey(key);
   return PSEUDO && key !== 'app.name' ? pseudoLocalize(raw) : raw;
 }
 
@@ -289,7 +298,7 @@ export function translateMarked(key: I18nKey, params?: Params): string {
  */
 export function tn(base: PluralBase, count: number, params?: Params): string {
   const own = active[`${base}.${pluralCategory(activeLang, count)}`] ?? active[`${base}.other`];
-  const lookup = en as Lookup;
+  const lookup = english as Lookup;
   const raw = own ?? lookup[`${base}.${pluralCategory('en', count)}`] ?? lookup[`${base}.other`] ?? base;
   const template = PSEUDO ? pseudoLocalize(raw) : raw;
   return interpolate(template, { count: formatNumber(count), ...params });
@@ -304,7 +313,7 @@ export function interpolate(template: string, params: Params): string {
 }
 
 export function isI18nKey(key: string): key is I18nKey {
-  return Object.prototype.hasOwnProperty.call(en, key);
+  return Object.prototype.hasOwnProperty.call(english, key);
 }
 
 /** Region colour name for a palette index 0..11 (02 §17.2). */

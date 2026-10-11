@@ -130,22 +130,23 @@ describe('S1 home', () => {
     daily: { state: 'not_played', dateKey: '2026-10-06', n: 8, solvedMs: null, unlockLevel: 20 },
     hints: 5,
     kitties: 3,
-    showTrophy: false,
     fbSafeZone: false,
     extraCards: [],
     period: { kind: 'week', total: 42 },
     event: null,
     bannerReserved: false,
     settingsDot: false,
+    ladder: null,
+    streak: null,
     ...over,
   });
   const callbacks = (): HomeCallbacks => ({
     onPlay: vi.fn(),
     onDaily: vi.fn(),
     onSettings: vi.fn(),
-    onTrophy: vi.fn(),
     onCard: vi.fn(),
     onEvent: vi.fn(),
+    onLadder: vi.fn(),
   });
 
   it('level button: plain, hard badge, continue', () => {
@@ -193,15 +194,14 @@ describe('S1 home', () => {
     q(home.el, '.daily-card').click();
     q(home.el, '.home-card').click();
     rec.cb.get('topbar')?.onSettings?.();
-    rec.cb.get('topbar')?.onTrophy?.();
     expect(cb.onPlay).toHaveBeenCalledTimes(1);
     expect(cb.onDaily).toHaveBeenCalledTimes(1);
     expect(cb.onCard).toHaveBeenCalledWith('events');
     expect(cb.onSettings).toHaveBeenCalledTimes(1);
-    expect(cb.onTrophy).toHaveBeenCalledTimes(1);
     expect(q(home.el, '.stock__item--hints').getAttribute('aria-label')).toBe('Hints: 5');
     expect(q(home.el, '.stock__item--kitties').textContent).toBe('3');
-    expect(callsOf('topbar', 'create')[0]).toMatchObject({ title: null, showHome: false, showSettings: true, showTrophy: false });
+    expect(callsOf('topbar', 'create')[0]).toMatchObject({ title: null, showHome: false, showSettings: true });
+    expect(callsOf('topbar', 'create')[0]).not.toHaveProperty('showTrophy'); // Phase 2e I-3: no Home trophy
     // Phase 2c §2.8: the period pill (this week's fish), not the fish pill with a shop "+".
     expect(callsOf('periodPill', 'create')[0]).toEqual({ kind: 'week', total: 42 });
     home.update(view({ period: { kind: 'week', total: 45 } }));

@@ -406,6 +406,9 @@ export function createSession(deps: SessionDeps): Session {
       : {};
     return {
       ...selectRankingView(store.get(), viewCtx(), w.summary, listFor(w), { tapMinMs }, c),
+      // Required since I-3 (spec §8.4); the ladder's own handlers below replace them while it is active.
+      onHeart: (_slot: number) => undefined,
+      onInfo: () => undefined,
       ...ladderExtras,
       onContinue: () => winFlow.continueFromRanking(),
       onSeeTop: () => {

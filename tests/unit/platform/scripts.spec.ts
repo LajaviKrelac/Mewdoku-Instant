@@ -87,10 +87,14 @@ describe('size-check', () => {
       'Lazy JS (board motion)',
       'Lazy JS (lazy art)',
       'Lazy JS (ladder)',
+      'Lazy JS (ladder boot)',
+      'Lazy JS (overlay chunk)',
+      'Lazy JS (English)',
       'Lazy JS (core)',
       'Lazy CSS (fx chunk)',
       'Lazy CSS (board motion)',
       'Lazy CSS (ladder)',
+      'Lazy CSS (overlay chunk)',
       'Lazy CSS',
       'Event packs',
       'Lazy (packs, other)',
@@ -99,43 +103,50 @@ describe('size-check', () => {
     expect(r.maxFiles).toBeUndefined();
   });
 
-  it('has the recorded ceilings (measured + about 3 %: 2b lead decision 2026-10-09; main JS and the first-load totals re-set at 2c.1, L7; main JS, CSS, the first-load totals and the lazy CSS at 2d I-4; main JS, CSS, index.html, the first-load totals and the locale chunk at 2d.1 I-4, 04 §9)', () => {
+  it('has the recorded ceilings (measured + about 3 %: 2b lead decision 2026-10-09; main JS and the first-load totals re-set at 2c.1, L7; main JS, CSS, the first-load totals and the lazy CSS at 2d I-4; main JS, CSS, index.html, the first-load totals and the locale chunk at 2d.1 I-4; main JS, the first-load totals, the locale chunk, the ladder rows and the core lazy rows at 2e I-4, 04 §9)', () => {
     const max = (label: string) => BUDGETS.find((b) => b.label === label)?.maxBytes;
     expect([max('Main JS'), max('CSS'), max('Font'), max('index.html'), FIRST_LOAD_MAX, FIRST_LOAD_LOCALE_MAX, FIRST_LOAD_GZIP_MAX]).toEqual([
-      332_000, 49_300, 17_000, 1_140, 398_000, 429_000, 148_500,
+      360_000, 49_300, 17_000, 1_140, 427_000, 470_000, 158_000,
     ]);
     // The first-load total still binds: below the sum of its rows' ceilings.
     expect(FIRST_LOAD_MAX).toBeLessThan((max('Main JS') ?? 0) + (max('CSS') ?? 0) + (max('Font') ?? 0) + (max('index.html') ?? 0));
+    // Phase 2e I-4: the core lazy rows hold only what the chunk rows leave (hint card, RPC, sounds, generator, grader;
+    // the events chunk's stylesheet), the locale chunk carries the 2e copy.
     expect([max('Worker JS (lazy)'), max('Lazy JS (core)'), max('Lazy JS (optional)'), max('Lazy CSS'), max('Locale chunk (each)')]).toEqual([
-      18_500, 74_000, 29_300, 34_600, 29_300,
+      18_500, 23_300, 29_300, 7_200, 41_900,
     ]);
     // Phase 2d.1 I-4: the new lazy chunks' rows (the fx chunk's JS and CSS and the lazy art re-set at the final audit fixes).
     expect([max('Lazy JS (fx chunk)'), max('Lazy JS (board motion)'), max('Lazy JS (lazy art)'), max('Lazy CSS (fx chunk)'), max('Lazy CSS (board motion)')]).toEqual([
       15_300, 3_800, 4_400, 3_260, 6_400,
     ]);
-    // Phase 2e L0: the ladder chunk's PLACEHOLDER ceilings (spec §7.9 estimates: ≈ 14–18 KB JS + up to 8 KB of ranking
-    // art, 4 KB CSS), re-set at I-4.
-    expect([max('Lazy JS (ladder)'), max('Lazy CSS (ladder)')]).toEqual([26_000, 4_000]);
+    // Phase 2e: the ladder chunk (L0's placeholders, the spec's 26 / 4 KB estimates, re-set at I-4 to measured + about 3 %)
+    // and the I-4 rows: the ladder boot chunk, the overlay chunk (JS, CSS) and the lazy English strings.
+    expect([max('Lazy JS (ladder)'), max('Lazy CSS (ladder)')]).toEqual([30_500, 11_050]);
+    expect([max('Lazy JS (ladder boot)'), max('Lazy JS (overlay chunk)'), max('Lazy JS (English)'), max('Lazy CSS (overlay chunk)')]).toEqual([
+      34_900, 56_200, 13_600, 32_000,
+    ]);
     expect(FB_MAX_FILES).toBe(100);
   });
 
   it('counts only the stylesheet index.html links as first-load CSS; the chunks\' stylesheets are lazy', () => {
     const d = tempDir('web');
     fakeBuild(d);
-    writeTree(d, { 'assets/overlay-chunk-a1.css': 24_000, 'assets/events-chunk-b2.css': 3_500 });
+    // (A 2-character hash: not the overlay chunk's own row, which needs Vite's 8-character hash; counted as lazy CSS.)
+    writeTree(d, { 'assets/overlay-chunk-a1.css': 3_000, 'assets/events-chunk-b2.css': 3_500 });
     const r = checkSizes(d, { fb: false });
     const row = (label: string) => r.rows.find((x) => x.label === label);
     expect(row('CSS')?.bytes).toBe(15_000);
-    expect(row('Lazy CSS')?.bytes).toBe(27_500);
+    expect(row('Lazy CSS')?.bytes).toBe(6_500);
+    expect(row('Lazy CSS')?.ok).toBe(true);
     expect(row('First-load total')?.bytes).toBe(110_000 + 15_000 + 16_468 + HTML.length);
-    writeTree(d, { 'assets/overlay-chunk-a1.css': 31_101 }); // + 3 500 = 34 601 > 34.6 KB
+    writeTree(d, { 'assets/overlay-chunk-a1.css': 3_701 }); // + 3 500 = 7 201 > 7.2 KB (since 2e I-4)
     expect(checkSizes(d, { fb: false }).rows.find((x) => x.label === 'Lazy CSS')?.ok).toBe(false);
   });
 
   it('the first load gzipped has its own ceiling (incompressible bytes go over it while every raw row passes)', () => {
     const d = tempDir('web');
     fakeBuild(d);
-    writeTree(d, { 'assets/index-abc.js': randomBytes(135_000) }); // incompressible: its gzip is over 148.5 KB with the rest
+    writeTree(d, { 'assets/index-abc.js': randomBytes(145_000) }); // incompressible: its gzip is over 158 KB with the rest (since 2e I-4)
     const r = checkSizes(d, { fb: false });
     const gz = r.rows.find((x) => x.label === 'First load (gzip)');
     expect(gz?.bytes).toBeGreaterThan(FIRST_LOAD_GZIP_MAX);
@@ -146,8 +157,8 @@ describe('size-check', () => {
 
   it('fails when the first-load total or the lazy chunks are over budget', () => {
     const d = tempDir('web');
-    // shared-def.js (10 KB) is a modulepreload chunk, so main JS = its ceiling (332 KB since 2d.1 I-4): each row
-    // at its ceiling, the sum (399.44 KB) over the first-load total's 398 KB.
+    // shared-def.js (10 KB) is a modulepreload chunk, so main JS = its ceiling (360 KB since 2e I-4): each row
+    // at its ceiling, the sum (427.44 KB) over the first-load total's 427 KB.
     const mainMax = BUDGETS.find((b) => b.label === 'Main JS')?.maxBytes ?? 0;
     const cssMax = BUDGETS.find((b) => b.label === 'CSS')?.maxBytes ?? 0;
     fakeBuild(d, { main: mainMax - 10_000, css: cssMax, font: 17_000, html: 1_140 });
@@ -157,14 +168,14 @@ describe('size-check', () => {
     expect(r.rows.find((x) => x.label === 'First-load total')?.ok).toBe(false);
     expect(r.ok).toBe(false);
     const lazy = tempDir('web');
-    fakeBuild(lazy, { lazy: 74_001 });
+    fakeBuild(lazy, { lazy: 23_301 }); // the core lazy JS's ceiling (23.3 KB since 2e I-4) + 1 byte
     expect(checkSizes(lazy, { fb: false }).ok).toBe(false);
   });
 
   it('fails when a budget is exceeded', () => {
     const d = tempDir('web');
     const mainMax = BUDGETS.find((b) => b.label === 'Main JS')?.maxBytes ?? 0;
-    fakeBuild(d, { main: mainMax - 10_000 + 1 }); // + the 10 KB modulepreload chunk = the ceiling + 1 byte (332.001 KB)
+    fakeBuild(d, { main: mainMax - 10_000 + 1 }); // + the 10 KB modulepreload chunk = the ceiling + 1 byte (360.001 KB)
     const r = checkSizes(d, { fb: false });
     expect(r.ok).toBe(false);
     expect(r.rows.find((x) => x.label === 'Main JS')?.ok).toBe(false);
@@ -180,7 +191,7 @@ describe('size-check', () => {
     expect(r.ok).toBe(false);
   });
 
-  it('phase2b rows: each locale chunk ≤ 29.3 KB (28 until 2d.1 I-4), the largest one added to the first load; optional lazy JS; lazy fonts and event packs listed', () => {
+  it('phase2b rows: each locale chunk ≤ 41.9 KB (28 until 2d.1 I-4, 29.3 until 2e I-4), the largest one added to the first load; optional lazy JS; lazy fonts and event packs listed', () => {
     const d = tempDir('web');
     fakeBuild(d);
     writeTree(d, {
@@ -204,9 +215,9 @@ describe('size-check', () => {
     expect(row('Event packs')).toMatchObject({ bytes: 3_500, files: 1 });
     expect(r.ok).toBe(true);
 
-    writeTree(d, { 'assets/locale-ar-gg.js': 29_301 });
+    writeTree(d, { 'assets/locale-ar-gg.js': 41_901 });
     const over = checkSizes(d, { fb: false });
-    expect(over.rows.find((x) => x.label === 'Locale chunk (each)')).toMatchObject({ bytes: 29_301, ok: false, files: 3 });
+    expect(over.rows.find((x) => x.label === 'Locale chunk (each)')).toMatchObject({ bytes: 41_901, ok: false, files: 3 });
     expect(over.ok).toBe(false);
   });
 
@@ -229,7 +240,7 @@ describe('size-check', () => {
       'assets/board-mouse-c3.js': 3_800,
       'assets/board-mouse-d4.css': 6_400,
       'assets/lazy-art-e5.js': 4_400,
-      'assets/overlay-chunk-f6.css': 20_000,
+      'assets/overlay-chunk-f6.css': 7_000,
     });
     const r = checkSizes(d, { fb: false });
     const row = (label: string) => r.rows.find((x) => x.label === label);
@@ -240,7 +251,7 @@ describe('size-check', () => {
     expect(row('Lazy CSS (board motion)')).toMatchObject({ bytes: 6_400, ok: true });
     // not counted twice: the core rows hold only the rest
     expect(row('Lazy JS (core)')?.bytes).toBe(18_000);
-    expect(row('Lazy CSS')?.bytes).toBe(20_000);
+    expect(row('Lazy CSS')?.bytes).toBe(7_000);
     expect(r.ok).toBe(true);
     for (const [file, bytes, label] of [
       ['assets/celebrate-a1.js', 15_301, 'Lazy JS (fx chunk)'],
@@ -262,23 +273,61 @@ describe('size-check', () => {
     const d = tempDir('web');
     fakeBuild(d);
     writeTree(d, {
-      'assets/ladder-Ab3_x-9Z.js': 26_000, // at the placeholder ceiling
-      'assets/ladder-chunk-Qw7-e2Rt.css': 4_000,
+      'assets/ladder-Ab3_x-9Z.js': 30_500, // at the ceiling (re-set at I-4)
+      'assets/ladder-chunk-Qw7-e2Rt.css': 11_050,
       // Chunks named after other ladder-* modules are not the ladder chunk: they stay in the core lazy rows.
       'assets/ladder-flow-Zx81_aBc.js': 2_000,
       'assets/ladder-sheet-Pp0-q1Wr.css': 500,
-      'assets/overlay-chunk-f6.css': 20_000,
+      'assets/overlay-chunk-f6.css': 6_000,
     });
     const r = checkSizes(d, { fb: false });
     const row = (label: string) => r.rows.find((x) => x.label === label);
-    expect(row('Lazy JS (ladder)')).toMatchObject({ bytes: 26_000, ok: true });
-    expect(row('Lazy CSS (ladder)')).toMatchObject({ bytes: 4_000, ok: true });
+    expect(row('Lazy JS (ladder)')).toMatchObject({ bytes: 30_500, ok: true });
+    expect(row('Lazy CSS (ladder)')).toMatchObject({ bytes: 11_050, ok: true });
     expect(row('Lazy JS (core)')?.bytes).toBe(18_000 + 2_000);
-    expect(row('Lazy CSS')?.bytes).toBe(20_000 + 500);
+    expect(row('Lazy CSS')?.bytes).toBe(6_000 + 500);
     expect(r.ok).toBe(true);
     for (const [file, bytes, label] of [
-      ['assets/ladder-Ab3_x-9Z.js', 26_001, 'Lazy JS (ladder)'],
-      ['assets/ladder-chunk-Qw7-e2Rt.css', 4_001, 'Lazy CSS (ladder)'],
+      ['assets/ladder-Ab3_x-9Z.js', 30_501, 'Lazy JS (ladder)'],
+      ['assets/ladder-chunk-Qw7-e2Rt.css', 11_051, 'Lazy CSS (ladder)'],
+    ] as const) {
+      const o = tempDir('web');
+      fakeBuild(o);
+      writeTree(o, { [file]: bytes });
+      const over = checkSizes(o, { fb: false });
+      expect(over.rows.find((x) => x.label === label)?.ok, label).toBe(false);
+      expect(over.ok).toBe(false);
+    }
+  });
+
+  it('Phase 2e I-4: the ladder boot chunk, the overlay chunk (JS, CSS) and the lazy English strings have their own rows, outside the core lazy rows', () => {
+    const d = tempDir('web');
+    fakeBuild(d);
+    writeTree(d, {
+      'assets/ladder-boot-Ab3_x-9Z.js': 34_900, // each at its ceiling
+      'assets/overlay-chunk-Qw7-e2Rt.js': 56_200,
+      'assets/en-lazy-hpVVNp3-.js': 13_600,
+      'assets/overlay-chunk-CbqOliHw.css': 32_000,
+      'assets/events-chunk-B7w1u0ro.css': 7_000,
+    });
+    const r = checkSizes(d, { fb: false });
+    const row = (label: string) => r.rows.find((x) => x.label === label);
+    expect(row('Lazy JS (ladder boot)')).toMatchObject({ bytes: 34_900, ok: true });
+    expect(row('Lazy JS (overlay chunk)')).toMatchObject({ bytes: 56_200, ok: true });
+    expect(row('Lazy JS (English)')).toMatchObject({ bytes: 13_600, ok: true });
+    expect(row('Lazy CSS (overlay chunk)')).toMatchObject({ bytes: 32_000, ok: true });
+    // not counted twice: the core rows hold only the rest (the fake's 2-character overlay-chunk-77.js, the events sheet)
+    expect(row('Lazy JS (core)')?.bytes).toBe(18_000);
+    expect(row('Lazy CSS')?.bytes).toBe(7_000);
+    // the ladder boot chunk is not the ladder chunk
+    expect(row('Lazy JS (ladder)')?.bytes).toBe(0);
+    expect(r.ok).toBe(true);
+    for (const [file, bytes, label] of [
+      ['assets/ladder-boot-Ab3_x-9Z.js', 34_901, 'Lazy JS (ladder boot)'],
+      ['assets/overlay-chunk-Qw7-e2Rt.js', 56_201, 'Lazy JS (overlay chunk)'],
+      ['assets/en-lazy-hpVVNp3-.js', 13_601, 'Lazy JS (English)'],
+      ['assets/overlay-chunk-CbqOliHw.css', 32_001, 'Lazy CSS (overlay chunk)'],
+      ['assets/events-chunk-B7w1u0ro.css', 7_201, 'Lazy CSS'],
     ] as const) {
       const o = tempDir('web');
       fakeBuild(o);

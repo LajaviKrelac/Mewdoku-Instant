@@ -45,7 +45,7 @@ import { loadChunk } from '../workers/lazy-chunk';
 import { createAdFlow } from './ad-flow';
 import { createBannerFlow } from './banner-flow';
 import { bundledEventDefs, createEventFlow } from './event-flow';
-import type { RankHubFlow } from './rank-hub-flow';
+import type { EventTopFlow } from './event-top-flow';
 import { createRankingFlow } from './ranking-flow';
 import { createShopFlow } from './shop-flow';
 import { delay, systemClock, type Clock } from './clock';
@@ -329,11 +329,11 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
   });
   const rankings = createRankingFlow({ platform, clock, bus, save: () => store.get().save, updateSave, touch: () => saves.touch() });
   const log = (e: AnalyticsEvent): void => bus.emit('analytics', e);
-  // The hub, the event top list and group challenges live in the lazy `social-flows` chunk (§11),
-  // created on first use: the web reaches only the event top list, after a tap.
+  // The event top list and group challenges live in the lazy `social-flows` chunk (§11), created on first use: the
+  // web reaches only the event top list, after a tap. (Phase 2e I-3: the rankings hub is gone, spec §2.10.)
   const groupsOn = (): boolean => isFlagOn('groupChallenges') && !!platform.groups && attempt(() => platform.capabilities().groups, false);
   type Social = typeof import('./social-flows');
-  let socialP: Promise<{ m: Social; groups: ReturnType<Social['createGroupFlow']>; hub: RankHubFlow }> | null = null;
+  let socialP: Promise<{ m: Social; groups: ReturnType<Social['createGroupFlow']>; top: EventTopFlow }> | null = null;
   const social = () =>
     (socialP ??= loadChunk(() => import('./social-flows')).then((m) => {
       const groups = m.createGroupFlow({
@@ -347,8 +347,8 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
         log,
         clock,
       });
-      const hub = m.createRankHubFlow({ store, router, clock, rankings, groups, activeEvent: () => events.active(), viewCtx: viewCtxFor });
-      return { m, groups, hub };
+      const top = m.createEventTopFlow({ store, router, rankings, viewCtx: viewCtxFor });
+      return { m, groups, top };
     })).catch((error: unknown) => {
       socialP = null; // a later tap tries again
       throw error;
@@ -357,9 +357,8 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
     bus.emit('error', { where: 'social_chunk', error });
     router.toast(t('toast.error'));
   };
-  const rankHub: RankHubFlow = {
-    open: (tab) => void social().then((s) => s.hub.open(tab), socialFailed),
-    openEventTopList: (def) => void social().then((s) => s.hub.openEventTopList(def), socialFailed),
+  const eventTop: EventTopFlow = {
+    open: (def) => void social().then((s) => s.top.open(def), socialFailed),
   };
   const groups = {
     // phase2c §4.8: a group challenge ranks the fish kept.
@@ -467,7 +466,7 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
     events,
     shop,
     banners,
-    rankHub,
+    eventTop,
     levelSize,
     applyLocale: (override) => applyLocale(override),
     ladder: () => ladder,
@@ -648,74 +647,30 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
       bus.emit('error', { where: 'ladder_boot', error });
       return;
     }
-    const storageOf = (): Storage | null => {
-      try {
-        return win?.localStorage ?? null;
-      } catch {
-        return null;
-      }
-    };
-    const cryptoOf = (): Crypto | null => (typeof crypto !== 'undefined' ? crypto : null);
-    const devPool = __E2E__ ? e2eLadderPool(opts.search ?? win?.location?.search ?? '') : null;
-    const client = m.createLadderClient({
+    // Phase 2e I-4 (lead): the wiring itself lives in the lazy chunk too (ladder-boot.ts startLadder).
+    const started = m.startLadder({
       baseUrl: env.url,
-      platformId: platform.id,
-      identity: platform.identity ?? null,
-      device: () => m.deviceCredential(storageOf(), cryptoOf()),
+      platform,
+      win,
+      devPool: __E2E__ ? e2eLadderPool(opts.search ?? win?.location?.search ?? '') : null,
       clock,
       clientVersion: __APP_VERSION__,
       contentVersion: CONTENT_VERSION,
-      devPool,
-    });
-    remote = m.createRemoteConfig({
-      fetchConfig: () => client.config(),
-      storage: storageOf(),
-      clock,
-      log: (e) => bus.emit('analytics', e),
-      onChange: () => {
-        void banners.switchesChanged().catch(() => undefined);
-        // The Buy rows (iapIos, iapInPlay) re-evaluate from their next render (never a purchase in flight).
-        bus.emit('ladder:update', { reason: 'session' });
-      },
-    });
-    await remote.start();
-    const rc = remote;
-    ladder = m.createLadderFlow({
-      client,
       store,
       saves,
       router,
       bus,
-      clock,
-      platformId: platform.id,
-      remoteOn: () => rc.ladderOn(),
-      rewardedAvailable: () => cfg.ads.enabled && attempt(() => platform.capabilities().rewarded, false),
       watchDouble: async () => (await adFlow.rewarded('rank_double')).ok,
-      loadChunk: () => loadChunk(() => import('./ladder-chunk'), { css: /ladder-chunk-[\w-]+\.css/ }).catch(() => null),
-      storage: storageOf(),
-      online: () => win?.navigator?.onLine ?? true,
+      switchesChanged: () => void banners.switchesChanged().catch(() => undefined),
       records: () => recordsView(),
-      canOpenCard: () => router.screen() === 'home' && router.stack().length === 0 && store.get().save.tutorialDone,
+      setRemote: (r) => {
+        remote = r;
+      },
+      setFlow: (f) => {
+        ladder = f;
+      },
     });
-    const flow = ladder;
-    const begin = (): void => {
-      void flow.start().then(() => {
-        if (router.screen() === 'home' && router.stack().length === 0) flow.homeMounted();
-      });
-    };
-    if (store.get().save.tutorialDone) begin();
-    else {
-      // A first run signs in only after the tutorial (its win shows no ranking).
-      const off = store.select(
-        (st) => st.save.tutorialDone,
-        (done) => {
-          if (!done) return;
-          off();
-          begin();
-        },
-      );
-    }
-    bus.emit('ladder:update', { reason: 'session' });
+    await started;
   }
 
   // 7. Route: returning players land on Home; first run goes straight into the tutorial (02 §4.2).

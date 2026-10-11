@@ -167,16 +167,18 @@ export function homeView(over: Partial<HomeView> = {}): HomeView {
     level: 37,
     hard: false,
     continueLevel: false,
-    daily: { state: 'not_played', dateKey: '2026-10-06', n: 8, solvedMs: null, unlockLevel: 20 },
+    daily: { state: 'not_played', dateKey: '2026-10-06', n: 8, solvedMs: null, unlockLevel: 21 },
     hints: 5,
     kitties: 3,
-    showTrophy: false,
     fbSafeZone: false,
     extraCards: [],
     period: { kind: 'week', total: 42 },
     event: null,
     bannerReserved: false,
     settingsDot: false,
+    // Phase 2e (required since I-3): the records chip (no ranking server in the harness) and no streak strip.
+    ladder: { state: 'records', period: { kind: 'week', total: 42 } },
+    streak: null,
     ...over,
   };
 }

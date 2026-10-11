@@ -3,6 +3,7 @@
 //   unit     → tests/unit/** in Node (engine, game, platform, app, layering)
 //   dom      → tests/unit/ui/** and tests/unit/shell/** in jsdom
 //   property → tests/property/** in Node (slow: every shipped record)
+// Every project runs tests/en-lazy-setup.ts first (Phase 2e I-4: the whole English table, as after a lazy chunk loads).
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 import { localeLoaderPlugin } from './scripts/locale-loaders.ts';
@@ -18,6 +19,8 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify('0.0.0-test'),
   },
   test: {
+    // Phase 2e I-4: the lazy English strings (src/i18n/en-lazy.ts) for every project.
+    setupFiles: ['./tests/en-lazy-setup.ts'],
     projects: [
       {
         extends: true,

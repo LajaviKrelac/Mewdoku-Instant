@@ -12,6 +12,7 @@
 // motion: the "+N" fades in place); UNITS_DONE → one label per anchor tile (the board plays the waves;
 // the game screen defers a mouse action's units to their anchor's landing before they get here).
 import './celebrate.css';
+import '../../i18n/en-lazy'; // the lazy English strings (I-4)
 import type { GameEvent } from '../../game/types';
 import { formatNumber, t } from '../../i18n';
 import { mountLazyArt } from '../art/lazy-art';

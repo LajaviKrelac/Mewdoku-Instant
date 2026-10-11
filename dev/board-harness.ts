@@ -5,6 +5,7 @@
 //     [&video=1][&band=1][&dot=0][&tickers=1]   (Phase 2d: the real game screen; M = mouse)
 //   scene=gallery (cat moods, icons, glyphs, marks)   scene=illus (illustrations)
 // The game scene is playable with the real reducer (tap, double-tap, drag; H = hint, M = mouse).
+import '../src/i18n/en-lazy'; // Phase 2e I-4: the harness shows lazy views without their chunk barrels
 import '../src/styles/tokens.css';
 import '../src/styles/base.css';
 import '../src/styles/board.css';

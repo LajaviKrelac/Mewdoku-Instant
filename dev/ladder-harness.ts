@@ -1,0 +1,485 @@
+// Owner: lead (Phase 2e I-1; adopted from G3's capture harness, requests-G3 R14). Dev harness (not shipped):
+// /dev/ladder-harness.html?view=<name>&lang=<id>&rm=1. Run `npx vite --port 5182 --strictPort` and open the index
+// (no view) for the list. Renders the Phase 2e surfaces (spec §2.4–§2.8, §4.1, §5.3, §6.1, §9.4) from fixtures: the
+// `fixture-*` views map the server's golden contract fixtures (server/test/contract/fixtures/bracket.*.json, the
+// same files the client and server tests parse) to the bracket list exactly as the app does (no row added, removed
+// or re-ranked, H-3); the other views use hand-written rows for states the fixtures do not cover (37 rows, stale,
+// records). Names come only from our word lists (nick-words), never a real player.
+import '../src/i18n/en-lazy'; // Phase 2e I-4: the harness shows lazy views without their chunk barrels
+import '../src/styles/tokens.css';
+import '../src/styles/base.css';
+import '../src/styles/board.css';
+import '../src/styles/hud.css';
+import '../src/styles/overlays.css';
+import '../src/styles/fx.css';
+import '../src/styles/art.css';
+import '../src/styles/screens.css';
+import '../src/styles/i18n.css';
+import '../src/styles/overlay-chunk.css';
+import '../src/styles/coach-chunk.css';
+import '../src/styles/board-mouse.css';
+import '../src/styles/ladder-chunk.css';
+import { cfg } from '../src/app/config';
+import { setLocale } from '../src/i18n/index';
+import { NICK_WORDS_V1 } from '../src/shared/nick-words';
+import { setInert, trapFocus } from '../src/ui/a11y/focus-trap';
+import { mountLadderArt } from '../src/ui/art/ladder-art';
+import { mountLazyArt } from '../src/ui/art/lazy-art';
+import { mountSprite } from '../src/ui/art/sprite';
+import { mountStreakArt } from '../src/ui/art/streak-art';
+import { createLadderChip } from '../src/ui/hud/ladder-chip';
+import { createStreakStrip } from '../src/ui/hud/streak-strip';
+import { provideHomeExtras } from '../src/ui/screens/home-extras';
+import type { OverlayView } from '../src/ui/dom';
+import { applyMotion } from '../src/ui/fx/motion';
+import type { LadderChipView } from '../src/ui/hud/ladder-chip';
+import type { StreakStripView } from '../src/ui/hud/streak-strip';
+import { createBracketList } from '../src/ui/overlays/bracket-list';
+import { createHowToPlay } from '../src/ui/overlays/how-to-play';
+import { createLadderResult, type LadderResultProps } from '../src/ui/overlays/ladder-result';
+import { createLadderSheet, type LadderRulesView, type LadderSheetProps } from '../src/ui/overlays/ladder-sheet';
+import { createNicknameSheet, type NicknameSheetProps } from '../src/ui/overlays/nickname-sheet';
+import {
+  createRankingPanel,
+  type BracketListView,
+  type BracketRowView,
+  type PersonalRecordsView,
+  type RankingListState,
+  type RankingPanelProps,
+} from '../src/ui/overlays/ranking-panel';
+import { createRewardedPrompt, type O2BuyView, type RewardedPromptProps } from '../src/ui/overlays/rewarded-prompt';
+import { createSettingsModal, type SettingsLadderRows, type SettingsProps } from '../src/ui/overlays/settings-modal';
+import { createToastLayer } from '../src/ui/overlays/toast';
+import { createVictoryScreen, type VictoryProps } from '../src/ui/overlays/victory-screen';
+import { createGameScreen, type GameView } from '../src/ui/screens/game-screen';
+import { createHomeScreen, type HomeView } from '../src/ui/screens/home-screen';
+import { gameView, homeView, midGame, solved } from './shell-fixtures';
+import type { BracketView } from '../src/shared/rank-api';
+import { parseBracketView } from '../src/shared/rank-api-parse';
+// The server's golden contract fixtures (G4; the client and server tests parse the same files).
+import fxOpen from '../server/test/contract/fixtures/bracket.open.json';
+import fxFull from '../server/test/contract/fixtures/bracket.full.json';
+import fxAlone from '../server/test/contract/fixtures/bracket.alone.json';
+import fxEnded from '../server/test/contract/fixtures/bracket.ended.json';
+
+const q = new URLSearchParams(location.search);
+const view = q.get('view') ?? 'index';
+const lang = q.get('lang') ?? 'en';
+const reduced = q.get('rm') === '1';
+
+const NOW = Date.now();
+const H = 3_600_000;
+const NAMES = [
+  'Sleepy Whisker 27',
+  'Velvet Paws 3',
+  'Cozy Biscuit 41',
+  'Misty Pebble 9',
+  'Brave Noodle 12',
+  'Golden Muffin 64',
+  'Dreamy Clover 5',
+  'Plucky Toffee 88',
+  'Starry Comet 17',
+  'Mellow Bean 33',
+  'Jolly Waffle 2',
+  'Snowy Tuft 71',
+];
+
+mountSprite();
+// Phase 2e I-4: in the app these come with the lazy overlay chunk (app/overlay-chunk.ts).
+mountStreakArt();
+provideHomeExtras({ createLadderChip, createStreakStrip });
+mountLazyArt();
+mountLadderArt();
+const app = document.getElementById('app') as HTMLElement;
+applyMotion(app, reduced);
+const toasts = createToastLayer();
+document.body.appendChild(toasts.el);
+const log = (name: string) => (..._a: unknown[]): void => {
+  console.info(`[ladder-harness] ${name}`);
+  toasts.show(name, { durationMs: 1200 });
+};
+
+let screenEl: HTMLElement | null = null;
+let top: OverlayView<never> | null = null;
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && top) top.dismiss();
+});
+
+function mountScreen(el: HTMLElement): void {
+  screenEl = el;
+  app.appendChild(el);
+}
+
+function openOverlay<P>(ov: OverlayView<P>, props: P): void {
+  app.appendChild(ov.el);
+  ov.open(props);
+  top = ov as unknown as OverlayView<never>;
+  if (ov.modal && screenEl) {
+    setInert([screenEl], true);
+    trapFocus(ov.el, { initialFocus: ov.el.querySelector<HTMLElement>('[data-autofocus]:not([hidden])') });
+  }
+}
+
+const gameCallbacks = {
+  onTap: log('onTap'),
+  onDoubleTap: log('onDoubleTap'),
+  onPaint: log('onPaint'),
+  onBulb: log('onBulb'),
+  onPaw: log('onPaw'),
+  onHome: log('onHome'),
+  onSettings: log('onSettings'),
+  onMouse: log('onMouse'),
+};
+
+function game(v: GameView): void {
+  const g = createGameScreen(v, gameCallbacks);
+  mountScreen(g.el);
+  g.playEntry();
+}
+const wonBoard = (): void => game(gameView(solved(37), { status: 'won', inputLocked: true, reducedMotion: reduced }));
+
+const homeCallbacks = {
+  onPlay: log('onPlay'),
+  onDaily: log('onDaily'),
+  onSettings: log('onSettings'),
+  onCard: log('onCard'),
+  onEvent: log('onEvent'),
+  onLadder: log('onLadder'),
+};
+
+// ─────────────────────────────── ranking fixtures ───────────────────────────────
+
+/** `n` rows, best first; my row at rank `me` (0 = none). Points fall with the rank; some ties. */
+function rows(n: number, me = 5, over: (r: BracketRowView) => Partial<BracketRowView> = () => ({})): BracketRowView[] {
+  return Array.from({ length: n }, (_, i) => {
+    const r: BracketRowView = {
+      rank: i + 1,
+      slot: (i * 7) % 53,
+      name: NAMES[i % NAMES.length] ?? `Cat ${i}`,
+      avatarId: (i * 5) % 12,
+      points: Math.max(1, 31 - Math.floor(i * 0.8)),
+      hearts: [3, 0, 1, 0, 2, 0, 0, 1][i % 8] ?? 0,
+      me: i + 1 === me,
+      likedByMe: i === 1,
+      heartEnabled: i + 1 !== me,
+      ...(i + 1 === me ? { name: 'Velvet Pounce 27', avatarId: 4 } : {}),
+    };
+    return { ...r, ...over(r) };
+  });
+}
+
+function bracket(over: Partial<BracketListView> = {}): BracketListView {
+  const rs = over.rows ?? rows(37);
+  return {
+    bracketId: 'mgk0b7q1z4a8',
+    rows: rs,
+    members: rs.length,
+    endsAt: NOW + 7 * H + 48 * 60_000,
+    final: false,
+    rewardsLine: 'places',
+    paidPlaces: 3,
+    minMembers: 5,
+    heartsNew: 0,
+    waiting: 0,
+    stale: null,
+    firstLineName: null,
+    panelRows: cfg.ladder.panelRows,
+    hearts: true,
+    now: () => Date.now(),
+    ...over,
+  };
+}
+
+/**
+ * A contract fixture's bracket as the app shows it: the shared parser first (a bad row would be dropped, never
+ * repaired), then the rows in the server's order with its ranks and count (as ladder-flow's listView maps them).
+ */
+function fromFixture(fx: { response: { body: unknown } }, over: Partial<BracketListView> = {}): BracketListView {
+  const v = parseBracketView(fx.response.body) as BracketView;
+  if (!v || v.bracketId === null) throw new Error('fixture is not a bracket view');
+  return bracket({
+    bracketId: v.bracketId,
+    rows: v.rows.map((r) => ({
+      rank: r.rank,
+      slot: r.slot,
+      name: r.nickname,
+      avatarId: r.avatarId,
+      points: r.points,
+      hearts: r.hearts,
+      me: r.me,
+      likedByMe: r.likedByMe,
+      heartEnabled: !r.likedByMe,
+    })),
+    members: v.members,
+    // Shown against the harness's clock: the same distance to the end as in the fixture.
+    endsAt: v.endsAt === null ? null : NOW + (v.endsAt - v.serverTime),
+    final: v.final,
+    rewardsLine: v.members < 5 ? 'min' : 'places',
+    heartsNew: v.heartsNew,
+    ...over,
+  });
+}
+
+const RULES: LadderRulesView = { periodMode: 'rolling', maxMembers: 50, minMembers: 5, doubleByVideo: true, heartsEnabled: true, paidPlaces: 3, durationMs: 24 * H };
+
+const RECORDS: PersonalRecordsView = {
+  board: 'period',
+  thisMs: 61_000,
+  n: 8,
+  bestSizeMs: 50_000,
+  totalPoints: 5120,
+  levelsSolved: 64,
+  event: null,
+  period: { kind: 'week', total: 42, best: 57 },
+};
+
+function panelProps(list: RankingListState, over: Partial<RankingPanelProps> = {}): RankingPanelProps {
+  return {
+    board: 'period',
+    eventNameKey: null,
+    result: { kind: 'ladder', gained: 2, total: 14 },
+    list,
+    tapMinMs: cfg.rank.panelTapMinMs,
+    reducedMotion: reduced,
+    onContinue: log('onContinue'),
+    onSeeTop: log('onSeeTop'),
+    onListArea: log('onListArea'),
+    onHeart: log('onHeart'),
+    onInfo: log('onInfo'),
+    bracketList: createBracketList,
+    ...over,
+  };
+}
+
+function panel(list: RankingListState, over: Partial<RankingPanelProps> = {}): void {
+  wonBoard();
+  openOverlay(createRankingPanel(), panelProps(list, over));
+}
+
+function sheetProps(over: Partial<LadderSheetProps> = {}): LadderSheetProps {
+  return {
+    view: 'list',
+    list: bracket(),
+    records: RECORDS,
+    rules: RULES,
+    infoOnly: false,
+    reducedMotion: reduced,
+    onHeart: log('onHeart'),
+    onEditName: log('onEditName'),
+    onClose: log('onClose'),
+    streakBest: 9,
+    ...over,
+  };
+}
+
+function sheet(over: Partial<LadderSheetProps> = {}): void {
+  home();
+  openOverlay(createLadderSheet(), sheetProps(over));
+}
+
+function result(over: Partial<LadderResultProps> = {}): void {
+  home();
+  openOverlay(createLadderResult(), {
+    case: 'paid',
+    place: 2,
+    members: 37,
+    reward: { hints: 1, kitties: 1 },
+    canDouble: true,
+    paidPlaces: 3,
+    busy: false,
+    onCollect: log('onCollect'),
+    onDouble: log('onDouble'),
+    onClose: log('onClose'),
+    ...over,
+  });
+}
+
+function nick(over: Partial<NicknameSheetProps> = {}): void {
+  home();
+  openOverlay(createNicknameSheet(), {
+    words: NICK_WORDS_V1,
+    current: { adj: 2, noun: 5, num: 27, avatarId: 4 },
+    avatarCount: 12,
+    numMin: 1,
+    numMax: 99,
+    state: 'idle',
+    cooldownUntil: null,
+    now: () => Date.now(),
+    shuffle: () => ({ adj: Math.floor(Math.random() * 64), noun: Math.floor(Math.random() * 64), num: 1 + Math.floor(Math.random() * 99), avatarId: Math.floor(Math.random() * 12) }),
+    onSave: log('onSave'),
+    onClose: log('onClose'),
+    ...over,
+  });
+}
+
+// ─────────────────────────────── Home / O2 / Settings / victory ───────────────────────────────
+
+const CHIP: LadderChipView = { state: 'bracket', rank: 5, members: 37, points: 14, endsAt: NOW + 7 * H + 48 * 60_000, now: () => Date.now() };
+const STRIP: StreakStripView = { state: 'alive', day: 3, total: 7, rewardDay: false };
+
+function home(over: Partial<HomeView> = {}): void {
+  mountScreen(
+    createHomeScreen(
+      homeView({ daily: { state: 'not_played', dateKey: '2026-10-06', n: 8, solvedMs: null, unlockLevel: 21 }, ladder: CHIP, streak: STRIP, ...over }),
+      homeCallbacks,
+    ).el,
+  );
+}
+
+const PACK: O2BuyView = { productId: 'hints_15', kind: 'pack', items: 15, price: q.get('price') ?? '$1.99', state: 'ready' };
+const NOADS: O2BuyView = { productId: 'remove_ads', kind: 'no_ads', items: 0, price: '$3.99', state: 'ready' };
+
+function o2(over: Partial<RewardedPromptProps> = {}): void {
+  game(gameView(midGame(37), { hints: 0, inputLocked: true, reducedMotion: reduced }));
+  openOverlay(createRewardedPrompt(), {
+    placement: 'hint',
+    variant: 'video',
+    nextFreeAt: 0,
+    now: () => Date.now(),
+    onAccept: log('onAccept'),
+    onDecline: log('onDecline'),
+    buy: [PACK, NOADS],
+    onBuy: log('onBuy'),
+    ...over,
+  });
+}
+
+function settings(ladder: Partial<SettingsLadderRows> = {}, confirm = false): void {
+  home();
+  const modal = createSettingsModal();
+  const p: SettingsProps = {
+    settings: { sound: true, haptics: true, patterns: false, reduceMotion: 'system' },
+    showVibration: true,
+    version: '0.2.0',
+    onChange: log('onChange'),
+    onHowToPlay: log('onHowToPlay'),
+    onClose: log('onClose'),
+    onShop: log('onShop'),
+    ladder: {
+      name: 'Velvet Pounce 27',
+      code: '7KQ2-M9XD',
+      listed: true,
+      showListed: true,
+      online: true,
+      onName: log('onName'),
+      onListed: log('onListed'),
+      onDelete: log('onDelete'),
+      ...ladder,
+    },
+  };
+  openOverlay(modal, p);
+  if (confirm) modal.el.querySelector<HTMLElement>('.settings__ladder-delete')?.click();
+}
+
+function victory(over: Partial<VictoryProps> = {}): void {
+  wonBoard();
+  openOverlay(createVictoryScreen(), {
+    variant: 'level',
+    praise: 1,
+    level: 37,
+    nextLevel: 38,
+    pointsEarned: 7296,
+    kept: { fish: 2, max: 3, gained: 2, total: 14, kind: 'ladder' },
+    daily: null,
+    event: null,
+    buttonDelayMs: cfg.fx.winButtonDelayMs,
+    reducedMotion: reduced,
+    bannerReserved: false,
+    now: () => Date.now(),
+    onPrimary: log('onPrimary'),
+    onHome: log('onHome'),
+    streak: { day: 4, total: 7, reward: null },
+    dailyReward: null,
+    ...over,
+  });
+}
+
+const VIEWS: Record<string, () => void> = {
+  // the server's contract fixtures (bracket.open / full / alone / ended), rows exactly as sent (H-3)
+  'fixture-open': () => panel({ kind: 'bracket', view: fromFixture(fxOpen) }, { result: { kind: 'ladder', gained: 3, total: 16 } }),
+  'fixture-full': () => panel({ kind: 'bracket', view: fromFixture(fxFull) }),
+  'fixture-alone': () => panel({ kind: 'bracket', view: fromFixture(fxAlone) }, { result: { kind: 'ladder', gained: 3, total: 3 } }),
+  'fixture-sheet-full': () => sheet({ list: fromFixture(fxFull) }),
+  'fixture-sheet-ended': () => sheet({ list: fromFixture(fxEnded) }),
+  // post-win panel (spec §2.4)
+  'panel-bracket': () => panel({ kind: 'bracket', view: bracket() }),
+  'panel-alone': () => panel({ kind: 'bracket', view: bracket({ rows: rows(1, 1), members: 1, rewardsLine: 'min' }) }, { result: { kind: 'ladder', gained: 3, total: 3 } }),
+  'panel-small': () => panel({ kind: 'bracket', view: bracket({ rows: rows(3, 2), members: 3, rewardsLine: 'min' }) }),
+  'panel-stale': () =>
+    panel({ kind: 'bracket', view: bracket({ stale: { at: NOW - 11 * 60_000 }, waiting: 2 }) }, { result: { kind: 'ladder', gained: 2, total: 14 } }),
+  'panel-records': () => panel({ kind: 'records', records: RECORDS, reason: 'unavailable' }),
+  'panel-loading': () => panel({ kind: 'bracket', view: bracket() }, { bracketList: undefined }),
+  // the ranking sheet (spec §2.5)
+  'sheet-list': () => sheet(),
+  'sheet-hearts': () => sheet({ list: bracket({ heartsNew: 3, firstLineName: 'Velvet Pounce 27' }) }),
+  'sheet-final': () => sheet({ list: bracket({ final: true, endsAt: NOW - 60_000 }) }),
+  'sheet-info': () => sheet({ view: 'info' }),
+  'sheet-info-only': () => sheet({ view: 'info', infoOnly: true, list: null }),
+  'sheet-records': () => sheet({ view: 'records', list: null, recordsReason: 'opted_out' }),
+  // the result card (spec §2.6)
+  'result-paid': () => result(),
+  'result-paid-no-video': () => result({ canDouble: false, place: 1, reward: { hints: 2, kitties: 1 } }),
+  'result-too-few': () => result({ case: 'too_few', place: 1, members: 3, reward: null, canDouble: false }),
+  'result-none': () => result({ case: 'none', place: 14, reward: null, canDouble: false }),
+  'result-busy': () => result({ busy: true }),
+  // the name sheet (spec §2.7)
+  nick: () => nick(),
+  'nick-cooldown': () => nick({ state: 'cooldown', cooldownUntil: NOW + 5 * H + 12 * 60_000 }),
+  'nick-offline': () => nick({ state: 'offline' }),
+  // Home (spec §2.5, §5.3, §6.1)
+  home: () => home(),
+  'home-join': () => home({ ladder: { state: 'join' } as LadderChipView, streak: { state: 'new', day: 0, total: 7, rewardDay: false } }),
+  'home-day7': () => home({ streak: { state: 'done', day: 7, total: 7, rewardDay: true } }),
+  'home-done': () => home({ streak: { state: 'done', day: 4, total: 7, rewardDay: false } }),
+  'home-locked': () => home({ level: 12, daily: { state: 'locked', dateKey: '2026-10-06', n: 8, solvedMs: null, unlockLevel: 21 }, ladder: { state: 'off' } as LadderChipView, streak: { state: 'none', day: 0, total: 7, rewardDay: false } }),
+  // O2 with Buy rows (spec §4.1)
+  'o2-buy': () => o2(),
+  'o2-buy-owned': () => o2({ buy: [PACK] }),
+  'o2-buy-busy': () => o2({ buy: [{ ...PACK, state: 'busy' }, NOADS] }),
+  'o2-kitty': () => o2({ placement: 'kitty', buy: [{ productId: 'kitties_8', kind: 'pack', items: 8, price: '$1.99', state: 'ready' }, NOADS] }),
+  // Settings (spec §2.8)
+  settings: () => settings(),
+  'settings-offline': () => settings({ online: false, listed: false }),
+  'settings-delete': () => settings({}, true),
+  // victory (spec §5.3, §6.1)
+  'victory-streak': () => victory(),
+  'victory-day7': () => victory({ streak: { day: 7, total: 7, reward: { hints: 2, kitties: 2 } } }),
+  'victory-daily': () =>
+    victory({
+      variant: 'daily',
+      level: null,
+      nextLevel: null,
+      kept: { fish: 3, max: 3, gained: 3, total: 17, kind: 'ladder' },
+      daily: { dateKey: '2026-10-10', ms: 188_000, mistakes: 0, hints: 0, kitties: 0, nextPuzzleAt: NOW + 9 * H },
+      dailyReward: { hints: 1, kitties: 0 },
+      streak: { day: 2, total: 7, reward: null },
+    } as Partial<VictoryProps>),
+  // how to play (spec §2.3, §5)
+  howto: () => {
+    home();
+    openOverlay(createHowToPlay(), { showSkip: false, showReplay: true, onSkip: log('onSkip'), onReplay: log('onReplay'), onClose: log('onClose'), ladder: true, streakDays: 7 } as never);
+  },
+};
+
+function index(): void {
+  const list = document.createElement('ul');
+  list.style.cssText = 'padding:24px 32px;font:16px/1.8 system-ui;overflow:auto;height:100%;margin:0';
+  for (const name of Object.keys(VIEWS)) {
+    const li = document.createElement('li');
+    const a = document.createElement('a');
+    a.href = `?view=${name}`;
+    a.textContent = name;
+    li.appendChild(a);
+    list.appendChild(li);
+  }
+  app.appendChild(list);
+}
+
+void (async () => {
+  if (lang !== 'en') await setLocale(lang, { override: lang } as never).catch((e: unknown) => console.error(e));
+  (VIEWS[view] ?? index)();
+  await document.fonts?.ready;
+  setTimeout(() => {
+    document.documentElement.dataset.ready = 'true';
+  }, 900);
+})();

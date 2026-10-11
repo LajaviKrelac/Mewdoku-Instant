@@ -94,8 +94,8 @@ describe('right to left and line breaking (UX-10, UX-8)', () => {
 });
 
 describe('sizes and text (A11Y-HUB-1, I18N-TEXT-1, UX-2, PAR-7)', () => {
-  it('rankings hub tabs are 44 px touch targets', () => {
-    expect(decls('overlay-chunk.css', '.rank-hub__tab')).toMatch(/min-height:\s*44px/);
+  it('the rankings hub is gone with its tabs (Phase 2e I-3, spec §2.10): no .rank-hub rule ships', () => {
+    expect(css('overlay-chunk.css')).not.toMatch(/\.rank-hub|\.rank-groups/);
   });
 
   it('the Home event card grows with larger text: a minimum height, no fixed height', () => {

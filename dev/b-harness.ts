@@ -9,6 +9,7 @@
 // panel, victory screen), so frames can be captured at any t.
 // A tiny router stand-in mounts overlays above the screen, traps focus for modal ones, makes the
 // screen inert and sends Esc to dismiss(). Callbacks show a toast with their name.
+import '../src/i18n/en-lazy'; // Phase 2e I-4: the harness shows lazy views without their chunk barrels
 import '../src/styles/tokens.css';
 import '../src/styles/base.css';
 import '../src/styles/board.css';
@@ -32,13 +33,16 @@ import { pointsRuleFor, runTotal } from '../src/game/scoring';
 import { CellState } from '../src/game/types';
 import { setInert, trapFocus } from '../src/ui/a11y/focus-trap';
 import { mountSprite } from '../src/ui/art/sprite';
+import { mountStreakArt } from '../src/ui/art/streak-art';
+import { createLadderChip } from '../src/ui/hud/ladder-chip';
+import { createStreakStrip } from '../src/ui/hud/streak-strip';
+import { provideHomeExtras } from '../src/ui/screens/home-extras';
 import { mountLazyArt } from '../src/ui/art/lazy-art';
 import type { OverlayView } from '../src/ui/dom';
 import { ensureFxLayer, fishSizeFromRect, flyFish } from '../src/ui/fx/fish-flight';
 import { applyMotion } from '../src/ui/fx/motion';
 import { playScreenTransition } from '../src/ui/fx/transitions';
 import { createGroupResult, type GroupResultOutcome } from '../src/ui/overlays/group-result';
-import { createRankHub, type RankHubTab } from '../src/ui/overlays/rank-hub';
 import { createRankingPanel, type RankingListState, type RankingPanelProps } from '../src/ui/overlays/ranking-panel';
 import { createRewardedPrompt } from '../src/ui/overlays/rewarded-prompt';
 import { createSettingsModal, type SettingsProps } from '../src/ui/overlays/settings-modal';
@@ -59,6 +63,9 @@ const fb = q.get('fb') === '1';
 const banner = q.get('banner') === '1';
 
 mountSprite();
+// Phase 2e I-4: in the app these come with the lazy overlay chunk (app/overlay-chunk.ts).
+mountStreakArt();
+provideHomeExtras({ createLadderChip, createStreakStrip });
 mountLazyArt(); // Phase 2d.1: the symbols the lazy chunks mount (board mouse, star, shards, the tickers' art)
 const app = document.getElementById('app') as HTMLElement;
 applyMotion(app, reduced);
@@ -126,9 +133,9 @@ const homeCallbacks = {
   onPlay: log('onPlay'),
   onDaily: log('onDaily'),
   onSettings: log('onSettings'),
-  onTrophy: log('onTrophy'),
   onCard: log('onCard'),
   onEvent: log('onEvent'),
+  onLadder: log('onLadder'),
 };
 
 function eventCard(state: HomeEventCardView['state'], over: Partial<HomeEventCardView> = {}): HomeEventCardView {
@@ -165,6 +172,8 @@ function rankingProps(list: RankingListState, over: Partial<RankingPanelProps> =
     onContinue: log('onContinue'),
     onSeeTop: log('onSeeTop'),
     onListArea: (r) => console.info('[b-harness] onListArea', JSON.stringify(r)),
+    onHeart: log('onHeart'),
+    onInfo: log('onInfo'),
     ...over,
   };
 }
@@ -213,6 +222,8 @@ function victoryProps(over: Partial<VictoryProps> = {}): VictoryProps {
     buttonDelayMs: cfg.fx.winButtonDelayMs,
     reducedMotion: reduced,
     bannerReserved: banner,
+    streak: null,
+    dailyReward: null,
     now: () => Date.now(),
     onPrimary: log('onPrimary'),
     onHome: log('onHome'),
@@ -357,26 +368,7 @@ const PRODUCTS: ShopBuyState = {
   ],
 };
 
-function hub(tab: RankHubTab, list: RankingListState): void {
-  home({ showTrophy: true });
-  const h = createRankHub();
-  const tabs: RankHubTab[] = ['period', 'daily', 'event', 'groups'];
-  const props = {
-    tabs,
-    tab,
-    eventNameKey: lantern.nameKey,
-    periodKind: 'week' as const,
-    list,
-    groups: { canStart: true, active: null, rewardMode: 'participation' as const, minWins: 3, hours: 72, kitties: 2 },
-    now: () => NOW,
-    onTab: (t: RankHubTab) => h.update({ ...props, tab: t }),
-    onSeeTop: log('onSeeTop'),
-    onListArea: log('onListArea'),
-    onStartGroup: log('onStartGroup'),
-    onClose: log('onClose'),
-  };
-  openOverlay(h, props);
-}
+// Phase 2e I-3 (spec §2.10): the rankings hub views are gone with the hub; the ranking views are in dev/ladder-harness.html.
 
 function group(outcome: GroupResultOutcome): void {
   home();
@@ -533,9 +525,6 @@ const VIEWS: Record<string, () => void> = {
   'shop-loading': () => shop({ kind: 'loading' }),
   'shop-error': () => shop({ kind: 'error' }),
   'shop-unavailable': () => shop({ kind: 'unavailable' }),
-  'hub-period': () => hub('period', { kind: 'mine', mine: { rank: 12, score: { kind: 'fish', fish: 42 }, count: null } }),
-  'hub-daily': () => hub('daily', { kind: 'records', reason: 'local', records: { board: 'daily', thisMs: 0, n: 9, bestSizeMs: 188_000, totalPoints: 1240, levelsSolved: 37, event: null } }),
-  'hub-groups': () => hub('groups', { kind: 'loading' }),
   'group-participation': () => group({ kind: 'participation', kitties: 2, kittiesWithAd: 4 }),
   'group-place': () => group({ kind: 'place', place: 3, count: 8, hints: cfg.groups.placeHints }),
   'event-screen': () => eventScreen(7, 7),
@@ -559,6 +548,8 @@ const VIEWS: Record<string, () => void> = {
       now: () => Date.now(),
       onAccept: log('onAccept'),
       onDecline: log('onDecline'),
+      buy: [],
+      onBuy: log('onBuy'),
     });
   },
   'transition-to-game': () => {

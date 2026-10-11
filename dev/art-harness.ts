@@ -7,6 +7,7 @@
 //   scene=events             event art (card, header) and the three [data-event-theme] pages
 //   scene=board&n=4…12[&glow=1][&flick=1][&patterns=1][&done=1][&mood=happy|sad|surprised][&rm=1]
 //   scene=ui                 buttons, badges, chips, pills, tools, the top bar with its lead slot
+import '../src/i18n/en-lazy'; // Phase 2e I-4: the harness shows lazy views without their chunk barrels
 import '../src/styles/tokens.css';
 import '../src/styles/base.css';
 import '../src/styles/board.css';
@@ -33,6 +34,10 @@ import { illustration, type IllustrationKind } from '../src/ui/art/illustrations
 import { mascotIllustration } from '../src/ui/art/mascot';
 import { PALETTE, regionColorsFor, xEdgeColor } from '../src/ui/art/palette';
 import { icon, mountSprite, type SymbolId } from '../src/ui/art/sprite';
+import { mountStreakArt } from '../src/ui/art/streak-art';
+import { createLadderChip } from '../src/ui/hud/ladder-chip';
+import { createStreakStrip } from '../src/ui/hud/streak-strip';
+import { provideHomeExtras } from '../src/ui/screens/home-extras';
 import { mountLazyArt } from '../src/ui/art/lazy-art';
 import { createBoardView, type BoardModel, type CatMood } from '../src/ui/board/board-view';
 import { computeLayout, gapFor, readViewport } from '../src/ui/board/layout';
@@ -45,6 +50,9 @@ import EVENTS from '../src/data/events/events.json';
 const q = new URLSearchParams(location.search);
 const root = document.getElementById('app') as HTMLElement;
 mountSprite();
+// Phase 2e I-4: in the app these come with the lazy overlay chunk (app/overlay-chunk.ts).
+mountStreakArt();
+provideHomeExtras({ createLadderChip, createStreakStrip });
 mountLazyArt(); // Phase 2d.1: the symbols the lazy chunks mount (board mouse, star, shards, the tickers' art)
 mountAccessories(); // the events chunk does this in the game
 applyMotion(root, q.get('rm') === '1');
@@ -269,7 +277,7 @@ function uiScene(): void {
   })()]);
   // Phase 2c §2.8: Home's lead slot is the period pill (icon-trophy + this week's fish), not a button.
   const pill = createPeriodPill({ total: 42, kind: 'week' }).el;
-  const top = createTopBar({ title: null, hard: false, showHome: false, showSettings: true, showTrophy: true, fbSafeZone: q.get('fb') === '1' }, { onHome: () => undefined, onSettings: () => undefined, onTrophy: () => undefined }, { lead: pill });
+  const top = createTopBar({ title: null, hard: false, showHome: false, showSettings: true, fbSafeZone: q.get('fb') === '1' }, { onHome: () => undefined, onSettings: () => undefined }, { lead: pill });
   section(wrap, 'Top bar with the lead slot (Home)', [top.el], 'ax-col-full');
   // Phase 2d §1.11: the three helpers at s = 1 (count, video and no badge; the bulb pulses).
   const toolRow = el('div', 'ax-tools');

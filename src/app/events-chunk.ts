@@ -5,6 +5,7 @@
 // assets/events-*.js. Nothing in the main bundle may import these modules statically.
 // 2b integration (04 §9): the event screen's and the event art's stylesheet comes with this chunk.
 import '../styles/events-chunk.css';
+import '../i18n/en-lazy'; // the lazy English strings (I-4)
 
 export { eventArt, eventPatternUrl } from '../ui/art/event-art';
 export { createEventScreen } from '../ui/screens/event-screen';

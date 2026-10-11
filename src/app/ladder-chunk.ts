@@ -6,6 +6,7 @@
 // before the first screen and never on the tutorial board. Nothing may import it statically
 // (tests/unit/layering.spec.ts). Its stylesheet keeps the barrel's name (assets/ladder-chunk-*.css).
 import '../styles/ladder-chunk.css';
+import '../i18n/en-lazy'; // the lazy English strings (I-4)
 
 export { createLadderSheet } from '../ui/overlays/ladder-sheet';
 export { createLadderResult } from '../ui/overlays/ladder-result';

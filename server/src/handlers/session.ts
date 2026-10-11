@@ -36,7 +36,9 @@ async function createPlayer(ctx: Ctx, key: string, pool: string, trust: 'signed'
   const tomb = await s.store.tombstoneUntil(key);
   if (tomb !== null && tomb > now) return fail('suspended', 'ranking paused for this player');
   const status = 'ok';
-  const seed = await sha256(`nick:${key}`);
+  // The first name is seeded with the key AND the creation time (requests-G1 R3, lead I-2; spec §1.11): a player
+  // re-created after "Delete my ranking data" (same key) gets a new name as well as a new code, not the old one.
+  const seed = await sha256(`nick:${key}:${now}`);
   const { nick, avatarId } = generateNick(seed, s.words, s.retired);
   let created = false;
   for (let attempt = 0; attempt < 5; attempt++) {

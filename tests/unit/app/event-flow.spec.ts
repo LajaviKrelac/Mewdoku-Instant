@@ -25,7 +25,7 @@ function state(patch: Partial<SaveData> = {}): AppState {
 }
 const ctx = (now: number): ViewContext => ({
   now,
-  capabilities: { interstitial: false, rewarded: false, banner: false, cloudSave: false, leaderboards: false, share: false, payments: false, overlayViews: false, groups: false, haptics: false },
+  capabilities: { interstitial: false, rewarded: false, banner: false, cloudSave: false, leaderboards: false, share: false, payments: false, paymentsIos: false, overlayViews: false, groups: false, haptics: false },
   platformId: 'web',
   events: DEFS,
 });

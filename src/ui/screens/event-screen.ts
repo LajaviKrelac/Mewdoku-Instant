@@ -83,12 +83,11 @@ export function createEventScreen(view: EventScreenView, cb: EventScreenCallback
     hard: false,
     showHome: false,
     showSettings: true,
-    showTrophy: false,
     fbSafeZone: v.fbSafeZone,
     // Phase 2d §1.15, §2.2: the red dot on the gear (something in Settings not seen yet).
     settingsDot: v.settingsDot,
   });
-  const topBar = createTopBar(topBarProps(view), { onHome: () => cb.onHome(), onSettings: () => cb.onSettings(), onTrophy: () => undefined });
+  const topBar = createTopBar(topBarProps(view), { onHome: () => cb.onHome(), onSettings: () => cb.onSettings() });
 
   const artHost = h('div', { class: 'event__art', 'aria-hidden': 'true' });
   const name = h('h1', { class: 'event__name' });

@@ -18,18 +18,7 @@ import {
   MAX_WINS_PER_REQUEST,
   NICK_NUM_MAX,
   NICK_NUM_MIN,
-  parseApiError,
-  parseBracketView,
-  parseClaimResponse,
-  parseConfigResponse,
-  parseHealthResponse,
-  parseHeartResponse,
-  parseMeResponse,
-  parseNonceResponse,
-  parseProfileResponse,
   parsePuzzleId,
-  parseSessionResponse,
-  parseWinsResponse,
   PLAYER_CODE_RE,
   PUZZLE_ID_RE,
   REMOTE_SWITCHES,
@@ -41,6 +30,19 @@ import {
   validateWinsRequest,
   type WinSubmission,
 } from '../../../src/shared/rank-api';
+import {
+  parseApiError,
+  parseBracketView,
+  parseClaimResponse,
+  parseConfigResponse,
+  parseHealthResponse,
+  parseHeartResponse,
+  parseMeResponse,
+  parseNonceResponse,
+  parseProfileResponse,
+  parseSessionResponse,
+  parseWinsResponse,
+} from '../../../src/shared/rank-api-parse';
 
 interface Fixture {
   readonly name: string;

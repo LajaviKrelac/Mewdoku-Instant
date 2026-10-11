@@ -1,10 +1,10 @@
 // Owner: A (Phase 2b); G3 (Phase 2d: the settings dot, shared helpers for the game bar)
-// Top bar (02 §5): title + Hard badge, Home and Gear (and Trophy on Home if leaderboards exist) at
-// the top RIGHT; the top-left 64×64 px stays empty in the FBIG build (FB safe zone, 02 §19).
+// Top bar (02 §5): title + Hard badge, Home and Gear at the top RIGHT (Phase 2e I-3, spec §2.10: the Home trophy
+// that opened the rankings hub is deleted; the ranking chip in the lead slot replaces it); the top-left 64×64 px stays empty in the FBIG build (FB safe zone, 02 §19).
 // Phase 2b (F0, phase2b §2.5, §12.3): an optional `lead` slot right after the safe zone (at the
 // inline start on web) for Home's lead pill (Phase 2c §2.8: the period pill). A styles it (hud.css).
 // Classes: .top-bar[data-fb-safe] > .top-bar__lead .top-bar__slot? .top-bar__title(.top-bar__text .badge--hard)
-//          .top-bar__actions > .btn.btn--icon.top-bar__btn--trophy|home|settings (> .top-bar__dot, Phase 2d)
+//          .top-bar__actions > .btn.btn--icon.top-bar__btn--home|settings (> .top-bar__dot, Phase 2d)
 // Review fixes: the title renders as a shrinking name plus a non-shrinking " · 13" / " · Fri 9 Oct"
 // suffix (split at the last " · " of the localized title), so a long event name loses its end, never
 // the puzzle number or the date (I18N-TEXT-2, UX-8); 2c.1 integration (N1): a title without " · " keeps
@@ -26,7 +26,6 @@ export interface TopBarProps {
   readonly hard: boolean;
   readonly showHome: boolean;
   readonly showSettings: boolean;
-  readonly showTrophy: boolean;
   readonly fbSafeZone: boolean;
   /** Phase 2d §1.15: the gear's red dot (something in Settings not seen yet). Absent = false. */
   readonly settingsDot?: boolean;
@@ -35,7 +34,6 @@ export interface TopBarProps {
 export interface TopBarCallbacks {
   onHome(): void;
   onSettings(): void;
-  onTrophy(): void;
 }
 
 /** A round icon button of a top bar (`.btn--icon`: the white disc of base.css; hud.css sizes the game bar's). */
@@ -106,10 +104,9 @@ export function createTopBar(props: TopBarProps, cb: TopBarCallbacks, slots?: To
   title.append(text, badge);
   const actions = document.createElement('div');
   actions.className = 'top-bar__actions';
-  const trophy = L.attr(iconButton('trophy', 'icon-trophy', () => cb.onTrophy()), 'aria-label', () => t('common.leaderboard'));
   const home = L.attr(iconButton('home', 'icon-house', () => cb.onHome()), 'aria-label', () => t('common.home'));
   const gear = iconButton('settings', 'icon-gear', () => cb.onSettings());
-  actions.append(trophy, home, gear);
+  actions.append(home, gear);
   L.watch();
   el.append(lead, title, actions);
   if (slots?.lead) {
@@ -121,7 +118,7 @@ export function createTopBar(props: TopBarProps, cb: TopBarCallbacks, slots?: To
 
   let cur: TopBarProps | null = null;
   const render = (p: TopBarProps): void => {
-    if (cur && cur.title === p.title && cur.hard === p.hard && cur.showHome === p.showHome && cur.showSettings === p.showSettings && cur.showTrophy === p.showTrophy && cur.fbSafeZone === p.fbSafeZone && cur.settingsDot === p.settingsDot) return;
+    if (cur && cur.title === p.title && cur.hard === p.hard && cur.showHome === p.showHome && cur.showSettings === p.showSettings && cur.fbSafeZone === p.fbSafeZone && cur.settingsDot === p.settingsDot) return;
     cur = p;
     el.toggleAttribute('data-fb-safe', p.fbSafeZone);
     // The platform's FB safe zone, for the overlays' rules (overlay-chunk.css :root[data-fb-safe]).
@@ -134,7 +131,6 @@ export function createTopBar(props: TopBarProps, cb: TopBarCallbacks, slots?: To
       suffixEl.hidden = parts.suffix === '';
     }
     badge.hidden = !p.hard || p.title === null;
-    trophy.hidden = !p.showTrophy;
     home.hidden = !p.showHome;
     gear.hidden = !p.showSettings;
     setSettingsDot(gear, p.settingsDot === true);

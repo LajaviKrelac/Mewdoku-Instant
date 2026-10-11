@@ -466,7 +466,7 @@ export function createHelperFlows(host: HelperHost): HelperFlows {
         save: host.save(),
         interstitialSupported: host.capabilities().interstitial,
         // (the save carries purchases.noAds: the gate answers 'no_ads')
-        ...(trigger === 'retry' ? { retryIndex } : {}),
+        retryIndex: trigger === 'retry' ? retryIndex : null,
       },
       c,
     );

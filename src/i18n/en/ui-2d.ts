@@ -8,25 +8,17 @@
 // (game.tool.kitty or game.tool.hint). Same conventions as en.ts: {name} placeholders, `.one` /
 // `.other` plural pairs.
 export const enUi2d = {
+  // Phase 2e I-4 (lead): the keys only lazy chunks show moved verbatim to ./lazy.ts (enLazyUi2d); see src/i18n/en-first.ts.
   // ── The game bar (§1.4) ────────────────────────────────────────────────────
   'game.score': 'Score',
   // The gear's accessible name while its red dot shows (§1.15).
   'common.settings.new': 'Settings, something new',
-
-  // ── The helpers (§1.11, §1.12) ─────────────────────────────────────────────
-  'game.tool.mouse': 'Mouse',
   'game.tool.mouse.a11y': 'Mouse: crosses out {count} tiles that have no cat',
   // A kitty or bulb at 0 with the video badge ("Kitty: watch a video for more").
   'game.tool.video.a11y': '{tool}: watch a video for more',
   // The mouse action's one screen-reader line.
   'a11y.mouse.one': 'The mouse crossed out {count} tile.',
   'a11y.mouse.other': 'The mouse crossed out {count} tiles.',
-
-  // ── O2 for the mouse (§1.12) ───────────────────────────────────────────────
-  'rewarded.title.mouse': 'Call the mouse?',
-  'rewarded.video.mouse': 'Watch a short video and the mouse crosses out {count} tiles that have no cat.',
-  'rewarded.free.mouse': 'The mouse is free this time.',
-  'rewarded.countdown.mouse': 'The mouse is back in {time}',
   // When the O2 chunk cannot load (helper-flows.ts cardsReady, like kitty.unavailable).
   'mouse.unavailable': 'The mouse is hiding. Try again in a moment.',
 

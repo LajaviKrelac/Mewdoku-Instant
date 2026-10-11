@@ -37,7 +37,6 @@ import type { GroupResultProps } from '../ui/overlays/group-result';
 import type { LadderResultProps } from '../ui/overlays/ladder-result';
 import type { LadderSheetProps } from '../ui/overlays/ladder-sheet';
 import type { NicknameSheetProps } from '../ui/overlays/nickname-sheet';
-import type { RankHubProps } from '../ui/overlays/rank-hub';
 import type { RankingPanelProps } from '../ui/overlays/ranking-panel';
 import type { ShopProps } from '../ui/overlays/shop-sheet';
 import type { VictoryProps } from '../ui/overlays/victory-screen';
@@ -70,7 +69,6 @@ export interface OverlayPropsMap {
   ranking: RankingPanelProps;
   victory: VictoryProps;
   shop: ShopProps;
-  rank_hub: RankHubProps;
   group_result: GroupResultProps;
   // Phase 2e (G3's props; the lazy `ladder` chunk, app/ladder-chunk.ts)
   ladder: LadderSheetProps;
@@ -238,7 +236,6 @@ export async function loadOverlayChunk(): Promise<Partial<OverlayFactories>> {
     ranking: m.createRankingPanel,
     victory: m.createVictoryScreen,
     shop: m.createShopSheet,
-    rank_hub: m.createRankHub,
     group_result: m.createGroupResult,
   };
 }

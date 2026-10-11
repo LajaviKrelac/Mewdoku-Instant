@@ -15,6 +15,11 @@ import { createSettingsModal, type SettingsLadderRows, type SettingsProps } from
 import { createVictoryScreen, type VictoryProps } from '../../../src/ui/overlays/victory-screen';
 import { periodPillLabel, periodResultText, periodTotalText, fishKeptText } from '../../../src/ui/period-text';
 import { createHomeScreen, type HomeView } from '../../../src/ui/screens/home-screen';
+import { provideHomeExtras } from '../../../src/ui/screens/home-extras';
+
+// Phase 2e I-4: in the app the chip and the strip arrive with the lazy overlay chunk (app/overlay-chunk.ts); these
+// tests render them as they look once it has (tests/unit/ui/home-extras.spec.ts covers the time before).
+provideHomeExtras({ createLadderChip, createStreakStrip });
 
 const NOW = Date.UTC(2026, 9, 11, 12, 0, 0);
 const H = 3_600_000;
@@ -146,16 +151,17 @@ const homeView = (over: Partial<HomeView> = {}): HomeView => ({
   daily: { state: 'locked', dateKey: '2026-10-06', n: 8, solvedMs: null, unlockLevel: 21 },
   hints: 5,
   kitties: 3,
-  showTrophy: false,
   fbSafeZone: false,
   extraCards: [],
   period: { kind: 'week', total: 42 },
   event: null,
   bannerReserved: false,
   settingsDot: false,
+  ladder: null,
+  streak: null,
   ...over,
 });
-const homeCb = () => ({ onPlay: vi.fn(), onDaily: vi.fn(), onSettings: vi.fn(), onTrophy: vi.fn(), onCard: vi.fn(), onEvent: vi.fn(), onLadder: vi.fn() });
+const homeCb = () => ({ onPlay: vi.fn(), onDaily: vi.fn(), onSettings: vi.fn(), onCard: vi.fn(), onEvent: vi.fn(), onLadder: vi.fn() });
 
 describe('Home: the chip in the lead slot, the strip under Play, the daily unlock copy (spec §2.5, §5.3, §6.1)', () => {
   it('without HomeView.ladder: today\'s period pill; with it: the chip (the pill hidden) that opens the sheet', () => {
@@ -210,6 +216,8 @@ function victoryProps(over: Partial<VictoryProps> = {}): VictoryProps {
     buttonDelayMs: cfg.fx.winButtonDelayMs,
     reducedMotion: false,
     bannerReserved: false,
+    streak: null,
+    dailyReward: null,
     now: () => 0,
     onPrimary: vi.fn(),
     onHome: vi.fn(),

@@ -439,8 +439,7 @@ describe('router: lazy overlay chunk (04 §9)', () => {
       'group_result', // phase2b §2.11: the 2b overlays live in the same lazy chunk
       'hint',
       'how_to_play',
-      'rank_hub',
-      'ranking',
+      'ranking', // Phase 2e I-3: 'rank_hub' is deleted (spec §2.10)
       'rewarded',
       'settings',
       'shop',

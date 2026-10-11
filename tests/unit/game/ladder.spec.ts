@@ -35,7 +35,8 @@ import {
   waitingFish,
 } from '../../../src/game/ladder-sync';
 import type { LadderPendingWin, LadderRecord } from '../../../src/game/types';
-import { isWinSubmission, parseBracketView, type BracketView, type ResultView, type WinResult } from '../../../src/shared/rank-api';
+import { isWinSubmission, type BracketView, type ResultView, type WinResult } from '../../../src/shared/rank-api';
+import { parseBracketView } from '../../../src/shared/rank-api-parse';
 
 const T = 1_791_799_800_000;
 const uuid = (i: number): string => `3f6c2a0e-8d1b-4c7a-9e55-${String(i).padStart(12, '0')}`;

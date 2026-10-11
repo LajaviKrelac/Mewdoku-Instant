@@ -16,7 +16,7 @@ export interface Capabilities {
   rewarded: boolean;
   banner: boolean;
   cloudSave: boolean;
-  /** = ranking.caps().global (phase2b §5.4); drives the Home trophy (views.ts showTrophy). */
+  /** = ranking.caps().global (phase2b §5.4): the FB list views of the event boards (Phase 2e I-3: the Home trophy is gone). */
   leaderboards: boolean;
   share: boolean;
   /** FB: getPlatform() !== 'IOS' and payments.purchaseAsync supported (phase2b §8.4). The Buy section also needs payments.ready(). */
@@ -30,9 +30,9 @@ export interface Capabilities {
   /**
    * Phase 2e (spec §4.4): the FB platform is iOS (getPlatform() === 'IOS'). From 2e `payments` no longer
    * excludes iOS (getSupportedAPIs + the functions decide); the app then also needs iap.iosEnabled or the
-   * remote switch iapIos. Optional until I-3 (absent = false).
+   * remote switch iapIos. Required since I-3 (spec §8.4).
    */
-  paymentsIos?: boolean;
+  paymentsIos: boolean;
 }
 
 /** A banner has no preload, so it is not an AdKind (phase2b §3.5): see PlatformAds.banner. */

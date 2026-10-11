@@ -26,9 +26,9 @@ export interface PacingInput {
   /**
    * Phase 2e (spec §3.2, P-I4): for trigger 'retry', the Retries since the last level win in this page
    * load, 1-based (this Retry included). Only every ads.interstitial.retryEveryN-th may show an ad.
-   * Absent = no cadence (the 2b rule). Optional until I-3.
+   * null = not a Retry, or no cadence (the 2b rule). Required since I-3 (spec §8.4): every caller says which.
    */
-  readonly retryIndex?: number;
+  readonly retryIndex: number | null;
 }
 
 /** Why the gate said no ('ok' = show). Logged as result 'gated' when not 'ok' (Phase 2e: with `gate`). */
@@ -58,7 +58,7 @@ export function interstitialGate(input: PacingInput, c: GameConfig = cfg): GateD
   if (!input.interstitialSupported) return 'unsupported';
   if (!ic.triggers.includes(input.trigger)) return 'trigger';
   if (input.save.progress.completed < ic.minCompletedLevels) return 'min_levels';
-  if (input.trigger === 'retry' && input.retryIndex !== undefined && !retryCadenceOk(input.retryIndex, c)) return 'retry_cadence';
+  if (input.trigger === 'retry' && input.retryIndex !== null && !retryCadenceOk(input.retryIndex, c)) return 'retry_cadence';
   if (input.now - input.sessionStartedAt < ic.sessionGraceSec * 1000) return 'grace';
   const cooldownMs = cooldownSecFor(tenureDays(input.now, input.save.firstSeenAt), c) * 1000;
   if (input.now - input.save.ads.lastAdAt < cooldownMs) return 'cooldown';
@@ -114,17 +114,17 @@ export interface BannerGateInput {
   readonly firstRunTutorial: boolean;
   /**
    * Phase 2e (spec §3.1): today's local date key (dailyDateKey(now)); from ads.banner.untilDate on the
-   * gate answers 'ended'. Absent = no end-date check. Optional until I-3.
+   * gate answers 'ended'. null = no end-date check (no clock). Required since I-3 (spec §8.4).
    */
-  readonly today?: string;
+  readonly today: string | null;
 }
 
 export type BannerGateDecision = 'ok' | 'disabled' | 'unsupported' | 'screen' | 'min_levels' | 'no_ads' | 'tutorial' | 'ended';
 
 /** Phase 2e (spec §3.1): banners have ended for good on `today` (ads.banner.untilDate, a local date; '' = never). */
-export function bannerEnded(today: string | undefined, c: GameConfig = cfg): boolean {
+export function bannerEnded(today: string | null | undefined, c: GameConfig = cfg): boolean {
   const until = c.ads.banner.untilDate;
-  return until !== '' && today !== undefined && today >= until;
+  return until !== '' && typeof today === 'string' && today >= until;
 }
 
 /**

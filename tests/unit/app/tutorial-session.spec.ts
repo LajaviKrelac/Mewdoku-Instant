@@ -79,7 +79,7 @@ describe('tutorial session', () => {
     await h.settle(1);
     expect(h.router.isOpen('ranking')).toBe(false);
     expect(h.router.props.victory).toMatchObject({ variant: 'tutorial', nextLevel: 2, pointsEarned: null, kept: null });
-    expect(h.router.props.victory).not.toHaveProperty('streak');
+    expect(h.router.props.victory?.streak).toBeNull(); // Phase 2e: no streak row (required since I-3, null)
     // The tutorial is scored for neither the period board nor level points (§3.3; 2c.1: no counter).
     expect(g.levelPoints).toBe(0);
     expect(h.router.game?.last.points).toBeNull();
@@ -126,7 +126,7 @@ describe('tutorial session', () => {
     await h.settle(h.config.fx.win.replayVictoryAtMs);
     expect(h.router.props.victory?.variant).toBe('tutorial_replay');
     expect(h.router.props.victory).toMatchObject({ kept: null, pointsEarned: null });
-    expect(h.router.props.victory).not.toHaveProperty('streak');
+    expect(h.router.props.victory?.streak).toBeNull(); // Phase 2e: no streak row (required since I-3, null)
     expect(h.save().period).toEqual(before.period);
     expect(h.save().streak).toEqual(before.streak);
     await h.session.onNext();

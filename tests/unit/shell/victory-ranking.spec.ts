@@ -10,7 +10,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cfg } from '../../../src/app/config';
 import type { I18nKey } from '../../../src/i18n';
-import { createRankHub, tabLabel, type RankHubProps } from '../../../src/ui/overlays/rank-hub';
 import {
   announcement,
   createRankingPanel,
@@ -48,6 +47,8 @@ function rankingProps(list: RankingListState, over: Partial<RankingPanelProps> =
     onContinue: vi.fn(),
     onSeeTop: vi.fn(),
     onListArea: vi.fn(),
+    onHeart: vi.fn(),
+    onInfo: vi.fn(),
     ...over,
   };
 }
@@ -325,78 +326,13 @@ describe('ranking panel, the period board (Phase 2c §2.6, §4.6)', () => {
 });
 
 // ─────────────────────────────── rankings hub ───────────────────────────────
+// Phase 2e I-3 (spec §2.10, §8.4): the rankings hub (rank-hub.ts, its tabs and its Groups tab) is deleted; the
+// ranking chip and the `ladder` sheet replace it. The panel's title rule it shared stays covered here.
 
-function hubProps(over: Partial<RankHubProps> = {}): RankHubProps {
-  return {
-    tabs: ['period', 'daily', 'event', 'groups'],
-    tab: 'period',
-    eventNameKey: 'event.lantern.name' as I18nKey,
-    periodKind: 'week',
-    list: { kind: 'mine', mine: { rank: 3, score: null, count: null } },
-    groups: { canStart: true, active: null, rewardMode: 'participation', minWins: 3, hours: 72, kitties: 2 },
-    now: () => 0,
-    onTab: vi.fn(),
-    onSeeTop: vi.fn(),
-    onListArea: vi.fn(),
-    onStartGroup: vi.fn(),
-    onClose: vi.fn(),
-    ...over,
-  };
-}
-
-describe('rankings hub (§5.5)', () => {
-  it('shows the tabs as a tablist with the selected one; a tab press asks the app', () => {
-    const hub = createRankHub();
-    document.body.appendChild(hub.el);
-    const p = hubProps();
-    hub.open(p);
-    const tabs = Array.from(hub.el.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
-    // Phase 2c §4.7: "This week" (the period board) first; no "Paw points".
-    expect(tabs.map((t) => t.textContent)).toEqual(['This week', 'Today', 'Event', 'Groups']);
-    expect(tabLabel('period', null, 'month')).toBe('This month');
-    // The 2b 'points' tab is gone (I-3); the period tab follows the kind.
-    expect(tabLabel('period', null, 'week')).toBe('This week');
+describe('ranking titles after the hub (Phase 2e I-3)', () => {
+  it('the period board title follows the period kind; a day reads "Daily ranking"', () => {
     expect(rankTitle('period', null, 'day')).toBe('Daily ranking');
-    expect(tabs.map((t) => t.getAttribute('aria-selected'))).toEqual(['true', 'false', 'false', 'false']);
-    expect(tabs.map((t) => t.tabIndex)).toEqual([0, -1, -1, -1]);
-    expect(q(hub.el, '[role="tablist"]')).toBeTruthy();
-    expect(q(hub.el, '[role="tabpanel"]').getAttribute('aria-labelledby')).toBe(tabs[0]?.id);
-    tabs[2]?.click();
-    expect(p.onTab).toHaveBeenCalledWith('event');
-    // Arrow keys move along the tabs (and select them).
-    tabs[0]?.focus();
-    tabs[0]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
-    expect(p.onTab).toHaveBeenLastCalledWith('groups');
-    expect(document.activeElement).toBe(tabs[3]);
-  });
-
-  it('each list tab renders the same list states as the panel; the Event tab is headed by the event', () => {
-    const hub = createRankHub();
-    document.body.appendChild(hub.el);
-    hub.open(hubProps());
-    expect(q(hub.el, '.rank-hub__heading').textContent).toBe('Weekly ranking');
-    expect(q(hub.el, '.rank-mine__rank').textContent).toBe('Your rank: #3');
-    hub.update(hubProps({ tab: 'event', list: RECORDS }));
-    expect(q(hub.el, '.rank-hub__heading').textContent).toBe('Lantern Walk: top players');
-    expect(hub.el.querySelectorAll('.rank-records__row').length).toBeGreaterThan(0);
-    expect(hub.el.querySelector('.rank-mine')).toBeNull();
-  });
-
-  it('the Groups tab explains the challenge and offers to start one; Esc closes', () => {
-    const hub = createRankHub();
-    document.body.appendChild(hub.el);
-    const p = hubProps({ tab: 'groups' });
-    hub.open(p);
-    expect(q<HTMLElement>(hub.el, '.rank-list').hidden).toBe(true);
-    expect(q(hub.el, '.rank-groups__body').textContent).toBe('Win 3 puzzles in this challenge within 72 hours to earn 2 kitties.');
-    q(hub.el, '.rank-groups__start').click();
-    expect(p.onStartGroup).toHaveBeenCalledTimes(1);
-    const p2 = hubProps({ tab: 'groups', now: () => 0, groups: { canStart: false, active: { endsAt: 2 * 86_400_000 + 3 * 3_600_000, wins: 2 }, rewardMode: 'participation', minWins: 3, hours: 72, kitties: 2 } });
-    hub.update(p2);
-    expect(q<HTMLElement>(hub.el, '.rank-groups__start').hidden).toBe(true);
-    expect(q(hub.el, '.rank-groups__active').textContent).toBe('Ends in 2 d 3 h · 2 / 3 wins');
-    expect(hub.dismiss()).toBe(true);
-    expect(p2.onClose).toHaveBeenCalledTimes(1);
+    expect(rankTitle('period', null, 'week')).toBe('Weekly ranking');
   });
 });
 
@@ -415,6 +351,8 @@ function victoryProps(over: Partial<VictoryProps> = {}): VictoryProps {
     buttonDelayMs: cfg.fx.winButtonDelayMs,
     reducedMotion: false,
     bannerReserved: false,
+    streak: null,
+    dailyReward: null,
     now: () => 0,
     onPrimary: vi.fn(),
     onHome: vi.fn(),

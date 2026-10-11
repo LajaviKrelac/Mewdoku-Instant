@@ -219,7 +219,7 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
     return (
       remoteOk(screen) &&
       bannerGate(
-        { screen, save: store.get().save, bannerSupported: supported(), firstRunTutorial, ...(today !== undefined ? { today } : {}) },
+        { screen, save: store.get().save, bannerSupported: supported(), firstRunTutorial, today: today ?? null },
         c,
       ) === 'ok'
     );
