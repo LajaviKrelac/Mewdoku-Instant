@@ -49,14 +49,15 @@ upload; this note records the result and what is left.
   with `{"queryId":"origins","timeframe":{"from":<ms>,"to":<ms>},"view":"events","limit":100,"parameters":{"filters":[{"key":"$metadata.service","operation":"eq","type":"string","value":"mewdoku-rank-staging"}]}}`;
   the lines are in `result.events.events[].source` (`route`, `origin`, `fields`).
 
+- iPhone FB app (IOS) probe, 2026-10-11 18:21 UTC: all five checks OK; `issued_at` present; Origin
+  `https://apps-2382571989149479.apps.fbsbx.com`, matching the server log's `origin` field. Production
+  `ALLOWED_ORIGINS` needs no change.
+
 ## Left
 
-- Before the production deploy: confirm the iPhone app's `origin` (any new value goes into production
-  `ALLOWED_ORIGINS`).
 - Android app and Messenger: not tested (the user deferred them). Until the Android app is checked,
   `signature.requireIssuedAt` stays false.
 
 ## Left (the user, when convenient)
 
-1. Open the game once more in the iPhone Facebook app (any time; it confirms the app's `origin` in the log).
-2. Later: the Android Facebook app (the probe or the game build), then `signature.requireIssuedAt` can go on.
+1. Later: the Android Facebook app (the probe or the game build), then `signature.requireIssuedAt` can go on.
