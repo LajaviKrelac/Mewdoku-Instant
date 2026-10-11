@@ -95,6 +95,10 @@ async function realAnswers(): Promise<Map<string, { status: number; body: unknow
   await put('bracket.alone', await fresh.rawBracket());
   const first = makeWin('L3');
   await fresh.wins([first]);
+  // Audit A-S2: a level past the table counts only for a player who climbed within maxLevelJump (30) of it:
+  // L33, L63, … L2973 (99 table levels, steps of 30, no jump flag), so the mixed request's L3001 is unverified.
+  const climb = Array.from({ length: 99 }, (_, k) => makeWin(`L${3 + 30 * (k + 1)}`, { solveMs: 20_000 }));
+  for (let i = 0; i < climb.length; i += 10) await fresh.wins(climb.slice(i, i + 10));
   await put(
     'wins.mixed',
     await fresh.rawWins([first, makeWin('L3001', { source: 'generated', cats: anyKing(9) }), makeWin('L4', { solveMs: 100 }), makeWin('L3')]),

@@ -87,7 +87,7 @@ describe('ranking panel (§2.4)', () => {
   it('is a dialog labelled by the orange title, with this win as the subtitle and the tap footer inside', () => {
     const panel = openPanel(rankingProps(RECORDS));
     const dialog = q(panel.el, '[role="dialog"]');
-    expect(q(panel.el, `#${dialog.getAttribute('aria-labelledby')}`).textContent).toBe('Weekly ranking');
+    expect(q(panel.el, `#${dialog.getAttribute('aria-labelledby')}`).textContent).toBe('Your records'); // audit B4
     expect(q(panel.el, '.ranking__sub').textContent).toBe('+2 fish · This week: 42');
     expect(dialog.contains(q(panel.el, '.ranking__tap'))).toBe(true);
     expect(q(panel.el, '.ranking__tap').textContent).toBe('Tap to keep going');
@@ -273,9 +273,14 @@ const periodPanel = (list: RankingListState, gained = 2, total = 42): RankingPan
   rankingProps(list, { board: 'period', periodKind: 'week', result: { kind: 'period', gained, total, periodKind: 'week' } });
 
 describe('ranking panel, the period board (Phase 2c §2.6, §4.6)', () => {
-  it('"Weekly ranking", "+2 fish · This week: 42"; "This week: 42" alone when the win added nothing', () => {
+  it('my records: "Your records" (audit B4: never "… ranking" over "Rankings … aren\'t available"), "+2 fish · This week: 42"; "This week: 42" alone when the win added nothing', () => {
     const panel = openPanel(periodPanel({ kind: 'records', reason: 'local', records: PERIOD_RECORDS }));
-    expect(q(panel.el, '.ranking__title').textContent).toBe('Weekly ranking');
+    expect(q(panel.el, '.ranking__title').textContent).toBe('Your records');
+    for (const reason of ['opted_out', 'unavailable', 'paused'] as const) {
+      panel.update(periodPanel({ kind: 'records', reason, records: PERIOD_RECORDS }));
+      expect(q(panel.el, '.ranking__title').textContent, reason).toBe('Your records');
+    }
+    panel.update(periodPanel({ kind: 'records', reason: 'local', records: PERIOD_RECORDS }));
     expect(q(panel.el, '.ranking__sub').textContent).toBe('+2 fish · This week: 42');
     panel.update(periodPanel({ kind: 'records', reason: 'local', records: PERIOD_RECORDS }, 0, 42));
     expect(q(panel.el, '.ranking__sub').textContent).toBe('This week: 42');

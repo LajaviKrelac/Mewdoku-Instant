@@ -25,11 +25,15 @@ describe('me and deletion (§1.11)', () => {
     await a!.heart(id, bSlot);
     await c!.heart(id, (await a!.bracket()).me!.slot);
     expect((await b!.bracket()).heartsNew).toBe(1);
+    await a!.win('L60'); // a level jump: a flag row keyed by the player
+    const key = a!.key(); // the real key, read before the delete (audit A-T1: a literal here could never fail)
+    expect(key).not.toBe('');
+    for (const table of ['wins', 'flags', 'members']) expect(t.count(`SELECT COUNT(*) FROM ${table} WHERE player_key = ?`, key), `${table} before`).toBeGreaterThan(0);
     expect((await a!.rawMe('DELETE')).status).toBe(204);
-    const key = a!.key();
-    expect(key).toBe(''); // the player row is gone
-    for (const table of ['players', 'wins', 'rewards', 'flags']) {
-      expect(t.count(`SELECT COUNT(*) FROM ${table} WHERE ${table === 'players' ? 'code' : 'player_key'} = ?`, table === 'players' ? a!.code() : 'x'), table).toBe(0);
+    expect(a!.key()).toBe(''); // the player row is gone
+    expect(t.count('SELECT COUNT(*) FROM players WHERE key = ?', key)).toBe(0);
+    for (const table of ['members', 'wins', 'rewards', 'flags']) {
+      expect(t.count(`SELECT COUNT(*) FROM ${table} WHERE player_key = ?`, key), table).toBe(0);
     }
     expect(t.count('SELECT COUNT(*) FROM members')).toBe(2);
     expect(t.count('SELECT COUNT(*) FROM hearts')).toBe(0); // given by a, and given to a
@@ -129,6 +133,25 @@ describe('cron (§1.1, §1.10, §1.14)', () => {
     expect(t.count('SELECT COUNT(*) FROM brackets WHERE finalized_at IS NULL')).toBe(0);
     expect(t.count('SELECT COUNT(*) FROM seen_nonces')).toBe(0);
     expect(t.count("SELECT COUNT(*) FROM stats_daily WHERE name = 'brackets_ended'")).toBeGreaterThan(0);
+  });
+
+  it('[audit A-S6] overlapping rollups add each win and flag once (the watermark moves in the same batch, guarded)', async () => {
+    const t = makeTestApp();
+    const [a] = await playersWithWins(t, 3, 'st');
+    await a!.win('L90'); // a level jump flag
+    t.clock.advance(60_000);
+    const [r1, r2] = await Promise.all([t.app.scheduled(), t.app.scheduled()]);
+    expect([r1.stats, r2.stats].sort()).toEqual([false, true]);
+    const v = (name: string): number => t.count('SELECT v FROM stats_daily WHERE name = ?', name);
+    expect(v('wins_accepted')).toBe(3);
+    expect(v('wins_accepted_flagged')).toBe(1);
+    expect(v('flags_level_jump')).toBe(1);
+    // a later run adds only what came after the watermark
+    await a!.win('L91');
+    t.clock.advance(60_000);
+    expect((await t.app.scheduled()).stats).toBe(true);
+    expect(v('wins_accepted')).toBe(4);
+    expect(v('wins_accepted_flagged')).toBe(1);
   });
 
   it('the daily retention sweep deletes by age only (wins 30 d, brackets 30 d, flags 90 d, players 180 d)', async () => {

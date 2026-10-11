@@ -62,6 +62,34 @@ describe('the lookup rule (§1.9.2, C-7, C-8)', () => {
     expect(isKingPermutationString(anyKing(12))).toBe(true);
   });
 
+  it('[audit A-S2] past the table: only a size the table\'s tail shows, and a level only within maxLevelJump of a baseline', () => {
+    expect(content.tailSizes('level')).toEqual([8, 12]);
+    expect(content.tailSizes('daily')).toEqual([8, 12]);
+    // a first win (no baseline) past the table is never counted: rejected, flagged for the admin
+    const first = one(makeWin('L3001', { source: 'generated', cats: anyKing(9) }));
+    expect(first.d).toMatchObject({ verdict: 'rejected', reason: 'bad_puzzle_id', write: false });
+    expect(first.d.flags.map((f) => f.kind)).toEqual(['unverified']);
+    // a baseline too far below (2960 + 30 < 3001)
+    expect(one(makeWin('L3001', { cats: anyKing(9) }), { player: { maxLevel: 2960 } }).d).toMatchObject({ verdict: 'rejected', reason: 'bad_puzzle_id' });
+    // the edge: 2971 + 30 = 3001
+    expect(one(makeWin('L3001', { cats: anyKing(9) }), { player: { maxLevel: 2971 } }).d).toMatchObject({ verdict: 'accepted_flagged', reason: 'unverified' });
+    // the auditor's 4-cell arrangement, even with a baseline: a size the schedule never shows there
+    expect(isKingPermutationString('1302')).toBe(true);
+    expect(one(makeWin('L3001', { cats: '1302', solveMs: 4000 }), { player: { maxLevel: 2995 } }).d).toMatchObject({ verdict: 'rejected', reason: 'bad_solution' });
+    expect(one(makeWin('L3001', { cats: anyKing(7) }), { player: { maxLevel: 2995 } }).d).toMatchObject({ verdict: 'rejected', reason: 'bad_solution' });
+    // the baseline is carried through one request: L2990 (a table level) then L3001 … L3020 in steps of ≤ 30
+    const climb = evaluateWins({
+      player: { ...fresh, maxLevel: 2960 },
+      wins: [makeWin('L2990'), makeWin('L3001', { cats: anyKing(10) }), makeWin('L3020', { cats: anyKing(11) })],
+      stored: [],
+      memberWins: 0,
+      now: T0,
+      cfg: DEFAULT_CONFIG,
+      content,
+    });
+    expect(climb.decisions.map((d) => d.verdict)).toEqual(['accepted', 'accepted_flagged', 'accepted_flagged']);
+  });
+
   it('an unknown content version is reported (logged), never a key', () => {
     const r = one(makeWin('L57', { contentVersion: 'content-future0001' }));
     expect(r.d.verdict).toBe('accepted');

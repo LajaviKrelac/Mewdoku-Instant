@@ -381,11 +381,12 @@
   overflow: hidden;
 }
 
-.ladder-sheet[data-fit] {
+/* Audit B3: the fit rules carry the full-height rule's selector, so they win (that rule is (0,4,0)). */
+.overlay[data-overlay='ladder'] .overlay__panel--sheet.ladder-sheet[data-fit] {
   height: auto;
 }
 
-.ladder-sheet[data-info-only] {
+.overlay[data-overlay='ladder'] .overlay__panel--sheet.ladder-sheet[data-info-only] {
   height: auto;
   margin-bottom: auto;
 }
@@ -525,6 +526,14 @@
   font-size: var(--fs-xl);
   line-height: 1.25;
   text-wrap: balance;
+}
+
+.ladder-result__double-note {
+  margin: -2px 0 2px;
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+  line-height: 1.3;
+  text-align: center;
 }
 
 .ladder-result__line {

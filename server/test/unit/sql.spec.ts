@@ -85,6 +85,8 @@ describe('sql: hygiene', () => {
       'freeGuard',
       'newGuard',
       'poolGuard', // integration I-6: "the pool has no joinable bracket" on a create (a fixed fragment; its values are bound)
+      'cas', // audit A-S3: "the player's wins token is the one this request read" (a fixed fragment; its values are bound)
+      'placed', // audit A-S3: the batch's rest applies only with its wins (a fixed fragment; its values are bound)
       "input.wins.map(() => '(NOT EXISTS (SELECT 1 FROM wins WHERE player_key = ? AND puzzle_id = ?) AND NOT EXISTS (SELECT 1 FROM wins WHERE player_key = ? AND win_id = ?))').join(' OR ')",
       "guardFinal ? 'EXISTS (SELECT 1 FROM brackets WHERE id = ? AND finalized_at IS NULL)' : '1 = 1'",
       'guard',

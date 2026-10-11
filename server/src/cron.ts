@@ -2,6 +2,7 @@
 // brackets (≤ cron.finalizePerRun per run: Free's 50 queries per invocation), purge used nonces, roll up the
 // day's stats; the retention sweep runs once a day in its own trigger (RETENTION_CRON). Every read is by index range.
 import { DAY, HOUR, utcDateKey, utcDayStart } from './core/clock';
+import { randomBase36 } from './core/crypto';
 import type { Services } from './services';
 import { finalizeIfDue } from './handlers/views';
 
@@ -49,11 +50,15 @@ export async function runCron(s: Services, now: number, opts: CronOptions = {}):
   const noncesPurged = await s.store.purgeNonces(Math.min(now, s.clock.now()));
 
   // Stats rollup: the last hour's wins and flags are added; DAU and the members-per-bracket spread of
-  // brackets ended today are set (each read by index range; critic C-18).
+  // brackets ended today are set (each read by index range; critic C-18). The watermark `stats_at` ("<ms>:<nonce>")
+  // moves in the same batch as the sums, guarded by the value read here, so overlapping runs never add twice
+  // (audit A-S6).
   let stats = false;
   if (opts.stats !== false) {
     try {
-      const last = Number((await s.store.getMeta('stats_at')) ?? now - HOUR);
+      const prev = await s.store.getMeta('stats_at');
+      const lastAt = prev === null ? Number.NaN : Number(prev.split(':')[0]);
+      const last = Number.isFinite(lastAt) ? lastAt : now - HOUR;
       const from = Math.max(last, now - 2 * HOUR);
       const day = utcDateKey(now);
       const w = await s.store.statsWindow(from, now, utcDayStart(now));
@@ -61,15 +66,19 @@ export async function runCron(s: Services, now: number, opts: CronOptions = {}):
       for (const r of w.winsByVerdict) add[`wins_${r.verdict}`] = Number(r.n);
       for (const r of w.flagsByKind) add[`flags_${r.kind}`] = Number(r.n);
       const sizes = w.endedToday.map((b) => b.final_members ?? b.members).sort((a, b) => a - b);
-      await s.store.writeStats(day, add, {
-        dau: w.dau,
-        brackets_ended: sizes.length,
-        members_p10: percentile(sizes, 10),
-        members_p50: percentile(sizes, 50),
-        members_p90: percentile(sizes, 90),
-      });
-      await s.store.setMeta('stats_at', String(now));
-      stats = true;
+      stats = await s.store.writeStats(
+        day,
+        add,
+        {
+          dau: w.dau,
+          brackets_ended: sizes.length,
+          members_p10: percentile(sizes, 10),
+          members_p50: percentile(sizes, 50),
+          members_p90: percentile(sizes, 90),
+        },
+        { k: 'stats_at', prev, next: `${now}:${randomBase36(s.rng, 8)}` },
+      );
+      if (!stats) s.log({ level: 'info', msg: 'stats rollup skipped: another run moved the watermark first' });
     } catch (err) {
       s.log({ level: 'error', msg: 'stats rollup failed', err: err instanceof Error ? err.message : String(err) });
     }

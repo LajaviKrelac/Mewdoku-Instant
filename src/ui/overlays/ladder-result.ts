@@ -11,7 +11,8 @@
 // the scrim does nothing (a choice is needed, and a stray tap must not drop a reward card).
 // Classes: .overlay[data-overlay=ladder_result][data-case=paid|too_few|none] > .overlay__panel--dialog.ladder-result
 //          > .ladder-result__art h2.overlay__title .ladder-result__place .ladder-result__line
-//            .overlay__actions(button.ladder-result__double button.ladder-result__collect button.ladder-result__ok)
+//            .overlay__actions(button.ladder-result__double p.ladder-result__double-note button.ladder-result__collect
+//            button.ladder-result__ok); the note ("You can watch a video to double your reward.") describes ×2 (audit B12, B13)
 import type { Reward } from '../../game/events';
 import { formatNumber, joinList, t, tn } from '../../i18n';
 import { mountLadderArt } from '../art/ladder-art';
@@ -84,9 +85,13 @@ export function createLadderResult(): OverlayView<LadderResultProps> {
     className: 'ladder-result__double',
     onPress: () => props?.onDouble(),
   });
+  // Audit B13: the video is said in words under ×2 (the play icon alone did not say an ad plays); audit B12: the
+  // button's name is its visible label ("Collect ×2") and the line is its description.
+  const doubleNote = h('p', { class: 'ladder-result__double-note', id: `${shell.descId}-video` });
+  double.setAttribute('aria-describedby', doubleNote.id);
   const collect = makeButton({ variant: 'secondary', label: '', block: true, className: 'ladder-result__collect', onPress: () => props?.onCollect() });
   const ok = makeButton({ variant: 'primary', label: '', block: true, className: 'ladder-result__ok', onPress: () => props?.onClose() });
-  shell.panel.append(art, title, desc, h('div', { class: 'overlay__actions overlay__actions--stack' }, double, collect, ok));
+  shell.panel.append(art, title, desc, h('div', { class: 'overlay__actions overlay__actions--stack' }, double, doubleNote, collect, ok));
 
   const setArt = (p: LadderResultProps): void => {
     const sym: SymbolId = p.case === 'paid' ? 'reward-chest' : p.place >= 1 && p.place <= 3 ? (`medal-${p.place}` as SymbolId) : 'icon-trophy';
@@ -106,13 +111,14 @@ export function createLadderResult(): OverlayView<LadderResultProps> {
     setText(line, resultLine(p));
     const paid = p.case === 'paid' && p.reward !== null;
     double.hidden = !(paid && p.canDouble);
+    doubleNote.hidden = double.hidden;
     collect.hidden = !paid;
     ok.hidden = paid;
     // Collect is the primary when there is no ×2 (orange); with ×2 it is the secondary under it.
     collect.classList.toggle('btn--primary', paid && !p.canDouble);
     collect.classList.toggle('btn--secondary', !(paid && !p.canDouble));
     setButtonLabel(double, t('ladder.collectDouble'));
-    double.setAttribute('aria-label', t('ladder.collectDouble.a11y'));
+    setText(doubleNote, t('ladder.info.double'));
     setButtonLabel(collect, t('ladder.collect'));
     setButtonLabel(ok, t('common.ok'));
     for (const b of [double, collect, ok]) {

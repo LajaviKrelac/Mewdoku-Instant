@@ -447,7 +447,18 @@ test('the web-prod path (no ranking origin, ?flags=-ladder ≡ ladder.web off): 
   const chip = page.locator('button.ladder-chip');
   await expect(chip).toHaveAttribute('data-state', 'records');
   await chip.click();
-  await expect(page.locator('.overlay[data-overlay="ladder"] .ladder-sheet[data-view="records"]')).toBeVisible({ timeout: 10_000 });
+  const sheet = page.locator('.overlay[data-overlay="ladder"] .ladder-sheet[data-view="records"]');
+  await expect(sheet).toBeVisible({ timeout: 10_000 });
+  // Audit B3: the records sheet fits its content (a bottom sheet), never the full height with empty white below.
+  await expect(sheet).toHaveAttribute('data-fit', '');
+  await page.waitForTimeout(400); // the sheet's slide-in
+  const fit = await sheet.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    const last = el.querySelector('.ladder-sheet__records-box')?.getBoundingClientRect() ?? r;
+    return { h: r.height, vh: window.innerHeight, below: r.bottom - last.bottom };
+  });
+  expect(fit.h, 'records sheet height').toBeLessThan(fit.vh * 0.75);
+  expect(fit.below, 'white below the records').toBeLessThan(120);
   await closeAll(page);
   await page.locator('.screen--home').getByRole('button', { name: 'Settings' }).click();
   await expect(page.locator('[data-overlay="settings"]')).toBeVisible();
@@ -455,6 +466,7 @@ test('the web-prod path (no ranking origin, ?flags=-ladder ≡ ladder.web off): 
   await closeAll(page);
   await winNext(page);
   await expect(panel(page).locator('.rank-list[data-kind="records"]')).toBeVisible({ timeout: 15_000 });
+  await expect(panel(page).locator('.ranking__title')).toHaveText('Your records'); // audit B4
   await tapThrough(page);
   expect(await page.evaluate(() => (window as TestWindow).__mewdoku?.app().save.ladder.pending)).toEqual([]);
   expect(seen).toEqual([]);

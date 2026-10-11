@@ -2,11 +2,11 @@
 // player racing itself past the bracket cap and the play-time budget, a delete racing an in-flight first win,
 // deletion completeness checked by the real player key, concurrent nonce use, concurrent nickname changes, a
 // large burst of first wins into an empty pool, and log hygiene (no raw id, token, signature, nickname or IP).
-// `it.fails` pins a defect the audit reported and did not fix (finding id in the title): it turns red once the
-// defect is fixed, then becomes a plain `it`.
+// `it.fails` pinned a defect the audit reported and did not fix (finding id in the title); the fix lead turned
+// each into a plain `it` with its fix (A-S1, A-S2, A-S3), each checked to fail with the fix reverted.
 import { createHmac } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { CONTENT, DAY, HOUR, json, makeTestApp, makeWin, playersWithWins, TestPlayer } from '../helpers/harness';
+import { anyKing, CONTENT, DAY, HOUR, json, makeTestApp, makeWin, playersWithWins, TestPlayer } from '../helpers/harness';
 
 const BIG_BUDGET = { antiCheat: { budget: { initialMs: 1e12, capacityMs: 1e12, perWinCapMs: 1 } } };
 
@@ -17,20 +17,29 @@ async function one(t: ReturnType<typeof makeTestApp>, id: string): Promise<TestP
 }
 
 describe('audit A: a player racing itself', () => {
-  it.fails('[A-S3, open] concurrent requests never push one member past antiCheat.maxWinsPerWindow (150)', async () => {
+  it('[A-S3, fixed: the wins token] concurrent requests never push one member past antiCheat.maxWinsPerWindow (150)', async () => {
     const t = makeTestApp({ overrides: BIG_BUDGET });
     const p = await one(t, 'cap-racer');
     // 140 accepted wins, sequentially (L2 … L141)
     for (let L = 2; L < 142; L += 10) await p.wins(Array.from({ length: 10 }, (_, i) => makeWin(`L${L + i}`)));
     expect(t.rows<{ wins: number }>('SELECT wins FROM members')[0]?.wins).toBe(140);
     // 5 concurrent requests of 10 distinct, valid wins each (L142 … L191)
-    await Promise.all(Array.from({ length: 5 }, (_, k) => p.wins(Array.from({ length: 10 }, (_, i) => makeWin(`L${142 + 10 * k + i}`)))));
+    const batches = Array.from({ length: 5 }, (_, k) => Array.from({ length: 10 }, (_, i) => makeWin(`L${142 + 10 * k + i}`)));
+    const rs = await Promise.all(batches.map((b) => p.rawWins(b)));
+    // a request that could not be evaluated against a fresh state answers 503 + retryAfterMs (the client keeps its queue)
+    for (const r of rs) expect([200, 503]).toContain(r.status);
+    for (const r of rs.filter((x) => x.status === 503)) expect((await json<{ error: { code: string; retryAfterMs: number } }>(r)).error).toMatchObject({ code: 'unavailable', retryAfterMs: expect.any(Number) });
     const m = t.rows<{ wins: number; points: number }>('SELECT wins, points FROM members')[0];
     expect(m?.wins, 'member wins after the race').toBeLessThanOrEqual(150);
     expect(t.count('SELECT COUNT(*) FROM wins')).toBeLessThanOrEqual(150);
+    // the client sends its queue again: still at most 150, the rest rejected window_cap
+    for (const b of batches) await p.wins(b);
+    expect(t.rows<{ wins: number; points: number }>('SELECT wins, points FROM members')[0]).toEqual({ wins: 150, points: 450 });
+    expect(t.count('SELECT COUNT(*) FROM wins')).toBe(150);
+    expect(t.count("SELECT COUNT(*) FROM flags WHERE kind = 'window_cap'")).toBeGreaterThan(0);
   });
 
-  it.fails('[A-S3, open] concurrent requests never spend the play-time budget twice', async () => {
+  it('[A-S3, fixed: the wins token] concurrent requests never spend the play-time budget twice', async () => {
     const t = makeTestApp();
     const p = await one(t, 'budget-racer');
     await p.win('L2', { solveMs: 60_000 }); // a running bracket first (1 min spent of the 1 h)
@@ -105,7 +114,7 @@ describe('audit A: concurrency on single-use and guarded writes', () => {
     expect(t.rows<{ nickname: string }>('SELECT nickname FROM players')[0]?.nickname).toBe(ok.player.nickname);
   });
 
-  it.fails('[A-S1, open] 120 concurrent first wins into an empty pool: every win counted, no bracket over 50, none empty', async () => {
+  it('[A-S1, fixed: placement loop, never a final verdict unplaced] 120 concurrent first wins into an empty pool: every win counted, no bracket over 50, none empty', async () => {
     const t = makeTestApp();
     const ps: TestPlayer[] = [];
     for (let i = 0; i < 120; i++) ps.push(await one(t, `burst${i}`));
@@ -121,13 +130,19 @@ describe('audit A: concurrency on single-use and guarded writes', () => {
 });
 
 describe('audit A: the solution table cannot be stepped around', () => {
-  it.fails('[A-S2, open] fake ids past the table (L3001+, any 4-cell king permutation) earn no paid place', async () => {
+  it('[A-S2, fixed: tail sizes and a baseline past the table] fake ids past the table (L3001+, any 4-cell king permutation) earn no paid place', async () => {
     const t = makeTestApp();
     await playersWithWins(t, 5, 'h'); // five honest players, 3 fish each
     const p = await one(t, 'farmer');
     for (let L = 3001; L < 3151; L += 10) {
       await p.wins(Array.from({ length: 10 }, (_, i) => makeWin(`L${L + i}`, { cats: '1302', solveMs: 4000, source: 'generated' })));
     }
+    expect(t.count('SELECT COUNT(*) FROM wins WHERE player_key = ?', p.key()), 'farmed wins stored').toBe(0);
+    expect(t.count("SELECT COUNT(*) FROM flags WHERE player_key = ? AND kind IN ('bad_solution', 'unverified')", p.key()), 'each attempt flagged for the admin').toBe(150);
+    // the same farm with a size the tail shows (9) still has no baseline near L3001: rejected and flagged
+    const q = await one(t, 'farmer2');
+    const r = await q.wins(Array.from({ length: 10 }, (_, i) => makeWin(`L${3001 + i}`, { cats: anyKing(9), solveMs: 11_000, source: 'generated' })));
+    expect(r.results.map((x) => `${x.verdict}:${x.reason ?? ''}`)).toEqual(Array.from({ length: 10 }, () => 'rejected:bad_puzzle_id'));
     t.clock.advance(DAY + HOUR);
     await p.signIn();
     expect(p.session?.results[0]?.reward ?? null, 'a paid reward for unverified farming').toBeNull();

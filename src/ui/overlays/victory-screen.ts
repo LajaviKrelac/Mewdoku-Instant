@@ -146,8 +146,12 @@ export function primaryLabel(p: Pick<VictoryProps, 'variant' | 'nextLevel' | 'ev
 
 /** Countdown refresh period (minute resolution text). */
 const REFRESH_MS = 1000;
-/** Compaction steps of fit() (overlay-chunk.css .victory[data-fit]). */
-export const FIT_LEVELS = 3;
+/**
+ * Compaction steps of fit() (overlay-chunk.css .victory[data-fit]). Step 4 (audit B1): the daily victory on a
+ * streak's day 7 at 320 × 568 (the streak row and its reward line on top of the daily's lines) still ran under
+ * the sticky Done; the last step drops the hero art (decorative, aria-hidden) and tightens the streak row.
+ */
+export const FIT_LEVELS = 4;
 
 /**
  * The compaction step that lets the content fit: the first of 0…FIT_LEVELS whose measured overflow
@@ -267,7 +271,7 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
 
   // ── fit (UX-1, I18N-LAYOUT-1): compact the hero while the content is taller than the screen ──
   const scroller = shell.el;
-  /** data-fit = the step (1–3); data-tight marks steps 2 and 3 (overlay-chunk.css). */
+  /** data-fit = the step (1–4); data-tight marks steps 2 to 4 (overlay-chunk.css). */
   const setFit = (lv: number): void => {
     if (lv === 0) delete root.dataset.fit;
     else root.dataset.fit = String(lv);
@@ -396,8 +400,11 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
       const sr = st.reward;
       streakReward.hidden = !(sr && ((sr.hints ?? 0) > 0 || (sr.kitties ?? 0) > 0));
       if (sr && !streakReward.hidden) setText(streakReward, t('victory.streakReward', { reward: rewardText(sr) }));
+      // Audit B6: the reward is paid → the last step shows the open chest (as the Home strip does).
+      streak.toggleAttribute('data-reward', !streakReward.hidden);
     } else {
       delete streak.dataset.day;
+      streak.removeAttribute('data-reward');
     }
 
     // The dialog's description (§7 screen reader): the result line, the level's points ("7,296

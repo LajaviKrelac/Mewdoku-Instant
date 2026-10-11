@@ -69,6 +69,13 @@ export interface WriteWinsInput {
   readonly wins: readonly WinWrite[];
   readonly player: { readonly maxLevel: number; readonly budgetMs: number; readonly budgetAt: number };
   readonly flags: readonly FlagWrite[];
+  /**
+   * The wins write token (audit A-S3): every statement of the batch is guarded by `players.wtok = expect` (the
+   * token read with the player this request evaluated against) and the batch's last statement sets `next`.
+   * A concurrent wins request of the same player that committed meanwhile changed the token, so this batch
+   * writes nothing (its cap and budget checks were made against a stale state) and the handler evaluates again.
+   */
+  readonly cas: { readonly expect: string; readonly next: string };
 }
 
 export interface WriteWinsResult {
@@ -76,6 +83,12 @@ export interface WriteWinsResult {
   readonly joinedSlot: number | null;
   /** Per win (same order): did its row go in (its points were added)? */
   readonly inserted: readonly boolean[];
+  /**
+   * The batch applied: the player row took the new token, the level baseline, the budget and the flags. False
+   * when the token had changed (a concurrent wins request of this player), the join lost its race, or the
+   * current bracket ended meanwhile: then nothing of the batch was written.
+   */
+  readonly applied: boolean;
 }
 
 /** A profile change (spec §1.8): any subset; the name change carries its cooldown guard. */
@@ -259,6 +272,11 @@ export class SqlStore {
     const bracketId = target === null ? null : target.kind === 'create' ? target.bracket.id : target.bracketId;
     const joining = target !== null && target.kind !== 'current';
     let joinIndex = -1;
+    // Audit A-S3: every statement before the last is guarded by the token this request read; the last one (the
+    // player row) sets the next token. A concurrent wins request of this player that committed after our read
+    // changed the token, so nothing of this batch applies and the handler evaluates the wins again.
+    const cas = 'EXISTS (SELECT 1 FROM players WHERE key = ? AND wtok = ?)';
+    const casArgs: SqlValue[] = [key, input.cas.expect];
     // A join (or a new bracket) happens only while the player has no running bracket and at least one of
     // these wins is not stored yet: a request that lost a race to another request of the same player never
     // opens a second bracket or leaves a 0-point row (H-1: a row exists only with a counted win).
@@ -276,12 +294,12 @@ export class SqlStore {
       // Integration I-6 (lead): a new bracket opens only while the pool has no joinable one. Without this guard,
       // concurrent first wins of DIFFERENT players in a pool with no open bracket each opened their own (seen in
       // e2e: 49 players split 48 + 1). A create that loses this race inserts nothing, so its member insert finds
-      // no bracket and the handler's retry joins the bracket that won (spec §1.5 "normally at most one").
+      // no bracket and the handler joins the bracket that won (spec §1.5 "normally at most one").
       const poolGuard = 'NOT EXISTS (SELECT 1 FROM brackets o WHERE o.pool = ? AND o.join_until > ? AND o.finalized_at IS NULL AND o.members < o.max_members)';
       stmts.push(
         this.q(
           `INSERT INTO brackets (id, pool, mode, opened_at, join_until, ends_at, members, next_slot, max_members)
-           SELECT ?, ?, ?, ?, ?, ?, 0, 0, ? WHERE ${freeGuard} AND ${newGuard} AND ${poolGuard}`,
+           SELECT ?, ?, ?, ?, ?, ?, 0, 0, ? WHERE ${cas} AND ${freeGuard} AND ${newGuard} AND ${poolGuard}`,
           b.id,
           b.pool,
           b.mode,
@@ -289,6 +307,7 @@ export class SqlStore {
           b.joinUntil,
           b.endsAt,
           b.maxMembers,
+          ...casArgs,
           ...guardArgs,
           b.pool,
           now,
@@ -304,7 +323,7 @@ export class SqlStore {
             WHERE b.id = ? AND b.finalized_at IS NULL AND b.join_until > ? AND b.ends_at > ?
               AND (SELECT COUNT(*) FROM members m WHERE m.bracket_id = b.id) < b.max_members
               AND NOT EXISTS (SELECT 1 FROM members m WHERE m.bracket_id = b.id AND m.player_key = ?)
-              AND ${freeGuard} AND ${newGuard}
+              AND ${cas} AND ${freeGuard} AND ${newGuard}
            ON CONFLICT DO NOTHING RETURNING slot`,
           key,
           input.nickname,
@@ -315,6 +334,7 @@ export class SqlStore {
           now,
           now,
           key,
+          ...casArgs,
           ...guardArgs,
         ),
         this.q(
@@ -327,10 +347,11 @@ export class SqlStore {
         ),
         this.q(
           `UPDATE players SET cur_bracket = ?, cur_ends_at = (SELECT ends_at FROM brackets WHERE id = ?)
-            WHERE key = ? AND EXISTS (SELECT 1 FROM members WHERE bracket_id = ? AND player_key = ?)`,
+            WHERE key = ? AND wtok = ? AND EXISTS (SELECT 1 FROM members WHERE bracket_id = ? AND player_key = ?)`,
           bracketId,
           bracketId,
           key,
+          input.cas.expect,
           bracketId,
           key,
         ),
@@ -345,7 +366,7 @@ export class SqlStore {
               WHERE bracket_id = ? AND player_key = ?
                 AND NOT EXISTS (SELECT 1 FROM wins WHERE player_key = ? AND puzzle_id = ?)
                 AND NOT EXISTS (SELECT 1 FROM wins WHERE player_key = ? AND win_id = ?)
-                AND ${RUNNING}`,
+                AND ${RUNNING} AND ${cas}`,
             w.points,
             now,
             bracketId,
@@ -356,6 +377,7 @@ export class SqlStore {
             w.winId,
             bracketId,
             now,
+            ...casArgs,
           ),
         );
         insertIndex.push(stmts.length);
@@ -363,7 +385,7 @@ export class SqlStore {
           this.q(
             `INSERT INTO wins (player_key, puzzle_id, win_id, bracket_id, points, fish, solve_ms, n, verdict, received_at, played_at_client, client_version)
              SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-              WHERE EXISTS (SELECT 1 FROM members WHERE bracket_id = ? AND player_key = ?) AND ${RUNNING}
+              WHERE EXISTS (SELECT 1 FROM members WHERE bracket_id = ? AND player_key = ?) AND ${RUNNING} AND ${cas}
              ON CONFLICT DO NOTHING`,
             key,
             w.puzzleId,
@@ -381,50 +403,53 @@ export class SqlStore {
             key,
             bracketId,
             now,
+            ...casArgs,
           ),
         );
       }
     }
-    const memberGuard = joining && bracketId !== null ? ' AND EXISTS (SELECT 1 FROM members WHERE bracket_id = ? AND player_key = ?)' : '';
-    const guardValues: SqlValue[] = joining && bracketId !== null ? [bracketId, key] : [];
-    stmts.push(
-      this.q(
-        // seen_at is the session's (indexed for the inactive sweep): not rewritten per win, so a counted win
-        // writes ≤ 5 rows (member 1, win + its 2 indexes 3, player 1; spec §10.4).
-        `UPDATE players SET max_level = CASE WHEN ? > max_level THEN ? ELSE max_level END, budget_ms = ?, budget_at = ?,
-                flag_count = flag_count + ? WHERE key = ?${memberGuard}`,
-        input.player.maxLevel,
-        input.player.maxLevel,
-        input.player.budgetMs,
-        input.player.budgetAt,
-        input.flags.length,
-        key,
-        ...guardValues,
-      ),
-    );
-    // ≤ 19 flags per statement (5 values each, ≤ 100 bound parameters with the guard).
+    // The rest applies only with the wins: on a join, once I am a member; into my current bracket, while it
+    // still runs (it may have ended between the read and this batch; the wins then go into the next one, and
+    // the level baseline, budget and flags go with them, never ahead of them).
+    const placed = target === null ? '' : joining ? ' AND EXISTS (SELECT 1 FROM members WHERE bracket_id = ? AND player_key = ?)' : ` AND ${RUNNING}`;
+    const placedArgs: SqlValue[] = target === null || bracketId === null ? [] : joining ? [bracketId, key] : [bracketId, now];
+    // ≤ 19 flags per statement (5 values each, ≤ 100 bound parameters with the guards).
     for (let i = 0; i < input.flags.length; i += 19) {
       const chunk = input.flags.slice(i, i + 19);
       const values: SqlValue[] = [];
       for (const f of chunk) values.push(f.id, key, now, f.kind, f.detail.slice(0, 300));
       const rows = chunk.map(() => '(?, ?, ?, ?, ?)').join(', ');
-      stmts.push(
-        this.q(
-          memberGuard
-            ? `INSERT INTO flags (id, player_key, at, kind, detail) SELECT * FROM (VALUES ${rows}) AS v WHERE EXISTS (SELECT 1 FROM members WHERE bracket_id = ? AND player_key = ?)`
-            : `INSERT INTO flags (id, player_key, at, kind, detail) VALUES ${rows}`,
-          ...values,
-          ...guardValues,
-        ),
-      );
+      stmts.push(this.q(`INSERT INTO flags (id, player_key, at, kind, detail) SELECT * FROM (VALUES ${rows}) AS v WHERE ${cas}${placed}`, ...values, ...casArgs, ...placedArgs));
     }
+    const playerIndex = stmts.length;
+    stmts.push(
+      this.q(
+        // seen_at is the session's (indexed for the inactive sweep): not rewritten per win, so a counted win
+        // writes ≤ 5 rows (member 1, win + its 2 indexes 3, player 1; spec §10.4). Last: it moves the token.
+        `UPDATE players SET max_level = CASE WHEN ? > max_level THEN ? ELSE max_level END, budget_ms = ?, budget_at = ?,
+                flag_count = flag_count + ?, wtok = ? WHERE key = ? AND wtok = ?${placed}`,
+        input.player.maxLevel,
+        input.player.maxLevel,
+        input.player.budgetMs,
+        input.player.budgetAt,
+        input.flags.length,
+        input.cas.next,
+        key,
+        input.cas.expect,
+        ...placedArgs,
+      ),
+    );
     const res = await this.db.batch(stmts);
     let joinedSlot: number | null = null;
     if (joinIndex >= 0) {
       const row = res[joinIndex]?.results?.[0] as { slot?: number } | undefined;
       joinedSlot = typeof row?.slot === 'number' ? row.slot : null;
     }
-    return { joinedSlot, inserted: insertIndex.map((i) => (res[i]?.meta.changes ?? 0) === 1) };
+    return {
+      joinedSlot,
+      inserted: insertIndex.map((i) => (res[i]?.meta.changes ?? 0) === 1),
+      applied: (res[playerIndex]?.meta.changes ?? 0) === 1,
+    };
   }
 
   // ───────────────────────────────────────────── brackets
@@ -791,10 +816,6 @@ export class SqlStore {
     return (await this.q('SELECT v FROM meta WHERE k = ?', k).first<{ v: string }>())?.v ?? null;
   }
 
-  async setMeta(k: string, v: string): Promise<void> {
-    await this.q('INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v', k, v).run();
-  }
-
   /** The hourly rollup's reads (spec §1.14), each by index range. */
   async statsWindow(from: number, to: number, dayStart: number): Promise<{
     winsByVerdict: { verdict: string; n: number }[];
@@ -811,9 +832,23 @@ export class SqlStore {
     return { winsByVerdict: w.results, flagsByKind: f.results, dau: Number(d?.n ?? 0), endedToday: e.results };
   }
 
-  /** stats_daily: `add` sums into the day's value, `set` replaces it (two multi-row upserts at most). */
-  async writeStats(day: string, add: Record<string, number>, set: Record<string, number>): Promise<void> {
-    const stmts: SqlStatement[] = [];
+  /**
+   * stats_daily: `add` sums into the day's value, `set` replaces it (two multi-row upserts at most), in ONE batch
+   * with the rollup's watermark (audit A-S6): the first statement moves meta[mark.k] from `prev` (the value this
+   * run read; null = none yet) to `next`, and every upsert is guarded by "the watermark is `next`", so a run that
+   * overlaps another (or retries after a failure) adds nothing twice. False: another run moved the watermark first.
+   */
+  async writeStats(
+    day: string,
+    add: Record<string, number>,
+    set: Record<string, number>,
+    mark: { readonly k: string; readonly prev: string | null; readonly next: string },
+  ): Promise<boolean> {
+    const stmts: SqlStatement[] = [
+      mark.prev === null
+        ? this.q('INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT (k) DO NOTHING', mark.k, mark.next)
+        : this.q('UPDATE meta SET v = ? WHERE k = ? AND v = ?', mark.next, mark.k, mark.prev),
+    ];
     const upsert = (entries: [string, number][], merge: string): void => {
       for (let i = 0; i < entries.length; i += 30) {
         const chunk = entries.slice(i, i + 30);
@@ -821,15 +856,19 @@ export class SqlStore {
         for (const [name, v] of chunk) values.push(day, name, v);
         stmts.push(
           this.q(
-            `INSERT INTO stats_daily (day, name, v) VALUES ${chunk.map(() => '(?, ?, ?)').join(', ')} ON CONFLICT (day, name) DO UPDATE SET v = ${merge}`,
+            `INSERT INTO stats_daily (day, name, v) SELECT * FROM (VALUES ${chunk.map(() => '(?, ?, ?)').join(', ')}) AS x
+              WHERE EXISTS (SELECT 1 FROM meta WHERE k = ? AND v = ?) ON CONFLICT (day, name) DO UPDATE SET v = ${merge}`,
             ...values,
+            mark.k,
+            mark.next,
           ),
         );
       }
     };
     upsert(Object.entries(add).filter(([, v]) => v !== 0), 'stats_daily.v + excluded.v');
     upsert(Object.entries(set), 'excluded.v');
-    if (stmts.length > 0) await this.db.batch(stmts);
+    const res = await this.db.batch(stmts);
+    return (res[0]?.meta.changes ?? 0) === 1;
   }
 
   /**

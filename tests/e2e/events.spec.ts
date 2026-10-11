@@ -110,7 +110,7 @@ test('Lantern Walk: card → event screen → puzzle 1 → win → victory 1 / 2
   // D7: the post-win panel is the period board in every mode; the event board stays on the event screen.
   const panel = page.locator('[data-overlay="ranking"]');
   await expect(panel).toBeVisible({ timeout: 10_000 });
-  await expect(panel).toContainText('Weekly ranking');
+  await expect(panel.locator('.ranking__title')).toHaveText('Your records'); // audit B4 (web-prod: my records)
   await expect(panel).toContainText('+3 fish');
   await expect(panel.locator('.ranking__tap')).toBeEnabled({ timeout: 3000 });
   await panel.locator('.ranking__tap').click();

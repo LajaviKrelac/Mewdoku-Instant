@@ -73,12 +73,15 @@ export function buyLabel(b: O2BuyView): string {
   return b.kind === 'no_ads' ? t('rewarded.buy.noAds.label', { price }) : t('rewarded.buy.label', { items: translate(productKey(b.productId, 'desc')), price });
 }
 
-/** A Buy row's accessible name: "Buy Bulb Bundle, 15 hints, $1.99"; "Getting the price…" while loading. */
+/**
+ * A Buy row's accessible name, starting with its visible label (audit B12, WCAG 2.5.3 label in name): "Buy 15
+ * hints · $1.99, Bulb Bundle"; "Buy No Ads · $3.99. Removes banners …" (the line under it); while the price
+ * loads, "Buy 15 hints · …, Getting the price…".
+ */
 export function buyA11y(b: O2BuyView): string {
-  if (b.price === null || b.state === 'loading') return t('rewarded.buy.loading');
-  return b.kind === 'no_ads'
-    ? t('rewarded.buy.noAds.a11y', { price: b.price })
-    : t('rewarded.buy.a11y', { name: translate(productKey(b.productId, 'name')), items: translate(productKey(b.productId, 'desc')), price: b.price });
+  const label = buyLabel(b);
+  if (b.price === null || b.state === 'loading') return `${label}, ${t('rewarded.buy.loading')}`;
+  return b.kind === 'no_ads' ? `${label}. ${t('rewarded.buy.noAds.note')}` : `${label}, ${translate(productKey(b.productId, 'name'))}`;
 }
 
 /** The pack's mini-art (the shop's: bulb for hints, paw for kitties); No Ads has none. */
@@ -242,6 +245,8 @@ export function createRewardedPrompt(): OverlayView<RewardedPromptProps> {
     // else the first Buy, else Not now / OK).
     // Phase 2e: the Buy rows; while a purchase is in flight every button is disabled (aria-disabled keeps focus).
     const wasBusy = shell.panel.hasAttribute('data-purchasing');
+    const doc = shell.el.ownerDocument;
+    const focusInside = shell.isOpen() && doc.activeElement !== null && shell.el.contains(doc.activeElement);
     const inFlight = renderBuys(p);
     const firstBuy = buys.hidden ? null : buys.querySelector<HTMLButtonElement>('button.rewarded__buy');
     const preferred = !countdown ? accept : (firstBuy ?? ok);
@@ -249,10 +254,16 @@ export function createRewardedPrompt(): OverlayView<RewardedPromptProps> {
     shell.panel.toggleAttribute('data-purchasing', inFlight);
     for (const b of [accept, notNow, ok]) setGated(b, inFlight);
     // After a cancel (busy → ready) focus returns to the Buy that was tapped.
+    const lost = (): boolean => doc.activeElement === null || doc.activeElement === doc.body || !shell.el.contains(doc.activeElement);
     if (wasBusy && !inFlight && lastTapped) {
       const r = buyRows.get(lastTapped);
-      const doc = shell.el.ownerDocument;
-      if (r && r.btn.isConnected && (doc.activeElement === null || doc.activeElement === doc.body || !shell.el.contains(doc.activeElement) || doc.activeElement.getAttribute('aria-disabled') === 'true')) r.btn.focus();
+      if (r && r.btn.isConnected && (lost() || doc.activeElement?.getAttribute('aria-disabled') === 'true')) r.btn.focus();
+    }
+    // Audit B5: the focused row went away (No Ads bought: its row leaves, the card stays) — focus the card's
+    // preferred control instead of dropping to <body>: Watch video, else the first Buy, else Not now / OK.
+    if (focusInside && lost()) {
+      const next = [accept, firstBuy, notNow, ok].find((b): b is HTMLButtonElement => b !== null && !b.hidden && b.isConnected);
+      next?.focus();
     }
     setButtonLabel(accept, p.variant === 'video' ? t('rewarded.watch') : t('rewarded.take'));
     if (p.variant === 'video') {

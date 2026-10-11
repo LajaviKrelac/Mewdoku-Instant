@@ -81,6 +81,18 @@ describe('config (§1.16)', () => {
     expect(loadConfig({ DEV_ROUTES: 'true', DEPLOY_ENV: 'staging' }).cfg.devRoutes).toBe(true);
   });
 
+  it('[audit A-S5] production runs records on the web unless WEB_MODE=anon itself says otherwise (D-2e-5)', () => {
+    expect(DEFAULT_CONFIG.web.mode).toBe('records');
+    expect(loadConfig({ DEPLOY_ENV: 'production' }).cfg.web.mode).toBe('records'); // WEB_MODE missing
+    const viaOverrides = loadConfig({ DEPLOY_ENV: 'production', CONFIG_OVERRIDES: '{"web":{"mode":"anon"}}' });
+    expect(viaOverrides.cfg.web.mode).toBe('records');
+    expect(viaOverrides.problems.join(' ')).toMatch(/anon ignored in production/);
+    expect(loadConfig({ DEPLOY_ENV: 'production', WEB_MODE: 'anon' }).cfg.web.mode).toBe('anon'); // the deliberate switch
+    expect(loadConfig({ DEPLOY_ENV: 'staging', CONFIG_OVERRIDES: '{"web":{"mode":"anon"}}' }).cfg.web.mode).toBe('anon');
+    expect(loadConfig({ DEPLOY_ENV: 'staging', WEB_MODE: 'anon' }).cfg.web.mode).toBe('anon');
+    expect(loadConfig({}).cfg.web.mode).toBe('records');
+  });
+
   it('CONFIG_OVERRIDES deep-merges typed values and reports the rest', () => {
     const problems: string[] = [];
     const c = mergeOverrides(DEFAULT_CONFIG, { rewards: { minMembers: 3, places: [{ place: 1, hints: 5, kitties: 5 }] }, hearts: { enabled: 'yes' }, nope: 1, antiCheat: { minSolveMs: { '13': [1, 2] } } }, problems);

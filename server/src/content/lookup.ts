@@ -48,16 +48,40 @@ export interface EventInfo {
 
 export interface ContentLookup {
   check(ref: PuzzleRef, cats: string): SolutionCheck;
+  /**
+   * Audit A-S2: the board sizes [smallest, largest] of the table's last TAIL_LEVELS levels or TAIL_DAILIES
+   * dailies. A win beyond the table must have a size from this range (the schedule past the table keeps it), so
+   * a 4-cell arrangement can no longer stand for a level of size 8–12.
+   */
+  tailSizes(mode: 'level' | 'daily'): readonly [number, number];
   event(id: string): EventInfo | null;
   knowsVersion(v: string): boolean;
   readonly contentVersions: readonly string[];
   readonly ranges: { readonly levelLast: number; readonly dailyLast: string };
 }
 
+/** How far back tailSizes looks: the last 200 levels, the last 8 weeks of dailies. */
+export const TAIL_LEVELS = 200;
+export const TAIL_DAILIES = 56;
+
 /** Splits the table lazily, once per isolate (≈ 1 ms for ≈ 60 KB). */
 export function createLookup(t: SolutionTableData): ContentLookup {
   let levels: string[] | null = null;
   let dailies: string[] | null = null;
+  const tails: Partial<Record<'level' | 'daily', readonly [number, number]>> = {};
+  const sizeRange = (entries: readonly string[]): readonly [number, number] => {
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (const e of entries) {
+      for (const b of e.split('|')) {
+        if (b.length === 0) continue;
+        lo = Math.min(lo, b.length);
+        hi = Math.max(hi, b.length);
+      }
+    }
+    // An empty table (never shipped) keeps the full king-permutation range.
+    return Number.isFinite(lo) ? [lo, hi] : [4, 12];
+  };
   const events = new Map<string, { info: EventInfo; boards: string; split: string[] | null }>();
   for (const e of t.events) {
     events.set(e.id, { info: { id: e.id, startMs: Date.parse(e.startUtc), endMs: Date.parse(e.endUtc), count: e.count, lives: e.lives }, boards: e.boards, split: null });
@@ -91,6 +115,20 @@ export function createLookup(t: SolutionTableData): ContentLookup {
       if (!e || ref.index >= e.info.count) return { kind: 'unknown' };
       e.split ??= e.boards.split(',');
       return inEntry(e.split[ref.index], cats);
+    },
+    tailSizes(mode: 'level' | 'daily'): readonly [number, number] {
+      const cached = tails[mode];
+      if (cached) return cached;
+      let range: readonly [number, number];
+      if (mode === 'level') {
+        levels ??= t.levels.boards.split(',');
+        range = sizeRange(levels.slice(-TAIL_LEVELS));
+      } else {
+        dailies ??= t.daily.boards.split(',');
+        range = sizeRange(dailies.slice(-TAIL_DAILIES));
+      }
+      tails[mode] = range;
+      return range;
     },
     event(id: string): EventInfo | null {
       return events.get(id)?.info ?? null;

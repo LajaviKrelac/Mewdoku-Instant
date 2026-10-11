@@ -158,7 +158,8 @@ export const DEFAULT_CONFIG: ServerConfig = {
   nonce: { ttlMs: 5 * MIN },
   signature: { maxAgeMs: 10 * MIN, maxFutureMs: 2 * MIN, requireIssuedAt: false },
   api: { maxWinsPerRequest: 10, maxBodyBytes: 16_384, queueMax: 20 },
-  web: { mode: 'anon', newDevicesPerIpPerDay: 5 },
+  // Audit A-S5: records unless a deploy asks for the anonymous pool (dev, e2e and staging set WEB_MODE=anon).
+  web: { mode: 'records', newDevicesPerIpPerDay: 5 },
   retention: {
     winsDays: 30,
     bracketsDays: 30,
@@ -292,8 +293,14 @@ export function loadConfig(vars: ConfigVars, base: ServerConfig = DEFAULT_CONFIG
   let webMode: WebMode = cfg.web.mode;
   if (vars.WEB_MODE === 'records' || vars.WEB_MODE === 'anon') webMode = vars.WEB_MODE;
   else if (vars.WEB_MODE !== undefined) problems.push('WEB_MODE: expected records | anon');
-  // A production deploy never runs the anonymous web pool or the dev routes, whatever the variables say.
+  // A production deploy never runs the dev routes, whatever the variables say, and runs the anonymous web pool
+  // only when WEB_MODE says "anon" itself (D-2e-5: a deliberate switch, never a default or a CONFIG_OVERRIDES
+  // value; audit A-S5).
   if (deployEnv === 'production' && vars.DEV_ROUTES === 'true') problems.push('DEV_ROUTES: ignored in production');
+  if (deployEnv === 'production' && webMode === 'anon' && vars.WEB_MODE !== 'anon') {
+    webMode = 'records';
+    problems.push('web.mode: anon ignored in production without WEB_MODE=anon');
+  }
   const min = vars.MIN_CLIENT_VERSION?.trim();
   return {
     cfg: {

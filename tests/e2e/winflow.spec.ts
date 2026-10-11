@@ -17,8 +17,8 @@
 // Level and Score columns".
 // Phase 2d.1 (G1, docs/phase2d/helpers-spec.md §2.5, §7.7): the last cat's star and the Score's
 // count-up end on the level's total with [data-final], and the period counter still appears at 1 000 ms.
-// Phase 2e (G1, docs/phase2e/spec.md §2.3, §2.11, §5.3): these checks pin the records path ("Weekly
-// ranking", this week's fish) and run with ?flags=-ladder (the e2e build as web-prod: no ranking origin);
+// Phase 2e (G1, docs/phase2e/spec.md §2.3, §2.11, §5.3): these checks pin the records path ("Your records"
+// since audit B4, this week's fish) and run with ?flags=-ladder (the e2e build as web-prod: no ranking origin);
 // the ranking's own win flow is tests/e2e/ladder.spec.ts. `.victory__streak` is now the daily streak row,
 // so "no Perfect ×N" is checked by its text.
 import { expect, test, type Page } from '@playwright/test';
@@ -161,7 +161,7 @@ test('win with 3 fish kept: rewards at once, the lives fly to "this week" (+3), 
   expect(dt).toBeLessThanOrEqual(4800);
 
   const panel = page.locator('[data-overlay="ranking"]');
-  await expect(panel).toContainText('Weekly ranking');
+  await expect(panel.locator('.ranking__title')).toHaveText('Your records'); // audit B4 (web-prod: my records)
   await expect(panel).toContainText('+3 fish');
   await tapPanel(page);
 

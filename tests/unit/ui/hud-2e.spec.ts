@@ -312,8 +312,10 @@ describe('O2 with Buy rows (spec §4.1, §4.6, §9.4)', () => {
     expect(rows.map((b) => b.dataset.state)).toEqual(['ready', 'ready']);
     expect(rows.map((b) => q(b, '.btn__label').textContent)).toEqual(['Buy 15 hints · $1.99', 'Buy No Ads · $3.99']);
     for (const b of rows) expect(q(b, '.btn__label').textContent).toMatch(/^Buy /);
-    expect(rows[0]?.getAttribute('aria-label')).toBe('Buy Bulb Bundle, 15 hints, $1.99');
-    expect(rows[1]?.getAttribute('aria-label')).toBe('Buy No Ads, $3.99. Removes banners and full-screen ads. Videos for helpers stay.');
+    // audit B12 (WCAG 2.5.3): each name starts with the visible label
+    expect(rows[0]?.getAttribute('aria-label')).toBe('Buy 15 hints · $1.99, Bulb Bundle');
+    expect(rows[1]?.getAttribute('aria-label')).toBe('Buy No Ads · $3.99. Removes banners and full-screen ads. Videos for helpers stay.');
+    for (const b of rows) expect(b.getAttribute('aria-label')?.startsWith(q(b, '.btn__label').textContent ?? '\u0000'), b.dataset.product).toBe(true);
     expect(href(rows[0])).toBe('#icon-bulb');
     expect(rows[1]?.nextElementSibling?.classList.contains('rewarded__buy-note')).toBe(true);
     expect(rows[1]?.nextElementSibling?.textContent).toBe('Removes banners and full-screen ads. Videos for helpers stay.');
@@ -332,11 +334,11 @@ describe('O2 with Buy rows (spec §4.1, §4.6, §9.4)', () => {
     expect(b.dataset.state).toBe('loading');
     expect(q(b, '.btn__label').textContent).toBe('Buy 15 hints · …');
     expect(b.getAttribute('aria-busy')).toBe('true');
-    expect(b.getAttribute('aria-label')).toBe('Getting the price…');
+    expect(b.getAttribute('aria-label')).toBe('Buy 15 hints · …, Getting the price…');
     b.click();
     expect(p.onBuy).not.toHaveBeenCalled();
     expect(buyLabel({ ...NOADS, price: null, state: 'loading' })).toBe('Buy No Ads · …');
-    expect(buyA11y({ ...NOADS, price: null, state: 'loading' })).toBe('Getting the price…');
+    expect(buyA11y({ ...NOADS, price: null, state: 'loading' })).toBe('Buy No Ads · …, Getting the price…');
   });
 
   it('busy: every button disabled, the tapped Buy aria-busy, Esc waits; back to ready → focus returns to it', () => {
@@ -366,6 +368,37 @@ describe('O2 with Buy rows (spec §4.1, §4.6, §9.4)', () => {
     card.update(p);
     expect(document.activeElement).toBe(first);
     expect(q(card.el, '.rewarded__accept').hasAttribute('aria-disabled')).toBe(false);
+  });
+
+  it('[audit B5] No Ads bought while its row has the focus: the row leaves, the focus goes to Watch video (never <body>)', () => {
+    const p = o2();
+    const card = createRewardedPrompt();
+    document.body.appendChild(card.el);
+    card.open(p);
+    const noAds = q<HTMLButtonElement>(card.el, 'button.rewarded__buy[data-product="remove_ads"]');
+    noAds.focus();
+    noAds.click();
+    expect(p.onBuy).toHaveBeenCalledWith('remove_ads');
+    card.update({ ...p, buy: [{ ...PACK, state: 'disabled' }, { ...NOADS, state: 'busy' }] });
+    expect(document.activeElement).toBe(noAds);
+    // Bought: the app leaves the row out; the card stays open for the helper.
+    card.update({ ...p, buy: [PACK] });
+    expect(noAds.isConnected).toBe(false);
+    expect(document.activeElement).toBe(q(card.el, '.rewarded__accept'));
+    // the countdown variant (no video): the first Buy takes it
+    const c2 = createRewardedPrompt();
+    document.body.appendChild(c2.el);
+    const p2 = o2({ variant: 'countdown', nextFreeAt: 90_000 });
+    c2.open(p2);
+    const na2 = q<HTMLButtonElement>(c2.el, 'button.rewarded__buy[data-product="remove_ads"]');
+    na2.focus();
+    c2.update({ ...p2, buy: [PACK] });
+    expect(document.activeElement).toBe(q(c2.el, 'button.rewarded__buy[data-product="hints_15"]'));
+    // and with no row left at all: OK
+    const na3 = q<HTMLButtonElement>(c2.el, 'button.rewarded__buy');
+    na3.focus();
+    c2.update({ ...p2, buy: [] });
+    expect(document.activeElement).toBe(q(c2.el, '.rewarded__ok'));
   });
 
   it('No Ads owned (the app leaves it out): one row; only No Ads offered: today\'s body (no "buy a Bulb Bundle")', () => {

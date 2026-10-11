@@ -989,6 +989,31 @@
   display: none;
 }
 
+/* Step 4 (audit B1: the daily victory with the streak row and its reward at 320 × 568): no hero art (it is
+   decorative), a tighter streak row; every line of text stays. */
+.victory[data-fit='4'] .victory__stage {
+  display: none;
+}
+
+.victory[data-fit='4'] .victory__praise {
+  margin-bottom: 6px;
+}
+
+.victory[data-fit='4'] .victory__streak .streak-steps {
+  margin-top: 3px;
+  padding: 2px 8px;
+}
+
+.victory[data-fit='4'] .victory__streak .streak-step {
+  width: 18px;
+  height: 18px;
+}
+
+.victory[data-fit='4'] .victory__daily-reward,
+.victory[data-fit='4'] .victory__streak-reward {
+  margin-top: 3px;
+}
+
 /* ── Shop sheet (§8.5; Phase 2c §5.2: the Buy section only, no balance and no swaps) ── */
 .shop {
   text-align: start;
@@ -1418,7 +1443,8 @@
 .streak-steps { display: inline-flex; align-items: center; }
 .streak-step { width: 18px; height: 18px; margin-inline-end: 2px; }
 .streak-step[data-kind='next'] { --step-line: var(--accent-deep); }
-.streak-strip[data-reward] .streak-step:last-child { --chest-open: 1; --chest-shut: 0; }
+.streak-strip[data-reward] .streak-step:last-child,
+.victory__streak[data-reward] .streak-step:last-child { --chest-open: 1; --chest-shut: 0; }
 .streak-strip__text { color: var(--ink-2); font-size: var(--fs-s); line-height: 1.25; }
 @media (max-width: 359px) {
   .ladder-chip { font-size: var(--fs-m); }

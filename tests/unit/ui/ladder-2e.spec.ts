@@ -452,7 +452,8 @@ describe('ranking panel: the bracket state (spec §2.4, §9.4)', () => {
     panel.open(panelProps({ list: { kind: 'records', records: RECORDS, reason: 'paused' } }));
     expect(q(panel.el, '.rank-list').dataset.kind).toBe('records');
     expect(q(panel.el, '.rank-list__note').textContent).toBe('Your ranking is paused. Here are your own records.');
-    expect(q(panel.el, '.ranking__title').textContent).toBe('Daily ranking');
+    // audit B4: the records state is titled as the sheet titles it
+    expect(q(panel.el, '.ranking__title').textContent).toBe('Your records');
     expect(q(panel.el, 'button.ranking__info').hidden).toBe(true);
   });
 });
@@ -600,7 +601,13 @@ describe('result card (overlay `ladder_result`, spec §2.6)', () => {
     const col = q<HTMLButtonElement>(card.el, 'button.ladder-result__collect');
     expect(dbl.hidden).toBe(false);
     expect(dbl.textContent).toBe('Collect ×2');
-    expect(dbl.getAttribute('aria-label')).toBe('Watch a video to collect twice the reward');
+    // audit B12, B13: the name is the visible label; the video is said in words under it (its description)
+    expect(dbl.hasAttribute('aria-label')).toBe(false);
+    const note = q(card.el, '.ladder-result__double-note');
+    expect(note.hidden).toBe(false);
+    expect(note.textContent).toBe('You can watch a video to double your reward.');
+    expect(dbl.getAttribute('aria-describedby')).toBe(note.id);
+    expect(dbl.nextElementSibling).toBe(note);
     expect(dbl.querySelector('use')?.getAttribute('href')).toBe('#icon-play-video');
     expect(dbl.hasAttribute('data-autofocus')).toBe(true);
     expect(col.classList.contains('btn--secondary')).toBe(true);
@@ -616,6 +623,7 @@ describe('result card (overlay `ladder_result`, spec §2.6)', () => {
     document.body.appendChild(card.el);
     card.open(resultProps({ canDouble: false, place: 1, reward: { hints: 2, kitties: 2 } }));
     expect(q(card.el, '.ladder-result__double').hidden).toBe(true);
+    expect(q(card.el, '.ladder-result__double-note').hidden).toBe(true); // no video, no video line
     const col = q(card.el, '.ladder-result__collect');
     expect(col.classList.contains('btn--primary')).toBe(true);
     expect(col.hasAttribute('data-autofocus')).toBe(true);

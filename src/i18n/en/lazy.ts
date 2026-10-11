@@ -271,7 +271,6 @@ export const enLazyUi2e = {
   'ladder.result.tooFew': 'Not enough players took part for rewards this time.',
   'ladder.collect': 'Collect',
   'ladder.collectDouble': 'Collect ×2',
-  'ladder.collectDouble.a11y': 'Watch a video to collect twice the reward',
   'ladder.claim.error': "Couldn't collect right now. We'll keep your reward for a few days.",
 
   // ── Ranking name and picture (§2.7) ────────────────────────────────────────
@@ -311,10 +310,8 @@ export const enLazyUi2e = {
   'rewarded.body.buy.kitty': 'Watch a short video for 1 kitty, or buy a Kitty Basket.',
   // {items} = shop.product.<id>.desc ("15 hints"); {price} = the store's price string, as given.
   'rewarded.buy.label': 'Buy {items} · {price}',
-  'rewarded.buy.a11y': 'Buy {name}, {items}, {price}',
   'rewarded.buy.noAds.label': 'Buy No Ads · {price}',
   'rewarded.buy.noAds.note': 'Removes banners and full-screen ads. Videos for helpers stay.',
-  'rewarded.buy.noAds.a11y': 'Buy No Ads, {price}. Removes banners and full-screen ads. Videos for helpers stay.',
   'rewarded.buy.loading': 'Getting the price…',
 
   // ── The daily streak (§5.3; our own design, no urgency) ─────────────────────

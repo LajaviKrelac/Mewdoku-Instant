@@ -638,11 +638,14 @@ test.describe('FBIG Phase 2e: buying helpers on the out-of-helpers card (spec §
     await outOfHints(page);
     const noAds = o2(page).locator('button.rewarded__buy[data-product="remove_ads"]');
     await expect(noAds).toHaveAttribute('data-state', 'ready', { timeout: 8_000 });
-    await noAds.click();
+    await noAds.focus();
+    await noAds.press('Enter'); // a keyboard user (audit B5)
     await expect.poll(async () => (await appState(page)).save.purchases.noAds, { timeout: 8_000 }).toBe(true);
     await expect(o2(page)).toBeVisible();
     await expect(o2(page).locator('button.rewarded__buy')).toHaveCount(1);
     await expect(o2(page).locator('button.rewarded__buy[data-product="hints_15"]')).toBeVisible();
+    // Audit B5: the focused row left; the focus is on Watch video, never dropped to <body>.
+    await expect(o2(page).locator('.rewarded__accept')).toBeFocused();
     expect((await appState(page)).save.stock.hints).toBe(0);
     await expect(stubBanner(page)).toHaveCount(0); // banners stop at once
     // The next level's interstitial is gated no_ads (logged with its gate, never shown).

@@ -1,9 +1,11 @@
 // Owner: G4 (Phase 2e). POST /v1/wins (spec §1.4, §1.5, §1.9): 1–10 wins (live or queued, oldest first),
 // one verdict each, then my bracket after them (the panel needs no second call).
-// Reads before the write: the player (auth), the stored wins of these ids (dedupe), the member's win count.
-// The write is ONE guarded batch (§1.9.6); a join that lost its race left no trace and is retried at
-// most 3 times, then a new bracket opens (§1.5 steps 3–4). The answer never reports points the database
-// did not add.
+// Reads before the write: the player (auth; its wins token, level baseline and budget), the stored wins of
+// these ids (dedupe), the member's win count. The write is ONE guarded batch (§1.9.6) carrying the token it read
+// (audit A-S3): a concurrent wins request of the same player that committed first moves the token, this batch
+// writes nothing and the wins are evaluated again, so the bracket cap and the budget hold under concurrency. A
+// join or create that lost its race left no trace and is tried again (≤ PLACE_TRIES; §1.5 steps 3–4). The answer
+// never reports a final verdict the database does not hold (audit A-S1): unplaced wins answer 503 and stay queued.
 import { MAX_WINS_PER_REQUEST, validateWinsRequest, type WinResult, type WinsResponse } from '../contract';
 import { bracketTimes } from '../core/brackets';
 import { newBracketId, newRowId } from '../core/ids';
@@ -16,11 +18,22 @@ import { readJson } from '../http/json';
 import type { BracketTarget, WinWrite } from '../store/sql-store';
 import { bracketView, finalizeIfDue } from './views';
 
-const JOIN_TRIES = 3;
+/** Places per evaluation: each a join, a create or a write into my bracket (spec §1.5; audit A-S1). */
+const PLACE_TRIES = 8;
+/** Evaluations per request: a concurrent wins request of the same player committed after our read (audit A-S3). */
+const EVAL_TRIES = 4;
+/** retryAfterMs when a request could not be counted now (the client keeps its queue and sends it again). */
+const BUSY_RETRY_MS = 2_000;
+
+type Attempt =
+  | { readonly kind: 'done'; readonly decisions: readonly WinDecision[]; readonly current: string | null; readonly flags: number }
+  | { readonly kind: 'conflict' }
+  | { readonly kind: 'unplaced' };
 
 export async function postWins(ctx: Ctx): Promise<Response> {
   const s = ctx.s;
-  const { player, now } = await authenticate(ctx, 'wins');
+  const authed = await authenticate(ctx, 'wins');
+  const now = authed.now;
   const raw = await readJson(ctx.req, s.cfg.api.maxBodyBytes);
   if (typeof raw === 'object' && raw !== null && Array.isArray((raw as { wins?: unknown }).wins)) {
     const n = (raw as { wins: unknown[] }).wins.length;
@@ -32,36 +45,48 @@ export async function postWins(ctx: Ctx): Promise<Response> {
   ctx.fields.n = wins.length;
   for (const w of wins) if (isBelowMin(w.clientVersion, s.cfg.minClientVersion)) fail('upgrade_required', `client ${w.clientVersion} below ${s.cfg.minClientVersion}`);
 
-  // My running bracket; an ended one is finalised on the way (the next win opens or joins a new one).
-  let current: string | null = player.cur_bracket !== null && (player.cur_ends_at ?? 0) > now ? player.cur_bracket : null;
-  if (player.cur_bracket !== null && current === null) await finalizeIfDue(s, player.cur_bracket, now);
-  const [stored, member] = await Promise.all([
-    s.store.storedWins(
-      player.key,
-      wins.map((w) => w.winId),
-      wins.map((w) => w.puzzleId),
-    ),
-    current === null ? Promise.resolve(null) : s.store.getMember(current, player.key),
-  ]);
-  if (current !== null && member === null) current = null; // (deleted meanwhile) — join anew
-  const ev = evaluateWins({
-    player: { listed: player.listed === 1, maxLevel: player.max_level, budgetMs: player.budget_ms, budgetAt: player.budget_at },
-    wins,
-    stored: stored.map((r) => ({ puzzleId: r.puzzle_id, winId: r.win_id, points: r.points })),
-    memberWins: member?.wins ?? 0,
-    now,
-    cfg: s.cfg,
-    content: s.content,
-  });
-  if (ev.unknownVersions.length > 0) {
-    s.metrics.count('content_version_unknown', ev.unknownVersions[0]);
-    ctx.fields.unknownVersions = ev.unknownVersions.join(',');
-  }
-  const decisions: WinDecision[] = [...ev.decisions];
-  const writeIdx = decisions.map((d, i) => (d.write ? i : -1)).filter((i) => i >= 0);
-  const writes: WinWrite[] = writeIdx.map((i) => {
-    const d = decisions[i] as WinDecision;
-    return {
+  // Wins this request placed (by winId), with the verdict they were placed with: an evaluation after a
+  // conflict reads them back as stored ('duplicate') and the answer keeps the original verdict.
+  const placedHere = new Map<string, WinDecision>();
+  let player = authed.player;
+  let unknownLogged = false;
+
+  /**
+   * One evaluation against one read of the player (its token, level baseline and budget), my running bracket's
+   * member row and the stored wins of these ids; then ONE applied batch at most (spec §1.9.6). Returns
+   * 'conflict' when a concurrent wins request of this player committed after the read (the token moved), and
+   * 'unplaced' when no bracket took the wins within PLACE_TRIES (a burst in the pool; never reported as counted).
+   */
+  const attempt = async (): Promise<Attempt> => {
+    // My running bracket; an ended one is finalised on the way (the next win opens or joins a new one).
+    let current: string | null = player.cur_bracket !== null && (player.cur_ends_at ?? 0) > now ? player.cur_bracket : null;
+    if (player.cur_bracket !== null && current === null) await finalizeIfDue(s, player.cur_bracket, now);
+    const [stored, member] = await Promise.all([
+      s.store.storedWins(
+        player.key,
+        wins.map((w) => w.winId),
+        wins.map((w) => w.puzzleId),
+      ),
+      current === null ? Promise.resolve(null) : s.store.getMember(current, player.key),
+    ]);
+    if (current !== null && member === null) current = null; // (deleted meanwhile) — join anew
+    const ev = evaluateWins({
+      player: { listed: player.listed === 1, maxLevel: player.max_level, budgetMs: player.budget_ms, budgetAt: player.budget_at },
+      wins,
+      stored: stored.map((r) => ({ puzzleId: r.puzzle_id, winId: r.win_id, points: r.points })),
+      memberWins: member?.wins ?? 0,
+      now,
+      cfg: s.cfg,
+      content: s.content,
+    });
+    if (ev.unknownVersions.length > 0 && !unknownLogged) {
+      unknownLogged = true;
+      s.metrics.count('content_version_unknown', ev.unknownVersions[0]);
+      ctx.fields.unknownVersions = ev.unknownVersions.join(',');
+    }
+    const decisions = ev.decisions.map((d) => (d.verdict === 'duplicate' && placedHere.has(d.win.winId) ? (placedHere.get(d.win.winId) as WinDecision) : d));
+    const toWrite = decisions.filter((d) => d.write);
+    const writes: WinWrite[] = toWrite.map((d) => ({
       puzzleId: d.win.puzzleId,
       winId: d.win.winId,
       points: d.points,
@@ -71,102 +96,84 @@ export async function postWins(ctx: Ctx): Promise<Response> {
       verdict: d.verdict === 'accepted_flagged' ? 'accepted_flagged' : 'accepted',
       playedAt: d.win.playedAt,
       clientVersion: d.win.clientVersion,
+    }));
+    const flags = decisions
+      .filter((d) => !placedHere.has(d.win.winId))
+      .flatMap((d) => d.flags)
+      .map((f) => ({ id: newRowId(now, s.rng), kind: f.kind, detail: f.detail }));
+    const base = {
+      playerKey: player.key,
+      nickname: player.nickname,
+      avatar: player.avatar,
+      now,
+      player: ev.player,
+      flags,
+      wins: writes,
+      cas: { expect: player.wtok, next: newRowId(now, s.rng) },
     };
-  });
-  const flags = decisions.flatMap((d) => d.flags).map((f) => ({ id: newRowId(now, s.rng), kind: f.kind, detail: f.detail }));
-  const extras = { playerKey: player.key, nickname: player.nickname, avatar: player.avatar, now, player: ev.player, flags };
-  const noExtras = { ...extras, player: { maxLevel: 0, budgetMs: ev.player.budgetMs, budgetAt: ev.player.budgetAt }, flags: [] };
-
-  /**
-   * One write: into my running bracket, or a join (≤ 3 tries into the pool's open bracket, then a new one;
-   * spec §1.5). A join that lost its race left no trace (every statement is guarded); when the reason is
-   * that another request of mine joined meanwhile, the wins go into that bracket instead.
-   */
-  let extrasDone = false;
-  const writeOnce = async (pending: readonly WinWrite[], cur: string | null): Promise<{ inserted: readonly boolean[]; bracket: string | null }> => {
-    const base = { ...(extrasDone ? noExtras : extras), wins: pending };
-    if (cur !== null) {
-      const r = await s.store.writeWins({ ...base, target: { kind: 'current', bracketId: cur } });
-      extrasDone = true;
-      return { inserted: r.inserted, bracket: cur };
+    const done = (cur: string | null): Attempt => ({ kind: 'done', decisions, current: cur, flags: flags.length });
+    if (writes.length === 0) {
+      // Nothing to count: the baseline, budget and flags alone (rejected wins, duplicates).
+      const r = await s.store.writeWins({ ...base, target: null });
+      return r.applied ? done(current) : { kind: 'conflict' };
     }
-    const mine = async (): Promise<string | null> => {
-      const p = await s.store.getPlayer(player.key);
-      return p !== null && p.cur_bracket !== null && (p.cur_ends_at ?? 0) > now ? p.cur_bracket : null;
-    };
-    for (let attempt = 0; attempt < JOIN_TRIES; attempt++) {
-      const open = await s.store.findOpenBracket(player.pool, now);
-      if (open === null) break;
-      const r = await s.store.writeWins({ ...base, target: { kind: 'join', bracketId: open } });
-      // Every statement after the member insert is guarded by "I am a member of this bracket", so when
-      // another request of mine joined it meanwhile, this batch still wrote my wins there: success either way.
-      if (r.joinedSlot !== null || r.inserted.some((x) => x) || (await s.store.getMember(open, player.key)) !== null) {
-        extrasDone = true;
-        s.metrics.count('join', r.joinedSlot !== null ? 'existing' : 'already_member');
-        return { inserted: r.inserted, bracket: open };
+    let cur = current;
+    for (let tries = 0; tries < PLACE_TRIES; tries++) {
+      let target: BracketTarget;
+      if (cur !== null) target = { kind: 'current', bracketId: cur };
+      else {
+        const open = await s.store.findOpenBracket(player.pool, now);
+        if (open !== null) target = { kind: 'join', bracketId: open };
+        else {
+          const t = bracketTimes(s.cfg.bracket.periodMode, now, s.cfg);
+          target = {
+            kind: 'create',
+            bracket: { id: newBracketId(now, s.rng), pool: player.pool, mode: s.cfg.bracket.periodMode, openedAt: t.openedAt, joinUntil: t.joinUntil, endsAt: t.endsAt, maxMembers: s.cfg.bracket.maxMembers },
+          };
+        }
       }
-      const now2 = await mine();
-      if (now2 !== null) return writeOnce(pending, now2);
+      const r = await s.store.writeWins({ ...base, target });
+      const into = target.kind === 'create' ? target.bracket.id : target.bracketId;
+      if (r.applied) {
+        if (target.kind !== 'current') s.metrics.count('join', target.kind === 'create' ? 'new_bracket' : 'existing');
+        // Under the token every win of an applied batch goes in; anything else is a race we did not foresee:
+        // evaluate again (the stored rows then answer for themselves).
+        toWrite.forEach((d, k) => {
+          if (r.inserted[k] === true) placedHere.set(d.win.winId, d);
+        });
+        if (r.inserted.some((x) => !x)) return { kind: 'conflict' };
+        return done(into);
+      }
+      // Nothing of the batch was written. A moved token: another wins request of mine committed first.
+      const p = await s.store.getPlayer(player.key);
+      if (p === null) return fail('token_invalid', 'no such player');
+      if (p.wtok !== player.wtok) return { kind: 'conflict' };
+      // Same token: the join lost its race (the bracket filled), the create lost the pool guard (another
+      // player's bracket opened: join it), or my bracket stopped taking wins. Look again.
+      cur = p.cur_bracket !== null && (p.cur_ends_at ?? 0) > now ? p.cur_bracket : null;
     }
-    const t = bracketTimes(s.cfg.bracket.periodMode, now, s.cfg);
-    const target: BracketTarget = {
-      kind: 'create',
-      bracket: { id: newBracketId(now, s.rng), pool: player.pool, mode: s.cfg.bracket.periodMode, openedAt: t.openedAt, joinUntil: t.joinUntil, endsAt: t.endsAt, maxMembers: s.cfg.bracket.maxMembers },
-    };
-    const r = await s.store.writeWins({ ...base, target });
-    if (r.joinedSlot !== null) {
-      extrasDone = true;
-      s.metrics.count('join', 'new_bracket');
-      return { inserted: r.inserted, bracket: target.bracket.id };
-    }
-    const now3 = await mine();
-    if (now3 !== null) return writeOnce(pending, now3);
-    // Nothing new to count (every win is stored already): no bracket to join.
-    return { inserted: pending.map(() => false), bracket: null };
+    return { kind: 'unplaced' };
   };
 
-  let pendingIdx = writeIdx;
-  for (let round = 0; round < 2 && pendingIdx.length > 0; round++) {
-    const cur = round === 0 ? current : await (async () => {
-      const p = await s.store.getPlayer(player.key);
-      return p !== null && p.cur_bracket !== null && (p.cur_ends_at ?? 0) > now ? p.cur_bracket : null;
-    })();
-    const r = await writeOnce(
-      pendingIdx.map((i) => writes[writeIdx.indexOf(i)] as WinWrite),
-      cur,
-    );
-    if (r.bracket !== null) current = r.bracket;
-    const lost = pendingIdx.filter((_, k) => r.inserted[k] !== true);
-    if (lost.length === 0) {
-      pendingIdx = [];
-      break;
-    }
-    // A win whose row did not go in: counted by a concurrent request (answer from the stored row), or its
-    // bracket ended between the read and the write (try once more: it joins the next bracket).
-    const again = await s.store.storedWins(
-      player.key,
-      lost.map((i) => (decisions[i] as WinDecision).win.winId),
-      lost.map((i) => (decisions[i] as WinDecision).win.puzzleId),
-    );
-    const retry: number[] = [];
-    for (const i of lost) {
-      const d = decisions[i] as WinDecision;
-      const same = again.find((x) => x.win_id === d.win.winId);
-      const other = again.find((x) => x.puzzle_id === d.win.puzzleId);
-      if (same) decisions[i] = { ...d, verdict: 'duplicate', points: same.points, write: false };
-      else if (other) decisions[i] = { ...d, verdict: 'already_counted', points: 0, write: false };
-      else retry.push(i);
-    }
-    pendingIdx = retry;
+  let out: Attempt = { kind: 'conflict' };
+  for (let i = 0; i < EVAL_TRIES; i++) {
+    out = await attempt();
+    if (out.kind !== 'conflict') break;
+    s.metrics.count('wins_conflict');
+    const fresh = await s.store.getPlayer(player.key);
+    if (fresh === null) return fail('token_invalid', 'no such player');
+    player = fresh;
   }
-  for (const i of pendingIdx) {
-    // Still not written after the retry (a pathological race): never report points the DB did not add.
-    const d = decisions[i] as WinDecision;
-    decisions[i] = { ...d, verdict: 'already_counted', points: 0, write: false };
+  // Never a final verdict for a win that was not stored (audit A-S1): the client keeps its queue and sends it
+  // again; the wins this request did store then answer 'duplicate' with their points.
+  if (out.kind === 'conflict') return fail('unavailable', 'other wins of this player are being counted; try again', BUSY_RETRY_MS);
+  if (out.kind === 'unplaced') {
+    s.metrics.count('wins_unplaced');
+    return fail('unavailable', 'no bracket could take the wins now; try again', BUSY_RETRY_MS);
   }
-  if (!extrasDone) await s.store.writeWins({ ...extras, wins: [], target: null });
-  if (s.cfg.antiCheat.autoSuspendFlags > 0 && flags.length > 0 && player.flag_count + flags.length >= s.cfg.antiCheat.autoSuspendFlags) {
-    await s.store.suspend(player.key, newRowId(now, s.rng), now, `auto: ${player.flag_count + flags.length} flags`);
+  const { decisions, current } = out;
+  if (s.cfg.antiCheat.autoSuspendFlags > 0 && out.flags > 0 && player.flag_count + out.flags >= s.cfg.antiCheat.autoSuspendFlags) {
+    await s.store.suspend(player.key, newRowId(now, s.rng), now, `auto: ${player.flag_count + out.flags} flags`);
   }
 
   const results: WinResult[] = decisions.map((d) => {

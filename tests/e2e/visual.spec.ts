@@ -252,7 +252,7 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
     await expect(counter).toHaveAttribute('aria-label', '42 fish this week', { timeout: 4000 });
     await expect(page.locator('.pill--lives .life[data-full]')).toHaveCount(0);
     await expect(page.locator('.overlay[data-overlay="ranking"]')).toBeVisible({ timeout: 8000 });
-    await expect(page.locator('.ranking__title')).toHaveText('Weekly ranking');
+    await expect(page.locator('.ranking__title')).toHaveText('Your records'); // audit B4: my records, titled as the sheet titles them
     await expect(page.locator('.ranking__sub')).toHaveText('+3 fish · This week: 42');
     await page.waitForTimeout(700);
     await shot(page, 'ranking');
@@ -1390,7 +1390,10 @@ test.describe('Phase 2e (G3): the ranking views in the real app (route fake; spe
         if (!v.lang) {
           await expect(card.locator('.ladder-result__place')).toHaveText('You finished #2 of 37.');
           await expect(card.locator('.ladder-result__line')).toHaveText('Your reward: +1 hint and +1 kitty');
-          await expect(card.locator('button.ladder-result__double')).toHaveAttribute('aria-label', 'Watch a video to collect twice the reward');
+          // audit B12, B13: named by its visible label, described by the visible video line under it
+          await expect(card.getByRole('button', { name: 'Collect ×2', exact: true })).toBeVisible();
+          await expect(card.locator('.ladder-result__double-note')).toHaveText('You can watch a video to double your reward.');
+          await expect(card.locator('button.ladder-result__double')).toHaveAccessibleDescription('You can watch a video to double your reward.');
         }
         await expectLang(p, v, (await card.locator('.ladder-result__place').textContent()) ?? '', /You finished/);
         await p.waitForTimeout(400);

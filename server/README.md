@@ -12,7 +12,7 @@ src/core/            PURE: fb-signature nonce token ids brackets wins anticheat 
 src/content/         the solution table (generated/solutions.ts, ≈ 59 KB) and its lookup rule
 src/store/           SqlStore (every SQL statement) · sql-db.ts (SqlDb) · drivers/d1.ts · drivers/node-sqlite.ts
 src/moderation/      our name blocklist
-migrations/          0001_init.sql (applied by wrangler and by the Node driver)
+migrations/          0001_init.sql, 0002_wins_token.sql (applied in order by wrangler and by the Node driver)
 dev/serve.ts         the Node dev server (what Playwright starts)
 scripts/             build-solutions.ts (offline table + drift check) · load.ts · smoke.ts · client.ts
 test/                unit/ http/ contract/ (golden fixtures shared with the client) workers/

@@ -546,7 +546,17 @@ export function createRankingPanel(): OverlayView<RankingPanelProps> {
     shell.panel.dataset.board = p.board;
     const ladder = p.list.kind === 'bracket' || p.result.kind === 'ladder';
     // Phase 2e: the worldwide ranking is the "Daily ranking" (rank.title.period.day), whatever period.kind is.
-    setText(title, ladder ? t('rank.title.period.day') : rankTitle(p.board, p.eventNameKey, p.periodKind ?? (p.result.kind === 'period' ? p.result.periodKind : cfg.period.kind)));
+    // Audit B4: my own records (web-prod, rankings off, the ranking unavailable) are titled as the sheet titles
+    // them, never "… ranking" above a note that says there is none.
+    const records = p.list.kind === 'records' && p.board === 'period';
+    setText(
+      title,
+      records
+        ? t('ladder.records.title')
+        : ladder
+          ? t('rank.title.period.day')
+          : rankTitle(p.board, p.eventNameKey, p.periodKind ?? (p.result.kind === 'period' ? p.result.periodKind : cfg.period.kind)),
+    );
     // Its glyph and the sheet it opens come with the lazy `ladder` chunk: no factory yet, no (i) (never a blank disc).
     info.hidden = !(p.list.kind === 'bracket' && p.bracketList);
     setText(sub, resultText(p.result));

@@ -112,6 +112,14 @@ export function evaluateWins(input: EvaluateInput): EvaluateResult {
       if (sol.kind === 'beyond') {
         if (!isKingPermutationString(win.cats)) return reject('bad_solution', [{ kind: 'bad_solution', detail: `${win.puzzleId} not a king permutation` }]);
         if (cfg.antiCheat.unknownPuzzle === 'reject') return reject('bad_puzzle_id');
+        // Audit A-S2: past the table a win must have a size the schedule shows there (the table's tail), and a
+        // level counts only for a player who climbed within maxLevelJump of it (a baseline, carried through this
+        // request), so a first win can never be a made-up id past the table.
+        const [lo, hi] = content.tailSizes(ref.mode === 'daily' ? 'daily' : 'level');
+        if (n < lo || n > hi) return reject('bad_solution', [{ kind: 'bad_solution', detail: `${win.puzzleId} size ${n} outside ${lo}–${hi} past the table` }]);
+        if (ref.mode === 'level' && (maxLevel <= 0 || ref.level > maxLevel + cfg.antiCheat.maxLevelJump)) {
+          return reject('bad_puzzle_id', [{ kind: 'unverified', detail: `${win.puzzleId} past the table without a baseline (L${maxLevel})` }]);
+        }
         soft.push('unverified');
         flags.push({ kind: 'unverified', detail: win.puzzleId });
       }
