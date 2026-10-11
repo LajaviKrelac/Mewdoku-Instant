@@ -1,6 +1,6 @@
 # Phase 2e provenance draft: workstream G2 (art, tokens)
 
-Status: draft for the lead to merge into [docs/provenance.md](../provenance.md) at I-5 ([spec](spec.md) Appendix B) · Date: 2026-10-11 · Author: Claude (Anthropic), workstream G2
+Status: **merged** into [docs/provenance.md](../provenance.md) §13 at I-5 (2026-10-11; this draft keeps the longer notes) · Date: 2026-10-11 · Author: Claude (Anthropic), workstream G2
 
 ## How this art was made
 

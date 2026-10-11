@@ -496,7 +496,7 @@ export const catalog: LocaleCatalog = {
   'nick.avatar.a11y': 'Bild {index} von {count}',
   'nick.edit.a11y': 'Ranglistenname und Bild ändern',
   'settings.ladder.title': 'Weltweite Rangliste',
-  'settings.ladder.name': 'Ranglistenname',
+  'settings.ladder.name': 'Ranglisten\u00ADname', // a soft hyphen: the Settings row may break it at 320 px (I-6)
   'settings.ladder.join': 'In Ranglisten zeigen',
   'settings.ladder.code': 'Spielercode {code}',
   'settings.ladder.offline': 'Verbinde dich mit dem Internet, um das zu ändern.',

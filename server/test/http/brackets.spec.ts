@@ -72,6 +72,17 @@ describe('assignment and capacity', () => {
     expect(t.count('SELECT COUNT(*) FROM members m WHERE m.points <> (SELECT COALESCE(SUM(points), 0) FROM wins w WHERE w.player_key = m.player_key AND w.bracket_id = m.bracket_id)')).toBe(0);
   });
 
+  it('10 concurrent first wins in an empty pool open ONE bracket (integration I-6: a pool guard on the create)', async () => {
+    const t = makeTestApp();
+    const racers = await signedIn(t, 10, 'first');
+    const results = await Promise.all(racers.map((p, i) => p.wins([makeWin(`L${100 + i}`)])));
+    expect(results.every((r) => r.results[0]?.verdict === 'accepted')).toBe(true);
+    const counts = t.rows<{ members: number; real: number }>('SELECT b.members, (SELECT COUNT(*) FROM members m WHERE m.bracket_id = b.id) AS real FROM brackets b');
+    expect(counts).toEqual([{ members: 10, real: 10 }]);
+    expect(new Set(results.map((r) => r.bracket?.bracketId)).size).toBe(1);
+    expect(t.count('SELECT COUNT(*) FROM wins')).toBe(10);
+  });
+
   it('the same player racing itself: one join, every win counted once', async () => {
     const t = makeTestApp();
     const [a] = await signedIn(t, 1, 'self');

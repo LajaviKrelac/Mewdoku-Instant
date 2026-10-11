@@ -2,7 +2,7 @@
 
 Spec: [spec.md](spec.md) §9 (this file repeats it, copy-paste ready). Date 2026-10-11. Built on top of the 2d.1 build ([CONTRACTS-2d1](../phase2d/CONTRACTS-2d1.md) and [CONTRACTS-2d](../phase2d/CONTRACTS.md) stay in force; this file only adds or changes).
 
-**Status: S0 contract, critic pass applied 2026-10-11** (§13 lists the critic's changes; to be marked final at I-5 with a §14 listing what changed at integration).
+**Status: FINAL (I-5, 2026-10-11).** The S0 contract with the critic pass (§13) and what changed at integration (§14). Where §1–§11 and §14 differ, §14 is right.
 Owners: **G1** logic, app, platform client · **G2** art, board, tokens · **G3** HUD, screens, overlays, fx, i18n, the nickname words · **G4** server and the wire contract · **lead** config, env, layering, Playwright, size-check, the probe, docs.
 
 Rules (as in 2b–2d.1): S0 lands every interface **additively**, in the order G4 → G2 → G3 → G1, each keeping `npx tsc --noEmit` and `npx vitest run` green; a member another workstream uses is never deleted before I-3; members marked *optional until I-3* become required there. `config.ts` is lead-only. `tsc` covers `dev/**`, so props the harnesses use only gain optional members until I-1 / I-3. Honesty (spec §0.4) is part of every contract: no interface below may carry an invented row, count or statistic. Clean room: no fixture, harness or capture uses the original's material.
@@ -850,3 +850,73 @@ Changes in another workstream's files go through `docs/phase2e/requests-<owner>.
 | — | The stub's signing secret lives only in e2e builds (§5) |
 
 No S0 order, owner or required-member schedule changed.
+
+## 14. Final (I-5): what changed at integration
+
+All additive unless marked; every row is in the code and covered by `npx tsc --noEmit` and `npx vitest run`.
+
+### 14.1 Wire and shared (G4; lead at I-2)
+
+| Change | Where | Why |
+|---|---|---|
+| The **response parsers** moved to `src/shared/rank-api-parse.ts` (`parseNonceResponse` … `parseApiError`, `parseBracketView`, `parseSessionResponse`, `parseConfigResponse` and their helpers); `rank-api.ts` keeps the types, constants, patterns, the request validators, `checkWin` / `isWinSubmission`, `formatPlayerCode` and exports the small checks (`isObj`, `isInt`, `isMs`, `isMsOrNull`, `isStr`, `matches`, `isBool`) the parse module imports. `server/src/contract/index.ts` re-exports both; the server's `tsconfig.json` / `tsconfig.node.json` include both. `tests/unit/layering.spec.ts` allows the one shared → shared edge (`rank-api-parse.ts` → `rank-api.ts`) | requests-G1 R9, G3 R18 | The first load validates the queued wins only; the parsers (≈ 6.8 KB) belong to the lazy `ladder-boot` chunk (spec §7.9) |
+| A re-created player gets a **new generated name**: `server/src/handlers/session.ts` seeds `generateNick` with `nick:<key>:<now>` | requests-G1 R3 | spec §1.11 "a new code and a new name" |
+| **One open bracket per pool** (I-6): the bracket create in `sql-store.ts` `writeWins` carries a pool guard ("no joinable bracket in this pool"); a create that loses inserts nothing and the handler's retry joins the winner | e2e `layout.spec.ts` (49 players split 48 + 1) | spec §1.5 "normally at most one"; no wire change |
+
+### 14.2 Game, app and platform (G1; as filed in requests-G1 R6, plus the lead's I-2 … I-4 changes)
+
+| Member | Note |
+|---|---|
+| `LadderRecord.noticeSeen: boolean` (save v4) | Merged by OR; a copy without it reads `false`, not corrupt (the `ladder.noticeFirst` dialog's OK) |
+| `LadderClient.onSignIn(fn)`; `LadderFailureCode` + `'no_api'` | |
+| `LadderFlow` as built | `active()`, `start()`, `onWin(LadderWinRef)`, `listState()`, `panelTotal()`, `panelExtras()` (`{ bracketList?, onHeart(slot), onInfo() }`), `counterBefore()`, `chip()`, `homeMounted()`, `openSheet(from, view?)`, `settingsRows()`, `streakClockOk()`, `prefetchChunk()`, `debug()`, `dispose()` |
+| `startLadder(deps: StartLadderDeps): Promise<LadderFlow>` (`src/app/ladder-boot.ts`, lead I-4) | Boot's ladder wiring (remote config, client, flow, the first sign-in) moved into the lazy `ladder-boot` chunk; boot passes `setRemote(r)` and `setFlow(f)` to receive the remote switches and the flow as soon as they exist |
+| `game/ladder-sync.ts` (new, lazy) | `applyVerdicts`, `pruneAged`, `sendable`, `currentFrom`, `isRunning`, `markDoubleWatched`, `markResultSeen`, `afterDelete`, `waitingFish`, `droppedBy`, `claimEntry`, `isClaimed`, `counterBefore`, `recordClaim`, `claimsToRepair`, `resultsToShow` (same signatures as §6); `game/ladder.ts` keeps `emptyLadder`, `toWinSubmission`, `encodeSolution`, `enqueueWin`, `wireWin`, `parseClaimEntry`, `readLadder`, `mergeLadder` |
+| `BannerFlow.modalClosed(closing?)`; `BannerHideReason` + `'helper'` | The banner's re-show after a modal over the board |
+| `WinScreen.showPeriodCounter(total, kind?)`; `WinFlowInput.periodKind: FishTotalKind` | The `'ladder'` counter (requests-G3 R4) |
+| `selectVictoryView(…, { praise, ladderTotal? })` | |
+| `PacingInput.retryIndex: number \| null`, `BannerGateInput.today: string \| null` | Required at I-3 as **nullable**: `null` = "no retry cadence" / "no date" (the 2d callers that have none pass `null`) |
+| `HomeView.ladder: LadderChipView \| null`, `HomeView.streak: StreakStripView \| null`, `HomeCallbacks.onLadder` | Required at I-3; `ladder: null` keeps the period pill (web-prod, ranking off), `streak: null` hides the strip |
+| `RankingPanelProps.onHeart`, `onInfo` | Required at I-3; the app's `RankingData` (session) omits them and the shell fills them from `panelExtras()` |
+| `createEventTopFlow({ store, router, rankings, viewCtx, config? }) → { open(def) }` (`src/app/event-top-flow.ts`, exported by `social-flows.ts`; lead I-3) | What the deleted rankings hub did for the event screen's Top list. The hub's group-challenge entry went with the hub (its flag is off) |
+| Rank hub **deleted** (I-3): `rank-hub.ts`, `rank-hub-flow.ts`, `'rank_hub'`, `HomeView.showTrophy`, `HomeCallbacks.onTrophy`, the Home trophy | As §11. **Kept**, not deleted: the period-board path of `session.ts` `winBoards`, behind `rank.fbPeriodBoard` (`false`): D-2e-4 / spec §2.10 keep the code until gate G1 decides, so the flag decides instead of a deletion |
+| The FB stub: `payments.purchaseDelayMs` / `consumeDelayMs` | e2e of the consume-first order and the paused timer |
+| `config.ts` L1 flips (lead I-2; spec §7.2.2) | `daily.unlockAfterLevel` 21, `ads.banner.fromCompletedLevels` 9, `ads.banner.minReloadSec` 46, `ads.interstitial.cooldownSec` `[{ fromDay: 0, sec: 30 }]`, `ads.reloadDelaysMs` `[30 000, 60 000, 120 000]`, `iap.grantBeforeConsume` `false` |
+| `fb-banner.ts` stuck-load window | `stuckLoadMs = min(window, max(45 500, window − ads.readyTimeoutMs))` (strictly inside the 46 s re-show window) |
+| `ladder-flow.ts` freshness (lead I-2, requests-G3 R16) | A bracket answered by the server in this page load is `stale: null` until a refresh or a submit fails or the `offline` event fires |
+
+### 14.3 UI (G3; as filed in requests-G3 R10, plus the lead's I-4 changes)
+
+| Member | Note |
+|---|---|
+| `BracketListFactory`, `BracketListCallbacks` (`onHeart`, optional `onEditName`), `BracketListHandle` (`View` + `centerMe()`), `RankingPanelProps.bracketList?` | The panel (overlay chunk) gets the list factory of the `ladder` chunk |
+| `RecordsReason` (`'local' \| 'unavailable' \| 'opted_out' \| 'paused'`), `LadderSheetProps.recordsReason?`, `streakBest?` | |
+| `LadderRulesView.durationMs?` | The info view's "lasts {hours} hours" from the server's rule (fallback 24) |
+| `O2BuyView` as specified; `FishTotalKind` (`PeriodPillProps.kind`, `VictoryProps.kept.kind`); `PillsView.showPeriodCounter(total, kind?)`; `HowToPlayProps.ladder?`, `streakDays?` | |
+| English keys beyond Appendix A | `common.cancel`, `nick.edit.a11y`, `ladder.chip.rank`, `ladder.total`, `ladder.pill.*`, `ladder.records.title`, `streak.best`, `streak.days.*`; `nick.cooldown` = "You can change your name again in {time}."; Appendix A's `victory.streak` ships as `victory.streakDay` |
+| `src/ui/screens/home-extras.ts` (lead I-4): `HomeExtras { createLadderChip, createStreakStrip }`, `homeExtras()`, `provideHomeExtras(x)`, `whenHomeExtras(fn)` | Home's chip and strip are created by factories the **overlay chunk** provides at load (`app/overlay-chunk.ts`); until then Home shows the period pill and an invisible reserved strip row (`.streak-strip--pending`) and re-renders when they land (spec §7.9's rule) |
+| `src/ui/art/streak-art.ts` (lead I-4; was G2's `art2e()` in `sprite.ts`): `streakArtSymbols`, `mountStreakArt(doc?)` | The flame and the four streak steps, mounted by the overlay chunk with the strip (requests-G2 R4); `sprite.ts` exports `icon24` |
+| The chip's and the strip's CSS moved from `screens.css` to `overlay-chunk.css` (lead I-4) | `screens.css` keeps `.home__lead`, the strip's margin and `.streak-strip--pending` |
+
+### 14.4 i18n (lead I-4): the English catalogue in two runtime tables
+
+| Member | Note |
+|---|---|
+| `src/i18n/en-first.ts`: `enFirst`, `FirstKey`, the key lists (`COLOR_KEYS`, `GLYPH_KEYS`, `PRAISE_KEYS`, `TUTORIAL_STEP_KEYS`, `WEEKDAY_KEYS`, `MONTH_KEYS`, now `satisfies readonly FirstKey[]`) | The first-load strings; `src/i18n/index.ts` bundles only this table and imports **types only** from `en.ts` |
+| `src/i18n/en/core.ts` (`enCore`, moved from `en.ts`); `src/i18n/en/lazy.ts` (`enLazyCore`, `enLazyUi2b`, `enLazyUi2c`, `enLazyUi2d`, `enLazyUi2d1`, `enLazyUi2e`, `enLazyEvents`, `enLazyPlatform`, `enLazyI18n`, `enLazyTable`) | The keys only lazy chunks show, moved verbatim (same keys, values, owners' comments); computed by `scripts/i18n-split.ts` |
+| `src/i18n/en-lazy.ts` (side effect: `registerEnglish(enLazyTable)`; exports `enLazy`) | Imported by every lazy entry that shows such a key (overlay, ladder, events and social chunks, `ladder-boot`, the fx chunk, `fb-social`) and by the dev harnesses; Rolldown names its chunk `assets/en-lazy-*.js` |
+| `registerEnglish(part)` (`src/i18n/index.ts`) | Adds English strings to the runtime table; a key in no loaded table shows as the key and logs `i18n: no English string for '<key>'` in dev and e2e builds |
+| `en.ts` | Still the whole catalogue (`en = { ...enFirst, ...enLazyTable }`) for types, tests, tools and translators; `EN_PARTS` lists both halves (every key in exactly one part) |
+| Guards | `tests/unit/i18n/first-load-strings.spec.ts` (no first-load file names a lazy-only key; every lazy entry that shows one imports `en-lazy.ts`); `tests/e2e/helpers/strings.ts` `watchStrings(test)` in six e2e specs (no missing-string log on any page); `tests/en-lazy-setup.ts` (vitest `setupFiles`) registers the lazy table for unit and dom tests |
+
+### 14.5 Tooling (lead)
+
+| Member | Note |
+|---|---|
+| `scripts/release-check.ts`: `TEST_DATA_MARKERS`, `fixtureNames()`, `testDataProblems(files)`, `releaseProblems(files)`, `forbiddenReleaseHost(host)`, `bundleFiles(dir)`, `isReleaseDir(dir)`, `checkBundle(dir, { release? })` | Spec §10.5 #1, §10.6 #3, #6: run by `size-check.ts` on every dist and by `zip-fbig.ts` before zipping |
+| `scripts/i18n-check.ts`: `PLAYER_COUNT_KEYS`, `honestyProblems(source?)` | Spec §10.6 #4, run by `npm run i18n:check` |
+| `scripts/i18n-split.ts`: `FIRST_LOAD_ROOTS`, `staticImports`, `dynamicImports`, `staticGraph`, `firstLoadFiles`, `keysNamedBy`, `lazyEntries`, `splitReport` | The first-load / lazy English split (§14.4) |
+| `scripts/size-check.ts` rows | New: `Lazy JS (ladder boot)`, `Lazy JS (overlay chunk)`, `Lazy JS (English)`, `Lazy CSS (overlay chunk)`; ceilings in 04 §9 and STATUS-2e §4 |
+| `scripts/rank-probe.ts` (`npm run probe -- --url <staging>`): `buildProbe`, `zipProbe`, `probeUrl`, `PROBE_VERSION`; `dev/rank-probe/` (`run-probe.ts`: `runProbe(deps)`, `reportText`, `signatureFacts`, `b64urlText`) | Gates G-SRV-1 / G-SRV-2 (spec §11.6) |
+| `playwright.config.ts`: `E2E_FB_APP_SECRET` (exported), the ranking dev server as a `webServer` on 8787, `E2E_LADDER_URL` | L0b |
+

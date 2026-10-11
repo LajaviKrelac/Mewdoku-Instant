@@ -1357,6 +1357,14 @@
   text-overflow: ellipsis;
 }
 
+/* I-6 (lead, FINAL screenshots): a one-word label longer than its share ("Ranglistenname" at 320 px) breaks inside the
+   word (hyphenated where the language allows) instead of running under the name. */
+.settings__ladder-name .btn__label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
+
 .settings__ladder .switch[aria-disabled='true'],
 .settings__ladder .settings-row--link[aria-disabled='true'] {
   cursor: default;

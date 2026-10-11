@@ -354,3 +354,68 @@ The fx pieces (points, shards, labels, tickers) are one lazy chunk (`src/ui/fx/c
 | The kitty's surprised mood on `CAT_PLACED`, the 2b kitty sparkle (`sparkle()`, `.cell__spark`, `@keyframes spark`) and the cat drop (`.fx-drop`, `cat-drop`) | Replaced by the cat sequence; deleted at I-3 (requests-G2 H6) |
 | The board's hint dim (`--hint-dim`), its focus ring and `ghost-pulse`; the 2b hint sheet placement (`sheetPlacement`, `fbTopInset`, `HintCardProps.avoidRect`, the top-placed card rule) | The hint overlay dims the screen and the ghosts are outlines; the card is anchored to the board (requests-G3 H2) |
 | The Score's "+N" chip and its gear clamp (`clampChip`, `.points-pill__chip`, the `.points-pill__label[data-reduced]` rule) | Replaced by the "+N" over the tile and the star (requests-G3 H3) |
+
+## 13. Phase 2e: the worldwide ranking, the daily streak, IAP in play, the banner and the daily unlock (workstreams G1–G4, integration, 2026-10-11)
+
+Merged at integration I-5 from [`docs/phase2e/provenance-G2.md`](phase2e/provenance-G2.md) (art, colours) and [`docs/phase2e/provenance-G3.md`](phase2e/provenance-G3.md) (screens, overlays, motions, copy, the name words), which keep the longer method notes, the layout decisions and the byte counts. Spec: [phase2e spec](phase2e/spec.md). File paths below are the ones after integration I-4 (the streak art and the chip's and the strip's rules moved into the lazy overlay chunk; nothing was redrawn).
+
+- **How it was made.** Every drawing was written by an AI coding agent (Claude, Anthropic) as hand-typed SVG in TypeScript from the words of spec Appendix C, §2.4, §2.8 and §5.3 and from our own earlier art (Tux, the 2b paw, the 2d `cat-head-flat`, the 2d fish, the icon set's line style); every screen, overlay and motion as hand-written TypeScript, CSS keyframes or WAAPI from spec §2.3–§2.9, §4.1, §4.6, §5.3, §6.1, §7.6–§7.7, §9.4; every string as our own words (Appendix A), then 16 AI-drafted locales.
+- **What was not used.** No image or recording of the original game, of another game or of any app was opened, traced or described for these features: the user has sent no recording of them (ask-user M1–M11 are open), so nothing was measured. No source of [06 §4](phase1/06-legal-and-originality.md) was opened (D-2e-0). No image, audio or text generator other than the coding agent.
+- **Honesty in the UI and the data (spec §0.4).** The ranking draws exactly the rows our server sends, in its order, with its ranks; counts come from the server's `members` and rules; no invented player, count or statistic exists anywhere (the e2e players are made through the public API of the local dev server in test pools; `scripts/release-check.ts` keeps test data out of every bundle). Fixture names in tests, harnesses and captures come from our own word lists (`src/shared/nick-words.ts`).
+- **How it was checked.** Only against our own renders: the workstreams' fixture harnesses and lab (`docs/phase2e/screenshots/G2-*.png`, `G3-*.png`), the real e2e app with the local ranking server, and the lead's `dev/ladder-harness.ts` (the bracket views drawn from G4's golden contract fixtures) for `docs/phase2e/screenshots/FINAL-*.png`.
+
+### 13.1 Art (SVG, hand-coded; G2)
+
+| Asset | File(s) | Method and words drawn from | Markup (B) |
+|---|---|---|---|
+| `icon-streak-flame` | `src/ui/art/streak-art.ts` (lazy since I-4; was `sprite.ts` `art2e`) | "A small warm flame with a paw-shaped base": an `--accent` outer flame with a side tongue, a round base ending in three soft lobes like a cat's main pad, a `--gold` inner flame and a `--fish-hi` core; 24 grid, no outline. | 456 |
+| `streak-step-empty`, `-done`, `-today`, `-chest` | `streak-art.ts` (lazy since I-4) | The 2b paw (`PAW`) outlined in `--step-line` around a white wash / filled `--accent` with an `--accent-deep` rim / filled with a soft gold halo and a white check / a small wooden chest with two gold straps and a gold fish-shaped lock that opens (`--chest-open`) behind a pale gold light for day 7. "Done" differs from "empty" by shape, not by colour alone. | 591 / 554 / 744 / 831 |
+| `medal-1` … `medal-3` | `src/ui/art/ladder-art.ts` (`medal`), `palette-2e.ts` (`MEDAL_COLORS`) | Round gold, silver and bronze medals with a short V ribbon and the 2b paw embossed in the face's own tone; no number in the art (the UI centres the rank at `MEDAL_FACE`). | 867 each |
+| `avatar-0` … `avatar-11` | `ladder-art.ts` (`avatar`, `markings`), `palette-2e.ts` (`AVATAR_COATS`) | One template: a tinted disc, our `cat-head-flat` silhouette, pink inner ears, the same big eyes (Tux's iris), Tux's nose and a small "w" mouth; twelve coats (ginger, grey tabby, black, white, calico, tuxedo with Tux's asymmetric blaze, cream, siamese points, brown tabby, blue-grey, tortoiseshell, white with grey patches) each on its own disc colour. | 1 416 – 1 843 |
+| `icon-heart-line`, `icon-heart-fill` | `ladder-art.ts` | A plump round-lobed heart of our own (not the pattern glyph 9): outline in `currentColor` with the `--icon-fill` wash / filled in `--cheer` with a soft highlight; the same outer size; `HEART_POP` (1 → 1.32 → 0.92 → 1, 320 ms) as the like motion, skipped with reduced motion. A heart is a cheer, never a life. | 345 / 437 |
+| `reward-chest`, `reward-chest-open` | `ladder-art.ts` (`chestArt`) | A plank chest with a rounded lid, grain, two gold straps and a gold fish-shaped lock whose eye is the keyhole; open: the lid tilted back, a radial gold glow, light rays and three small sparkles. | 1 178 / 2 021 |
+| `nick-tag` | `ladder-art.ts` | A Coral collar with stitching, a gold ring and a round gold tag with the 2b paw engraved, a small gold bell; no bone. | 1 466 |
+| `icon-pencil`, `icon-shuffle`, `icon-info` | `ladder-art.ts` | Edit, shuffle and info glyphs in the icon set's 2-unit round line with the wash. | 410 / 322 / 411 |
+
+The ranking art is mounted into the sprite by `mountLadderArt()` when the lazy `ladder` chunk's views are created; the streak art by `mountStreakArt()` when the overlay chunk loads (with Home's strip). The first screen draws neither.
+
+### 13.2 Colours (ours; checked or reported by `scripts/palette-check.ts`)
+
+| Colour | Where | Check |
+|---|---|---|
+| `--cheer` `#D9466A` | The given heart | 4.17 on `--card`, 3.54 on `--accent-soft` (≥ 3:1 rows) |
+| `--step-line` `#A6827C` | The empty paw step's outline | 3.10 on `--page` (≥ 3:1 row) |
+| `MEDAL_COLORS` (silver, bronze, two ribbon shades, the gold emboss) | Medals | The `--ink-deep` number ≥ 4.5:1 on every face (5.91–10.42) and emboss (4.91–8.99): `artContrast` rows, enforced by the CLI since I-2 (requests-G2 R5) |
+| `AVATAR_COATS` and the 12 disc tints (`mixHex(PALETTE[i], white, 0.58)`) | Avatars | Reported; `art-2e.spec` keeps every two avatars ≥ ΔE00 10 apart |
+| `CHEST_COLORS`, `TAG_COLORS` | Chests, the name tag | Informational / decorative |
+
+### 13.3 Screens, overlays and motions (G3; hand-written TypeScript and CSS)
+
+| Surface | File(s) | Notes |
+|---|---|---|
+| The post-win panel's bracket state, the bracket list (rows, my pinned copy, hearts, countdown) | `src/ui/overlays/ranking-panel.ts` (overlay chunk), `bracket-list.ts` (ladder chunk), `src/styles/ladder-chunk.css` | Two-line rows on a small grid (place and picture, the name, my tags and fish, the heart); the countdown is plain text, never a live region, never red |
+| The ranking sheet (list, info, records), the end-of-ranking card, the name sheet | `ladder-sheet.ts`, `ladder-result.ts`, `nickname-sheet.ts` (ladder chunk) | The rules lines from the server's rules (`paidPlaces`, `minMembers`, `durationMs`); Collect / ×2 by video; names picked from the word lists only |
+| Home's ranking chip and streak strip | `src/ui/hud/ladder-chip.ts`, `streak-strip.ts` (overlay chunk since I-4, through `ui/screens/home-extras.ts`); rules in `overlay-chunk.css` since I-4 | Until the chunk lands Home shows the period pill and an invisible reserved strip row (`.streak-strip--pending`, `screens.css`) |
+| The victory's streak row and daily reward line; the Buy rows of the out-of-helpers card; the Settings ranking rows; How to play notes | `victory-screen.ts`, `rewarded-prompt.ts`, `settings-modal.ts`, `how-to-play.ts`, `overlay-chunk.css` | Every purchase button starts with "Buy" and shows the store's price as given |
+| Motions | `bracket-list.ts` (the heart pop, `centerMe()`), `overlay-chunk.css` `@keyframes streak-fill` (520 ms) | Both off with reduced motion |
+
+### 13.4 Copy and words (G3)
+
+- `src/i18n/en/ui-2e.ts` (and, since I-4, the lazy-only part of it in `src/i18n/en/lazy.ts` `enLazyUi2e`, moved verbatim) is ours: Appendix A as written, with `victory.streak` shipped as `victory.streakDay`, plus `common.cancel`, `nick.edit.a11y`, `ladder.chip.rank`, `ladder.total`, `ladder.pill.*`, `ladder.records.title`, `streak.best`, `streak.days.*`. No invented statistic, no urgency, no promise that queued fish count (`scripts/i18n-check.ts` `honestyProblems`, spec §10.6 #4).
+- `src/shared/nick-words.ts` (`NICK_WORDS_V1`): 64 + 64 plain English words of our own after the CONTRACTS §2.3 starters; screened by `catalogs-2e.spec.ts` and by G4's server blocklist test over every pair (none blocked; `RETIRED_V1` empty).
+- The 16 locales' 2e keys are AI drafts by the same agent, unreviewed, logged in [review-log.md](i18n/review-log.md) and following [glossary.md](i18n/glossary.md) §6.
+
+### 13.5 Server and tooling (G4, lead; code only, no assets)
+
+| Item | File(s) | Method |
+|---|---|---|
+| The ranking server | `server/**` (Cloudflare Worker + D1, a Node dev driver over `node:sqlite`) | Written from spec §1 and CONTRACTS §2–§4; zero runtime dependencies; no third-party code copied |
+| The probe | `dev/rank-probe/` (`run-probe.ts`, `probe.ts`, `index.html`), `scripts/rank-probe.ts` | Ours; calls only our server and the FBInstant SDK; shows field names and statuses, never a player id, signature or token |
+| The release and honesty checks | `scripts/release-check.ts`, `scripts/i18n-check.ts` (`honestyProblems`), `scripts/i18n-split.ts` | Ours |
+
+### 13.6 Retired in 2e (no longer ship)
+
+| Asset | Why |
+|---|---|
+| The rankings hub (`src/ui/overlays/rank-hub.ts`, `src/app/rank-hub-flow.ts`, the overlay id `rank_hub`, its CSS) and Home's trophy button | Replaced by the chip and the ranking sheet (spec §2.10); deleted at I-3. The event Top list opens through `src/app/event-top-flow.ts` |
+| The FB weekly period board in the post-win panel | Retired (D-2e-4, `rank.fbPeriodBoard: false`); the code path stays behind the flag until gate G1 |

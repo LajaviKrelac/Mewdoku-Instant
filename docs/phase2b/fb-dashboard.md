@@ -196,3 +196,8 @@ Every FB ad load (all kinds) keeps a **30 s floor per placement ID** (`ads.minLo
 - [ ] The probe (spec §11.6) green on facebook.com, Android, iOS and Messenger.com (G-SRV-1, G-SRV-2) before an FB release with `VITE_LADDER_URL` set.
 - [ ] The purchase review (G5) with the in-play recording and the consume-first note; iOS purchases stay off until G10 (then `RC_SWITCHES = '{"iapIos": true}'`).
 - [ ] Interstitial frequency (G6) against "every level from level 10 with a 30 s floor, every 2nd Retry, the fail card's Home".
+
+### 9.6 Lead additions (I-4 / I-5, 2026-10-11)
+
+- **The probe build** (`npm run probe -- --url <staging>`, `dev/rank-probe/`, spec §11.6, STATUS-2e §7): a private test build only — upload `dist-zip/mewdoku-rank-probe-<sha>.zip` under Web Hosting, move it to **Testing**, never to Production. It has the same `fbapp-config.json` as the game.
+- **The release check** (`scripts/release-check.ts`, run by `npm run size` and `npm run zip:fbig`): a release zip is refused when `VITE_LADDER_URL` points at a staging, `workers.dev` or local host, when it carries an e2e placement or leaderboard id (`e2e-*`, `e2e_*`), the e2e hooks or a call to the dev server's routes, and any zip is refused with test data (the e2e FB secret, the dev admin key, the synthetic load-test pool, fixture names). So the production zip needs the production `VITE_LADDER_URL` (`https://rank.<domain>`, gate G-NAME) or an empty one (personal records).

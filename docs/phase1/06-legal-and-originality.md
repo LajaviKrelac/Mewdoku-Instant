@@ -141,13 +141,13 @@ Also avoid using others' marks in our name or listing: "Meowdoku", "LinkedIn Que
 
 | Item | Note |
 |---|---|
-| Privacy policy | Required for the listing (*inferred*). It should cover: the FB player ID; game progress in FB player data and local storage; Meta ads (Audience Network), including any personalisation; `logEvent` analytics; no other data collection; a contact address. |
+| Privacy policy | Required for the listing (*inferred*). It should cover: the FB player ID; game progress in FB player data and local storage; Meta ads (Audience Network), including any personalisation; `logEvent` analytics; no other data collection; a contact address. **Phase 2e (2026-10-11; gate G-LEGAL / G-SRV-3; [phase2e spec](../phase2e/spec.md) §1.11, §7.8):** with the worldwide ranking it must also say that our own server (Cloudflare, region per the D1 location) stores a key derived from the FB-signed player id (never the raw id), a generated ranking name and picture, the win records (puzzle, fish kept, times) and hearts given; that the name, picture and fish totals are shown to up to 49 other players; the retention (wins and brackets 30 days, flags 90 days, inactive players 180 days); and how to delete: Settings → Worldwide ranking → "Delete my ranking data", or an email with the player code (the Data Deletion Instructions URL in the App Dashboard). Never stored: FB names, photos, friends, emails, IP addresses (anon web mode only a salted daily hash), device or ad ids, purchase data. A notice before the first ranking submit is built and off (`ladder.noticeFirst`) until the user decides. Not legal advice. |
 | Terms of use | Optional, but recommended |
 | Age and audience | General audience, not aimed at children. Facebook accounts are 13+ (*inferred*). Avoid child-directed design or marketing. |
 | Ad content | Ads come from the platform's network. Configure Monetization Manager category blocks if they are available (the original drew complaints about scam ads, 01 §11.11). |
 | Claims | No unsupported cognitive or IQ claims in the listing or creatives |
 | Third-party licences | Font (OFL), shown in About. No other runtime dependencies. Dev tooling licences do not ship. |
-| Data portability | Not applicable in Phase 2 (no accounts beyond FB) |
+| Data portability | Not applicable in Phase 2 (no accounts beyond FB). Phase 2e: the ranking data can be deleted in the game (Settings) or by email request with the player code (`DELETE /admin/v1/players/{code}`); an export is not built |
 
 ## 9. Per-PR originality checklist (copy into the PR template in Phase 2)
 

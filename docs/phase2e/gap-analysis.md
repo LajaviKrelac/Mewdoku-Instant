@@ -1,6 +1,6 @@
 # Phase 2e gap analysis: leaderboards, ads, purchases, daily streak and daily challenge vs Meowdoku
 
-Status: **analysis only**, not a spec. No code, test, config or other doc was changed. Written 2026-10-10 on `claude/mewdoku-instant` @ `9b171ed` (Phases 2, 2b, 2c, 2c.1, 2d, 2d.1 done). Owner: lead. Next step: the user answers [§8](#8-decisions-for-the-user) and the material list (M1–M12, also sent as a short plain-words list). Then the lead writes `docs/phase2e/spec.md` and the parts marked "start now" in [§7](#7-proposed-build-plan) can begin.
+Status: **superseded by the [phase2e spec](spec.md)** (built and integrated 2026-10-11, [STATUS-2e](STATUS-2e.md)); kept as the analysis it was. Originally: **analysis only**, not a spec. No code, test, config or other doc was changed. Written 2026-10-10 on `claude/mewdoku-instant` @ `9b171ed` (Phases 2, 2b, 2c, 2c.1, 2d, 2d.1 done). Owner: lead. Next step: the user answers [§8](#8-decisions-for-the-user) and the material list (M1–M12, also sent as a short plain-words list). Then the lead writes `docs/phase2e/spec.md` and the parts marked "start now" in [§7](#7-proposed-build-plan) can begin.
 
 ---
 

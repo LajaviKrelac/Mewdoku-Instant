@@ -1118,8 +1118,10 @@ test.describe('FBIG banner during play (phase 2d §1.16, D-2d-15)', () => {
   test('persistence from the victory into the next board (the interstitial gated by its cooldown): no hide, no reload', async ({ page }) => {
     test.setTimeout(120_000);
     const t0 = Date.UTC(2026, 9, 7, 10, 0, 0);
-    // lastAdAt now: the 90 s cooldown gates the next_level interstitial during this test.
-    await openGame(page, { persist: false, data: { save: seededSave(12, 11, (s) => ({ ...s, ads: { ...s.ads, lastAdAt: t0 } })) } }, { clockAt: t0 });
+    // lastAdAt at the level's start (t0 + the 61 s jump below): the floor between full-screen ads
+    // (ads.interstitial.cooldownSec, 30 s since the 2e L1 flip; it was a 90 s tenure step when this test was written
+    // with lastAdAt = t0) still gates the next_level interstitial when Next is tapped a few seconds later.
+    await openGame(page, { persist: false, data: { save: seededSave(12, 11, (s) => ({ ...s, ads: { ...s.ads, lastAdAt: t0 + 61_000 } })) } }, { clockAt: t0 });
     await expect.poll(() => count(page, 'loadBannerAdAsync')).toBe(1);
     await startLevel(page);
     await page.clock.fastForward(61_000);

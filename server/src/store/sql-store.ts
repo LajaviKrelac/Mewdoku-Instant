@@ -262,7 +262,9 @@ export class SqlStore {
     // A join (or a new bracket) happens only while the player has no running bracket and at least one of
     // these wins is not stored yet: a request that lost a race to another request of the same player never
     // opens a second bracket or leaves a 0-point row (H-1: a row exists only with a counted win).
-    const freeGuard = 'NOT EXISTS (SELECT 1 FROM players WHERE key = ? AND cur_ends_at > ?)';
+    // Audit A: the player row must still exist (EXISTS, not NOT EXISTS), so a join or create racing "Delete my
+    // ranking data" never leaves a member row (with the nickname) or win rows of a deleted player behind.
+    const freeGuard = 'EXISTS (SELECT 1 FROM players WHERE key = ? AND (cur_ends_at IS NULL OR cur_ends_at <= ?))';
     const newGuard =
       input.wins.length === 0
         ? '1 = 0'
@@ -271,10 +273,15 @@ export class SqlStore {
     for (const w of input.wins) guardArgs.push(key, w.puzzleId, key, w.winId);
     if (target?.kind === 'create') {
       const b = target.bracket;
+      // Integration I-6 (lead): a new bracket opens only while the pool has no joinable one. Without this guard,
+      // concurrent first wins of DIFFERENT players in a pool with no open bracket each opened their own (seen in
+      // e2e: 49 players split 48 + 1). A create that loses this race inserts nothing, so its member insert finds
+      // no bracket and the handler's retry joins the bracket that won (spec §1.5 "normally at most one").
+      const poolGuard = 'NOT EXISTS (SELECT 1 FROM brackets o WHERE o.pool = ? AND o.join_until > ? AND o.finalized_at IS NULL AND o.members < o.max_members)';
       stmts.push(
         this.q(
           `INSERT INTO brackets (id, pool, mode, opened_at, join_until, ends_at, members, next_slot, max_members)
-           SELECT ?, ?, ?, ?, ?, ?, 0, 0, ? WHERE ${freeGuard} AND ${newGuard}`,
+           SELECT ?, ?, ?, ?, ?, ?, 0, 0, ? WHERE ${freeGuard} AND ${newGuard} AND ${poolGuard}`,
           b.id,
           b.pool,
           b.mode,
@@ -283,6 +290,8 @@ export class SqlStore {
           b.endsAt,
           b.maxMembers,
           ...guardArgs,
+          b.pool,
+          now,
         ),
       );
     }
