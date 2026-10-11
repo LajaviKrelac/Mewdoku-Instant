@@ -102,8 +102,9 @@ async function safeZoneClear(page: Page): Promise<void> {
     const out: string[] = [];
     for (const el of Array.from(document.querySelectorAll<HTMLElement>('button, a[href], [role="button"]'))) {
       if (el.closest('.screen--game')) continue;
-      // Phase 2e (spec §2.5): the ranking chip is the web bar's lead button (FBIG shifts it past the zone).
-      if (el.classList.contains('ladder-chip') && document.getElementById('app')?.dataset.platform !== 'fbig') continue;
+      // Phase 2e (spec §2.5): the ranking chip was the web bar's lead button; since the Home layout of 2026-10-11 the
+      // profile picture is (FBIG shifts the lead slot past the zone).
+      if ((el.classList.contains('ladder-chip') || el.classList.contains('home__profile')) && document.getElementById('app')?.dataset.platform !== 'fbig') continue;
       const r = el.getBoundingClientRect();
       if (r.width === 0 || r.height === 0 || el.closest('[hidden]')) continue;
       if (r.left < zone && r.top < zone) out.push(el.className || el.tagName);
