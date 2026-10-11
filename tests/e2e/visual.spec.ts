@@ -869,13 +869,16 @@ test.describe('Phase 2e (G3): the ranking chip, the streak pill and the victory 
     const chipBox = (await chip.boundingBox())!;
     const play = (await page.locator('.home__play').boundingBox())!;
     const daily = (await page.locator('.screen--home .daily-card').boundingBox())!;
+    // Relative to Home's column (a centred column on a desktop window).
+    const col = (await page.locator('.screen--home .top-bar').boundingBox())!;
+    const cw = col.width;
     // One top row: profile left, pill centred, gear right.
-    expect(profile.x).toBeLessThan(vw * 0.25);
+    expect(profile.x - col.x).toBeLessThan(cw * 0.25);
     expect(Math.abs(pillBox.x + pillBox.width / 2 - vw / 2)).toBeLessThan(2);
-    expect(gear.x).toBeGreaterThan(vw * 0.75);
+    expect(gear.x - col.x).toBeGreaterThan(cw * 0.75);
     expect(Math.abs(profile.y + profile.height / 2 - (pillBox.y + pillBox.height / 2))).toBeLessThan(2);
     // The ranking button at the left edge, between the top row and Play; Play above the daily pill, both centred.
-    expect(chipBox.x).toBeLessThan(vw * 0.1);
+    expect(chipBox.x - col.x).toBeLessThan(cw * 0.1);
     expect(chipBox.y).toBeGreaterThan(profile.y + profile.height);
     expect(chipBox.y + chipBox.height).toBeLessThan(play.y);
     expect(daily.y).toBeGreaterThan(play.y + play.height);
