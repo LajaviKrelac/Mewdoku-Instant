@@ -15,7 +15,7 @@ describe('the Home background tile', () => {
     expect(tokens).toContain(`width='${/--home-tile: (\d+)px;/.exec(tokens)?.[1]}'`);
   });
 
-  it('uses all eight colours and never puts one colour on both sides of a border', () => {
+  it('uses every board colour and never puts one colour on both sides of a border', () => {
     const cell = regions();
     const col = colours(cell);
     const at = (x: number, y: number): number => col[cell[((x + N) % N) + ((y + N) % N) * N] as number] as number;

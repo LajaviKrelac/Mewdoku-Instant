@@ -1,20 +1,25 @@
 // Home redesign (2026-10-11): generates the Home background tile (tokens.css --home-art).
 // A seamless N × N grid of CELL px cells cut into irregular regions (like a puzzle board), each region one colour
-// of the user's palette with no two touching regions alike (also across the tile's edges, so it repeats without a
+// of the in-game board palette with no two touching regions alike (also across the tile's edges, so it repeats without a
 // seam), thin white cell lines, bold white region borders and a few white sticker crosses. Deterministic (SEED).
 // Run: npx tsx scripts/home-art.ts  → prints the --home-art declaration to paste into src/styles/tokens.css.
 import { pathToFileURL } from 'node:url';
+import { PALETTE as BOARD, PALETTE_CORE } from '../src/ui/art/palette';
 
-export const PALETTE = ['#f5c12e', '#20c4c2', '#f05ba6', '#ff9147', '#f0444b', '#4d68d8', '#8fd66b', '#ff91be'];
+/** The in-game board colours (palette.ts), the 11 core ones: Cocoa only appears on 12 × 12 boards. */
+export const PALETTE = PALETTE_CORE.map((i) => (BOARD[i] as string).toLowerCase());
 export const N = 10;
 export const CELL = 72;
-const REGIONS = 13;
+const REGIONS = 16;
 const SEED = 7;
-/** Palette indexes that read as one colour side by side. */
-const SIMILAR: [number, number][] = [
-  [2, 7],
-  [3, 4],
-];
+/** Board colours (palette.ts indexes) that read as one colour side by side: Orchid / Pink, Sky / Slate, Coral / Pink. */
+const SIMILAR: [number, number][] = (
+  [
+    [8, 11],
+    [6, 10],
+    [0, 11],
+  ] as const
+).map(([a, b]) => [PALETTE_CORE.indexOf(a), PALETTE_CORE.indexOf(b)]);
 
 function rng(seed: number): () => number {
   let s = seed >>> 0;
@@ -52,7 +57,7 @@ export function regions(seed = SEED): number[] {
   }
 }
 
-/** A colour per region: touching regions differ; the least-used colour wins ties, so all eight show. */
+/** A colour per region: touching regions differ; the least-used colour wins ties, so every colour shows. */
 export function colours(cell: number[], seed = SEED): number[] {
   const r = rng(seed + 1);
   const adj = new Map<number, Set<number>>();
@@ -69,7 +74,7 @@ export function colours(cell: number[], seed = SEED): number[] {
   for (let g = 0; g < REGIONS; g++) {
     const banned = new Set([...(adj.get(g) ?? [])].map((h) => out[h]));
     const all = PALETTE.map((_, k) => k).filter((k) => !banned.has(k));
-    // Prefer no near twin next door (the two pinks, orange and red), when the neighbours leave a choice.
+    // Prefer no near twin next door (SIMILAR), when the neighbours leave a choice.
     const ok = all.filter((k) => !SIMILAR.some(([a, b]) => (k === a && banned.has(b)) || (k === b && banned.has(a))));
     if (ok.length === 0) ok.push(...all);
     ok.sort((p, q) => (used[p] as number) - (used[q] as number) || r() - 0.5);
