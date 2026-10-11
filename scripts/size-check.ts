@@ -126,7 +126,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { gzipSync } from 'node:zlib';
-import { checkBundle, isReleaseDir } from './release-check';
+import { checkBundle, isPreviewDir, isReleaseDir } from './release-check';
 
 export interface SizeBudget {
   readonly label: string;
@@ -356,11 +356,15 @@ export function main(argv: readonly string[]): void {
       ok &&= r.ok;
       if (!json) console.log(formatReport(relative(root, dir) || dir, r));
       // Phase 2e (spec §10.5 #1, §10.6 #3 and #6): no test data in any bundle; a release one carries no e2e hooks, dev
-      // routes, e2e ids or staging / workers.dev / local URLs (scripts/release-check.ts).
+      // routes, e2e ids or staging / workers.dev / local URLs (scripts/release-check.ts). Preview link (lead, 2026-10-11):
+      // and no dist but a preview one carries the preview build's code.
       const problems = checkBundle(dir);
       for (const p of problems) console.error(`size-check: ${relative(root, dir) || dir}: ${p}`);
       if (problems.length > 0) ok = false;
-      else if (!json) console.log(`  bundle check: ok${isReleaseDir(dir) ? ' (release rules: no test data, e2e hooks, dev routes or staging / local URLs)' : ' (no test data)'}`);
+      else if (!json) {
+        const rules = isReleaseDir(dir) ? 'release rules: no test data, e2e hooks, dev routes, staging / local URLs or preview code' : isPreviewDir(dir) ? 'no test data' : 'no test data or preview code';
+        console.log(`  bundle check: ok (${rules})`);
+      }
     } catch (err) {
       ok = false;
       console.error(`size-check: ${(err as Error).message}`);

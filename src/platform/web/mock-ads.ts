@@ -9,6 +9,10 @@
 // screen reserves: its bottom edge at var(--play-band-bottom), which the game screen publishes on
 // <html> while it is mounted (platform/ may not import ui/). Elsewhere the variables are absent and
 // the bar is the 2b full-width bar at the bottom.
+// Preview link (lead, 2026-10-11): two optional seams for the owner's preview build (preview/ads.ts): `present`
+// draws the full-screen ad itself (an interstitial the player closes, a rewarded video that grants after its
+// countdown) and answers 'ok' or 'skipped'; `label` names the banner bar. Absent, every behaviour is as before.
+// The modes, the one-at-a-time rule and the AdResult mapping stay here.
 import { cfg } from '../../app/config';
 import { t } from '../../i18n';
 import type { AdKind, AdResult, PlatformAds, PlatformTimers } from '../types';
@@ -72,9 +76,10 @@ export function mockBannerStyle(): string {
  * Mock PlatformAds.banner for dev/e2e (phase2b §3.3), or undefined in 'unsupported' mode. show() puts
  * the bar up (idempotent) and answers ok, or no_fill in 'nofill' mode; hide() takes it down. Never rejects.
  */
-export function createMockBanner(mode: MockAdMode, opts: { doc: Document }): PlatformAds['banner'] {
+export function createMockBanner(mode: MockAdMode, opts: { doc: Document; label?: () => string }): PlatformAds['banner'] {
   if (mode === 'unsupported') return undefined;
   const doc = opts.doc;
+  const label = opts.label ?? (() => t('ads.banner.placeholder'));
   let bar: HTMLElement | null = null;
   return {
     show() {
@@ -83,8 +88,8 @@ export function createMockBanner(mode: MockAdMode, opts: { doc: Document }): Pla
         bar = doc.createElement('div');
         bar.setAttribute('data-testid', MOCK_BANNER_TEST_ID);
         bar.setAttribute('role', 'region');
-        bar.setAttribute('aria-label', t('ads.banner.placeholder'));
-        bar.textContent = t('ads.banner.placeholder');
+        bar.setAttribute('aria-label', label());
+        bar.textContent = label();
         // Inline styles: platform/ may not use ui/ or styles/. Neutral grey, like an empty ad slot.
         bar.style.cssText = mockBannerStyle();
         (doc.body ?? doc.documentElement).appendChild(bar);
@@ -100,10 +105,20 @@ export function createMockBanner(mode: MockAdMode, opts: { doc: Document }): Pla
 }
 
 /**
+ * Draws one full-screen ad and settles when it is gone: 'ok' = watched / closed normally, 'skipped' = a rewarded
+ * video closed before its end (no reward). Never rejects.
+ */
+export type MockAdPresenter = (kind: AdKind, placement: string) => Promise<'ok' | 'skipped'>;
+
+/**
  * ok: shows the placeholder, resolves {ok:true}; nofill: {ok:false,'no_fill'}; unsupported:
  * {ok:false,'unsupported'}; close: rewarded resolves {ok:false,'skipped'} (closed early).
+ * `present` (the preview link) replaces the timed placeholder; a 'skipped' answer is {ok:false,'skipped'}.
  */
-export function createMockAds(mode: MockAdMode, opts: { doc: Document; timers: PlatformTimers; durationMs?: number }): PlatformAds {
+export function createMockAds(
+  mode: MockAdMode,
+  opts: { doc: Document; timers: PlatformTimers; durationMs?: number; present?: MockAdPresenter },
+): PlatformAds {
   const durationMs = opts.durationMs ?? cfg.ads.mock.durationMs;
   let showing = false;
 
@@ -112,12 +127,14 @@ export function createMockAds(mode: MockAdMode, opts: { doc: Document; timers: P
     if (mode === 'nofill') return { ok: false, reason: 'no_fill' };
     if (showing) return { ok: false, reason: 'not_ready' };
     showing = true;
+    let outcome: 'ok' | 'skipped' = 'ok';
     try {
-      await showPlaceholder(opts.doc, opts.timers, durationMs, kind, placement);
+      if (opts.present) outcome = await opts.present(kind, placement).catch((): 'skipped' => 'skipped');
+      else await showPlaceholder(opts.doc, opts.timers, durationMs, kind, placement);
     } finally {
       showing = false;
     }
-    if (mode === 'close' && kind === 'rewarded') return { ok: false, reason: 'skipped' };
+    if (outcome === 'skipped' || (mode === 'close' && kind === 'rewarded')) return { ok: false, reason: 'skipped' };
     return { ok: true };
   };
 

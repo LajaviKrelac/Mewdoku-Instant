@@ -15,6 +15,7 @@ import { describe, expect, it } from 'vitest';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const SRC = join(ROOT, 'src');
 const SCRIPTS = join(ROOT, 'scripts');
+const PREVIEW = join(ROOT, 'preview');
 
 type Layer = 'config' | 'i18n' | 'engine' | 'game' | 'platform' | 'ui' | 'audio' | 'workers' | 'app' | 'main' | 'data' | 'styles' | 'assets' | 'env' | 'shared';
 
@@ -216,13 +217,34 @@ function checkScriptEdge(e: Edge): string | null {
     e.target.startsWith('src/i18n/') ||
     e.target.startsWith('src/data/') ||
     // Phase 2e L0 (lead): the shared wire contract and words are pure leaves too.
-    e.target.startsWith('src/shared/');
+    e.target.startsWith('src/shared/') ||
+    // Preview link (lead, 2026-10-11): release-check.ts reads the preview's strings (pure data) to keep them out of builds.
+    e.target === 'preview/strings.ts';
   if (e.target === ORACLE) return null; // verify-levels may cross-check with the oracle
   return ok ? null : 'scripts import src/engine, src/game, src/i18n, src/data, src/shared, src/app/config.ts, src/ui/art/palette.ts, src/ui/art/palette-2e.ts';
 }
 
+/**
+ * Preview link (lead, 2026-10-11; scripts/preview-mode.ts): preview/ is the preview build's platform, reached only through
+ * the '@platform' alias of the preview-link mode. It may use the game (src/**) and G4's PURE server code — the core
+ * rules, the solution table and its lookup, the contract re-exports, the name blocklist and the views over the store
+ * (server/src/handlers/views.ts) — plus the row and store TYPES its in-memory store implements. Never the SQL store,
+ * the HTTP layer, the handlers that need HMAC keys, the Worker or Node; never a bare package at run time.
+ */
+function checkPreviewEdge(e: Edge): string | null {
+  if (e.target === null) return e.typeOnly ? null : 'no runtime dependencies in preview/ (bare or node: import)';
+  if (e.target === '@platform') return "preview/ is the platform: it never imports '@platform'";
+  if (e.target.startsWith('preview/') || e.target.startsWith('src/')) return null;
+  if (/^server\/src\/(core|content|contract|moderation)\//.test(e.target)) return null;
+  if (e.target === 'server/src/handlers/views.ts') return null;
+  const types = ['server/src/services.ts', 'server/src/store/rows.ts', 'server/src/store/sql-store.ts'];
+  if (types.includes(e.target)) return e.typeOnly ? null : `${e.target}: types only (the preview's store is in memory)`;
+  return 'preview/ imports src/**, preview/** and the pure server code only (server/src/{core,content,contract,moderation}, handlers/views.ts)';
+}
+
 const srcFiles = walk(SRC);
 const scriptFiles = walk(SCRIPTS);
+const previewFiles = walk(PREVIEW);
 
 describe('layering (04 §2)', () => {
   it('the scanner sees the expected edges', () => {
@@ -251,6 +273,30 @@ describe('layering (04 §2)', () => {
       .filter((v) => v.why !== null)
       .map(({ e, why }) => `${e.from} → ${e.spec}: ${why}`);
     expect(violations).toEqual([]);
+  });
+
+  it('preview/ (the preview link) imports the game and the pure server code only; nothing in src/ or scripts/ reaches it but its strings', () => {
+    expect(previewFiles.length).toBeGreaterThan(5);
+    const violations = previewFiles
+      .flatMap(scanImports)
+      .map((e) => ({ e, why: checkPreviewEdge(e) }))
+      .filter((v) => v.why !== null)
+      .map(({ e, why }) => `${e.from} → ${e.spec}${e.typeOnly ? ' (type)' : ''}: ${why}`);
+    expect(violations).toEqual([]);
+    // The game itself never imports the preview (only vite.config.ts's preview-link alias leads there).
+    const intoPreview = [...srcFiles, ...scriptFiles]
+      .flatMap(scanImports)
+      .filter((e) => e.target !== null && e.target.startsWith('preview/') && e.target !== 'preview/strings.ts')
+      .map((e) => `${e.from} → ${e.spec}`);
+    expect(intoPreview).toEqual([]);
+    expect(srcFiles.flatMap(scanImports).some((e) => e.target?.startsWith('preview/'))).toBe(false);
+    // The checker refuses the impure server code.
+    const edge = (target: string, typeOnly = false): Edge => ({ from: 'preview/x.ts', spec: target, target, typeOnly });
+    expect(checkPreviewEdge(edge('server/src/store/sql-store.ts'))).not.toBeNull();
+    expect(checkPreviewEdge(edge('server/src/store/sql-store.ts', true))).toBeNull();
+    expect(checkPreviewEdge(edge('server/src/handlers/session.ts'))).not.toBeNull();
+    expect(checkPreviewEdge(edge('server/src/store/drivers/node-sqlite.ts'))).not.toBeNull();
+    expect(checkPreviewEdge(edge('server/src/core/wins.ts'))).toBeNull();
   });
 
   it('engine/ and game/ stay pure: no DOM, timers, randomness or I/O globals', () => {

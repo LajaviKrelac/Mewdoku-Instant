@@ -19,6 +19,9 @@
 // server's address from E2E_LADDER_URL (set below; tests/e2e/helpers/rank-players.ts) and every ranking test uses
 // its own test pool (?ladderPool=<random> → devPool), so tests run in parallel without sharing brackets or clocks.
 // The server needs `npm --prefix server ci` once (npm run verify:server says so when it is missing).
+// Preview link (lead, 2026-10-11; scripts/preview-mode.ts): preview.spec.ts runs in its own project, preview-390, against
+// the e2e twin of the preview build (dist/preview-e2e: the preview-link mode with the usual __E2E__ hooks, served on
+// 4175). It needs no server: its ranking is the in-page sample server. The shipped link is dist/preview (no hooks).
 import { defineConfig } from '@playwright/test';
 
 process.env.PLAYWRIGHT_BROWSERS_PATH ??= '/opt/pw-browsers';
@@ -26,6 +29,7 @@ process.env.PLAYWRIGHT_BROWSERS_PATH ??= '/opt/pw-browsers';
 const WEB_PORT = 4173; // dist/e2e (web build with __E2E__ hooks)
 const FBIG_PORT = 4174; // dist/fbig-e2e (fbig build with hooks and test placement IDs)
 const LADDER_PORT = 8787; // G4's dev ranking server (server/dev/serve.ts)
+const PREVIEW_PORT = 4175; // dist/preview-e2e (the preview link's build with __E2E__ hooks)
 const LADDER_URL = `http://127.0.0.1:${LADDER_PORT}`;
 /**
  * The e2e FB test secret (CONTRACTS §5): the dev server's FB_APP_SECRET and the stub's default signing secret.
@@ -49,7 +53,7 @@ export default defineConfig({
   },
   projects: [
     // Main web suite (smoke, winflow, events, layout, visual, i18n …) on a 390×844 phone.
-    { name: 'web-390', testIgnore: /fbig\.spec\.ts/, use: { ...phone } },
+    { name: 'web-390', testIgnore: /(fbig|preview)\.spec\.ts/, use: { ...phone } },
     // Layout, visual and i18n checks also run at the small phone; layout and visual at desktop size.
     {
       name: 'web-320',
@@ -62,6 +66,12 @@ export default defineConfig({
       name: 'fbig-390',
       testMatch: /fbig\.spec\.ts/,
       use: { ...phone, baseURL: `http://127.0.0.1:${FBIG_PORT}` },
+    },
+    // The preview link's features (mock ads, mock store, the sample ranking, the preview menu).
+    {
+      name: 'preview-390',
+      testMatch: /preview\.spec\.ts/,
+      use: { ...phone, baseURL: `http://127.0.0.1:${PREVIEW_PORT}` },
     },
   ],
   webServer: [
@@ -110,6 +120,14 @@ export default defineConfig({
           event_yarn_hearts_2027: 'e2e_event_yarn_hearts_2027',
         }),
       },
+    },
+    // The preview link's e2e twin (hooks on; its ranking origin is the in-page sample server, whatever the env says).
+    {
+      command: 'npm run build:preview-e2e && npm run preview:preview-e2e',
+      url: `http://127.0.0.1:${PREVIEW_PORT}`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 180_000,
+      env: { MEWDOKU_E2E: '1' },
     },
   ],
 });

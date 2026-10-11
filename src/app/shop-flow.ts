@@ -24,6 +24,10 @@
 //   whole row set hidden off FB, without payments, with iap.inPlay or the remote iapInPlay off);
 //   prefetchCatalog() asks for the catalogue at boot step 8 after onReady (iap.prefetchCatalog).
 // - iap analytics carry `source` ('shop' | 'o2').
+// Preview link (lead, 2026-10-11): the shop and the O2 Buy rows exist where the platform SELLS — the FB adapter, or
+// a web adapter whose capabilities say payments (only the owner's preview build: preview/payments.ts, a mock store
+// that charges nothing). The web adapter never sells (caps.payments is a frozen false and it has no payments code),
+// so the web and web-prod builds keep no shop, exactly as before.
 import { addPending, applyPurchase, grantPending, isPending, isRecorded, pendingRecords, productDef, removePending } from '../game/purchases';
 import type { ProductId, SaveData } from '../game/types';
 import type { Capabilities, PaymentsProvider, PlatformId, Product, Purchase } from '../platform/types';
@@ -139,6 +143,16 @@ export function createShopFlow(deps: ShopFlowDeps): ShopFlow {
     }
   };
 
+  /** The platform sells at all: FB, or a web adapter with payments (the preview link's mock store); never web-prod. */
+  const sells = (): boolean => {
+    if (deps.platformId === 'fbig') return true;
+    try {
+      return deps.capabilities().payments;
+    } catch {
+      return false;
+    }
+  };
+
   /** What is on sale (phase2c §5.3): iap.catalog, in its order. */
   const onSale = (id: ProductId): boolean => c.iap.catalog.some((d) => d.id === id);
 
@@ -178,7 +192,7 @@ export function createShopFlow(deps: ShopFlowDeps): ShopFlow {
   }
 
   function computeBuy(): ShopBuyState {
-    if (deps.platformId !== 'fbig' || !isFlagOn('shop')) return { kind: 'hidden' };
+    if (!sells() || !isFlagOn('shop')) return { kind: 'hidden' };
     // capabilities() is final after init (FB iOS: no payments at all): no "Getting the shop ready…"
     // wait where payments can never come (review FB2B-5; §8.5 iOS and Messenger show shop.unavailable).
     if (!capsPayments()) return { kind: 'unavailable' };
@@ -355,7 +369,7 @@ export function createShopFlow(deps: ShopFlowDeps): ShopFlow {
     },
     buyInPlay: (id) => purchase(id, 'o2'),
     prefetchCatalog() {
-      if (!c.iap.prefetchCatalog || deps.platformId !== 'fbig' || !capsPayments()) return;
+      if (!c.iap.prefetchCatalog || !sells() || !capsPayments()) return;
       const p = provider();
       if (!p) return;
       hookReady();
@@ -373,7 +387,7 @@ export function createShopFlow(deps: ShopFlowDeps): ShopFlow {
     },
     paymentsAllowed: () => capsPayments(),
     o2Buy(placement) {
-      if (deps.platformId !== 'fbig' || !isFlagOn('shop') || !c.iap.inPlay || (deps.inPlayOn && !deps.inPlayOn())) return [];
+      if (!sells() || !isFlagOn('shop') || !c.iap.inPlay || (deps.inPlayOn && !deps.inPlayOn())) return [];
       const ids = c.iap.o2Products[placement] ?? [];
       if (ids.length === 0 || !capsPayments()) return [];
       const p = provider();

@@ -961,6 +961,8 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
     if (r.value.state === 'none') updateLadder((l) => ({ ...l, current: null }));
     deps.saves.touch();
     emit('bracket');
+    // A sheet opened while this request was in flight drew the cached view; show the answer now.
+    refreshOpenSheet();
   }
 
   function active(): boolean {

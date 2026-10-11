@@ -6,6 +6,7 @@ import { cfg, mergeConfig } from '../../src/app/config';
 import { buildLocales } from '../../src/i18n';
 import { ladderDefine, ladderEnv, ladderUrl } from '../../scripts/ladder-env';
 import { chunkFileName, isReleaseMode, localeChunkName, localeModuleSource, localesForMode } from '../../scripts/locale-loaders';
+import { isPreviewMode, PREVIEW_MODE, PREVIEW_OUT_DIR, PREVIEW_SAMPLE_ORIGIN, previewDefine, previewHtml } from '../../scripts/preview-mode';
 
 describe('locale loader map (phase2b §6.7)', () => {
   it('release modes bundle i18n.releaseLocales; every other mode i18n.locales', () => {
@@ -105,3 +106,52 @@ describe('VITE_LADDER_* passthrough (Phase 2e L0, spec §7.3, §2.11)', () => {
     });
   });
 });
+
+describe('the preview link build mode (lead, 2026-10-11; scripts/preview-mode.ts)', () => {
+  it('is its own mode, never a release mode; its ranking is the in-page sample origin (`.invalid` never resolves) in anon mode', () => {
+    expect(isPreviewMode(PREVIEW_MODE)).toBe(true);
+    for (const m of ['production', 'development', 'fbig', 'e2e', 'release', 'release-fbig', 'preview']) expect(isPreviewMode(m), m).toBe(false);
+    expect(isReleaseMode(PREVIEW_MODE)).toBe(false);
+    expect(new URL(PREVIEW_SAMPLE_ORIGIN).hostname.endsWith('.invalid')).toBe(true);
+    const d = previewDefine({ at: '2026-10-11T12:00:00.000Z', sha: 'abc1234', version: '0.1.0' });
+    expect(d['import.meta.env.VITE_LADDER_URL']).toBe(JSON.stringify(PREVIEW_SAMPLE_ORIGIN));
+    expect(d['import.meta.env.VITE_LADDER_WEB']).toBe('"anon"');
+    expect(JSON.parse(d.__PREVIEW_BUILD__ as string)).toEqual({ at: '2026-10-11T12:00:00.000Z', sha: 'abc1234', version: '0.1.0' });
+  });
+
+  it('its page says Preview and noindex; the platform head marker stays for the FB script slot', () => {
+    const html = previewHtml('<head><title>Mewdoku</title>\n    <!--PLATFORM_HEAD-->\n</head>');
+    expect(html).toContain('<title>Mewdoku · Preview</title>');
+    expect(html).toContain('<meta name="robots" content="noindex, nofollow" />');
+    expect(html).toContain('<!--PLATFORM_HEAD-->');
+  });
+
+  it("vite.config.ts: only the preview-link mode maps '@platform' to preview/ and writes dist/preview; every other mode keeps its own platform", async () => {
+    const { default: config } = await import('../../vite.config');
+    const resolveFor = async (mode: string) => {
+      const c = await (config as unknown as (env: { mode: string; command: 'serve' | 'build'; isPreview?: boolean }) => Promise<UserConfigLike> | UserConfigLike)({ mode, command: 'serve' });
+      return c;
+    };
+    const preview = await resolveFor(PREVIEW_MODE);
+    expect(String(preview.resolve?.alias?.['@platform'])).toMatch(/[\\/]preview[\\/]platform\.ts$/);
+    expect(preview.build?.outDir).toBe(PREVIEW_OUT_DIR);
+    expect(preview.define?.['import.meta.env.VITE_LADDER_URL']).toBe(JSON.stringify(PREVIEW_SAMPLE_ORIGIN));
+    for (const [mode, entry] of [
+      ['production', /[\\/]src[\\/]platform[\\/]web[\\/]index\.ts$/],
+      ['e2e', /[\\/]src[\\/]platform[\\/]web[\\/]index\.ts$/],
+      ['release', /[\\/]src[\\/]platform[\\/]web[\\/]index\.ts$/],
+      ['fbig', /[\\/]src[\\/]platform[\\/]fb[\\/]index\.ts$/],
+      ['release-fbig', /[\\/]src[\\/]platform[\\/]fb[\\/]index\.ts$/],
+    ] as const) {
+      const c = await resolveFor(mode);
+      expect(String(c.resolve?.alias?.['@platform']), mode).toMatch(entry);
+      expect(c.define?.__PREVIEW_BUILD__, mode).toBeUndefined();
+    }
+  });
+});
+
+interface UserConfigLike {
+  readonly resolve?: { readonly alias?: Record<string, string> };
+  readonly build?: { readonly outDir?: string };
+  readonly define?: Record<string, string>;
+}

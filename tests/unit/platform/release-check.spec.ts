@@ -9,7 +9,10 @@ import {
   checkBundle,
   fixtureNames,
   forbiddenReleaseHost,
+  isPreviewDir,
   isReleaseDir,
+  PREVIEW_MARKERS,
+  previewProblems,
   releaseProblems,
   testDataProblems,
   TEST_DATA_MARKERS,
@@ -83,3 +86,37 @@ describe('release-check (spec §10.5 #1, §10.6 #3, #6)', () => {
     expect(() => zipFbig({ release: false, distDir: secret, outDir: join(dirname(secret), 'zip'), sha: 'x', quiet: true })).toThrow(/test data/);
   });
 });
+
+describe('release-check: the preview link never reaches another build (lead, 2026-10-11; scripts/preview-mode.ts)', () => {
+  const previewJs = [
+    'const t="Preview ad · banner";',
+    'const s="Preview purchase — nothing is charged";',
+    'const n="Preview: sample players";',
+    'fetch("https://sample-ranking.preview.invalid/v1/config");',
+    'localStorage.getItem("mewdoku.preview.ui.v1");',
+    'import("./sample-server-abc.js");',
+    'el.className="mwp-ribbon";',
+  ];
+
+  it('every preview marker fails a web, FB, e2e or release dist', () => {
+    expect(PREVIEW_MARKERS).toEqual(expect.arrayContaining(['Preview ad', 'Preview purchase', 'Preview: sample', 'preview.invalid', 'mewdoku.preview.', 'sample-server']));
+    for (const name of ['web', 'fbig', 'e2e', 'fbig-e2e', 'release-web', 'release-fbig']) {
+      for (const bad of previewJs) {
+        const p = checkBundle(tree(name, base(CLEAN_JS + bad)));
+        expect(p.some((x) => x.includes("the preview link's code")), `${name}: ${bad}`).toBe(true);
+      }
+    }
+    expect(previewProblems([{ path: 'a.js', text: CLEAN_JS }])).toEqual([]);
+  });
+
+  it('a preview dist (dist/preview, dist/preview-e2e) may carry them; test data still fails there', () => {
+    expect(isPreviewDir('dist/preview')).toBe(true);
+    expect(isPreviewDir('dist/preview-e2e')).toBe(true);
+    expect(isPreviewDir('dist/web')).toBe(false);
+    expect(isReleaseDir('dist/preview')).toBe(false);
+    expect(checkBundle(tree('preview', base(CLEAN_JS + previewJs.join(''))))).toEqual([]);
+    expect(checkBundle(tree('preview-e2e', base(CLEAN_JS + previewJs.join('') + 'window.__mewdoku={};')))).toEqual([]);
+    expect(checkBundle(tree('preview', base(CLEAN_JS + '"e2e-fb-app-secret"'))).length).toBeGreaterThan(0);
+  });
+});
+

@@ -276,7 +276,8 @@ describe("O2's Buy rows (spec §4.1)", () => {
   });
 
   it('hidden: the web, no payments, iap.inPlay off, the remote iapInPlay off, a catalogue error (no Retry in play)', async () => {
-    expect(setup({ platformId: 'web' }).flow.o2Buy('hint')).toEqual([]);
+    // The web adapter never sells (caps.payments false, no payments code).
+    expect(setup({ platformId: 'web', payments: false }).flow.o2Buy('hint')).toEqual([]);
     expect(setup({ payments: false }).flow.o2Buy('hint')).toEqual([]);
     expect(setup({ config: mergeConfig({ iap: { grantBeforeConsume: false, inPlay: false } }) }).flow.o2Buy('hint')).toEqual([]);
     expect(setup({ inPlayOn: false }).flow.o2Buy('hint')).toEqual([]);
@@ -285,6 +286,16 @@ describe("O2's Buy rows (spec §4.1)", () => {
     err.flow.o2Buy('hint');
     await settle();
     expect(err.flow.o2Buy('hint')).toEqual([]);
+  });
+
+  it('preview link: a web adapter whose capabilities sell (mock payments) gets the same rows as FB', async () => {
+    const s = setup({ platformId: 'web' });
+    s.flow.o2Buy('hint');
+    await settle();
+    expect(s.flow.o2Buy('hint').map((r) => [r.productId, r.price])).toEqual([
+      ['hints_15', '$1.99'],
+      ['remove_ads', '$3.99'],
+    ]);
   });
 
   it('Messenger.com (onReady never fires): loading for iap.readyTimeoutMs from the start, then hidden', () => {
@@ -390,7 +401,7 @@ describe('prefetchCatalog (spec §4.1)', () => {
 
   it('never on the web, without payments, on iOS with the switch off, or with iap.prefetchCatalog false', async () => {
     for (const s of [
-      setup({ platformId: 'web' }),
+      setup({ platformId: 'web', payments: false }),
       setup({ payments: false }),
       setup({ ios: true }),
       setup({ config: mergeConfig({ iap: { grantBeforeConsume: false, prefetchCatalog: false } }) }),

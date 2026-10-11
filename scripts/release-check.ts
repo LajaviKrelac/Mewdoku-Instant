@@ -6,12 +6,17 @@
 //     (window.__mewdoku), no call to the dev-only server routes (/dev/clock, /dev/cron, /dev/config), no e2e placement
 //     or leaderboard ids (e2e-*, e2e_*), and no URL on a staging, workers.dev or local host — so a release build can
 //     never talk to the staging database (its fb:synthetic load-test players and private testers) or a dev server.
+//   Every dist but a preview one (lead, preview link 2026-10-11; scripts/preview-mode.ts): none of the preview build's
+//     own code — its strings (preview/strings.ts PREVIEW_MARKERS: "Preview ad", "Preview purchase", "Preview: sample",
+//     the sample server's reserved origin, its storage keys) and its module names (the sample server, the mock store) —
+//     so the mock ads, the mock store and the sample ranking can never reach the web, FB or release builds.
 // scripts/size-check.ts runs both checks on every dist it measures and zip-fbig.ts before it zips; a problem fails
 // either (exit 1). Text files only (.js, .css, .html, .json, .webmanifest, .txt); fonts and images are skipped.
 //   tsx scripts/release-check.ts [distDir …]      (default: every existing dist/*)
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { PREVIEW_MARKERS as PREVIEW_STRINGS } from '../preview/strings.ts';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const FIXTURES = join(ROOT, 'server/test/contract/fixtures');
@@ -49,6 +54,26 @@ const SECRET_SHAPES: readonly RegExp[] = [
 
 /** Release-only markers: the e2e hooks and the dev-only server routes. */
 export const RELEASE_MARKERS: readonly string[] = ['__mewdoku', '/dev/clock', '/dev/cron', '/dev/config'];
+
+/**
+ * The preview build's own code (preview/): its strings and storage keys (preview/strings.ts) and the names its lazy
+ * module and stylesheet classes carry. Only a preview dist (dist/preview, dist/preview-e2e) may contain them.
+ */
+export const PREVIEW_MARKERS: readonly string[] = [...PREVIEW_STRINGS, 'sample-server', 'mwp-ribbon', '__PREVIEW_BUILD__'];
+
+/** A preview dist: dist/preview, dist/preview-e2e (or any dir whose name starts with "preview"). */
+export function isPreviewDir(distDir: string): boolean {
+  return /^preview/.test(basename(resolve(distDir)));
+}
+
+/** Problems of every non-preview bundle: the preview build's code. */
+export function previewProblems(files: readonly BundleFile[]): string[] {
+  const out: string[] = [];
+  for (const f of files) {
+    for (const m of PREVIEW_MARKERS) if (f.text.includes(m)) out.push(`${f.path}: "${m}" (the preview link's code) outside a preview build`);
+  }
+  return out;
+}
 
 /** e2e placement / leaderboard ids (the fbig-e2e build's VITE_FB_* values): e2e-interstitial, e2e_event_… */
 const E2E_IDS = /["'`]e2e[-_][A-Za-z0-9_-]+["'`]/;
@@ -117,11 +142,15 @@ export function isReleaseDir(distDir: string): boolean {
   return /^release/.test(basename(resolve(distDir)));
 }
 
-/** Every problem of a dist dir: test data always, the release rules for a release dir (or `release: true`). */
-export function checkBundle(distDir: string, opts: { release?: boolean } = {}): string[] {
+/**
+ * Every problem of a dist dir: test data always, the release rules for a release dir (or `release: true`), and the
+ * preview build's code anywhere but a preview dir (or `preview: true`).
+ */
+export function checkBundle(distDir: string, opts: { release?: boolean; preview?: boolean } = {}): string[] {
   const files = bundleFiles(distDir);
   const release = opts.release ?? isReleaseDir(distDir);
-  return [...testDataProblems(files), ...(release ? releaseProblems(files) : [])];
+  const preview = opts.preview ?? isPreviewDir(distDir);
+  return [...testDataProblems(files), ...(release ? releaseProblems(files) : []), ...(preview ? [] : previewProblems(files))];
 }
 
 export function main(argv: readonly string[]): void {
@@ -136,7 +165,7 @@ export function main(argv: readonly string[]): void {
   for (const d of dirs) {
     const problems = checkBundle(d);
     const name = relative(ROOT, d) || d;
-    if (problems.length === 0) console.log(`release-check: ${name}: ok${isReleaseDir(d) ? ' (release rules)' : ''}`);
+    if (problems.length === 0) console.log(`release-check: ${name}: ok${isReleaseDir(d) ? ' (release rules)' : ''}${isPreviewDir(d) ? ' (preview build)' : ''}`);
     else {
       process.exitCode = 1;
       for (const p of problems) console.error(`release-check: ${name}: ${p}`);

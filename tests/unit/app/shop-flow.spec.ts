@@ -235,8 +235,15 @@ describe('purchase grant order (§8.4)', () => {
 
 describe('the Buy section (§8.5, §8.6)', () => {
   it('web: hidden (no payments code)', () => {
-    const s = setup({ platformId: 'web', provider: false });
+    const s = setup({ platformId: 'web', caps: false, provider: false });
     expect(s.flow.buyState()).toEqual({ kind: 'hidden' });
+  });
+
+  it('preview link: a web adapter that sells (mock payments in its capabilities) shows the Buy section', async () => {
+    const s = setup({ platformId: 'web' });
+    expect(s.flow.buyState()).toEqual({ kind: 'loading' });
+    await settle();
+    expect(s.flow.buyState().kind).toBe('ready');
   });
 
   it('FB before onReady: "Getting the shop ready…" up to 5 s, then unavailable; a late onReady shows Buy', async () => {
@@ -335,7 +342,7 @@ describe('no fish swaps (phase2c §5.2)', () => {
   });
 
   it('on the web the Buy section is hidden: there is nothing to sell, so there is no shop (§5.2)', () => {
-    const s = setup({ platformId: 'web', provider: false });
+    const s = setup({ platformId: 'web', caps: false, provider: false });
     s.flow.open();
     expect(s.props()?.buy).toEqual({ kind: 'hidden' });
   });

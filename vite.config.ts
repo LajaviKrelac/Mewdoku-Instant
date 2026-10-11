@@ -6,6 +6,9 @@
 //   e2e                                   → web build with test hooks (__E2E__), dist/e2e
 //   release                               → web RELEASE build, dist/release-web (public web deploy)
 //   release-fbig                          → FBIG RELEASE build, dist/release-fbig (the FB production zip)
+//   preview-link                          → the owner's PREVIEW link, dist/preview (lead, 2026-10-11; scripts/preview-mode.ts):
+//                                           the web build with '@platform' → preview/platform.ts (mock ads, a mock
+//                                           store, the in-page sample ranking server, the preview menu); never a release
 // MEWDOKU_E2E=1 also turns the test hooks on in any mode (used by the fbig e2e build).
 // Release builds bundle only cfg.i18n.releaseLocales; every other mode bundles all of cfg.i18n.locales
 // that have a catalogue (scripts/locale-loaders.ts, the `virtual:mewdoku-locales` module).
@@ -34,6 +37,7 @@
 // Phase 2e L0 (spec §7.3): VITE_LADDER_URL and VITE_LADDER_WEB reach the bundle through scripts/ladder-env.ts
 // (trimmed and checked; VITE_LADDER_WEB never in a release build); every other VITE_* key (the FB placement
 // IDs, VITE_FB_LEADERBOARDS) as Vite loads it.
+import { execSync } from 'node:child_process';
 import { copyFileSync, existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -41,6 +45,7 @@ import { defineConfig, loadEnv, type Plugin, type Rolldown } from 'vite';
 import basicSsl from '@vitejs/plugin-basic-ssl';
 import { ladderDefine, ladderEnv } from './scripts/ladder-env.ts';
 import { chunkFileName, isReleaseMode, localeLoaderPlugin } from './scripts/locale-loaders.ts';
+import { isPreviewMode, PREVIEW_OUT_DIR, PREVIEW_PLATFORM_ENTRY, previewDefine, previewHtml } from './scripts/preview-mode.ts';
 
 /** Pinned FB SDK (05 §2). */
 export const FB_SDK_URL = 'https://connect.facebook.net/en_US/fbinstant.8.0.js';
@@ -48,8 +53,17 @@ export const FB_SDK_URL = 'https://connect.facebook.net/en_US/fbinstant.8.0.js';
 const rootDir = fileURLToPath(new URL('.', import.meta.url));
 const pkg = JSON.parse(readFileSync(resolve(rootDir, 'package.json'), 'utf8')) as { version: string };
 
+/** The preview link's commit (short sha), or null outside a git checkout. */
+function gitSha(): string | null {
+  try {
+    return execSync('git rev-parse --short HEAD', { cwd: rootDir, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 /** Injects the platform head (FB SDK tag in fbig mode) and copies fbapp-config.json after an fbig build. */
-function platformHtml(fb: boolean): Plugin {
+function platformHtml(fb: boolean, preview = false): Plugin {
   let outDir = '';
   return {
     name: 'platform-html',
@@ -58,7 +72,7 @@ function platformHtml(fb: boolean): Plugin {
     },
     transformIndexHtml(html) {
       const head = fb ? `<script src="${FB_SDK_URL}"></script>` : '';
-      return html.replace('<!--PLATFORM_HEAD-->', head);
+      return (preview ? previewHtml(html) : html).replace('<!--PLATFORM_HEAD-->', head);
     },
     closeBundle() {
       if (!fb) return;
@@ -110,9 +124,21 @@ export default defineConfig(({ mode, command, isPreview }) => {
   const release = isReleaseMode(mode);
   const fb = mode === 'fbig' || mode === 'release-fbig';
   const e2e = mode === 'e2e' || process.env.MEWDOKU_E2E === '1';
-  const platformEntry = fb ? './src/platform/fb/index.ts' : './src/platform/web/index.ts';
-  const outDir = release ? (fb ? 'dist/release-fbig' : 'dist/release-web') : fb ? 'dist/fbig' : mode === 'e2e' ? 'dist/e2e' : 'dist/web';
-  const plugins: Plugin[] = [platformHtml(fb), localeLoaderPlugin(mode, rootDir), preloadFirstRun()];
+  // The preview link (scripts/preview-mode.ts): its own platform entry, the only way into preview/.
+  const preview = isPreviewMode(mode);
+  const platformEntry = fb ? './src/platform/fb/index.ts' : preview ? PREVIEW_PLATFORM_ENTRY : './src/platform/web/index.ts';
+  const outDir = release
+    ? fb
+      ? 'dist/release-fbig'
+      : 'dist/release-web'
+    : fb
+      ? 'dist/fbig'
+      : mode === 'e2e'
+        ? 'dist/e2e'
+        : preview
+          ? PREVIEW_OUT_DIR
+          : 'dist/web';
+  const plugins: Plugin[] = [platformHtml(fb, preview), localeLoaderPlugin(mode, rootDir), preloadFirstRun()];
   // HTTPS for the FB embed player (05 §11), dev server only (preview stays HTTP for Playwright).
   if (fb && command === 'serve' && !isPreview) plugins.push(basicSsl());
   // Phase 2e L0: the ranking server's build values (empty = off, never a broken build; spec §7.3, §2.11).
@@ -125,7 +151,8 @@ export default defineConfig(({ mode, command, isPreview }) => {
       __PLATFORM__: JSON.stringify(fb ? 'fbig' : 'web'),
       __E2E__: JSON.stringify(e2e),
       __APP_VERSION__: JSON.stringify(pkg.version),
-      ...ladderDefine(ladder),
+      // The preview link answers its ranking in the page (whatever VITE_LADDER_* say) and stamps its build time.
+      ...(preview ? previewDefine({ at: new Date().toISOString(), sha: command === 'build' ? gitSha() : null, version: pkg.version }) : ladderDefine(ladder)),
     },
     resolve: {
       alias: { '@platform': fileURLToPath(new URL(platformEntry, import.meta.url)) },

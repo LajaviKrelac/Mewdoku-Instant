@@ -1,0 +1,328 @@
+/* Owner: lead (preview link, 2026-10-11). The preview build's own UI: the menu (tab + card), the mock ad screens,
+   the mock purchase sheet and the "sample players" line. Class prefix mwp- (never a game class); system fonts, a
+   plum accent that is not in the game's palette, so nothing here can be mistaken for the game. Bundled only by the
+   preview build (preview/platform.ts imports it). */
+.mwp-ribbon,
+.mwp-ad,
+.mwp-sheet,
+.mwp-note {
+  --mwp-plum: #4a2f6e;
+  --mwp-plum-soft: #efe8f8;
+  --mwp-ink: #241b2f;
+  --mwp-muted: #6b5f78;
+  --mwp-amber: #f5c04a;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* The game styles headings with its display font; the preview's own UI keeps its own. */
+.mwp-menu__title,
+.mwp-ad__title,
+.mwp-sheet__title {
+  font-family: inherit;
+  letter-spacing: normal;
+}
+
+/* ── the menu ── */
+.mwp-ribbon__tab {
+  position: fixed;
+  top: env(safe-area-inset-top, 0px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1001;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  margin: 0;
+  padding: 0 10px 1px 12px;
+  border: 0;
+  border-radius: 0 0 10px 10px;
+  background: var(--mwp-plum);
+  color: #fff;
+  font: 600 11px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.9;
+  box-shadow: 0 1px 4px rgba(36, 27, 47, 0.25);
+  cursor: pointer;
+}
+.mwp-ribbon__tab:focus-visible,
+.mwp-menu__op:focus-visible,
+.mwp-btn:focus-visible {
+  outline: 3px solid var(--mwp-amber);
+  outline-offset: 2px;
+}
+.mwp-ribbon__chev {
+  font-size: 9px;
+}
+.mwp-ribbon__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: rgba(36, 27, 47, 0.18);
+}
+.mwp-ribbon__scrim[hidden],
+.mwp-menu[hidden] {
+  display: none;
+}
+.mwp-menu {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 28px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  box-sizing: border-box;
+  width: min(360px, calc(100vw - 24px));
+  max-height: calc(100vh - 40px - env(safe-area-inset-top, 0px));
+  max-height: calc(100dvh - 40px - env(safe-area-inset-top, 0px));
+  overflow: auto;
+  padding: 14px 14px 12px;
+  border-radius: 16px;
+  background: #fff;
+  color: var(--mwp-ink);
+  box-shadow: 0 10px 32px rgba(36, 27, 47, 0.28);
+  text-align: left;
+}
+.mwp-menu__title {
+  margin: 0 0 4px;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--mwp-plum);
+}
+.mwp-menu__intro {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--mwp-muted);
+}
+.mwp-menu__now {
+  margin: 0 0 10px;
+  font-size: 13px;
+}
+.mwp-menu__list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mwp-menu__op {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  margin: 0;
+  padding: 9px 12px;
+  border: 1px solid #e3d9ef;
+  border-left: 4px solid var(--mwp-plum);
+  border-radius: 10px;
+  background: #fbf9fe;
+  color: var(--mwp-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.mwp-menu__op:active {
+  background: var(--mwp-plum-soft);
+}
+.mwp-menu__op:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+.mwp-menu__name {
+  font-size: 15px;
+  font-weight: 650;
+}
+.mwp-menu__help {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--mwp-muted);
+}
+.mwp-menu__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+}
+.mwp-menu__built {
+  margin: 0;
+  font-size: 11px;
+  color: var(--mwp-muted);
+}
+
+/* ── shared bits ── */
+.mwp-badge {
+  display: inline-block;
+  margin: 0 0 8px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--mwp-amber);
+  color: var(--mwp-ink);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.mwp-btn {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  font: 650 15px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  cursor: pointer;
+}
+.mwp-btn--primary {
+  background: var(--mwp-plum);
+  color: #fff;
+}
+.mwp-btn--primary:disabled {
+  background: #9c8cae;
+  cursor: default;
+}
+.mwp-btn--ghost {
+  background: transparent;
+  color: var(--mwp-plum);
+  box-shadow: inset 0 0 0 1.5px currentColor;
+}
+.mwp-menu__hide {
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+/* ── mock ads (above everything, like a real full-screen ad) ── */
+.mwp-ad {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(24, 18, 34, 0.95);
+  color: #fff;
+  touch-action: none;
+}
+.mwp-ad__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(320px, 100%);
+  text-align: center;
+}
+.mwp-ad__title {
+  margin: 4px 0 8px;
+  font-size: 24px;
+  font-weight: 700;
+}
+.mwp-ad__body {
+  margin: 0 0 22px;
+  font-size: 15px;
+  line-height: 1.45;
+  opacity: 0.85;
+}
+.mwp-ad__close {
+  min-width: 160px;
+  background: #fff;
+  color: var(--mwp-ink);
+}
+.mwp-ad__close:disabled {
+  background: rgba(255, 255, 255, 0.35);
+  color: rgba(255, 255, 255, 0.9);
+}
+.mwp-ad__bar {
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+}
+.mwp-ad__fill {
+  width: 100%;
+  height: 100%;
+  background: var(--mwp-amber);
+  transform-origin: left center;
+  animation: mwp-progress linear both;
+}
+@keyframes mwp-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+.mwp-ad__status {
+  margin: 10px 0 18px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.mwp-ad .mwp-btn--ghost {
+  color: #fff;
+  min-height: 40px;
+  font-size: 14px;
+}
+
+/* ── the mock purchase sheet (where FB opens its own dialog) ── */
+.mwp-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(24, 18, 34, 0.5);
+}
+.mwp-sheet__panel {
+  box-sizing: border-box;
+  width: min(480px, 100%);
+  padding: 18px 18px calc(18px + env(safe-area-inset-bottom, 0px));
+  border-radius: 20px 20px 0 0;
+  background: #fff;
+  color: var(--mwp-ink);
+  box-shadow: 0 -8px 28px rgba(24, 18, 34, 0.25);
+}
+.mwp-sheet__title {
+  margin: 0 0 12px;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.mwp-sheet__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--mwp-plum-soft);
+  font-size: 16px;
+}
+.mwp-sheet__body {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--mwp-muted);
+}
+.mwp-sheet__actions {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 10px;
+}
+
+/* ── "Preview: sample players" (inside the game's ranking views) ── */
+.mwp-note {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 0 auto 6px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--mwp-plum-soft);
+  color: var(--mwp-plum);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  text-align: center;
+}

@@ -1,7 +1,7 @@
 // Owner: lead. Test projects (04 §3, §11). Tests see every locale catalogue that exists
 // (`virtual:mewdoku-locales` in non-release mode, phase2b §6.7).
 //   unit     → tests/unit/** in Node (engine, game, platform, app, layering)
-//   dom      → tests/unit/ui/** and tests/unit/shell/** in jsdom
+//   dom      → tests/unit/ui/**, tests/unit/shell/** and tests/unit/preview/** (the preview link's pieces) in jsdom
 //   property → tests/property/** in Node (slow: every shipped record)
 // Every project runs tests/en-lazy-setup.ts first (Phase 2e I-4: the whole English table, as after a lazy chunk loads).
 import { fileURLToPath } from 'node:url';
@@ -28,7 +28,7 @@ export default defineConfig({
           name: 'unit',
           environment: 'node',
           include: ['tests/unit/**/*.spec.ts'],
-          exclude: ['tests/unit/ui/**', 'tests/unit/shell/**'],
+          exclude: ['tests/unit/ui/**', 'tests/unit/shell/**', 'tests/unit/preview/**'],
         },
       },
       {
@@ -36,7 +36,7 @@ export default defineConfig({
         test: {
           name: 'dom',
           environment: 'jsdom',
-          include: ['tests/unit/ui/**/*.spec.ts', 'tests/unit/shell/**/*.spec.ts'],
+          include: ['tests/unit/ui/**/*.spec.ts', 'tests/unit/shell/**/*.spec.ts', 'tests/unit/preview/**/*.spec.ts'],
         },
       },
       {

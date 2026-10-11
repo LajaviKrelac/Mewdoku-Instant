@@ -60,7 +60,9 @@ interface Setup {
   shop: () => ShopFlow;
 }
 
-function setup(o: { save?: (s: SaveData) => SaveData; config?: DeepPartial<GameConfig>; platformId?: 'fbig' | 'web'; caps?: { rewarded?: boolean } } = {}): Setup {
+function setup(
+  o: { save?: (s: SaveData) => SaveData; config?: DeepPartial<GameConfig>; platformId?: 'fbig' | 'web'; caps?: { rewarded?: boolean }; payments?: boolean } = {},
+): Setup {
   const log: string[] = [];
   const pay = fakePayments(log);
   let shop: ShopFlow | null = null;
@@ -71,7 +73,7 @@ function setup(o: { save?: (s: SaveData) => SaveData; config?: DeepPartial<GameC
     extra: (parts: HarnessParts) => {
       shop = createShopFlow({
         payments: () => pay,
-        capabilities: () => ({ payments: true, paymentsIos: false }),
+        capabilities: () => ({ payments: o.payments ?? true, paymentsIos: false }),
         platformId: o.platformId ?? 'fbig',
         save: () => parts.store.get().save,
         updateSave: (fn) => parts.store.update((st) => ({ ...st, save: fn(st.save) })),
@@ -146,7 +148,7 @@ describe('O2 Buy rows (spec §4.1)', () => {
     void (await openO2(mouse, 'mouse')).run;
     expect(o2(mouse.h).buy).toEqual([]);
     expect(named(mouse.h, 'o2_shown')).toEqual([{ placement: 'mouse', video: 1, buy: 0 }]);
-    const web = setup({ platformId: 'web' });
+    const web = setup({ platformId: 'web', payments: false }); // the web adapter never sells
     void (await openO2(web)).run;
     expect(o2(web.h).buy).toEqual([]);
   });

@@ -713,6 +713,24 @@ describe('the sheet: a fresh answer is current, never "Last updated" (requests-G
   });
 });
 
+describe('an open sheet follows the answer that arrives after it opened (preview-link finding)', () => {
+  it('a sheet opened while a bracket request is in flight is redrawn when that answer lands', async () => {
+    const s = setup();
+    await s.flow.start();
+    s.queue(1, 3);
+    s.flow.onWin({ winId: winId(1), mode: 'level', kept: 3 });
+    await s.settle(0);
+    // Someone joins after my win: only the next bracket answer knows them, the cached view does not.
+    s.fake.addOther({ nickname: 'Sleepy Whisker 27', avatarId: 1, points: 31 });
+    await s.settle(cfg.ladder.homeRefreshMs);
+    s.flow.homeMounted(); // starts a bracket request
+    s.flow.openSheet('home'); // same tick: its own refresh is throttled, so it draws the cached view at once
+    await s.settle(0);
+    const sheet = s.router.props.ladder as { list: { rows: { name: string }[] } | null };
+    expect(sheet.list?.rows.map((r) => r.name)).toContain('Sleepy Whisker 27');
+  });
+});
+
 describe('the Home chip and its refresh (spec §2.5, §2.2)', () => {
   it('bracket state from the saved numbers (rank, count, fish, ends on the device clock); refreshed at most every ladder.homeRefreshMs', async () => {
     const s = setup();
