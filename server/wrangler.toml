@@ -47,7 +47,7 @@ workers_dev = true
 [[env.staging.d1_databases]]
 binding = "DB"
 database_name = "mewdoku-rank-staging"
-database_id = "REPLACE-WITH-THE-ID-PRINTED-BY-wrangler-d1-create-mewdoku-rank-staging"
+database_id = "8a935fda-8976-4e28-b6af-4189ed558cce"
 migrations_dir = "migrations"
 
 [env.staging.vars]
