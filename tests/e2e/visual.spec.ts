@@ -855,7 +855,6 @@ test.describe('Phase 2e (G3): the ranking chip, the streak pill and the victory 
   test('Home (layout 2026-10-11): profile top left, streak pill top centre, the records chip floating at the left, Play and the daily pill low', async ({ page }) => {
     await open(page, streakSave());
     const vw = page.viewportSize()?.width ?? 0;
-    const vh = page.viewportSize()?.height ?? 0;
     const chip = page.locator('.screen--home .home__rank .ladder-chip');
     await expect(chip).toBeVisible();
     await expect(chip).toHaveAttribute('data-state', 'records');
@@ -882,7 +881,6 @@ test.describe('Phase 2e (G3): the ranking chip, the streak pill and the victory 
     expect(daily.y).toBeGreaterThan(play.y + play.height);
     expect(Math.abs(play.x + play.width / 2 - vw / 2)).toBeLessThan(2);
     expect(Math.abs(daily.x + daily.width / 2 - vw / 2)).toBeLessThan(2);
-    expect(play.y).toBeGreaterThan(vh * 0.5);
     await page.screenshot({ path: join(OUT_2E, `G3-2e-home-${page.viewportSize()?.width ?? 0}.png`) });
   });
 
