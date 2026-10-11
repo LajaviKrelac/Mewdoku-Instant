@@ -1,0 +1,17 @@
+{
+  "name": "error.upgrade_required",
+  "request": {
+    "method": "POST",
+    "path": "/v1/session"
+  },
+  "response": {
+    "status": 426,
+    "body": {
+      "error": {
+        "code": "upgrade_required",
+        "message": "client 0.1.0 below 0.2.0"
+      },
+      "serverTime": 1791799800000
+    }
+  }
+}

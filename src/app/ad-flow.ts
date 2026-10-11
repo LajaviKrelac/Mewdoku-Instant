@@ -3,6 +3,8 @@
 // request until the ad settles; readiness timeout lives in the adapter; ads.showWatchdogMs safety
 // net here; ad_* analytics with the result; preload a new instance afterwards. Never throws.
 // The pacing gate (game/ad-pacing.ts) is checked by the CALLER before interstitial().
+// Phase 2e (G1, docs/phase2e/spec.md §3.1): afterShow(kind) runs once every interstitial or rewarded
+// attempt that hid the banner has settled (the banner flow re-shows it on the game screen).
 import type { InterstitialTrigger } from '../game/ad-pacing';
 import type { AdKind, AdPlacement, AdResult, PlatformAdapter, RewardedPlacement } from '../platform/types';
 import { cfg, type GameConfig } from './config';
@@ -24,6 +26,8 @@ export interface AdFlowDeps {
    * Awaited for at most ads.readyTimeoutMs; it never blocks the ad.
    */
   beforeShow?(): Promise<void>;
+  /** Phase 2e (spec §3.1): after an interstitial or rewarded attempt settled (input unlocked). Never throws into the flow. */
+  afterShow?(kind: AdKind): void;
 }
 
 export interface AdFlow {
@@ -114,7 +118,14 @@ export function createAdFlow(deps: AdFlowDeps): AdFlow {
     }
     report(kind, placement, result);
     try {
-      deps.platform.ads.preload(kind); // one fresh instance after every show or failure (05 §6.2)
+      deps.afterShow?.(kind);
+    } catch {
+      // the banner re-show is best effort
+    }
+    try {
+      // One fresh instance after every show or failure (05 §6.2); Phase 2e §3.4: the placement's own slot.
+      if (kind === 'rewarded') deps.platform.ads.preload('rewarded', placement as RewardedPlacement);
+      else deps.platform.ads.preload(kind);
     } catch {
       // preload problems surface on the next show
     }

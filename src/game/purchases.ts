@@ -4,7 +4,13 @@
 // IAP grants and the purchase ledger (phase2b §8.4, §9.3). PURE, idempotent by purchase token.
 // Ledger entries are "<productId>|<purchaseToken>" so a save merge can re-apply paid grants that only
 // the other document has (§9.3 paid-grant repair).
+// Phase 2e (G1, docs/phase2e/spec.md §4.2, §5.2, §7.1; D-2e-10): the consume-first intent ledger
+// purchases.pending ("<productId>|<token>": paid by FB, not granted yet; exactly once at every crash
+// point), and the paid-grant repair extended to the rank-reward claims (ladder.claimed) and the streak's
+// cycle rewards (dayStreak.paid), whose grants live in the newest-wins stock like a purchase's.
 import { cfg, type GameConfig, type IapProductDef } from '../app/config';
+import { parsePaidEntry } from './day-streak';
+import { parseClaimEntry } from './ladder';
 import { capLedger } from './save-v2';
 import type { ProductId, SaveData } from './types';
 
@@ -102,6 +108,8 @@ export function compensateRetired(save: SaveData, c: GameConfig = cfg): SaveData
  * fields) has its grant applied once more to `merged`. Only entries that survive the merged ledger's
  * cap are repaired (an entry the newer document already dropped as too old is never granted twice).
  * No Ads is merged by OR already. Phase 2c: a retired pack's entry re-applies its compensation.
+ * Phase 2e (spec §5.2, §7.1): the same for ladder.claimed (a rank reward claimed on the older copy's
+ * device) and dayStreak.paid (a cycle reward paid there): hints and kitties added once each.
  */
 export function repairPaidGrants(merged: SaveData, older: SaveData, newer: SaveData, c: GameConfig = cfg): SaveData {
   const newerSet = new Set(newer.purchases.tokens);
@@ -111,6 +119,65 @@ export function repairPaidGrants(merged: SaveData, older: SaveData, newer: SaveD
     if (newerSet.has(entry) || !kept.has(entry)) continue;
     const rec = parseLedgerEntry(entry, c);
     if (rec) out = applyGrant(out, rec.productId, c);
+  }
+  let hints = 0;
+  let kitties = 0;
+  const addOnly = (olderList: readonly string[], newerList: readonly string[], mergedList: readonly string[], parse: (e: string) => { hints: number; kitties: number } | null): void => {
+    const inNewer = new Set(newerList);
+    const inMerged = new Set(mergedList);
+    for (const entry of olderList) {
+      if (inNewer.has(entry) || !inMerged.has(entry)) continue;
+      const g = parse(entry);
+      if (!g) continue;
+      hints += g.hints;
+      kitties += g.kitties;
+    }
+  };
+  addOnly(older.ladder.claimed, newer.ladder.claimed, merged.ladder.claimed, parseClaimEntry);
+  addOnly(older.dayStreak.paid, newer.dayStreak.paid, merged.dayStreak.paid, parsePaidEntry);
+  if (hints > 0 || kitties > 0) out = { ...out, stock: { hints: out.stock.hints + hints, kitties: out.stock.kitties + kitties } };
+  return out;
+}
+
+// ─────────────────────────────── Phase 2e: the intent ledger (spec §4.2) ───────────────────────────────
+
+/** Whether a token waits in purchases.pending (paid, not granted yet). */
+export function isPending(save: SaveData, token: string, c: GameConfig = cfg): boolean {
+  return save.purchases.pending.some((e) => parseLedgerEntry(e, c)?.purchaseToken === token);
+}
+
+/**
+ * Step 2 of the consume-first flow: records the intent "<productId>|<token>" before the consume call
+ * (the caller saves critically right after). A token already granted (in `tokens`) or already pending
+ * changes nothing; the newest iap.pendingKept are kept.
+ */
+export function addPending(save: SaveData, p: PurchaseRecord, c: GameConfig = cfg): SaveData {
+  if (!productDef(p.productId, c) || isRecorded(save, p.purchaseToken, c) || isPending(save, p.purchaseToken, c)) return save;
+  const pending = [...save.purchases.pending, ledgerEntry(p)];
+  const keep = Math.max(1, c.iap.pendingKept);
+  return { ...save, purchases: { ...save.purchases, pending: pending.slice(Math.max(0, pending.length - keep)) } };
+}
+
+/** Drops a token from purchases.pending (after its grant, or when it turns out granted already). */
+export function removePending(save: SaveData, token: string, c: GameConfig = cfg): SaveData {
+  const pending = save.purchases.pending.filter((e) => parseLedgerEntry(e, c)?.purchaseToken !== token);
+  return pending.length === save.purchases.pending.length ? save : { ...save, purchases: { ...save.purchases, pending } };
+}
+
+/**
+ * Step 4: grants a pending purchase once (applyPurchase: the tokens ledger, then the grant) and drops it
+ * from `pending`. A token already in `tokens` is only dropped from `pending` (never granted twice).
+ */
+export function grantPending(save: SaveData, p: PurchaseRecord, c: GameConfig = cfg): SaveData {
+  return removePending(applyPurchase(save, p, c), p.purchaseToken, c);
+}
+
+/** The pending entries as records (the boot restore grants each once, spec §4.2's recovery table). */
+export function pendingRecords(save: SaveData, c: GameConfig = cfg): PurchaseRecord[] {
+  const out: PurchaseRecord[] = [];
+  for (const e of save.purchases.pending) {
+    const rec = parseLedgerEntry(e, c);
+    if (rec) out.push(rec);
   }
   return out;
 }

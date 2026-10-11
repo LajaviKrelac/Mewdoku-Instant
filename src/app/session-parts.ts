@@ -43,7 +43,11 @@ export interface TimerHooks {
   mute(reason: MuteReason, on: boolean): void;
 }
 
-const MUTE_FOR: Readonly<Partial<Record<PauseReason, MuteReason>>> = { hidden: 'hidden', fb_pause: 'pause', ad: 'ad' };
+/**
+ * Phase 2e (spec §4.3): FB's purchase dialog mutes like an ad (the two never overlap: O2 is modal and
+ * the board is busy), so 'purchase' shares the audio engine's 'ad' mute reason.
+ */
+const MUTE_FOR: Readonly<Partial<Record<PauseReason, MuteReason>>> = { hidden: 'hidden', fb_pause: 'pause', ad: 'ad', purchase: 'ad' };
 const isHide = (r: PauseReason): boolean => r === 'hidden' || r === 'fb_pause';
 
 export function createSessionTimers(clock: Clock, c: GameConfig, hooks: TimerHooks): SessionTimers {
@@ -97,7 +101,8 @@ export function createSessionTimers(clock: Clock, c: GameConfig, hooks: TimerHoo
     resume(reason) {
       if (!pauses.delete(reason)) return;
       const m = MUTE_FOR[reason];
-      if (m) hooks.mute(m, false);
+      // Phase 2e: 'ad' and 'purchase' share the ad mute; it lifts when neither is left.
+      if (m && ![...pauses].some((r) => MUTE_FOR[r] === m)) hooks.mute(m, false);
       if (isHide(reason) && !pauses.has('hidden') && !pauses.has('fb_pause')) hooks.onPausedChange(false);
       timers.sync();
     },

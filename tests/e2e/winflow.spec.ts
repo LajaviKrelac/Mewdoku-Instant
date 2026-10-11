@@ -17,6 +17,10 @@
 // Level and Score columns".
 // Phase 2d.1 (G1, docs/phase2d/helpers-spec.md §2.5, §7.7): the last cat's star and the Score's
 // count-up end on the level's total with [data-final], and the period counter still appears at 1 000 ms.
+// Phase 2e (G1, docs/phase2e/spec.md §2.3, §2.11, §5.3): these checks pin the records path ("Weekly
+// ranking", this week's fish) and run with ?flags=-ladder (the e2e build as web-prod: no ranking origin);
+// the ranking's own win flow is tests/e2e/ladder.spec.ts. `.victory__streak` is now the daily streak row,
+// so "no Perfect ×N" is checked by its text.
 import { expect, test, type Page } from '@playwright/test';
 import type { E2EHooks } from '../../src/app/boot';
 import { defaults } from '../../src/game/save';
@@ -35,7 +39,7 @@ const atLevel = (level: number, patch: Partial<SaveData> = {}): SaveData => ({
 });
 
 async function open(page: Page, save: SaveData): Promise<void> {
-  await page.goto('/?ads=unsupported');
+  await page.goto('/?ads=unsupported&flags=-ladder');
   await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home' || (window as TestWindow).__mewdoku?.app().screen === 'game');
   await page.evaluate((json) => (window as TestWindow).__mewdoku?.seedSave(json), JSON.stringify(save));
   await page.reload();
@@ -164,7 +168,7 @@ test('win with 3 fish kept: rewards at once, the lives fly to "this week" (+3), 
   await expect(victory.locator('.victory__kept')).toHaveAttribute('data-count', '3');
   await expect(victory.locator('.victory__period')).toHaveText('This week: 3');
   await expect(victory.locator('.victory__points')).toHaveText(`${run.text} points`);
-  await expect(victory.locator('.victory__streak')).toHaveCount(0); // 2c.1: no "Perfect ×N"
+  await expect(victory.getByText(/Perfect ×/)).toHaveCount(0); // 2c.1: no "Perfect ×N"
   // §2.7: no fish pill, no "+" (shop).
   await expect(victory.locator('.fish-pill, .fish-pill__plus')).toHaveCount(0);
   await primary.click();
@@ -192,7 +196,7 @@ test('a 1-fish win (two mistakes): one fish flies, the panel at 4.2 s (4.1–4.5
   await tapPanel(page);
   const victory = page.locator('[data-overlay="victory"]');
   await expect(victory.locator('.victory__kept')).toHaveAttribute('data-count', '1');
-  await expect(victory.locator('.victory__streak')).toHaveCount(0);
+  await expect(victory.getByText(/Perfect ×/)).toHaveCount(0);
   await expect(victory.locator('.victory__points')).toHaveText(`${run.text} points`);
   expect((await stored(page))?.streak).toEqual({ current: 5, best: 5 });
 });
@@ -307,7 +311,7 @@ test('two wins: save.period.total = 6 and points.total = both levels\' totals; s
   const second = await fullRun(page);
   await solve(page);
   await tapPanel(page);
-  await expect(page.locator('[data-overlay="victory"] .victory__streak')).toHaveCount(0);
+  await expect(page.locator('[data-overlay="victory"]').getByText(/Perfect ×/)).toHaveCount(0);
   await expect(page.locator('[data-overlay="victory"] .victory__points')).toHaveText(`${second.text} points`);
   await expect(page.locator('[data-overlay="victory"] .victory__period')).toHaveText('This week: 6');
   const s = await stored(page);
@@ -316,7 +320,7 @@ test('two wins: save.period.total = 6 and points.total = both levels\' totals; s
   expect(s?.streak).toEqual({ current: 0, best: 0 });
   await page.locator('[data-overlay="victory"] .victory__home').click();
   await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');
-  await expect(page.locator('.screen--home .period-pill')).toHaveAttribute('aria-label', '6 fish this week');
+  await expect(page.locator('.screen--home button.ladder-chip[data-state="records"]') /* 2e §2.9: the period pill is the records chip (a button) */).toHaveAttribute('aria-label', '6 fish this week');
 });
 
 // ── 2b review fixes (R): PAR-6 / UX-4 — no frame falls back to the bare or stale board ──

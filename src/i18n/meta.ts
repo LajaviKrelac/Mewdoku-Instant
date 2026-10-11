@@ -1,7 +1,7 @@
 // Owner: E (Phase 2b); G2 (Phase 2c: lives are fish, the period and streak keys, the fish currency went;
 // Phase 2c.1: the level points per cat, the perfect-streak keys went); G3 (Phase 2d: the Score column,
 // the mouse, the video badge's name, the level-start toast, the gear's dot; Phase 2d.1: the completion
-// label, the level-start tickers)
+// label, the level-start tickers; Phase 2e: the worldwide ranking, the name sheet, the Buy rows, the streak)
 // Translator notes per key (phase2b §6.7 step 1): a description, a max length where the layout needs
 // one (chips ≤ 18 chars, buttons ≤ 22, titles ≤ 28) and placeholder notes. The AI-draft brief carries
 // only our English, this file and docs/i18n/glossary.md (never the original game or its strings).
@@ -34,7 +34,7 @@ export const PLACEHOLDER_NOTES: Readonly<Record<string, string>> = {
   time: "a clock ('4:12') or a duration ('7 h 48 min', '2 d 5 h', 'under a minute')",
   count: 'a number (already formatted for the locale)',
   placed: 'number of cats placed so far',
-  hearts: 'fish (lives) left',
+  hearts: "fish (lives) left; in the ranking (ladder.*) the hearts phrase '2 hearts' (a cheer, never a life)",
   max: 'fish at the start (3)',
   unit: "a row ('row 3'), a column ('column 5') or a colour name ('Violet'); may start the sentence",
   color: "a colour name such as 'Violet' (a proper name, used in apposition: 'the colour Violet')",
@@ -49,14 +49,14 @@ export const PLACEHOLDER_NOTES: Readonly<Record<string, string>> = {
   rest: 'all list items but the last, already joined with the separator',
   glyph: "a pattern glyph name, e.g. 'star'",
   version: 'the app version, e.g. 0.1.0',
-  name: 'the app name (Mewdoku for now)',
+  name: "the app name (Mewdoku for now), a shop product's name ('Bulb Bundle') or a ranking name such as 'Brave Noodle 12' (our English words, never translated)",
   row: 'a 1-based row number',
   col: 'a 1-based column number',
   state: "the tile state word: 'empty', 'marked', 'cat', 'wrong' or 'given cat'",
   text: 'a whole hint sentence',
   pct: 'a percentage number, 0–100',
   weekday: "a short weekday name ('Tue')",
-  day: 'a day of the month',
+  day: 'a day of the month (dates) or a streak day number, 1–7 (streak.*)',
   month: "a short month name ('Oct')",
   h: 'hours',
   m: 'minutes',
@@ -77,6 +77,13 @@ export const PLACEHOLDER_NOTES: Readonly<Record<string, string>> = {
   wins: 'puzzles won so far in a group challenge',
   needed: 'puzzles to win for the reward',
   tool: "a helper's name: 'Kitty' (game.tool.kitty) or 'Hint' (game.tool.hint)",
+  // Phase 2e (G3)
+  items: "a pack's contents from the shop, e.g. '15 hints' or '8 kitties'",
+  days: 'the streak cycle length, a number of days (7)',
+  min: 'the smallest number of players a ranking needs for rewards (5)',
+  num: 'a number 1–99 (the number of a ranking name)',
+  code: "a player code, e.g. '7KQ2-M9XD' (never translated)",
+  fish: "the fish phrase, e.g. '14 fish'",
 };
 
 /** Descriptions by key prefix (the longest matching prefix wins). */
@@ -135,6 +142,15 @@ const GROUPS: readonly (readonly [prefix: string, description: string, maxLength
   ['locale.name.', "The language's own name (endonym) in the Language list; identical in every catalogue"],
   // Phase 2d.1 (helpers-spec §4.3, §5.4).
   ['fx.', 'Game screen: a short animated word over the board (decorative; the same news is also read to screen readers)'],
+  // Phase 2e (spec Appendix A; docs/i18n/glossary.md: "ranking" never "leaderboard", "heart" is a cheer, ranking names are never translated).
+  ['ladder.', 'The worldwide daily ranking (always "ranking" in copy, never "leaderboard"). Real players only: never add a count, a statistic or a promise the text does not have'],
+  ['ladder.info.', 'The ranking sheet\'s "How it works" view: one plain sentence per line'],
+  ['ladder.result.', 'The card when a ranking ends: your final place and your reward'],
+  ['nick.', 'The ranking name sheet: the player picks two of our English words and a number (the words are never translated) and a picture'],
+  ['streak.', 'The daily streak on Home: days in a row with a solved puzzle. Calm and friendly: never urgent, never "you will lose it", never a warning', 36],
+  ['settings.ladder.', 'Settings: the worldwide ranking rows', 28],
+  ['rewarded.buy.', 'The out-of-helpers pop-up: a purchase button. It must start with your word for "Buy" (money is spent) and keep the price exactly as given', 28],
+  ['rewarded.body.buy.', 'The out-of-helpers pop-up text when a pack can be bought: a video for one helper, or buying the pack'],
   ['ticker.', 'Game screen: a level-start ticker, a one-line cream strip that slides across the top of the screen once. Only the player\'s own numbers, the board, a true fact or a tip; never a statistic about other players', 40],
 ];
 
@@ -279,6 +295,64 @@ const NOTES: Readonly<Partial<Record<I18nKey, Partial<KeyMeta>>>> = {
   'time.daysHours': { description: 'Duration of days and hours (event countdowns); unit abbreviations may stay as in English', translatable: false },
   'time.hoursMinutes': { description: 'Unit abbreviations may stay as in English (h, min)', translatable: false },
   'time.minutes': { description: 'Unit abbreviations may stay as in English (min)', translatable: false },
+  // Phase 2e (G3; spec §7.6 width limits: the chip 12, the Buy labels 28, the streak strip text 36).
+  'common.cancel': { description: 'Button: close a dialog without changing anything', maxLength: 14 },
+  'ladder.sub.one': { description: 'Ranking panel subtitle after a win: the fish this win added, then my total in my ranking', maxLength: 30 },
+  'ladder.sub.other': { description: 'Ranking panel subtitle after a win: the fish this win added, then my total in my ranking', maxLength: 30 },
+  'ladder.total': { description: 'Victory screen: my fish total in my current ranking', maxLength: 20 },
+  'ladder.pill.one': { description: 'Screen-reader name of the fish counter during the win (my fish in my ranking)' },
+  'ladder.endsIn': { description: 'Ranking countdown line; {time} is a duration ("7 h 48 min"). Never read aloud as a live update', maxLength: 26 },
+  'ladder.endsSoon': { maxLength: 30 },
+  'ladder.ended': { description: 'Shown instead of the countdown once the ranking has ended', maxLength: 22 },
+  'ladder.players.one': { description: "The SERVER'S real number of players in this ranking (never an estimate)", maxLength: 16 },
+  'ladder.players.other': { description: "The SERVER'S real number of players in this ranking (never an estimate)", maxLength: 16 },
+  'ladder.rewards.line.one': { description: 'Under the countdown: only first place wins (the count comes from the server; this form is used when 1 place pays)' },
+  'ladder.rewards.line.other': { description: 'Under the countdown: how many top places win hints and kitties ({count} from the server, 2 or 3)' },
+  'ladder.alone': { description: 'When I am the only player in my ranking. Never promise that others will join' },
+  'ladder.waiting': { description: 'A small chip on my row: fish not sent yet (offline). Never promise they will count', maxLength: 14 },
+  'ladder.offline': { description: 'Offline line under a cached ranking. Must not promise that the fish will count' },
+  'ladder.stale': { description: 'When the shown ranking was last fetched; {time} is a clock time ("14:02")', maxLength: 28 },
+  'ladder.join': { description: 'Home chip next to a trophy when the player is in no ranking now (tap to see how to join)', maxLength: 12 },
+  'ladder.chip.rank': { description: 'The rank on the Home chip ("#5"); only change it if your language writes ranks differently', maxLength: 6, translatable: false },
+  'ladder.you': { description: 'Tag on my own row in the ranking', maxLength: 10 },
+  'ladder.row.a11y': { description: 'Screen-reader name of one ranking row: rank, ranking name, fish, hearts' },
+  'ladder.heart.give.a11y': { description: 'Screen-reader name of the heart button on another player\'s row (a heart is a cheer, never a life)' },
+  'ladder.info': { description: 'The (i) button\'s name and the title of the "How it works" view', maxLength: 22 },
+  'ladder.info.fish': { description: 'How it works: what adds to my ranking total ("up to 3": the fish are the lives kept)' },
+  'ladder.info.window.rolling': { description: 'How it works: a ranking lasts {hours} hours (24) from its first win; {count} = the most players (50)' },
+  'ladder.info.window.utcDay': { description: 'How it works: a ranking per UTC day; {count} = the most players (50)' },
+  'ladder.info.names': { description: 'How it works: other players never see the Facebook name or photo' },
+  'ladder.records.title': { description: 'Title of the ranking sheet when only the player\'s own records can be shown', maxLength: 22 },
+  'ladder.result.title': { maxLength: 24 },
+  'ladder.result.place': { description: 'The final place in the ranking that ended, e.g. "You finished #2 of 37."', maxLength: 30 },
+  'ladder.collect': { description: 'Button: take the reward', maxLength: 18 },
+  'ladder.collectDouble': { description: 'Button with a video icon: watch a video to get twice the reward ("×2" stays)', maxLength: 18 },
+  'ladder.claimed': { description: 'Toast after collecting a reward', maxLength: 22 },
+  'nick.title': { maxLength: 24 },
+  'nick.picture': { description: 'Label over the 12 pictures (our cat avatars)', maxLength: 18 },
+  'nick.first': { description: 'Label of the first word picker (an adjective)', maxLength: 18 },
+  'nick.second': { description: 'Label of the second word picker (a cat word)', maxLength: 18 },
+  'nick.number': { description: 'Label of the number field (1–99)', maxLength: 18 },
+  'nick.shuffle': { description: 'Button: pick a random name and picture', maxLength: 14 },
+  'nick.save': { maxLength: 14 },
+  'nick.fallback': { description: 'A name when a word is missing: "Cat" and the number', maxLength: 10 },
+  'nick.first.line': { description: 'Shown once under the ranking: the player\'s generated ranking name, and where to change it' },
+  'settings.ladder.code': { description: 'Plain text: the player code for support and deletion requests ({code} is never translated)' },
+  'settings.ladder.offline': { description: 'Settings note while offline (the switch and Delete need the internet)', maxLength: 60 },
+  'settings.ladder.delete.confirm': { description: 'The question before deleting the ranking data (the game progress stays)', maxLength: 120 },
+  'settings.ladder.delete.ok': { description: 'Button: delete for good', maxLength: 16 },
+  'settings.ladder.deleted': { description: 'Toast after the ranking data was deleted', maxLength: 60 },
+  'rewarded.buy.label': { description: 'Purchase button: "Buy" + the pack\'s contents + the store\'s price. Starts with your word for "Buy"', maxLength: 28 },
+  'rewarded.buy.noAds.label': { description: 'Purchase button for No Ads: "Buy No Ads" + the store\'s price', maxLength: 28 },
+  'rewarded.buy.noAds.note': { description: 'Small line under the No Ads button: what it does and that the optional videos stay', maxLength: 72 },
+  'rewarded.buy.loading': { description: 'A purchase button while the price loads (screen reader)' },
+  'streak.day': { description: 'Streak strip: "Day 3 of 7" ({total} = the cycle length)', maxLength: 14 },
+  'streak.a11y': { description: 'Screen-reader name of the streak strip: the day line and the status sentence' },
+  'victory.streakDay': { description: 'Victory screen: today\'s streak day', maxLength: 28 },
+  'victory.streakReward': { description: 'Victory screen on the cycle\'s last day: the reward already added ({reward} = "+2 hints and +2 kitties")' },
+  'victory.dailyReward': { description: 'Victory screen of the daily puzzle: a reward already added (only when the game gives one)' },
+  'howto.streak': { description: 'How to play: the streak ({days} = days in a cycle, 7). Calm: no urgency' },
+  'streak.best': { description: 'Records row label: the longest streak so far', maxLength: 22 },
 };
 
 /**
@@ -370,6 +444,11 @@ export function displayWidth(s: string): number {
 
 /** Sample values for the length check, by placeholder name (typical widths, not the longest). */
 const SAMPLES: Readonly<Record<string, string>> = {
+  // Phase 2e: a long store price (spec §7.6: the Buy labels must fit with one) and a pack's contents.
+  price: '1,99 US$',
+  items: '15 hints',
+  code: '7KQ2-M9XD',
+  fish: '14 fish',
   date: 'Tue 6 Oct',
   time: '7 h 48 min',
   event: 'Lantern Walk',

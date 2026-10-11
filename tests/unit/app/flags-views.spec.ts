@@ -36,7 +36,7 @@ const ctx: ViewContext = { now: NOW, capabilities: caps, platformId: 'web' };
 describe('flags', () => {
   afterEach(() => setFlagOverrides({}));
 
-  it('defaults: the Phase 2 flags off; phase2b §10 events, banners, shop, rankings on and groupChallenges off', () => {
+  it('defaults: the Phase 2 flags off; phase2b §10 events, banners, shop, rankings on and groupChallenges off; 2e ladder and dayStreak on', () => {
     expect(DEFAULT_FLAGS).toEqual({
       autoX: false,
       undo: false,
@@ -47,6 +47,8 @@ describe('flags', () => {
       shop: true,
       rankings: true,
       groupChallenges: false,
+      ladder: true,
+      dayStreak: true,
     });
     for (const id of Object.keys(DEFAULT_FLAGS) as (keyof typeof DEFAULT_FLAGS)[]) expect(isFlagOn(id)).toBe(DEFAULT_FLAGS[id]);
     setFlagOverrides(parseFlagParam('?flags=-events,groupChallenges'));
@@ -181,6 +183,8 @@ describe('phase2c.1 §3.2.5: the victory and the records (no streak anywhere)', 
     pointsEarned: 7_296,
     pointsTotal: 7_296,
     event: null,
+    streak: null,
+    dailyReward: null,
     ...patch,
   });
 
@@ -379,7 +383,7 @@ describe('phase 2d §4.3: pulse, mouse, videoRefill, bannerBand, settingsDot', (
     expect(view(base({ game: g, session: meta({ bannerBand: false }) }))?.bannerBand).toBe(false);
     const st = base({ game: g, session: meta({ bannerBand: true }) });
     expect(view(st)?.bannerBand).toBe(true);
-    expect(view({ ...st, save: { ...st.save, purchases: { noAds: true, tokens: [] } } })?.bannerBand).toBe(false);
+    expect(view({ ...st, save: { ...st.save, purchases: { noAds: true, tokens: [], pending: [] } } })?.bannerBand).toBe(false);
   });
 
   it('settingsDot: save.ext.settingsSeen below settingsDot.version, on the game, Home and the event screen', () => {

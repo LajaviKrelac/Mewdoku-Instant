@@ -1284,3 +1284,195 @@
     font-size: var(--fs-m);
   }
 }
+
+/* ═══════════════════════ Phase 2e (G3) ═══════════════════════ */
+/* ── The post-win panel's head: the title centred, the (i) button at the inline end (spec §2.4) ── */
+.ranking__head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 48px;
+}
+
+.ranking__head .ranking__title {
+  min-width: 0;
+}
+
+.ranking__info.btn {
+  position: absolute;
+  top: 50%;
+  right: -6px;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  margin-top: -22px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: none;
+  color: #fff;
+  --icon-fill: rgba(255, 255, 255, 0.25);
+}
+
+.ranking__info .btn__icon {
+  width: 24px;
+  height: 24px;
+}
+
+/* RTL: the (i) sits at the title row's inline end, the left (this chunk loads with the panel; i18n.css is first load). */
+[dir='rtl'] .ranking__info.btn {
+  right: auto;
+  left: -6px;
+}
+
+/* ── O2: the Buy rows under the video (spec §4.1): secondary pills that start with "Buy"; No Ads smaller ── */
+.rewarded__buys {
+  display: flex;
+  flex-direction: column;
+}
+
+.rewarded__buy.btn {
+  min-height: 48px;
+  padding: 6px 18px;
+  font-size: var(--fs-l);
+  line-height: 1.15;
+  white-space: normal;
+  text-align: center;
+}
+
+.rewarded__buy.btn + .rewarded__buy.btn,
+.rewarded__buy-note + .rewarded__buy.btn {
+  margin-top: 10px;
+}
+
+.rewarded__buy--small.btn {
+  min-height: 44px;
+  font-size: var(--fs-m);
+}
+
+.rewarded__buy-art {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin-inline-end: 6px;
+}
+
+.rewarded__buy[data-state='loading'] .btn__label {
+  opacity: 0.7;
+}
+
+.rewarded__buy-note {
+  margin-top: 6px;
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+  line-height: 1.35;
+  text-align: center;
+}
+
+/* ── Settings: the "Worldwide ranking" group (spec §2.7) ── */
+.settings__ladder {
+  border-top: 1px solid var(--line);
+}
+
+.settings__group-title {
+  margin: 12px 2px 0;
+  color: var(--ink-2);
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  font-size: var(--fs-s);
+  text-align: start;
+}
+
+.settings__group-title + .settings-row {
+  border-top: 0;
+}
+
+.settings__ladder-value {
+  max-width: 48%;
+  overflow: hidden;
+  margin-inline-end: 6px;
+  color: var(--ink-2);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: var(--fs-s);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.settings__ladder .switch[aria-disabled='true'],
+.settings__ladder .settings-row--link[aria-disabled='true'] {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.settings__ladder-offline,
+.settings__ladder-code {
+  padding: 4px 2px 8px;
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+  text-align: start;
+}
+
+.settings__confirm-text {
+  text-align: start;
+}
+
+/* ── Victory: the daily reward line and the streak row (spec §5.3, §6.1) ── */
+/* The sticky footer's ::after (stage colour) starts right under the actions: room for the primary's ring and
+   glow when no Home link follows it (the daily variant), so the ring is not cut. */
+.victory__actions {
+  padding-bottom: 6px;
+}
+
+.victory__daily-reward,
+.victory__streak-reward {
+  margin-top: 6px;
+  color: var(--tap-text);
+  font-weight: 600;
+}
+
+.victory__streak {
+  margin-top: 12px;
+}
+
+.victory__streak-text {
+  color: #fff;
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  font-size: var(--fs-l);
+}
+
+/* The steps sit on a small white pill (the step art is drawn for a light ground). */
+.victory__streak .streak-steps {
+  margin-top: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--card);
+}
+
+.victory__streak .streak-step {
+  width: 22px;
+  height: 22px;
+  margin: 0 1px;
+}
+
+.victory__streak[data-fill] .streak-step[data-kind='today'] {
+  animation: streak-fill 520ms var(--ease-drop) 360ms both;
+}
+
+@keyframes streak-fill {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+}
+
+[data-motion='reduced'] .victory__streak .streak-step,
+.victory[data-reduced] .victory__streak .streak-step {
+  animation: none;
+}
+
+.victory[data-tight] .victory__streak {
+  margin-top: 6px;
+}

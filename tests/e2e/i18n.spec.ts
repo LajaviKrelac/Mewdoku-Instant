@@ -1,5 +1,6 @@
 // Owner: E (phase2b §6.9); G2 (Phase 2c: lives are fish in every locale, the 2c victory rows, no web
-// shop; Phase 2c.1: the level-points counter and the victory's points row per locale). Localized layout at 320×568 (web-320) and 390×844 (web-390): for German,
+// shop; Phase 2c.1: the level-points counter and the victory's points row per locale); G3 (Phase 2e: the
+// ranking chip at Home's lead, the streak strip, the victory's streak row per locale). Localized layout at 320×568 (web-320) and 390×844 (web-390): for German,
 // Russian, Arabic, Thai, Japanese and the pseudo-locale "xx-long" (+40 % length, accents; dev and
 // e2e builds only, ?i18n=pseudo), Home, the game screen and Settings render in that language with
 // no horizontal overflow, no clipped button, chip or title, and — for Arabic — dir=rtl with the board
@@ -214,9 +215,13 @@ for (const c of CASES) {
 
     // Review UX-8: the win flow's screens are checked per locale too (Phase 2c: the web has no shop;
     // the period pill, the ranking subtitle and the victory's kept-fish row and points; 2c.1: no streak chip).
+    // Phase 2e (G3, spec §2.5, §5.3): the lead is the ranking chip (the records chip without a ranking server,
+    // named like the period pill) and the victory shows the streak row on the day's first counted win.
     test('the period pill, the ranking panel and the victory fit and read in the locale', async ({ page }, info) => {
       await bootHome(page, c);
-      await expect(page.locator('.screen--home .period-pill')).toBeVisible();
+      await expect(page.locator('.screen--home .ladder-chip')).toBeVisible();
+      await expect(page.locator('.screen--home .period-pill')).toBeHidden();
+      await expect(page.locator('.screen--home .streak-strip')).toBeVisible();
       await expect(page.locator('.screen--home .fish-pill__plus')).toHaveCount(0);
       await page.locator('.home__play').click();
       await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
@@ -231,7 +236,8 @@ for (const c of CASES) {
       await expect(page.locator('[data-overlay="victory"] .victory__primary')).toBeVisible({ timeout: 4000 });
       await expect(page.locator('[data-overlay="victory"] .victory__kept')).toBeVisible();
       await expect(page.locator('[data-overlay="victory"] .victory__points')).toBeVisible();
-      await expect(page.locator('[data-overlay="victory"] .victory__streak')).toHaveCount(0);
+      await expect(page.locator('[data-overlay="victory"] .victory__streak')).toBeVisible();
+      await expect(page.locator('[data-overlay="victory"] .victory__streak .streak-step')).toHaveCount(7);
       await page.waitForTimeout(800);
       await noOverflow(page);
       await noClipping(page);

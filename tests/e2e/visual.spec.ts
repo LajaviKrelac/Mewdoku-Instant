@@ -28,11 +28,17 @@
 // clock and the animations put at their age on it: the tickers mid-crossing, the kitty's "+N" at rest,
 // the star mid-flight, the count-up mid-way, the completion label, the hint overlay settled and Apply's
 // labels, at 402 × 874 (the recordings' phone) and in de and ar at 320 × 568 (G3-2d1-<moment>-<width>.png).
+// Phase 2e (G3, spec §2.5, §5.3, §9.4): Home's lead is the ranking chip (the records chip while no ranking
+// server is configured) and the streak strip sits under Play; the victory gains the streak row on the day's
+// first counted win. Captured as G3-2e-<screen>-<width>.png in docs/phase2e/screenshots/ (VISUAL_OUT_2E
+// overrides). The bracket, the sheet, the result card and the name sheet need the local ranking server
+// (lead L0b); until then G3 captured them from fixtures in a private harness (docs/phase2e/provenance-G3.md).
 import { mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
 import type { E2EHooks } from '../../src/app/boot';
+import { dailyDateKey } from '../../src/game/progression';
 import { defaults } from '../../src/game/save';
 import { periodKeyAt } from '../../src/game/scoring';
 import type { SaveData } from '../../src/game/types';
@@ -174,11 +180,15 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
     // Phase 2d §1.15, §2.2: the gear's red dot (Settings never opened); white round buttons.
     await expect(page.locator('.screen--home .top-bar__btn--settings .top-bar__dot')).toBeVisible();
     await expect(page.locator('.screen--home .top-bar__btn--settings')).toHaveAttribute('aria-label', 'Settings, something new');
-    // Phase 2c §2.8: the period pill (this week's fish), not a fish pill with a shop "+".
-    const pill = page.locator('.screen--home .top-bar .period-pill');
-    await expect(pill).toBeVisible();
-    await expect(pill).toHaveAttribute('aria-label', '39 fish this week');
-    await expect(pill.locator('.period-pill__n')).toHaveText('39');
+    // Phase 2c §2.8: this week's fish at the lead, not a fish pill with a shop "+". Phase 2e (G3, spec §2.5):
+    // the ranking chip holds the lead; with no ranking server it is the records chip (trophy + this week's
+    // fish, named like the period pill) and the period pill stays hidden.
+    const chip = page.locator('.screen--home .top-bar .ladder-chip');
+    await expect(chip).toBeVisible();
+    await expect(chip).toHaveAttribute('data-state', 'records');
+    await expect(chip).toHaveAttribute('aria-label', '39 fish this week');
+    await expect(chip.locator('.ladder-chip__n')).toHaveText('39');
+    await expect(page.locator('.screen--home .top-bar .period-pill')).toBeHidden();
     await expect(page.locator('.fish-pill, .fish-pill__plus')).toHaveCount(0);
     await shot(page, 'home');
   });
@@ -246,7 +256,9 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
     await expect(page.locator('.victory__kept')).toHaveAttribute('data-count', '3');
     await expect(page.locator('.victory__period')).toHaveText('This week: 42');
     await expect(page.locator('.victory__points')).toHaveText(/^\d{1,2},\d{3} points$/);
-    await expect(page.locator('.victory__streak, .victory__score')).toHaveCount(0);
+    await expect(page.locator('.victory__score')).toHaveCount(0);
+    // Phase 2e (G3, spec §5.3): the day's first counted win shows the streak row (a fresh streak: day 1).
+    await expect(page.locator('.victory__streak .victory__streak-text')).toHaveText('Streak: day 1 of 7');
     await expect(page.locator('.victory__top, .fish-pill')).toHaveCount(0);
     await page.waitForTimeout(900);
     await shot(page, 'victory');
@@ -814,5 +826,52 @@ test.describe('short phones with the banner band (review UX-1, UX-2, I18N-LAYOUT
     });
     expect(await onTop(page, '.victory__kept .victory__period')).toBe(true);
     expect(await onTop(page, '.victory__points .victory__points-text')).toBe(true);
+  });
+});
+
+// ─────────────────────────────── Phase 2e (G3): the chip, the streak strip, the victory's streak row ───────────────────────────────
+
+const OUT_2E = process.env.VISUAL_OUT_2E ?? resolve(dirname(fileURLToPath(import.meta.url)), '../../docs/phase2e/screenshots');
+mkdirSync(OUT_2E, { recursive: true });
+const DAY_MS = 86_400_000;
+/** A streak counted yesterday and the day before (day 2 of the cycle); today not counted yet. */
+const streakSave = (): SaveData =>
+  returning({ dayStreak: { dates: [dailyDateKey(NOW - 2 * DAY_MS), dailyDateKey(NOW - DAY_MS)], run: 2, best: 9, paid: [] } });
+
+test.describe('Phase 2e (G3): the ranking chip, the streak strip and the victory streak row', () => {
+  test('Home: the records chip at the lead and the streak strip under Play', async ({ page }) => {
+    await open(page, streakSave());
+    const chip = page.locator('.screen--home .top-bar .ladder-chip');
+    await expect(chip).toBeVisible();
+    await expect(chip).toHaveAttribute('data-state', 'records');
+    const strip = page.locator('.screen--home .streak-strip');
+    await expect(strip).toBeVisible();
+    await expect(strip).toHaveAttribute('data-state', 'alive');
+    await expect(strip).toHaveAttribute('aria-label', 'Streak: day 2 of 7. Solve a puzzle today for day 3.');
+    // 7 steps (dayStreak.cycleDays), the last one the reward chest; never colour alone (the label says it).
+    await expect(strip.locator('.streak-step')).toHaveCount(7);
+    // The strip sits under Play, inside the screen, never under the stock row.
+    const play = (await page.locator('.home__play').boundingBox())!;
+    const box = (await strip.boundingBox())!;
+    expect(box.y).toBeGreaterThanOrEqual(play.y + play.height - 0.5);
+    expect(box.x).toBeGreaterThanOrEqual(-0.5);
+    expect(box.x + box.width).toBeLessThanOrEqual((page.viewportSize()?.width ?? 0) + 0.5);
+    await page.screenshot({ path: join(OUT_2E, `G3-2e-home-${page.viewportSize()?.width ?? 0}.png`) });
+  });
+
+  test('victory: "Streak: day 3 of 7" on the day\'s first counted win, today\'s step filled', async ({ page }) => {
+    await open(page, streakSave());
+    await solve(page);
+    await expect(page.locator('.overlay[data-overlay="ranking"]')).toBeVisible({ timeout: 8000 });
+    await page.waitForTimeout(2000);
+    const vp = page.viewportSize() ?? { width: 390, height: 844 };
+    await page.mouse.click(10, vp.height - 10);
+    await expect(page.locator('.overlay[data-overlay="victory"]')).toBeVisible({ timeout: 4000 });
+    const row = page.locator('.victory__streak');
+    await expect(row).toBeVisible();
+    await expect(row.locator('.victory__streak-text')).toHaveText('Streak: day 3 of 7');
+    await expect(row.locator('.streak-step[data-kind="today"]')).toHaveCount(1);
+    await page.waitForTimeout(900);
+    await page.screenshot({ path: join(OUT_2E, `G3-2e-victory-${vp.width}.png`) });
   });
 });

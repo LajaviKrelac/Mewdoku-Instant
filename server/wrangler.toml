@@ -1,0 +1,92 @@
+# Owner: G4 (Phase 2e). The ranking server's Worker (spec §1.2, §11). Versions are pinned in package.json;
+# compatibility_date is bumped on purpose only. Secrets are NEVER here: `wrangler secret put <NAME> --env …`
+# (FB_APP_SECRET, SESSION_SECRET, ID_PEPPER, ADMIN_KEY; FB_APP_SECRET_ALT on staging only). Locally they come
+# from .dev.vars (git-ignored; see .dev.vars.example). Note: `vars` and `d1_databases` are NOT inherited by
+# the [env.*] sections, so each environment lists all of them.
+name = "mewdoku-rank"
+main = "src/worker.ts"
+compatibility_date = "2026-09-01"
+workers_dev = false                  # production: the custom domain only
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[observability.logs]
+# Cloudflare's automatic per-request record carries request metadata (URL, headers); our own JSON line
+# (spec §1.14) is the only log, so no IP, Authorization header or body is ever logged (critic C-17).
+invocation_logs = false
+
+[triggers]
+# hourly at :17: finalise due brackets, purge used nonces, roll up stats; daily at 03:47 UTC: the retention
+# sweep alone (its own invocation, so each stays inside Workers Free's 50 queries per invocation).
+crons = ["17 * * * *", "47 3 * * *"]
+
+# ── local (wrangler dev --local) ─────────────────────────────────────────────────────────────────────────
+[[d1_databases]]
+binding = "DB"
+database_name = "mewdoku-rank-dev"
+database_id = "local"
+migrations_dir = "migrations"
+
+[vars]
+DEPLOY_ENV = "dev"
+RANKING_ENABLED = "true"
+PERIOD_MODE = "rolling"
+WEB_MODE = "anon"
+DEV_ROUTES = "false"
+ALLOWED_ORIGINS = "http://127.0.0.1:4173,http://127.0.0.1:4174,https://localhost:8080"
+MIN_CLIENT_VERSION = "0.0.0"
+RC_SWITCHES = "{}"
+CONFIG_OVERRIDES = ""
+
+# ── staging: mewdoku-rank-staging.<account>.workers.dev until the public name exists (task #36) ─────────────
+[env.staging]
+workers_dev = true
+
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "mewdoku-rank-staging"
+database_id = "REPLACE-WITH-THE-ID-PRINTED-BY-wrangler-d1-create-mewdoku-rank-staging"
+migrations_dir = "migrations"
+
+[env.staging.vars]
+DEPLOY_ENV = "staging"
+RANKING_ENABLED = "true"
+PERIOD_MODE = "rolling"
+WEB_MODE = "anon"
+DEV_ROUTES = "false"
+ALLOWED_ORIGINS = "https://*.apps.fbsbx.com,http://127.0.0.1:4173,http://127.0.0.1:4174"
+MIN_CLIENT_VERSION = "0.0.0"
+RC_SWITCHES = "{}"
+CONFIG_OVERRIDES = ""
+
+# ── production ───────────────────────────────────────────────────────────────────────────────────────────
+[env.production]
+workers_dev = false
+# The API host (spec §11.1): uncomment with the real domain once it exists (D-2e-22, Q-D1).
+# routes = [{ pattern = "rank.example.com", custom_domain = true }]
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "mewdoku-rank-prod"
+database_id = "REPLACE-WITH-THE-ID-PRINTED-BY-wrangler-d1-create-mewdoku-rank-prod"
+migrations_dir = "migrations"
+
+# Optional counters (spec §1.14): uncomment after enabling Analytics Engine on the account.
+# [[env.production.analytics_engine_datasets]]
+# binding = "METRICS"
+# dataset = "mewdoku_rank"
+
+[env.production.vars]
+DEPLOY_ENV = "production"
+RANKING_ENABLED = "true"
+PERIOD_MODE = "rolling"
+WEB_MODE = "records"
+DEV_ROUTES = "false"
+# Set from the origins G-SRV-1 records (spec §11.3): the game's exact https://apps-<APP_ID>.apps.fbsbx.com is
+# preferred to the wildcard (which admits every Instant Game); add the web origin; `null` only if measured.
+ALLOWED_ORIGINS = "https://*.apps.fbsbx.com"
+MIN_CLIENT_VERSION = "0.0.0"
+RC_SWITCHES = "{}"
+CONFIG_OVERRIDES = ""

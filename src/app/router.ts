@@ -34,6 +34,9 @@ import type { CoachProps } from '../ui/overlays/coach';
 import type { DailyResultProps } from '../ui/overlays/daily-result';
 import type { FailOverlayProps } from '../ui/overlays/fail-overlay';
 import type { GroupResultProps } from '../ui/overlays/group-result';
+import type { LadderResultProps } from '../ui/overlays/ladder-result';
+import type { LadderSheetProps } from '../ui/overlays/ladder-sheet';
+import type { NicknameSheetProps } from '../ui/overlays/nickname-sheet';
 import type { RankHubProps } from '../ui/overlays/rank-hub';
 import type { RankingPanelProps } from '../ui/overlays/ranking-panel';
 import type { ShopProps } from '../ui/overlays/shop-sheet';
@@ -69,6 +72,10 @@ export interface OverlayPropsMap {
   shop: ShopProps;
   rank_hub: RankHubProps;
   group_result: GroupResultProps;
+  // Phase 2e (G3's props; the lazy `ladder` chunk, app/ladder-chunk.ts)
+  ladder: LadderSheetProps;
+  ladder_result: LadderResultProps;
+  nickname: NicknameSheetProps;
 }
 
 export interface Router {
@@ -130,6 +137,12 @@ export interface Router {
    * waits for this one only. Never rejects.
    */
   coachReady(): Promise<boolean>;
+  /**
+   * Phase 2e (spec §2.12): resolves true once the ranking overlays can open (the lazy `ladder` chunk, also
+   * prefetched at Home idle and at a scored board's mount), false when it cannot be loaded. Never rejects.
+   * Optional (test routers).
+   */
+  ladderReady?(): Promise<boolean>;
   destroy(): void;
 }
 
@@ -145,6 +158,11 @@ export interface RouterFactories {
    * gives only loadOverlays, coachReady() waits for that instead).
    */
   loadCoach?(): Promise<Partial<OverlayFactories>>;
+  /**
+   * Phase 2e (spec §2.12): loads the ranking overlays (ladder, ladder_result, nickname; default: the lazy
+   * ./ladder-chunk). A test router with only its own loadOverlays gets them from that set.
+   */
+  loadLadder?(): Promise<Partial<OverlayFactories>>;
   bootScreen(): BootScreen;
   homeScreen(view: HomeView, cb: HomeCallbacks): View<HomeView>;
   gameScreen(view: GameView, cb: GameScreenCallbacks): GameScreen;
@@ -223,6 +241,18 @@ export async function loadOverlayChunk(): Promise<Partial<OverlayFactories>> {
     rank_hub: m.createRankHub,
     group_result: m.createGroupResult,
   };
+}
+
+/** Phase 2e: the overlays that come with the lazy `ladder` chunk, not the overlay chunk. */
+export const LADDER_OVERLAYS: readonly OverlayId[] = ['ladder', 'ladder_result', 'nickname'];
+
+/**
+ * Phase 2e (spec §2.12, §7.9): the lazy `ladder` chunk's overlays (app/ladder-chunk.ts; its stylesheet
+ * keeps the barrel's name), re-fetched with a cache-busting URL after a failure.
+ */
+export async function loadLadderChunk(): Promise<Partial<OverlayFactories>> {
+  const m = await loadChunk(() => import('./ladder-chunk'), { css: /ladder-chunk-[\w-]+\.css/ });
+  return { ladder: m.createLadderSheet, ladder_result: m.createLadderResult, nickname: m.createNicknameSheet };
 }
 
 /** Stand-in when no splash factory was given (FBIG builds): an empty screen. */
@@ -389,6 +419,34 @@ export function createRouter(root: HTMLElement, deps: RouterDeps = {}): Router {
     restack();
     applyInert();
     syncFocus();
+  }
+
+  /** Phase 2e: the ladder overlays' factories (see RouterFactories.loadLadder). */
+  let ladderLoading: Promise<boolean> | null = null;
+  const ladderReadyNow = (): boolean => LADDER_OVERLAYS.every((id) => factories[id] !== undefined);
+  function ladderReady(): Promise<boolean> {
+    if (ladderReadyNow()) return Promise.resolve(true);
+    const load = f.loadLadder ?? (f.loadOverlays ? null : loadLadderChunk);
+    if (!load) return ensureLoaded().then(() => ladderReadyNow(), () => false);
+    ladderLoading ??= load().then(
+      (chunk) => {
+        for (const key of Object.keys(chunk) as OverlayId[]) {
+          if (!factories[key]) (factories as Record<OverlayId, unknown>)[key] = chunk[key];
+        }
+        flushPending();
+        return ladderReadyNow();
+      },
+      (error: unknown) => {
+        ladderLoading = null; // a later open() retries
+        if (destroyed) return false;
+        bus?.emit('error', { where: 'ladder_chunk', error });
+        const failed = order.filter((id) => pending.has(id) && LADDER_OVERLAYS.includes(id));
+        for (const id of failed) closeInternal(id);
+        for (const id of failed) bus?.emit('overlay:failed', { id });
+        return false;
+      },
+    );
+    return ladderLoading;
   }
 
   /** Phase 2d.1 I-4: the coach's factory alone (see Router.coachReady). */
@@ -707,7 +765,9 @@ export function createRouter(root: HTMLElement, deps: RouterDeps = {}): Router {
         v.open(props);
       } else {
         pending.set(id, props);
-        void ensureLoaded();
+        // Phase 2e: the ranking overlays come with the lazy `ladder` chunk.
+        if (LADDER_OVERLAYS.includes(id)) void ladderReady();
+        else void ensureLoaded();
       }
       applyInert();
       syncFocus();
@@ -781,6 +841,7 @@ export function createRouter(root: HTMLElement, deps: RouterDeps = {}): Router {
     preloadOverlays: () => ensureLoaded().catch(() => undefined),
     overlaysReady: () => (loaded ? Promise.resolve(true) : ensureLoaded().then(() => loaded, () => false)),
     coachReady,
+    ladderReady,
     destroy() {
       destroyed = true;
       early = null;

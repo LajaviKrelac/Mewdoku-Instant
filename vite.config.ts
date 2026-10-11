@@ -23,16 +23,23 @@
 //   assets/events-*.js          src/app/events-chunk.ts: the event screen + event art (C/B/A)
 //   assets/fb-social-*.js       src/platform/fb/fb-social.ts: ranking, overlay views, groups, payments (D)
 //   assets/social-flows-*.js    src/app/social-flows.ts: rankings hub, event top list, group flows (C)
+//   assets/ladder-*.js          src/app/ladder-chunk.ts (Phase 2e, spec §2.12, §7.9): the ranking's sheet, list,
+//                               result card, name sheet and words; prefetched at Home idle and at a scored
+//                               board's mount, never before the first screen (scripts/locale-loaders.ts names it)
 //   assets/overlay-chunk-*.css, assets/events-chunk-*.css, assets/coach-chunk-*.css, assets/celebrate-*.css,
-//   assets/board-mouse-*.css: those chunks' own stylesheets (cssCodeSplit)
+//   assets/board-mouse-*.css, assets/ladder-chunk-*.css: those chunks' own stylesheets (cssCodeSplit)
 //   assets/locale-<id>-*.js     one per bundled non-English catalogue (E)
 // Each is reached through ONE dynamic import of its barrel module; nothing in the main bundle may
 // import those modules statically (that would pull them into the first load).
+// Phase 2e L0 (spec §7.3): VITE_LADDER_URL and VITE_LADDER_WEB reach the bundle through scripts/ladder-env.ts
+// (trimmed and checked; VITE_LADDER_WEB never in a release build); every other VITE_* key (the FB placement
+// IDs, VITE_FB_LEADERBOARDS) as Vite loads it.
 import { copyFileSync, existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { defineConfig, type Plugin, type Rolldown } from 'vite';
+import { defineConfig, loadEnv, type Plugin, type Rolldown } from 'vite';
 import basicSsl from '@vitejs/plugin-basic-ssl';
+import { ladderDefine, ladderEnv } from './scripts/ladder-env.ts';
 import { chunkFileName, isReleaseMode, localeLoaderPlugin } from './scripts/locale-loaders.ts';
 
 /** Pinned FB SDK (05 §2). */
@@ -108,6 +115,9 @@ export default defineConfig(({ mode, command, isPreview }) => {
   const plugins: Plugin[] = [platformHtml(fb), localeLoaderPlugin(mode, rootDir), preloadFirstRun()];
   // HTTPS for the FB embed player (05 §11), dev server only (preview stays HTTP for Playwright).
   if (fb && command === 'serve' && !isPreview) plugins.push(basicSsl());
+  // Phase 2e L0: the ranking server's build values (empty = off, never a broken build; spec §7.3, §2.11).
+  const ladder = ladderEnv(mode, loadEnv(mode, rootDir, 'VITE_'));
+  for (const w of ladder.warnings) console.warn(`[vite.config] ${w}`);
 
   return {
     base: './', // relative URLs: required inside the FB zip
@@ -115,6 +125,7 @@ export default defineConfig(({ mode, command, isPreview }) => {
       __PLATFORM__: JSON.stringify(fb ? 'fbig' : 'web'),
       __E2E__: JSON.stringify(e2e),
       __APP_VERSION__: JSON.stringify(pkg.version),
+      ...ladderDefine(ladder),
     },
     resolve: {
       alias: { '@platform': fileURLToPath(new URL(platformEntry, import.meta.url)) },

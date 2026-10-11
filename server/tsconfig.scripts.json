@@ -1,0 +1,33 @@
+{
+  "//": "Owner: G4 (Phase 2e). scripts/** with the ROOT tsconfig's options (spec \u00a71.1, critic C-23): build-solutions.ts imports ../src/engine and ../src/game, which were written for those options.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": [
+      "ES2020",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": false,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "types": [
+      "node",
+      "vite/client"
+    ]
+  },
+  "include": [
+    "scripts/**/*.ts",
+    "../src/env.d.ts",
+    "../src/i18n/virtual-locales.d.ts"
+  ]
+}

@@ -1,0 +1,109 @@
+{
+  "name": "session.fb",
+  "request": {
+    "method": "POST",
+    "path": "/v1/session",
+    "body": {
+      "platform": "fb",
+      "playerId": "7392816450",
+      "signature": "Xk2b9QfLm4R8sTvWy1Za3Cd5Ef7Gh9Ij0Kl2Mn4Op6_A.eyJhbGdvcml0aG0iOiJITUFDLVNIQTI1NiIsImlzc3VlZF9hdCI6MTc5MTc5OTc5NSwicGxheWVyX2lkIjoiNzM5MjgxNjQ1MCIsInJlcXVlc3RfcGF5bG9hZCI6Im4xLm1na3dxM2tpLlprM2hROWZBMkxtWDhyVHEuOWZBa2Q4M0xtUXAyWGNWYiJ9",
+      "nonce": "n1.mgkwq3ki.Zk3hQ9fA2LmX8rTq.9fAkd83LmQp2XcVb",
+      "clientVersion": "0.2.0",
+      "contentVersion": "content-bb8a756dfaf9"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "token": "v1.eyJrIjoiUjNmQ2tYOVR2cFd1TGFxTTJ6TjhIZyIsImMiOiI3S1EyTTlYRCIsInAiOiJmYiIsInQiOiJzaWduZWQiLCJ2IjoiMC4yLjAiLCJpYXQiOjE3OTE3OTk4MDAsImV4cCI6MTc5MTg4NjIwMH0.q8Jd0RkM2vWnXa7LpT4sYcBe9FhGu1Zo",
+      "expiresAt": 1791886200000,
+      "player": {
+        "code": "7KQ2M9XD",
+        "nickname": "Velvet Pounce 27",
+        "nick": {
+          "adj": 2,
+          "noun": 5,
+          "num": 27
+        },
+        "avatarId": 4,
+        "status": "ok",
+        "pool": "fb",
+        "trust": "signed",
+        "listed": true,
+        "nicknameChangeAt": null
+      },
+      "rules": {
+        "periodMode": "rolling",
+        "durationMs": 86400000,
+        "maxMembers": 50,
+        "scoringModes": [
+          "level",
+          "daily",
+          "event"
+        ],
+        "places": [
+          {
+            "place": 1,
+            "hints": 2,
+            "kitties": 2
+          },
+          {
+            "place": 2,
+            "hints": 1,
+            "kitties": 1
+          },
+          {
+            "place": 3,
+            "hints": 1,
+            "kitties": 0
+          }
+        ],
+        "minMembers": 5,
+        "doubleByVideo": true,
+        "claimTtlMs": 604800000,
+        "hearts": {
+          "enabled": true,
+          "allowSelf": true,
+          "maxGivenPerBracket": 20
+        },
+        "nickname": {
+          "freeText": false,
+          "changeCooldownMs": 86400000
+        }
+      },
+      "results": [
+        {
+          "bracketId": "mgj1a0k3x9f2",
+          "endedAt": 1791790000000,
+          "place": 2,
+          "members": 37,
+          "points": 22,
+          "reward": {
+            "rewardId": "mgj1a0k3x9f2:11",
+            "place": 2,
+            "grant": {
+              "hints": 1,
+              "kitties": 1
+            },
+            "canDouble": true,
+            "expiresAt": 1792394800000,
+            "claim": null
+          }
+        }
+      ],
+      "bracket": {
+        "state": "open",
+        "bracketId": "mgk0b7q1z4a8",
+        "rank": 5,
+        "members": 37,
+        "points": 14,
+        "endsAt": 1791830000000
+      },
+      "limits": {
+        "maxWinsPerRequest": 10,
+        "queueMax": 20
+      },
+      "serverTime": 1791799800000
+    }
+  }
+}

@@ -1,6 +1,6 @@
 # Translation glossary
 
-Status: Phase 2b AI-draft glossary, Phase 2c fish update, Phase 2c.1 level-points update, Phase 2d HUD update, Phase 2d.1 helpers update · Date: 2026-10-09 (2c.1, 2d and 2d.1: 2026-10-10) · Owner: workstream E (localization); Phase 2c and 2c.1 rows: workstream G2; Phase 2d and 2d.1 rows: workstream G3 · Used with [`src/i18n/meta.ts`](../../src/i18n/meta.ts) (per-key notes and max lengths) and the English catalogue [`src/i18n/en.ts`](../../src/i18n/en.ts)
+Status: Phase 2b AI-draft glossary, Phase 2c fish update, Phase 2c.1 level-points update, Phase 2d HUD update, Phase 2d.1 helpers update, Phase 2e ranking and streak update · Date: 2026-10-09 (2c.1, 2d, 2d.1 and 2e: 2026-10-10) · Owner: workstream E (localization); Phase 2c and 2c.1 rows: workstream G2; Phase 2d, 2d.1 and 2e rows: workstream G3 · Used with [`src/i18n/meta.ts`](../../src/i18n/meta.ts) (per-key notes and max lengths) and the English catalogue [`src/i18n/en.ts`](../../src/i18n/en.ts)
 
 This glossary is part of the translation brief (phase2b §6.7 step 2). The brief contains **only our own English copy, `meta.ts` and this file**. It never names, quotes or describes any other game, and translators must not look at any other game's localized UI (06 §2 step 6).
 
@@ -134,3 +134,34 @@ Shapes: a filled dot, a ring, a triangle, a square, a diamond (rhombus), a star,
 ## 5. Our own names (events, products, praise)
 
 Event names and product names are ours. Translate their meaning and keep them short and cosy; they need not be literal. Praise words are cat-themed exclamations: write natural ones in your language (puns welcome) rather than literal translations, and keep the six different from one another.
+
+## 6. Phase 2e: the worldwide ranking, the streak, purchases (workstream G3)
+
+| Rule | Detail |
+|---|---|
+| Ranking, never leaderboard | The worldwide daily ranking is always "ranking" (de *Rangliste*, es/pt-BR/pl *ranking*, fr *classement*, it *classifica*, id *peringkat*, tr *sıralama*, ru *рейтинг*, vi *xếp hạng*, th *อันดับ*, ja/ko *ランキング*/*랭킹*, zh-Hans *排行*, hi *रैंकिंग*, ar *الترتيب*). Never a word for "leaderboard" in new copy. |
+| Real players only | Copy never invents a count or a statistic: "37 players" is the server's real number, and nothing says "online now", "N % of players" or that more players will join. Waiting fish are never promised to count ("we'll try to send them"). |
+| Heart = a cheer | A heart in the ranking is a small cheer from another player: no reward, never a life (the lives are fish), never "like" in the social-network sense if your language has a warmer word. |
+| Streak = days in a row | Days in a row with at least one solved puzzle (de *Serie*, es *racha*, fr *série*, it *serie*, pt-BR *sequência*, id *rangkaian*, tr *seri*, pl *seria*, ru *серия*, vi *chuỗi*, th *สตรีค*, ja *連続記録*, ko *연속 기록*, zh-Hans *连续打卡*, hi *सिलसिला*, ar *سلسلة*). Not the retired 2c "perfect streak". Calm: never "you'll lose it", never a countdown. |
+| Ranking name | The player's name in the ranking: two of our English words and a number ("Brave Noodle 12"). The words are **never translated** (every player sees the same text). Translate only the term "ranking name" itself. |
+| Player code | An 8-character code shown as "7KQ2-M9XD" for support and deletion requests; never translated. |
+| "Buy" first | Every purchase button starts with your word for "Buy" (money is spent) and keeps `{price}` exactly as the store formats it. Width ≤ 28 with a long price ("1,99 US$"). |
+| Picture | The ranking picture is one of our 12 cat avatars: a "picture" or "image", not a "photo" (photos are what we never show). |
+
+| English | de | es | fr | it | pt-BR | id | tr | pl |
+|---|---|---|---|---|---|---|---|---|
+| daily ranking | Tagesrangliste | ranking del día | classement du jour | classifica di oggi | ranking do dia | peringkat harian | günlük sıralama | ranking dnia |
+| heart (cheer) | Herz | corazón | cœur | cuore | coração | hati | kalp | serduszko |
+| streak | Serie | racha | série | serie | sequência | rangkaian | seri | seria |
+| ranking name | Ranglistenname | nombre de ranking | nom de classement | nome in classifica | nome no ranking | nama peringkat | sıralama adı | nazwa w rankingu |
+| player code | Spielercode | código de jugador | code joueur | codice giocatore | código de jogador | kode pemain | oyuncu kodu | kod gracza |
+| Buy | Kaufen | Comprar | Acheter | Compra | Comprar | Beli | Satın al | Kup |
+
+| English | ru | vi | th | ja | ko | zh-Hans | hi | ar |
+|---|---|---|---|---|---|---|---|---|
+| daily ranking | рейтинг дня | xếp hạng ngày | อันดับรายวัน | 今日のランキング | 일간 랭킹 | 今日排行 | आज की रैंकिंग | ترتيب اليوم |
+| heart (cheer) | сердечко | tim | หัวใจ | ハート | 하트 | 爱心 | दिल | قلب |
+| streak | серия | chuỗi | สตรีค | 連続記録 | 연속 기록 | 连续打卡 | सिलसिला | سلسلة |
+| ranking name | имя в рейтинге | tên xếp hạng | ชื่อในอันดับ | ランキング名 | 랭킹 이름 | 排行昵称 | रैंकिंग नाम | الاسم في الترتيب |
+| player code | код игрока | mã người chơi | รหัสผู้เล่น | プレイヤーコード | 플레이어 코드 | 玩家代码 | प्लेयर कोड | رمز اللاعب |
+| Buy | Купить | Mua | ซื้อ | 購入 | 구매 | 购买 | खरीदें | اشترِ |

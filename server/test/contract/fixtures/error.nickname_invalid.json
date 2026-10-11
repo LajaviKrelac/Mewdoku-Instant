@@ -1,0 +1,18 @@
+{
+  "name": "error.nickname_invalid",
+  "request": {
+    "method": "PUT",
+    "path": "/v1/me/profile",
+    "auth": true
+  },
+  "response": {
+    "status": 422,
+    "body": {
+      "error": {
+        "code": "nickname_invalid",
+        "message": "nickname.adj"
+      },
+      "serverTime": 1791799800000
+    }
+  }
+}

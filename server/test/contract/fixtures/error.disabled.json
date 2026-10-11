@@ -1,0 +1,19 @@
+{
+  "name": "error.disabled",
+  "request": {
+    "method": "GET",
+    "path": "/v1/bracket",
+    "auth": true
+  },
+  "response": {
+    "status": 503,
+    "body": {
+      "error": {
+        "code": "disabled",
+        "message": "ranking disabled",
+        "retryAfterMs": 3600000
+      },
+      "serverTime": 1791799800000
+    }
+  }
+}

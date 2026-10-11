@@ -2,6 +2,10 @@
 // static imports / re-exports, side-effect imports, dynamic import(), new URL(…, import.meta.url)
 // and import.meta.glob patterns. Also checks that engine/ and game/ stay pure (no DOM, timers,
 // randomness or I/O globals) and that nothing in the app bundle imports engine/solver-oracle.ts.
+// Phase 2e L0 (lead; spec §1.1, §8.2, CONTRACTS §1): the `shared` layer, src/shared/** (the ranking's wire
+// contract and the nickname words, compiled into both the client and the server Worker). shared/ imports
+// nothing and uses no DOM, Worker or Node globals; game/, platform/, app/ and main.ts may import it; ui/ (and
+// audio/) for types only; workers/, engine/, i18n/ and app/config.ts may not.
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,7 +15,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const SRC = join(ROOT, 'src');
 const SCRIPTS = join(ROOT, 'scripts');
 
-type Layer = 'config' | 'i18n' | 'engine' | 'game' | 'platform' | 'ui' | 'audio' | 'workers' | 'app' | 'main' | 'data' | 'styles' | 'assets' | 'env';
+type Layer = 'config' | 'i18n' | 'engine' | 'game' | 'platform' | 'ui' | 'audio' | 'workers' | 'app' | 'main' | 'data' | 'styles' | 'assets' | 'env' | 'shared';
 
 interface Edge {
   readonly from: string; // path relative to the repo root, '/' separators
@@ -129,6 +133,7 @@ function layerOf(repoPath: string): Layer | null {
     data: 'data',
     styles: 'styles',
     assets: 'assets',
+    shared: 'shared',
   };
   return map[top] ?? null;
 }
@@ -143,6 +148,9 @@ const VIRTUAL_MODULES: Readonly<Record<string, Layer>> = { 'virtual:mewdoku-loca
 
 function checkSrcEdge(e: Edge): string | null {
   const from = layerOf(e.from) as Layer;
+  // Phase 2e L0: a shared module is a leaf for both bundles (the client's and the server Worker's), so not
+  // even a type import, a bare package or another shared module.
+  if (from === 'shared') return 'shared/ is a leaf: imports nothing (spec §1.1)';
   if (e.target === null) {
     const owner = VIRTUAL_MODULES[e.spec];
     if (owner !== undefined) return from === owner ? null : `${e.spec} is imported only by ${owner}/`;
@@ -153,6 +161,11 @@ function checkSrcEdge(e: Edge): string | null {
   const to = layerOf(e.target);
   if (to === null) return 'import outside src/';
   const isGameTypes = e.target === 'src/game/types.ts';
+  // Phase 2e L0: who may use shared/ (app/ and main.ts fall through to their own case, which allows all).
+  if (to === 'shared' && !['game', 'platform', 'app', 'main'].includes(from)) {
+    if ((from === 'ui' || from === 'audio') && e.typeOnly) return null;
+    return 'shared/ is imported by game/, platform/, app/ and main.ts (ui/ and audio/ for types only)';
+  }
   switch (from) {
     case 'config':
     case 'env':
@@ -163,12 +176,12 @@ function checkSrcEdge(e: Edge): string | null {
     case 'engine':
       return to === 'engine' ? null : 'engine/ imports only engine/';
     case 'game':
-      if (['engine', 'game', 'config', 'data'].includes(to)) return null;
+      if (['engine', 'game', 'config', 'data', 'shared'].includes(to)) return null;
       // phase2b F0 (lead): EventDef.nameKey is an I18nKey, so game/ may import i18n TYPES (no values).
-      return to === 'i18n' && e.typeOnly ? null : 'game/ imports only engine/, game/, app/config.ts, data/ (and i18n types)';
+      return to === 'i18n' && e.typeOnly ? null : 'game/ imports only engine/, game/, app/config.ts, data/, shared/ (and i18n types)';
     case 'platform':
-      if (['platform', 'config', 'i18n'].includes(to)) return null;
-      return isGameTypes && e.typeOnly ? null : 'platform/ imports platform/, app/config.ts, i18n/ and game/types.ts (types only)';
+      if (['platform', 'config', 'i18n', 'shared'].includes(to)) return null;
+      return isGameTypes && e.typeOnly ? null : 'platform/ imports platform/, app/config.ts, i18n/, shared/ and game/types.ts (types only)';
     case 'ui':
     case 'audio':
       if (['ui', 'audio', 'i18n', 'config', 'engine', 'game', 'styles', 'assets'].includes(to)) return null;
@@ -194,9 +207,11 @@ function checkScriptEdge(e: Edge): string | null {
     e.target === 'src/ui/art/palette.ts' ||
     // phase2b F0 (lead): i18n-check reads the catalogues; palette-check and verify-levels read the event data.
     e.target.startsWith('src/i18n/') ||
-    e.target.startsWith('src/data/');
+    e.target.startsWith('src/data/') ||
+    // Phase 2e L0 (lead): the shared wire contract and words are pure leaves too.
+    e.target.startsWith('src/shared/');
   if (e.target === ORACLE) return null; // verify-levels may cross-check with the oracle
-  return ok ? null : 'scripts import src/engine, src/game, src/i18n, src/data, src/app/config.ts, src/ui/art/palette.ts';
+  return ok ? null : 'scripts import src/engine, src/game, src/i18n, src/data, src/shared, src/app/config.ts, src/ui/art/palette.ts';
 }
 
 const srcFiles = walk(SRC);
@@ -251,9 +266,30 @@ describe('layering (04 §2)', () => {
     expect(violations).toEqual([]);
   });
 
+  it('shared/ stays pure: no DOM, Worker or Node globals, timers, randomness or I/O (Phase 2e, spec §1.1)', () => {
+    // Compiled into the client's lazy chunk AND the server Worker (spec §1.1): only the language itself.
+    const banned: [RegExp, string][] = [
+      // (?<![.\w$]): a free identifier, not a property such as `view.self.x`.
+      [/(?<![.\w$])(document|window|navigator|localStorage|sessionStorage|self|globalThis)\s*\./, 'DOM / Worker / global objects'],
+      [/(?<![.\w$])(process|Buffer|global)\s*\.|(?<![.\w$])require\s*\(|(?<![.\w$])__(dirname|filename)\b/, 'Node globals'],
+      [/(?<![.\w$])fetch\s*\(|\bnew\s+(Worker|XMLHttpRequest|WebSocket)\s*\(/, 'I/O (fetch, Worker, XHR, sockets)'],
+      [/(?<![.\w$])(setTimeout|setInterval|requestAnimationFrame|queueMicrotask)\s*\(/, 'timers'],
+      [/(?<![.\w$])Math\.random\b|(?<![.\w$])crypto\s*\./, 'randomness'],
+      [/(?<![.\w$])Date\.now\s*\(|(?<![.\w$])performance\.now\s*\(/, 'clocks (pass the time in)'],
+    ];
+    const shared = srcFiles.filter((f) => posix(relative(ROOT, f)).startsWith('src/shared/'));
+    const violations: string[] = [];
+    for (const f of shared) {
+      const code = stripSource(readFileSync(f, 'utf8'), true);
+      for (const [re, what] of banned) if (re.test(code)) violations.push(`${posix(relative(ROOT, f))}: ${what}`);
+    }
+    expect(violations).toEqual([]);
+  });
+
   it('lazy chunk entries are never imported statically from src/ (CONTRACTS-2b §2, §5.5)', () => {
     // One dynamic import each; a static value import would pull the chunk into the importer's bundle.
-    const LAZY = ['src/app/overlay-chunk.ts', 'src/app/events-chunk.ts', 'src/app/social-flows.ts', 'src/platform/fb/fb-social.ts', 'src/audio/sfx.ts'];
+    // Phase 2e L0: + the ladder chunk (spec §2.12, §7.9; named assets/ladder-*.js by scripts/locale-loaders.ts).
+    const LAZY = ['src/app/overlay-chunk.ts', 'src/app/events-chunk.ts', 'src/app/social-flows.ts', 'src/platform/fb/fb-social.ts', 'src/audio/sfx.ts', 'src/app/ladder-chunk.ts'];
     const bad = srcFiles
       .flatMap(scanImports)
       .filter((e) => e.target !== null && LAZY.includes(e.target) && !e.dynamic && !e.typeOnly && !LAZY.includes(e.from))
@@ -287,6 +323,23 @@ describe('layering (04 §2)', () => {
     expect(checkSrcEdge({ from: 'src/i18n/build-locales.ts', spec: 'virtual:mewdoku-locales', target: null, typeOnly: false })).toBeNull();
     expect(checkSrcEdge({ from: 'src/app/boot.ts', spec: 'virtual:mewdoku-locales', target: null, typeOnly: false })).not.toBeNull();
     expect(checkSrcEdge(edge('src/app/boot.ts', null))).not.toBeNull();
+    // Phase 2e L0: the shared layer (spec §8.2, CONTRACTS §1).
+    const API = 'src/shared/rank-api.ts';
+    for (const from of ['src/game/ladder.ts', 'src/platform/fb/index.ts', 'src/app/ladder-client.ts', 'src/main.ts']) {
+      expect(checkSrcEdge(edge(from, API)), from).toBeNull();
+    }
+    expect(checkSrcEdge(edge('src/ui/overlays/bracket-list.ts', API, true))).toBeNull();
+    expect(checkSrcEdge(edge('src/ui/overlays/bracket-list.ts', API))).not.toBeNull();
+    expect(checkSrcEdge(edge('src/audio/sfx.ts', API))).not.toBeNull();
+    for (const from of ['src/workers/rpc.ts', 'src/engine/codec.ts', 'src/i18n/index.ts', 'src/app/config.ts', 'src/env.d.ts']) {
+      expect(checkSrcEdge(edge(from, API)), from).not.toBeNull();
+      expect(checkSrcEdge(edge(from, API, true)), `${from} (type)`).not.toBeNull();
+    }
+    expect(checkSrcEdge(edge(API, 'src/shared/nick-words.ts'))).not.toBeNull();
+    expect(checkSrcEdge(edge(API, 'src/app/config.ts', true))).not.toBeNull();
+    expect(checkSrcEdge(edge(API, null, true))).not.toBeNull();
+    expect(checkSrcEdge(edge('src/shared/nick-words.ts', 'src/game/types.ts', true))).not.toBeNull();
+    expect(checkScriptEdge(edge('scripts/x.ts', API))).toBeNull();
     expect(stripSource("const a = '/*'; // x\nconst b = 1; /* y */", true)).toBe("const a = '  '; \nconst b = 1; ");
   });
 });

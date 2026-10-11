@@ -39,6 +39,8 @@ describe('the catalogue set', () => {
       [
         'app.name', 'boot.progress', 'event.title.game', 'fail.continue.bonus', 'fish.plus', 'home.daily.size',
         'home.daily.sub', 'list.separator', 'time.daysHours', 'time.hoursMinutes', 'time.minutes', 'unit.colorWithGlyph',
+        // Phase 2e: the chip's "#5" (a rank sign; a locale changes it only where it writes ranks otherwise).
+        'ladder.chip.rank',
       ].sort(),
     );
   });

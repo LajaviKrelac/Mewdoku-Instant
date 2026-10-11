@@ -1,0 +1,17 @@
+{
+  "name": "error.nonce_invalid",
+  "request": {
+    "method": "POST",
+    "path": "/v1/session"
+  },
+  "response": {
+    "status": 401,
+    "body": {
+      "error": {
+        "code": "nonce_invalid",
+        "message": "nonce invalid or expired"
+      },
+      "serverTime": 1791799800000
+    }
+  }
+}

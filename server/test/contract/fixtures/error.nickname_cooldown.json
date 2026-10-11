@@ -1,0 +1,19 @@
+{
+  "name": "error.nickname_cooldown",
+  "request": {
+    "method": "PUT",
+    "path": "/v1/me/profile",
+    "auth": true
+  },
+  "response": {
+    "status": 409,
+    "body": {
+      "error": {
+        "code": "nickname_cooldown",
+        "message": "nickname changed recently",
+        "retryAfterMs": 43200000
+      },
+      "serverTime": 1791799800000
+    }
+  }
+}

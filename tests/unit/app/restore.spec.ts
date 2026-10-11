@@ -280,6 +280,8 @@ describe('opening a restored board (02 §15 steps 3–6)', () => {
     const h = createHarness({ save: () => base({ inProgress: { level: lost, daily: null, event: null } }) });
     await h.session.start({ mode: 'level', level: 25 });
     h.session.onHome();
+    // Phase 2e (§3.2, P-I5): the fail card's Home runs the 'fail_home' interstitial first, then discards.
+    await h.settle(0);
     expect(h.save().inProgress.level).toBeNull();
     expect(last(h.platform.writes)?.cloud).toBe('now');
     expect(h.store.get().game).toBeNull();

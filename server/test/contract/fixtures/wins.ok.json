@@ -1,0 +1,98 @@
+{
+  "name": "wins.ok",
+  "request": {
+    "method": "POST",
+    "path": "/v1/wins",
+    "auth": true,
+    "body": {
+      "wins": [
+        {
+          "winId": "3f6c2a0e-8d1b-4c7a-9e55-0b9a1d2c4e6f",
+          "puzzleId": "L57",
+          "source": "pack",
+          "contentVersion": "content-bb8a756dfaf9",
+          "cats": "681524073",
+          "fish": 2,
+          "mistakes": 1,
+          "revives": 0,
+          "hints": 0,
+          "kitties": 1,
+          "mice": 0,
+          "solveMs": 94210,
+          "playedAt": 1791799790000,
+          "clientVersion": "0.2.0"
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "results": [
+        {
+          "winId": "3f6c2a0e-8d1b-4c7a-9e55-0b9a1d2c4e6f",
+          "verdict": "accepted",
+          "points": 2
+        }
+      ],
+      "windowPoints": 16,
+      "bracket": {
+        "state": "open",
+        "bracketId": "mgk0b7q1z4a8",
+        "pool": "fb",
+        "mode": "rolling",
+        "openedAt": 1791743600000,
+        "endsAt": 1791830000000,
+        "members": 3,
+        "maxMembers": 50,
+        "rows": [
+          {
+            "rank": 1,
+            "slot": 0,
+            "nickname": "Sleepy Whisker 27",
+            "avatarId": 1,
+            "points": 31,
+            "hearts": 4,
+            "me": false,
+            "likedByMe": false
+          },
+          {
+            "rank": 2,
+            "slot": 2,
+            "nickname": "Velvet Pounce 27",
+            "avatarId": 4,
+            "points": 16,
+            "hearts": 2,
+            "me": true,
+            "likedByMe": false
+          },
+          {
+            "rank": 3,
+            "slot": 1,
+            "nickname": "Cozy Biscuit 41",
+            "avatarId": 7,
+            "points": 9,
+            "hearts": 0,
+            "me": false,
+            "likedByMe": true
+          }
+        ],
+        "me": {
+          "rank": 2,
+          "slot": 2,
+          "nickname": "Velvet Pounce 27",
+          "avatarId": 4,
+          "points": 16,
+          "hearts": 2,
+          "me": true,
+          "likedByMe": false
+        },
+        "final": false,
+        "heartsNew": 1,
+        "result": null,
+        "serverTime": 1791799801000
+      },
+      "serverTime": 1791799801000
+    }
+  }
+}

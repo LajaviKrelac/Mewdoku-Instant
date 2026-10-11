@@ -1,0 +1,84 @@
+{
+  "name": "session.web",
+  "request": {
+    "method": "POST",
+    "path": "/v1/session",
+    "body": {
+      "platform": "web",
+      "device": {
+        "id": "q2Vx8LmN4pRt6WyZ0aBc1D",
+        "secret": "k9Jf3Hs7Ld2Qw5Er8Ty1Ui4Op6As0Df3Gh5Jk7Lz9Xa"
+      },
+      "clientVersion": "0.2.0",
+      "contentVersion": "content-bb8a756dfaf9"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "token": "v1.eyJrIjoiUjNmQ2tYOVR2cFd1TGFxTTJ6TjhIZyIsImMiOiI3S1EyTTlYRCIsInAiOiJmYiIsInQiOiJzaWduZWQiLCJ2IjoiMC4yLjAiLCJpYXQiOjE3OTE3OTk4MDAsImV4cCI6MTc5MTg4NjIwMH0.q8Jd0RkM2vWnXa7LpT4sYcBe9FhGu1Zo",
+      "expiresAt": 1791886200000,
+      "player": {
+        "code": "H4TW8C2R",
+        "nickname": "Misty Pebble 9",
+        "nick": {
+          "adj": 3,
+          "noun": 8,
+          "num": 9
+        },
+        "avatarId": 11,
+        "status": "ok",
+        "pool": "web",
+        "trust": "anon",
+        "listed": true,
+        "nicknameChangeAt": null
+      },
+      "rules": {
+        "periodMode": "rolling",
+        "durationMs": 86400000,
+        "maxMembers": 50,
+        "scoringModes": [
+          "level",
+          "daily",
+          "event"
+        ],
+        "places": [
+          {
+            "place": 1,
+            "hints": 2,
+            "kitties": 2
+          },
+          {
+            "place": 2,
+            "hints": 1,
+            "kitties": 1
+          },
+          {
+            "place": 3,
+            "hints": 1,
+            "kitties": 0
+          }
+        ],
+        "minMembers": 5,
+        "doubleByVideo": true,
+        "claimTtlMs": 604800000,
+        "hearts": {
+          "enabled": true,
+          "allowSelf": true,
+          "maxGivenPerBracket": 20
+        },
+        "nickname": {
+          "freeText": false,
+          "changeCooldownMs": 86400000
+        }
+      },
+      "results": [],
+      "bracket": null,
+      "limits": {
+        "maxWinsPerRequest": 10,
+        "queueMax": 20
+      },
+      "serverTime": 1791799800000
+    }
+  }
+}

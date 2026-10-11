@@ -1,16 +1,24 @@
-// Owner: B (Phase 2b)
+// Owner: B (Phase 2b); G3 (Phase 2e: the "Worldwide ranking" rows and the delete confirmation)
 // O5 settings (02 §5 O5, §14) with the "About & credits" sub-view (version, font licence, privacy link).
 // Toggles call onChange(patch) at once; the app saves and re-renders through update(). Esc in a
 // sub-view returns to the list; otherwise Esc, × and scrim taps call onClose.
 // Phase 2b rows (§6.8, §8.5): Language (a sub-view listing "Automatic" and the endonyms of the
 // locales this build contains, a radio group), Shop and Remove ads. Each is shown only when its prop
 // is present (no look rows: one theme, §1.9).
+// Phase 2e (G3, spec §2.7, §9.4; CONTRACTS §8): with SettingsProps.ladder (FB with the ranking active, or the
+// web in anon mode; absent = rows hidden) a "Worldwide ranking" group: "Ranking name" (the name, opens the
+// name sheet), "Show me in rankings" (a switch, when ladder.optOutAllowed), "Delete my ranking data" (opens a
+// confirmation view: "Delete your ranking name, picture and results from our server? Your game progress
+// stays." Delete / Cancel) and the player code as plain text ("Player code 7KQ2-M9XD", formatted by the
+// app). Offline: the switch and Delete are disabled with "Connect to the internet to change this.".
 //
-// Classes: .overlay[data-overlay=settings] > .overlay__panel--dialog.settings[data-view=main|about|language]
+// Classes: .overlay[data-overlay=settings] > .overlay__panel--dialog.settings[data-view=main|about|language|confirm]
 //          .settings__view .overlay__head .settings__list .settings-row(--link) .settings-row__label
 //          .settings-row__note .settings-row__value .switch(.switch__track .switch__knob .switch__state)
 //          .segmented .segmented__opt .about__name .about__text .about__code .about__link
 //          .lang-list > .lang-opt[aria-checked]
+//          .settings__ladder(.settings__group-title button.settings__ladder-name button.switch.settings__ladder-listed[aria-checked]
+//            button.settings__ladder-delete .settings__ladder-offline .settings__ladder-code) .settings__view--confirm
 // Review fixes: every label follows the language at once, also the ones built here at creation
 // (A11Y-I18N-1: switching to Deutsch left "Settings / Sound / …" in English until a reload); a
 // Feedback row (PAR-5: the original's "Settings → Feedback") shown only when the app passes a
@@ -52,11 +60,29 @@ export interface SettingsProps {
    * rules are checked). Absent or empty = row hidden.
    */
   readonly feedbackUrl?: string;
+  /** Phase 2e §2.7: the "Worldwide ranking" rows; absent = hidden (web-prod, no server). */
+  readonly ladder?: SettingsLadderRows;
+}
+
+/** Phase 2e (CONTRACTS §8): the Settings ranking rows. */
+export interface SettingsLadderRows {
+  /** My ranking name (our words; rendered with textContent, dir="auto"). */
+  readonly name: string;
+  /** ALREADY formatted by the app ("7KQ2-M9XD"): ui/ imports shared/ for types only. null hides the line. */
+  readonly code: string | null;
+  readonly listed: boolean;
+  /** ladder.optOutAllowed. */
+  readonly showListed: boolean;
+  /** false disables the switch and Delete (both need the server's answer). */
+  readonly online: boolean;
+  onName(): void;
+  onListed(on: boolean): void;
+  onDelete(): void;
 }
 
 
 type SwitchKey = 'sound' | 'haptics' | 'patterns';
-type SettingsView = 'main' | 'about' | 'language';
+type SettingsView = 'main' | 'about' | 'language' | 'confirm';
 
 /** "Automatic" or the locale's endonym (locale.name.<id>, E's catalogue). */
 export function languageName(id: 'auto' | LocaleId): string {
@@ -152,6 +178,44 @@ export function createSettingsModal(): OverlayView<SettingsProps> {
     icon('icon-chevron', { class: 'btn__chev' }),
   );
 
+  // ── Phase 2e: the "Worldwide ranking" group ──
+  const ladderNameValue = h('span', { class: 'settings-row__value settings__ladder-value', dir: 'auto' });
+  const ladderName = linkRow(() => t('settings.ladder.name'), () => props?.ladder?.onName(), 'settings__ladder-name', ladderNameValue);
+  const listedId = nextId('set-listed');
+  const listedSwitch = h(
+    'button',
+    { type: 'button', class: 'switch settings__ladder-listed', role: 'switch', id: listedId, 'aria-checked': 'false' },
+    h('span', { class: 'switch__state', 'aria-hidden': 'true' }),
+    h('span', { class: 'switch__track', 'aria-hidden': 'true' }, h('span', { class: 'switch__knob' })),
+  );
+  listedSwitch.addEventListener('click', () => {
+    const l = props?.ladder;
+    if (!l || !l.online || listedSwitch.getAttribute('aria-disabled') === 'true') return;
+    l.onListed(!l.listed);
+  });
+  const listedRow = h(
+    'div',
+    { class: 'settings-row settings__ladder-listed-row' },
+    h('label', { class: 'settings-row__label', for: listedId }, L.text(document.createTextNode(''), () => t('settings.ladder.join'))),
+    listedSwitch,
+  );
+  const ladderDelete = linkRow(() => t('settings.ladder.delete'), () => {
+    if (props?.ladder?.online) showView('confirm');
+  }, 'settings__ladder-delete');
+  const ladderOffline = L.text(h('p', { class: 'settings__ladder-offline' }), () => t('settings.ladder.offline'));
+  const ladderCode = h('p', { class: 'settings__ladder-code' });
+  const ladderTitleId = nextId('set-ladder');
+  const ladderGroup = h(
+    'div',
+    { class: 'settings__ladder', role: 'group', 'aria-labelledby': ladderTitleId, hidden: true },
+    L.text(h('h3', { class: 'settings__group-title', id: ladderTitleId }), () => t('settings.ladder.title')),
+    ladderName,
+    listedRow,
+    ladderDelete,
+    ladderOffline,
+    ladderCode,
+  );
+
   const vibrationRow = switchRow('haptics', () => t('settings.vibration'));
   const aboutLink = linkRow(() => t('settings.about'), () => showView('about'), 'settings__about-link');
   const mainView = h(
@@ -171,6 +235,7 @@ export function createSettingsModal(): OverlayView<SettingsProps> {
         segmented,
       ),
       languageLink,
+      ladderGroup,
       shopLink,
       removeAdsLink,
       linkRow(() => t('settings.howToPlay'), () => props?.onHowToPlay(), 'settings__howto-link'),
@@ -264,7 +329,33 @@ export function createSettingsModal(): OverlayView<SettingsProps> {
     });
   };
 
-  shell.panel.append(mainView, aboutView, langView);
+  // ── Phase 2e: the delete confirmation (a view of its own, so focus and Esc stay in the dialog) ──
+  const confirmTitleId = nextId('confirm-title');
+  const confirmBack = backButton();
+  const confirmDelete = L.label(
+    makeButton({
+      variant: 'primary',
+      label: '',
+      block: true,
+      className: 'settings__confirm-delete',
+      onPress: () => {
+        const l = props?.ladder;
+        showView('main');
+        if (l?.online) l.onDelete();
+      },
+    }),
+    () => t('settings.ladder.delete.ok'),
+  );
+  const confirmCancel = L.label(makeButton({ variant: 'ghost', label: '', className: 'settings__confirm-cancel', onPress: () => showView('main') }), () => t('common.cancel'));
+  const confirmView = h(
+    'div',
+    { class: 'settings__view settings__view--confirm', hidden: true, role: 'group', 'aria-labelledby': confirmTitleId },
+    h('div', { class: 'overlay__head' }, confirmBack, L.text(h('h2', { class: 'overlay__title', id: confirmTitleId }), () => t('settings.ladder.delete')), close()),
+    L.text(h('p', { class: 'overlay__body settings__confirm-text' }), () => t('settings.ladder.delete.confirm')),
+    h('div', { class: 'overlay__actions overlay__actions--stack' }, confirmDelete, confirmCancel),
+  );
+
+  shell.panel.append(mainView, aboutView, langView, confirmView);
 
   function showView(v: SettingsView, moveFocus = true): void {
     const from = view;
@@ -273,11 +364,16 @@ export function createSettingsModal(): OverlayView<SettingsProps> {
     mainView.hidden = v !== 'main';
     aboutView.hidden = v !== 'about';
     langView.hidden = v !== 'language';
-    shell.panel.setAttribute('aria-labelledby', v === 'main' ? shell.titleId : v === 'about' ? aboutTitleId : langTitleId);
+    confirmView.hidden = v !== 'confirm';
+    shell.panel.setAttribute(
+      'aria-labelledby',
+      v === 'main' ? shell.titleId : v === 'about' ? aboutTitleId : v === 'language' ? langTitleId : confirmTitleId,
+    );
     if (!moveFocus) return;
     if (v === 'about') back.focus();
     else if (v === 'language') (langOpts.find((o) => o.tabIndex === 0) ?? langBack).focus();
-    else (from === 'language' ? languageLink : aboutLink).focus();
+    else if (v === 'confirm') confirmCancel.focus();
+    else (from === 'language' ? languageLink : from === 'confirm' ? ladderDelete : aboutLink).focus();
   }
 
   const render = (p: SettingsProps): void => {
@@ -295,6 +391,24 @@ export function createSettingsModal(): OverlayView<SettingsProps> {
       setText(languageValue, languageName(p.language.current));
       renderLanguages(p.language);
     }
+    // Phase 2e: the ranking rows.
+    const l = p.ladder;
+    ladderGroup.hidden = !l;
+    if (l) {
+      // Our words, the same in every locale: textContent only.
+      if (ladderNameValue.textContent !== l.name) ladderNameValue.textContent = l.name;
+      listedRow.hidden = !l.showListed;
+      listedSwitch.setAttribute('aria-checked', String(l.listed));
+      const state = listedSwitch.querySelector('.switch__state');
+      if (state) setText(state, l.listed ? t('common.on') : t('common.off'));
+      for (const b of [listedSwitch, ladderDelete]) {
+        if (l.online) b.removeAttribute('aria-disabled');
+        else b.setAttribute('aria-disabled', 'true');
+      }
+      ladderOffline.hidden = l.online;
+      ladderCode.hidden = l.code === null;
+      if (l.code !== null) setText(ladderCode, t('settings.ladder.code', { code: l.code }));
+    } else if (view === 'confirm') showView('main', false);
     shopLink.hidden = !p.onShop;
     removeAdsLink.hidden = !p.onRemoveAds;
     const feedback = p.feedbackUrl && /^(https:|mailto:)/i.test(p.feedbackUrl) ? p.feedbackUrl : null;

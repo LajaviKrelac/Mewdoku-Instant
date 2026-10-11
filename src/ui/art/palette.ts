@@ -83,6 +83,8 @@ export type TokenName =
   | 'stage'
   | 'amber-text'
   | 'gold'
+  /** Phase 2e: icon strokes on gold (tokens.css since 2b); the medal rims, the chest straps, the tag's ring. */
+  | 'gold-deep'
   | 'fish'
   | 'fish-deep'
   | 'fish-hi'
@@ -110,7 +112,11 @@ export type TokenName =
   | 'done-bottom'
   | 'done-line'
   | 'hint-card'
-  | 'apply';
+  | 'apply'
+  // Phase 2e (spec §2.8, §5.3, Appendix C): a given heart in the ranking (a cheer; never a life: lives are
+  // fish) and the streak strip's empty paw outline (the strip may recolour one step through --step-line).
+  | 'cheer'
+  | 'step-line';
 
 /**
  * The one token set (phase2b §1.3, §1.4; look-spec §1.2). Phase 2d (D-2d-0): the page, card, ink,
@@ -151,6 +157,7 @@ export const TOKENS: Readonly<Record<TokenName, string>> = Object.freeze({
   stage: '#2A2430',
   'amber-text': '#8A5A00',
   gold: '#FFC23D',
+  'gold-deep': '#DD9A12',
   fish: '#F1AA22',
   'fish-deep': '#D47E18',
   'fish-hi': '#FED95D',
@@ -175,7 +182,16 @@ export const TOKENS: Readonly<Record<TokenName, string>> = Object.freeze({
   'done-line': '#813800',
   'hint-card': '#FFFCFA',
   apply: '#D38025',
+  cheer: '#D9466A',
+  'step-line': '#A6827C',
 });
+
+/**
+ * Phase 2e (spec Appendix C, ours): the reward chest's wood and its dark inside, shared by the streak strip's
+ * day-7 step (first-load sprite) and the reward chests (art/ladder-art.ts). The straps and the fish-shaped lock
+ * are --gold / --gold-deep. palette-check reports the wood (informational: decorative art).
+ */
+export const CHEST_COLORS = Object.freeze({ wood: '#B9773F', lid: '#CC8A4E', grain: '#94582B', inside: '#5A3420' });
 
 /**
  * Tux, our tuxedo-style cat (phase2b §1.6): dark fur with a sheen, a near-black outline, a white

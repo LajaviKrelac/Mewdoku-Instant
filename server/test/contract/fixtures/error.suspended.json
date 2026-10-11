@@ -1,0 +1,18 @@
+{
+  "name": "error.suspended",
+  "request": {
+    "method": "GET",
+    "path": "/v1/bracket",
+    "auth": true
+  },
+  "response": {
+    "status": 403,
+    "body": {
+      "error": {
+        "code": "suspended",
+        "message": "ranking paused for this player"
+      },
+      "serverTime": 1791799800000
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "error.heart_exists",
+  "request": {
+    "method": "POST",
+    "path": "/v1/hearts",
+    "auth": true
+  },
+  "response": {
+    "status": 409,
+    "body": {
+      "error": {
+        "code": "heart_exists",
+        "message": "heart already given"
+      },
+      "serverTime": 1791799800000
+    }
+  }
+}

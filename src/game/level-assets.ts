@@ -6,7 +6,14 @@
 // an absent month resolves null (→ daily generated from its seed, 02 §12).
 import type { LevelPack } from '../engine/types';
 import pack000 from '../data/levels/pack-000.json';
+import { version as manifestVersion } from '../data/levels/manifest.json';
 import type { LevelsRepoDeps } from './levels-repo';
+
+/**
+ * Phase 2e (G1, spec §2.3): the content manifest's `version` (WinSubmission.contentVersion), a named JSON
+ * import so the bundle carries only this string, not the manifest.
+ */
+export const CONTENT_VERSION: string = typeof manifestVersion === 'string' ? manifestVersion : 'unknown';
 
 /** pack-000, validated by createLevelsRepo (an invalid bundle → substitute boards, never a crash). */
 export const BUNDLED_PACK: LevelPack = pack000 as unknown as LevelPack;

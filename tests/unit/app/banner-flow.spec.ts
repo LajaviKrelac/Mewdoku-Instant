@@ -34,7 +34,7 @@ function setup(opts: { completed?: number; noAds?: boolean; banner?: boolean; re
     ...defaults(NOW),
     tutorialDone: true,
     progress: { level: (opts.completed ?? 14) + 1, completed: opts.completed ?? 14, best: {} },
-    purchases: { noAds: opts.noAds ?? false, tokens: [] },
+    purchases: { noAds: opts.noAds ?? false, tokens: [], pending: [] },
   };
   const store = createStore<AppState>(initialAppState(save));
   const platform: FakePlatform = createFakePlatform(log, { banner: opts.banner ?? true });
@@ -204,7 +204,7 @@ describe('banner-flow (§3.2)', () => {
     await s.flow.screenShown('home');
     await s.flow.entitlementChanged(); // something else changed (a hint pack): nothing to do
     expect(s.log).toEqual(['banner:show:bottom']);
-    s.store.update((st) => ({ ...st, save: { ...st.save, purchases: { noAds: true, tokens: [] } } }));
+    s.store.update((st) => ({ ...st, save: { ...st.save, purchases: { noAds: true, tokens: [], pending: [] } } }));
     await s.flow.entitlementChanged();
     expect(s.log).toEqual(['banner:show:bottom', 'banner:hide']);
     expect(s.flow.showing()).toBe(false);
@@ -220,7 +220,7 @@ describe('banner-flow (§3.2)', () => {
     let release: (r: AdResult) => void = () => undefined;
     if (s.platform.ads.banner) s.platform.ads.banner.show = () => (s.log.push('banner:show:bottom'), new Promise((r) => (release = r)));
     const shown = s.flow.screenShown('home');
-    s.store.update((st) => ({ ...st, save: { ...st.save, purchases: { noAds: true, tokens: [] } } }));
+    s.store.update((st) => ({ ...st, save: { ...st.save, purchases: { noAds: true, tokens: [], pending: [] } } }));
     await s.flow.entitlementChanged();
     expect(s.log).toEqual(['banner:show:bottom', 'banner:hide']);
     release({ ok: true });
@@ -419,7 +419,7 @@ describe('phase 2d §1.16: the banner on the game screen (ads.banner.duringPlay,
     await replay.h.settle(replay.h.config.fx.boardEntryMs);
     expect([band(replay.h), banner(replay.h)]).toEqual([false, []]);
 
-    const noAds = play({ save: (s) => ({ ...veteran(s), purchases: { noAds: true, tokens: [] } }) });
+    const noAds = play({ save: (s) => ({ ...veteran(s), purchases: { noAds: true, tokens: [], pending: [] } }) });
     await startLevel(noAds.h, 15);
     expect([band(noAds.h), banner(noAds.h)]).toEqual([false, []]);
 
@@ -466,8 +466,8 @@ describe('phase 2d §1.16: the banner on the game screen (ads.banner.duringPlay,
     expect(order.slice(0, 2)).toEqual(['banner:hide', 'ad:interstitial:next_level']);
   });
 
-  it('the modals hide it (Settings, How to play, the shop, the hub, the ranking panel); closing does not re-show it; the next board after the window does', async () => {
-    const { h, shell } = play();
+  it('reshowAfterAnyHide off (the 2d.1 rule): the modals hide it (Settings, How to play, the shop, the hub, the ranking panel); closing does not re-show it; the next board after the window does', async () => {
+    const { h, shell } = play({ config: { ads: { banner: { reshowAfterAnyHide: false } } } });
     await startLevel(h, 15);
     h.router.game?.cb.onSettings(); // the game's gear → Settings
     await h.settle(0);
@@ -622,7 +622,7 @@ describe('phase 2d §1.16: the banner on the game screen (ads.banner.duringPlay,
   it('No Ads bought mid-level: the band goes and the banner is hidden', async () => {
     const { h, flow } = play();
     await startLevel(h, 15);
-    h.store.update((s) => ({ ...s, save: { ...s.save, purchases: { noAds: true, tokens: [] } } }));
+    h.store.update((s) => ({ ...s, save: { ...s.save, purchases: { noAds: true, tokens: [], pending: [] } } }));
     await flow.entitlementChanged();
     expect(band(h)).toBe(false);
     expect(banner(h)).toEqual(['banner:show', 'banner:hide']);

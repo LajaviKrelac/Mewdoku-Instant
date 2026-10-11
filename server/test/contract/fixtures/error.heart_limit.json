@@ -1,0 +1,18 @@
+{
+  "name": "error.heart_limit",
+  "request": {
+    "method": "POST",
+    "path": "/v1/hearts",
+    "auth": true
+  },
+  "response": {
+    "status": 409,
+    "body": {
+      "error": {
+        "code": "heart_limit",
+        "message": "heart limit reached"
+      },
+      "serverTime": 1791799800000
+    }
+  }
+}

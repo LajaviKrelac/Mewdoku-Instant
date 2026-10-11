@@ -1,0 +1,9 @@
+# Owner: G4 (Phase 2e). Copy to .dev.vars (git-ignored) for `npm run dev` (wrangler dev --local) or to
+# override the Node dev server's test values (`npm run dev:node`). TEST VALUES ONLY: never a real secret here.
+FB_APP_SECRET=e2e-fb-app-secret
+FB_APP_SECRET_ALT=mewdoku-dev-synthetic-players-secret-0001
+SESSION_SECRET=mewdoku-dev-session-secret-not-for-production-01
+ID_PEPPER=mewdoku-dev-id-pepper-not-for-production-000001
+ADMIN_KEY=mewdoku-dev-admin-key-0123456789abcdef0123456789
+DEV_ROUTES=true
+WEB_MODE=anon

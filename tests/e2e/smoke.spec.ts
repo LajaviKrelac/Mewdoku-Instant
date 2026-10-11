@@ -19,6 +19,11 @@
 // star (0 at 1 s, 576 by 1.8 s) with the head's face; the hint's ghosts are exactly the open step's
 // Empty effect tiles, Apply closes it at once and crosses exactly those, and a completed line gets
 // one "Done!" label per anchor; the two tickers replace the start toast.
+// Phase 2e (G1, docs/phase2e/spec.md §2.9, §2.11, §5.3; L0b): the e2e build has a ranking origin (the dev
+// server, VITE_LADDER_WEB=anon). The web-prod checks (records + rank.localOnly, the period pill, no Shop)
+// run with ?flags=-ladder (spec §7.3: the flag `ladder` off = the web-prod path), and assert that not
+// one request reaches the ranking origin. The victory's `.victory__streak` is now the daily streak row
+// (§5.3); "no Perfect ×N" is checked by its text.
 import { expect, test, type Page } from '@playwright/test';
 import type { E2EHooks } from '../../src/app/boot';
 import type { Puzzle } from '../../src/engine/types';
@@ -165,8 +170,19 @@ test('4 · a win: ranking panel, then the victory screen; "Level 6" loads the fo
   expect((await game(page))?.id).toBe('L6');
 });
 
-test('4b · web rankings: my own records and the rankings-not-available line, never another player row', async ({ page }) => {
-  await open(page, '', returning());
+/** Phase 2e §2.11: every request to the ranking origin (port 8797 in the e2e builds; any /v1/ path). */
+function ladderRequests(page: Page): string[] {
+  const seen: string[] = [];
+  page.on('request', (r) => {
+    const u = new URL(r.url());
+    if (u.pathname.startsWith('/v1/') || u.port === '8787' || u.port === '8797') seen.push(`${r.method()} ${u.pathname}`);
+  });
+  return seen;
+}
+
+test('4b · web-prod rankings (?flags=-ladder): my own records and the rankings-not-available line, never another player row, no request to the ranking origin', async ({ page }) => {
+  const sent = ladderRequests(page);
+  await open(page, '?flags=-ladder', returning());
   await playLevel(page);
   const sol = await solution(page);
   for (let r = 0; r < sol.length; r++) await dbl(page, r * sol.length + (sol[r] as number));
@@ -178,15 +194,22 @@ test('4b · web rankings: my own records and the rankings-not-available line, ne
   await expect(panel).toContainText('Total points'); // 2c.1 (D24): instead of the retired perfect streak
   await expect(panel).not.toContainText('Perfect streak');
   await expect(panel).toContainText('Levels solved');
-  expect(await panel.locator('.rank-list__row, [data-rank-row]').count()).toBe(0);
+  expect(await panel.locator('.rank-list__row, [data-rank-row], .rank-row').count()).toBe(0);
   expect((await app(page))?.save.period.total).toBe(3);
+  // §2.11: nothing queued for a server and not one request to it (the win, Home, the panel).
+  expect((await app(page))?.save.ladder.pending).toEqual([]);
+  await continueFromPanel(page);
+  await page.locator('[data-overlay="victory"] .victory__home').click();
+  await ready(page, 'home');
+  await page.waitForTimeout(500);
+  expect(sent).toEqual([]);
 });
 
-test('4c · no shop on the web (phase2c §5.2): no fish pill "+" on Home, no Shop row in Settings; Home shows this week\'s fish', async ({ page }) => {
+test('4c · no shop on the web (phase2c §5.2): no fish pill "+" on Home, no Shop row in Settings; Home shows this week\'s fish (web-prod, ?flags=-ladder)', async ({ page }) => {
   const week = periodKeyAt(Date.now());
-  await open(page, '', returning({ period: { key: week, total: 42, bestKey: week, bestTotal: 42 } }));
+  await open(page, '?flags=-ladder', returning({ period: { key: week, total: 42, bestKey: week, bestTotal: 42 } }));
   await expect(page.locator('.screen--home .fish-pill, .screen--home .fish-pill__plus')).toHaveCount(0);
-  const pill = page.locator('.screen--home .period-pill');
+  const pill = page.locator('.screen--home button.ladder-chip[data-state="records"]') /* 2e §2.9: the period pill is the records chip (a button) */;
   await expect(pill).toBeVisible();
   await expect(pill).toHaveAttribute('aria-label', '42 fish this week');
   await page.locator('.screen--home').getByRole('button', { name: 'Settings' }).click();
@@ -208,8 +231,30 @@ test('4d · the victory rows: the level\'s points total, the fish kept and "This
   // 2c.1: n cats in a row, 96 × (5 + s) each: runTotal(n) (5×5 → 3,840; 8×8 → 7,296).
   const total = runTotal(sol.length, pointsRuleFor('level'));
   await expect(victory.locator('.victory__points')).toHaveText(`${total.toLocaleString('en-US')} points`);
-  await expect(victory.locator('.victory__streak')).toHaveCount(0);
+  await expect(victory.getByText(/Perfect ×/)).toHaveCount(0); // 2c.1; `.victory__streak` is the 2e daily streak row
   expect((await app(page))?.save.points.total).toBe(total);
+});
+
+test('4e · the daily streak (Phase 2e §5): the first win of the day → day 1 on the victory and on Home\'s strip, today done; saved', async ({ page }) => {
+  await open(page, '?flags=-ladder', returning());
+  const strip = page.locator('.screen--home .streak-strip');
+  await expect(strip).toHaveAttribute('data-today', '0');
+  await playLevel(page);
+  const sol = await solution(page);
+  for (let r = 0; r < sol.length; r++) await dbl(page, r * sol.length + (sol[r] as number));
+  await continueFromPanel(page);
+  const row = page.locator('[data-overlay="victory"] .victory__streak');
+  await expect(row).toBeVisible();
+  await expect(row).toHaveAttribute('data-day', '1');
+  await expect(row).toContainText(/day 1 of 7/i);
+  const s = (await app(page))?.save;
+  expect(s?.dayStreak.run).toBe(1);
+  expect(s?.dayStreak.dates).toEqual([today()]);
+  await page.locator('[data-overlay="victory"] .victory__home').click();
+  await ready(page, 'home');
+  await expect(strip).toHaveAttribute('data-day', '1');
+  await expect(strip).toHaveAttribute('data-today', '1');
+  await expect(strip).toHaveAttribute('data-state', 'done');
 });
 
 test('5 · reload mid-level restores the exact board', async ({ page }) => {

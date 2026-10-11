@@ -31,11 +31,12 @@ import { eventEnd, eventRules, type EventDef } from '../game/events';
 import { newGame, restoreGame, toInProgress } from '../game/factory';
 import { getMode, rulesFor } from '../game/modes';
 import { mouseLandMs, mouseVisitMs } from '../game/mouse';
-import { dailyCardState, isHard, localDateKey } from '../game/progression';
+import { dailyCardState, dailyDateKey, isHard } from '../game/progression';
 import { reduce } from '../game/reducer';
 import { validateSlot } from '../game/save';
 import { encodeDailyScore, encodeEventScore, encodePeriodScore } from '../game/scoring';
 import { advance, filterTutorialAction, tutorialStep } from '../game/tutorial';
+import type { PuzzleSource } from '../game/levels-repo';
 import type { Action, BoardKey, GameEvent, GameState, ModeId, RuleFlags } from '../game/types';
 import type { RankingListState, RankScoreView } from '../ui/overlays/ranking-panel';
 import { periodRankTitle } from '../ui/period-text';
@@ -45,7 +46,9 @@ import { t } from '../i18n';
 import type { TimerId } from './clock';
 import { cfg } from './config';
 import type { AnalyticsEvent, RankResult } from './events';
+import { isFlagOn } from './flags';
 import { createHelperFlows } from './helper-flows';
+import { queueWin } from './ladder-origin';
 import { pickTickerLines } from './tickers';
 import type { BoardScore } from './ranking-flow';
 import { feedbackFor, failEvent, levelParam, mistakeEvent, startEvents, winBookkeeping, type WinSummary } from './session-effects';
@@ -147,6 +150,9 @@ export function createSession(deps: SessionDeps): Session {
       if (gen === mine) {
         busy = false;
         setLock(false);
+        // Phase 2e §3.1: a banner hidden during the flow (a video, FB's purchase dialog) comes back now
+        // that the board is free (nothing when it is still up or the hint card is open).
+        if (deps.banners && store.get().screen === 'game') void deps.banners.reshowGame('helper').catch(() => undefined);
       }
     }
   }
@@ -175,6 +181,7 @@ export function createSession(deps: SessionDeps): Session {
       if (game()?.status === 'kitty') timers.later(c.kitty.revealMs, () => dispatch({ type: 'KITTY_DONE' }));
     },
     reducedMotion: () => store.get().ui.reducedMotion,
+    ...(deps.shop ? { shop: deps.shop } : {}),
   });
 
   const winFlow = createWinFlow({
@@ -315,7 +322,12 @@ export function createSession(deps: SessionDeps): Session {
     result: RankResult | null;
     panelOpen: boolean;
     logged: boolean;
+    /** Phase 2e §2.3: the worldwide ranking gives this win's panel its list (the flow was active at WON). */
+    readonly ladder: boolean;
   } | null = null;
+
+  /** Phase 2e: the loaded ladder flow, or null. */
+  const ladderFlow = () => deps.ladder?.flow() ?? null;
 
   /** Every cat cell in row order (the solution cells of a won board). */
   function catCells(puzzle: Puzzle): CellIndex[] {
@@ -333,7 +345,8 @@ export function createSession(deps: SessionDeps): Session {
     const out: BoardScore[] = [];
     if (!summary.counted || summary.mode === 'tutorial') return out;
     const p = summary.period;
-    if (p && p.gained > 0) out.push({ board: c.rank.boards.period, score: encodePeriodScore(p.key, p.total, c) });
+    // Phase 2e §2.10 (D-2e-4): the FB weekly board is retired unless rank.fbPeriodBoard.
+    if (p && p.gained > 0 && c.rank.fbPeriodBoard) out.push({ board: c.rank.boards.period, score: encodePeriodScore(p.key, p.total, c) });
     if (summary.mode === 'event' && summary.event) {
       const e = summary.event;
       out.push({ board: e.def.leaderboard, score: encodeEventScore(e.solvedAfter, e.totalMs) });
@@ -348,6 +361,11 @@ export function createSession(deps: SessionDeps): Session {
   }
 
   function listFor(w: NonNullable<typeof win>): RankingListState {
+    // Phase 2e §2.4: the worldwide ranking's states (loading · bracket · bracket + stale · records).
+    if (w.ladder) {
+      const st = ladderFlow()?.listState() ?? null;
+      if (st) return st;
+    }
     if (!w.result) return { kind: 'loading' };
     const s = w.summary;
     const records = personalRecords(store.get(), viewCtx(), {
@@ -377,8 +395,18 @@ export function createSession(deps: SessionDeps): Session {
 
   function rankingProps(w: NonNullable<typeof win>, tapMinMs: number) {
     const band = w.summary.period ? { periodKey: w.summary.period.key } : undefined;
+    const lf = w.ladder ? ladderFlow() : null;
+    // Phase 2e §2.4: "+2 fish · Your total: 14", the bracket list factory, hearts and the info button
+    // (only while the ladder is active: its records keep this week's subtitle).
+    const ladderExtras = lf && lf.active()
+      ? {
+          result: { kind: 'ladder' as const, gained: w.summary.counted ? w.summary.kept : 0, total: lf.panelTotal() },
+          ...lf.panelExtras(),
+        }
+      : {};
     return {
       ...selectRankingView(store.get(), viewCtx(), w.summary, listFor(w), { tapMinMs }, c),
+      ...ladderExtras,
       onContinue: () => winFlow.continueFromRanking(),
       onSeeTop: () => {
         if (w.board) void deps.rankings?.showList(w.board, rankingTitle(w), undefined, undefined, band, myScoreView(w.summary) ?? undefined);
@@ -435,13 +463,60 @@ export function createSession(deps: SessionDeps): Session {
 
   function onWon(state: GameState, m: SessionMeta, restored: boolean): void {
     const before = save();
-    const book = winBookkeeping(before, m, state, { now: clock.now(), event: m.event ?? null, restored, config: c });
+    const book = winBookkeeping(before, m, state, {
+      now: clock.now(),
+      event: m.event ?? null,
+      restored,
+      config: c,
+      // Phase 2e §5.1: the streak's day (the daily's date key) and whether it may count now.
+      streakDateKey: dailyDateKey(clock.now(), c),
+      streakAllowed: isFlagOn('dayStreak') && (deps.streakClockOk?.() ?? true),
+    });
     updateSave(() => book.save);
-    if (book.critical) deps.saves.critical(); // t = 0: every reward is saved before any animation (§2.2)
-    for (const e of book.events) log(e);
     const s = book.summary;
+    if (m.mode === 'level' && !restored) helpers.levelWon(); // Phase 2e §3.2: the retry cadence restarts
+    // Phase 2e §2.3 (critic C-25): a counted, scored win is queued for the ranking server in the SAME
+    // critical save as the win (a crash after WON loses nothing); the flow sends it right after.
+    const lad = deps.ladder;
+    const flowAtWon = ladderFlow();
+    // The ladder's panel whenever its flow is loaded (it answers records with the right note itself: not
+    // listed, paused, unavailable); the 2c records path only without a ranking origin or before the flow loads.
+    const useLadder = !!lad && lad.inUse() && s.mode !== 'tutorial' && !restored && !!flowAtWon;
+    let ladderWinId: string | null = null;
+    if (lad && lad.inUse() && s.counted && s.mode !== 'tutorial' && !restored && (c.period.modes as readonly string[]).includes(s.mode)) {
+      const source: PuzzleSource = m.source ?? (m.substitute ? 'substitute' : 'pack');
+      const q = queueWin(
+        save(),
+        {
+          puzzleId: state.puzzle.id,
+          source,
+          contentVersion: lad.contentVersion,
+          solution: state.puzzle.solution,
+          kept: s.kept,
+          mistakes: state.mistakes,
+          revives: state.revivesUsed,
+          hints: state.hintsUsed,
+          kitties: state.kittiesUsed,
+          mice: helpers.mouseUses(),
+          solveMs: state.elapsedMs,
+          deviceNow: clock.now(),
+          clientVersion: lad.clientVersion,
+        },
+        lad.newWinId(),
+        c,
+      );
+      if (q.win) {
+        updateSave(() => q.save);
+        ladderWinId = q.win.winId;
+        for (let i = 0; i < q.dropped; i++) log({ name: 'ladder_submit', params: { mode: s.mode, result: 'dropped', reason: 'cap', ms: 0 } });
+        if (!flowAtWon || !flowAtWon.active()) log({ name: 'ladder_submit', params: { mode: s.mode, result: 'queued', reason: '', ms: 0 } });
+      }
+    }
+    if (book.critical || ladderWinId !== null) deps.saves.critical(); // t = 0: every reward (and the queued win) is saved before any animation (§2.2)
+    for (const e of book.events) log(e);
     if (book.save.stock !== before.stock) bus.emit('stock', { hints: book.save.stock.hints, kitties: book.save.stock.kitties });
     if (m.mode === 'level' && m.level !== null) deps.levels.prefetch(m.level + 1);
+    if (useLadder && flowAtWon) flowAtWon.onWin({ winId: ladderWinId, mode: s.mode, kept: s.counted ? s.kept : 0 });
     router.close('coach');
     if (!restored) timers.later(c.fx.winHappyDelayMs, () => fx.play({ sfx: 'win', haptic: c.haptics.win }));
 
@@ -463,6 +538,7 @@ export function createSession(deps: SessionDeps): Session {
       result: null,
       panelOpen: false,
       logged: false,
+      ladder: useLadder,
     };
     const w = win;
     // §5.5 steps 2 then 3, from t = 0 so the panel is ready in time (deadline rank.fetchTimeoutMs):
@@ -482,7 +558,11 @@ export function createSession(deps: SessionDeps): Session {
     if (gained > 0) void deps.groups?.onWin(gained).catch(() => undefined);
     if (panelBoard && variant !== 'restored') {
       const band = s.period ? { periodKey: s.period.key } : undefined;
-      const fetched = deps.rankings ? deps.rankings.fetch(panelBoard, band) : Promise.resolve<RankResult>({ board: panelBoard, api: 'local', mine: null, top: [], ok: true });
+      // Phase 2e §2.10: the FB period board is read only with rank.fbPeriodBoard (the ladder or the records otherwise).
+      const fetched =
+        deps.rankings && c.rank.fbPeriodBoard && !useLadder
+          ? deps.rankings.fetch(panelBoard, band)
+          : Promise.resolve<RankResult>({ board: panelBoard, api: 'local', mine: null, top: [], ok: true });
       void fetched.then(
         (result) => {
           if (win !== w) return;
@@ -505,7 +585,8 @@ export function createSession(deps: SessionDeps): Session {
       // §2.2: only the fish kept fly, and only when the win adds leaderboard points.
       kept: gained > 0 ? s.kept : 0,
       perFish: c.period.pointsPerFish,
-      periodBefore: s.period?.before ?? 0,
+      // Phase 2e §2.3: with the ladder, my bracket's points from the last answer (0 when none is running).
+      periodBefore: useLadder && flowAtWon && flowAtWon.active() ? flowAtWon.counterBefore() : (s.period?.before ?? 0),
       periodKind: s.period?.kind ?? c.period.kind,
       reducedMotion: store.get().ui.reducedMotion,
     });
@@ -627,7 +708,8 @@ export function createSession(deps: SessionDeps): Session {
     deps.saves.now();
   }
 
-  function mount(req: SessionRequest, puzzle: Puzzle, substitute: boolean): void {
+  function mount(req: SessionRequest, puzzle: Puzzle, source: PuzzleSource): void {
+    const substitute = source === 'substitute';
     const mode: ModeId = req.mode;
     const gm = getMode(mode);
     const slotKey = substitute ? null : gm.saveSlot;
@@ -676,6 +758,8 @@ export function createSession(deps: SessionDeps): Session {
       event: eventDef && req.mode === 'event' ? { def: eventDef, index: req.index } : null,
       // §1.16: decided once, at mount (the band never appears or goes mid-level, except for No Ads).
       bannerBand: deps.banners?.eligible('game', { firstRunTutorial: mode === 'tutorial' }) === true,
+      // Phase 2e §2.3: the ranking's WinSubmission.source.
+      source,
     };
     store.update((app) => ({ ...app, screen: 'game', game: state, session: m, save: current, ui: { ...app.ui, inputLocked: false } }));
     if (cleared) deps.saves.touch();
@@ -696,6 +780,8 @@ export function createSession(deps: SessionDeps): Session {
     // Rewarded ads are preloaded at level start (02 §13.3); never in the tutorial, which has no ads.
     if (c.ads.enabled && gm.chargesHelpers && caps().rewarded) fx.guard(() => platform.ads.preload('rewarded'));
     if (req.mode === 'level') deps.levels.prefetch(req.level);
+    // Phase 2e §7.9: a scored board fetches the lazy ranking chunk in the background (the panel needs it at WON).
+    if (gm.chargesHelpers && deps.ladder?.inUse()) fx.guard(() => deps.ladder?.flow()?.prefetchChunk());
     if (mode === 'tutorial') showCoach();
     if (state.status === 'ready') {
       playBoardEntry(resumed || mode === 'tutorial' ? null : m.hard ? 'hard' : 'level');
@@ -746,7 +832,7 @@ export function createSession(deps: SessionDeps): Session {
     if (!s || !m) return null;
     const sv = save();
     const now = clock.now();
-    const today = localDateKey(now);
+    const today = dailyDateKey(now, c);
     const daily = dailyCardState(sv, today, c);
     return pickTickerLines(
       {
@@ -846,7 +932,7 @@ export function createSession(deps: SessionDeps): Session {
       }
       const mine = gen;
       let puzzle: Puzzle;
-      let substitute = false;
+      let source: PuzzleSource = 'tutorial';
       let eventDef: EventDef | null = null;
       if (req.mode === 'event') {
         eventDef = deps.events?.byId(req.eventId) ?? null;
@@ -886,7 +972,7 @@ export function createSession(deps: SessionDeps): Session {
             }),
           ]);
           puzzle = lp.puzzle;
-          substitute = lp.source === 'substitute';
+          source = lp.source;
         }
       } catch (error) {
         if (gen !== mine || disposed) return;
@@ -903,7 +989,7 @@ export function createSession(deps: SessionDeps): Session {
         if (gen !== mine || disposed) return;
       }
       hideLoading();
-      mount(req, puzzle, substitute);
+      mount(req, puzzle, source);
     },
     state: game,
     subscribe(fn) {
@@ -995,6 +1081,11 @@ export function createSession(deps: SessionDeps): Session {
     }),
     bus.on('overlay:open', syncModal),
     bus.on('overlay:close', syncModal),
+    // Phase 2e §2.4: the ladder answered (or gave up): the open panel re-renders its list and total.
+    bus.on('ladder:update', () => {
+      const w = win;
+      if (w && w.ladder && w.panelOpen && router.isOpen('ranking')) router.update('ranking', rankingProps(w, panelTapMinMs));
+    }),
     bus.on('overlay:failed', ({ id }) => onOverlayFailed(id)),
   ];
 

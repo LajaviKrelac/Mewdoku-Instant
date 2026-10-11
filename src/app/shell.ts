@@ -14,10 +14,15 @@
 // = cfg.settingsDot.version, saved at once), which clears the gear's red dot; the game screen with its
 // banner band is a banner screen too (the listed modals hide the banner; closing them does not
 // re-show it there).
+// Phase 2e (G1, docs/phase2e/spec.md §2.5–§2.7, §5.3, §6.1): "today" is dailyDateKey (daily.dayStartHour);
+// Home's top-bar lead slot is the ranking chip (the ladder flow's while it is loaded, else the records
+// chip) and opens the ranking sheet (records mode without a server); Home mounted → the flow's throttled
+// refresh, queue flush and the next result card; Settings gets the "Worldwide ranking" rows; every
+// `ladder:update` re-renders Home and open Settings. The ranking overlays are banner-hiding modals.
 import type { AudioEngine } from '../audio/audio-engine';
 import { isEventLive, type EventDef } from '../game/events';
 import { markSettingsSeen } from '../game/save';
-import { dailyCardState, dateKeyOf, localDateKey, localMidnightAfter, msUntilLocalMidnight } from '../game/progression';
+import { dailyCardState, dailyDateKey, dateKeyOf, nextDayStartAfter } from '../game/progression';
 import type { LocaleId, SaveData, Settings } from '../game/types';
 import type { PlatformAdapter } from '../platform/types';
 import oflUrl from '../assets/fonts/OFL.txt?url';
@@ -30,6 +35,7 @@ import type { BannerFlow } from './banner-flow';
 import type { Clock } from './clock';
 import { cfg, type GameConfig } from './config';
 import type { EventFlow } from './event-flow';
+import type { LadderFlow } from './ladder-flow';
 import type { AppBus } from './events';
 import { isFlagOn } from './flags';
 import type { RankHubFlow } from './rank-hub-flow';
@@ -70,6 +76,11 @@ export interface ShellDeps {
    * locale now active (ROB-2: a chunk that could not load falls back), or undefined when unknown.
    */
   applyLocale?(override: 'auto' | LocaleId): Promise<LocaleId | undefined> | void;
+  // ── Phase 2e (optional) ──
+  /** The loaded ladder flow, or null (not loaded, or the ranking origin is not in use: records). */
+  ladder?(): LadderFlow | null;
+  /** The ranking sheet in records mode (no server: web-prod, the ladder not loaded). */
+  openRecordsSheet?(): void;
 }
 
 export interface Shell {
@@ -112,7 +123,16 @@ export function createShell(deps: ShellDeps): Shell {
     ...(deps.events ? { events: deps.events.defs() } : {}),
     ...(deps.levelSize ? { levelSize: deps.levelSize } : {}),
     ...(eventArt ? { eventArt } : {}),
+    ...(ladderNow() ? { ladderChip: (ladderNow() as LadderFlow).chip() } : {}),
   });
+  /** Phase 2e: the ladder flow when it is loaded. */
+  const ladderNow = (): LadderFlow | null => {
+    try {
+      return deps.ladder?.() ?? null;
+    } catch {
+      return null;
+    }
+  };
 
   let home: View<HomeView> | null = null;
   let unbindHome: (() => void) | null = null;
@@ -142,7 +162,7 @@ export function createShell(deps: ShellDeps): Shell {
    * window). The victory screen is a banner screen too, although it is an overlay on the game screen
    * (reviews L2B-1, FB2B-2: the shop opened from its fish pill "+" left the banner over its Buy buttons).
    */
-  const MODALS: readonly OverlayId[] = ['settings', 'how_to_play', 'shop', 'rank_hub', 'ranking', 'group_result', 'daily_result'];
+  const MODALS: readonly OverlayId[] = ['settings', 'how_to_play', 'shop', 'rank_hub', 'ranking', 'group_result', 'daily_result', 'ladder', 'ladder_result', 'nickname'];
   // Phase 2d §1.16: the game screen too (its band; O4, O1, O2 and the coach are not in MODALS).
   const bannerScreen = (): boolean =>
     router.screen() === 'home' || router.screen() === 'event' || router.screen() === 'game' || router.isOpen('victory');
@@ -153,6 +173,12 @@ export function createShell(deps: ShellDeps): Shell {
   });
   const offClose = deps.bus.on('overlay:close', ({ id }) => {
     if (MODALS.includes(id) && bannerScreen() && !router.stack().some((o) => MODALS.includes(o))) void deps.banners?.modalClosed().catch(() => undefined);
+  });
+
+  // Phase 2e §9.3: the ranking changed (session, wins, a claim, a profile change …): Home and Settings re-render.
+  const offLadder = deps.bus.on('ladder:update', () => {
+    if (home && router.screen() === 'home') home.update(selectHomeView(store.get(), ctx(), c));
+    if (router.isOpen('settings')) router.update('settings', settingsProps());
   });
 
   /** §1.15: Settings opened: the dot's marker becomes cfg.settingsDot.version, saved at once (no-op when already seen). */
@@ -174,7 +200,8 @@ export function createShell(deps: ShellDeps): Shell {
       mistakes: rec[1],
       hints: rec[2],
       kitties: rec[3],
-      nextPuzzleAt: localMidnightAfter(today) ?? now + msUntilLocalMidnight(now),
+      // Phase 2e §6.1: the next day starts at daily.dayStartHour (nextDayStartAfter, DST-safe).
+      nextPuzzleAt: Number.isFinite(nextDayStartAfter(today, c)) ? nextDayStartAfter(today, c) : nextDayStartAfter(dailyDateKey(now, c), c),
       now: () => clock.now(),
       onDone: () => router.close('daily_result'), // reopened from Home: no transition, no gate
     });
@@ -235,6 +262,8 @@ export function createShell(deps: ShellDeps): Shell {
             },
           }
         : {}),
+      // Phase 2e §2.7: "Worldwide ranking" (FB with the ladder, or web anon); absent = hidden.
+      ...(ladderNow()?.settingsRows() ? { ladder: ladderNow()?.settingsRows() } : {}),
       // review PAR-5: the Feedback row, from config (empty by default = no row); on FBIG only with
       // support.feedbackOnFbig (Meta's external-link rules, parity-spec §0.7, §14).
       ...(feedbackUrl() ? { feedbackUrl: feedbackUrl() } : {}),
@@ -262,7 +291,7 @@ export function createShell(deps: ShellDeps): Shell {
 
   const shell: Shell = {
     showHome() {
-      const today = localDateKey(clock.now());
+      const today = dailyDateKey(clock.now(), c);
       const cleaned = clearStaleDaily(save(), today);
       if (cleaned !== save()) {
         updateSave(() => cleaned);
@@ -279,7 +308,7 @@ export function createShell(deps: ShellDeps): Shell {
           void deps.session().start(s.tutorialDone ? { mode: 'level', level: s.progress.level } : { mode: 'tutorial', replay: false });
         },
         onDaily: () => {
-          const day = localDateKey(clock.now());
+          const day = dailyDateKey(clock.now(), c);
           const state = dailyCardState(save(), day, c);
           if (state === 'locked') router.toast(t('home.daily.lockedToast', { level: c.daily.unlockAfterLevel }));
           else if (state === 'solved') openSolvedDaily(day);
@@ -288,6 +317,12 @@ export function createShell(deps: ShellDeps): Shell {
         onSettings: () => shell.openSettings(),
         // §5.5: the trophy shows only when capabilities().leaderboards.
         onTrophy: () => deps.rankHub?.open(),
+        // Phase 2e §2.5: the ranking chip opens the ranking sheet (records mode without a server).
+        onLadder: () => {
+          const lf = ladderNow();
+          if (lf) lf.openSheet('home');
+          else deps.openRecordsSheet?.();
+        },
         onCard: () => undefined, // Phase 3 hook
         onEvent: () => {
           const card = selectHomeView(store.get(), ctx(), c).event;
@@ -304,6 +339,8 @@ export function createShell(deps: ShellDeps): Shell {
       );
       // §3.2 (after the screen mounted) and §11 (the events chunk is prefetched after Home shows).
       void deps.banners?.screenShown('home').catch(() => undefined);
+      // Phase 2e §2.2, §2.6: a throttled bracket refresh, a queue flush and the next result card.
+      ladderNow()?.homeMounted();
       const card = selectHomeView(store.get(), ctx(), c).event;
       if (card && deps.events) {
         void deps.events.preload().then((chunk) => {
@@ -397,6 +434,7 @@ export function createShell(deps: ShellDeps): Shell {
       offScreen();
       offOpen();
       offClose();
+      offLadder();
       releaseHome();
       releaseEvent();
       deps.shop?.dispose();

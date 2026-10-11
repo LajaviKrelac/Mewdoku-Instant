@@ -1,0 +1,22 @@
+{
+  "//": "Owner: G4 (Phase 2e). Node 22: the tests, the dev server and the node:sqlite driver (with src/** again, under Node's globals).",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "dev/**/*.ts", "vitest.config.ts", "../src/shared/rank-api.ts", "../src/shared/nick-words.ts"]
+}

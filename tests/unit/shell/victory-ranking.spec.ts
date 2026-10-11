@@ -435,8 +435,9 @@ const fishes = (root: ParentNode): string[] =>
 describe('victory screen (§2.5; Phase 2c §2.7; 2c.1 §10.3)', () => {
   it('level: praise, "Level 37 complete", "7,296 points", the kept fish, and "Level 38" after 600 ms', () => {
     vi.useFakeTimers();
-    // A stale 2c `streak` (deleted from VictoryProps at 2c.1 I-3) handed in through a cast is ignored.
-    const p = { ...victoryProps(), streak: 4 } as VictoryProps;
+    // A stale 2c `streak` number (deleted from VictoryProps at 2c.1 I-3; Phase 2e reuses the name for the
+    // day streak's row, an object) handed in through a cast is ignored.
+    const p = { ...victoryProps(), streak: 4 } as unknown as VictoryProps;
     const v = openVictory(p);
     expect(q(v.el, '.victory__praise').textContent).toBe('Clever cat!');
     expect(q(v.el, '.victory__sub').textContent).toBe('Level 37 complete');
@@ -459,7 +460,8 @@ describe('victory screen (§2.5; Phase 2c §2.7; 2c.1 §10.3)', () => {
     expect(Array.from(q(v.el, '.victory__reward').children).map((c) => c.className.split(' ')[0])).toEqual(['victory__points', 'victory__kept']);
     // Gone in 2c: the fish pill at the top, its "+", the bonus chip; in 2c.1 the "Perfect ×N" chip and the chips row.
     expect(v.el.querySelector('.victory__top, .fish-pill, .fish-pill__plus, .victory__chip--bonus, .victory__total')).toBeNull();
-    expect(v.el.querySelector('.victory__streak, .victory__score, .victory__chip')).toBeNull();
+    expect(v.el.querySelector('.victory__score, .victory__chip')).toBeNull();
+    expect(q(v.el, '.victory__streak').hidden).toBe(true);
     expect(v.el.textContent).not.toMatch(/Perfect|×/);
     const primary = q<HTMLButtonElement>(v.el, '.victory__primary');
     expect(primary.classList.contains('btn--primary')).toBe(true);

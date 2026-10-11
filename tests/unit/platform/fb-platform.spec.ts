@@ -160,10 +160,11 @@ describe('createFbPlatform: capabilities', () => {
       cloudSave: true,
       leaderboards: true, // phase2b §5.4: a leaderboard API + at least one board id
       share: false,
-      payments: true, // phase2b §8.4: not iOS + payments.purchaseAsync
+      payments: true, // phase2b §8.4: payments.purchaseAsync (Phase 2e: iOS no longer excluded here)
       haptics: true,
       overlayViews: true,
       groups: true,
+      paymentsIos: false, // Phase 2e §4.4: the platform is not iOS
     });
   });
 
@@ -172,7 +173,7 @@ describe('createFbPlatform: capabilities', () => {
     await plain.platform.init();
     expect(plain.platform.capabilities()).toMatchObject({ banner: false, leaderboards: false }); // no placement, no boards
     const off = setup(
-      { presets: ['no-banner-hide', 'lb-none', 'ios', 'no-overlay', 'no-tournament'] },
+      { presets: ['no-banner-hide', 'lb-none', 'ios-no-payments', 'no-overlay', 'no-tournament'] },
       { placements: { ...PLACEMENTS, banner: 'ban-1' }, leaderboards: BOARDS_JSON },
     );
     await off.platform.init();
@@ -435,5 +436,69 @@ describe('createFbPlatform: phase2b social facades (lazy fb-social chunk)', () =
     await expect(groups.current()).resolves.toMatchObject({ id: 'tournament-1' });
     await expect(groups.post(40)).resolves.toBe(true);
     expect(control.state.tournament?.score).toBe(40);
+  });
+});
+
+describe('Phase 2e (G1, spec §1.3, §3.4, §4.4): identity, paymentsIos, the build tag', () => {
+  const b64urlDecode = (s: string): string => Buffer.from(s.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
+
+  it('identity: absent before init; after init the signed player info, verifiable with the app secret (HMAC-SHA256)', async () => {
+    const { createHmac } = await import('node:crypto');
+    const { platform } = setup({ presets: ['player:alice'] });
+    expect(platform.identity).toBeUndefined();
+    await platform.init();
+    const id = platform.identity;
+    expect(id).toBeDefined();
+    const info = await id?.signedPlayerInfo('nonce-123');
+    expect(info?.playerId).toBe('alice');
+    const [sig, enc] = (info?.signature ?? '').split('.');
+    expect(sig && enc).toBeTruthy();
+    const expected = createHmac('sha256', 'e2e-fb-app-secret')
+      .update(enc as string)
+      .digest('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+    expect(sig).toBe(expected);
+    const payload = JSON.parse(b64urlDecode(enc as string)) as Record<string, unknown>;
+    expect(payload).toMatchObject({ algorithm: 'HMAC-SHA256', player_id: 'alice', request_payload: 'nonce-123' });
+    expect(typeof payload.issued_at).toBe('number');
+  });
+
+  it("identity is absent when the SDK does not list player.getSignedPlayerInfoAsync ('no-signed-info')", async () => {
+    const { platform } = setup({ presets: ['no-signed-info'] });
+    await platform.init();
+    expect(platform.identity).toBeUndefined();
+  });
+
+  it('a signing failure, or an answer without a player ID or signature, resolves null (never rejects)', async () => {
+    const clock = createFakeClock();
+    const { sdk } = createStub({}, clock);
+    const platform = createFbPlatform({ sdk, placements: PLACEMENTS, storage: new MemoryStorage(), timers: clock, leaderboards: '' });
+    await platform.init();
+    const player = sdk.player as unknown as { getSignedPlayerInfoAsync: (p?: string) => Promise<unknown> };
+    player.getSignedPlayerInfoAsync = () => Promise.reject(Object.assign(new Error('x'), { code: 'NETWORK_FAILURE' }));
+    await expect(platform.identity?.signedPlayerInfo('n')).resolves.toBeNull();
+    player.getSignedPlayerInfoAsync = async () => ({ getPlayerID: () => '', getSignature: () => 'sig' });
+    await expect(platform.identity?.signedPlayerInfo('n')).resolves.toBeNull();
+    player.getSignedPlayerInfoAsync = async () => ({ getPlayerID: () => 'p', getSignature: () => '' });
+    await expect(platform.identity?.signedPlayerInfo('n')).resolves.toBeNull();
+  });
+
+  it("paymentsIos: true on the FB iPhone app ('ios': payments listed), false elsewhere; payments itself no longer excludes iOS", async () => {
+    const ios = setup({ presets: ['ios'] });
+    await ios.platform.init();
+    expect(ios.platform.capabilities()).toMatchObject({ payments: true, paymentsIos: true });
+    const web = setup({});
+    await web.platform.init();
+    expect(web.platform.capabilities().paymentsIos).toBe(false);
+    const off = setup({ presets: ['ios-no-payments'] });
+    await off.platform.init();
+    expect(off.platform.capabilities()).toMatchObject({ payments: false, paymentsIos: true });
+  });
+
+  it('the build tag reports the per-helper rewarded IDs as flags only (h k m v d), never the values', async () => {
+    const { FB_IDS_MARKER } = await import('../../../src/platform/fb');
+    expect(FB_IDS_MARKER).toMatch(/^mewdoku-fb-ids:i[01]r[01]b[01]l[01]h[01]k[01]m[01]v[01]d[01]$/);
   });
 });

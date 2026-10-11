@@ -1,0 +1,17 @@
+{
+  "name": "config.ok",
+  "request": {
+    "method": "GET",
+    "path": "/v1/config"
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "switches": {
+        "iapIos": false
+      },
+      "ttlSec": 3600,
+      "serverTime": 1791799800000
+    }
+  }
+}

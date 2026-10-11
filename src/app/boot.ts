@@ -14,18 +14,27 @@
 // live save (restore.ts mergeArrived).
 // Phase 2d (G1, docs/phase2d/look-spec.md §1.16, §5.3): e2e builds read ?bannerPlay=0 (the banner
 // flow then runs with ads.banner.duringPlay off: the 2b "never in play" rule) for the fbig e2e.
+// Phase 2e (G1, docs/phase2e/spec.md §2.2, §3.1, §4.1, §7.4): step 8 also starts, where the ranking
+// origin is in use (never on web-prod), the lazy ranking code (app/ladder-boot.ts): the remote switches
+// (GET /v1/config), then the sign-in and the first queue flush — on a first run only once the tutorial is
+// done; the banner flow learns today's date (ads.banner.untilDate), the remote switches and its analytics
+// row; ads tell the banner flow when they end (the re-show). e2e builds read ?ladderPool= (a dev server's
+// test pool) and expose __mewdoku.ladder() / remote() / streak().
 import { createAudioEngine, type AudioEngine } from '../audio/audio-engine';
 import { createLazySfx } from '../audio/lazy-sfx';
 import type { Sfx } from '../audio/sfx';
 import { createAssetLoaders } from '../game/level-assets';
 import { createLevelsRepo, type LevelsRepo } from '../game/levels-repo';
-import { localDateKey } from '../game/progression';
+import { dailyDateKey } from '../game/progression';
 import { migrate } from '../game/save';
 import type { GenResult, GenSpec } from '../engine/types';
 import { CellState, type GameState, type LocaleId, type SaveData } from '../game/types';
 import type { PlatformAdapter, RawSave } from '../platform/types';
 import { buildLocales, getDir, getLocale, onLocaleChanged, prefetchGuess, prefetchLocale, setLocale, t } from '../i18n';
 import { localeCandidates, resolveLocale } from '../i18n/locale';
+import { CONTENT_VERSION } from '../game/level-assets';
+import { streakView, type StreakView } from '../game/day-streak';
+import type { LadderCurrent } from '../game/types';
 import { createAnnouncer, type Announcer } from '../ui/a11y/announcer';
 import { mountSprite } from '../ui/art/sprite';
 import { applyMotion, resolveReducedMotion, systemPrefersReducedMotion, watchSystemReducedMotion } from '../ui/fx/motion';
@@ -42,6 +51,11 @@ import { createShopFlow } from './shop-flow';
 import { delay, systemClock, type Clock } from './clock';
 import { cfg, mergeConfig, type GameConfig } from './config';
 import { createEventBus, type AnalyticsEvent, type AppBus, type AppEventMap } from './events';
+import type { LadderFlow } from './ladder-flow';
+import { ladderEnv, ladderOriginInUse, newWinId } from './ladder-origin';
+import type { RemoteConfig, Switches } from './remote-config';
+import type { SessionLadder } from './session-types';
+import { personalRecords } from './views';
 import { isFlagOn, parseFlagParam, setFlagOverrides } from './flags';
 import { fetchJsonWithTimeout } from './fetch-json';
 import { applyRestoreRules, loadSave, mergeArrived } from './restore';
@@ -112,6 +126,12 @@ export interface E2EHooks {
    * (as double taps would), so WON happens now. false when no board is playing.
    */
   solve(): boolean;
+  /** Phase 2e (CONTRACTS §10): the ranking client's state (null fields before it loaded). */
+  ladder?(): { active: boolean; signedIn: boolean; pending: number; current: LadderCurrent | null };
+  /** Phase 2e: the remote switches in force. */
+  remote?(): Switches;
+  /** Phase 2e: streakView(save.dayStreak, today). */
+  streak?(): StreakView;
 }
 
 declare global {
@@ -259,7 +279,7 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
   }
 
   // 5. Restore rules 1–3 (02 §15); slower checks happen when the board is opened.
-  const today = localDateKey(clock.now());
+  const today = dailyDateKey(clock.now());
   const restored = await within(clock, cfg.boot.restoreTimeoutMs, applyRestoreRules(store.get().save, { today, levels }), null);
   if (restored && restored.cleared.length > 0 && restored.save !== store.get().save) {
     const next = restored.save;
@@ -283,11 +303,19 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
       const next = fn(s.save);
       return next === s.save ? s : { ...s, save: next };
     });
+  // Phase 2e (§2.2, §7.4): the ranking origin and the remote switches (loaded lazily at step 8). Tests get
+  // the web-prod path (no ranking origin, not one request to it) with ?flags=-ladder (spec §7.3).
+  const env = ladderEnv();
+  let ladder: LadderFlow | null = null;
+  let remote: RemoteConfig | null = null;
   const banners = createBannerFlow({
     platform,
     store,
     clock,
     onError: (error) => bus.emit('error', { where: 'banner', error }),
+    today: () => dailyDateKey(clock.now()),
+    remote: () => (remote ? { banner: remote.bannerOn(), bannerInPlay: remote.bannerInPlayOn() } : { banner: true, bannerInPlay: true }),
+    log: (e) => bus.emit('analytics', e),
     ...(__E2E__ ? { config: e2eBannerConfig(opts.search ?? win?.location?.search ?? '') } : {}),
   });
   const adFlow = createAdFlow({
@@ -297,6 +325,7 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
     setInputLocked: (on) => store.update((s) => (s.ui.adShowing === on ? s : { ...s, ui: { ...s.ui, adShowing: on } })),
     setMuted: (on) => attempt(() => audio.setMuted('ad', on), undefined),
     beforeShow: () => banners.hide(), // §3.2: no banner under an interstitial or a rewarded video
+    afterShow: (kind) => banners.afterAd(kind), // Phase 2e §3.1: back on the game screen after every ad
   });
   const rankings = createRankingFlow({ platform, clock, bus, save: () => store.get().save, updateSave, touch: () => saves.touch() });
   const log = (e: AnalyticsEvent): void => bus.emit('analytics', e);
@@ -373,7 +402,48 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
     // §3.2: the shop is a modal over a banner screen (Home, event): hide the banner first
     // (reviews L2B-1, FB2B-2; the shell also hides on overlay:open and re-gates on close).
     onOpen: () => void banners.hide().catch(() => undefined),
+    // Phase 2e §4.4: the iOS switch (remote iapIos when fetched, else the build value); §4.5: iapInPlay.
+    iosOn: () => (remote ? remote.iapIosOn() : cfg.iap.iosEnabled),
+    inPlayOn: () => (remote ? remote.iapInPlayOn() : true),
+    // Phase 2e §4.3: FB's purchase dialog stops the timer and mutes; the banner re-shows after it.
+    purchaseDialog: (open) => {
+      if (open) {
+        bus.emit('pause', { reason: 'purchase' });
+        return;
+      }
+      bus.emit('resume', { reason: 'purchase' });
+      attempt(() => banners.afterPurchase(), undefined);
+    },
   });
+  // Phase 2e §2.3: what the session needs to queue a win at WON (the flow itself is lazy).
+  const sessionLadder: SessionLadder = {
+    inUse: () => ladderOriginInUse(env, platform),
+    flow: () => ladder,
+    contentVersion: CONTENT_VERSION,
+    clientVersion: __APP_VERSION__,
+    newWinId: () => newWinId(),
+  };
+  /** The records of the ranking sheet (records mode: no server, web-prod). */
+  const recordsView = () => {
+    const s = store.get().save;
+    return personalRecords(store.get(), viewCtxFor(), { board: 'period', n: levelSize(s.progress.level) ?? 8, thisMs: 0 });
+  };
+  const openRecordsSheet = (): void => {
+    bus.emit('analytics', { name: 'ladder_open', params: { from: 'home' } });
+    router.open('ladder', {
+      view: 'records',
+      list: null,
+      records: recordsView(),
+      rules: null,
+      infoOnly: false,
+      reducedMotion: store.get().ui.reducedMotion,
+      recordsReason: 'local',
+      streakBest: store.get().save.dayStreak.best,
+      onHeart: () => undefined,
+      onEditName: () => undefined,
+      onClose: () => router.close('ladder'),
+    });
+  };
   let session: Session | null = null;
   const getSession = (): Session => {
     if (!session) throw new Error('session not ready');
@@ -400,6 +470,8 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
     rankHub,
     levelSize,
     applyLocale: (override) => applyLocale(override),
+    ladder: () => ladder,
+    openRecordsSheet: () => openRecordsSheet(),
   });
   session = createSession({
     store,
@@ -424,6 +496,9 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
     banners,
     root: () => root,
     levelSize,
+    ladder: sessionLadder,
+    streakClockOk: () => ladder?.streakClockOk() ?? true,
+    shop,
   });
   shell.applySettings();
   // phase2b §6.3: a locale switch (late chunk after the boot wait, or Settings → Language) re-renders
@@ -523,7 +598,13 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
       bus.clear();
     },
   };
-  if (__E2E__ && win) win.__mewdoku = createE2EHooks(handle, platform, saves, engine);
+  if (__E2E__ && win) {
+    const hooks = createE2EHooks(handle, platform, saves, engine);
+    hooks.ladder = () => ladder?.debug() ?? { active: false, signedIn: false, pending: store.get().save.ladder.pending.length, current: store.get().save.ladder.current };
+    hooks.remote = () => remote?.switches() ?? {};
+    hooks.streak = () => streakView(store.get().save.dayStreak, dailyDateKey(clock.now()));
+    win.__mewdoku = hooks;
+  }
 
   const showGroupResult = async (): Promise<void> => {
     if (!groupsOn()) return;
@@ -534,6 +615,108 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
       // the dialog waits for the next launch
     }
   };
+
+  /**
+   * Phase 2e (spec §3.4): the rewarded preload priority, at most ads.maxPreloadedRewarded held (fb-ads):
+   * `hint` when hints = 0, else `kitty` when kitties = 0, else `mouse` on a board; plus `revive` once the
+   * player is down to 1 fish. With the shared placement ID only, every placement is the same instance (as
+   * before 2e). `anyScreen`: boot step 8 (no board yet) preloads the stock's first placement.
+   */
+  function preloadRewarded(anyScreen: boolean): void {
+    if (!cfg.ads.enabled || !attempt(() => platform.capabilities().rewarded, false)) return;
+    const st = store.get();
+    const onBoard = st.screen === 'game' && st.game !== null && st.game.status === 'playing';
+    if (!onBoard && !anyScreen) return;
+    const { hints, kitties } = st.save.stock;
+    const first = hints <= 0 ? 'hint' : kitties <= 0 ? 'kitty' : onBoard && cfg.mouse.enabled ? 'mouse' : 'hint';
+    attempt(() => platform.ads.preload('rewarded', first), undefined);
+    if (onBoard && st.game?.hearts === 1) attempt(() => platform.ads.preload('rewarded', 'revive'), undefined);
+  }
+
+  /**
+   * Phase 2e step 8 (spec §2.2, §7.4): only where the ranking origin is in use (FB with VITE_LADDER_URL and
+   * the identity API; the web with ladder.web 'anon'); web-prod returns at once (no request, no download).
+   * The remote switches first (no sign-in), then — once the tutorial is done — the sign-in, the claim
+   * repair and the first flush. Never blocks the first screen; never rejects.
+   */
+  async function startLadder(): Promise<void> {
+    if (!ladderOriginInUse(env, platform) || !env.url) return;
+    let m: typeof import('./ladder-boot');
+    try {
+      m = await loadChunk(() => import('./ladder-boot'));
+    } catch (error) {
+      bus.emit('error', { where: 'ladder_boot', error });
+      return;
+    }
+    const storageOf = (): Storage | null => {
+      try {
+        return win?.localStorage ?? null;
+      } catch {
+        return null;
+      }
+    };
+    const cryptoOf = (): Crypto | null => (typeof crypto !== 'undefined' ? crypto : null);
+    const devPool = __E2E__ ? e2eLadderPool(opts.search ?? win?.location?.search ?? '') : null;
+    const client = m.createLadderClient({
+      baseUrl: env.url,
+      platformId: platform.id,
+      identity: platform.identity ?? null,
+      device: () => m.deviceCredential(storageOf(), cryptoOf()),
+      clock,
+      clientVersion: __APP_VERSION__,
+      contentVersion: CONTENT_VERSION,
+      devPool,
+    });
+    remote = m.createRemoteConfig({
+      fetchConfig: () => client.config(),
+      storage: storageOf(),
+      clock,
+      log: (e) => bus.emit('analytics', e),
+      onChange: () => {
+        void banners.switchesChanged().catch(() => undefined);
+        // The Buy rows (iapIos, iapInPlay) re-evaluate from their next render (never a purchase in flight).
+        bus.emit('ladder:update', { reason: 'session' });
+      },
+    });
+    await remote.start();
+    const rc = remote;
+    ladder = m.createLadderFlow({
+      client,
+      store,
+      saves,
+      router,
+      bus,
+      clock,
+      platformId: platform.id,
+      remoteOn: () => rc.ladderOn(),
+      rewardedAvailable: () => cfg.ads.enabled && attempt(() => platform.capabilities().rewarded, false),
+      watchDouble: async () => (await adFlow.rewarded('rank_double')).ok,
+      loadChunk: () => loadChunk(() => import('./ladder-chunk'), { css: /ladder-chunk-[\w-]+\.css/ }).catch(() => null),
+      storage: storageOf(),
+      online: () => win?.navigator?.onLine ?? true,
+      records: () => recordsView(),
+      canOpenCard: () => router.screen() === 'home' && router.stack().length === 0 && store.get().save.tutorialDone,
+    });
+    const flow = ladder;
+    const begin = (): void => {
+      void flow.start().then(() => {
+        if (router.screen() === 'home' && router.stack().length === 0) flow.homeMounted();
+      });
+    };
+    if (store.get().save.tutorialDone) begin();
+    else {
+      // A first run signs in only after the tutorial (its win shows no ranking).
+      const off = store.select(
+        (st) => st.save.tutorialDone,
+        (done) => {
+          if (!done) return;
+          off();
+          begin();
+        },
+      );
+    }
+    bus.emit('ladder:update', { reason: 'session' });
+  }
 
   // 7. Route: returning players land on Home; first run goes straight into the tutorial (02 §4.2).
   if (store.get().save.tutorialDone) shell.showHome();
@@ -555,13 +738,35 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
   // group challenge's result (§5.6). None of them blocks the first route.
   void rankings.flushPending();
   void shop.restore();
+  // Phase 2e §4.1: the catalogue after onReady, so O2 can show a price at once (FB with payments only).
+  attempt(() => shop.prefetchCatalog(), undefined);
+  // Phase 2e §2.2, §7.4: the remote switches, then the ranking's sign-in (a first run: after the tutorial).
+  void startLadder();
   if (store.get().save.tutorialDone) void showGroupResult();
   const caps = attempt(() => platform.capabilities(), null);
   if (cfg.ads.enabled && caps) {
     if (caps.interstitial) attempt(() => platform.ads.preload('interstitial'), undefined);
-    if (caps.rewarded) attempt(() => platform.ads.preload('rewarded'), undefined);
+    if (caps.rewarded) preloadRewarded(true);
   }
+  // Phase 2e §3.4: again on every stock change and at every board (and when the last fish is reached).
+  bus.on('stock', () => preloadRewarded(false));
+  store.select(
+    (st) => (st.screen === 'game' && st.game ? `${st.game.puzzle.id}|${st.game.hearts}` : ''),
+    (key) => {
+      if (key) preloadRewarded(false);
+    },
+  );
   return handle;
+}
+
+/** e2e builds only: ?ladderPool=<name> → the dev server's test pool (DEV_POOL_RE). */
+export function e2eLadderPool(search: string): string | null {
+  try {
+    const v = new URLSearchParams(search).get('ladderPool');
+    return v && /^[a-z0-9-]{1,32}$/.test(v) ? v : null;
+  } catch {
+    return null;
+  }
 }
 
 /**

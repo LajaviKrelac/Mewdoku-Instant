@@ -1,0 +1,537 @@
+{
+  "name": "bracket.full",
+  "request": {
+    "method": "GET",
+    "path": "/v1/bracket",
+    "auth": true
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "state": "open",
+      "bracketId": "mgk0b7q1z4a8",
+      "pool": "fb",
+      "mode": "rolling",
+      "openedAt": 1791743600000,
+      "endsAt": 1791830000000,
+      "members": 50,
+      "maxMembers": 50,
+      "rows": [
+        {
+          "rank": 1,
+          "slot": 0,
+          "nickname": "Sleepy Whisker 1",
+          "avatarId": 0,
+          "points": 120,
+          "hearts": 0,
+          "me": false,
+          "likedByMe": true
+        },
+        {
+          "rank": 2,
+          "slot": 7,
+          "nickname": "Fluffy Whisker 14",
+          "avatarId": 1,
+          "points": 117,
+          "hearts": 5,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 3,
+          "slot": 14,
+          "nickname": "Velvet Whisker 27",
+          "avatarId": 2,
+          "points": 114,
+          "hearts": 3,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 4,
+          "slot": 21,
+          "nickname": "Misty Whisker 40",
+          "avatarId": 3,
+          "points": 114,
+          "hearts": 1,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 5,
+          "slot": 28,
+          "nickname": "Brave Whisker 53",
+          "avatarId": 4,
+          "points": 111,
+          "hearts": 6,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 6,
+          "slot": 35,
+          "nickname": "Cozy Paws 66",
+          "avatarId": 5,
+          "points": 108,
+          "hearts": 4,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 7,
+          "slot": 42,
+          "nickname": "Curious Paws 79",
+          "avatarId": 6,
+          "points": 108,
+          "hearts": 2,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 8,
+          "slot": 49,
+          "nickname": "Gentle Paws 92",
+          "avatarId": 7,
+          "points": 105,
+          "hearts": 0,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 9,
+          "slot": 6,
+          "nickname": "Lucky Paws 6",
+          "avatarId": 8,
+          "points": 102,
+          "hearts": 5,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 10,
+          "slot": 13,
+          "nickname": "Sunny Paws 19",
+          "avatarId": 9,
+          "points": 102,
+          "hearts": 3,
+          "me": false,
+          "likedByMe": true
+        },
+        {
+          "rank": 11,
+          "slot": 20,
+          "nickname": "Sleepy Mittens 32",
+          "avatarId": 10,
+          "points": 99,
+          "hearts": 1,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 12,
+          "slot": 27,
+          "nickname": "Fluffy Mittens 45",
+          "avatarId": 11,
+          "points": 96,
+          "hearts": 6,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 13,
+          "slot": 34,
+          "nickname": "Velvet Mittens 58",
+          "avatarId": 0,
+          "points": 96,
+          "hearts": 4,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 14,
+          "slot": 41,
+          "nickname": "Misty Mittens 71",
+          "avatarId": 1,
+          "points": 93,
+          "hearts": 2,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 15,
+          "slot": 48,
+          "nickname": "Brave Mittens 84",
+          "avatarId": 2,
+          "points": 90,
+          "hearts": 0,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 16,
+          "slot": 5,
+          "nickname": "Cozy Tabby 97",
+          "avatarId": 3,
+          "points": 90,
+          "hearts": 5,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 17,
+          "slot": 12,
+          "nickname": "Curious Tabby 11",
+          "avatarId": 4,
+          "points": 87,
+          "hearts": 3,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 18,
+          "slot": 19,
+          "nickname": "Gentle Tabby 24",
+          "avatarId": 5,
+          "points": 84,
+          "hearts": 1,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 19,
+          "slot": 26,
+          "nickname": "Lucky Tabby 37",
+          "avatarId": 6,
+          "points": 84,
+          "hearts": 6,
+          "me": false,
+          "likedByMe": true
+        },
+        {
+          "rank": 20,
+          "slot": 33,
+          "nickname": "Sunny Tabby 50",
+          "avatarId": 7,
+          "points": 81,
+          "hearts": 4,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 21,
+          "slot": 40,
+          "nickname": "Sleepy Biscuit 63",
+          "avatarId": 8,
+          "points": 78,
+          "hearts": 2,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 22,
+          "slot": 47,
+          "nickname": "Fluffy Biscuit 76",
+          "avatarId": 9,
+          "points": 78,
+          "hearts": 0,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 23,
+          "slot": 4,
+          "nickname": "Velvet Biscuit 89",
+          "avatarId": 10,
+          "points": 75,
+          "hearts": 5,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 24,
+          "slot": 11,
+          "nickname": "Misty Biscuit 3",
+          "avatarId": 11,
+          "points": 72,
+          "hearts": 3,
+          "me": true,
+          "likedByMe": false
+        },
+        {
+          "rank": 25,
+          "slot": 18,
+          "nickname": "Brave Biscuit 16",
+          "avatarId": 0,
+          "points": 72,
+          "hearts": 1,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 26,
+          "slot": 25,
+          "nickname": "Cozy Pounce 29",
+          "avatarId": 1,
+          "points": 69,
+          "hearts": 6,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 27,
+          "slot": 32,
+          "nickname": "Curious Pounce 42",
+          "avatarId": 2,
+          "points": 66,
+          "hearts": 4,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 28,
+          "slot": 39,
+          "nickname": "Gentle Pounce 55",
+          "avatarId": 3,
+          "points": 66,
+          "hearts": 2,
+          "me": false,
+          "likedByMe": true
+        },
+        {
+          "rank": 29,
+          "slot": 46,
+          "nickname": "Lucky Pounce 68",
+          "avatarId": 4,
+          "points": 63,
+          "hearts": 0,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 30,
+          "slot": 3,
+          "nickname": "Sunny Pounce 81",
+          "avatarId": 5,
+          "points": 60,
+          "hearts": 5,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 31,
+          "slot": 10,
+          "nickname": "Sleepy Purr 94",
+          "avatarId": 6,
+          "points": 60,
+          "hearts": 3,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 32,
+          "slot": 17,
+          "nickname": "Fluffy Purr 8",
+          "avatarId": 7,
+          "points": 57,
+          "hearts": 1,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 33,
+          "slot": 24,
+          "nickname": "Velvet Purr 21",
+          "avatarId": 8,
+          "points": 54,
+          "hearts": 6,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 34,
+          "slot": 31,
+          "nickname": "Misty Purr 34",
+          "avatarId": 9,
+          "points": 54,
+          "hearts": 4,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 35,
+          "slot": 38,
+          "nickname": "Brave Purr 47",
+          "avatarId": 10,
+          "points": 51,
+          "hearts": 2,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 36,
+          "slot": 45,
+          "nickname": "Cozy Muffin 60",
+          "avatarId": 11,
+          "points": 48,
+          "hearts": 0,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 37,
+          "slot": 2,
+          "nickname": "Curious Muffin 73",
+          "avatarId": 0,
+          "points": 48,
+          "hearts": 5,
+          "me": false,
+          "likedByMe": true
+        },
+        {
+          "rank": 38,
+          "slot": 9,
+          "nickname": "Gentle Muffin 86",
+          "avatarId": 1,
+          "points": 45,
+          "hearts": 3,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 39,
+          "slot": 16,
+          "nickname": "Lucky Muffin 99",
+          "avatarId": 2,
+          "points": 42,
+          "hearts": 1,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 40,
+          "slot": 23,
+          "nickname": "Sunny Muffin 13",
+          "avatarId": 3,
+          "points": 42,
+          "hearts": 6,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 41,
+          "slot": 30,
+          "nickname": "Sleepy Pebble 26",
+          "avatarId": 4,
+          "points": 39,
+          "hearts": 4,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 42,
+          "slot": 37,
+          "nickname": "Fluffy Pebble 39",
+          "avatarId": 5,
+          "points": 36,
+          "hearts": 2,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 43,
+          "slot": 44,
+          "nickname": "Velvet Pebble 52",
+          "avatarId": 6,
+          "points": 36,
+          "hearts": 0,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 44,
+          "slot": 1,
+          "nickname": "Misty Pebble 65",
+          "avatarId": 7,
+          "points": 33,
+          "hearts": 5,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 45,
+          "slot": 8,
+          "nickname": "Brave Pebble 78",
+          "avatarId": 8,
+          "points": 30,
+          "hearts": 3,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 46,
+          "slot": 15,
+          "nickname": "Cozy Socks 91",
+          "avatarId": 9,
+          "points": 30,
+          "hearts": 1,
+          "me": false,
+          "likedByMe": true
+        },
+        {
+          "rank": 47,
+          "slot": 22,
+          "nickname": "Curious Socks 5",
+          "avatarId": 10,
+          "points": 27,
+          "hearts": 6,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 48,
+          "slot": 29,
+          "nickname": "Gentle Socks 18",
+          "avatarId": 11,
+          "points": 24,
+          "hearts": 4,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 49,
+          "slot": 36,
+          "nickname": "Lucky Socks 31",
+          "avatarId": 0,
+          "points": 24,
+          "hearts": 2,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 50,
+          "slot": 43,
+          "nickname": "Sunny Socks 44",
+          "avatarId": 1,
+          "points": 21,
+          "hearts": 0,
+          "me": false,
+          "likedByMe": false
+        }
+      ],
+      "me": {
+        "rank": 24,
+        "slot": 11,
+        "nickname": "Misty Biscuit 3",
+        "avatarId": 11,
+        "points": 72,
+        "hearts": 3,
+        "me": true,
+        "likedByMe": false
+      },
+      "final": false,
+      "heartsNew": 2,
+      "result": null,
+      "serverTime": 1791799800000
+    }
+  }
+}

@@ -1,6 +1,10 @@
 // Owner: C (Phase 2b; was game)
 // Level numbers → packs and puzzle ids, hard levels, endless/substitute/daily GenSpecs, daily unlock,
 // local date keys (02 §11, §12; 03 §8–9). PURE: the current time is always passed in.
+// Phase 2e (G1, docs/phase2e/spec.md §6.1, D-2e-13, D-2e-23; CONTRACTS §6): isDailyUnlocked keeps an
+// earlier unlock (a daily record or a daily in progress; daily.keepEarlierUnlock), and the daily's (and
+// the streak's) "today" is dailyDateKey(now) with daily.dayStartHour; nextDayStartAfter replaces
+// localMidnightAfter / msUntilLocalMidnight for "Next puzzle in …" (both DST-safe local-date maths).
 import { cfg, type GameConfig } from '../app/config';
 import type { DailyPack, GenSpec, GradeBand, LevelPack, LevelRecord, PuzzleId, SizeWeight } from '../engine/types';
 import {
@@ -160,9 +164,20 @@ export function dailySpec(dateKey: string, c: GameConfig = cfg): GenSpec {
   return tuned(makeGenSpec({ n: slot.n, seed: SEEDS.daily(dateKey), band: slot.band, level: null }, c), null, c);
 }
 
-/** Unlocked iff save.progress.level > daily.unlockAfterLevel (02 §12). */
-export function isDailyUnlocked(save: Pick<SaveData, 'progress'>, c: GameConfig = cfg): boolean {
-  return save.progress.level > c.daily.unlockAfterLevel;
+/**
+ * Unlocked iff save.progress.level > daily.unlockAfterLevel (02 §12). Phase 2e (spec §6.1,
+ * daily.keepEarlierUnlock): also when the save already holds a daily record or a daily in progress, so
+ * a player who opened the daily under an earlier (lower) unlock level is never locked out and an
+ * in-progress daily is never stranded. `daily` / `inProgress` may be absent (then only the level counts).
+ */
+export function isDailyUnlocked(
+  save: Pick<SaveData, 'progress'> & Partial<Pick<SaveData, 'daily' | 'inProgress'>>,
+  c: GameConfig = cfg,
+): boolean {
+  if (save.progress.level > c.daily.unlockAfterLevel) return true;
+  if (!c.daily.keepEarlierUnlock) return false;
+  if (save.daily && Object.keys(save.daily).length > 0) return true;
+  return (save.inProgress?.daily ?? null) !== null;
 }
 
 const pad2 = (x: number): string => (x < 10 ? `0${x}` : String(x));
@@ -171,6 +186,36 @@ const pad2 = (x: number): string => (x < 10 ? `0${x}` : String(x));
 export function localDateKey(nowMs: number): string {
   const d = new Date(nowMs);
   return `${String(d.getFullYear()).padStart(4, '0')}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+/** daily.dayStartHour clamped to a whole hour 0…23. */
+function dayStartHourOf(c: GameConfig): number {
+  const h = Math.floor(c.daily.dayStartHour);
+  return Number.isFinite(h) ? Math.min(23, Math.max(0, h)) : 0;
+}
+
+/**
+ * Phase 2e (spec §5.1, §6.1, D-2e-23): the daily's (and the streak's) date key at `nowMs`: the local
+ * calendar date, or the day before while the local hour is below daily.dayStartHour (0: local midnight,
+ * i.e. localDateKey). Local wall-clock maths, so a DST change never shifts the boundary.
+ */
+export function dailyDateKey(nowMs: number, c: GameConfig = cfg): string {
+  const h = dayStartHourOf(c);
+  if (h === 0) return localDateKey(nowMs);
+  const d = new Date(nowMs);
+  if (d.getHours() >= h) return localDateKey(nowMs);
+  return localDateKey(new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1, 12).getTime());
+}
+
+/**
+ * Phase 2e (spec §6.1, CONTRACTS §6, critic C-26): epoch ms at which the day after `dateKey` begins
+ * (the next local date at daily.dayStartHour:00), DST-safe. With dayStartHour 0 it equals
+ * localMidnightAfter. A malformed key returns NaN (callers pass dailyDateKey / a daily id's date).
+ */
+export function nextDayStartAfter(dateKey: string, c: GameConfig = cfg): number {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey);
+  if (!m) return Number.NaN;
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + 1, dayStartHourOf(c), 0, 0, 0).getTime();
 }
 
 /** 0..6 (Sun..Sat) from the date string, never from the device clock (02 §12). */

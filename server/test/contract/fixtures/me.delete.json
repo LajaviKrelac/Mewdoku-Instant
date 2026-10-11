@@ -1,0 +1,12 @@
+{
+  "name": "me.delete",
+  "request": {
+    "method": "DELETE",
+    "path": "/v1/me",
+    "auth": true
+  },
+  "response": {
+    "status": 204,
+    "body": null
+  }
+}

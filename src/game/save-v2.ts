@@ -14,7 +14,10 @@ import type { BoardKey, EventRecord, GroupRecord, SaveData } from './types';
  * The fields v2 adds to v1 (phase2b §9.1), besides settings.locale and inProgress.event, that the
  * current save still has (phase2c: the v2 wallet is dropped by the v2 → v3 migration).
  */
-export type V2Fields = Pick<SaveData, 'points' | 'events' | 'groups' | 'purchases' | 'rank'>;
+export type V2Fields = Pick<SaveData, 'points' | 'events' | 'groups' | 'rank'> & {
+  /** Phase 2e: the v2 part of purchases (save-v4.ts adds the intent ledger `pending`). */
+  purchases: { noAds: boolean; tokens: string[] };
+};
 
 /** §9.2 defaults of the new fields. No retro grant of points [DECISION]. */
 export function v2Defaults(): V2Fields {

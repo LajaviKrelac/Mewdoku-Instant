@@ -125,6 +125,26 @@ Points a reviewer should check first:
 | `es`, `fr`, `it`, `pt-BR` | `a11y.unitDone` puts `{unit}` after a colon ("Completada: la fila 1.") because `{unit}` carries its article |
 | `vi` | *Chàm* (indigo, the dye of denim) for colour 4, distinct from *Tím* (Violet) and *Đá phiến* (Slate) |
 
+## Phase 2e drafts: the worldwide ranking, the name sheet, the Buy rows, the streak (2026-10-10, workstream G3)
+
+The 16 catalogues gained a block headed "Phase 2e" at the end of each file, drafted on 2026-10-10 by Claude (AI) for [`docs/phase2e/spec.md`](../phase2e/spec.md) Appendix A (`src/i18n/en/ui-2e.ts`), from our own English copy, `meta.ts` and the [glossary](glossary.md) only (its new §6 "Phase 2e" rules: ranking, heart as a cheer, streak, ranking name, player code, "Buy"). Every line is an **unreviewed AI draft**; the release still ships English only.
+
+- **New keys (110 English, every plural form each language needs):** the ranking panel and sheet (`ladder.*`), the end-of-ranking card (`ladder.result.*`, `ladder.collect*`), the name sheet (`nick.*`), the Settings rows (`settings.ladder.*`), the out-of-helpers card's Buy rows (`rewarded.body.buy.*`, `rewarded.buy.*`), the streak (`streak.*`, `victory.streakDay`, `victory.streakReward`, `howto.streak`), the ranking notes (`howto.ladder`, `a11y.fishKept.ladder.*`, `ladder.total`, `ladder.pill.*`), the daily reward (`victory.dailyReward`) and `common.cancel`.
+- `docs/i18n/drafted-from.json` rewritten (`i18n-check --write-drafted-from`): no stale warning.
+- `npm run i18n:check`: OK; the remaining width warnings are the No Ads Buy label in es, pt-BR, ru, tr and vi (29–31 wide with the long sample price "1,99 US$", max 28; the button wraps to two lines at 320 px). The es No Ads note was shortened to fit its 72.
+
+Points a reviewer should check first:
+
+| Locale | Check |
+|---|---|
+| all | every purchase button starts with the language's word for "Buy" and keeps `{price}` exactly as the store gives it; a heart is a cheer, never a life (lives are fish); no line promises that waiting fish will count or that more players will join; the streak lines are calm (no urgency) |
+| all | ranking names (`{name}`) are our English words and are never translated; `{code}` is a player code |
+| `ru`, `pl`, `ar` | counts with agreement use plural forms or a label + colon construction (`ladder.rewards.min`, `ladder.info.window.*`, `a11y.fishKept.ladder.*`); Russian `howto.streak` abbreviates "дн." so any `{days}` reads correctly; Polish/Russian `ladder.info.window.rolling` abbreviates the hours ("{hours} godz.", "{hours} ч") |
+| `ar` | `ladder.players.*`, `ladder.hearts.*`, `ladder.rewards.line.*`, `ladder.info.rewards.*`, `ladder.result.none.*`, `streak.days.*` have all six categories; "{hours} ساعة" reads correctly for the configured 24 hours |
+| `ja`, `ko`, `zh-Hans`, `th`, `vi`, `id` | only `.other` forms: "上位{count}人" etc. must read well for 1 too (the server may pay only first place) |
+| `tr` | `rewarded.buy.label` "Satın al {items} · {price}" puts the verb first on purpose (money is spent, C-3); a reviewer may prefer a colon |
+| `de`, `fr` | `ladder.result.place` and the streak lines were shortened to fit 320 px ("Dein Platz: …", "Ta place : …") |
+
 ## Known limits of the drafts
 
 - Event names, product names and praise words are our own and were translated for meaning and tone, not literally; reviewers may propose better local names (they must stay our own, never another game's).

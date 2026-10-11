@@ -1,6 +1,8 @@
 // Owner: A (Phase 2b; was ui-board); G2 (Phase 2c.1: the level-points counter rows; Phase 2d: the
 // measured palette and tokens, look-spec §2.3; Phase 2d.1: Denim, the dark-tile rules and the helpers'
-// rows, helpers-spec §6.4)
+// rows, helpers-spec §6.4; Phase 2e: the ranking and streak art, spec Appendix C: the given heart and the streak
+// steps' edges in uiContrast(), the rank number on each medal in artContrast() and the informational art rows
+// of artInfo(); the last two take palette-2e.ts's tables from their caller, requests-G2 R5)
 // Palette validation for the one token set (02 §17.2, §18; phase2b §1.4, §1.5, §1.12; look-spec §1.2,
 // §1.9, §2.3): pairwise CIEDE2000 ≥ 10, simulated deuteranopia/protanopia/tritanopia ΔE report; on every
 // tile, normal and faded: the X with Colour patterns on (white vs the tile ≥ 3, OR its edge vs the tile
@@ -15,6 +17,7 @@ import { pathToFileURL } from 'node:url';
 import { cfg } from '../src/app/config';
 import {
   CAT_COLORS,
+  CHEST_COLORS,
   EVENT_PATTERN_COLORS,
   EVENT_THEME_TOKENS,
   isDarkTile,
@@ -338,6 +341,12 @@ export function uiContrast(): UiContrastRow[] {
     ['victory chips (--accent-text on --accent-soft)', T['accent-text'], T['accent-soft'], MIN_TEXT_CONTRAST],
     // Rule keywords in teaching copy (review PAR-7): accent text on the coach card and the dialogs.
     ['rule keyword (--accent-text on --card)', T['accent-text'], T.card, MIN_TEXT_CONTRAST],
+    // Phase 2e (spec §2.4, §2.8, §5.3, Appendix C): the ranking rows (white, my row --accent-soft) and the streak strip (--page).
+    ['given heart (--cheer on --card)', T.cheer, T.card, MIN_CONTRAST],
+    ['given heart on my row (--cheer on --accent-soft)', T.cheer, T['accent-soft'], MIN_CONTRAST],
+    ['heart outline on my row (--ink-icon on --accent-soft)', T['ink-icon'], T['accent-soft'], MIN_CONTRAST],
+    ['streak step done, its rim (--accent-deep on --page)', T['accent-deep'], T.page, MIN_CONTRAST],
+    ['streak step empty, its outline (--step-line on --page)', T['step-line'], T.page, MIN_CONTRAST],
   ];
   return pairs.map(([what, fg, bg, min]) => ({ what, fg, bg, min, ratio: contrastRatio(fg, bg) }));
 }
@@ -358,6 +367,50 @@ export function parityExceptions(): UiContrastRow[] {
   add('ticker border (--toast-line on --page)', T['toast-line'], T.page);
   // Phase 2d.1 (helpers-spec §2.5, D-2d1-16): the "+N" in the original's orange (white outline; the Score shows the number).
   add('"+N" (--plus on --page)', T.plus, T.page);
+  return rows;
+}
+
+/** The ranking art's colour tables (src/ui/art/palette-2e.ts), passed in: scripts/ may import only palette.ts (layering). */
+export interface ArtTables {
+  readonly medals: readonly { readonly rim: string; readonly face: string; readonly emboss: string }[];
+  readonly numberInk: string;
+  readonly avatars: readonly { readonly name: string; readonly coat: string; readonly disc: string }[];
+}
+
+/**
+ * Phase 2e (spec Appendix C): the ranking art's hard rows, the rank number the UI draws on each medal (on the
+ * face and on its paw emboss, as text: 4.5:1). The tables come from palette-2e.ts through the caller
+ * (tests/unit/ui/palette-check.spec.ts; the CLI once the layering rule lets scripts/ read palette-2e.ts,
+ * requests-G2 R5).
+ */
+export function artContrast(t: ArtTables): UiContrastRow[] {
+  return t.medals.flatMap((m, i) => [
+    { what: `rank number on medal ${i + 1} (--ink-deep on its face)`, fg: t.numberInk, bg: m.face, min: MIN_TEXT_CONTRAST, ratio: contrastRatio(t.numberInk, m.face) },
+    { what: `rank number on medal ${i + 1} (--ink-deep on its paw emboss)`, fg: t.numberInk, bg: m.emboss, min: MIN_TEXT_CONTRAST, ratio: contrastRatio(t.numberInk, m.emboss) },
+  ]);
+}
+
+/**
+ * Phase 2e (spec Appendix C): the new art's colours that carry no information of their own, reported so a
+ * change is visible (informational): the flame and the done paw's fill against the strip's page (the done paw
+ * carries its rim, a hard row), the chest's wood and, with the ranking tables, each medal's rim on a row and
+ * each avatar's fur on its own disc and its disc on a row (the avatars are pictures beside a name; every coat
+ * also differs in hue from its disc, and art-2e.spec keeps neighbours distinct).
+ */
+export function artInfo(t?: ArtTables): UiContrastRow[] {
+  const T = TOKENS;
+  const rows: UiContrastRow[] = [];
+  const add = (what: string, fg: string, bg: string): void => {
+    rows.push({ what, fg, bg, min: 0, ratio: contrastRatio(fg, bg) });
+  };
+  add('streak flame (--accent on --page)', T.accent, T.page);
+  add('streak step done, its fill (--accent on --page)', T.accent, T.page);
+  add('reward chest wood on --card', CHEST_COLORS.wood, T.card);
+  t?.medals.forEach((m, i) => add(`medal ${i + 1} rim on --card`, m.rim, T.card));
+  for (const c of t?.avatars ?? []) {
+    add(`avatar ${c.name}: fur on its disc`, c.coat, c.disc);
+    add(`avatar ${c.name}: disc on --card`, c.disc, T.card);
+  }
   return rows;
 }
 
@@ -462,6 +515,9 @@ export function main(argv: readonly string[]): void {
 
   // 6. The recorded parity exceptions (informational, look-spec §1.2 D-2d-6).
   for (const r of parityExceptions()) log(`${r.what.padEnd(58)} ${fmt(r.ratio)}:1 (informational, D-2d-6)`);
+
+  // 7. Phase 2e: the new art's decorative colours (informational, spec Appendix C).
+  for (const r of artInfo()) log(`${r.what.padEnd(58)} ${fmt(r.ratio)}:1 (informational, Phase 2e art)`);
 
   if (failures.length) {
     console.error(`palette-check: ${failures.length} failure(s)`);

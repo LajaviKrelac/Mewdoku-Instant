@@ -37,7 +37,7 @@ import { formatNumber, onLocaleChanged, t } from '../../i18n';
 import { headOrderFor } from '../art/palette';
 import { icon } from '../art/sprite';
 import type { View } from '../dom';
-import { periodPillLabel } from '../period-text';
+import { periodPillLabel, type FishTotalKind } from '../period-text';
 
 export interface PillsProps {
   readonly catsPlaced: number;
@@ -80,8 +80,10 @@ export interface PillsView extends View<PillsProps> {
   /**
    * Win flow: shows the period counter (fade in at the first call), later calls with a higher total
    * roll + bump. Phase 2d: it shows in the heads pill's place while the heads fade out.
+   * Phase 2e (G3, spec §2.3): `kind` on the first call names the total ('ladder' while the worldwide ranking
+   * is active: "14 fish in the daily ranking"); absent = cfg.period.kind, as before.
    */
-  showPeriodCounter(total: number): void;
+  showPeriodCounter(total: number, kind?: FishTotalKind): void;
   /** Client rect of the counter's icon (flight target), null while hidden. */
   periodRect(): DOMRect | null;
   /** The rising "+N" chip at the counter. */
@@ -93,7 +95,8 @@ export interface PillsView extends View<PillsProps> {
 export interface PeriodPillProps {
   /** This period's leaderboard points (fish kept), 0 after a rollover. */
   readonly total: number;
-  readonly kind: PeriodKind;
+  /** Phase 2e: 'ladder' while the worldwide ranking is active (my bracket's fish). */
+  readonly kind: FishTotalKind;
 }
 
 type Timers = Set<ReturnType<typeof setTimeout>>;
@@ -607,10 +610,10 @@ export function createPills(props: PillsProps): PillsView {
     later(timers, Math.max(LIFE_POP_MS, POP_SPLASH_MS) + CLEANUP_MS, () => drops.remove());
   };
 
-  const showPeriodCounter = (n: number): void => {
+  const showPeriodCounter = (n: number, kind?: FishTotalKind): void => {
     if (!periodShown) {
       periodShown = true;
-      period.setTotal(n);
+      period.update({ total: n, kind: kind ?? cfg.period.kind });
       period.el.hidden = false;
       // §1.13: over the heads pill, whose heads fade out over the same fishPillFadeMs.
       if (reduced()) {

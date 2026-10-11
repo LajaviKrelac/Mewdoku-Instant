@@ -1,9 +1,10 @@
 // Owner: C (Phase 2b; was game). Level → pack/record, hard levels, endless/substitute/daily specs, daily unlock and dates (02 §11–12).
 import { describe, expect, it } from 'vitest';
-import { mergeConfig } from '../../../src/app/config';
+import { cfg, mergeConfig } from '../../../src/app/config';
 import type { DailyPack, LevelPack } from '../../../src/engine/types';
 import {
   dailyCardState,
+  dailyDateKey,
   dailyMonthOf,
   dailyPuzzleId,
   dailyRecordIn,
@@ -19,6 +20,7 @@ import {
   localDateKey,
   localMidnightAfter,
   msUntilLocalMidnight,
+  nextDayStartAfter,
   packCount,
   packFirstLevel,
   packIndexFor,
@@ -215,5 +217,87 @@ describe('daily unlock and dates (02 §12)', () => {
     expect(dailyCardState({ ...open, inProgress: { level: null, daily: slot('D2026-10-06'), event: null } }, today)).toBe('in_progress');
     expect(dailyCardState({ ...open, inProgress: { level: null, daily: slot('D2026-10-05'), event: null } }, today)).toBe('not_played');
     expect(dailyCardState({ ...open, daily: { [today]: [252_000, 1, 0, 0] } }, today)).toBe('solved');
+  });
+});
+
+// ─────────────────────────────── Phase 2e (G1, spec §6.1, D-2e-13, D-2e-23) ───────────────────────────────
+
+/** Runs `fn` with the process time zone set to `tz` (Node re-reads TZ on assignment). */
+function inZone<T>(tz: string, fn: () => T): T {
+  const before = process.env.TZ;
+  process.env.TZ = tz;
+  try {
+    return fn();
+  } finally {
+    if (before === undefined) delete process.env.TZ;
+    else process.env.TZ = before;
+  }
+}
+
+describe('Phase 2e: the daily unlock after level 21 with earlier unlocks kept (spec §6.1)', () => {
+  const l1 = mergeConfig({ daily: { unlockAfterLevel: 21 } });
+  const at = (level: number, extra: Partial<SaveData> = {}): SaveData => ({ ...defaults(0), progress: { level, completed: level - 1, best: {} }, ...extra });
+  const slot: InProgressV2 = { id: 'D2026-10-06', mode: 'daily', cells: '0'.repeat(64), hearts: 3, revivesUsed: 0, mistakes: 0, hintsUsed: 0, kittiesUsed: 0, elapsedMs: 0, savedAt: 0 };
+
+  it('locked at level 21 (the next level is 21), open at 22', () => {
+    expect(isDailyUnlocked(at(21), l1)).toBe(false);
+    expect(isDailyUnlocked(at(22), l1)).toBe(true);
+  });
+
+  it('open at 21 with a daily record or a daily in progress (keepEarlierUnlock); off: locked', () => {
+    expect(isDailyUnlocked(at(21, { daily: { '2026-10-05': [1, 0, 0, 0] } }), l1)).toBe(true);
+    expect(isDailyUnlocked(at(21, { inProgress: { level: null, daily: slot, event: null } }), l1)).toBe(true);
+    const off = mergeConfig({ daily: { unlockAfterLevel: 21, keepEarlierUnlock: false } });
+    expect(isDailyUnlocked(at(21, { daily: { '2026-10-05': [1, 0, 0, 0] } }), off)).toBe(false);
+    expect(dailyCardState(at(21, { daily: { '2026-10-05': [1, 0, 0, 0] } }), '2026-10-06', l1)).toBe('not_played');
+    expect(dailyCardState(at(21), '2026-10-06', l1)).toBe('locked');
+  });
+
+  it('today (unlockAfterLevel 20): unchanged behaviour (open at 21)', () => {
+    expect(cfg.daily.unlockAfterLevel).toBe(20);
+    expect(isDailyUnlocked(at(20))).toBe(false);
+    expect(isDailyUnlocked(at(21))).toBe(true);
+  });
+});
+
+describe('Phase 2e: dailyDateKey and nextDayStartAfter (spec §6.1, critic C-26)', () => {
+  it('dayStartHour 0: the local date; nextDayStartAfter = localMidnightAfter', () => {
+    const t = new Date(2026, 9, 6, 0, 30).getTime();
+    expect(dailyDateKey(t)).toBe(localDateKey(t));
+    expect(nextDayStartAfter('2026-10-06')).toBe(localMidnightAfter('2026-10-06'));
+    expect(nextDayStartAfter('2026-12-31')).toBe(new Date(2027, 0, 1).getTime());
+    expect(Number.isNaN(nextDayStartAfter('bad'))).toBe(true);
+  });
+
+  it('dayStartHour 4: 03:59 still belongs to yesterday, 04:00 is today; the next start is 04:00 tomorrow', () => {
+    const c4 = mergeConfig({ daily: { dayStartHour: 4 } });
+    expect(dailyDateKey(new Date(2026, 9, 6, 3, 59).getTime(), c4)).toBe('2026-10-05');
+    expect(dailyDateKey(new Date(2026, 9, 6, 4, 0).getTime(), c4)).toBe('2026-10-06');
+    expect(dailyDateKey(new Date(2026, 9, 1, 2, 0).getTime(), c4)).toBe('2026-09-30'); // month boundary
+    expect(nextDayStartAfter('2026-10-05', c4)).toBe(new Date(2026, 9, 6, 4, 0).getTime());
+  });
+
+  it.each(['Europe/Berlin', 'America/New_York', 'Australia/Sydney'])('DST weekends in %s: 24 local hours apart or not, every local day is one key; the next start is local 00:00 / 04:00', (tz) => {
+    inZone(tz, () => {
+      for (const [y, m, d] of [
+        [2026, 9, 24],
+        [2026, 2, 7],
+        [2026, 2, 27],
+        [2026, 3, 3],
+        [2026, 9, 3],
+      ] as const) {
+        for (const h of [0, 4]) {
+          const c = mergeConfig({ daily: { dayStartHour: h } });
+          const keys = new Set<string>();
+          for (let i = 0; i < 4; i++) keys.add(dailyDateKey(new Date(y, m, d + i, 12).getTime(), c));
+          expect(keys.size).toBe(4);
+          const key = dailyDateKey(new Date(y, m, d, 12).getTime(), c);
+          const next = new Date(nextDayStartAfter(key, c));
+          expect(next.getHours()).toBe(h);
+          expect(dailyDateKey(next.getTime(), c)).not.toBe(key);
+          expect(dailyDateKey(next.getTime() - 1, c)).toBe(key);
+        }
+      }
+    });
   });
 });

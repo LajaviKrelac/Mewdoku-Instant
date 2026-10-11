@@ -17,11 +17,17 @@
 // the last mark, unmark, cat or mistake, the end of the board entry, a revive, the page becoming
 // visible again), needs stock (needsStock) and stops for the attempt once a helper was used
 // (untilHelperUsed: hintsUsed, kittiesUsed, ViewContext.mouseUses).
+// Phase 2e (G1, docs/phase2e/spec.md §2.5, §5.3, §6.1): "today" is dailyDateKey(now) (daily.dayStartHour)
+// and "Next puzzle in …" counts down to nextDayStartAfter; Home gains the ranking chip (HomeView.ladder:
+// the ladder flow's chip when it is active, else the records chip with the period pill's content) and
+// the streak strip (HomeView.streak, after the tutorial, dayStreak.showOnHome); the victory gains the
+// streak row (the day's first counted win, dayStreak.victoryRow) and the daily reward line.
+import { streakView, rewardForDay } from '../game/day-streak';
 import { activeEvent, eventEnd, eventRecord, eventStart, sumRewards, teaserEvent, type EventDef } from '../game/events';
 import { getMode } from '../game/modes';
 import { hasMouseCandidate } from '../game/mouse';
 import { settingsDotOn } from '../game/save';
-import { dailyCardState, isHard, localDateKey, localMidnightAfter, msUntilLocalMidnight } from '../game/progression';
+import { dailyCardState, dailyDateKey, isHard, nextDayStartAfter } from '../game/progression';
 import { dailySlotFor } from '../game/ramp';
 import { periodTotal } from '../game/scoring';
 import { tutorialAllowsTool, tutorialStep, TUTORIAL_STEP_COUNT, type TutorialStepIndex } from '../game/tutorial';
@@ -34,6 +40,8 @@ import type { VictoryProps } from '../ui/overlays/victory-screen';
 import type { EventScreenView } from '../ui/screens/event-screen';
 import type { GameView } from '../ui/screens/game-screen';
 import type { HomeEventCardView, HomeView } from '../ui/screens/home-screen';
+import type { LadderChipView } from '../ui/hud/ladder-chip';
+import type { StreakStripView } from '../ui/hud/streak-strip';
 import { cfg, type GameConfig } from './config';
 import { isFlagOn } from './flags';
 import type { WinSummary } from './session-effects';
@@ -60,6 +68,11 @@ export interface ViewContext {
   readonly lastBoardChangeAt?: number;
   /** Phase 2d.1 §4.6: uses of the mouse in this attempt (HelperFlows' per-attempt counter). */
   readonly mouseUses?: number;
+  /**
+   * Phase 2e (spec §2.5): the ranking chip from the ladder flow while the ladder is active; absent = the
+   * records chip (the period pill's content; the web, no server, the ladder off).
+   */
+  readonly ladderChip?: LadderChipView;
 }
 
 /** A SessionMeta.tutorialStep as the tutorial module's step type (null outside 1..6). */
@@ -72,9 +85,26 @@ export function asTutorialStep(step: number | null): TutorialStepIndex | null {
 /** Rule chip emphasised by each tutorial step (02 §11.5: colours, lines, space). */
 const STEP_CHIPS: Readonly<Record<number, RuleChip>> = { 1: 'colours', 2: 'lines', 3: 'space' };
 
+/**
+ * Phase 2e (spec §5.3): the Home streak strip for `today` (dailyDateKey), or null: before the tutorial is
+ * done, with flag `dayStreak` or dayStreak.enabled / showOnHome off.
+ */
+export function selectStreakStrip(state: AppState, today: string, c: GameConfig = cfg): StreakStripView | null {
+  const { save } = state;
+  if (!save.tutorialDone || !isFlagOn('dayStreak') || !c.dayStreak.enabled || !c.dayStreak.showOnHome) return null;
+  const v = streakView(save.dayStreak, today, c);
+  const state2: StreakStripView['state'] = v.alive ? (v.todayDone ? 'done' : 'alive') : v.broken ? 'new' : 'none';
+  return {
+    state: state2,
+    day: v.day,
+    total: v.total,
+    rewardDay: v.todayDone && v.day === v.total && rewardForDay(v.day, c) !== null,
+  };
+}
+
 export function selectHomeView(state: AppState, ctx: ViewContext, c: GameConfig = cfg): HomeView {
   const { save } = state;
-  const today = localDateKey(ctx.now);
+  const today = dailyDateKey(ctx.now, c);
   const level = save.progress.level;
   const solved = save.daily[today];
   return {
@@ -98,6 +128,10 @@ export function selectHomeView(state: AppState, ctx: ViewContext, c: GameConfig 
     event: selectEventCard(state, ctx, c),
     bannerReserved: state.ui.bannerReserved,
     settingsDot: settingsDotOn(save, c),
+    // Phase 2e §2.5: the ranking chip (the ladder flow's while active, else the records chip).
+    // A 'records' chip from the flow (no server) carries this week's real total from the save.
+    ladder: ctx.ladderChip && ctx.ladderChip.state !== 'records' ? ctx.ladderChip : { state: 'records', period: { kind: c.period.kind, total: periodTotal(save, ctx.now, c) } },
+    streak: selectStreakStrip(state, today, c),
   };
 }
 
@@ -279,15 +313,17 @@ export function selectVictoryView(state: AppState, ctx: ViewContext, win: WinSum
   const p = win.period;
   let daily: VictoryData['daily'] = null;
   if (win.mode === 'daily') {
-    const key = win.dateKey ?? localDateKey(ctx.now);
+    const key = win.dateKey ?? dailyDateKey(ctx.now, c);
+    // The start of the day after the daily's OWN date (already past when it was solved after it);
+    // Phase 2e: daily.dayStartHour (nextDayStartAfter, DST-safe).
+    const next = nextDayStartAfter(key, c);
     daily = {
       dateKey: key,
       ms: win.ms,
       mistakes: win.mistakes,
       hints: win.hints,
       kitties: win.kitties,
-      // The midnight after the daily's OWN date (already past when it was solved after midnight).
-      nextPuzzleAt: localMidnightAfter(key) ?? ctx.now + msUntilLocalMidnight(ctx.now),
+      nextPuzzleAt: Number.isFinite(next) ? next : nextDayStartAfter(dailyDateKey(ctx.now, c), c),
     };
   }
   let event: VictoryData['event'] = null;
@@ -319,6 +355,9 @@ export function selectVictoryView(state: AppState, ctx: ViewContext, win: WinSum
     buttonDelayMs: c.fx.winButtonDelayMs,
     reducedMotion: ui.reducedMotion,
     bannerReserved: ui.bannerReserved,
+    // Phase 2e §5.3: the streak row on the day's first counted win only (absent = no row); §6.1: the daily reward.
+    ...(win.streak && c.dayStreak.victoryRow && isFlagOn('dayStreak') ? { streak: win.streak } : {}),
+    ...(win.dailyReward ? { dailyReward: win.dailyReward } : {}),
   };
 }
 

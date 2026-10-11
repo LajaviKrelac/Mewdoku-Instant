@@ -137,8 +137,11 @@ describe('fbinstant-stub', () => {
     expect((await second.sdk.payments!.getPurchasesAsync()).map((x) => x.purchaseToken)).toEqual([p.purchaseToken]);
     await second.sdk.payments!.consumePurchaseAsync(p.purchaseToken);
     expect(await second.sdk.payments!.getPurchasesAsync()).toEqual([]);
+    // Phase 2e (§4.4): 'ios' lists the payments APIs (the app decides); 'ios-no-payments' is the 2b preset.
     const ios = load({ setTimeout: realTimers, __FB_STUB_CONFIG__: { presets: ['ios'] } }).sdk;
-    expect(ios.payments).toBeUndefined();
+    expect(ios.payments).toBeDefined();
+    const iosOld = load({ setTimeout: realTimers, __FB_STUB_CONFIG__: { presets: ['ios-no-payments'] } }).sdk;
+    expect(iosOld.payments).toBeUndefined();
   });
 
   // ── phase2c ──

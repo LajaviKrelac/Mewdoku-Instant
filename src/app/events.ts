@@ -2,6 +2,9 @@
 // Phase 2c (G1): analytics row win_points (§3.9); the bus event `wallet` is removed (no fish wallet).
 // Phase 2c.1 (G1, §10.5): win_points.streak becomes `run` (the cat run at WON); points = the level's total.
 // Phase 2d (G1, docs/phase2d/look-spec.md §1.12): mouse_used (the mouse helper crossed out `cells` tiles).
+// Phase 2e (G1, docs/phase2e/spec.md §7.5, §9.3; CONTRACTS §7): the ranking, streak, O2, banner and
+// remote-config analytics rows; iap + source; ad_interstitial + gate; PauseReason 'purchase'; the bus
+// event 'ladder:update'.
 // Typed event bus (04 §3) and the analytics event table (02 §20). Phase 3 hook: achievements,
 // quests and stats subscribe here without touching the session.
 import type { HintKind } from '../engine/types';
@@ -16,7 +19,8 @@ import type {
   RankingCaps,
   RewardedPlacement,
 } from '../platform/types';
-import type { LocaleId } from './config';
+import type { BannerScreen, LocaleId } from './config';
+import type { GateDecision } from '../game/ad-pacing';
 import type { OverlayId, ScreenId } from './store';
 
 export type Handler<P> = (payload: P) => void;
@@ -80,7 +84,8 @@ export interface AnalyticsParamsMap {
   mistake: { level: number; size: number; cats: number };
   hint_used: { level: number; kind: HintKind; charged: 0 | 1 };
   kitty_used: { level: number };
-  ad_interstitial: { trigger: InterstitialPlacement; result: AdResultCode };
+  /** Phase 2e (spec §3.5): + `gate`, the GateDecision when the gate said no (result 'gated'). */
+  ad_interstitial: { trigger: InterstitialPlacement; result: AdResultCode; gate?: GateDecision };
   ad_rewarded: { placement: RewardedPlacement; result: AdResultCode | 'fallback' };
   daily_start: { date: string; size: number; ms: number; mistakes: number };
   daily_win: { date: string; size: number; ms: number; mistakes: number };
@@ -99,7 +104,8 @@ export interface AnalyticsParamsMap {
   /** place only in rank mode (§5.6); doubled = the group_double video was watched. */
   group_result: { mode: 'participation' | 'rank'; place?: number; wins: number; doubled: 0 | 1 };
   // ── phase2b §8.4 purchases: never a price or payment id ──
-  iap: { product: ProductId; result: 'ok' | PurchaseFailReason; platform: string };
+  /** Phase 2e (spec §4.6): + `source`, where the purchase started (Settings → Shop or the O2 card). */
+  iap: { product: ProductId; result: 'ok' | PurchaseFailReason; platform: string; source?: 'shop' | 'o2' };
   // ── phase2c §3.9: once per counted scored win ──
   /**
    * fish = fish (lives) kept; total = this period's leaderboard points after; points = the level's
@@ -110,6 +116,31 @@ export interface AnalyticsParamsMap {
   // ── phase2d §1.12: once per use of the mouse helper (after its video or free grant) ──
   /** cells = the X marks the mouse placed (≤ cfg.mouse.cells). */
   mouse_used: { mode: ModeId; cells: number };
+  // ── Phase 2e (spec §7.5): never a nickname, player key or code, token, bracket or reward id, price or payment id ──
+  ladder_auth: { platform: string; result: 'ok' | 'no_api' | 'rejected' | 'error' | 'timeout' | 'disabled' };
+  ladder_submit: {
+    mode: ModeId;
+    result: 'accepted' | 'flagged' | 'duplicate' | 'counted_before' | 'rejected' | 'queued' | 'dropped' | 'error';
+    reason: string;
+    ms: number;
+  };
+  ladder_panel: { state: 'bracket' | 'stale' | 'records' | 'loading'; rows: number; rank: number; ms: number };
+  ladder_open: { from: 'home' | 'settings' };
+  ladder_result: { rank: number; size: number; rewarded: 0 | 1 };
+  ladder_claim: { result: 'ok' | 'error' | 'video_failed'; doubled: 0 | 1 };
+  heart_give: { result: 'ok' | 'exists' | 'limit' | 'error'; self: 0 | 1 };
+  nick_set: { result: 'ok' | 'rejected' | 'cooldown' | 'error'; avatar: 0 | 1 };
+  ladder_listed: { on: 0 | 1 };
+  ladder_delete: { result: 'ok' | 'error' };
+  streak_day: { day: number; run: number };
+  streak_reward: { run: number };
+  streak_reset: { prev: number };
+  /** buy = the number of Buy rows shown (0–2). */
+  o2_shown: { placement: 'hint' | 'kitty' | 'mouse'; video: 0 | 1; buy: number };
+  o2_choice: { placement: 'hint' | 'kitty' | 'mouse'; choice: 'video' | 'buy' | 'no_ads' | 'free' | 'decline' };
+  /** Once per banner load attempt (≤ 1 per ads.banner.minReloadSec). */
+  ad_banner: { screen: BannerScreen; result: AdResultCode };
+  remote_config: { result: 'ok' | 'cached' | 'default' };
 }
 export type AnalyticsName = keyof AnalyticsParamsMap;
 export type AnalyticsEvent = { [K in AnalyticsName]: { name: K; params: AnalyticsParamsMap[K] } }[AnalyticsName];
@@ -124,7 +155,7 @@ export const ANALYTICS_PARAM_KEYS: { readonly [K in AnalyticsName]: readonly (ke
   mistake: ['level', 'size', 'cats'],
   hint_used: ['level', 'kind', 'charged'],
   kitty_used: ['level'],
-  ad_interstitial: ['trigger', 'result'],
+  ad_interstitial: ['trigger', 'result', 'gate'],
   ad_rewarded: ['placement', 'result'],
   daily_start: ['date', 'size', 'ms', 'mistakes'],
   daily_win: ['date', 'size', 'ms', 'mistakes'],
@@ -137,14 +168,34 @@ export const ANALYTICS_PARAM_KEYS: { readonly [K in AnalyticsName]: readonly (ke
   rank_panel: ['board', 'api', 'ms', 'ok'],
   group_create: [],
   group_result: ['mode', 'place', 'wins', 'doubled'],
-  iap: ['product', 'result', 'platform'],
+  iap: ['product', 'result', 'platform', 'source'],
   win_points: ['mode', 'fish', 'total', 'points', 'run'],
   mouse_used: ['mode', 'cells'],
+  ladder_auth: ['platform', 'result'],
+  ladder_submit: ['mode', 'result', 'reason', 'ms'],
+  ladder_panel: ['state', 'rows', 'rank', 'ms'],
+  ladder_open: ['from'],
+  ladder_result: ['rank', 'size', 'rewarded'],
+  ladder_claim: ['result', 'doubled'],
+  heart_give: ['result', 'self'],
+  nick_set: ['result', 'avatar'],
+  ladder_listed: ['on'],
+  ladder_delete: ['result'],
+  streak_day: ['day', 'run'],
+  streak_reward: ['run'],
+  streak_reset: ['prev'],
+  o2_shown: ['placement', 'video', 'buy'],
+  o2_choice: ['placement', 'choice'],
+  ad_banner: ['screen', 'result'],
+  remote_config: ['result'],
 };
 
 // ─────────────────────────────── App events ───────────────────────────────
 
-export type PauseReason = 'hidden' | 'fb_pause' | 'modal' | 'ad';
+/** Phase 2e (spec §4.3): + 'purchase' (FB's purchase dialog is open; stacks with 'fb_pause'). */
+export type PauseReason = 'hidden' | 'fb_pause' | 'modal' | 'ad' | 'purchase';
+/** Phase 2e (spec §9.3): why the ranking state changed (views re-render; the panel and the chip refresh). */
+export type LadderUpdateReason = 'session' | 'wins' | 'bracket' | 'claim' | 'heart' | 'profile' | 'listed' | 'deleted' | 'offline';
 
 export interface AppEventMap {
   /** After every reduce() that produced events (04 §5.2). `prev` is the state before the action. */
@@ -173,6 +224,8 @@ export interface AppEventMap {
   'locale:changed': { readonly locale: LocaleId; readonly dir: 'ltr' | 'rtl' };
   /** phase2b §5.5: what the ranking fetch for a board returned (or 'local' when there is no provider). */
   'rank:result': RankResult;
+  /** Phase 2e (spec §9.3): the ladder's state changed (session, wins, bracket, claim, heart, profile, …). */
+  'ladder:update': { readonly reason: LadderUpdateReason };
 }
 
 /**

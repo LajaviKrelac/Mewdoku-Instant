@@ -452,7 +452,7 @@ describe('session win flow (phase2c §2.2 t = 0, §2.5–§2.7, §3.7)', () => {
       kept: { fish: 3, max: 3, gained: 3, total: 3, kind: 'week' },
       buttonDelayMs: 600,
     });
-    expect(v).not.toHaveProperty('streak'); // 2c.1: no "Perfect ×N"
+    expect(v?.streak).toMatchObject({ day: 1, total: 7, reward: null }); // Phase 2e: the daily streak's row (2c.1's "Perfect ×N" stays retired)
     // §2.7: no fish pill, no "+" (shop), no bonus chip.
     expect(v).not.toHaveProperty('onShop');
     expect(v).not.toHaveProperty('fish');
@@ -484,7 +484,7 @@ describe('session win flow (phase2c §2.2 t = 0, §2.5–§2.7, §3.7)', () => {
     expect(h.router.game?.counters.slice(0, 3)).toEqual([0, 1, 2]);
     await tapRanking(h);
     expect(h.router.props.victory).toMatchObject({ pointsEarned: 3_264, kept: { fish: 2, max: 3, gained: 2, total: 2 } });
-    expect(h.router.props.victory).not.toHaveProperty('streak');
+    expect(h.router.props.victory?.streak).toMatchObject({ total: 7 }); // Phase 2e: the daily streak's row (2c.1's streak stays retired)
   });
 
   it('UX-4: the tap crossfades — the victory opens over the panel at once; the panel closes only once the victory is opaque', async () => {
@@ -516,7 +516,7 @@ describe('session win flow (phase2c §2.2 t = 0, §2.5–§2.7, §3.7)', () => {
     await h.settle(cfg.fx.winOverlayDelayMs);
     await tapRanking(h);
     expect(h.router.props.victory?.pointsEarned).toBe(3_840);
-    expect(h.router.props.victory).not.toHaveProperty('streak');
+    expect(h.router.props.victory?.streak).toMatchObject({ total: 7 }); // Phase 2e: the daily streak's row (2c.1's streak stays retired)
   });
 
   it('a level already counted (replayed after a merge moved progress on) is never awarded twice: no lifetime points, no fish, panel at 1 200 with "This week" only; the victory still shows the level\'s total', async () => {

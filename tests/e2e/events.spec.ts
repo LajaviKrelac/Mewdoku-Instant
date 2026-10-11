@@ -10,6 +10,8 @@
 // Phase 2d (G1, docs/phase2d/look-spec.md §1.4, §5.3): the game bar splits the event title into its
 // Level column ("Lantern Walk" over "1"), the whole name visible at 390 (the column widens instead of
 // cutting it, §1.4 Fit), with the Score column beside it.
+// Phase 2e (G1, docs/phase2e/spec.md §2.11): runs with ?flags=-ladder (the e2e build as web-prod, no ranking
+// origin), so the panel stays the weekly records card these checks pin.
 import { expect, test, type Page } from '@playwright/test';
 import type { E2EHooks } from '../../src/app/boot';
 import { defaults } from '../../src/game/save';
@@ -31,7 +33,7 @@ const player = (level: number, patch: Partial<SaveData> = {}): SaveData => ({
 
 async function open(page: Page, when: Date, save: SaveData): Promise<void> {
   await page.clock.setFixedTime(when);
-  await page.goto('/?ads=unsupported');
+  await page.goto('/?ads=unsupported&flags=-ladder');
   await page.waitForFunction(() => {
     const s = (window as TestWindow).__mewdoku?.app().screen;
     return s === 'home' || s === 'game';
@@ -115,7 +117,7 @@ test('Lantern Walk: card → event screen → puzzle 1 → win → victory 1 / 2
   await expect(victory.locator('.victory__primary')).toHaveText(/Play puzzle 2/);
   await expect(victory.locator('.victory__kept')).toHaveAttribute('data-count', '3');
   await expect(victory.locator('.victory__points')).toHaveText(`${total.toLocaleString('en-US')} points`);
-  await expect(victory.locator('.victory__streak')).toHaveCount(0);
+  await expect(victory.getByText(/Perfect ×/)).toHaveCount(0); // `.victory__streak` is the 2e daily streak row
   await victory.getByRole('button', { name: 'Home' }).click();
 
   await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');
@@ -151,7 +153,7 @@ test('an event screen left open across the end: Play goes Home quietly, never an
     }).observe(document, { subtree: true, childList: true, characterData: true });
   });
   await page.clock.install({ time: nearEnd });
-  await page.goto('/?ads=unsupported');
+  await page.goto('/?ads=unsupported&flags=-ladder');
   await page.waitForFunction(() => ['home', 'game'].includes((window as TestWindow).__mewdoku?.app().screen ?? ''));
   await page.evaluate((json) => (window as TestWindow).__mewdoku?.seedSave(json), JSON.stringify(player(15)));
   await page.reload();

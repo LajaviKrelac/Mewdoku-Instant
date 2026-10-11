@@ -1,0 +1,44 @@
+{
+  "name": "mewdoku-rank",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Owner: G4 (Phase 2e). The worldwide daily ranking server (Cloudflare Worker + D1; Node + node:sqlite for dev and tests). docs/phase2e/spec.md \u00a71.",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "dev": "wrangler dev --local",
+    "dev:node": "tsx dev/serve.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.scripts.json",
+    "test": "vitest run",
+    "solutions": "tsx scripts/build-solutions.ts",
+    "solutions:check": "tsx scripts/build-solutions.ts --check",
+    "db:migrate:local": "wrangler d1 migrations apply mewdoku-rank-dev --local",
+    "db:migrate:staging": "wrangler d1 migrations apply mewdoku-rank-staging --remote --env staging",
+    "db:migrate:prod": "wrangler d1 migrations apply mewdoku-rank-prod --remote --env production",
+    "d1:create:staging": "wrangler d1 create mewdoku-rank-staging",
+    "d1:create:prod": "wrangler d1 create mewdoku-rank-prod",
+    "secret:staging": "wrangler secret put --env staging",
+    "secret:prod": "wrangler secret put --env production",
+    "deploy:staging": "wrangler deploy --env staging",
+    "deploy:prod": "wrangler deploy --env production",
+    "rollback:prod": "wrangler rollback --env production",
+    "tail:staging": "wrangler tail --env staging",
+    "tail:prod": "wrangler tail --env production",
+    "login": "wrangler login",
+    "bundle:check": "wrangler deploy --dry-run --outdir .wrangler/dry-run --env staging",
+    "load": "tsx scripts/load.ts",
+    "smoke": "tsx scripts/smoke.ts",
+    "verify": "npm run typecheck && npm run test && npm run solutions:check"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260925.1",
+    "@types/node": "22.20.5",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
+    "vitest": "5.0.3",
+    "wrangler": "4.140.0"
+  }
+}

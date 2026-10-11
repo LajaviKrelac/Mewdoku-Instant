@@ -15,15 +15,20 @@
 // as main-bundle facades over the lazy `fb-social` chunk (fb-social-glue.ts). Their capabilities come
 // from cheap probes after init(), so capabilities() stays final after init(); the chunk is preloaded
 // right after start() (never awaited, never before the first route) when any of them is usable.
+// Phase 2e (G1, docs/phase2e/spec.md §1.3, §3.4, §4.4; CONTRACTS §5): `identity` (the signed player info
+// for the ranking server; null when player.getSignedPlayerInfoAsync is not listed or not a function, or on
+// any error), per-helper rewarded placement IDs (VITE_FB_PLACEMENT_REWARDED_*), Capabilities.paymentsIos
+// (iOS no longer excludes payments here: the app decides with iap.iosEnabled / the remote switch iapIos),
+// and the build marker's per-helper flags.
 import { cfg } from '../../app/config';
 import { canVibrate, createHaptics, type Haptics } from '../shared/haptics';
 import { createSystemTimers } from '../shared/timers';
-import type { AdKind, Capabilities, PlatformAdapter, PlatformAds, PlatformTimers } from '../types';
+import type { AdKind, Capabilities, IdentityProvider, PlatformAdapter, PlatformAds, PlatformTimers, RewardedPlacement } from '../types';
 import { createLocalFlag, createLocalStore } from '../web/local-storage';
 import { createFbAds } from './fb-ads';
 import { createFbAnalytics } from './fb-analytics';
 import { createFbBanner } from './fb-banner';
-import { parseLeaderboardMap, probeBanner } from './fb-probe';
+import { identitySupported, isIosPlatform, parseLeaderboardMap, probeBanner } from './fb-probe';
 import { createSocialGlue, type SocialModule } from './fb-social-glue';
 import { createFbStorage } from './fb-storage';
 import type { FBInstantSDK } from './fbinstant';
@@ -33,6 +38,8 @@ export interface FbPlatformOptions {
   readonly sdk?: FBInstantSDK;
   /** Defaults to import.meta.env.VITE_FB_PLACEMENT_INTERSTITIAL / _REWARDED / _BANNER (banner: '' when omitted here). */
   readonly placements?: { readonly interstitial: string; readonly rewarded: string; readonly banner?: string };
+  /** Phase 2e (spec §3.4): per-helper rewarded IDs; defaults to the VITE_FB_PLACEMENT_REWARDED_* values. */
+  readonly rewardedIds?: Partial<Record<RewardedPlacement, string>>;
   /** VITE_FB_LEADERBOARDS (JSON map BoardKey → dashboard name or id). Defaults to the env value. */
   readonly leaderboards?: string;
   /** Loads the lazy `fb-social` chunk. Default: () => import('./fb-social'). Tests inject failures. */
@@ -71,6 +78,13 @@ export function createFbPlatform(opts: FbPlatformOptions = {}): PlatformAdapter 
     banner: import.meta.env.VITE_FB_PLACEMENT_BANNER ?? '',
   };
   const bannerPlacement = (placements.banner ?? '').trim();
+  const rewardedIds: Partial<Record<RewardedPlacement, string>> = opts.rewardedIds ?? {
+    hint: import.meta.env.VITE_FB_PLACEMENT_REWARDED_HINT ?? '',
+    kitty: import.meta.env.VITE_FB_PLACEMENT_REWARDED_KITTY ?? '',
+    mouse: import.meta.env.VITE_FB_PLACEMENT_REWARDED_MOUSE ?? '',
+    revive: import.meta.env.VITE_FB_PLACEMENT_REWARDED_REVIVE ?? '',
+    rank_double: import.meta.env.VITE_FB_PLACEMENT_REWARDED_RANK_DOUBLE ?? '',
+  };
   const boards = parseLeaderboardMap(opts.leaderboards !== undefined ? opts.leaderboards : import.meta.env.VITE_FB_LEADERBOARDS);
   const lazySdk = (): FBInstantSDK => {
     const s = opts.sdk ?? defaultSdk();
@@ -139,6 +153,7 @@ export function createFbPlatform(opts: FbPlatformOptions = {}): PlatformAdapter 
   });
   const ads = createFbAds(forward, {
     placements,
+    rewardedIds,
     timers,
     readyTimeoutMs: cfg.ads.readyTimeoutMs,
     supported: (kind) => initialized && adSupported(kind),
@@ -167,8 +182,8 @@ export function createFbPlatform(opts: FbPlatformOptions = {}): PlatformAdapter 
   };
   // `banner` is a getter: present only while usable (after init, both APIs, a placement, not latched off).
   const adsAll: PlatformAds = {
-    preload: (kind) => ads.preload(kind),
-    isReady: (kind) => ads.isReady(kind),
+    preload: (kind, placement) => ads.preload(kind, placement),
+    isReady: (kind, placement) => ads.isReady(kind, placement),
     showInterstitial: (p) => ads.showInterstitial(p),
     showRewarded: (p) => ads.showRewarded(p),
     get banner() {
@@ -210,7 +225,27 @@ export function createFbPlatform(opts: FbPlatformOptions = {}): PlatformAdapter 
     haptics: has(FB_API.haptics) || canVibrate(nav),
     overlayViews: social.overlayViews(),
     groups: social.groups() !== undefined,
+    // Phase 2e §4.4: the platform is iOS (payments there need iap.iosEnabled or the remote switch iapIos).
+    paymentsIos: initialized && isIosPlatform(sdkRef()),
   });
+
+  // ── Phase 2e §1.3: the signed player info for the ranking server ──
+  const identity: IdentityProvider = {
+    async signedPlayerInfo(requestPayload) {
+      if (!initialized) return null;
+      const s = sdkRef();
+      if (!identitySupported(s, apis)) return null;
+      try {
+        const info = await s.player.getSignedPlayerInfoAsync(requestPayload);
+        const playerId = info.getPlayerID();
+        const signature = info.getSignature();
+        if (typeof playerId !== 'string' || playerId === '' || typeof signature !== 'string' || signature === '') return null;
+        return { playerId, signature };
+      } catch {
+        return null;
+      }
+    },
+  };
 
   const playerId = (): string | null => {
     if (!initialized) return null;
@@ -313,6 +348,10 @@ export function createFbPlatform(opts: FbPlatformOptions = {}): PlatformAdapter 
     get payments() {
       return social.payments();
     },
+    // Phase 2e §1.3: present when the SDK lists player.getSignedPlayerInfoAsync (after init); else absent.
+    get identity() {
+      return initialized && identitySupported(sdkRef(), apis) ? identity : undefined;
+    },
   };
 }
 
@@ -327,7 +366,13 @@ export const FB_IDS_MARKER =
   (import.meta.env.VITE_FB_PLACEMENT_INTERSTITIAL ? 'i1' : 'i0') +
   (import.meta.env.VITE_FB_PLACEMENT_REWARDED ? 'r1' : 'r0') +
   (import.meta.env.VITE_FB_PLACEMENT_BANNER ? 'b1' : 'b0') +
-  (import.meta.env.VITE_FB_LEADERBOARDS ? 'l1' : 'l0');
+  (import.meta.env.VITE_FB_LEADERBOARDS ? 'l1' : 'l0') +
+  // Phase 2e §3.4 (fbBuildTag): the per-helper rewarded IDs, as flags only (h, k, m, v = revive, d = rank_double).
+  (import.meta.env.VITE_FB_PLACEMENT_REWARDED_HINT ? 'h1' : 'h0') +
+  (import.meta.env.VITE_FB_PLACEMENT_REWARDED_KITTY ? 'k1' : 'k0') +
+  (import.meta.env.VITE_FB_PLACEMENT_REWARDED_MOUSE ? 'm1' : 'm0') +
+  (import.meta.env.VITE_FB_PLACEMENT_REWARDED_REVIVE ? 'v1' : 'v0') +
+  (import.meta.env.VITE_FB_PLACEMENT_REWARDED_RANK_DOUBLE ? 'd1' : 'd0');
 
 /** Entry used by main.ts through the '@platform' alias in the fbig build. */
 export function createPlatform(): PlatformAdapter {

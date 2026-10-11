@@ -1,0 +1,17 @@
+{
+  "name": "error.bad_signature",
+  "request": {
+    "method": "POST",
+    "path": "/v1/session"
+  },
+  "response": {
+    "status": 401,
+    "body": {
+      "error": {
+        "code": "bad_signature",
+        "message": "signature does not verify"
+      },
+      "serverTime": 1791799800000
+    }
+  }
+}

@@ -1,0 +1,755 @@
+/* Owner: G3 (Phase 2e)
+   The lazy `ladder` chunk's stylesheet (spec §2.4–§2.7, §7.7, §7.9): the bracket list (shared by the post-win
+   panel and the ranking sheet), the sheet, the result card and the name sheet. Loaded with the chunk
+   (assets/ladder-chunk-*.css), after the overlay chunk's stylesheet, so its rules may refine the panel's.
+   The Classic look of Phase 2d: the list is a white rounded card with mauve-brown ink, my row in
+   --accent-soft, round white discs with the warm shadow for the small buttons, the display face for names
+   and numbers. Tokens only (css-rules.spec.ts); logical properties for RTL (the rank and the picture at the
+   inline start, the fish and the hearts at the end); no flex gap, no inset (04 §1 baseline).
+   Reduced motion: no row or heart motion here (the heart pop is WAAPI in bracket-list.ts, skipped there). */
+
+/* ── The bracket list ─────────────────────────────────────────────────── */
+.rank-list--bracket {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  margin-top: 10px;
+  color: var(--ink);
+  text-align: start;
+}
+
+.ranking__meta,
+.ranking__rewards,
+.ranking__stale,
+.ranking__offline,
+.ranking__alone,
+.ranking__hearts-new,
+.ranking__first {
+  flex: none;
+  margin: 0;
+  font-size: var(--fs-s);
+  line-height: 1.35;
+  text-align: center;
+  color: var(--ink-2);
+}
+
+.ranking__meta {
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  font-size: var(--fs-m);
+  color: var(--ink);
+}
+
+.ranking__countdown,
+.ranking__count {
+  white-space: nowrap;
+}
+
+.ranking__rewards,
+.ranking__stale,
+.ranking__alone {
+  margin-top: 2px;
+}
+
+.ranking__offline,
+.ranking__hearts-new,
+.ranking__first {
+  margin-top: 8px;
+}
+
+.ranking__hearts-new {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* The rows: a white card that scrolls inside the panel or the sheet (never the page). */
+.rank-rows {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 104px;
+  margin: 10px 0 0;
+  padding: 4px;
+  overflow-y: auto;
+  list-style: none;
+  border-radius: var(--radius-l);
+  background: var(--card);
+  box-shadow: var(--shadow-1);
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.rank-rows[data-single] {
+  flex: 0 0 auto;
+  min-height: 0;
+}
+
+/* A row is two lines on a small grid (no flex gap): the place and the picture at the inline start, the heart at
+   the end, both spanning; the name on line 1 with the whole middle to itself (names are never squeezed by the
+   points: a 40-character name wraps to two lines at 320 px instead of "Velvet…"); line 2 holds my tags ("You",
+   "+2 waiting", the pencil) and then the fish. Mirrors in RTL with the grid areas. */
+.rank-row {
+  display: grid;
+  grid-template-columns: auto auto auto minmax(min-content, 1fr) auto;
+  grid-template-areas:
+    'place avatar name name heart'
+    'place avatar line pts heart';
+  align-items: center;
+  min-height: 48px;
+  padding: 3px 4px;
+  padding-inline-start: 6px;
+  border-radius: var(--radius-m);
+  color: var(--ink);
+}
+
+.rank-row + .rank-row {
+  margin-top: 2px;
+}
+
+/* My row (and its pinned copy): highlighted in --accent-soft with a soft accent ring; the "You" tag says it
+   too (never colour alone). */
+.rank-row[data-me='1'],
+.rank-row--pinned {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 2px rgba(var(--accent-rgb), 0.35);
+}
+
+.rank-row--pinned {
+  flex: none;
+  margin-top: 6px;
+  box-shadow: inset 0 0 0 2px rgba(var(--accent-rgb), 0.35), var(--shadow-1);
+}
+
+.rank-row__place {
+  position: relative;
+  display: flex;
+  grid-area: place;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  font-family: var(--font-num);
+  font-weight: var(--display-weight);
+  font-size: var(--fs-m);
+}
+
+.rank-row__medal {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 32px;
+  height: 32px;
+}
+
+.rank-row__medal-art {
+  display: block;
+  width: 32px;
+  height: 32px;
+}
+
+/* The rank number on the medal's face (G2: MEDAL_FACE, x 50 %, y 53 %), in --ink-deep (≥ 4.5:1 on every face). */
+.rank-row__place[data-medal] .rank-row__num {
+  position: absolute;
+  top: 53%;
+  left: 0;
+  width: 100%;
+  margin-top: -0.6em;
+  line-height: 1.2em;
+  text-align: center;
+  font-size: 12px;
+  color: var(--ink-deep);
+}
+
+.rank-row__avatar {
+  grid-area: avatar;
+  width: 34px;
+  height: 34px;
+  margin-inline-start: 4px;
+  margin-inline-end: 8px;
+}
+
+.rank-row__avatar-art {
+  display: block;
+  width: 34px;
+  height: 34px;
+}
+
+/* The name and the tag line are the grid's own items (the wrapper only groups them in the DOM). */
+.rank-row__who {
+  display: contents;
+}
+
+.rank-row__name {
+  display: -webkit-box;
+  grid-area: name;
+  align-self: end;
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  font-size: var(--fs-m);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.rank-row__tags {
+  display: flex;
+  align-items: center;
+}
+
+.rank-row__you {
+  padding: 0 7px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-text);
+  color: #fff;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  line-height: 16px;
+}
+
+.rank-row__waiting {
+  margin-inline-start: 6px;
+  color: var(--amber-text);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.rank-row__points {
+  display: inline-flex;
+  grid-area: pts;
+  align-items: center;
+  align-self: start;
+  justify-self: start;
+  margin-top: 1px;
+  font-family: var(--font-num);
+  font-weight: var(--display-weight);
+  font-size: var(--fs-s);
+  line-height: 18px;
+}
+
+.rank-row__fish {
+  width: 18px;
+  height: 18px;
+  margin-inline-end: 2px;
+}
+
+/* A heart: 48 × 44 (spec §7.7), the line heart in --ink-icon, a given one filled in --cheer (G2's art). */
+.rank-row__heart {
+  display: inline-flex;
+  grid-area: heart;
+  align-items: center;
+  justify-content: center;
+  min-width: 50px;
+  height: 44px;
+  margin-inline-start: 2px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink-icon);
+  font-family: var(--font-num);
+  font-weight: var(--display-weight);
+  font-size: var(--fs-s);
+  cursor: pointer;
+}
+
+.rank-row__heart-icon {
+  display: inline-flex;
+}
+
+.rank-row__heart-art {
+  width: 22px;
+  height: 22px;
+}
+
+.rank-row__hearts {
+  min-width: 1ch;
+  margin-inline-start: 3px;
+  color: var(--ink);
+}
+
+.rank-row__heart:not(:disabled):not([aria-disabled='true']):active {
+  background: rgba(var(--ink-rgb), 0.08);
+}
+
+.rank-row__heart:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.rank-row__heart[aria-disabled='true'] {
+  cursor: default;
+}
+
+.rank-row__heart[aria-busy='true'] {
+  opacity: 0.7;
+}
+
+.rank-row__heart:focus-visible,
+.rank-row__edit:focus-visible {
+  outline: var(--focus-ring) solid var(--focus);
+  outline-offset: 1px;
+}
+
+/* My row's pencil in the sheet: a small white disc with the warm shadow (the Classic look) on the tag line after
+   "You", so the name keeps the row's width; its tap area is 44 × 44 (the ::after), the line does not grow. */
+.rank-row__line {
+  display: flex;
+  grid-area: line;
+  flex-wrap: wrap;
+  align-items: center;
+  align-self: start;
+  margin-top: 1px;
+  margin-inline-end: 8px;
+}
+
+.rank-row__edit {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  margin: -5px 0 -5px 0;
+  margin-inline-start: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: var(--shadow-btn);
+  color: var(--ink-icon);
+  cursor: pointer;
+}
+
+.rank-row__edit::after {
+  content: '';
+  position: absolute;
+  top: -9px;
+  left: -9px;
+  width: 44px;
+  height: 44px;
+}
+
+.rank-row__edit-icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* ── The post-win panel (overlay `ranking`, the dark stage): the header lines light, the list a white card ── */
+.ranking[data-list='bracket'] .ranking__card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ranking[data-list='bracket'] .ranking__head,
+.ranking[data-list='bracket'] .ranking__sub {
+  flex: none;
+}
+
+.overlay[data-overlay='ranking'] .rank-list--bracket {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.overlay[data-overlay='ranking'] .ranking__meta {
+  color: #fff;
+}
+
+.overlay[data-overlay='ranking'] .ranking__rewards,
+.overlay[data-overlay='ranking'] .ranking__stale,
+.overlay[data-overlay='ranking'] .ranking__offline,
+.overlay[data-overlay='ranking'] .ranking__alone,
+.overlay[data-overlay='ranking'] .ranking__first {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.overlay[data-overlay='ranking'] .ranking__hearts-new {
+  color: var(--tap-text);
+}
+
+/* ── The ranking sheet (overlay `ladder`): a full-height light sheet ── */
+.overlay[data-overlay='ladder'] .overlay__panel--sheet.ladder-sheet {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.ladder-sheet[data-fit] {
+  height: auto;
+}
+
+.ladder-sheet[data-info-only] {
+  height: auto;
+  margin-bottom: auto;
+}
+
+.ladder-sheet .overlay__head {
+  flex: none;
+}
+
+.ladder-sheet__info,
+.ladder-sheet .overlay__close,
+.ladder-sheet .overlay__back {
+  flex: none;
+}
+
+.ladder-sheet__info.btn {
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  margin-inline-end: 8px;
+  padding: 0;
+  background: var(--card);
+  box-shadow: var(--shadow-btn);
+  color: var(--ink-icon);
+}
+
+.ladder-sheet__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.ladder-sheet[data-view='list'] .ladder-sheet__body {
+  overflow: hidden;
+}
+
+.ladder-sheet__list {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.ladder-sheet__list[hidden] {
+  display: none;
+}
+
+.ladder-sheet .rank-list--bracket {
+  flex: 1 1 auto;
+  margin-top: 0;
+}
+
+.ladder-sheet .rank-rows {
+  background: var(--page-2);
+  box-shadow: none;
+}
+
+.ladder-sheet .rank-row[data-me='1'] {
+  background: var(--accent-soft);
+}
+
+.ladder-sheet__join {
+  margin: 28px 12px;
+  color: var(--ink-2);
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  font-size: var(--fs-l);
+  text-align: center;
+  text-wrap: balance;
+}
+
+.ladder-info {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  text-align: start;
+}
+
+.ladder-info__line {
+  display: flex;
+  align-items: flex-start;
+  padding: 11px 2px;
+  border-top: 1px solid var(--line);
+  color: var(--ink);
+  font-size: var(--fs-m);
+  line-height: 1.4;
+}
+
+.ladder-info__line:first-child {
+  border-top: 0;
+}
+
+.ladder-info__icon {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin-inline-end: 12px;
+  color: var(--ink-icon);
+  --icon-fill: var(--accent-soft);
+}
+
+.ladder-sheet__records-box {
+  min-height: 0;
+}
+
+.ladder-sheet__actions {
+  flex: none;
+}
+
+/* ── The result card (overlay `ladder_result`) ── */
+.ladder-result__art {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  height: 96px;
+  margin: 0 auto 10px;
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: var(--shadow-btn), inset 0 0 0 8px var(--accent-soft);
+}
+
+.ladder-result__art-icon {
+  width: 68px;
+  height: 68px;
+  color: var(--ink);
+  --icon-fill: var(--gold);
+}
+
+.ladder-result__place {
+  margin-top: 6px;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  font-size: var(--fs-xl);
+  line-height: 1.25;
+  text-wrap: balance;
+}
+
+.ladder-result__line {
+  margin-top: 6px;
+  color: var(--ink-2);
+  font-size: var(--fs-l);
+  line-height: 1.4;
+  text-wrap: balance;
+}
+
+.ladder-result[data-case='paid'] .ladder-result__line {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* ── The name sheet (overlay `nickname`) ── */
+.nickname {
+  text-align: start;
+}
+
+.nickname__tag {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  margin-inline-end: 8px;
+}
+
+.nickname__tag .icon {
+  width: 44px;
+  height: 44px;
+}
+
+.nickname__preview {
+  display: flex;
+  align-items: center;
+  min-height: 60px;
+  padding: 8px 12px;
+  border-radius: var(--radius-l);
+  background: var(--accent-soft);
+}
+
+.nickname__avatar {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  margin-inline-end: 10px;
+}
+
+.nickname__avatar-art {
+  display: block;
+  width: 44px;
+  height: 44px;
+}
+
+.nickname__name {
+  flex: 1;
+  min-width: 0;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  font-size: var(--fs-xl);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.nickname__label {
+  margin-top: 12px;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+}
+
+/* 12 pictures: as many 48 px columns as fit (4 at 320 px, 6 on wider phones); every one ≥ 44 × 44. */
+.nickname__avatars {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+  grid-gap: 6px;
+  margin-top: 6px;
+}
+
+.nickname__pic {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: center;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+
+.nickname__pic-art {
+  width: 44px;
+  height: 44px;
+}
+
+.nickname__pic[aria-checked='true'] {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 3px var(--accent);
+}
+
+.nickname__pic:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.nickname__pic:focus-visible {
+  outline: var(--focus-ring) solid var(--focus);
+  outline-offset: 1px;
+}
+
+.nickname__fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-gap: 10px 10px;
+  align-items: end;
+  margin-top: 14px;
+}
+
+.nickname__field {
+  min-width: 0;
+}
+
+.nickname__field-label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--ink-2);
+  font-size: var(--fs-s);
+  font-weight: 600;
+}
+
+.nickname__adj,
+.nickname__noun,
+.nickname__num {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 2px solid var(--line-2);
+  border-radius: var(--radius-m);
+  background: var(--card);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  font-size: 16px; /* never under 16 px: iOS would zoom the page on focus */
+}
+
+.nickname__adj:focus-visible,
+.nickname__noun:focus-visible,
+.nickname__num:focus-visible {
+  outline: var(--focus-ring) solid var(--focus);
+  outline-offset: 1px;
+}
+
+.nickname__shuffle.btn {
+  min-height: 44px;
+  padding: 0 14px;
+  font-size: var(--fs-m);
+}
+
+.nickname__shuffle .btn__icon {
+  width: 20px;
+  height: 20px;
+  margin-inline-end: 6px;
+}
+
+.nickname__status {
+  margin-top: 10px;
+  color: var(--accent-text);
+  font-size: var(--fs-s);
+  font-weight: 600;
+  text-align: center;
+}
+
+/* RTL: a ranking name runs LTR (dir=auto, a Latin name) but sits at the row's start, the right (text-align: start
+   would follow the name's own direction; match-parent is not honoured by Chromium). */
+[dir='rtl'] .rank-row__name,
+[dir='rtl'] .nickname__name {
+  text-align: right;
+}
+
+/* Narrow phones (320–359 px): the sheet and the panel nearly edge to edge, a tighter row, so a name keeps ≈ 140 px. */
+@media (max-width: 359px) {
+  .overlay[data-overlay='ladder'] {
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+
+  .overlay[data-overlay='ladder'] .overlay__panel--sheet.ladder-sheet {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .overlay[data-overlay='ranking'] {
+    padding-right: 10px;
+    padding-left: 10px;
+  }
+
+  .ranking[data-list='bracket'] .ranking__card {
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+
+  .rank-row__avatar {
+    margin-inline-start: 2px;
+    margin-inline-end: 6px;
+  }
+
+  .rank-row__heart {
+    min-width: 44px;
+    padding: 0 4px;
+  }
+}
+
+/* Short screens: the dialog scrolls inside itself; trim the preview and the gaps first. */
+@media (max-height: 639px) {
+  .nickname__preview {
+    min-height: 52px;
+    padding: 6px 10px;
+  }
+
+  .nickname__label,
+  .nickname__fields {
+    margin-top: 8px;
+  }
+}

@@ -4,8 +4,10 @@ import { describe, expect, it } from 'vitest';
 import { createFakeClock } from '../../../src/app/clock';
 import { cfg, mergeConfig } from '../../../src/app/config';
 import {
+  bannerEnded,
   bannerGate,
   canShowInterstitial,
+  retryCadenceOk,
   cooldownSecFor,
   interstitialGate,
   tenureDays,
@@ -265,5 +267,88 @@ describe('phase2b §3: cadence parity and the banner gate', () => {
     // The same checks after the screen: capability, levels, No Ads, the tutorial, disabled.
     expect(bannerGate({ ...game, bannerSupported: false })).toBe('unsupported');
     expect(bannerGate(game, mergeConfig({ ads: { banner: { enabled: false } } }))).toBe('disabled');
+  });
+});
+
+// ─────────────────────────────── Phase 2e (G1, spec §3.1, §3.2) ───────────────────────────────
+
+describe('Phase 2e: the interstitial cadence (spec §3.2)', () => {
+  /** The L1 target (spec §7.2.2): a 30 s floor at every tenure. */
+  const target = mergeConfig({ ads: { interstitial: { cooldownSec: [{ fromDay: 0, sec: 30 }] } } });
+  const veteranAt = (now: number, lastAdAt: number): SaveData => ({
+    ...defaults(T0),
+    progress: { level: 15, completed: 14, best: {} },
+    ads: { lastAdAt, lastFallbackGrantAt: 0 },
+  });
+  const input = (trigger: InterstitialTrigger, now: number, lastAdAt: number, extra: { retryIndex?: number } = {}) => ({
+    trigger,
+    now,
+    sessionStartedAt: T0,
+    save: veteranAt(now, lastAdAt),
+    interstitialSupported: true,
+    ...extra,
+  });
+
+  it('the 30 s floor at every tenure (day 0, 2, 7, 40): 29 s gated, 30 s shown', () => {
+    for (const day of [0, 2, 7, 40]) {
+      const now = T0 + day * DAY + 3600 * SEC;
+      expect(cooldownSecFor(day, target)).toBe(30);
+      expect(interstitialGate(input('next_level', now, now - 29 * SEC), target)).toBe('cooldown');
+      expect(interstitialGate(input('next_level', now, now - 30 * SEC), target)).toBe('ok');
+    }
+  });
+
+  it("retryEveryN 2: Retry 1 'retry_cadence', 2 ok, 3 gated, 4 ok; absent retryIndex = no cadence (2b)", () => {
+    const now = T0 + 3600 * SEC;
+    const at = (i?: number): GateDecision => interstitialGate(input('retry', now, 0, i === undefined ? {} : { retryIndex: i }), target);
+    expect([at(1), at(2), at(3), at(4)]).toEqual(['retry_cadence', 'ok', 'retry_cadence', 'ok']);
+    expect(at()).toBe('ok');
+    expect(retryCadenceOk(1)).toBe(false);
+    expect(retryCadenceOk(2)).toBe(true);
+    expect(retryCadenceOk(1, mergeConfig({ ads: { interstitial: { retryEveryN: 1 } } }))).toBe(true);
+    expect(retryCadenceOk(2, mergeConfig({ ads: { interstitial: { retryEveryN: 3 } } }))).toBe(false);
+    expect(retryCadenceOk(3, mergeConfig({ ads: { interstitial: { retryEveryN: 3 } } }))).toBe(true);
+    // The cadence only applies to Retry; min_levels and No Ads come first.
+    expect(interstitialGate(input('next_level', now, 0, { retryIndex: 1 }), target)).toBe('ok');
+    const early = { ...input('retry', now, 0, { retryIndex: 1 }), save: { ...veteranAt(now, 0), progress: { level: 5, completed: 4, best: {} } } };
+    expect(interstitialGate(early, target)).toBe('min_levels');
+  });
+
+  it("'fail_home' is a listed trigger with the same gate (No Ads, min levels, grace, floor)", () => {
+    const now = T0 + 3600 * SEC;
+    expect(cfg.ads.interstitial.triggers).toContain('fail_home');
+    expect(interstitialGate(input('fail_home', now, 0), target)).toBe('ok');
+    expect(interstitialGate({ ...input('fail_home', now, 0), save: { ...veteranAt(now, 0), purchases: { noAds: true } } }, target)).toBe('no_ads');
+    expect(interstitialGate({ ...input('fail_home', T0 + 30 * SEC, 0) }, target)).toBe('grace');
+    expect(interstitialGate(input('fail_home', now, 0), mergeConfig({ ads: { interstitial: { triggers: ['next_level'] } } }))).toBe('trigger');
+  });
+});
+
+describe('Phase 2e: the banner end date (spec §3.1, ads.banner.untilDate)', () => {
+  const save = { progress: { level: 31, completed: 30, best: {} }, purchases: { noAds: false, tokens: [] } };
+  const game = { screen: 'game' as const, save, bannerSupported: true, firstRunTutorial: false };
+
+  it("'ended' from 2027-03-31 (a local date key), on every screen; before it the gate is unchanged", () => {
+    expect(cfg.ads.banner.untilDate).toBe('2027-03-31');
+    expect(bannerGate({ ...game, today: '2027-03-30' })).toBe('ok');
+    for (const screen of ['game', 'home', 'victory', 'event'] as const) {
+      expect(bannerGate({ ...game, screen, today: '2027-03-31' })).toBe('ended');
+      expect(bannerGate({ ...game, screen, today: '2028-01-01' })).toBe('ended');
+    }
+    // No date given: no end-date check (S0 callers); '' in config: never ends.
+    expect(bannerGate(game)).toBe('ok');
+    expect(bannerGate({ ...game, today: '2030-01-01' }, mergeConfig({ ads: { banner: { untilDate: '' } } }))).toBe('ok');
+    expect(bannerEnded('2027-03-31')).toBe(true);
+    expect(bannerEnded(undefined)).toBe(false);
+    // 'disabled' still comes first; 'ended' before the capability.
+    expect(bannerGate({ ...game, today: '2027-04-01' }, mergeConfig({ ads: { banner: { enabled: false } } }))).toBe('disabled');
+    expect(bannerGate({ ...game, today: '2027-04-01', bannerSupported: false })).toBe('ended');
+  });
+
+  it('the L1 start level: fromCompletedLevels 9 shows the first banner on level 10 (the tutorial counts as 1)', () => {
+    const l1 = mergeConfig({ ads: { banner: { fromCompletedLevels: 9 } } });
+    const at = (completed: number) => bannerGate({ ...game, save: { ...save, progress: { level: completed + 1, completed, best: {} } } }, l1);
+    expect(at(8)).toBe('min_levels'); // on level 9's board
+    expect(at(9)).toBe('ok'); // level 10's board
   });
 });

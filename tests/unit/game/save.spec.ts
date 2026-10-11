@@ -25,16 +25,16 @@ import {
   SETTINGS_SEEN_KEY,
   validateInProgress,
 } from '../../../src/game/save';
-import type { InProgressV2, SaveData, SaveDataV1, SaveDataV2 } from '../../../src/game/types';
+import type { InProgressV2, SaveData, SaveDataV1, SaveDataV2, SaveDataV3 } from '../../../src/game/types';
 import { dbl, lostState, makePuzzle, P5, P5G, playing, R5, run, S5, SOL5, tap, wonState, WRONG5 } from './fixtures';
 
 const NOW = 1_790_000_000_000;
 
-/** A fully populated, valid v3 save. */
+/** A fully populated, valid v4 save (Phase 2e: the v3 player plus the ladder and streak defaults). */
 function full(): SaveData {
   const level = toInProgress(run(playing(P5), [tap(1), dbl(WRONG5[1] as number)]).state, NOW - 5);
   return {
-    v: 3,
+    v: 4,
     updatedAt: NOW - 10,
     firstSeenAt: NOW - 86_400_000 * 9,
     sessions: 12,
@@ -49,30 +49,38 @@ function full(): SaveData {
     points: { total: 375 },
     events: { 'lantern-walk-2026': { solved: 3, ms: 400_000, lastAt: NOW - 50 } },
     groups: { 'tour-1': { endsAt: NOW + 3_600_000, total: 120, wins: 2, claimed: 0 } },
-    purchases: { noAds: false, tokens: ['hints_15|tok-1'] },
-    rank: { pending: { period_points: 3_900_042 }, lastSubmitAt: NOW - 20_000 },
+    purchases: { noAds: false, tokens: ['hints_15|tok-1'], pending: [] },
+    rank: { pending: { event_lantern_walk_2026: 3_000_123 }, lastSubmitAt: NOW - 20_000 },
     streak: { current: 2, best: 6 },
     period: { key: '2026-10-05', total: 42, bestKey: '2026-09-28', bestTotal: 57 },
+    ladder: { listed: true, pending: [], current: null, claimed: [], doubleWatched: [], resultsSeen: [], nickLineSeen: false, me: null },
+    dayStreak: { dates: [], run: 0, best: 0, paid: [] },
   };
+}
+
+/** The same player as a stored v3 document (Phase 2c shape: no ladder, no streak record, no intent ledger). */
+function fullV3(): SaveDataV3 {
+  const { v: _v, ladder: _l, dayStreak: _d, purchases, ...rest } = full();
+  return { ...rest, v: 3, purchases: { noAds: purchases.noAds, tokens: purchases.tokens } };
 }
 
 /** The same player as a stored v2 document (Phase 2b shape: a wallet, no streak or period). */
 function fullV2(): SaveDataV2 {
-  const { v: _v, streak: _s, period: _p, ...rest } = full();
+  const { v: _v, streak: _s, period: _p, ...rest } = fullV3();
   return { ...rest, v: 2, wallet: { fish: 42, earned: 90 }, rank: { pending: { event_lantern_walk_2026: 3_000_123 }, lastSubmitAt: NOW - 20_000 } };
 }
 
 /** The same player as a stored v1 document (Phase 2 shape). */
 function fullV1(): SaveDataV1 {
-  const { v: _v, settings, inProgress, points: _p, events: _e, groups: _g, purchases: _pu, rank: _r, streak: _s, period: _pe, ...rest } = full();
+  const { v: _v, settings, inProgress, points: _p, events: _e, groups: _g, purchases: _pu, rank: _r, streak: _s, period: _pe, ...rest } = fullV3();
   const { locale: _l, ...v1Settings } = settings;
   return { ...rest, v: 1, settings: v1Settings, inProgress: { level: inProgress.level as SaveDataV1['inProgress']['level'], daily: null } };
 }
 
 describe('defaults (04 §4.3)', () => {
-  it('matches the spec exactly (04 §4.3 + phase2b §9.2 v2 fields + phase2c §3.8 v3 records, no wallet)', () => {
+  it('matches the spec exactly (04 §4.3 + phase2b §9.2 v2 fields + phase2c §3.8 v3 records + Phase 2e §7.1 v4 fields, no wallet)', () => {
     expect(defaults(NOW)).toEqual({
-      v: 3,
+      v: 4,
       updatedAt: NOW,
       firstSeenAt: NOW,
       sessions: 0,
@@ -87,10 +95,12 @@ describe('defaults (04 §4.3)', () => {
       points: { total: 0 },
       events: {},
       groups: {},
-      purchases: { noAds: false, tokens: [] },
+      purchases: { noAds: false, tokens: [], pending: [] },
       rank: { pending: {}, lastSubmitAt: 0 },
       streak: { current: 0, best: 0 },
       period: { key: '', total: 0, bestKey: '', bestTotal: 0 },
+      ladder: { listed: true, pending: [], current: null, claimed: [], doubleWatched: [], resultsSeen: [], nickLineSeen: false, me: null },
+      dayStreak: { dates: [], run: 0, best: 0, paid: [] },
     });
   });
 
@@ -169,7 +179,7 @@ describe('migrate: wrong types are replaced field by field', () => {
     { path: 'inProgress.level', patch: (d) => ((d.inProgress as Record<string, unknown>).level = { id: 'L2', mode: 'level', cells: 'abc' }), check: (s) => s.inProgress.level, want: null },
     { path: 'inProgress.daily', patch: (d) => ((d.inProgress as Record<string, unknown>).daily = { ...full().inProgress.level, mode: 'level' }), check: (s) => s.inProgress.daily, want: null },
     { path: 'ext', patch: (d) => (d.ext = 'none'), check: (s) => s.ext, want: {} },
-    { path: 'v', patch: (d) => (d.v = '1'), check: (s) => s.v, want: 3 },
+    { path: 'v', patch: (d) => (d.v = '1'), check: (s) => s.v, want: 4 },
   ];
 
   it.each(ROWS)('$path', ({ path, patch, check, want }) => {
@@ -369,7 +379,7 @@ describe('save v2 (phase2b §9.2, §9.3): the F0 baseline', () => {
       points: { total: 0 },
       events: {},
       groups: {},
-      purchases: { noAds: false, tokens: [] },
+      purchases: { noAds: false, tokens: [], pending: [] },
       rank: { pending: {}, lastSubmitAt: 0 },
       streak: { current: 0, best: 0 },
       period: { key: '', total: 0, bestKey: '', bestTotal: 0 },
@@ -388,7 +398,7 @@ describe('save v2 (phase2b §9.2, §9.3): the F0 baseline', () => {
       path: 'purchases.tokens',
       patch: (d) => (d.purchases = { noAds: true, tokens: ['hints_15|a', 'hints_15|a', 'nope', 7] }),
       check: (s) => s.purchases,
-      want: { noAds: true, tokens: ['hints_15|a'] },
+      want: { noAds: true, tokens: ['hints_15|a'], pending: [] },
     },
     {
       path: 'rank.pending',
@@ -408,14 +418,14 @@ describe('save v2 (phase2b §9.2, §9.3): the F0 baseline', () => {
   });
 
   it('merge: points max, events by more solved, noAds OR, ledger union, stock from the newer document + paid repair', () => {
-    const a: SaveData = { ...full(), updatedAt: NOW - 10, points: { total: 900 }, purchases: { noAds: true, tokens: ['kitties_8|old'] } };
+    const a: SaveData = { ...full(), updatedAt: NOW - 10, points: { total: 900 }, purchases: { noAds: true, tokens: ['kitties_8|old'], pending: [] } };
     const b: SaveData = {
       ...full(),
       updatedAt: NOW,
       stock: { hints: 5, kitties: 5 },
       points: { total: 10 },
       events: { 'lantern-walk-2026': { solved: 4, ms: 900_000, lastAt: NOW } },
-      purchases: { noAds: false, tokens: ['hints_15|new'] },
+      purchases: { noAds: false, tokens: ['hints_15|new'], pending: [] },
     };
     const m = merge(a, b);
     // The newer stock, plus the kitties_8 that only the older copy holds (§9.3 paid-grant repair).
@@ -423,7 +433,7 @@ describe('save v2 (phase2b §9.2, §9.3): the F0 baseline', () => {
     expect(m).not.toHaveProperty('wallet');
     expect(m.points.total).toBe(900);
     expect(m.events['lantern-walk-2026']).toEqual({ solved: 4, ms: 900_000, lastAt: NOW });
-    expect(m.purchases).toEqual({ noAds: true, tokens: ['kitties_8|old', 'hints_15|new'] });
+    expect(m.purchases).toEqual({ noAds: true, tokens: ['kitties_8|old', 'hints_15|new'], pending: [] });
   });
 
   it('an event slot below its event\'s solved count is cleared after a merge', () => {
@@ -439,7 +449,7 @@ describe('save v2 (phase2b §9.4): merge table, paid-grant repair, event slots, 
   const T = (tokens: string[], updatedAt: number, extra: Partial<SaveData> = {}): SaveData => ({
     ...full(),
     updatedAt,
-    purchases: { noAds: false, tokens },
+    purchases: { noAds: false, tokens, pending: [] },
     ...extra,
   });
 
@@ -464,7 +474,7 @@ describe('save v2 (phase2b §9.4): merge table, paid-grant repair, event slots, 
   });
 
   it('No Ads from either document survives (OR); its ledger entry adds nothing else', () => {
-    const older = T(['remove_ads|x'], NOW - 50, { purchases: { noAds: true, tokens: ['remove_ads|x'] } });
+    const older = T(['remove_ads|x'], NOW - 50, { purchases: { noAds: true, tokens: ['remove_ads|x'], pending: [] } });
     const newer = T([], NOW);
     const m = merge(older, newer);
     expect(m.purchases.noAds).toBe(true);
@@ -507,13 +517,13 @@ describe('save v2 (phase2b §9.4): merge table, paid-grant repair, event slots, 
     expect(merge(b, { ...a, updatedAt: NOW + 1 }).inProgress.event).toEqual(slot);
   });
 
-  it('round trip: a v3 document with every new field set survives JSON + migrate unchanged', () => {
+  it('round trip: a v4 document with every v2 field set survives JSON + migrate unchanged', () => {
     const slot = { ...(full().inProgress.level as InProgressV2), id: 'Elantern-walk-2026/3' as const, mode: 'event' as const };
     const s: SaveData = {
       ...full(),
       inProgress: { ...full().inProgress, event: slot },
       groups: { 'tour-1': { endsAt: NOW + 5, total: 120, wins: 4, claimed: 0 } },
-      purchases: { noAds: true, tokens: ['remove_ads|t1', 'fish_250|t2'] },
+      purchases: { noAds: true, tokens: ['remove_ads|t1', 'fish_250|t2'], pending: [] },
       rank: { pending: { event_lantern_walk_2026: 3_000_123, period_points: 3_900_042 }, lastSubmitAt: NOW - 3 },
     };
     const r = migrateReport(JSON.parse(JSON.stringify(s)) as unknown, NOW);
@@ -548,7 +558,7 @@ describe('save v2 (phase2b §9.4): merge table, paid-grant repair, event slots, 
         'yarn-hearts-2027': { solved: 21, ms: 99_999_999, lastAt: NOW },
       },
       groups,
-      purchases: { noAds: true, tokens: Array.from({ length: 50 }, (_, i) => `fish_900|${'x'.repeat(40)}${i}`) },
+      purchases: { noAds: true, tokens: Array.from({ length: 50 }, (_, i) => `fish_900|${'x'.repeat(40)}${i}`), pending: [] },
     };
     const json = JSON.stringify(s);
     expect(json.length).toBeLessThan(40_000);
@@ -570,7 +580,7 @@ describe('save v3 (phase2c §3.8)', () => {
   });
 
   it('the acceptance case: a wallet, a paw_points pending score and a fish_250 entry → no wallet, no paw score, +10 hints +3 kitties once', () => {
-    const v2 = { ...fullV2(), rank: { pending: { paw_points: 375, event_snow_paws_2026: 2_000_000 }, lastSubmitAt: 1 }, purchases: { noAds: false, tokens: ['fish_250|tok-9'] } };
+    const v2 = { ...fullV2(), rank: { pending: { paw_points: 375, event_snow_paws_2026: 2_000_000 }, lastSubmitAt: 1 }, purchases: { noAds: false, tokens: ['fish_250|tok-9'], pending: [] } };
     const s = migrate(JSON.parse(JSON.stringify(v2)) as unknown, NOW);
     expect(s).not.toHaveProperty('wallet');
     expect(s.rank.pending).toEqual({ event_snow_paws_2026: 2_000_000 });
@@ -585,7 +595,7 @@ describe('save v3 (phase2c §3.8)', () => {
   });
 
   it('a v3 document is never compensated (its retired entries were compensated when it was migrated)', () => {
-    const s: SaveData = { ...full(), purchases: { noAds: false, tokens: ['fish_900|x'] } };
+    const s: SaveData = { ...full(), purchases: { noAds: false, tokens: ['fish_900|x'], pending: [] } };
     expect(migrate(JSON.parse(JSON.stringify(s)) as unknown, NOW).stock).toEqual(s.stock);
   });
 
@@ -646,9 +656,11 @@ describe('save v3 (phase2c §3.8)', () => {
     expect(merge(e, f).period).toEqual(P('2026-10-05', 40, '2026-10-05', 40));
   });
 
-  it('the pending period_points score round-trips and follows the newer document', () => {
-    const s = migrate(JSON.parse(JSON.stringify(full())) as unknown, NOW);
+  it('the pending period_points score round-trips in a v4 document (the v3 → v4 migration drops it, Phase 2e)', () => {
+    const s = migrate(JSON.parse(JSON.stringify({ ...full(), rank: { pending: { period_points: 3_900_042 }, lastSubmitAt: 1 } })) as unknown, NOW);
     expect(s.rank.pending).toEqual({ period_points: 3_900_042 });
+    const v3 = migrate(JSON.parse(JSON.stringify({ ...fullV3(), rank: { pending: { period_points: 3_900_042 }, lastSubmitAt: 1 } })) as unknown, NOW);
+    expect(v3.rank.pending).toEqual({});
   });
 });
 
@@ -658,11 +670,11 @@ describe('phase2c.1 §3.2.3–§3.2.4: the slot\'s level-points fields; the save
     toInProgress(run(playing(P5), [dbl(SOL5[0] as number), dbl(SOL5[1] as number), dbl(WRONG5[0] as number), dbl(SOL5[2] as number)]).state, NOW - 3);
   const withSlot = (slot: unknown): unknown => ({ ...(JSON.parse(JSON.stringify(full())) as SaveData), inProgress: { level: slot, daily: null, event: null } });
 
-  it('the version stays 3 and the three fields round-trip through JSON + migrate (outcome ok)', () => {
-    expect(SAVE_VERSION).toBe(3);
+  it('the three fields round-trip through JSON + migrate (outcome ok; Phase 2e: the version is 4)', () => {
+    expect(SAVE_VERSION).toBe(4);
     const r = migrateReport(JSON.parse(JSON.stringify(withSlot(scored()))) as unknown, NOW);
     expect(r.outcome).toBe('ok');
-    expect(r.save.v).toBe(3);
+    expect(r.save.v).toBe(4);
     expect(r.save.inProgress.level).toEqual(scored());
     expect(r.save.inProgress.level).toMatchObject({ points: 1_824, catStreak: 1, scoredRows: 0b111 });
   });
@@ -723,8 +735,8 @@ describe('phase 2d §1.15: ext.settingsSeen (the settings dot); the save stays v
     const none = migrate(withExt({ coins: 3 }), NOW);
     expect(none.ext).toEqual({ coins: 3 });
     expect(settingsSeenOf(none)).toBe(0);
-    expect(SAVE_VERSION).toBe(3);
-    expect(none.v).toBe(3);
+    expect(SAVE_VERSION).toBe(4);
+    expect(none.v).toBe(4);
   });
 
   it('an invalid marker is dropped and reported; the rest of ext stays', () => {

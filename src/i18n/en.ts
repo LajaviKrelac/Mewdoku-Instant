@@ -9,6 +9,7 @@
 // Phase 2c (fish-lives-spec §1.5, Appendix A): G2 owns every file here; the 2c keys are in en/ui-2c.ts.
 // Phase 2d (look-spec Appendix A): G3 owns every file here; the 2d keys are in en/ui-2d.ts.
 // Phase 2d.1 (helpers-spec Appendix A): G3; the 2d.1 keys are in en/ui-2d1.ts.
+// Phase 2e (phase2e spec Appendix A): G3; the 2e keys (ranking, name, Buy rows, streak) are in en/ui-2e.ts.
 // The lives are fish: the 2b "heart" values changed (same keys, A.1), the fish-currency keys went (A.3).
 // A key must exist in exactly one file (tests/unit/sanity.spec.ts checks it).
 import { enArt } from './en/art';
@@ -19,6 +20,7 @@ import { enUi2b } from './en/ui-2b';
 import { enUi2c } from './en/ui-2c';
 import { enUi2d } from './en/ui-2d';
 import { enUi2d1 } from './en/ui-2d1';
+import { enUi2e } from './en/ui-2e';
 
 /** The Phase 2 catalogue (02 §21), E-owned. Values may change; keys and placeholders never do. */
 export const enCore = {
@@ -301,10 +303,10 @@ export const enCore = {
 } as const;
 
 /** The English catalogue: the Phase 2 keys plus every owner's Phase 2b file. */
-export const en = { ...enCore, ...enArt, ...enUi2b, ...enUi2c, ...enUi2d, ...enUi2d1, ...enEvents, ...enPlatform, ...enI18n } as const;
+export const en = { ...enCore, ...enArt, ...enUi2b, ...enUi2c, ...enUi2d, ...enUi2d1, ...enUi2e, ...enEvents, ...enPlatform, ...enI18n } as const;
 
 /** The per-owner parts of `en`, for the disjointness check (sanity.spec.ts). */
-export const EN_PARTS = { enCore, enArt, enUi2b, enUi2c, enUi2d, enUi2d1, enEvents, enPlatform, enI18n } as const;
+export const EN_PARTS = { enCore, enArt, enUi2b, enUi2c, enUi2d, enUi2d1, enUi2e, enEvents, enPlatform, enI18n } as const;
 
 export type En = typeof en;
 export type I18nKey = keyof En;

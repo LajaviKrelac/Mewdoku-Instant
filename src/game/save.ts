@@ -9,6 +9,10 @@
 // one); merge takes inProgress whole from the newer document, fields included. `streak` is frozen.
 // Phase 2d (G1, docs/phase2d/look-spec.md §1.15): still v3. ext.settingsSeen (the settings-dot marker)
 // is validated on read (an invalid value is dropped and reported) and merged by max.
+// Phase 2e (G1, docs/phase2e/spec.md §7.1, D-2e-6): schema v4 (save-v4.ts): the ranking client's record
+// `ladder`, the daily streak `dayStreak` and the purchase intent ledger purchases.pending; the v3 → v4
+// migration drops rank.pending.period_points; the merge runs the v4 rows, then the paid-grant repair
+// (now also over ladder.claimed and dayStreak.paid). Storage keys unchanged.
 import { cfg, type GameConfig } from '../app/config';
 import {
   copySlot,
@@ -25,20 +29,23 @@ import {
 import { compensateRetired, repairPaidGrants } from './purchases';
 import { isLocaleSetting, mergeV2Fields, migrate_1_to_2, parseEventSlotId, readV2Fields, v2Defaults } from './save-v2';
 import { mergeV3Fields, migrate_2_to_3, readV3Fields, v3Defaults } from './save-v3';
+import { mergeV4Fields, migrate_3_to_4, readV4Fields, v4Defaults } from './save-v4';
 import type { DailyRecord, InProgressV2, LevelBest, ReduceMotionSetting, SaveData, SettingsV2 } from './types';
 
-export type { InProgressV1, InProgressV2, PeriodRecord, SaveData, SaveDataV1, SaveDataV2, SaveDataV3, StreakRecord } from './types';
+export type { InProgressV1, InProgressV2, PeriodRecord, SaveData, SaveDataV1, SaveDataV2, SaveDataV3, SaveDataV4, StreakRecord } from './types';
 export { decodeCells, encodeCells, validateInProgress, validateSlot, slotLimitsOf, isInProgressShape } from './save-fields';
 export { markSettingsSeen, settingsDotOn, settingsSeenOf, SETTINGS_SEEN_KEY } from './save-fields';
 export type { SlotCheck, SlotLimits } from './save-fields';
 
-/** Current schema version (phase2c §3.8). Storage keys stay `mewdoku.save.v1` / cloud `save` [DECISION]. */
-export const SAVE_VERSION = 3;
+/** Current schema version (Phase 2e §7.1: 4). Storage keys stay `mewdoku.save.v1` / cloud `save` [DECISION]. */
+export const SAVE_VERSION = 4;
 
 /** 04 §4.3 defaults (stock from cfg; firstSeenAt = updatedAt = now), the phase2b §9.2 v2 fields and the phase2c §3.8 v3 records. */
 export function defaults(now: number, c: GameConfig = cfg): SaveData {
+  const v2 = v2Defaults();
+  const v4 = v4Defaults(c);
   return {
-    v: 3,
+    v: 4,
     updatedAt: now,
     firstSeenAt: now,
     sessions: 0,
@@ -50,8 +57,11 @@ export function defaults(now: number, c: GameConfig = cfg): SaveData {
     ads: { lastAdAt: 0, lastFallbackGrantAt: 0 },
     inProgress: { level: null, daily: null, event: null },
     ext: {},
-    ...v2Defaults(),
+    ...v2,
     ...v3Defaults(),
+    purchases: { ...v2.purchases, pending: v4.purchasesPending },
+    ladder: v4.ladder,
+    dayStreak: v4.dayStreak,
   };
 }
 
@@ -67,9 +77,10 @@ export interface MigrateReport {
 }
 
 /** vN → vN+1 steps, run in order up to SAVE_VERSION before validation (phase2b §9.2, phase2c §3.8). */
-const MIGRATIONS: Readonly<Record<number, (d: Record<string, unknown>) => Record<string, unknown>>> = {
+const MIGRATIONS: Readonly<Record<number, (d: Record<string, unknown>, c: GameConfig) => Record<string, unknown>>> = {
   1: migrate_1_to_2,
   2: migrate_2_to_3,
+  3: migrate_3_to_4,
 };
 
 /**
@@ -98,20 +109,20 @@ export function migrateReport(raw: unknown, now: number, c: GameConfig = cfg): M
   let doc = data;
   const inputV = doc.v;
   while (typeof doc.v === 'number' && doc.v < SAVE_VERSION && MIGRATIONS[doc.v]) {
-    doc = (MIGRATIONS[doc.v] as (d: Record<string, unknown>) => Record<string, unknown>)(doc);
+    doc = (MIGRATIONS[doc.v] as (d: Record<string, unknown>, c: GameConfig) => Record<string, unknown>)(doc, c);
   }
   if (doc.v !== SAVE_VERSION) repaired.push('v');
-  let save = validateV3(doc, now, c, repaired);
+  let save = validateV4(doc, now, c, repaired);
   // §3.8: a v2 (or v1) document's ledger entries of retired fish packs are compensated once, here.
   if (typeof inputV === 'number' && inputV < 3) save = compensateRetired(save, c);
   return { save, outcome: repaired.length > 0 ? 'repaired' : 'ok', repairedFields: repaired };
 }
 
 /**
- * Field-by-field validation of a v3 candidate (validateV1 + phase2b §9.2 + phase2c §3.8). Never
- * throws; every invalid field gets its default.
+ * Field-by-field validation of a v4 candidate (validateV1 + phase2b §9.2 + phase2c §3.8 + Phase 2e
+ * §7.1). Never throws; every invalid field gets its default.
  */
-function validateV3(d: Record<string, unknown>, now: number, c: GameConfig, rep: string[]): SaveData {
+function validateV4(d: Record<string, unknown>, now: number, c: GameConfig, rep: string[]): SaveData {
   const def = defaults(now, c);
   const field = <T>(value: unknown, ok: (v: unknown) => v is T, fallback: T, path: string): T => {
     if (ok(value)) return value;
@@ -181,8 +192,10 @@ function validateV3(d: Record<string, unknown>, now: number, c: GameConfig, rep:
     rep.push('tutorialDone');
   }
 
+  const v2 = readV2Fields(d, c, rep);
+  const v4 = readV4Fields(d, c, rep, v2.purchases.tokens);
   return {
-    v: 3,
+    v: 4,
     updatedAt: field(d.updatedAt, isTime, now, 'updatedAt'),
     firstSeenAt: field(d.firstSeenAt, isTime, now, 'firstSeenAt'),
     sessions: field(d.sessions, isNonNegInt, 0, 'sessions'),
@@ -194,8 +207,11 @@ function validateV3(d: Record<string, unknown>, now: number, c: GameConfig, rep:
     ads,
     inProgress: { level: slot('level'), daily: slot('daily'), event: slot('event') },
     ext: isRecord(d.ext) ? readExt(d.ext, rep) : (rep.push('ext'), {}),
-    ...readV2Fields(d, c, rep),
+    ...v2,
     ...readV3Fields(d, c, rep),
+    purchases: { ...v2.purchases, pending: v4.purchasesPending },
+    ladder: v4.ladder,
+    dayStreak: v4.dayStreak,
   };
 }
 
@@ -209,12 +225,14 @@ function isReduceMotion(x: unknown): x is ReduceMotionSetting {
 
 // ─────────────────────────────── merge (04 §7.3) ───────────────────────────────
 
-/** Local mirror vs cloud (04 §7.3 + phase2b §9.3 + phase2c §3.8 merge tables), then clears stale in-progress slots. */
+/** Local mirror vs cloud (04 §7.3 + phase2b §9.3 + phase2c §3.8 + Phase 2e §7.1 merge tables), then clears stale in-progress slots. */
 export function merge(local: SaveData, cloud: SaveData, c: GameConfig = cfg): SaveData {
   const newer = cloud.updatedAt > local.updatedAt ? cloud : local;
   const older = newer === local ? cloud : local;
+  const v2 = mergeV2Fields(local, cloud, newer, c);
+  const v4 = mergeV4Fields(local, cloud, newer, c);
   const merged: SaveData = {
-    v: 3,
+    v: 4,
     updatedAt: Math.max(local.updatedAt, cloud.updatedAt),
     firstSeenAt: Math.min(local.firstSeenAt, cloud.firstSeenAt),
     sessions: Math.max(local.sessions, cloud.sessions),
@@ -230,11 +248,14 @@ export function merge(local: SaveData, cloud: SaveData, c: GameConfig = cfg): Sa
     ads: { ...newer.ads },
     inProgress: { level: newer.inProgress.level, daily: newer.inProgress.daily, event: newer.inProgress.event },
     ext: mergeExt(local, cloud, newer),
-    ...mergeV2Fields(local, cloud, newer, c),
+    ...v2,
     ...mergeV3Fields(local, cloud, newer),
+    purchases: { ...v2.purchases, pending: v4.purchasesPending },
+    ladder: v4.ladder,
+    dayStreak: v4.dayStreak,
   };
-  // §9.3: stock came from the newer copy; paid grants (and retired-pack compensation, phase2c §3.8)
-  // only the older copy holds are re-applied once.
+  // §9.3: stock came from the newer copy; paid grants (and retired-pack compensation, phase2c §3.8;
+  // Phase 2e: rank-reward claims and streak rewards) only the older copy holds are re-applied once.
   return clearStaleSlots(repairPaidGrants(merged, older, newer, c));
 }
 

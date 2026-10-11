@@ -64,6 +64,18 @@
 //                   retired fish_250 / fish_900 can no longer be bought. An `unconsumed` entry needs only
 //                   a productID: { productID: 'fish_250' } is filled in as an unconsumed 'charge' with
 //                   token 'stub-unconsumed-<n>-<productID>' (an old fish pack bought before 2c).
+// Phase 2e (G1, docs/phase2e/spec.md §1.3, §4.4, §10.3; CONTRACTS §5):
+//   signing         { secret: 'e2e-fb-app-secret', playerId?: string, issuedAtSkewSec?: number }
+//                   player.getSignedPlayerInfoAsync(payload) signs {algorithm, issued_at, player_id,
+//                   request_payload} as Meta's signed request: b64url(HMAC-SHA256(secret, encPayload)) + '.' +
+//                   encPayload, encPayload = b64url(JSON), with SubtleCrypto (browser and Node 22), so the
+//                   ranking server's real check runs in e2e. The secret is the dev server's e2e test value; the
+//                   stub (and with it this secret) is served only in e2e builds. issued_at = the stub clock
+//                   in seconds (+ issuedAtSkewSec). playerId defaults to `playerId`.
+//   presets         'no-signed-info' removes player.getSignedPlayerInfoAsync (no identity: personal records);
+//                   'player:<id>' (e.g. ?fbstub=player:alice) picks the player id, so two browser contexts
+//                   are two players; 'ios' is getPlatform() 'IOS' WITH the payments APIs listed (from 2e the app
+//                   decides with iap.iosEnabled or the remote switch iapIos); 'ios-no-payments' is the 2b preset.
 (function (root) {
   'use strict';
 
@@ -84,6 +96,8 @@
     'player.getDataAsync',
     'player.setDataAsync',
     'player.flushDataAsync',
+    // Phase 2e (spec §1.3): the ranking server's identity.
+    'player.getSignedPlayerInfoAsync',
   ];
   // Phase 2b API groups (getSupportedAPIs strings as src/platform/fb/fb-probe.ts reads them).
   var BANNER_APIS = ['loadBannerAdAsync', 'hideBannerAdAsync'];
@@ -149,6 +163,8 @@
       errors: { getCatalogAsync: [], getPurchasesAsync: [], consumePurchaseAsync: [] },
     },
     presets: [],
+    // Phase 2e: the e2e FB test secret (the dev server reads the same value from its test env).
+    signing: { secret: 'e2e-fb-app-secret', playerId: null, issuedAtSkewSec: 0 },
   };
 
   var PRESETS = {
@@ -172,8 +188,12 @@
     'no-tournament': { removeAPIs: TOURNAMENT_APIS },
     'no-payments': { removeAPIs: PAYMENT_APIS },
     'payments-never-ready': { payments: { ready: false } },
-    // iOS: not eligible for payments (05 §9); the API is not offered there.
-    ios: { platform: 'IOS', removeAPIs: PAYMENT_APIS },
+    // Phase 2e (spec §4.4): iOS lists the payments APIs; the app decides (iap.iosEnabled / remote iapIos).
+    ios: { platform: 'IOS' },
+    // The 2b reading: iOS without the payments APIs.
+    'ios-no-payments': { platform: 'IOS', removeAPIs: PAYMENT_APIS },
+    // Phase 2e: no signed player info (no ranking identity: personal records).
+    'no-signed-info': { removeAPIs: ['player.getSignedPlayerInfoAsync'] },
     // phase2c §5.3: an old fish pack bought before 2c, still unconsumed (the boot restore compensates it).
     'unconsumed-fish-250': { payments: { unconsumed: [{ productID: 'fish_250' }] } },
   };
@@ -214,13 +234,22 @@
       /* no location */
     }
     for (var i = 0; i < presets.length; i++) {
-      var p = PRESETS[String(presets[i]).trim()];
+      var name = String(presets[i]).trim();
+      // Phase 2e: 'player:<id>' picks the player (two browser contexts = two players).
+      if (name.indexOf('player:') === 0 && /^player:[A-Za-z0-9_-]{1,40}$/.test(name)) {
+        c = merge(c, { playerId: name.slice(7), signing: { playerId: name.slice(7) } });
+        continue;
+      }
+      var p = PRESETS[name];
       if (!p) continue;
       if (p.removeAPIs) {
         var drop = p.removeAPIs;
         c.supportedAPIs = c.supportedAPIs.filter(function (a) {
           return drop.indexOf(a) < 0;
         });
+        var rest = {};
+        for (var key in p) if (key !== 'removeAPIs') rest[key] = p[key];
+        c = merge(c, rest);
       } else {
         c = merge(c, p);
       }
@@ -301,6 +330,50 @@
           /* ignore */
         }
       }
+    }
+
+    // ── Phase 2e: the signed player info (Meta's signed-request layout, our own code) ──
+    function b64url(bytes) {
+      var bin = '';
+      for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+      var b64 = typeof root.btoa === 'function' ? root.btoa(bin) : Buffer.from(bin, 'binary').toString('base64');
+      return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+    function utf8(str) {
+      return new TextEncoder().encode(str);
+    }
+    function subtle() {
+      var c = (root.crypto && root.crypto.subtle) || (typeof globalThis !== 'undefined' && globalThis.crypto && globalThis.crypto.subtle) || null;
+      return c;
+    }
+    function signPayload(requestPayload) {
+      var sg = cfg.signing || {};
+      var playerId = sg.playerId || cfg.playerId;
+      var payload = {
+        algorithm: 'HMAC-SHA256',
+        issued_at: Math.floor(now() / 1000) + (sg.issuedAtSkewSec || 0),
+        player_id: String(playerId),
+        request_payload: requestPayload === undefined ? null : requestPayload,
+      };
+      var encPayload = b64url(utf8(JSON.stringify(payload)));
+      var sc = subtle();
+      if (!sc) return Promise.reject(fbError('CLIENT_UNSUPPORTED_OPERATION', 'no SubtleCrypto'));
+      return sc
+        .importKey('raw', utf8(String(sg.secret || '')), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+        .then(function (key) {
+          return sc.sign('HMAC', key, utf8(encPayload));
+        })
+        .then(function (mac) {
+          var sig = b64url(new Uint8Array(mac)) + '.' + encPayload;
+          return {
+            getPlayerID: function () {
+              return String(playerId);
+            },
+            getSignature: function () {
+              return sig;
+            },
+          };
+        });
     }
 
     var player = {
@@ -982,6 +1055,14 @@
     if (offered('tournament.createAsync')) sdk.tournament = tournament;
     if (offered('getTournamentAsync')) sdk.getTournamentAsync = getTournamentAsync;
     if (offered('payments.purchaseAsync')) sdk.payments = payments;
+    // Phase 2e: the identity API exists only while listed (preset 'no-signed-info' removes both).
+    if (offered('player.getSignedPlayerInfoAsync')) {
+      player.getSignedPlayerInfoAsync = function (requestPayload) {
+        record('player.getSignedPlayerInfoAsync', [requestPayload]);
+        if (!state.initialized) return Promise.reject(fbError('INVALID_OPERATION', 'not initialized'));
+        return signPayload(requestPayload);
+      };
+    }
 
     var control = {
       calls: calls,

@@ -4,6 +4,7 @@
 import type { PuzzleId } from '../engine/types';
 import type { LocaleId } from './config';
 import type { EventDef } from '../game/events';
+import type { PuzzleSource } from '../game/levels-repo';
 import type { GameState, ModeId, SaveData } from '../game/types';
 
 export type Listener<S> = (state: S, prev: S) => void;
@@ -109,7 +110,11 @@ export type OverlayId =
   | 'victory'
   | 'shop'
   | 'rank_hub'
-  | 'group_result';
+  | 'group_result'
+  // Phase 2e (spec §2.5–§2.7): the ranking sheet, a ranking's result card and the name sheet (lazy `ladder` chunk).
+  | 'ladder'
+  | 'ladder_result'
+  | 'nickname';
 
 /** What the player asked to play. phase2b §4.4 adds event puzzles (`index` 0-based). */
 export type SessionRequest =
@@ -134,6 +139,11 @@ export interface SessionMeta {
   readonly tutorialStep: number | null;
   /** Substitute board (pack failed to load): never saved as in-progress (02 §11.4). */
   readonly substitute: boolean;
+  /**
+   * Phase 2e (spec §2.3): where the board came from (levels-repo PuzzleSource), for the ranking's
+   * WinSubmission.source. Absent = derived from `substitute` and the mode.
+   */
+  readonly source?: PuzzleSource;
   /** Event mode (phase2b §4.4): the event and the puzzle index (0-based); absent or null otherwise. */
   readonly event?: { readonly def: EventDef; readonly index: number } | null;
   /**

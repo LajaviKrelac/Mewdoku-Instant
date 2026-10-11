@@ -1,6 +1,9 @@
 // Owner: D (Phase 2b; F0 fixed the 2b contract: additive only, ask the lead to change a shape).
 // Owner: G3 (Phase 2c): RankEntry.boardRank (additive), band docs generalised to the period board,
 // payments catalogue vs retired ids (docs/phase2c/fish-lives-spec.md §4.5, §5.3, §7.4).
+// Owner: G1 (Phase 2e, docs/phase2e/CONTRACTS.md §5): Capabilities.paymentsIos, InterstitialPlacement
+// 'fail_home', RewardedPlacement 'rank_double', the FB identity provider (signed player info for the
+// ranking server). Additive only.
 // Platform adapter contract (04 §4.4, §6; phase2b §3.5, §5.4, §5.6, §8.4). Depends only on game/ types.
 import type { BoardKey, ProductId, SaveData } from '../game/types';
 
@@ -24,17 +27,25 @@ export interface Capabilities {
   groups: boolean;
   /** Platform haptics OR navigator.vibrate. false → Settings hides "Vibration" (02 §14). */
   haptics: boolean;
+  /**
+   * Phase 2e (spec §4.4): the FB platform is iOS (getPlatform() === 'IOS'). From 2e `payments` no longer
+   * excludes iOS (getSupportedAPIs + the functions decide); the app then also needs iap.iosEnabled or the
+   * remote switch iapIos. Optional until I-3 (absent = false).
+   */
+  paymentsIos?: boolean;
 }
 
 /** A banner has no preload, so it is not an AdKind (phase2b §3.5): see PlatformAds.banner. */
 export type AdKind = 'interstitial' | 'rewarded';
-/** phase2b §3.2 adds `event_next` (lead-approved F0 widening). */
-export type InterstitialPlacement = 'next_level' | 'retry' | 'daily_done' | 'event_next';
+/** phase2b §3.2 adds `event_next` (lead-approved F0 widening). Phase 2e (spec §3.2): + 'fail_home'. */
+export type InterstitialPlacement = 'next_level' | 'retry' | 'daily_done' | 'event_next' | 'fail_home';
 /**
  * phase2b §5.6 adds `group_double` (lead-approved F0 widening). Phase 2d (look-spec §1.12): + 'mouse',
  * the third helper (one video per use; the FB adapter uses the one rewarded placement ID for all).
+ * Phase 2e (spec §2.6, §3.3): + 'rank_double' (Collect ×2 on a ranking result); each placement may have
+ * its own FB placement ID (VITE_FB_PLACEMENT_REWARDED_*, falling back to the shared one, spec §3.4).
  */
-export type RewardedPlacement = 'hint' | 'kitty' | 'revive' | 'group_double' | 'mouse';
+export type RewardedPlacement = 'hint' | 'kitty' | 'revive' | 'group_double' | 'mouse' | 'rank_double';
 export type AdPlacement = InterstitialPlacement | RewardedPlacement;
 export type AdFailReason = 'unsupported' | 'no_fill' | 'not_ready' | 'skipped' | 'rate_limited' | 'timeout' | 'error';
 export type AdResult =
@@ -102,8 +113,9 @@ export interface PlatformStorage {
 }
 
 export interface PlatformAds {
-  preload(kind: AdKind): void;
-  isReady(kind: AdKind): boolean;
+  /** Phase 2e (spec §3.4): `placement` names the rewarded helper (its own placement ID on FB); absent = the shared one. */
+  preload(kind: AdKind, placement?: RewardedPlacement): void;
+  isReady(kind: AdKind, placement?: RewardedPlacement): boolean;
   /** Waits ≤ ads.readyTimeoutMs for readiness (→ 'timeout'), then shows with NO timeout. Never rejects. */
   showInterstitial(p: InterstitialPlacement): Promise<AdResult>;
   /** ok only when watched to completion. Never rejects. */
@@ -269,6 +281,23 @@ export interface PaymentsProvider {
 
 export type AnalyticsParams = Record<string, string | number>;
 
+// ─────────────────────────── Identity (Phase 2e, spec §1.3) ───────────────────────────
+
+/** Phase 2e (spec §1.3): the FB signed player info for the ranking server. */
+export interface SignedPlayer {
+  readonly playerId: string;
+  /** getSignature(): "<b64url sig>.<b64url payload>" (verified by the server, never by the client). */
+  readonly signature: string;
+}
+
+export interface IdentityProvider {
+  /**
+   * player.getSignedPlayerInfoAsync(requestPayload). null when unsupported (not listed by
+   * getSupportedAPIs or not a function) or on any error. Never rejects.
+   */
+  signedPlayerInfo(requestPayload: string): Promise<SignedPlayer | null>;
+}
+
 export interface PlatformAdapter {
   readonly id: PlatformId;
   capabilities(): Capabilities; // final after init(), except that an ad kind can turn off later (FB: 'unsupported' result, PLAT-4)
@@ -297,6 +326,8 @@ export interface PlatformAdapter {
   groups?: GroupProvider;
   /** FB payments (phase2b §8.4). Undefined on web: no payments code is bundled there. */
   payments?: PaymentsProvider;
+  /** Phase 2e (spec §1.3): FB only (the web uses a device credential in anon mode). Stays optional. */
+  identity?: IdentityProvider;
 }
 
 /** Both adapters export `createPlatform(): PlatformAdapter` from their index.ts (imported via '@platform'). */

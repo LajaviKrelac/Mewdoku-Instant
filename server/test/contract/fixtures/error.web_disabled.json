@@ -1,0 +1,17 @@
+{
+  "name": "error.web_disabled",
+  "request": {
+    "method": "POST",
+    "path": "/v1/session"
+  },
+  "response": {
+    "status": 403,
+    "body": {
+      "error": {
+        "code": "web_disabled",
+        "message": "web ranking is off"
+      },
+      "serverTime": 1791799800000
+    }
+  }
+}

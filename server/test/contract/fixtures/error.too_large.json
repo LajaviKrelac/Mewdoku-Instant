@@ -1,0 +1,18 @@
+{
+  "name": "error.too_large",
+  "request": {
+    "method": "POST",
+    "path": "/v1/wins",
+    "auth": true
+  },
+  "response": {
+    "status": 413,
+    "body": {
+      "error": {
+        "code": "too_large",
+        "message": "body over 16384 bytes"
+      },
+      "serverTime": 1791799800000
+    }
+  }
+}

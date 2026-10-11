@@ -1,0 +1,67 @@
+{
+  "name": "bracket.open",
+  "request": {
+    "method": "GET",
+    "path": "/v1/bracket",
+    "auth": true
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "state": "open",
+      "bracketId": "mgk0b7q1z4a8",
+      "pool": "fb",
+      "mode": "rolling",
+      "openedAt": 1791743600000,
+      "endsAt": 1791830000000,
+      "members": 3,
+      "maxMembers": 50,
+      "rows": [
+        {
+          "rank": 1,
+          "slot": 0,
+          "nickname": "Sleepy Whisker 27",
+          "avatarId": 1,
+          "points": 31,
+          "hearts": 4,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 2,
+          "slot": 2,
+          "nickname": "Velvet Pounce 27",
+          "avatarId": 4,
+          "points": 16,
+          "hearts": 2,
+          "me": true,
+          "likedByMe": false
+        },
+        {
+          "rank": 3,
+          "slot": 1,
+          "nickname": "Cozy Biscuit 41",
+          "avatarId": 7,
+          "points": 9,
+          "hearts": 0,
+          "me": false,
+          "likedByMe": true
+        }
+      ],
+      "me": {
+        "rank": 2,
+        "slot": 2,
+        "nickname": "Velvet Pounce 27",
+        "avatarId": 4,
+        "points": 16,
+        "hearts": 2,
+        "me": true,
+        "likedByMe": false
+      },
+      "final": false,
+      "heartsNew": 1,
+      "result": null,
+      "serverTime": 1791799800000
+    }
+  }
+}

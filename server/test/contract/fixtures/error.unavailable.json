@@ -1,0 +1,19 @@
+{
+  "name": "error.unavailable",
+  "request": {
+    "method": "POST",
+    "path": "/v1/wins",
+    "auth": true
+  },
+  "response": {
+    "status": 503,
+    "body": {
+      "error": {
+        "code": "unavailable",
+        "message": "database unavailable",
+        "retryAfterMs": 30000
+      },
+      "serverTime": 1791799800000
+    }
+  }
+}

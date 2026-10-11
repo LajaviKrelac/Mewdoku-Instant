@@ -14,8 +14,17 @@
 // onMouse keeps the board and the tools locked (runBusy) for mouseRunMs(cells, reduced motion) after
 // the dispatch; ending the session or leaving the board ends the run (alive() false). The per-attempt
 // use count is readable (mouseUses) for the pulse rule (§4.6).
-import type { RewardedVariant } from '../ui/overlays/rewarded-prompt';
-import { interstitialGate, type InterstitialTrigger } from '../game/ad-pacing';
+// Phase 2e (G1, docs/phase2e/spec.md §3.3, §4.1–§4.3, §4.6): O2 carries the Buy rows of
+// iap.o2Products (HelperHost.shop.o2Buy; never on the mouse card) and askO2 resolves an O2Choice
+// ('accept' | 'buy' | 'decline'). A Buy tap runs shop.buyInPlay while O2 stays open (its rows re-render
+// through router.update on every shop.onRowsChange): a helper pack bought closes O2 with 'buy' and, with
+// iap.useOneAfterBuy, one is used at once through the existing path (the board unchanged, the session
+// alive; else the pack stays in stock); No Ads bought keeps O2 open without its row (it gave no helper);
+// a cancel or an error goes back to O2 (the shop flow toasts the error). ads.rewarded.promptFirst false
+// starts the video at once (O2 stays for the free fallback, the countdown and the Buy rows). Analytics
+// o2_shown {placement, video, buy} and o2_choice {placement, choice}.
+import type { O2BuyView, RewardedPromptProps, RewardedVariant } from '../ui/overlays/rewarded-prompt';
+import { interstitialGate, type GateDecision, type InterstitialTrigger } from '../game/ad-pacing';
 import { fallbackAvailable, fallbackReadyAt, grant, recordAdShown, recordFallbackGrant, spend } from '../game/economy';
 import { getMode } from '../game/modes';
 import { hasMouseCandidate, mouseRunMs, mouseSeed, pickMouseCells } from '../game/mouse';
@@ -34,11 +43,18 @@ import type { AnalyticsEvent, AppBus } from './events';
 import type { Router } from './router';
 import type { SaveScheduler } from './saves';
 import { levelParam } from './session-effects';
+import type { ShopFlow } from './shop-flow';
 import type { SessionMeta } from './store';
+import { asTutorialStep } from './views';
 
 /** The rewarded placements the helper flows serve (02 §13.3). */
-export type HelperPlacement = Exclude<RewardedPlacement, 'group_double'>;
-import { asTutorialStep } from './views';
+export type HelperPlacement = Exclude<RewardedPlacement, 'group_double' | 'rank_double'>;
+
+/** Phase 2e (spec §4.2): how O2 was answered. 'buy' only for a helper pack bought (No Ads keeps O2 open). */
+export type O2Choice = 'accept' | 'buy' | 'decline';
+
+/** Phase 2e (spec §4.1): what O2 needs from the shop flow (absent: no Buy rows, as before). */
+export type HelperShop = Pick<ShopFlow, 'o2Buy' | 'buyInPlay' | 'onRowsChange'>;
 
 /** What the helper flows need from the session. */
 export interface HelperHost {
@@ -67,6 +83,8 @@ export interface HelperHost {
   afterKitty(): void;
   /** Phase 2d.1 §1.5: reduced motion is on (the mouse run then lasts fx.reducedMotionFadeMs). */
   reducedMotion(): boolean;
+  /** Phase 2e (spec §4.1): the in-play purchases (the O2 Buy rows); absent = none. */
+  readonly shop?: HelperShop;
 }
 
 export interface HelperFlows {
@@ -87,8 +105,16 @@ export interface HelperFlows {
   rewardedOrFallback(p: HelperPlacement): Promise<boolean>;
   /** O4 Continue offer (02 §10.2): 'video', 'free' or hidden. */
   continueOffer(): 'video' | 'free' | null;
-  /** Pacing gate, then the interstitial when allowed. Never throws; the caller continues afterwards. */
+  /**
+   * Pacing gate, then the interstitial when allowed. Never throws; the caller continues afterwards.
+   * Phase 2e (spec §3.2): a 'retry' counts towards the retry cadence (ads.interstitial.retryEveryN);
+   * a gated call logs ad_interstitial {result: 'gated', gate}.
+   */
   interstitial(trigger: InterstitialTrigger): Promise<void>;
+  /** Phase 2e (spec §3.2): a level was won: the retry cadence's counter (in memory) restarts. */
+  levelWon(): void;
+  /** Phase 2e: what the pacing gate answers for `trigger` now (no side effect; a 'retry' as the next one). */
+  gate(trigger: InterstitialTrigger): GateDecision;
   /** Free-reopen cache (02 §9.1): cleared by board changes, Retry, Revive and leaving the game. */
   clearHintCache(): void;
 }
@@ -110,29 +136,97 @@ export function createHelperFlows(host: HelperHost): HelperFlows {
     host.bus.emit('stock', { hints, kitties });
   }
 
-  /** O2 as a question (02 §13.3, phase2c §5.4): true = accept (never for the countdown variant), false = "Not now". */
-  function askO2(placement: 'hint' | 'kitty' | 'mouse', variant: RewardedVariant): Promise<boolean> {
+  /** Phase 2e (spec §4.1): O2's Buy rows now (never on the mouse card; [] without a shop). */
+  function buyRows(placement: 'hint' | 'kitty' | 'mouse'): readonly O2BuyView[] {
+    if (placement === 'mouse' || !host.shop) return [];
+    try {
+      return host.shop.o2Buy(placement);
+    } catch {
+      return []; // the card stays today's
+    }
+  }
+
+  /**
+   * O2 as a question (02 §13.3, phase2c §5.4; Phase 2e §4.2): 'accept' (never for the countdown
+   * variant), 'buy' (a helper pack was bought from the card; the shop flow granted it) or 'decline'
+   * ("Not now", OK, Esc, or the card closed from elsewhere).
+   */
+  function askO2(placement: 'hint' | 'kitty' | 'mouse', variant: RewardedVariant): Promise<O2Choice> {
     return new Promise((resolve) => {
       let done = false;
+      let buying = false;
       let off: () => void = () => undefined;
-      const finish = (value: boolean): void => {
+      let offRows: () => void = () => undefined;
+      let rows = buyRows(placement);
+      const choice = (value: 'video' | 'buy' | 'no_ads' | 'free' | 'decline'): void =>
+        host.log({ name: 'o2_choice', params: { placement, choice: value } });
+      const finish = (value: O2Choice): void => {
         if (done) return;
         done = true;
         off();
+        offRows();
         host.router.close('rewarded');
         resolve(value);
       };
-      host.router.open('rewarded', {
+      const props = (): RewardedPromptProps => ({
         placement,
         variant,
         nextFreeAt: fallbackReadyAt(host.save(), c),
         now: () => host.clock.now(),
-        onAccept: () => finish(variant !== 'countdown'),
-        onDecline: () => finish(false),
+        onAccept: () => {
+          if (done || buying) return;
+          if (variant === 'countdown') {
+            choice('decline');
+            finish('decline');
+            return;
+          }
+          choice(variant === 'video' ? 'video' : 'free');
+          finish('accept');
+        },
+        onDecline: () => {
+          if (done || buying) return; // never while FB's purchase dialog is open
+          choice('decline');
+          finish('decline');
+        },
+        buy: rows,
+        onBuy: (id) => {
+          const shop = host.shop;
+          const row = rows.find((r) => r.productId === id);
+          if (done || buying || !shop || !row || row.state !== 'ready') return;
+          buying = true;
+          choice(row.kind === 'no_ads' ? 'no_ads' : 'buy');
+          void shop
+            .buyInPlay(id)
+            .catch(() => 'error' as const)
+            .then((r) => {
+              buying = false;
+              if (done) return; // closed meanwhile (screen change): a pack bought stays in stock
+              if (r === 'ok' && row.kind === 'pack') {
+                finish('buy');
+                return;
+              }
+              // No Ads bought (O2 stays open without its row), a cancel or an error: back to O2.
+              refreshRows();
+            });
+        },
       });
+      const refreshRows = (): void => {
+        if (done) return;
+        rows = buyRows(placement);
+        host.router.update('rewarded', props());
+      };
+      host.router.open('rewarded', props());
+      host.log({ name: 'o2_shown', params: { placement, video: variant === 'video' ? 1 : 0, buy: rows.length } });
+      if (host.shop && placement !== 'mouse') {
+        try {
+          offRows = host.shop.onRowsChange(refreshRows);
+        } catch {
+          // the rows stay as opened
+        }
+      }
       // Closed from elsewhere (screen change, closeAll): treat as "Not now".
       off = host.bus.on('overlay:close', ({ id }) => {
-        if (id === 'rewarded') finish(false);
+        if (id === 'rewarded') finish('decline');
       });
     });
   }
@@ -154,42 +248,60 @@ export function createHelperFlows(host: HelperHost): HelperFlows {
   }
 
   /**
-   * The rewarded / fallback part of a helper refill: true = the ad or the free grant succeeded (the
-   * caller grants); false = nothing.
+   * The rewarded / fallback part of a helper refill: 'reward' = the ad or the free grant succeeded (the
+   * caller grants); 'bought' = a helper pack was bought from O2 (Phase 2e: the shop flow granted it);
+   * null = nothing.
    */
-  async function rewardedOrFallback(p: HelperPlacement): Promise<boolean> {
+  async function obtain(p: HelperPlacement): Promise<'reward' | 'bought' | null> {
     const asks = p !== 'revive';
     const unavailable = p === 'hint' ? 'hint.unavailable' : p === 'mouse' ? 'mouse.unavailable' : 'kitty.unavailable';
-    if (asks && !(await cardsReady(() => true, t(unavailable)))) return false;
-    const ask = async (variant: RewardedVariant): Promise<boolean> => (asks ? askO2(p as 'hint' | 'kitty' | 'mouse', variant) : true);
+    if (asks && !(await cardsReady(() => true, t(unavailable)))) return null;
+    const ask = async (variant: RewardedVariant): Promise<O2Choice> => (asks ? askO2(p as 'hint' | 'kitty' | 'mouse', variant) : 'accept');
     if (rewardedAvailable()) {
-      if (!(await ask('video'))) return false;
+      // Phase 2e §3.3: ads.rewarded.promptFirst false starts the video at once (no O2 before it).
+      if (c.ads.rewarded.promptFirst) {
+        const answer = await ask('video');
+        if (answer === 'buy') return 'bought';
+        if (answer !== 'accept') return null;
+      }
       const r = await host.adFlow.rewarded(p);
       if (r.ok) {
         if (c.ads.rewarded.resetsInterstitialClock) {
           host.updateSave((s) => recordAdShown(s, host.clock.now()));
           host.saves.touch();
         }
-        return true;
+        return 'reward';
       }
       // The platform turned out not to support rewarded ads (FB CLIENT_UNSUPPORTED_OPERATION, which
       // also switches the capability off): the player already said yes, so the free grant applies
       // at once when it is available, instead of a "no video" dead end (PLAT-4).
-      if (r.reason === 'unsupported' && fallbackAvailable(host.save(), host.clock.now(), c)) return grantFallback(p);
+      if (r.reason === 'unsupported' && fallbackAvailable(host.save(), host.clock.now(), c)) return grantFallback(p) && 'reward';
       host.toast(t('rewarded.noVideo'));
-      return false;
+      return null;
     }
     if (fallbackAvailable(host.save(), host.clock.now(), c)) {
-      if (!(await ask('free'))) return false;
-      return grantFallback(p);
+      const answer = await ask('free');
+      if (answer === 'buy') return 'bought';
+      if (answer !== 'accept') return null;
+      return grantFallback(p) && 'reward';
     }
-    if (asks) await ask('countdown'); // the countdown card only informs: [OK] grants nothing
-    return false;
+    // The countdown card informs ([OK] grants nothing); Phase 2e: its Buy rows can still sell a pack.
+    if (asks && (await ask('countdown')) === 'buy') return 'bought';
+    return null;
   }
 
-  /** Stock is empty: O2 → ad / free grant (+1, saved). True when the stock went up. */
+  async function rewardedOrFallback(p: HelperPlacement): Promise<boolean> {
+    return (await obtain(p)) === 'reward';
+  }
+
+  /**
+   * Stock is empty: O2 → ad / free grant (+1, saved), or (Phase 2e §4.2) a pack bought on O2 (granted by
+   * the shop flow). True when the caller should go on and use one now.
+   */
   async function refill(p: 'hint' | 'kitty'): Promise<boolean> {
-    if (!(await rewardedOrFallback(p))) return false;
+    const got = await obtain(p);
+    if (got === null) return false;
+    if (got === 'bought') return c.iap.useOneAfterBuy && host.save().stock[p === 'hint' ? 'hints' : 'kitties'] > 0;
     host.updateSave((s) => grant(s, p === 'hint' ? 'hints' : 'kitties', undefined, c));
     host.saves.now();
     stockChanged();
@@ -266,13 +378,15 @@ export function createHelperFlows(host: HelperHost): HelperFlows {
     if (!cur || !getMode(cur.meta.mode).kittyAllowed) return;
     const step = asTutorialStep(cur.meta.tutorialStep);
     if (step !== null && !tutorialAllowsTool(step, 'paw')) return;
+    const cells0 = cur.game.cells;
     await host.runBusy(async (alive) => {
       if (host.save().stock.kitties <= 0) {
         if (!(await refill('kitty')) || !alive()) return;
       }
       const s1 = host.game();
       const meta = host.meta();
-      if (!alive() || !s1 || !meta || s1.status !== 'playing') return;
+      // Phase 2e §4.2: a board that changed while O2 (or FB's dialog) was open keeps the stock unused.
+      if (!alive() || !s1 || !meta || s1.status !== 'playing' || s1.cells !== cells0) return;
       let cell: number;
       try {
         cell = await host.engine.pickKittyCell(s1.puzzle, s1.cells);
@@ -340,8 +454,11 @@ export function createHelperFlows(host: HelperHost): HelperFlows {
     return fallbackAvailable(host.save(), host.clock.now(), c) ? 'free' : null;
   }
 
-  async function interstitial(trigger: InterstitialTrigger): Promise<void> {
-    const decision = interstitialGate(
+  /** Phase 2e (spec §3.2, P-I4): Retries since the last level win in this page load. */
+  let retries = 0;
+
+  function gate(trigger: InterstitialTrigger, retryIndex: number): GateDecision {
+    return interstitialGate(
       {
         trigger,
         now: host.clock.now(),
@@ -349,11 +466,17 @@ export function createHelperFlows(host: HelperHost): HelperFlows {
         save: host.save(),
         interstitialSupported: host.capabilities().interstitial,
         // (the save carries purchases.noAds: the gate answers 'no_ads')
+        ...(trigger === 'retry' ? { retryIndex } : {}),
       },
       c,
     );
+  }
+
+  async function interstitial(trigger: InterstitialTrigger): Promise<void> {
+    if (trigger === 'retry') retries++;
+    const decision = gate(trigger, retries);
     if (decision !== 'ok') {
-      host.log({ name: 'ad_interstitial', params: { trigger, result: 'gated' } });
+      host.log({ name: 'ad_interstitial', params: { trigger, result: 'gated', gate: decision } });
       return;
     }
     const r = await host.adFlow.interstitial(trigger);
@@ -374,6 +497,10 @@ export function createHelperFlows(host: HelperHost): HelperFlows {
     rewardedOrFallback,
     continueOffer,
     interstitial,
+    levelWon: () => {
+      retries = 0;
+    },
+    gate: (trigger) => gate(trigger, trigger === 'retry' ? retries + 1 : retries),
     clearHintCache: () => {
       hintCache = null;
     },

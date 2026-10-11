@@ -30,7 +30,8 @@
     "palette:check": "tsx scripts/palette-check.ts",
     "i18n:check": "tsx scripts/i18n-check.ts",
     "size": "tsx scripts/size-check.ts",
-    "verify": "npm run typecheck && npm run test && npm run levels:verify && npm run palette:check && npm run i18n:check",
+    "verify": "npm run typecheck && npm run test && npm run levels:verify && npm run palette:check && npm run i18n:check && npm run verify:server",
+    "verify:server": "tsx scripts/verify-server.ts",
     "release:fbig": "npm run verify && npm run build:release && npm run size -- dist/release-fbig && npm run zip:fbig",
     "upload:fbig": "tsx scripts/upload-fbig.ts"
   },

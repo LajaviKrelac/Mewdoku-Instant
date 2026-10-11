@@ -82,6 +82,12 @@
 // 3 %: the fx chunk JS 14.8 → 15.3 (14.88, web), its CSS 2.73 → 3.26 (3.16), the lazy art 4.2 → 4.4 (4.27, web).
 // The first load stays inside every ceiling (FBIG e2e: main JS 323.3 / 332, CSS 48.9 / 49.3, first load
 // 389.9 / 398, gzip 144.7 / 148.5); nothing else moved.
+// Phase 2e L0 (lead; spec §7.9, §8.2 item 1): PLACEHOLDER rows for the lazy `ladder` chunk (src/app/ladder-chunk.ts,
+// named by scripts/locale-loaders.ts: the ranking's sheet, list, result card, name sheet and words) so it is never
+// counted in the core lazy rows. Their ceilings are the spec's estimates, not a measurement: JS 26 KB (the upper end
+// of the views and words, ≈ 14–18 KB, plus the ranking art, ≈ 6–8 KB, which §7.9 allows here: G2's ladder-art.ts is
+// imported by the chunk's views) and CSS 4 KB. The lead re-sets both at I-4 to the largest build's measured value +
+// about 3 % (04 §9), like every other row. No other ceiling moved.
 //
 // Usage: tsx scripts/size-check.ts [distDir …] [--json]
 //   No dirs → every existing one of dist/web, dist/fbig, dist/release-web and dist/release-fbig. A dir
@@ -134,6 +140,7 @@ export const LOCALE_CHUNK = /^assets\/locale-[A-Za-z-]+-[^/]*\.js$/;
  * 2026-10-10; main JS, CSS, index.html, the three first-load totals and the locale chunk re-set, and the
  * fx-chunk, board-motion and lazy-art rows added at 2d.1 I-4, 2026-10-10; the fx chunk's JS and CSS and the lazy
  * art re-set at the final audit fixes, 2026-10-10): the largest measured build (FBIG for JS) plus about 3 % (04 §9).
+ * Phase 2e L0: the two ladder rows are placeholders (the spec §7.9 estimate) until I-4 measures the chunk.
  */
 export const BUDGETS: readonly SizeBudget[] = [
   // The entry and the modulepreload chunks index.html links (since 2d.1 I-4: core-*, and the tutorial coach's
@@ -155,9 +162,15 @@ export const BUDGETS: readonly SizeBudget[] = [
   { label: 'Lazy JS (board motion)', pattern: /^assets\/board-mouse-[^/]*\.js$/, maxBytes: 3.8 * KB },
   // Phase 2d.1: the symbols only those two chunks draw (src/ui/art/lazy-art.ts), split out because both import it.
   { label: 'Lazy JS (lazy art)', pattern: /^assets\/lazy-art-[^/]*\.js$/, maxBytes: 4.4 * KB },
+  // Phase 2e L0, PLACEHOLDER ceiling (spec §7.9 estimate; re-set at I-4): the lazy ranking chunk (src/app/ladder-chunk.ts).
+  // The 8-character hash keeps chunks named after other ladder-* modules (ladder-flow, ladder-sheet, …) out of it.
+  { label: 'Lazy JS (ladder)', pattern: /^assets\/ladder-[\w-]{8}\.js$/, maxBytes: 26 * KB },
   { label: 'Lazy JS (core)', pattern: /^assets\/[^/]*\.js$/, maxBytes: 74 * KB },
   { label: 'Lazy CSS (fx chunk)', pattern: /^assets\/celebrate-[^/]*\.css$/, maxBytes: 3.26 * KB },
   { label: 'Lazy CSS (board motion)', pattern: /^assets\/board-mouse-[^/]*\.css$/, maxBytes: 6.4 * KB },
+  // Phase 2e L0, PLACEHOLDER ceiling (spec §7.9 estimate; re-set at I-4): the ladder chunk's own stylesheet (the CSS keeps
+  // the barrel's name, as events-chunk-*.css does).
+  { label: 'Lazy CSS (ladder)', pattern: /^assets\/ladder-chunk-[\w-]{8}\.css$/, maxBytes: 4 * KB },
   { label: 'Lazy CSS', pattern: /^assets\/[^/]*\.css$/, maxBytes: 34.6 * KB },
   { label: 'Event packs', pattern: /^assets\/[a-z][a-z-]*-\d{4}-[^/]*\.json$/, maxBytes: LISTED },
 ];

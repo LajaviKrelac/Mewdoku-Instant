@@ -18,6 +18,8 @@ import type { WinFlowFx } from './win-flow';
 import type { Clock } from './clock';
 import type { GameConfig } from './config';
 import type { AppBus, PauseReason } from './events';
+import type { LadderFlow } from './ladder-flow';
+import type { HelperShop } from './helper-flows';
 import type { Router } from './router';
 import type { SaveScheduler } from './saves';
 import type { AppState, SessionRequest, Store } from './store';
@@ -120,4 +122,28 @@ export interface SessionDeps {
   readonly winFx?: Partial<WinFlowFx>;
   /** Board size of a shipped level when known without loading (personal records). */
   levelSize?(level: number): number | null;
+  // ── Phase 2e (all optional: absent = the feature is off in this session) ──
+  /**
+   * The worldwide ranking (spec §2.3): the win is queued in save.ladder.pending in the same critical save
+   * as WON; the loaded flow (lazy) sends it and gives the panel its list. Absent = the 2c records path.
+   */
+  readonly ladder?: SessionLadder;
+  /** Phase 2e (spec §5.1, dayStreak.serverSkewCheck): false while the device clock is too far off. */
+  streakClockOk?(): boolean;
+  /** Phase 2e (spec §4.1): the in-play purchases (O2's Buy rows); absent = none. */
+  readonly shop?: HelperShop;
+}
+
+/** Phase 2e: what the session needs of the ranking (boot builds it; the flow itself is lazy). */
+export interface SessionLadder {
+  /** The ranking origin is in use (spec §2.2): wins are queued for the server. */
+  inUse(): boolean;
+  /** The loaded flow, or null (not loaded yet). */
+  flow(): LadderFlow | null;
+  /** The content manifest's version (WinSubmission.contentVersion). */
+  readonly contentVersion: string;
+  /** __APP_VERSION__ (WinSubmission.clientVersion). */
+  readonly clientVersion: string;
+  /** A UUID v4 (ladder-origin.ts newWinId). */
+  newWinId(): string;
 }

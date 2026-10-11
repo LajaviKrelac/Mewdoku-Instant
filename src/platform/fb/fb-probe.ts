@@ -22,6 +22,8 @@ export const FB_2B_API = {
   tournamentPost: 'tournament.postScoreAsync',
   tournamentCurrent: 'getTournamentAsync',
   purchase: 'payments.purchaseAsync',
+  /** Phase 2e (spec §1.3, G-SRV-2 checks the exact listing). */
+  signedPlayerInfo: 'player.getSignedPlayerInfoAsync',
 } as const;
 
 /** getSupportedAPIs() as a set; empty when the call throws (before init, or a broken SDK). */
@@ -86,9 +88,12 @@ export function groupsSupported(sdk: FBInstantSDK, apis: ReadonlySet<string> = s
 }
 
 /**
- * The capabilities().payments rule (§8.4): getPlatform() !== 'IOS' (iOS is not eligible, 05: confirmed)
- * and payments.purchaseAsync listed and callable. Messenger.com cannot be told apart here: there
- * onReady never fires, so the Buy section never appears (§8.6). getPlatform() is null before init.
+ * The capabilities().payments rule (§8.4): payments.purchaseAsync listed and callable. Messenger.com
+ * cannot be told apart here: there onReady never fires, so the Buy section never appears (§8.6).
+ * getPlatform() is null before init.
+ * Phase 2e (G1, spec §4.4, D-2e-11): iOS is no longer excluded here (getSupportedAPIs and the functions
+ * decide); Capabilities.paymentsIos says the platform is iOS and the app requires iap.iosEnabled or the
+ * remote switch iapIos there (shop-flow paymentsAllowed), so iOS never sells while the switch is off.
  */
 export function paymentsSupported(sdk: FBInstantSDK, apis: ReadonlySet<string> = supportedApis(sdk)): boolean {
   let platform: string | null = null;
@@ -97,9 +102,29 @@ export function paymentsSupported(sdk: FBInstantSDK, apis: ReadonlySet<string> =
   } catch {
     return false;
   }
-  if (platform === null || platform === 'IOS') return false;
+  if (platform === null) return false;
   const p = prop(sdk, 'payments');
   return apis.has(FB_2B_API.purchase) && !!p && isFn(p.purchaseAsync) && isFn(p.onReady);
+}
+
+/** Phase 2e (spec §4.4): getPlatform() === 'IOS' (false before init or on a throwing SDK). */
+export function isIosPlatform(sdk: FBInstantSDK): boolean {
+  try {
+    return sdk.getPlatform() === 'IOS';
+  } catch {
+    return false;
+  }
+}
+
+/** Phase 2e (spec §1.3): player.getSignedPlayerInfoAsync listed by getSupportedAPIs and callable. */
+export function identitySupported(sdk: FBInstantSDK, apis: ReadonlySet<string> = supportedApis(sdk)): boolean {
+  if (!apis.has(FB_2B_API.signedPlayerInfo)) return false;
+  try {
+    const player = sdk.player as unknown as { getSignedPlayerInfoAsync?: unknown };
+    return typeof player.getSignedPlayerInfoAsync === 'function';
+  } catch {
+    return false;
+  }
 }
 
 /**

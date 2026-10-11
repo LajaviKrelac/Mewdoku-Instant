@@ -1,0 +1,16 @@
+{
+  "name": "nonce.ok",
+  "request": {
+    "method": "POST",
+    "path": "/v1/session/nonce",
+    "body": {}
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "nonce": "n1.mgkwq3ki.Zk3hQ9fA2LmX8rTq.9fAkd83LmQp2XcVb",
+      "expiresAt": 1791800100000,
+      "serverTime": 1791799800000
+    }
+  }
+}

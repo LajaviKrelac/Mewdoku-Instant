@@ -53,6 +53,8 @@
   --danger: #d33a4a; /* error flash */
   --wrong: #560a1c; /* wrong-X glyph + ring: ≥ 3.18:1 on every tile (Denim the lowest), ≥ 6.4 faded (2d.1 §6.4) */
   --hard: #6c3fb5; /* Hard badge: white on it 6.96 */
+  --cheer: #d9466a; /* Phase 2e: a given heart in the ranking (a cheer, never a life): 4.17 on --card, 3.54 on --accent-soft */
+  --step-line: #a6827c; /* Phase 2e: the streak strip's empty paw outline: 3.10 on --page (a step may override it) */
 
   /* ── Phase 2d HUD colours (look-spec §1.2; measured unless noted) ─────── */
   --badge: #dc2f2f; /* count badges: measured #e93636 darkened for white digits 4.68 */

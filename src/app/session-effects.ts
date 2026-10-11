@@ -11,8 +11,14 @@
 // own (the session plays `mouse` and `mark` with its visits); UNITS_DONE plays the `unit_done` chime
 // (pitch index = units − 1) unless the same action plays the region chime (REGION_DONE), and adds
 // "{units} complete." to the action's utterance, leaving out a region whose REGION_DONE is in it.
+// Phase 2e (G1, docs/phase2e/spec.md §5.1–§5.4, §6.1; CONTRACTS §6): a counted, non-tutorial, non-restored
+// win in a mode of dayStreak.modes counts the day for the daily streak (day-streak.ts countWin, the date
+// key dailyDateKey(now)); a cycle reward goes into the stock in the same critical save as the win; a
+// daily's first win grants daily.reward when it is not zero. WinSummary.streak / dailyReward carry both
+// to the victory screen; streak_day / streak_reward / streak_reset are logged.
 import type { SfxId } from '../audio/sfx';
-import { applyEventWin, type EventDef, type Milestone } from '../game/events';
+import { countWin } from '../game/day-streak';
+import { applyEventWin, type EventDef, type Milestone, type Reward } from '../game/events';
 import { popcount } from '../game/factory';
 import { getMode } from '../game/modes';
 import { addPeriodPoints, addPoints, keptPoints, periodKeyAt, periodTotal } from '../game/scoring';
@@ -204,6 +210,13 @@ export interface WinSummary {
   /** Lifetime level points after the win: points.total, which a COUNTED win raised by pointsEarned. */
   readonly pointsTotal: number;
   readonly event: EventWinSummary | null;
+  /**
+   * Phase 2e (spec §5.3): the day's first counted win in a streak mode: day `day` of `total`, with the
+   * cycle reward already granted and saved (null on other days); null when the win did not count a day.
+   */
+  readonly streak: { readonly day: number; readonly total: number; readonly reward: Reward | null } | null;
+  /** Phase 2e (spec §6.1): daily.reward granted with a daily's first win (null when zero or not a daily). */
+  readonly dailyReward: Reward | null;
 }
 
 export interface WinBookkeeping {
@@ -223,6 +236,13 @@ export interface WinContext {
   readonly event?: { readonly def: EventDef; readonly index: number } | null;
   readonly restored?: boolean;
   readonly config?: GameConfig;
+  /**
+   * Phase 2e (spec §5.1): the streak's date key, dailyDateKey(now) (the app computes it with the device's
+   * local calendar). Absent = no streak counting (S0 callers).
+   */
+  readonly streakDateKey?: string;
+  /** Phase 2e: false when the streak must not count now (flag off, or the optional skew check failed). Default true. */
+  readonly streakAllowed?: boolean;
 }
 
 const inModes = (mode: ModeId, modes: readonly ScoredMode[]): boolean => (modes as readonly string[]).indexOf(mode) >= 0;
@@ -281,6 +301,31 @@ export function winBookkeeping(save: SaveData, meta: SessionMeta, state: GameSta
         events.push({ name: 'win_points', params: { mode, fish: kept, total, points: pts, run: Math.max(0, state.catStreak) } });
       }
     }
+    // Phase 2e §6.1: the daily reward with a daily's first win (none while daily.reward is zero).
+    let dailyReward: Reward | null = null;
+    if (counted && mode === 'daily' && !base.restored) {
+      const h = Math.max(0, Math.floor(c.daily.reward.hints));
+      const k = Math.max(0, Math.floor(c.daily.reward.kitties));
+      if (h > 0 || k > 0) {
+        out = { ...out, stock: { hints: out.stock.hints + h, kitties: out.stock.kitties + k } };
+        dailyReward = { hints: h, kitties: k };
+      }
+    }
+    // Phase 2e §5.1: the day's first counted win in a streak mode counts the day (never the tutorial,
+    // a restored board or a replay); the cycle reward is granted in this same save.
+    let streak: WinSummary['streak'] = null;
+    const dateKey = ctx.streakDateKey;
+    if (counted && scored && !base.restored && dateKey !== undefined && ctx.streakAllowed !== false && c.dayStreak.enabled && inModes(mode, c.dayStreak.modes)) {
+      const r = countWin(out.dayStreak, dateKey, c);
+      if (r.counted) {
+        out = { ...out, dayStreak: r.ds };
+        if (r.reward) out = { ...out, stock: { hints: out.stock.hints + r.reward.hints, kitties: out.stock.kitties + r.reward.kitties } };
+        if (r.reset) events.push({ name: 'streak_reset', params: { prev: r.prevRun } });
+        events.push({ name: 'streak_day', params: { day: r.day, run: r.ds.run } });
+        if (r.reward) events.push({ name: 'streak_reward', params: { run: r.ds.run } });
+        streak = { day: r.day, total: Math.max(1, Math.floor(c.dayStreak.cycleDays)), reward: r.reward };
+      }
+    }
     const summary: WinSummary = {
       ...base,
       counted,
@@ -288,6 +333,8 @@ export function winBookkeeping(save: SaveData, meta: SessionMeta, state: GameSta
       pointsEarned: pts,
       pointsTotal: out.points.total,
       event,
+      streak,
+      dailyReward,
     };
     return { save: out, critical, events, summary, pointsEarned: pts };
   };

@@ -1,0 +1,37 @@
+{
+  "name": "profile.nickname",
+  "request": {
+    "method": "PUT",
+    "path": "/v1/me/profile",
+    "auth": true,
+    "body": {
+      "nickname": {
+        "adj": 7,
+        "noun": 12,
+        "num": 3
+      },
+      "avatarId": 9
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "player": {
+        "code": "7KQ2M9XD",
+        "nickname": "Gentle Marble 3",
+        "nick": {
+          "adj": 7,
+          "noun": 12,
+          "num": 3
+        },
+        "avatarId": 9,
+        "status": "ok",
+        "pool": "fb",
+        "trust": "signed",
+        "listed": true,
+        "nicknameChangeAt": 1791886200000
+      },
+      "serverTime": 1791799800000
+    }
+  }
+}

@@ -1,4 +1,5 @@
-// Owner: B (Phase 2b); G2 (Phase 2c: the period board, the fish score, the period records; 2c.1: Total points)
+// Owner: B (Phase 2b); G2 (Phase 2c: the period board, the fish score, the period records; 2c.1: Total points);
+// G3 (Phase 2e: the worldwide daily ranking's 'bracket' state)
 // Ranking panel (new overlay `ranking`, phase2b §2.4): a dimmed full-screen --scrim with a centred
 // --stage panel (orange --title-on-dark title, the subtitle for this win, the list area) and the
 // "Tap to keep going" footer in --tap-text. Opens at t = fx.winOverlayDelayMs (4.5 s) of the win flow.
@@ -16,8 +17,19 @@
 // a provider the records card shows This week · Your best week · Total points · Levels solved
 // (Phase 2c.1 §4.6, D24: "Total points" replaced the retired "Perfect streak").
 //
+// Phase 2e (G3, spec §2.4, §7.7, §9.4): the 'bracket' state shows MY BRACKET of the worldwide daily ranking:
+// the title "Daily ranking" with an (i) button (onInfo), the subtitle "+2 fish · Your total: 14", then the
+// bracket list (bracket-list.ts, from the lazy `ladder` chunk through props.bracketList): "Ends in 7 h 48 min ·
+// 37 players", the rewards line, exactly the server's rows (H-3) with my row highlighted and a pinned copy,
+// the hearts. The panel stays interactive: a heart, the (i) button, a tap or a drag inside the list never
+// continues; a tap elsewhere, the footer, Enter, Space or Esc does (after the gate). My rank is announced
+// politely once ("You are #5 of 37 in the daily ranking."); the countdown never is. Without the factory the
+// 'bracket' state shows the static skeleton (no fake rows). The records note widens: 'opted_out'
+// (ladder.optedOut) and 'paused' (ladder.paused); 'unavailable' while the ladder is active reads
+// ladder.unavailable (the 2b rank.unavailable stays for the event boards).
+//
 // Classes: .overlay[data-overlay=ranking] > .overlay__scrim--dark + .overlay__panel--stage.ranking[data-list]
-//          > .ranking__card(.ranking__title .ranking__sub .rank-list[data-kind]) .ranking__tap
+//          > .ranking__card(.ranking__head(.ranking__title button.ranking__info) .ranking__sub .rank-list[data-kind]) .ranking__tap
 //          (the dialog element holds the card and the footer, so aria-modal never hides the footer)
 //          List parts (shared with the rankings hub): .rank-list__skeleton .rank-mine(.rank-mine__rank
 //          .rank-mine__score .rank-mine__count) .rank-records(.rank-records__row) .rank-list__note .rank-list__seetop
@@ -25,6 +37,7 @@ import { cfg, type PeriodKind } from '../../app/config';
 import { formatClock, formatNumber, t, tn, translate, type I18nKey } from '../../i18n';
 import { h, setText, type OverlayView } from '../dom';
 import { createLocaleText } from '../locale-text';
+import { icon } from '../art/sprite';
 import { periodBestLabel, periodRankTitle, periodResultText, periodTabLabel } from '../period-text';
 import { createDelay, createOverlayShell, makeButton, setGated, setButtonLabel } from './overlay-base';
 
@@ -67,9 +80,85 @@ export interface PersonalRecordsView {
   readonly period?: { readonly kind: PeriodKind; readonly total: number; readonly best: number };
 }
 
+// ─────────────────────────────── Phase 2e: the worldwide daily ranking (spec §2.4, CONTRACTS §8) ───────────────────────────────
+
+/** One row of my bracket, exactly as the server sent it (H-3); the app adds only heartEnabled. */
+export interface BracketRowView {
+  readonly rank: number;
+  readonly slot: number;
+  /** The ranking name (our English words in every locale), rendered with textContent and dir="auto". */
+  readonly name: string;
+  readonly avatarId: number;
+  /** Fish kept, summed in this bracket. */
+  readonly points: number;
+  readonly hearts: number;
+  readonly me: boolean;
+  readonly likedByMe: boolean;
+  /** The heart button is enabled (hearts on, not yet given, under the cap, not offline). */
+  readonly heartEnabled: boolean;
+}
+
+/** My bracket for the panel and the sheet (CONTRACTS §8). Never carries an invented row or count. */
+export interface BracketListView {
+  readonly bracketId: string;
+  /** EXACTLY the server's rows, in its order (H-3). */
+  readonly rows: readonly BracketRowView[];
+  /** The server's count ("37 players"). */
+  readonly members: number;
+  /** DEVICE-clock ms (the app applied the server offset); null: no countdown line. */
+  readonly endsAt: number | null;
+  readonly final: boolean;
+  /** 'places': "The top 3 win …" (paidPlaces); 'min': "Rewards need at least 5 players …"; 'none': no line. */
+  readonly rewardsLine: 'places' | 'min' | 'none';
+  /** rules.places.length. */
+  readonly paidPlaces: number;
+  /** rules.minMembers. */
+  readonly minMembers: number;
+  /** Hearts received from other players since my last read; 0 = no line. */
+  readonly heartsNew: number;
+  /** Queued fish shown on my row ("+2 waiting"); 0 = none. */
+  readonly waiting: number;
+  /** A cached bracket shown while offline or down: "Last updated hh:mm" (+ the offline line). */
+  readonly stale: { readonly at: number } | null;
+  /** My ranking name for nick.first.line, shown once; else null. */
+  readonly firstLineName: string | null;
+  /** ladder.panelRows (0 = every row, in a scroll list). */
+  readonly panelRows: number;
+  /** rules.hearts.enabled. */
+  readonly hearts: boolean;
+  /** Device clock for the countdown. */
+  now(): number;
+}
+
+/** The records card's note: rank.localOnly, ladder.unavailable, ladder.optedOut or ladder.paused (spec §2.9). */
+export type RecordsReason = 'local' | 'unavailable' | 'opted_out' | 'paused';
+
+/**
+ * Phase 2e: the bracket list's factory (src/ui/overlays/bracket-list.ts, in the lazy `ladder` chunk).
+ * The ranking panel lives in the overlay chunk, so the app passes the factory from the loaded `ladder`
+ * chunk (RankingPanelProps.bracketList); until it is there a 'bracket' state shows the static skeleton.
+ */
+export type BracketListFactory = (view: BracketListView, cb: BracketListCallbacks) => BracketListHandle;
+
+export interface BracketListCallbacks {
+  onHeart(slot: number): void;
+  /** The pencil on my row (the ranking sheet only); absent = no pencil. */
+  onEditName?(): void;
+}
+
+export interface BracketListHandle {
+  readonly el: HTMLElement;
+  update(view: BracketListView): void;
+  /** Scrolls my row to the middle of the list (after the list is shown and laid out). */
+  centerMe(): void;
+  destroy(): void;
+}
+
 /**
  * The list area (phase2b §2.4): loading skeleton (static grey bars, no fake data), one of the three
  * FB modes, or the personal records with rank.localOnly ('local') or rank.unavailable ('unavailable').
+ * Phase 2e (spec §2.4): 'bracket', my bracket of the worldwide daily ranking; the records card's note
+ * widens with 'opted_out' (ladder.optedOut) and 'paused' (ladder.paused).
  */
 export type RankingListState =
   | { readonly kind: 'loading' }
@@ -79,7 +168,9 @@ export type RankingListState =
   | { readonly kind: 'see_top'; readonly mine: RankMineView }
   /** No overlay views: my line only, never other players' rows. */
   | { readonly kind: 'mine'; readonly mine: RankMineView }
-  | { readonly kind: 'records'; readonly records: PersonalRecordsView; readonly reason: 'local' | 'unavailable' };
+  | { readonly kind: 'records'; readonly records: PersonalRecordsView; readonly reason: RecordsReason }
+  /** Phase 2e: my bracket (rows exactly as the server sent them). */
+  | { readonly kind: 'bracket'; readonly view: BracketListView };
 
 /**
  * The subtitle: this win's result ("+2 fish · This week: 42", "Solved in 3:08", "13 of 21 solved").
@@ -89,7 +180,9 @@ export type RankingResultView =
   | { readonly kind: 'daily'; readonly ms: number }
   | { readonly kind: 'event'; readonly solved: number; readonly total: number }
   /** Phase 2c §2.6: "+2 fish · This week: 42" (gained > 0), else "This week: 42". */
-  | { readonly kind: 'period'; readonly gained: number; readonly total: number; readonly periodKind: PeriodKind };
+  | { readonly kind: 'period'; readonly gained: number; readonly total: number; readonly periodKind: PeriodKind }
+  /** Phase 2e §2.4: "+2 fish · Your total: 14" (my points in my current ranking; the estimate while offline). */
+  | { readonly kind: 'ladder'; readonly gained: number; readonly total: number };
 
 export interface RankingPanelProps {
   readonly board: RankingBoardKind;
@@ -108,6 +201,16 @@ export interface RankingPanelProps {
   onSeeTop(): void;
   /** 'overlay' mode: the list area's client rect once laid out (RankingProvider.showList(board, view, rect)). */
   onListArea(rect: DOMRect): void;
+  // ── Phase 2e (spec §2.4; optional until I-3) ──
+  /** A heart button of the 'bracket' list (the app sends it; the panel never continues on it). */
+  onHeart?(slot: number): void;
+  /** The (i) button next to the title in the 'bracket' state: the app opens the ranking sheet's info view. */
+  onInfo?(): void;
+  /**
+   * The bracket list's factory from the lazy `ladder` chunk (bracket-list.ts createBracketList). Absent:
+   * a 'bracket' state shows the static skeleton until an update brings it (no fake rows meanwhile).
+   */
+  readonly bracketList?: BracketListFactory;
 }
 
 // ─────────────────────────────── shared text helpers ───────────────────────────────
@@ -140,6 +243,8 @@ export function resultText(r: RankingResultView): string {
       return t('event.card.progress', { solved: formatNumber(r.solved), total: formatNumber(r.total) });
     case 'period':
       return periodResultText(r.periodKind, r.gained, r.total);
+    case 'ladder':
+      return periodResultText('ladder', r.gained, r.total);
   }
 }
 
@@ -149,6 +254,13 @@ export function resultText(r: RankingResultView): string {
  */
 export function announcement(p: Pick<RankingPanelProps, 'list' | 'result'>): string {
   const parts: string[] = [];
+  // Phase 2e (§7.7): "You are #5 of 37 in the daily ranking." from the server's own row and count.
+  if (p.list.kind === 'bracket') {
+    const me = p.list.view.rows.find((r) => r.me);
+    if (me) parts.push(t('ladder.announce', { rank: formatNumber(me.rank), count: formatNumber(p.list.view.members) }));
+    parts.push(resultText(p.result));
+    return parts.map((s) => (/[.!?…]$/.test(s) ? s : `${s}.`)).join(' ');
+  }
   const mine = p.list.kind === 'mine' || p.list.kind === 'see_top' ? p.list.mine : null;
   if (mine?.rank != null) parts.push(t('rank.yourRank', { rank: formatNumber(mine.rank) }));
   else if (mine?.score) parts.push(t('rank.yourScore', { score: formatRankScore(mine.score) }));
@@ -164,6 +276,8 @@ export function announcement(p: Pick<RankingPanelProps, 'list' | 'result'>): str
 export interface RankListRenderOptions {
   /** 'see_top' mode's button. */
   onSeeTop(): void;
+  /** Phase 2e: the worldwide ranking is in use (the records note reads ladder.unavailable). */
+  readonly ladder?: boolean;
 }
 
 /** My line: "Your rank: #1,234", "Your score: 42 fish", "5,678 players" (only what the API gave). */
@@ -260,17 +374,39 @@ export function renderRankList(list: HTMLElement, state: RankingListState, opts:
       list.appendChild(mineBlock(state.mine));
       break;
     case 'records':
-      list.append(
-        recordsBlock(state.records),
-        h('p', { class: 'rank-list__note' }, state.reason === 'local' ? t('rank.localOnly') : t('rank.unavailable')),
-      );
+      list.append(recordsBlock(state.records), h('p', { class: 'rank-list__note' }, recordsNote(state.reason, opts.ladder === true)));
       break;
+    case 'bracket':
+      // The bracket list comes from the lazy `ladder` chunk (the panel swaps it in); until then the static
+      // skeleton, never a fake row (H-1, H-3).
+      list.dataset.kind = 'loading';
+      list.append(skeleton(), h('p', { class: 'rank-list__note' }, t('rank.loading')));
+      break;
+  }
+}
+
+/**
+ * The records card's note (spec §2.9): rank.localOnly (the web, no ranking), ladder.optedOut, ladder.paused;
+ * 'unavailable' reads ladder.unavailable while the worldwide ranking is in use, else the 2b rank.unavailable.
+ */
+export function recordsNote(reason: RecordsReason, ladder: boolean): string {
+  switch (reason) {
+    case 'local':
+      return t('rank.localOnly');
+    case 'opted_out':
+      return t('ladder.optedOut');
+    case 'paused':
+      return t('ladder.paused');
+    case 'unavailable':
+      return ladder ? t('ladder.unavailable') : t('rank.unavailable');
   }
 }
 
 // ─────────────────────────────── the panel ───────────────────────────────
 
 const isActionKey = (k: string): boolean => k === 'Enter' || k === ' ' || k === 'Spacebar';
+/** Phase 2e: a pointer that moved this far (CSS px, |dx| + |dy|) between down and click was a drag, not a tap. */
+const DRAG_PX = 10;
 
 export function createRankingPanel(): OverlayView<RankingPanelProps> {
   let props: RankingPanelProps | null = null;
@@ -284,14 +420,26 @@ export function createRankingPanel(): OverlayView<RankingPanelProps> {
   const announceDelay = createDelay();
 
   const title = h('h2', { class: 'overlay__title ranking__title', id: shell.titleId });
-  const sub = h('p', { class: 'ranking__sub num', id: shell.descId });
+  // Phase 2e: the (i) button next to the title in the 'bracket' state (opens the sheet's info view).
+  const info = makeButton({ variant: 'icon', icon: 'icon-info', ariaLabel: t('ladder.info'), className: 'ranking__info', onPress: () => props?.onInfo?.() });
+  info.hidden = true;
+  const head = h('div', { class: 'ranking__head' }, title, info);
+  // Worded ("+2 fish · Your total: 14", "Solved in 3:08"): no .num (it would force the whole line LTR in Arabic).
+  const sub = h('p', { class: 'ranking__sub', id: shell.descId });
   const list = h('div', { class: 'rank-list' });
+  /** Phase 2e: the bracket list from the `ladder` chunk, swapped in for `list` in the 'bracket' state. */
+  let bracket: { readonly factory: BracketListFactory; readonly handle: BracketListHandle } | null = null;
+  let centerAfterOpen = false;
   const live = h('p', { class: 'sr-only', role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true' });
   const tap = makeButton({ variant: 'ghost', label: t('rank.tap'), autofocus: true, className: 'ranking__tap', onPress: () => tryContinue() });
   // The footer follows the language (A11Y-I18N-1).
   const L = createLocaleText();
-  L.run(() => setButtonLabel(tap, t('rank.tap')));
-  shell.panel.append(h('div', { class: 'ranking__card' }, title, sub, list), tap, live);
+  L.run(() => {
+    setButtonLabel(tap, t('rank.tap'));
+    info.setAttribute('aria-label', t('ladder.info'));
+  });
+  const card = h('div', { class: 'ranking__card' }, head, sub, list);
+  shell.panel.append(card, tap, live);
   shell.el.style.setProperty('--pop-ms', `${cfg.rank.panelPopMs}ms`);
   shell.el.style.setProperty('--out-ms', `${cfg.rank.panelOutMs}ms`);
   shell.el.style.setProperty('--pulse-ms', `${cfg.rank.tapPulseMs}ms`);
@@ -304,11 +452,27 @@ export function createRankingPanel(): OverlayView<RankingPanelProps> {
     return true;
   }
 
+  // Phase 2e (§2.4 Taps): a drag (or a scroll) that started anywhere never counts as a tap to continue.
+  let downAt: { x: number; y: number } | null = null;
+  let dragged = false;
+  shell.el.addEventListener('pointerdown', (ev) => {
+    downAt = { x: ev.clientX, y: ev.clientY };
+    dragged = false;
+  });
+  shell.el.addEventListener('pointermove', (ev) => {
+    if (downAt && Math.abs(ev.clientX - downAt.x) + Math.abs(ev.clientY - downAt.y) > DRAG_PX) dragged = true;
+  });
   // A tap anywhere (scrim, panel, footer) continues after the gate; the "See top players" button does its own thing.
+  // Phase 2e: the heart buttons, the (i) button and any tap inside the bracket list never continue.
   shell.el.addEventListener('click', (ev) => {
     const target = ev.target as Element | null;
+    const wasDrag = dragged;
+    downAt = null;
+    dragged = false;
     if (target?.closest('.rank-list__seetop')) return;
     if (target?.closest('.ranking__tap')) return; // its own onPress
+    if (target?.closest('.ranking__info, .rank-list--bracket')) return;
+    if (wasDrag) return;
     tryContinue();
   });
   shell.el.addEventListener('keydown', (ev) => {
@@ -318,6 +482,47 @@ export function createRankingPanel(): OverlayView<RankingPanelProps> {
     ev.preventDefault();
     tryContinue();
   });
+
+  /** Phase 2e: the 'bracket' state — the factory's list replaces the plain list area (or the skeleton until it lands). */
+  const renderBracket = (p: RankingPanelProps, view: BracketListView): void => {
+    const factory = p.bracketList;
+    if (!factory) {
+      dropBracket();
+      renderRankList(list, { kind: 'bracket', view }, { onSeeTop: () => undefined });
+      return;
+    }
+    if (bracket && bracket.factory !== factory) dropBracket();
+    if (!bracket) {
+      const handle = factory(view, { onHeart: (slot) => props?.onHeart?.(slot) });
+      bracket = { factory, handle };
+      list.replaceWith(handle.el);
+      centerAfterOpen = true;
+    } else bracket.handle.update(view);
+    if (centerAfterOpen && shell.isOpen()) scheduleCenter();
+  };
+  const dropBracket = (): void => {
+    if (!bracket) return;
+    bracket.handle.el.replaceWith(list);
+    bracket.handle.destroy();
+    bracket = null;
+  };
+  let centerRaf = 0;
+  /** On open the list scrolls so my row is in the middle (after layout: two frames). */
+  const scheduleCenter = (): void => {
+    const win = shell.el.ownerDocument.defaultView;
+    const run = (): void => {
+      centerRaf = 0;
+      if (bracket && shell.isOpen()) {
+        centerAfterOpen = false;
+        bracket.handle.centerMe();
+      }
+    };
+    if (!win?.requestAnimationFrame) return run();
+    if (centerRaf) win.cancelAnimationFrame(centerRaf);
+    centerRaf = win.requestAnimationFrame(() => {
+      centerRaf = win.requestAnimationFrame(run);
+    });
+  };
 
   /** 'overlay' mode: report the list area's rect once it is laid out (and again if the mode returns). */
   const reportListArea = (): void => {
@@ -339,11 +544,19 @@ export function createRankingPanel(): OverlayView<RankingPanelProps> {
     props = p;
     L.apply();
     shell.panel.dataset.board = p.board;
-    setText(title, rankTitle(p.board, p.eventNameKey, p.periodKind ?? (p.result.kind === 'period' ? p.result.periodKind : cfg.period.kind)));
+    const ladder = p.list.kind === 'bracket' || p.result.kind === 'ladder';
+    // Phase 2e: the worldwide ranking is the "Daily ranking" (rank.title.period.day), whatever period.kind is.
+    setText(title, ladder ? t('rank.title.period.day') : rankTitle(p.board, p.eventNameKey, p.periodKind ?? (p.result.kind === 'period' ? p.result.periodKind : cfg.period.kind)));
+    // Its glyph and the sheet it opens come with the lazy `ladder` chunk: no factory yet, no (i) (never a blank disc).
+    info.hidden = !(p.list.kind === 'bracket' && p.onInfo && p.bracketList);
     setText(sub, resultText(p.result));
-    if (p.list.kind !== listKind || p.list.kind !== 'overlay') {
+    if (p.list.kind === 'bracket') {
+      renderBracket(p, p.list.view);
+      listKind = 'bracket';
+    } else if (p.list.kind !== listKind || p.list.kind !== 'overlay') {
+      dropBracket();
       // Re-render on any data change; the overlay area is left alone (the FB view sits on it).
-      renderRankList(list, p.list, { onSeeTop: () => props?.onSeeTop() });
+      renderRankList(list, p.list, { onSeeTop: () => props?.onSeeTop(), ladder });
       listKind = p.list.kind;
     }
     shell.panel.dataset.list = p.list.kind;
@@ -359,10 +572,12 @@ export function createRankingPanel(): OverlayView<RankingPanelProps> {
       continued = false;
       listKind = null;
       rectFor = null;
+      centerAfterOpen = true;
       shell.el.classList.remove('is-leaving', 'is-ready');
       setGated(tap, true);
       render(p);
       shell.show();
+      if (bracket) scheduleCenter();
       if (p.reducedMotion && typeof shell.el.animate === 'function') {
         try {
           shell.el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: cfg.fx.reducedMotionFadeMs, easing: 'linear' });
@@ -387,6 +602,8 @@ export function createRankingPanel(): OverlayView<RankingPanelProps> {
     close() {
       gate.cancel();
       announceDelay.cancel();
+      if (centerRaf) shell.el.ownerDocument.defaultView?.cancelAnimationFrame(centerRaf);
+      centerRaf = 0;
       ready = false;
       shell.hide();
     },
@@ -394,6 +611,8 @@ export function createRankingPanel(): OverlayView<RankingPanelProps> {
     destroy() {
       gate.cancel();
       announceDelay.cancel();
+      if (centerRaf) shell.el.ownerDocument.defaultView?.cancelAnimationFrame(centerRaf);
+      dropBracket();
       props = null;
       shell.el.remove();
     },

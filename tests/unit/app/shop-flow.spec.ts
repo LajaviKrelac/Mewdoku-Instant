@@ -114,11 +114,11 @@ describe('purchase grant order (§8.4)', () => {
     expect(s.log).toEqual(['purchase:hints_15:P1', 'state:h15k0', 'save:critical', 'changed', 'consume:tok1']);
     expect(s.save().purchases.tokens).toEqual(['hints_15|tok1']);
     expect(s.toasts).toEqual(['Thank you! Your items are in.']);
-    expect(s.analytics).toEqual([{ name: 'iap', params: { product: 'hints_15', result: 'ok', platform: 'fbig' } }]);
+    expect(s.analytics).toEqual([{ name: 'iap', params: { product: 'hints_15', result: 'ok', platform: 'fbig', source: 'shop' } }]);
   });
 
   it('a crash between grant and consume: the boot restore consumes only (no second grant)', async () => {
-    const s = setup({ save: { stock: { hints: 15, kitties: 0 }, purchases: { noAds: false, tokens: ['hints_15|tokX'] } } });
+    const s = setup({ save: { stock: { hints: 15, kitties: 0 }, purchases: { noAds: false, tokens: ['hints_15|tokX'], pending: [] } } });
     s.pay.unconsumed = [{ productId: 'hints_15', purchaseToken: 'tokX', paymentId: 'p', purchaseTime: 1 }];
     await s.flow.restore();
     expect(s.log).toEqual(['purchases', 'consume:tokX']);
@@ -139,7 +139,7 @@ describe('purchase grant order (§8.4)', () => {
     expect(s.log).toEqual(['purchases', 'state:h10k3', 'save:critical', 'changed', 'consume:tokF']);
     expect(s.save().purchases.tokens).toEqual(['fish_250|tokF']);
     expect(s.save()).not.toHaveProperty('wallet');
-    expect(s.analytics).toEqual([{ name: 'iap', params: { product: 'fish_250', result: 'ok', platform: 'fbig' } }]);
+    expect(s.analytics).toEqual([{ name: 'iap', params: { product: 'fish_250', result: 'ok', platform: 'fbig', source: 'shop' } }]);
     // Still unconsumed at the next boot (the consume failed): consumed only, never granted twice.
     s.log.length = 0;
     await s.flow.restore();
@@ -180,8 +180,8 @@ describe('purchase grant order (§8.4)', () => {
     expect(s.toasts).toEqual(["We couldn't finish that purchase. Please try again."]);
     expect(s.save().stock).toEqual({ hints: 0, kitties: 0 });
     expect(s.analytics.map((e) => e.params)).toEqual([
-      { product: 'hints_15', result: 'cancelled', platform: 'fbig' },
-      { product: 'hints_15', result: 'error', platform: 'fbig' },
+      { product: 'hints_15', result: 'cancelled', platform: 'fbig', source: 'shop' },
+      { product: 'hints_15', result: 'error', platform: 'fbig', source: 'shop' },
     ]);
   });
 
@@ -193,10 +193,11 @@ describe('purchase grant order (§8.4)', () => {
     expect(s.analytics).toEqual([]);
   });
 
-  it('grantBeforeConsume false: consume first, then grant and save', async () => {
+  it('grantBeforeConsume false (Phase 2e, spec §4.2): intent + critical save, consume, then grant + critical save', async () => {
     const s = setup({ config: mergeConfig({ iap: { grantBeforeConsume: false } }) });
     await s.flow.buy('kitties_8');
-    expect(s.log).toEqual(['purchase:kitties_8:P1', 'consume:tok1', 'state:h0k8', 'save:critical', 'changed']);
+    expect(s.log).toEqual(['purchase:kitties_8:P1', 'state:h0k0', 'save:critical', 'consume:tok1', 'state:h0k8', 'save:critical', 'changed']);
+    expect(s.save().purchases).toEqual({ noAds: false, tokens: ['kitties_8|tok1'], pending: [] });
   });
 
   it("removeAdsMode 'keep': No Ads is never consumed", async () => {
@@ -234,7 +235,7 @@ describe('the Buy section (§8.5, §8.6)', () => {
   });
 
   it('a catalogue failure shows the error state with retry; No Ads reads "Owned" once bought', async () => {
-    const s = setup({ save: { purchases: { noAds: true, tokens: [] } } });
+    const s = setup({ save: { purchases: { noAds: true, tokens: [], pending: [] } } });
     let fail = true;
     s.pay.catalog = async () => {
       if (fail) throw new Error('net');

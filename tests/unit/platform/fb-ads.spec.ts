@@ -5,16 +5,18 @@
 // Phase 2d (G1, look-spec §1.12): the mouse's video ('mouse') uses the one rewarded placement ID.
 import { describe, expect, it } from 'vitest';
 import { createFakeClock } from '../../../src/app/clock';
-import { cfg } from '../../../src/app/config';
+import { cfg, mergeConfig } from '../../../src/app/config';
 import { createFbAds, mapAdError } from '../../../src/platform/fb/fb-ads';
 import { createStub, drain, track, type StubConfig } from './helpers';
 
 const PLACEMENTS = { interstitial: 'int-1', rewarded: 'rew-1' };
+/** The 2b/2d sequencing without Phase 2e's 30 s load floor (its own tests below use the default). */
+const PRE2E = mergeConfig({ ads: { minLoadGapMs: 0 } });
 
 function setup(config: StubConfig = {}, placements = PLACEMENTS) {
   const clock = createFakeClock();
   const { sdk, control } = createStub(config, clock);
-  const ads = createFbAds(sdk, { placements, timers: clock });
+  const ads = createFbAds(sdk, { placements, timers: clock, config: PRE2E });
   return { clock, sdk, control, ads };
 }
 
@@ -54,7 +56,7 @@ describe('createFbAds', () => {
   it('respects the supported() predicate (getSupportedAPIs)', async () => {
     const clock = createFakeClock();
     const { sdk, control } = createStub({}, clock);
-    const ads = createFbAds(sdk, { placements: PLACEMENTS, timers: clock, supported: (k) => k === 'interstitial' });
+    const ads = createFbAds(sdk, { placements: PLACEMENTS, timers: clock, supported: (k) => k === 'interstitial', config: PRE2E });
     await expect(ads.showRewarded('hint')).resolves.toEqual({ ok: false, reason: 'unsupported' });
     expect(control.count('getRewardedVideoAsync')).toBe(0);
   });
@@ -182,7 +184,7 @@ describe('createFbAds', () => {
     const clock = createFakeClock();
     const { sdk, control } = createStub({ ads: { rewarded: { load: 'CLIENT_UNSUPPORTED_OPERATION' } } }, clock);
     const off: string[] = [];
-    const ads = createFbAds(sdk, { placements: PLACEMENTS, timers: clock, onUnsupported: (k) => off.push(k) });
+    const ads = createFbAds(sdk, { placements: PLACEMENTS, timers: clock, onUnsupported: (k) => off.push(k), config: PRE2E });
     await expect(ads.showRewarded('hint')).resolves.toEqual({ ok: false, reason: 'unsupported' });
     expect(off).toEqual(['rewarded']);
     const created = control.count('getRewardedVideoAsync');
@@ -204,7 +206,7 @@ describe('createFbAds', () => {
     const clock = createFakeClock();
     const { sdk, control } = createStub({ ads: { interstitial: { show: 'CLIENT_UNSUPPORTED_OPERATION', showDelayMs: 0 } } }, clock);
     const off: string[] = [];
-    const ads = createFbAds(sdk, { placements: PLACEMENTS, timers: clock, onUnsupported: (k) => off.push(k) });
+    const ads = createFbAds(sdk, { placements: PLACEMENTS, timers: clock, onUnsupported: (k) => off.push(k), config: PRE2E });
     ads.preload('interstitial');
     await drain();
     await expect(ads.showInterstitial('retry')).resolves.toEqual({ ok: false, reason: 'unsupported' });
@@ -300,7 +302,7 @@ describe('createFbAds', () => {
         throw { code: 'CLIENT_UNSUPPORTED_OPERATION', message: 'no' };
       },
     });
-    const ads = createFbAds(broken, { placements: PLACEMENTS, timers: clock });
+    const ads = createFbAds(broken, { placements: PLACEMENTS, timers: clock, config: PRE2E });
     await expect(ads.showInterstitial('next_level')).resolves.toEqual({ ok: false, reason: 'unsupported' });
     expect(clock.pending()).toBe(0); // unsupported → no reload timer
   });
@@ -318,5 +320,112 @@ describe("phase 2d §1.12: the mouse's rewarded video", () => {
     for (const c of loads as { args: unknown[] }[]) expect(c.args).toEqual([PLACEMENTS.rewarded]);
     expect(control.count('ad.showAsync')).toBe(1);
     expect(cfg.ads.rewarded.placements).toContain('mouse');
+  });
+});
+
+describe('Phase 2e §3.4: loading rules (G1)', () => {
+  const loads = (control: { calls: { name: string; args: unknown[] }[] }, name: string): unknown[] =>
+    control.calls.filter((c) => c.name === name).map((c) => c.args[0]);
+
+  it('30 s floor per placement ID: a load asked within ads.minLoadGapMs waits for the floor, never sent early', async () => {
+    const clock = createFakeClock();
+    const { sdk, control } = createStub({ presets: ['no-fill'] }, clock);
+    const ads = createFbAds(sdk, { placements: PLACEMENTS, timers: clock, config: cfg });
+    expect(cfg.ads.minLoadGapMs).toBe(30_000);
+    await expect(ads.showInterstitial('next_level')).resolves.toEqual({ ok: false, reason: 'no_fill' });
+    expect(control.count('getInterstitialAdAsync')).toBe(1);
+    // The backoff's first step (5 s at L0) asks earlier than the floor: the request waits until 30 s.
+    await clock.advanceAsync(30_000 - 1);
+    await drain();
+    expect(control.count('getInterstitialAdAsync')).toBe(1);
+    await clock.advanceAsync(1);
+    await drain();
+    expect(control.count('getInterstitialAdAsync')).toBe(2);
+  });
+
+  it('no-fill backoff at the L1 value [30 000, 60 000, 120 000]: loads at 0, 30, 90 and 210 s, then wait for a request', async () => {
+    const clock = createFakeClock();
+    const { sdk, control } = createStub({ presets: ['no-fill'] }, clock);
+    const config = mergeConfig({ ads: { reloadDelaysMs: [30_000, 60_000, 120_000] } });
+    const ads = createFbAds(sdk, { placements: PLACEMENTS, timers: clock, config });
+    ads.preload('interstitial');
+    await drain();
+    const at: number[] = [];
+    let seen = 0;
+    for (let t = 0; t <= 600_000; t += 1_000) {
+      const n = control.count('getInterstitialAdAsync');
+      for (; seen < n; seen++) at.push(clock.now());
+      await clock.advanceAsync(1_000);
+      await drain();
+    }
+    const t0 = at[0] ?? 0;
+    expect(at.map((t) => t - t0)).toEqual([0, 30_000, 90_000, 210_000]);
+  });
+
+  it('per-helper placement IDs, each falling back to the shared rewarded ID', async () => {
+    const clock = createFakeClock();
+    const { sdk, control } = createStub({ ads: { rewarded: { loadDelayMs: 0, showDelayMs: 0 } } }, clock);
+    const ads = createFbAds(sdk, {
+      placements: PLACEMENTS,
+      rewardedIds: { hint: 'rew-hint', kitty: 'rew-kitty', revive: '  ' },
+      timers: clock,
+      config: cfg,
+    });
+    for (const p of ['hint', 'kitty', 'revive'] as const) {
+      const r = track(ads.showRewarded(p));
+      await clock.advanceAsync(10);
+      await drain();
+      expect(r.value).toEqual({ ok: true });
+    }
+    expect(loads(control, 'getRewardedVideoAsync').slice(0, 1)).toEqual(['rew-hint']);
+    expect(loads(control, 'getRewardedVideoAsync')).toContain('rew-kitty');
+    expect(loads(control, 'getRewardedVideoAsync')).toContain('rew-1'); // revive: blank → the shared ID
+    expect(loads(control, 'getRewardedVideoAsync')).not.toContain('  ');
+  });
+
+  it('the floor is per placement ID: two helpers load at once; the same ID waits', async () => {
+    const clock = createFakeClock();
+    const { sdk, control } = createStub({ ads: { rewarded: { loadDelayMs: 0 } } }, clock);
+    const ads = createFbAds(sdk, { placements: PLACEMENTS, rewardedIds: { hint: 'rew-hint', kitty: 'rew-kitty' }, timers: clock, config: cfg });
+    ads.preload('rewarded', 'hint');
+    ads.preload('rewarded', 'kitty');
+    await drain();
+    expect(loads(control, 'getRewardedVideoAsync')).toEqual(['rew-hint', 'rew-kitty']);
+  });
+
+  it('at most ads.maxPreloadedRewarded (2) rewarded instances are held; a show frees a place', async () => {
+    const clock = createFakeClock();
+    const { sdk, control } = createStub({ ads: { rewarded: { loadDelayMs: 0, showDelayMs: 0 } } }, clock);
+    const ads = createFbAds(sdk, {
+      placements: PLACEMENTS,
+      rewardedIds: { hint: 'rew-hint', kitty: 'rew-kitty', mouse: 'rew-mouse' },
+      timers: clock,
+      config: cfg,
+    });
+    ads.preload('rewarded', 'hint');
+    ads.preload('rewarded', 'kitty');
+    ads.preload('rewarded', 'mouse');
+    await drain();
+    expect(loads(control, 'getRewardedVideoAsync')).toEqual(['rew-hint', 'rew-kitty']);
+    expect(ads.isReady('rewarded', 'hint')).toBe(true);
+    expect(ads.isReady('rewarded', 'mouse')).toBe(false);
+    // The mouse asked on demand still loads (within ads.readyTimeoutMs) and shows.
+    const r = track(ads.showRewarded('mouse'));
+    await clock.advanceAsync(10);
+    await drain();
+    expect(r.value).toEqual({ ok: true });
+    expect(loads(control, 'getRewardedVideoAsync')).toContain('rew-mouse');
+  });
+
+  it('a build with the shared ID only behaves as before: one slot for every placement', async () => {
+    const clock = createFakeClock();
+    const { sdk, control } = createStub({ ads: { rewarded: { loadDelayMs: 0 } } }, clock);
+    const ads = createFbAds(sdk, { placements: PLACEMENTS, timers: clock, config: cfg });
+    ads.preload('rewarded', 'hint');
+    ads.preload('rewarded', 'kitty');
+    ads.preload('rewarded');
+    await drain();
+    expect(loads(control, 'getRewardedVideoAsync')).toEqual(['rew-1']);
+    expect(ads.isReady('rewarded', 'mouse')).toBe(true);
   });
 });

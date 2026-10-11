@@ -1,0 +1,19 @@
+{
+  "name": "health.ok",
+  "request": {
+    "method": "GET",
+    "path": "/v1/health"
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "version": "0.1.0+abc1234",
+      "contentVersions": [
+        "content-bb8a756dfaf9"
+      ],
+      "db": "ok",
+      "serverTime": 1791799800000
+    }
+  }
+}

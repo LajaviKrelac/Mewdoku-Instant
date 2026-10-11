@@ -1,0 +1,47 @@
+{
+  "name": "bracket.alone",
+  "request": {
+    "method": "GET",
+    "path": "/v1/bracket",
+    "auth": true
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "state": "open",
+      "bracketId": "mgk0b7q1z4a8",
+      "pool": "fb",
+      "mode": "rolling",
+      "openedAt": 1791743600000,
+      "endsAt": 1791830000000,
+      "members": 1,
+      "maxMembers": 50,
+      "rows": [
+        {
+          "rank": 1,
+          "slot": 0,
+          "nickname": "Velvet Pounce 27",
+          "avatarId": 4,
+          "points": 3,
+          "hearts": 0,
+          "me": true,
+          "likedByMe": false
+        }
+      ],
+      "me": {
+        "rank": 1,
+        "slot": 0,
+        "nickname": "Velvet Pounce 27",
+        "avatarId": 4,
+        "points": 3,
+        "hearts": 0,
+        "me": true,
+        "likedByMe": false
+      },
+      "final": false,
+      "heartsNew": 0,
+      "result": null,
+      "serverTime": 1791799800000
+    }
+  }
+}

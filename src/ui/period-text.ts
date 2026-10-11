@@ -1,15 +1,23 @@
-// Owner: G2 (Phase 2c)
+// Owner: G2 (Phase 2c); G3 (Phase 2e: the 'ladder' kind)
 // The period copy of fish-lives-spec Appendix A.2 by PeriodKind ('day' | 'week' | 'month'): each
 // helper maps the kind to its literal key with a switch (keys are typed literals, never a template
 // string), so the i18n type checker sees every key and placeholder. Shared by the pills, Home, the
 // victory screen, the ranking panel, the rankings hub and How to play; G1 may use them too.
+// Phase 2e (G3, spec §2.3): while the worldwide ranking is active the in-game counter, the victory's kept-fish
+// row and the panel count MY BRACKET's fish, not this period's: the 'ladder' kind names them "Your total: 14"
+// and "14 fish in the daily ranking" (never "this week").
 import type { PeriodKind } from '../app/config';
 import { formatNumber, t, tn } from '../i18n';
 
-/** "This week: 42" (period.total.<kind>). */
-export function periodTotalText(kind: PeriodKind, total: number): string {
+/** A fish total's kind: this period's records (PeriodKind) or my bracket of the daily ranking (Phase 2e). */
+export type FishTotalKind = PeriodKind | 'ladder';
+
+/** "This week: 42" (period.total.<kind>); Phase 2e 'ladder': "Your total: 14". */
+export function periodTotalText(kind: FishTotalKind, total: number): string {
   const n = formatNumber(total);
   switch (kind) {
+    case 'ladder':
+      return t('ladder.total', { total: n });
     case 'day':
       return t('period.total.day', { total: n });
     case 'month':
@@ -19,10 +27,12 @@ export function periodTotalText(kind: PeriodKind, total: number): string {
   }
 }
 
-/** "42 fish this week" (period.pill.<kind>, plural): the Home and in-game period pill's label. */
-export function periodPillLabel(kind: PeriodKind, count: number): string {
+/** "42 fish this week" (period.pill.<kind>, plural): the Home and in-game period pill's label; 'ladder': "14 fish in the daily ranking". */
+export function periodPillLabel(kind: FishTotalKind, count: number): string {
   const p = { count: formatNumber(count) };
   switch (kind) {
+    case 'ladder':
+      return tn('ladder.pill', count, p);
     case 'day':
       return tn('period.pill.day', count, p);
     case 'month':
@@ -68,10 +78,12 @@ export function periodBestLabel(kind: PeriodKind): string {
   }
 }
 
-/** "You kept 2 fish. Your total this week: 42." (a11y.fishKept.<kind>, plural on the fish kept). */
-export function fishKeptText(kind: PeriodKind, kept: number, total: number): string {
+/** "You kept 2 fish. Your total this week: 42." (a11y.fishKept.<kind>, plural on the fish kept); 'ladder': "… Your ranking total: 14." */
+export function fishKeptText(kind: FishTotalKind, kept: number, total: number): string {
   const p = { count: formatNumber(kept), total: formatNumber(total) };
   switch (kind) {
+    case 'ladder':
+      return tn('a11y.fishKept.ladder', kept, p);
     case 'day':
       return tn('a11y.fishKept.day', kept, p);
     case 'month':
@@ -94,8 +106,9 @@ export function howtoPointsText(kind: PeriodKind): string {
 }
 
 /** "+2 fish · This week: 42" when the win added fish, else "This week: 42" (§2.6 subtitle). */
-export function periodResultText(kind: PeriodKind, gained: number, total: number): string {
+export function periodResultText(kind: FishTotalKind, gained: number, total: number): string {
   const totalText = periodTotalText(kind, total);
   if (gained <= 0) return totalText;
+  if (kind === 'ladder') return tn('ladder.sub', gained, { count: formatNumber(gained), total: formatNumber(total) });
   return tn('rank.sub.period', gained, { count: formatNumber(gained), total: totalText });
 }

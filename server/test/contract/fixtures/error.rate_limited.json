@@ -1,0 +1,19 @@
+{
+  "name": "error.rate_limited",
+  "request": {
+    "method": "POST",
+    "path": "/v1/wins",
+    "auth": true
+  },
+  "response": {
+    "status": 429,
+    "body": {
+      "error": {
+        "code": "rate_limited",
+        "message": "wins: 30 per minute",
+        "retryAfterMs": 12000
+      },
+      "serverTime": 1791799800000
+    }
+  }
+}

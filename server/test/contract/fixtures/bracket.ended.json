@@ -1,0 +1,104 @@
+{
+  "name": "bracket.ended",
+  "request": {
+    "method": "GET",
+    "path": "/v1/bracket",
+    "auth": true
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "state": "ended",
+      "bracketId": "mgj1a0k3x9f2",
+      "pool": "fb",
+      "mode": "rolling",
+      "openedAt": 1791703600000,
+      "endsAt": 1791790000000,
+      "members": 5,
+      "maxMembers": 50,
+      "rows": [
+        {
+          "rank": 1,
+          "slot": 4,
+          "nickname": "Brave Noodle 12",
+          "avatarId": 9,
+          "points": 40,
+          "hearts": 6,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 2,
+          "slot": 1,
+          "nickname": "Velvet Pounce 27",
+          "avatarId": 4,
+          "points": 22,
+          "hearts": 3,
+          "me": true,
+          "likedByMe": false
+        },
+        {
+          "rank": 3,
+          "slot": 0,
+          "nickname": "Golden Comet 5",
+          "avatarId": 2,
+          "points": 20,
+          "hearts": 1,
+          "me": false,
+          "likedByMe": false
+        },
+        {
+          "rank": 4,
+          "slot": 3,
+          "nickname": "Snowy Clover 61",
+          "avatarId": 6,
+          "points": 12,
+          "hearts": 0,
+          "me": false,
+          "likedByMe": true
+        },
+        {
+          "rank": 5,
+          "slot": 2,
+          "nickname": "Quiet Ginger 18",
+          "avatarId": 10,
+          "points": 4,
+          "hearts": 2,
+          "me": false,
+          "likedByMe": false
+        }
+      ],
+      "me": {
+        "rank": 2,
+        "slot": 1,
+        "nickname": "Velvet Pounce 27",
+        "avatarId": 4,
+        "points": 22,
+        "hearts": 3,
+        "me": true,
+        "likedByMe": false
+      },
+      "final": true,
+      "heartsNew": 0,
+      "result": {
+        "bracketId": "mgj1a0k3x9f2",
+        "endedAt": 1791790000000,
+        "place": 2,
+        "members": 5,
+        "points": 22,
+        "reward": {
+          "rewardId": "mgj1a0k3x9f2:1",
+          "place": 2,
+          "grant": {
+            "hints": 1,
+            "kitties": 1
+          },
+          "canDouble": true,
+          "expiresAt": 1792394800000,
+          "claim": null
+        }
+      },
+      "serverTime": 1791799800000
+    }
+  }
+}

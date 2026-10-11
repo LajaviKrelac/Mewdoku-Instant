@@ -1,6 +1,7 @@
 // Owner: D (Phase 2b; was platform)
 // Our own minimal ambient types for the FBInstant 8.0 subset we call (05 §2, §4–§10). Extend as needed.
 // Written from the API surface listed in 05; no third-party typings are copied (06).
+// Phase 2e (G1): player.getSignedPlayerInfoAsync (the ranking server's identity, spec §1.3).
 
 /** Error codes we branch on (05 §6.2, §7). The SDK may send others; treat unknown codes generically. */
 export type FBErrorCode =
@@ -35,8 +36,20 @@ export interface FBAdInstance {
   showAsync(): Promise<void>;
 }
 
+/** Phase 2e (spec §1.3; CONTRACTS §5): the signed player info (G-SRV-2 pins the format against a real signature). */
+export interface FBSignedPlayerInfo {
+  getPlayerID(): string;
+  /** "<b64url HMAC-SHA256 sig>.<b64url JSON payload>" (the server verifies it with the app secret). */
+  getSignature(): string;
+}
+
 export interface FBPlayer {
   getID(): string | null;
+  /**
+   * Phase 2e (spec §1.3): signed with the app secret; `requestMetadata` (our server's nonce) comes back as
+   * the payload's request_payload. Listed by getSupportedAPIs as 'player.getSignedPlayerInfoAsync'.
+   */
+  getSignedPlayerInfoAsync(requestMetadata?: string): Promise<FBSignedPlayerInfo>;
   getDataAsync(keys: string[]): Promise<Record<string, unknown>>;
   /** Resolves when the write is scheduled (not necessarily persisted). Rejects while a flush is pending. */
   setDataAsync(data: Record<string, unknown>): Promise<void>;

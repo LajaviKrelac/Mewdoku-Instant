@@ -1,0 +1,35 @@
+{
+  "name": "me.ok",
+  "request": {
+    "method": "GET",
+    "path": "/v1/me",
+    "auth": true
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "player": {
+        "code": "7KQ2M9XD",
+        "nickname": "Velvet Pounce 27",
+        "nick": {
+          "adj": 2,
+          "noun": 5,
+          "num": 27
+        },
+        "avatarId": 4,
+        "status": "ok",
+        "pool": "fb",
+        "trust": "signed",
+        "listed": true,
+        "nicknameChangeAt": null
+      },
+      "data": {
+        "brackets": 4,
+        "wins30d": 63,
+        "rewards": 2,
+        "createdAt": 1790000000000
+      },
+      "serverTime": 1791799800000
+    }
+  }
+}

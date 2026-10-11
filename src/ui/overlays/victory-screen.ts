@@ -1,4 +1,5 @@
-// Owner: B (Phase 2b); G2 (Phase 2c: the kept-fish row; Phase 2c.1: the level's points total)
+// Owner: B (Phase 2b); G2 (Phase 2c: the kept-fish row; Phase 2c.1: the level's points total); G3 (Phase 2e:
+// the streak row and the daily reward line)
 // Victory screen (new overlay `victory`, phase2b §2.5; replaces O3 `win` and, for dailies, O7
 // `daily_result`, which stay one release unopened). Full screen, opaque --page; 12 --accent-soft sun
 // rays behind the cat turning once per fx.victoryRaysTurnMs (static with reduced motion). Top to
@@ -24,9 +25,15 @@
 // while the content is taller than the screen, so on short phones nothing needs a scroll. The event
 // bar is named by its "3 / 21 solved" line (A11Y-NAME-1); static labels follow the language.
 //
+// Phase 2e (G3, spec §5.3, §6.1): on the day's first counted win a streak row "Streak: day 4 of 7" with the 7
+// steps (today's step fills in; no animation with reduced motion) and, on the cycle's last day, "Streak
+// reward: +2 hints and +2 kitties" (already granted and saved at t = 0); a "Daily reward: +1 hint" line when
+// daily.reward is not zero (VictoryProps.dailyReward). Both are plain text in the dialog's description.
+//
 // Classes: .overlay[data-overlay=victory] > .victory[data-variant][data-banner]
 //          > .victory__col(.victory__praise .victory__stage(.victory__rays .victory__art)
 //            .victory__sub .victory__daily .victory__event(.victory__bar .victory__milestone)
+//            .victory__daily-reward .victory__streak[data-day](.victory__streak-text .streak-steps .victory__streak-reward)
 //            .victory__reward(.victory__points(.victory__points-icon .victory__points-text)
 //              .victory__kept[data-count](.victory__fishes > .victory__fish[data-kept] .victory__plus .victory__period))
 //            .victory__actions(.victory__primary .victory__home))
@@ -36,8 +43,9 @@ import { formatClock, formatDuration, formatNumber, formatShortDate, joinList, p
 import { illustration } from '../art/illustrations';
 import { icon } from '../art/sprite';
 import { h, setText, type OverlayView } from '../dom';
+import { renderStreakSteps, streakStepKinds } from '../hud/streak-strip';
 import { createLocaleText } from '../locale-text';
-import { fishKeptText, periodTotalText } from '../period-text';
+import { fishKeptText, periodTotalText, type FishTotalKind } from '../period-text';
 import { createDelay, createOverlayShell, createTicker, makeButton, nextId, setButtonLabel, setGated, setTextKeepTogether } from './overlay-base';
 
 /**
@@ -88,7 +96,7 @@ export interface VictoryProps {
    * Phase 2c §2.7: the fish-kept row (`fish` of `max` lives kept, "+`gained`", the period `total`
    * after the win); null when the win added no leaderboard points (tutorial, not counted, mode excluded).
    */
-  readonly kept: { readonly fish: number; readonly max: number; readonly gained: number; readonly total: number; readonly kind: PeriodKind } | null;
+  readonly kept: { readonly fish: number; readonly max: number; readonly gained: number; readonly total: number; readonly kind: FishTotalKind } | null;
   readonly daily: VictoryDailyView | null;
   readonly event: VictoryEventView | null;
   /** fx.winButtonDelayMs (600): the primary button turns active this long after open. */
@@ -98,6 +106,15 @@ export interface VictoryProps {
   readonly bannerReserved: boolean;
   /** Clock for the daily countdown. */
   now(): number;
+  // ── Phase 2e (spec §5.3, §6.1; optional until I-3) ──
+  /**
+   * The streak row, on the day's first counted win only: day `day` of `total` (today's step fills in) and the
+   * cycle reward when this win paid it (already granted). Absent or null: no row (the tutorial, a second win
+   * the same day, a restored board, the daily result reopened from Home).
+   */
+  readonly streak?: { readonly day: number; readonly total: number; readonly reward: Reward | null } | null;
+  /** "Daily reward: +1 hint" (daily.reward, already granted); shown only when not null and not zero. */
+  readonly dailyReward?: Reward | null;
   /** The orange primary: next level / Play Level 2 / Home (replay) / Done (daily) / next puzzle or back to event. */
   onPrimary(): void;
   onHome(): void;
@@ -193,6 +210,15 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
   const eventId = nextId('victory-event');
   const event = h('div', { class: 'victory__event', id: eventId }, eventLabel, bar, milestone);
 
+  // Phase 2e (§6.1, §5.3): the daily reward line and the streak row.
+  const dailyRewardId = nextId('victory-daily-reward');
+  const dailyReward = h('p', { class: 'victory__daily-reward', id: dailyRewardId, hidden: true });
+  const streakId = nextId('victory-streak');
+  const streakText = h('p', { class: 'victory__streak-text' });
+  const streakSteps = h('span', { class: 'streak-steps', 'aria-hidden': 'true' });
+  const streakReward = h('p', { class: 'victory__streak-reward' });
+  const streak = h('div', { class: 'victory__streak', id: streakId, hidden: true }, streakText, streakSteps, streakReward);
+
   const primary = makeButton({
     variant: 'primary',
     label: '',
@@ -215,6 +241,8 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
     daily,
     // Phase 2c §2.7: the daily's and the event's own lines sit above the reward block.
     event,
+    dailyReward,
+    streak,
     reward,
     h('div', { class: 'victory__actions' }, primary, home),
   );
@@ -346,6 +374,32 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
       }
     }
 
+    // Phase 2e: the daily reward line and the streak row (never on a tutorial).
+    const dr = tutorial ? null : (p.dailyReward ?? null);
+    const drOn = dr !== null && ((dr.hints ?? 0) > 0 || (dr.kitties ?? 0) > 0);
+    dailyReward.hidden = !drOn;
+    if (drOn) setText(dailyReward, t('victory.dailyReward', { reward: rewardText(dr) }));
+    const st = tutorial || !p.streak || typeof p.streak !== 'object' ? null : p.streak;
+    streak.hidden = st === null;
+    if (st) {
+      const total = Math.max(1, Math.floor(st.total));
+      const day = Math.max(1, Math.min(total, Math.floor(st.day)));
+      streak.dataset.day = String(day);
+      setText(streakText, t('victory.streakDay', { day: formatNumber(day), total: formatNumber(total) }));
+      const key = `${day}/${total}`;
+      if (streakSteps.dataset.key !== key) {
+        streakSteps.dataset.key = key;
+        renderStreakSteps(streakSteps, streakStepKinds(total, day, day, 0));
+      }
+      // Today's step fills in once on open (CSS; none with reduced motion).
+      streak.toggleAttribute('data-fill', opening && !p.reducedMotion);
+      const sr = st.reward;
+      streakReward.hidden = !(sr && ((sr.hints ?? 0) > 0 || (sr.kitties ?? 0) > 0));
+      if (sr && !streakReward.hidden) setText(streakReward, t('victory.streakReward', { reward: rewardText(sr) }));
+    } else {
+      delete streak.dataset.day;
+    }
+
     // The dialog's description (§7 screen reader): the result line, the level's points ("7,296
     // points"), the fish kept ("You kept 2 fish. Your total this week: 42."), the event progress and
     // milestone; only what is shown, in the order shown.
@@ -353,6 +407,8 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
     if (!pointsRow.hidden) described.push(pointsId);
     if (!kept.hidden) described.push(keptId);
     if (!event.hidden) described.push(eventId);
+    if (!dailyReward.hidden) described.push(dailyRewardId);
+    if (!streak.hidden) described.push(streakId);
     root.setAttribute('aria-describedby', described.join(' '));
 
     setButtonLabel(primary, primaryLabel(p));

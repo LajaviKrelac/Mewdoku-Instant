@@ -1,5 +1,6 @@
 // Owner: A (Phase 2b; was ui-board); G2 (Phase 2d: the measured palette and tokens, look-spec §1.2, §2.3;
-// Phase 2d.1: Denim, the dark-tile rules, the helpers' rows, helpers-spec §6.4).
+// Phase 2d.1: Denim, the dark-tile rules, the helpers' rows, helpers-spec §6.4; Phase 2e: the ranking and
+// streak art's rows, spec Appendix C).
 // scripts/palette-check.ts: CIEDE2000, CVD simulation, contrast, and the shipped palette passes.
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -7,6 +8,8 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import { cfg } from '../../../src/app/config';
 import {
+  artContrast,
+  artInfo,
   computeMatrix,
   contrastRatio,
   deltaE2000,
@@ -26,6 +29,7 @@ import {
 } from '../../../scripts/palette-check';
 import EVENTS from '../../../src/data/events/events.json';
 import { CAT_COLORS, EVENT_THEME_TOKENS, isDarkTile, PALETTE, PALETTE_DE00, TOKENS, xEdgeColor } from '../../../src/ui/art/palette';
+import { AVATAR_COATS, avatarDisc, MEDAL_COLORS, MEDAL_NUMBER_INK } from '../../../src/ui/art/palette-2e';
 
 describe('palette-check', () => {
   it('CIEDE2000 matches Sharma et al. (2005) reference pairs', () => {
@@ -264,6 +268,33 @@ describe('palette-check', () => {
       const m = new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{6})`).exec(css);
       expect(m?.[1]?.toLowerCase(), `--${name}`).toBe(hex.toLowerCase());
     }
+  });
+
+  it('Phase 2e (spec Appendix C): the given heart, the rank number on every medal and the streak steps\' edges pass; the decorative art is reported', () => {
+    const rows = uiContrast();
+    const get = (prefix: string): { ratio: number; min: number }[] => rows.filter((r) => r.what.startsWith(prefix));
+    const r2 = (v: number): number => Math.round(v * 100) / 100;
+    expect(get('given heart (--cheer on --card)')[0]?.ratio).toBeGreaterThanOrEqual(MIN_CONTRAST);
+    expect(r2(contrastRatio(TOKENS.cheer, TOKENS.card))).toBe(4.17);
+    expect(r2(contrastRatio(TOKENS.cheer, TOKENS['accent-soft']))).toBe(3.54);
+    expect(r2(contrastRatio(TOKENS['step-line'], TOKENS.page))).toBe(3.1);
+    const tables = { medals: MEDAL_COLORS, numberInk: MEDAL_NUMBER_INK, avatars: AVATAR_COATS.map((c) => ({ name: c.name, coat: c.coat, disc: avatarDisc(c) })) };
+    const medals = artContrast(tables);
+    expect(medals).toHaveLength(6); // three faces and three paw embosses
+    for (const r of medals) {
+      expect(r.min).toBe(MIN_TEXT_CONTRAST);
+      expect(r.ratio).toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST);
+    }
+    for (const what of ['streak step done, its rim', 'streak step empty, its outline', 'heart outline on my row']) {
+      const r = get(what)[0];
+      expect(r?.ratio, what).toBeGreaterThanOrEqual(MIN_CONTRAST);
+    }
+    // informational: min 0, one fur and one disc row per avatar, the medal rims, the chest, the flame
+    const info = artInfo(tables);
+    expect(info.every((r) => r.min === 0)).toBe(true);
+    expect(artInfo().some((r) => r.what.startsWith('avatar '))).toBe(false); // the CLI alone reports the token rows
+    expect(info.filter((r) => r.what.startsWith('avatar '))).toHaveLength(24);
+    expect(info.some((r) => r.what.startsWith('streak flame'))).toBe(true);
   });
 
   it('main() passes on the shipped palette', () => {

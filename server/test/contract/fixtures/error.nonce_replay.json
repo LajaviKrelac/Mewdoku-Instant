@@ -1,0 +1,17 @@
+{
+  "name": "error.nonce_replay",
+  "request": {
+    "method": "POST",
+    "path": "/v1/session"
+  },
+  "response": {
+    "status": 401,
+    "body": {
+      "error": {
+        "code": "nonce_replay",
+        "message": "nonce already used"
+      },
+      "serverTime": 1791799800000
+    }
+  }
+}

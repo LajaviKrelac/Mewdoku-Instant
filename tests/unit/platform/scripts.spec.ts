@@ -1,14 +1,16 @@
 // Owner: D (Phase 2b; was platform)
 // Build tooling: size-check budgets (04 §9), zip-fbig rules (04 §10, 05 §5), upload-fbig request
-// shape (05 §12) against a fake fetch (it never touches the network).
+// shape (05 §12) against a fake fetch (it never touches the network); Phase 2e L0: the guarded server verify step.
 import { randomBytes } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { unzipSync } from 'fflate';
 import { afterEach, describe, expect, it } from 'vitest';
 import { BUDGETS, checkSizes, FB_MAX_FILES, FIRST_LOAD_GZIP_MAX, FIRST_LOAD_LOCALE_MAX, FIRST_LOAD_MAX } from '../../../scripts/size-check';
 import { latestZip, uploadBundle } from '../../../scripts/upload-fbig';
+import { SERVER_VERIFY_CMD, serverVerifyStep } from '../../../scripts/verify-server';
 import { BUDGET_ZIP_BYTES, fbIdWarnings, localeChunkIds, zipFbig } from '../../../scripts/zip-fbig';
 
 const dirs: string[] = [];
@@ -84,9 +86,11 @@ describe('size-check', () => {
       'Lazy JS (fx chunk)',
       'Lazy JS (board motion)',
       'Lazy JS (lazy art)',
+      'Lazy JS (ladder)',
       'Lazy JS (core)',
       'Lazy CSS (fx chunk)',
       'Lazy CSS (board motion)',
+      'Lazy CSS (ladder)',
       'Lazy CSS',
       'Event packs',
       'Lazy (packs, other)',
@@ -109,6 +113,9 @@ describe('size-check', () => {
     expect([max('Lazy JS (fx chunk)'), max('Lazy JS (board motion)'), max('Lazy JS (lazy art)'), max('Lazy CSS (fx chunk)'), max('Lazy CSS (board motion)')]).toEqual([
       15_300, 3_800, 4_400, 3_260, 6_400,
     ]);
+    // Phase 2e L0: the ladder chunk's PLACEHOLDER ceilings (spec §7.9 estimates: ≈ 14–18 KB JS + up to 8 KB of ranking
+    // art, 4 KB CSS), re-set at I-4.
+    expect([max('Lazy JS (ladder)'), max('Lazy CSS (ladder)')]).toEqual([26_000, 4_000]);
     expect(FB_MAX_FILES).toBe(100);
   });
 
@@ -241,6 +248,37 @@ describe('size-check', () => {
       ['assets/lazy-art-e5.js', 4_401, 'Lazy JS (lazy art)'],
       ['assets/celebrate-b2.css', 3_261, 'Lazy CSS (fx chunk)'],
       ['assets/board-mouse-d4.css', 6_401, 'Lazy CSS (board motion)'],
+    ] as const) {
+      const o = tempDir('web');
+      fakeBuild(o);
+      writeTree(o, { [file]: bytes });
+      const over = checkSizes(o, { fb: false });
+      expect(over.rows.find((x) => x.label === label)?.ok, label).toBe(false);
+      expect(over.ok).toBe(false);
+    }
+  });
+
+  it('Phase 2e L0: the ladder chunk (assets/ladder-*.js, ladder-chunk-*.css) has its own rows, outside the core lazy rows', () => {
+    const d = tempDir('web');
+    fakeBuild(d);
+    writeTree(d, {
+      'assets/ladder-Ab3_x-9Z.js': 26_000, // at the placeholder ceiling
+      'assets/ladder-chunk-Qw7-e2Rt.css': 4_000,
+      // Chunks named after other ladder-* modules are not the ladder chunk: they stay in the core lazy rows.
+      'assets/ladder-flow-Zx81_aBc.js': 2_000,
+      'assets/ladder-sheet-Pp0-q1Wr.css': 500,
+      'assets/overlay-chunk-f6.css': 20_000,
+    });
+    const r = checkSizes(d, { fb: false });
+    const row = (label: string) => r.rows.find((x) => x.label === label);
+    expect(row('Lazy JS (ladder)')).toMatchObject({ bytes: 26_000, ok: true });
+    expect(row('Lazy CSS (ladder)')).toMatchObject({ bytes: 4_000, ok: true });
+    expect(row('Lazy JS (core)')?.bytes).toBe(18_000 + 2_000);
+    expect(row('Lazy CSS')?.bytes).toBe(20_000 + 500);
+    expect(r.ok).toBe(true);
+    for (const [file, bytes, label] of [
+      ['assets/ladder-Ab3_x-9Z.js', 26_001, 'Lazy JS (ladder)'],
+      ['assets/ladder-chunk-Qw7-e2Rt.css', 4_001, 'Lazy CSS (ladder)'],
     ] as const) {
       const o = tempDir('web');
       fakeBuild(o);
@@ -411,5 +449,36 @@ describe('upload-fbig', () => {
     writeFileSync(zip, 'PK');
     await expect(uploadBundle(zip, 'c', { env: {} })).rejects.toThrow(/FB_APP_ID/);
     await expect(uploadBundle(zip, 'c', { env: { FB_APP_ID: '1' } })).rejects.toThrow(/FB_UPLOAD_TOKEN/);
+  });
+});
+
+describe('verify-server (Phase 2e L0: the root verify runs the server\'s, guarded)', () => {
+  const at =
+    (...present: string[]) =>
+    (p: string): boolean =>
+      present.some((q) => p.replace(/\\/g, '/').endsWith(q));
+
+  it('skips with a note before server/ exists, so the root verify stays green', () => {
+    expect(serverVerifyStep('/repo', at()).kind).toBe('skip');
+  });
+
+  it('says what to run when server/node_modules is missing', () => {
+    const step = serverVerifyStep('/repo', at('server/package.json'));
+    expect(step.kind).toBe('skip');
+    const message = step.kind === 'skip' ? step.message : '';
+    expect(message).toContain('npm --prefix server ci');
+    expect(message).toContain(SERVER_VERIFY_CMD);
+  });
+
+  it('runs npm --prefix server run verify once both exist', () => {
+    expect(serverVerifyStep('/repo', at('server/package.json', 'server/node_modules'))).toEqual({ kind: 'run' });
+    expect(SERVER_VERIFY_CMD).toBe('npm --prefix server run verify');
+  });
+
+  it('is the last step of the root verify', () => {
+    const pkgPath = join(dirname(fileURLToPath(import.meta.url)), '../../../package.json');
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as { scripts: Record<string, string> };
+    expect(pkg.scripts.verify).toMatch(/&& npm run verify:server$/);
+    expect(pkg.scripts['verify:server']).toBe('tsx scripts/verify-server.ts');
   });
 });

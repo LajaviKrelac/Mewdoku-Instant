@@ -3,6 +3,8 @@
 // the victory screen's primary (next level / Play Level 2 / next event puzzle or back to the event /
 // daily Done), Home (save or discard) and "I know how to play". Interstitials go through the
 // pacing gate first, and the transition always goes ahead whatever the ad did.
+// Phase 2e (G1, docs/phase2e/spec.md §3.2, P-I5): the fail card's Home after a loss runs the
+// 'fail_home' interstitial gate (busy), then discards the attempt and goes Home.
 import type { EventDef } from '../game/events';
 import { canRevive } from '../game/reducer';
 import { applyTutorialDone } from '../game/stats';
@@ -140,10 +142,31 @@ export function createTransitions(host: TransitionHost): TransitionCommands {
         if (s.status === 'lost' && host.failOpen()) {
           // O4 Home discards the attempt (02 §10.2). The top-bar Home in the fx.failOverlayDelayMs
           // before O4 shows saves the board like any other Home; a restore reopens O4 (02 §15 step 5).
-          const slot = host.slotFor(m);
-          if (slot) host.updateSave((sv) => withoutSlot(sv, slot, m.puzzleId));
-          host.saves.now();
-          host.leave('discard');
+          // Phase 2e (§3.2, P-I5): the 'fail_home' interstitial first (gated; busy), then discard and Home.
+          if (host.busy()) return;
+          const discard = (): void => {
+            const slot = host.slotFor(m);
+            if (slot) host.updateSave((sv) => withoutSlot(sv, slot, m.puzzleId));
+            host.saves.now();
+            host.leave('discard');
+            host.goHome();
+          };
+          if (host.helpers.gate('fail_home') !== 'ok') {
+            void host.helpers.interstitial('fail_home'); // logs ad_interstitial gated (synchronously)
+            discard();
+            return;
+          }
+          const mine = host.generation();
+          void host
+            .runBusy(async () => {
+              host.updateFail({ busy: true });
+              await host.helpers.interstitial('fail_home');
+            })
+            .then(() => {
+              if (host.generation() !== mine || host.disposed()) return;
+              discard();
+            });
+          return;
         } else {
           host.saveNow();
           host.leave('home');

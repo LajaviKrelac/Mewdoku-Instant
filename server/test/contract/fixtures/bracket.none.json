@@ -1,0 +1,27 @@
+{
+  "name": "bracket.none",
+  "request": {
+    "method": "GET",
+    "path": "/v1/bracket",
+    "auth": true
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "state": "none",
+      "bracketId": null,
+      "pool": "fb",
+      "mode": "rolling",
+      "openedAt": null,
+      "endsAt": null,
+      "members": 0,
+      "maxMembers": 50,
+      "rows": [],
+      "me": null,
+      "final": false,
+      "heartsNew": 0,
+      "result": null,
+      "serverTime": 1791799800000
+    }
+  }
+}

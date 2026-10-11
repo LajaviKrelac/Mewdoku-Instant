@@ -1,4 +1,5 @@
-// Owner: B (Phase 2b; was ui-shell); G2 (Phase 2c: the lives are fish, plus the points note; 2c.1: level points); G3 (Phase 2d: the helpers note)
+// Owner: B (Phase 2b; was ui-shell); G2 (Phase 2c: the lives are fish, plus the points note; 2c.1: level points); G3 (Phase 2d: the helpers note;
+// Phase 2e: the ranking and streak notes)
 // O6 how to play (02 §4.2, §14): three illustrated rules, controls, plus "I know how to play"
 // (only while the first-run tutorial runs) or "Replay tutorial" (after it is done).
 // Phase 2c (fish-lives-spec §1.5): the lives note shows our fish (icon-fish, howto.hearts "Your fish
@@ -8,6 +9,9 @@
 // points, more for each cat in a row without a mistake; hint and kitty cats count too).
 // Phase 2d (look-spec Appendix A): the helpers note names the kitty, the bulb and the mouse, next to
 // their own art (tool-kitty, tool-bulb, tool-mouse) in a small column.
+// Phase 2e (G3, Appendix A, §5.3): with `ladder` the points note reads howto.ladder ("The fish you keep … count
+// for the daily ranking."); with `streakDays` a streak note follows (howto.streak, {days} = dayStreak.cycleDays,
+// next to our streak flame). Both optional until G1 passes them (absent = today's notes).
 // The three rule pictures are small SVG boards drawn here (our own art, 06 §5).
 //
 // Classes: .overlay[data-overlay=how_to_play] > .overlay__panel--dialog.howto
@@ -16,9 +20,9 @@
 // Review fixes: the rules' keywords print in the accent colour (PAR-7; `*…*` in the catalogue, rich
 // text), and every text follows the language (A11Y-I18N-1).
 import { cfg } from '../../app/config';
-import { t, translate, translateMarked, type I18nKey } from '../../i18n';
+import { formatNumber, t, translate, translateMarked, type I18nKey } from '../../i18n';
 import { icon, type SymbolId } from '../art/sprite';
-import { h, s, type OverlayView } from '../dom';
+import { h, s, setText, type OverlayView } from '../dom';
 import { createLocaleText } from '../locale-text';
 import { howtoPointsText } from '../period-text';
 import { setRichText } from '../rich-text';
@@ -32,6 +36,10 @@ export interface HowToPlayProps {
   onSkip(): void;
   onReplay(): void;
   onClose(): void;
+  /** Phase 2e: the worldwide daily ranking is in use (the points note says where the fish go). */
+  readonly ladder?: boolean;
+  /** Phase 2e: dayStreak.cycleDays when the streak is on (the streak note); absent or 0 hides it. */
+  readonly streakDays?: number;
 }
 
 const TILE = 20;
@@ -105,6 +113,10 @@ export function createHowToPlay(): OverlayView<HowToPlayProps> {
     () => t('howto.replay'),
   );
   const extra = h('div', { class: 'overlay__actions howto__extra' }, skip, replay);
+  const levelPointsNote = h('p', { class: 'howto__level-points' }, icon('icon-points', { class: 'howto__note-icon howto__note-icon--points' }), note('howto.levelPoints'));
+  // Phase 2e: the streak note, built only while the app passes streakDays (no streak copy otherwise).
+  const streakText = h('span');
+  const streakNote = h('p', { class: 'howto__streak' }, icon('icon-streak-flame', { class: 'howto__note-icon howto__note-icon--streak' }), streakText);
 
   shell.panel.append(
     h(
@@ -131,9 +143,9 @@ export function createHowToPlay(): OverlayView<HowToPlayProps> {
         'p',
         { class: 'howto__points' },
         icon('icon-trophy', { class: 'howto__note-icon howto__note-icon--trophy' }),
-        L.text(h('span'), () => howtoPointsText(cfg.period.kind)),
+        L.text(h('span'), () => (props?.ladder ? t('howto.ladder') : howtoPointsText(cfg.period.kind))),
       ),
-      h('p', { class: 'howto__level-points' }, icon('icon-points', { class: 'howto__note-icon howto__note-icon--points' }), note('howto.levelPoints')),
+      levelPointsNote,
       h(
         'p',
         { class: 'howto__helpers' },
@@ -143,11 +155,19 @@ export function createHowToPlay(): OverlayView<HowToPlayProps> {
     ),
     extra,
   );
-  L.watch();
+  // Settings → Language: the streak note follows too (A11Y-I18N-1).
+  L.watch(() => {
+    if (props?.streakDays) setText(streakText, t('howto.streak', { days: formatNumber(props.streakDays) }));
+  });
 
   const render = (p: HowToPlayProps): void => {
     props = p;
     L.apply();
+    // The streak note sits after the level-points note; it exists only while the streak is on.
+    if (p.streakDays && p.streakDays > 0) {
+      setText(streakText, t('howto.streak', { days: formatNumber(p.streakDays) }));
+      if (!streakNote.isConnected) levelPointsNote.after(streakNote);
+    } else streakNote.remove();
     skip.hidden = !p.showSkip;
     replay.hidden = !p.showReplay;
     extra.hidden = !p.showSkip && !p.showReplay;

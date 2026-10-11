@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { createFakeClock } from '../../../src/app/clock';
 import { cfg, mergeConfig } from '../../../src/app/config';
 import { createFbPayments, mapPurchaseError, paymentsSupported, toProduct, toPurchase } from '../../../src/platform/fb/fb-payments';
+import { isIosPlatform } from '../../../src/platform/fb/fb-probe';
 import { createStub, drain, track, type StubConfig } from './helpers';
 
 async function setup(config: StubConfig = {}, opts: { start?: boolean } = {}) {
@@ -22,7 +23,7 @@ async function setup(config: StubConfig = {}, opts: { start?: boolean } = {}) {
 }
 
 describe('paymentsSupported (§8.4)', () => {
-  it('needs getPlatform() !== IOS and payments.purchaseAsync, after init', async () => {
+  it('Phase 2e (§4.4): needs payments.purchaseAsync, after init; iOS is no longer excluded here (the app decides)', async () => {
     const clock = createFakeClock();
     const web = createStub({}, clock).sdk;
     expect(paymentsSupported(web)).toBe(false); // getPlatform() is null before init
@@ -31,13 +32,16 @@ describe('paymentsSupported (§8.4)', () => {
     const android = createStub({ platform: 'ANDROID' }, clock).sdk;
     await android.initializeAsync();
     expect(paymentsSupported(android)).toBe(true);
+    // Phase 2e: iOS with the API listed → supported here; paymentsIos and iap.iosEnabled / iapIos decide in the app.
     const ios = createStub({ presets: ['ios'] }, clock).sdk;
     await ios.initializeAsync();
-    expect(paymentsSupported(ios)).toBe(false);
-    // iOS even if the API were offered: not eligible (05: confirmed).
-    const iosWithApi = createStub({ platform: 'IOS' }, clock).sdk;
-    await iosWithApi.initializeAsync();
-    expect(paymentsSupported(iosWithApi)).toBe(false);
+    expect(paymentsSupported(ios)).toBe(true);
+    expect(isIosPlatform(ios)).toBe(true);
+    // iOS without the API (the 2b preset): unsupported.
+    const iosNoApi = createStub({ presets: ['ios-no-payments'] }, clock).sdk;
+    await iosNoApi.initializeAsync();
+    expect(paymentsSupported(iosNoApi)).toBe(false);
+    expect(isIosPlatform(web)).toBe(false);
     const none = createStub({ presets: ['no-payments'] }, clock).sdk;
     await none.initializeAsync();
     expect(paymentsSupported(none)).toBe(false);

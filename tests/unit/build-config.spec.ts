@@ -1,8 +1,10 @@
 // Owner: lead. Build helpers of phase2b F0 (§6.7 step 4, §11): which locales a build mode bundles, the
-// generated `virtual:mewdoku-locales` module, and the lazy chunks' file names.
+// generated `virtual:mewdoku-locales` module, and the lazy chunks' file names. Phase 2e L0: the ladder chunk's
+// name and the VITE_LADDER_* passthrough (scripts/ladder-env.ts, spec §7.3, §2.11).
 import { describe, expect, it } from 'vitest';
 import { cfg, mergeConfig } from '../../src/app/config';
 import { buildLocales } from '../../src/i18n';
+import { ladderDefine, ladderEnv, ladderUrl } from '../../scripts/ladder-env';
 import { chunkFileName, isReleaseMode, localeChunkName, localeModuleSource, localesForMode } from '../../scripts/locale-loaders';
 
 describe('locale loader map (phase2b §6.7)', () => {
@@ -42,5 +44,64 @@ describe('lazy chunk names (phase2b §11)', () => {
     expect(chunkFileName('/r/src/app/social-flows.ts')).toBe('assets/social-flows-[hash].js');
     expect(chunkFileName('/r/src/app/overlay-chunk.ts')).toBe('assets/[name]-[hash].js');
     expect(chunkFileName(null)).toBe('assets/[name]-[hash].js');
+  });
+
+  it('Phase 2e L0: the ladder chunk (src/app/ladder-chunk.ts) is assets/ladder-*.js; its neighbours keep [name]', () => {
+    expect(chunkFileName('/r/src/app/ladder-chunk.ts')).toBe('assets/ladder-[hash].js');
+    expect(chunkFileName('C:\\r\\src\\app\\ladder-chunk.ts')).toBe('assets/ladder-[hash].js');
+    for (const id of ['/r/src/app/ladder-flow.ts', '/r/src/app/ladder-client.ts', '/r/src/game/ladder.ts', '/r/src/ui/overlays/ladder-sheet.ts']) {
+      expect(chunkFileName(id), id).toBe('assets/[name]-[hash].js');
+    }
+  });
+});
+
+describe('VITE_LADDER_* passthrough (Phase 2e L0, spec §7.3, §2.11)', () => {
+  it('passes the API base trimmed and without a trailing slash; empty or missing is off', () => {
+    expect(ladderUrl('https://rank.example.org/')).toBe('https://rank.example.org');
+    expect(ladderUrl('  http://127.0.0.1:8787  ')).toBe('http://127.0.0.1:8787');
+    expect(ladderUrl('https://example.org/rank//')).toBe('https://example.org/rank');
+    expect(ladderUrl('')).toBeUndefined();
+    expect(ladderUrl('   ')).toBeUndefined();
+    expect(ladderUrl(undefined)).toBeUndefined();
+  });
+
+  it('drops a value that is not a plain http(s) API base (null), never breaking the build', () => {
+    for (const bad of ['rank.example.org', 'ftp://rank.example.org', 'javascript:alert(1)', 'https://u:p@rank.example.org', 'https://rank.example.org/?x=1', 'https://rank.example.org/#a']) {
+      expect(ladderUrl(bad), bad).toBeNull();
+    }
+    const le = ladderEnv('fbig', { VITE_LADDER_URL: 'rank.example.org' });
+    expect(le.url).toBeUndefined();
+    expect(le.warnings).toHaveLength(1);
+    expect(le.warnings[0]).toContain('VITE_LADDER_URL');
+  });
+
+  it('VITE_LADDER_WEB overrides cfg.ladder.web in dev, e2e and other non-release builds only', () => {
+    for (const mode of ['development', 'production', 'e2e', 'fbig']) {
+      expect(ladderEnv(mode, { VITE_LADDER_WEB: 'anon' }), mode).toEqual({ url: undefined, web: 'anon', warnings: [] });
+      expect(ladderEnv(mode, { VITE_LADDER_WEB: 'off' }).web).toBe('off');
+    }
+    // Web-prod never calls the ranking server (§2.11, §10.5 #12): release builds never get the override.
+    for (const mode of ['release', 'release-fbig']) {
+      const le = ladderEnv(mode, { VITE_LADDER_URL: 'https://rank.example.org', VITE_LADDER_WEB: 'anon' });
+      expect(le.web, mode).toBeUndefined();
+      expect(le.url).toBe('https://rank.example.org');
+      expect(le.warnings.join('\n')).toContain('ignored');
+      expect(ladderEnv(mode, { VITE_LADDER_WEB: 'off' })).toEqual({ url: undefined, web: undefined, warnings: [] });
+    }
+    const odd = ladderEnv('e2e', { VITE_LADDER_WEB: 'on' });
+    expect(odd.web).toBeUndefined();
+    expect(odd.warnings).toHaveLength(1);
+    expect(ladderEnv('e2e', {})).toEqual({ url: undefined, web: undefined, warnings: [] });
+  });
+
+  it('defines both keys: a JSON string, or the expression undefined when not given', () => {
+    expect(ladderDefine(ladderEnv('e2e', { VITE_LADDER_URL: 'http://127.0.0.1:8787/', VITE_LADDER_WEB: 'anon' }))).toEqual({
+      'import.meta.env.VITE_LADDER_URL': '"http://127.0.0.1:8787"',
+      'import.meta.env.VITE_LADDER_WEB': '"anon"',
+    });
+    expect(ladderDefine(ladderEnv('release', { VITE_LADDER_WEB: 'anon' }))).toEqual({
+      'import.meta.env.VITE_LADDER_URL': 'undefined',
+      'import.meta.env.VITE_LADDER_WEB': 'undefined',
+    });
   });
 });

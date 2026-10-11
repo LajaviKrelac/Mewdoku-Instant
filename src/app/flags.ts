@@ -2,6 +2,8 @@
 // Feature flags (02 §22 Phase 3 hook): ship hidden features dark. The Phase 2 flags stay off.
 // Phase 2b (phase2b §10): events, banners, shop and rankings are on (each still capability-gated);
 // groupChallenges stays OFF until §14 G2 is verified. `?flags=` overrides still work.
+// Phase 2e (G1, docs/phase2e/spec.md §7.3): `ladder` (the worldwide ranking client; `rankings` stays the
+// master switch of every ranking surface; `?flags=-ladder` gives the 2c records path) and `dayStreak`.
 
 export type FlagId =
   | 'autoX'
@@ -12,7 +14,9 @@ export type FlagId =
   | 'banners'
   | 'shop'
   | 'rankings'
-  | 'groupChallenges';
+  | 'groupChallenges'
+  | 'ladder'
+  | 'dayStreak';
 
 export const DEFAULT_FLAGS: Readonly<Record<FlagId, boolean>> = Object.freeze({
   autoX: false,
@@ -24,6 +28,8 @@ export const DEFAULT_FLAGS: Readonly<Record<FlagId, boolean>> = Object.freeze({
   shop: true,
   rankings: true,
   groupChallenges: false,
+  ladder: true,
+  dayStreak: true,
 });
 
 const FLAG_IDS = Object.keys(DEFAULT_FLAGS) as FlagId[];

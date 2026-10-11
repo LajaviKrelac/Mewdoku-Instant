@@ -200,7 +200,7 @@ describe('shell: the victory screen is a banner screen (reviews L2B-1, FB2B-2)',
     h.router.open('victory', {} as never);
     shell.openShop();
     await flush(h);
-    h.store.update((st) => ({ ...st, save: { ...st.save, purchases: { noAds: true, tokens: [] } } }));
+    h.store.update((st) => ({ ...st, save: { ...st.save, purchases: { noAds: true, tokens: [], pending: [] } } }));
     h.clock.advance(61_000);
     h.router.close('shop');
     await flush(h);
@@ -300,7 +300,7 @@ describe('shell: shop, hub, settings rows (§5.5, §6.8, §8.5; phase2c §5.2, �
     const withIt = setup((s) => s, { shop: ready(['remove_ads', 'hints_15']) });
     withIt.shell.openSettings();
     expect(typeof withIt.h.router.props.settings?.onRemoveAds).toBe('function');
-    const owned = setup((s) => ({ ...s, purchases: { noAds: true, tokens: [] } }), { shop: ready(['remove_ads']) });
+    const owned = setup((s) => ({ ...s, purchases: { noAds: true, tokens: [], pending: [] } }), { shop: ready(['remove_ads']) });
     owned.shell.openSettings();
     expect(owned.h.router.props.settings?.onRemoveAds).toBeUndefined();
   });

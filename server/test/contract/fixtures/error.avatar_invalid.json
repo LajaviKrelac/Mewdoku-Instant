@@ -1,0 +1,18 @@
+{
+  "name": "error.avatar_invalid",
+  "request": {
+    "method": "PUT",
+    "path": "/v1/me/profile",
+    "auth": true
+  },
+  "response": {
+    "status": 422,
+    "body": {
+      "error": {
+        "code": "avatar_invalid",
+        "message": "avatarId"
+      },
+      "serverTime": 1791799800000
+    }
+  }
+}

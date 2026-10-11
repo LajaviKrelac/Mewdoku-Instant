@@ -1,0 +1,27 @@
+{
+  "name": "claim.ok",
+  "request": {
+    "method": "POST",
+    "path": "/v1/rewards/claim",
+    "auth": true,
+    "body": {
+      "rewardId": "mgj1a0k3x9f2:11",
+      "double": true
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "rewardId": "mgj1a0k3x9f2:11",
+      "grant": {
+        "hints": 2,
+        "kitties": 2
+      },
+      "doubled": true,
+      "claimedAt": 1791799900000,
+      "place": 2,
+      "alreadyClaimed": false,
+      "serverTime": 1791799900000
+    }
+  }
+}

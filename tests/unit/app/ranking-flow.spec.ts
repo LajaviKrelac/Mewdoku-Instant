@@ -487,6 +487,8 @@ describe('session: submit at WON, panel at 4.5 s (§5.5; phase2c §4.4, §2.6)',
     p.mineValue = { rank: 1234, score: PERIOD(3), isMe: true };
     p.topValue = band([[PERIOD(90), 1], [PERIOD(80), 2]]);
     const h = createHarness({
+      // Phase 2e §2.10: the FB period board is retired by default; these pin the board path behind its key.
+      config: { rank: { fbPeriodBoard: true } },
       extra: (parts) =>
         ({
           rankings: createRankingFlow({
@@ -519,6 +521,7 @@ describe('session: submit at WON, panel at 4.5 s (§5.5; phase2c §4.4, §2.6)',
     const LANTERN = bundledEventDefs()[0] as EventDef;
     const h = createHarness({
       save: (s) => ({ ...s, progress: { level: 15, completed: 14, best: {} } }),
+      config: { rank: { fbPeriodBoard: true } },
       extra: (parts) => ({
         events: { byId: (id) => (id === LANTERN.id ? LANTERN : null) },
         rankings: createRankingFlow({
@@ -552,6 +555,7 @@ describe('session: submit at WON, panel at 4.5 s (§5.5; phase2c §4.4, §2.6)',
     const p = provider();
     const h = createHarness({
       save: (s) => ({ ...s, progress: { level: 9, completed: 8, best: {} } }),
+      config: { rank: { fbPeriodBoard: true } },
       extra: (parts) => ({
         rankings: createRankingFlow({
           platform: { ranking: p },
@@ -569,5 +573,31 @@ describe('session: submit at WON, panel at 4.5 s (§5.5; phase2c §4.4, §2.6)',
     await h.settle(0);
     expect(p.calls.filter((c) => c.startsWith('submit:'))).toEqual([]);
     expect(p.calls).toContain('mine:period_points');
+  });
+});
+
+describe('Phase 2e §2.10: the FB weekly board retired (rank.fbPeriodBoard false, the default)', () => {
+  it('a counted win submits only its event board; the panel never reads the period board', async () => {
+    const p = provider();
+    const h = createHarness({
+      save: (s) => ({ ...s, progress: { level: 9, completed: 8, best: {} } }),
+      extra: (parts) => ({
+        rankings: createRankingFlow({
+          platform: { ranking: p },
+          clock: parts.clock,
+          bus: parts.bus,
+          save: () => parts.store.get().save,
+          updateSave: (fn) => parts.store.update((st) => ({ ...st, save: fn(st.save) })),
+          touch: () => parts.saves.touch(),
+        }),
+      }),
+    });
+    expect(cfg.rank.fbPeriodBoard).toBe(false);
+    await startLevel(h, 9);
+    await h.settle(5000);
+    winGame(h);
+    await h.settle(cfg.fx.winOverlayDelayMs);
+    expect(p.calls.filter((c) => c.includes('period_points'))).toEqual([]);
+    expect(h.router.props.ranking?.list.kind).toBe('records');
   });
 });

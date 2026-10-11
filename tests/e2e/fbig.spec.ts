@@ -36,6 +36,11 @@
 // Phase 2d.1 (G1, docs/phase2d/helpers-spec.md §3.2, §7.7, D-2d1-13): the hint card hides the banner;
 // after it closes a new banner loads at once when ads.banner.minReloadSec has passed, else once when
 // the window ends (the stub's clock), never by a second load inside the window.
+// Phase 2e (G1, docs/phase2e/spec.md §2.10, §1.3, §10.3): the FB weekly board is retired (rank.fbPeriodBoard
+// false): the 2b/2c tests of period_points (classic "Your rank", NEZP "Your score", the week band) became
+// one test that a win never writes or reads it; the win flow signs in through getSignedPlayerInfoAsync
+// (the stub signs with the e2e FB test secret) and the panel lists my real bracket (its own test pool and a
+// rival made through the public API); without the identity API the build uses no ranking origin at all.
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -44,6 +49,7 @@ import type { E2EHooks } from '../../src/app/boot';
 import type { AppState } from '../../src/app/store';
 import { defaults } from '../../src/game/save';
 import type { SaveData } from '../../src/game/types';
+import { devSwitches, fbPlayer, LADDER_URL, ladderUp, newPool } from './helpers/rank-players';
 
 const STUB_PATH = resolve(dirname(fileURLToPath(import.meta.url)), '../fixtures/fbinstant-stub.js');
 const STUB_SRC = readFileSync(STUB_PATH, 'utf8');
@@ -178,15 +184,6 @@ async function closeOverlays(page: Page): Promise<void> {
     expect((await appState(page)).overlays).toEqual([]);
   }).toPass({ timeout: 5_000 });
 }
-
-/** The leaderboard band encoding, written out from the spec (§4.3), not the app's encoder. */
-const PERIOD_SPAN = 100_000;
-/** UTC week index of `at` from cfg.rank.periodEpoch 2026-01-05, a Monday (spec §3.5). */
-const weekIndexAt = (at: number): number => {
-  const d = new Date(at);
-  return Math.floor((Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - Date.UTC(2026, 0, 5)) / 86_400_000 / 7);
-};
-const pageNow = (page: Page): Promise<number> => page.evaluate(() => Date.now());
 
 test.describe('FBIG lifecycle', () => {
   test('initializeAsync first, progress 100 before startGameAsync, locale after start', async ({ page }) => {
@@ -481,73 +478,109 @@ test.describe('FBIG banners (phase2b §3)', () => {
   });
 });
 
-test.describe('FBIG rankings (phase2b §5, phase2c §4)', () => {
-  test('classic leaderboard: this week\'s fish reach e2e_period_points as week × 100 000 + 3; the panel shows "Your rank: #1"', async ({ page }) => {
-    await openGame(page, { data: { save: seededSave(5, 4) } });
+test.describe('FBIG rankings (Phase 2e §2.10: the FB weekly board retired; the worldwide ranking)', () => {
+  const sdkBoardCalls = (page: Page) =>
+    stub(page, (s) => s.calls.filter((c) => /setScoreAsync|getLeaderboardAsync|getEntriesAsync|getPlayerEntryAsync/.test(c.name)).map((c) => `${c.name}:${String(c.args[0])}`));
+
+  test('a win signs in with getSignedPlayerInfoAsync and shows my bracket; the retired FB period board is never written or read', async ({ page }) => {
+    test.skip(!(await ladderUp()), `no ranking server at ${LADDER_URL}`);
+    const pool = newPool('fbl1');
+    const rival = await fbPlayer(pool);
+    await rival.win([2, 3, 4]);
+    await openGame(page, { presets: [`player:${pool.replace(/-/g, '')}`], data: { save: seededSave(5, 4) } }, { query: `?ladderPool=${pool}` });
+    await page.waitForFunction(() => (window as TestWindow).__mewdoku?.ladder?.()?.signedIn === true, undefined, { timeout: 10_000 });
+    expect(await count(page, 'player.getSignedPlayerInfoAsync')).toBeGreaterThanOrEqual(1);
     await startLevel(page);
-    await solve(page, { slow: true }); // no mistake: the 3 fish are kept
-    await expect.poll(() => stub(page, (s) => s.calls.filter((c) => c.name === 'leaderboard.setScoreAsync').map((c) => c.args[0])), { timeout: 8_000 }).toEqual([
-      'e2e_period_points',
-    ]);
-    const expected = weekIndexAt(await pageNow(page)) * PERIOD_SPAN + 3;
-    expect(await stub(page, (s) => s.find('leaderboard.setScoreAsync')[0]?.args[1])).toBe(expected);
-    expect(await stub(page, (s) => s.leaderboard('e2e_period_points'))).toEqual([expect.objectContaining({ playerId: 'stub-player-1', score: expected })]);
-    // paw_points is retired and daily_fastest off: nothing else is submitted.
-    expect(await stub(page, (s) => s.calls.filter((c) => c.name === 'getLeaderboardAsync').map((c) => c.args[0]))).toEqual(['e2e_period_points']);
-    expect((await appState(page)).save.period.total).toBe(3);
-    await expect(page.getByRole('dialog').getByText(/^Your rank: #1$/)).toBeVisible({ timeout: 10_000 });
+    await page.waitForTimeout(5_000); // past the server's solve floor
+    await solve(page);
+    const list = page.locator('.overlay[data-overlay="ranking"] .rank-list[data-kind="bracket"]');
+    await expect(list).toBeVisible({ timeout: 15_000 });
+    const ui = await list.locator('ol.rank-rows > li.rank-row').evaluateAll((els) =>
+      els.map((el) => [el.getAttribute('data-rank'), el.querySelector('.rank-row__name')?.textContent?.trim() ?? '', el.getAttribute('data-me')]),
+    );
+    const server = await rival.bracket();
+    expect(ui).toEqual(server.rows.map((r) => [String(r.rank), r.nickname, r.me ? '0' : '1']));
+    // D-2e-4: no FB leaderboard call for the period board (the event boards keep theirs).
+    expect((await sdkBoardCalls(page)).filter((c) => c.includes('period_points'))).toEqual([]);
+    expect((await appState(page)).save.rank.pending).not.toHaveProperty('period_points');
   });
 
-  test('NEZP leaderboard: the week\'s total is posted by id; the panel shows "Your score: 3 fish", never a rank', async ({ page }) => {
-    await openGame(page, { presets: ['lb-nezp'], data: { save: seededSave(5, 4) } });
-    await startLevel(page);
-    await solve(page, { slow: true });
-    await expect
-      .poll(() => stub(page, (s) => s.calls.filter((c) => c.name === 'globalLeaderboards.setScoreAsync').map((c) => c.args[0])), { timeout: 8_000 })
-      .toEqual(['e2e_period_points']);
-    expect(await stub(page, (s) => s.find('globalLeaderboards.setScoreAsync')[0]?.args[1])).toBe(weekIndexAt(await pageNow(page)) * PERIOD_SPAN + 3);
-    await expect(page.getByRole('dialog').getByText(/^Your score: 3 fish$/).first()).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByRole('dialog').getByText(/Your rank/)).toHaveCount(0);
-  });
-
-  test('no leaderboard API: the personal period records only, no other players and no SDK leaderboard call', async ({ page }) => {
-    await openGame(page, { presets: ['lb-none'], data: { save: seededSave(5, 4) } });
+  test("no signed player info ('no-signed-info'): no ranking origin, my period records, not one request to it and no SDK leaderboard call", async ({ page }) => {
+    const sent: string[] = [];
+    page.on('request', (r) => {
+      if (r.url().startsWith(LADDER_URL)) sent.push(r.url());
+    });
+    await openGame(page, { presets: ['no-signed-info', 'lb-none'], data: { save: seededSave(5, 4) } });
     await startLevel(page);
     await solve(page, { slow: true });
     await expect(sel.rankingTap(page)).toBeVisible({ timeout: 15_000 });
     const records = page.getByRole('dialog').locator('.rank-records[data-board="period"]');
     await expect(records).toBeVisible();
     await expect(records.getByText('This week', { exact: true })).toBeVisible();
-    // Phase 2c.1 (D24): Total points replaced the retired Perfect streak row.
     await expect(records.getByText('Total points', { exact: true })).toBeVisible();
-    await expect(records.getByText(/Perfect/)).toHaveCount(0);
     expect(await stub(page, (s) => s.calls.filter((c) => /eaderboard/i.test(c.name)).length)).toBe(0);
+    expect((await appState(page)).save.ladder.pending).toEqual([]);
+    expect(sent).toEqual([]);
+  });
+});
+
+test.describe('FBIG Phase 2e: buying helpers on the out-of-helpers card (spec §4.1–§4.4)', () => {
+  const o2 = (page: Page) => page.locator('.overlay[data-overlay="rewarded"]');
+  async function outOfHints(page: Page, stubConfig: Record<string, unknown> = {}, opts: LoadOpts = {}): Promise<void> {
+    await openGame(page, { persist: false, ...stubConfig, data: { save: seededSave(5, 4, (s) => ({ ...s, stock: { hints: 0, kitties: 3 } })) } }, opts);
+    await startLevel(page);
+    await sel.hintTool(page).click();
+    await expect(o2(page)).toBeVisible();
+  }
+
+  test('O2 Buy: the Bulb Bundle and No Ads rows with the store prices; the pack bought → +15, one used at once (14 left), the hint card opens; consumed once', async ({ page }) => {
+    await outOfHints(page);
+    const buy = o2(page).locator('button.rewarded__buy[data-product="hints_15"]');
+    await expect(buy).toHaveAttribute('data-state', 'ready', { timeout: 8_000 });
+    await expect(o2(page).locator('button.rewarded__buy')).toHaveCount(2);
+    await expect(buy).toContainText('$1.99');
+    await expect(o2(page).locator('button.rewarded__buy[data-product="remove_ads"]')).toContainText('$3.99');
+    await buy.click();
+    await expect.poll(async () => (await appState(page)).save.stock.hints, { timeout: 8_000 }).toBe(14);
+    await expect(page.locator('.overlay[data-overlay="hint"]')).toBeVisible();
+    expect((await appState(page)).overlays).not.toContain('rewarded');
+    expect(await count(page, 'payments.consumePurchaseAsync')).toBe(1);
+    expect(await stub(page, (s) => s.calls.filter((c) => c.name === 'ad.showAsync').length)).toBe(0); // no video
+    const s = (await appState(page)).save;
+    expect(s.purchases.tokens.some((t) => t.startsWith('hints_15|'))).toBe(true);
+    expect(s.purchases.pending).toEqual([]);
   });
 
-  test('the week band: a future-dated entry and older weeks are skipped; 250 better players this week make me #251 (past 200 entries), and the list pins #251', async ({ page }) => {
-    test.setTimeout(60_000);
-    // Seeded relative to the stub clock (the page's): one device a week ahead, 250 players of this week
-    // with 5 fish, three of last week with 99. My 3 fish come after all of this week's 5s.
-    const entries = [
-      { playerId: 'ahead', period: 1, total: 1 },
-      ...Array.from({ length: 250 }, (_, i) => ({ playerId: `week-${i}`, period: 0, total: 5 })),
-      ...Array.from({ length: 3 }, (_, i) => ({ playerId: `last-${i}`, period: -1, total: 99 })),
-    ];
-    await openGame(page, { persist: false, data: { save: seededSave(5, 4) }, leaderboards: { entries: { e2e_period_points: entries } } });
-    await startLevel(page);
-    await solve(page, { slow: true });
-    const dialog = page.getByRole('dialog');
-    await expect(dialog.getByText(/^Your rank: #251$/)).toBeVisible({ timeout: 15_000 });
-    const board = await stub(page, (s) => s.leaderboard('e2e_period_points'));
-    expect(board.findIndex((r) => r.playerId === 'stub-player-1')).toBe(251); // 0-based: the board's own rank is 252
-    await dialog.getByRole('button', { name: /See top players/i }).click();
-    await expect.poll(() => count(page, 'overlayViews.createOverlayViewWithXMLString')).toBe(1);
-    const rows = await stub(page, (s) =>
-      (JSON.parse(String(s.find('overlayViews.createOverlayViewWithXMLString')[0]?.args[2])) as { rows: { rank: string; kind: string; score: string }[] }).rows,
-    );
-    expect(rows.slice(0, 10).map((r) => `${r.rank}:${r.kind}`)).toEqual(Array.from({ length: 10 }, (_, i) => `#${i + 1}:other`));
-    expect(rows.slice(10).map((r) => `${r.rank}:${r.kind}`)).toEqual(['#251:mine']);
-    expect(rows[10]?.score).toMatch(/\b3\b/);
+  test('O2 No Ads: the entitlement at once, O2 stays open without its row (it gave no helper)', async ({ page }) => {
+    await outOfHints(page);
+    const noAds = o2(page).locator('button.rewarded__buy[data-product="remove_ads"]');
+    await expect(noAds).toHaveAttribute('data-state', 'ready', { timeout: 8_000 });
+    await noAds.click();
+    await expect.poll(async () => (await appState(page)).save.purchases.noAds, { timeout: 8_000 }).toBe(true);
+    await expect(o2(page)).toBeVisible();
+    await expect(o2(page).locator('button.rewarded__buy')).toHaveCount(1);
+    await expect(o2(page).locator('button.rewarded__buy[data-product="hints_15"]')).toBeVisible();
+    expect((await appState(page)).save.stock.hints).toBe(0);
+  });
+
+  test('iOS: no Buy row with the iOS switch off (the build default); the remote switch iapIos on brings the rows', async ({ page }) => {
+    await outOfHints(page, { presets: ['ios'] });
+    await page.waitForTimeout(1_000);
+    await expect(o2(page).locator('button.rewarded__buy')).toHaveCount(0);
+    expect(await count(page, 'payments.getCatalogAsync')).toBe(0);
+    test.skip(!(await ladderUp()), `no ranking server at ${LADDER_URL} (the remote switches)`);
+    const pool = newPool('fbios');
+    await devSwitches(pool, { iapIos: true });
+    const page2 = await page.context().newPage();
+    // The first page cached its pool-less answer (localStorage['mewdoku.rc.v1'], ladder.ttlSec): start clean.
+    await page2.addInitScript(() => localStorage.removeItem('mewdoku.rc.v1'));
+    await outOfHints(page2, { presets: ['ios'] }, { query: `?ladderPool=${pool}` });
+    await expect.poll(() => page2.evaluate(() => (window as TestWindow).__mewdoku?.remote?.()), { timeout: 10_000 }).toEqual({ iapIos: true });
+    // The open card re-reads its rows when the catalogue arrives; reopen it to read them after the switch.
+    await page2.keyboard.press('Escape');
+    await expect.poll(async () => (await appState(page2)).overlays).toEqual([]);
+    await sel.hintTool(page2).click();
+    await expect(o2(page2).locator('button.rewarded__buy[data-product="hints_15"]')).toHaveAttribute('data-state', 'ready', { timeout: 8_000 });
   });
 });
 

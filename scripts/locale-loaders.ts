@@ -68,7 +68,9 @@ export function localeChunkName(moduleId: string): string | null {
  * The lazy chunks' file names (phase2b §11), so scripts/size-check.ts can budget them by name:
  * locale-<id>-*.js per catalogue, events-*.js (src/app/events-chunk.ts), fb-social-*.js
  * (src/platform/fb/fb-social.ts), social-flows-*.js (src/app/social-flows.ts: the rankings hub, the
- * event top list and group challenges, 2b integration); everything else keeps Vite's default
+ * event top list and group challenges, 2b integration), and (Phase 2e L0, spec §2.12, §7.9) ladder-*.js
+ * (src/app/ladder-chunk.ts: the ranking's sheet, list, result card, name sheet and words; its stylesheet
+ * keeps the chunk's own name, ladder-chunk-*.css); everything else keeps Vite's default
  * `assets/[name]-[hash].js`.
  */
 export function chunkFileName(facadeModuleId: string | null | undefined): string {
@@ -78,5 +80,6 @@ export function chunkFileName(facadeModuleId: string | null | undefined): string
   if (/[\\/]src[\\/]app[\\/]events-chunk\.ts$/.test(id)) return 'assets/events-[hash].js';
   if (/[\\/]src[\\/]platform[\\/]fb[\\/]fb-social\.ts$/.test(id)) return 'assets/fb-social-[hash].js';
   if (/[\\/]src[\\/]app[\\/]social-flows\.ts$/.test(id)) return 'assets/social-flows-[hash].js';
+  if (/[\\/]src[\\/]app[\\/]ladder-chunk\.ts$/.test(id)) return 'assets/ladder-[hash].js';
   return 'assets/[name]-[hash].js';
 }

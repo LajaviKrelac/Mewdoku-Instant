@@ -6,9 +6,12 @@
 // §3.1–§3.2, §10.10. The save stays v3; StreakRecord / SaveDataV3.streak are @deprecated (frozen).
 // Phase 2d (G1, docs/phase2d/look-spec.md §1.12): the mouse helper's MOUSE action and MARKED.source.
 // Phase 2d.1 (G1, docs/phase2d/helpers-spec.md §4.1): DoneUnit and the UNITS_DONE event.
+// Phase 2e (G1, docs/phase2e/spec.md §5.2, §7.1; CONTRACTS §6): save schema v4 (SaveDataV4: the ranking
+// client's record `ladder`, the daily streak `dayStreak`, the purchase intent ledger purchases.pending).
 // Game state, actions, events (04 §4.2) and save data (04 §4.3, phase2b §9). PURE types.
 import type { LocaleId, ProductId } from '../app/config';
 import type { CellIndex, HintStep, Puzzle, PuzzleId } from '../engine/types';
+import type { WinSubmission } from '../shared/rank-api';
 
 export { CellState } from '../engine/types';
 export type { CellIndex, PuzzleId } from '../engine/types';
@@ -304,8 +307,76 @@ export interface SaveDataV3 extends Omit<SaveDataV2, 'v' | 'wallet'> {
   period: PeriodRecord;
 }
 
-/** The current save schema. Every consumer types its save as SaveData; SaveDataV1/V2 are stored shapes only. */
-export type SaveData = SaveDataV3;
+// ─────────────────────────── Phase 2e records (spec §5.2, §7.1) ───────────────────────────
+
+/**
+ * Phase 2e (spec §5.2, D-2e-12): the daily streak. `dates` the counted dates (sorted, unique, newest
+ * dayStreak.historyDays); `run` the consecutive counted days ending at the last date; `best` ≥ run;
+ * `paid` "<date>|<hints>|<kitties>" per paid cycle reward (newest dayStreak.paidKept).
+ */
+export interface DayStreakRecord {
+  dates: string[];
+  run: number;
+  best: number;
+  paid: string[];
+}
+
+/** Phase 2e (spec §2.3, §7.1): a win queued for the ranking server (a WinSubmission + when it was queued). */
+export interface LadderPendingWin extends WinSubmission {
+  /** Device clock (the queue drops entries older than ladder.pendingMaxAgeMs). */
+  readonly queuedAt: number;
+}
+
+/** Phase 2e (spec §2.3, §7.1): my bracket as last answered by the server, WITHOUT rows (no other player's name in the cloud save). */
+export interface LadderCurrent {
+  readonly bracketId: string;
+  /** Server clock. */
+  readonly endsAt: number;
+  /** serverTime − Date.now() measured with this answer (device clock + offset = server clock). */
+  readonly serverOffsetMs: number;
+  /** Device clock. */
+  readonly fetchedAt: number;
+  readonly points: number;
+  readonly rank: number | null;
+  /** The server's count of visible members. */
+  readonly members: number;
+  readonly maxMembers: number;
+}
+
+/** Phase 2e (spec §7.1): the ranking client's saved record. */
+export interface LadderRecord {
+  /** "Show me in rankings" (ladder.defaultListed). */
+  listed: boolean;
+  /** Wins waiting for the server (≤ ladder.pendingMax, ≤ ladder.pendingMaxAgeMs old), oldest first. */
+  pending: LadderPendingWin[];
+  /** My bracket from the last answer (no rows), or null. */
+  current: LadderCurrent | null;
+  /** "<rewardId>|<hints>|<kitties>" per applied rank-reward grant (newest ladder.claimedKept). */
+  claimed: string[];
+  /** Reward ids whose ×2 video was watched but whose claim failed (the next claim needs no second video). */
+  doubleWatched: string[];
+  /** Bracket ids whose result card was shown. */
+  resultsSeen: string[];
+  /** nick.first.line was shown. */
+  nickLineSeen: boolean;
+  /** My ranking name, picture and player code as the server last said (the offline display), or null. */
+  me: { name: string; avatarId: number; code: string } | null;
+}
+
+/** Phase 2e (spec §7.1, D-2e-6): v3 plus the ranking client's record, the daily streak and the purchase intent ledger. */
+export interface SaveDataV4 extends Omit<SaveDataV3, 'v' | 'purchases'> {
+  v: 4;
+  /**
+   * noAds, the granted-token ledger (phase2b §8.4) and Phase 2e's consume-first intent ledger `pending`:
+   * "<productId>|<token>" of purchases that FB reported paid and that are not granted yet (spec §4.2).
+   */
+  purchases: { noAds: boolean; tokens: string[]; pending: string[] };
+  ladder: LadderRecord;
+  dayStreak: DayStreakRecord;
+}
+
+/** The current save schema. Every consumer types its save as SaveData; SaveDataV1/V2/V3 are stored shapes only. */
+export type SaveData = SaveDataV4;
 
 /** How urgently to persist (04 §7.1, 02 §15). */
 export type SaveMode = 'touch' | 'now' | 'critical';

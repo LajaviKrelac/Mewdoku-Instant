@@ -1,0 +1,32 @@
+{
+  "name": "profile.listed",
+  "request": {
+    "method": "PUT",
+    "path": "/v1/me/profile",
+    "auth": true,
+    "body": {
+      "listed": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "player": {
+        "code": "7KQ2M9XD",
+        "nickname": "Velvet Pounce 27",
+        "nick": {
+          "adj": 2,
+          "noun": 5,
+          "num": 27
+        },
+        "avatarId": 4,
+        "status": "ok",
+        "pool": "fb",
+        "trust": "signed",
+        "listed": false,
+        "nicknameChangeAt": null
+      },
+      "serverTime": 1791799800000
+    }
+  }
+}

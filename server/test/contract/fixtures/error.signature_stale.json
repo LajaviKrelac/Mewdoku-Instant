@@ -1,0 +1,17 @@
+{
+  "name": "error.signature_stale",
+  "request": {
+    "method": "POST",
+    "path": "/v1/session"
+  },
+  "response": {
+    "status": 401,
+    "body": {
+      "error": {
+        "code": "signature_stale",
+        "message": "issued_at outside the window"
+      },
+      "serverTime": 1791799800000
+    }
+  }
+}

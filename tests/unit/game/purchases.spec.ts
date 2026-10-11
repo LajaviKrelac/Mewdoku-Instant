@@ -26,7 +26,7 @@ const s0 = (): SaveData => ({ ...defaults(T0), stock: { hints: 2, kitties: 1 } }
 describe('applyPurchase per product (§8.3)', () => {
   it('remove_ads → noAds; nothing else', () => {
     const s = applyPurchase(s0(), { productId: 'remove_ads', purchaseToken: 't1' });
-    expect(s.purchases).toEqual({ noAds: true, tokens: ['remove_ads|t1'] });
+    expect(s.purchases).toEqual({ noAds: true, tokens: ['remove_ads|t1'], pending: [] });
     expect(s.stock).toEqual(s0().stock);
   });
 
@@ -104,15 +104,15 @@ describe('ledger (§8.4, §9.2)', () => {
 
 describe('merge of purchases (§9.3)', () => {
   it('noAds is OR; the ledger is the union', () => {
-    const a: SaveData = { ...s0(), updatedAt: T0 + 1, purchases: { noAds: true, tokens: ['remove_ads|r'] } };
-    const b: SaveData = { ...s0(), updatedAt: T0 + 2, purchases: { noAds: false, tokens: ['hints_15|h'] } };
+    const a: SaveData = { ...s0(), updatedAt: T0 + 1, purchases: { noAds: true, tokens: ['remove_ads|r'], pending: [] } };
+    const b: SaveData = { ...s0(), updatedAt: T0 + 2, purchases: { noAds: false, tokens: ['hints_15|h'], pending: [] } };
     const m = merge(a, b);
     expect(m.purchases.noAds).toBe(true);
     expect([...m.purchases.tokens].sort()).toEqual(['hints_15|h', 'remove_ads|r']);
   });
 
   it('paid grants of the losing document are re-applied once (repairPaidGrants), a retired pack as its compensation', () => {
-    const older: SaveData = { ...s0(), updatedAt: T0 + 1, purchases: { noAds: false, tokens: ['kitties_8|k', 'fish_250|f'] } };
+    const older: SaveData = { ...s0(), updatedAt: T0 + 1, purchases: { noAds: false, tokens: ['kitties_8|k', 'fish_250|f'], pending: [] } };
     const newer: SaveData = { ...s0(), updatedAt: T0 + 2, stock: { hints: 0, kitties: 0 } };
     const m = merge(older, newer);
     expect(m.stock).toEqual({ hints: 10, kitties: 8 + 3 });
@@ -135,7 +135,7 @@ describe('retired packs compensated once (phase2c §3.8)', () => {
   };
 
   it('compensateRetired grants each retired entry once and ignores catalogue entries', () => {
-    const s: SaveData = { ...s0(), purchases: { noAds: false, tokens: ['hints_15|h', 'fish_250|a', 'fish_900|b'] } };
+    const s: SaveData = { ...s0(), purchases: { noAds: false, tokens: ['hints_15|h', 'fish_250|a', 'fish_900|b'], pending: [] } };
     expect(compensateRetired(s).stock).toEqual({ hints: 2 + 10 + 30, kitties: 1 + 3 + 15 });
     const plain = s0();
     expect(compensateRetired(plain)).toBe(plain);

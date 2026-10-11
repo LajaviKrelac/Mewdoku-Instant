@@ -1,0 +1,23 @@
+{
+  "name": "hearts.ok",
+  "request": {
+    "method": "POST",
+    "path": "/v1/hearts",
+    "auth": true,
+    "body": {
+      "bracketId": "mgk0b7q1z4a8",
+      "slot": 0
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "bracketId": "mgk0b7q1z4a8",
+      "slot": 0,
+      "hearts": 5,
+      "likedByMe": true,
+      "givenInBracket": 1,
+      "serverTime": 1791799805000
+    }
+  }
+}

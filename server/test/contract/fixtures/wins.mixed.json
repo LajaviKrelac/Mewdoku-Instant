@@ -1,0 +1,163 @@
+{
+  "name": "wins.mixed",
+  "request": {
+    "method": "POST",
+    "path": "/v1/wins",
+    "auth": true,
+    "body": {
+      "wins": [
+        {
+          "winId": "3f6c2a0e-8d1b-4c7a-9e55-0b9a1d2c4e6f",
+          "puzzleId": "L57",
+          "source": "pack",
+          "contentVersion": "content-bb8a756dfaf9",
+          "cats": "681524073",
+          "fish": 2,
+          "mistakes": 1,
+          "revives": 0,
+          "hints": 0,
+          "kitties": 1,
+          "mice": 0,
+          "solveMs": 94210,
+          "playedAt": 1791799790000,
+          "clientVersion": "0.2.0"
+        },
+        {
+          "winId": "9b2e4f60-1c3d-4a5b-8c7d-2e3f4a5b6c7d",
+          "puzzleId": "L3001",
+          "source": "generated",
+          "contentVersion": "content-bb8a756dfaf9",
+          "cats": "3507146285b9",
+          "fish": 3,
+          "mistakes": 0,
+          "revives": 0,
+          "hints": 0,
+          "kitties": 0,
+          "mice": 0,
+          "solveMs": 412000,
+          "playedAt": 1791799790000,
+          "clientVersion": "0.2.0"
+        },
+        {
+          "winId": "0c1d2e3f-4a5b-4c6d-9e8f-7a6b5c4d3e2f",
+          "puzzleId": "D2026-10-11",
+          "source": "pack",
+          "contentVersion": "content-bb8a756dfaf9",
+          "cats": "2041753860",
+          "fish": 3,
+          "mistakes": 0,
+          "revives": 0,
+          "hints": 0,
+          "kitties": 0,
+          "mice": 0,
+          "solveMs": 2100,
+          "playedAt": 1791799790000,
+          "clientVersion": "0.2.0"
+        },
+        {
+          "winId": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+          "puzzleId": "L57",
+          "source": "pack",
+          "contentVersion": "content-bb8a756dfaf9",
+          "cats": "681524073",
+          "fish": 2,
+          "mistakes": 1,
+          "revives": 0,
+          "hints": 0,
+          "kitties": 1,
+          "mice": 0,
+          "solveMs": 94210,
+          "playedAt": 1791799790000,
+          "clientVersion": "0.2.0"
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "results": [
+        {
+          "winId": "3f6c2a0e-8d1b-4c7a-9e55-0b9a1d2c4e6f",
+          "verdict": "duplicate",
+          "points": 2
+        },
+        {
+          "winId": "9b2e4f60-1c3d-4a5b-8c7d-2e3f4a5b6c7d",
+          "verdict": "accepted_flagged",
+          "reason": "unverified",
+          "points": 3
+        },
+        {
+          "winId": "0c1d2e3f-4a5b-4c6d-9e8f-7a6b5c4d3e2f",
+          "verdict": "rejected",
+          "reason": "too_fast",
+          "points": 0
+        },
+        {
+          "winId": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+          "verdict": "already_counted",
+          "points": 0
+        }
+      ],
+      "windowPoints": 19,
+      "bracket": {
+        "state": "open",
+        "bracketId": "mgk0b7q1z4a8",
+        "pool": "fb",
+        "mode": "rolling",
+        "openedAt": 1791743600000,
+        "endsAt": 1791830000000,
+        "members": 3,
+        "maxMembers": 50,
+        "rows": [
+          {
+            "rank": 1,
+            "slot": 0,
+            "nickname": "Sleepy Whisker 27",
+            "avatarId": 1,
+            "points": 31,
+            "hearts": 4,
+            "me": false,
+            "likedByMe": false
+          },
+          {
+            "rank": 2,
+            "slot": 2,
+            "nickname": "Velvet Pounce 27",
+            "avatarId": 4,
+            "points": 19,
+            "hearts": 2,
+            "me": true,
+            "likedByMe": false
+          },
+          {
+            "rank": 3,
+            "slot": 1,
+            "nickname": "Cozy Biscuit 41",
+            "avatarId": 7,
+            "points": 9,
+            "hearts": 0,
+            "me": false,
+            "likedByMe": true
+          }
+        ],
+        "me": {
+          "rank": 2,
+          "slot": 2,
+          "nickname": "Velvet Pounce 27",
+          "avatarId": 4,
+          "points": 19,
+          "hearts": 2,
+          "me": true,
+          "likedByMe": false
+        },
+        "final": false,
+        "heartsNew": 0,
+        "result": null,
+        "serverTime": 1791799802000
+      },
+      "serverTime": 1791799802000
+    }
+  }
+}

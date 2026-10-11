@@ -1,0 +1,17 @@
+{
+  "name": "error.origin_not_allowed",
+  "request": {
+    "method": "POST",
+    "path": "/v1/session/nonce"
+  },
+  "response": {
+    "status": 403,
+    "body": {
+      "error": {
+        "code": "origin_not_allowed",
+        "message": "origin not allowed"
+      },
+      "serverTime": 1791799800000
+    }
+  }
+}
