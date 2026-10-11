@@ -71,7 +71,8 @@ export async function uploadBundle(
   form.set('access_token', token);
   form.set('type', 'BUNDLE');
   form.set('comment', comment);
-  form.set('asset', new Blob([readFileSync(zipPath)], { type: 'application/zip' }), basename(zipPath));
+  // Meta accepts only application/octet-stream here; application/zip is refused with HTTP 500 "Invalid file".
+  form.set('asset', new Blob([readFileSync(zipPath)], { type: 'application/octet-stream' }), basename(zipPath));
 
   const res = await fetchFn(GRAPH_UPLOAD_URL(env.appId), { method: 'POST', body: form });
   const text = await res.text();

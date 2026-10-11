@@ -470,6 +470,8 @@ describe('upload-fbig', () => {
     expect(form.get('access_token')).toBe('app|tok');
     expect(form.get('comment')).toBe('1.0.0 abc');
     expect((form.get('asset') as File).name).toBe('mew-fbig-1.0.0-abc.zip');
+    // Meta answers 500 "Invalid file. Expected … application/octet-stream" to application/zip (live upload, 2026-10-11).
+    expect((form.get('asset') as File).type).toBe('application/octet-stream');
   });
 
   it('uses FB_UPLOAD_TOKEN directly and reports failures', async () => {
