@@ -32,6 +32,8 @@ upload; this note records the result and what is left.
 - facebook.com (WEB), 2026-10-11 17:23 UTC: all five checks OK; `issued_at` present (+0 s); Origin
   `https://apps-2382571989149479.apps.fbsbx.com` (referrer origin `https://shield-apps-2382571989149479.apps.fbsbx.com`).
   That origin is now the production `ALLOWED_ORIGINS` in `server/wrangler.toml` (production is not deployed yet).
+- Phone browser (MOBILE_WEB), 2026-10-11 17:45 UTC: all five checks OK; `issued_at` present (+0 s); same Origin
+  and referrer origin as WEB.
 
 ## Left (the user, in the App Dashboard)
 
