@@ -53,6 +53,13 @@ upload; this note records the result and what is left.
   `https://apps-2382571989149479.apps.fbsbx.com`, matching the server log's `origin` field. Production
   `ALLOWED_ORIGINS` needs no change.
 
+## Later uploads
+
+- 2026-10-11 22:1x UTC: `mewdoku-instant-fbig-preview-0.1.0-f5d8cdf.zip` (503,539 bytes; the new home board, staging
+  ranking), comment "Game test build 0.1.0 f5d8cdf - new home board, staging ranking, no ads/IAP ids yet"; uploaded
+  from the main session (the FB variables reached it after a container restart). Checked first: tsc, 3,035 unit
+  tests, size budget (89 files), home screen rendered with no page errors.
+
 ## Left
 
 - Android app and Messenger: not tested (the user deferred them). Until the Android app is checked,
