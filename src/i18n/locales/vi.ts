@@ -29,6 +29,7 @@ export const catalog: LocaleCatalog = {
   // ── Home ───────────────────────────────────────────────────────────────────
   'home.play': 'Màn {level}',
   'home.continue': 'Chơi tiếp · Màn {level}',
+  'home.profile': 'Hồ sơ',
   'home.daily.title': 'Câu đố hôm nay · {date}',
   'home.daily.size': '{n}×{n}',
   'home.daily.locked': 'Mở sau màn {level}',

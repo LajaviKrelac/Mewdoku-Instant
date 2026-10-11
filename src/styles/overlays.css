@@ -87,8 +87,7 @@
    downward only (home-screen.ts fitHero() then shrinks the mascot), never up under the top bar
    (review UX-2, I18N-LAYOUT-2; `justify-content: safe center` is above the 04 §1 baseline). */
 .home__hero { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: flex-start; min-height: 0; text-align: center; }
-.home__hero > :first-child { margin-top: auto; }
-.home__hero > :last-child { margin-bottom: auto; }
+.home__hero > :first-child { margin-top: clamp(4px, 5vh, 48px); }
 .screen--home[data-tight] .home__tagline, .screen--home[data-tight='2'] .home__mascot { display: none; }
 .home__wordmark { color: var(--accent-title); font-size: min(3rem, 15vw); line-height: 1; overflow-wrap: anywhere; }
 .home__tagline { margin-top: 6px; color: var(--ink-2); }
@@ -96,26 +95,36 @@
    router makes the screen inert while it is open, and the wordmark fades out (UX-14). */
 .home__wordmark, .home__tagline { transition: opacity var(--t-overlay) ease; }
 [inert] .home__wordmark, [inert] .home__tagline { opacity: 0; }
-.home__mascot { margin-top: 12px; }
-.home__mascot > svg { width: 210px; height: 210px; max-height: 28vh; }
+.home__mascot { margin-top: 12px; margin-bottom: auto; }
+.home__mascot > svg { width: 210px; height: 210px; max-width: calc(100vw - 180px); max-height: 28vh; }
+.home__actions { display: flex; flex-direction: column; align-items: center; }
 .home__actions > * + * { margin-top: 14px; }
-.home__play { position: relative; }
+.home__actions > .daily-card { margin-top: 22px; margin-bottom: 26px; }
+.home__actions > .event-card, .home__cards { align-self: stretch; }
+.home__play, .daily-card { width: min(100%, max(272px, 70vw)); max-width: 360px; }
+.home__play { position: relative; min-height: 60px; }
 .home__play .btn__chev { position: absolute; right: 22px; top: 50%; margin-top: -0.55em; }
-.daily-card, .home-card { display: flex; align-items: center; width: 100%; min-height: 72px; padding: 12px 16px; border: 0; border-radius: var(--radius-l);
+.home-card { display: flex; width: 100%; min-height: 72px; padding: 12px 16px; border: 0; border-radius: var(--radius-l);
   background: var(--card); color: var(--ink); font: inherit; text-align: start; cursor: pointer; box-shadow: 0 3px 0 var(--line-2), var(--shadow-1); }
-.daily-card:active, .home-card:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--line-2), var(--shadow-1); }
-.daily-card__icon { display: flex; flex: none; align-items: center; justify-content: center; width: 46px; height: 46px; margin-inline-end: 12px;
-  border-radius: 14px; background: var(--accent-soft); color: var(--accent-deep); }
-.daily-card__icon .icon { width: 28px; height: 28px; }
+.home-card:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--line-2), var(--shadow-1); }
+/* The daily pill (the original's second button): periwinkle, an icon disc, the title, and a status tab hanging below. */
+.daily-card { position: relative; display: flex; align-items: center; justify-content: center; min-height: 60px; padding: 8px 20px 8px 12px;
+  border: 0; border-radius: var(--radius-pill); background: var(--daily); color: #fff; font: inherit; cursor: pointer;
+  box-shadow: 0 4px 0 var(--daily-deep), var(--shadow-1); }
+.daily-card:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--daily-deep); }
+.daily-card__icon { display: flex; flex: none; align-items: center; justify-content: center; width: 40px; height: 40px; margin-inline-end: 10px;
+  border-radius: 50%; background: #fff; color: var(--daily-deep); }
+.daily-card__icon .icon { width: 24px; height: 24px; }
 .home-card { flex-direction: column; align-items: flex-start; justify-content: center; }
-.daily-card__text { display: flex; flex: 1; flex-direction: column; min-width: 0; }
 .daily-card__title, .home-card__title { font-family: var(--font-display); font-weight: var(--display-weight); font-size: var(--fs-l); text-wrap: balance; overflow-wrap: break-word; }
-.daily-card__sub, .home-card__sub { margin-top: 2px; color: var(--ink-2); font-size: var(--fs-s); }
-.daily-card__chev { width: 20px; height: 20px; color: var(--ink-3); }
-.daily-card[data-state='locked'] { background: var(--page-2); color: var(--ink-2); box-shadow: none; }
-.daily-card[data-state='locked'] .daily-card__icon { background: var(--line); color: var(--ink-3); }
-.daily-card[data-state='in_progress'] .daily-card__sub { color: var(--amber-text); font-weight: 600; }
-.daily-card[data-state='solved'] .daily-card__sub { color: var(--accent-deep); font-weight: 600; }
+.daily-card__title { min-width: 0; font-size: var(--fs-btn); line-height: 1.15; }
+.home-card__sub { margin-top: 2px; color: var(--ink-2); font-size: var(--fs-s); }
+.daily-card__tab { position: absolute; top: 100%; left: 50%; max-width: 86%; padding: 6px 14px 3px; border-radius: 0 0 12px 12px;
+  background: var(--daily-deep); transform: translateX(-50%); white-space: nowrap; }
+.daily-card__sub { display: block; overflow: hidden; font-family: var(--font-display); font-weight: var(--display-weight); font-size: var(--fs-s); text-overflow: ellipsis; }
+.daily-card[data-state='locked'] { background: var(--page-2); color: var(--ink-2); box-shadow: 0 4px 0 var(--line-2); }
+.daily-card[data-state='locked'] .daily-card__icon { background: var(--line); color: var(--ink-icon); }
+.daily-card[data-state='locked'] .daily-card__tab { background: var(--card); box-shadow: var(--shadow-1); }
 .home__stock { display: flex; justify-content: center; margin-top: 18px; }
 .stock__item { display: inline-flex; align-items: center; margin: 0 6px; padding: 6px 16px 6px 10px; border-radius: var(--radius-pill);
   background: var(--card); box-shadow: var(--shadow-1); font-family: var(--font-display); font-weight: var(--display-weight); font-size: var(--fs-l); }
@@ -130,7 +139,7 @@
    (review A11Y-CONTRAST-1). */
 @media (max-width: 359px) {
   .home__play .btn__chev { display: none; }
-  .daily-card__title { font-size: var(--fs-m); }
+  .daily-card__title { font-size: var(--fs-xl); }
 }
 @media (max-width: 374px) {
   .toast { padding: 8px 14px; font-size: var(--fs-s); }

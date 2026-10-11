@@ -30,6 +30,7 @@ export const catalog: LocaleCatalog = {
   // ── Home ───────────────────────────────────────────────────────────────────
   'home.play': 'ด่าน {level}',
   'home.continue': 'เล่นต่อ · ด่าน {level}',
+  'home.profile': 'โปรไฟล์',
   'home.daily.title': 'ปริศนาประจำวัน · {date}',
   'home.daily.size': '{n}×{n}',
   'home.daily.locked': 'ปลดล็อกหลังด่าน {level}',

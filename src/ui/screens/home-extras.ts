@@ -4,11 +4,11 @@
 // then Home shows the period pill in the lead slot and keeps the strip's row reserved; a mounted Home re-renders the
 // moment they land. Type-only imports: nothing of the chip or the strip is in the first load.
 import type { createLadderChip } from '../hud/ladder-chip';
-import type { createStreakStrip } from '../hud/streak-strip';
+import type { createStreakPill } from '../hud/streak-strip';
 
 export interface HomeExtras {
   readonly createLadderChip: typeof createLadderChip;
-  readonly createStreakStrip: typeof createStreakStrip;
+  readonly createStreakPill: typeof createStreakPill;
 }
 
 let extras: HomeExtras | null = null;

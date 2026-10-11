@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cfg } from '../../../src/app/config';
 import { createLadderChip, ladderChipLabel, type LadderChipView } from '../../../src/ui/hud/ladder-chip';
 import { createPills, type PillsProps } from '../../../src/ui/hud/pills';
-import { createStreakStrip, streakStepKinds, streakStripModel, type StreakStripView } from '../../../src/ui/hud/streak-strip';
+import { createStreakPill, streakPillCount, streakStepKinds, streakStripModel, type StreakStripView } from '../../../src/ui/hud/streak-strip';
 import { createHowToPlay, type HowToPlayProps } from '../../../src/ui/overlays/how-to-play';
 import { buyA11y, buyLabel, createRewardedPrompt, type O2BuyView, type RewardedPromptProps } from '../../../src/ui/overlays/rewarded-prompt';
 import { createSettingsModal, type SettingsLadderRows, type SettingsProps } from '../../../src/ui/overlays/settings-modal';
@@ -22,7 +22,7 @@ import { provideHomeExtras } from '../../../src/ui/screens/home-extras';
 
 // Phase 2e I-4: in the app the chip and the strip arrive with the lazy overlay chunk (app/overlay-chunk.ts); these
 // tests render them as they look once it has (tests/unit/ui/home-extras.spec.ts covers the time before).
-provideHomeExtras({ createLadderChip, createStreakStrip });
+provideHomeExtras({ createLadderChip, createStreakPill });
 
 const NOW = Date.UTC(2026, 9, 11, 12, 0, 0);
 const H = 3_600_000;
@@ -93,48 +93,43 @@ describe('Home ranking chip (spec §2.5 table, §9.4)', () => {
 
 // ─────────────────────────────── the streak strip ───────────────────────────────
 
-const strip = (v: StreakStripView): ReturnType<typeof createStreakStrip> => createStreakStrip(v);
+const pill = (v: StreakStripView) => createStreakPill(v, { onPress: () => undefined });
 
-describe('streak strip (spec §5.3 table): calm, no urgency', () => {
-  it('none and new: 7 empty steps and the neutral line', () => {
-    const s = strip({ state: 'none', day: 0, total: 7, rewardDay: false });
-    expect(s.el.getAttribute('role')).toBe('img');
-    expect(s.el.dataset.state).toBe('none');
-    expect(s.el.dataset.day).toBe('0');
-    expect(s.el.dataset.today).toBe('0');
-    expect(q(s.el, '.streak-strip__text').textContent).toBe('Solve a puzzle to start a streak.');
-    expect(q(s.el, '.streak-strip__day').hidden).toBe(true);
-    expect(qa(s.el, '.streak-step').map((e) => e.dataset.kind)).toEqual(Array(7).fill('empty'));
-    expect(qa(s.el, '.streak-step')[6]?.querySelector('use')?.getAttribute('href')).toBe('#streak-step-chest');
-    s.update({ state: 'new', day: 0, total: 7, rewardDay: false });
-    expect(s.el.dataset.state).toBe('none');
-    expect(s.el.hasAttribute('data-broken')).toBe(true);
-    expect(s.el.getAttribute('aria-label')).toBe('A new streak starts today.');
-    expect(s.el.textContent).not.toMatch(/lose|hurry|last chance|!/i);
+describe('streak words and the Home pill (spec §5.3 table): calm, no urgency', () => {
+  it('none and new: 7 empty steps, the neutral line, a 0 in the pill', () => {
+    const m = streakStripModel({ state: 'none', day: 0, total: 7, rewardDay: false });
+    expect(m.day).toBeNull();
+    expect(m.status).toBe('Solve a puzzle to start a streak.');
+    expect(m.kinds).toEqual(Array(7).fill('empty'));
+    const p = pill({ state: 'new', day: 0, total: 7, rewardDay: false, run: 0 });
+    expect(p.el.dataset.state).toBe('none');
+    expect(p.el.dataset.today).toBe('0');
+    expect(q(p.el, '.streak-pill__n').textContent).toBe('0');
+    expect(p.el.getAttribute('aria-label')).toBe('A new streak starts today.');
+    expect(p.el.getAttribute('aria-label')).not.toMatch(/lose|hurry|last chance|!/i);
+    expect(p.el.querySelector('use')?.getAttribute('href')).toBe('#icon-streak-flame');
   });
 
   it('alive: "Day 3 of 7 · Solve a puzzle today for day 4." with 3 done and step 4 outlined', () => {
-    const s = strip({ state: 'alive', day: 3, total: 7, rewardDay: false });
-    expect(s.el.dataset.state).toBe('alive');
-    expect(s.el.dataset.day).toBe('3');
-    expect(q(s.el, '.streak-strip__day').textContent).toBe('Day 3 of 7');
-    expect(q(s.el, '.streak-strip__text').textContent).toBe('Solve a puzzle today for day 4.');
-    expect(s.el.getAttribute('aria-label')).toBe('Streak: day 3 of 7. Solve a puzzle today for day 4.');
-    expect(qa(s.el, '.streak-step').map((e) => e.dataset.kind)).toEqual(['done', 'done', 'done', 'next', 'empty', 'empty', 'empty']);
-    const uses = qa(s.el, '.streak-step').map((e) => e.querySelector('use')?.getAttribute('href'));
-    expect(uses).toEqual(['#streak-step-done', '#streak-step-done', '#streak-step-done', '#streak-step-empty', '#streak-step-empty', '#streak-step-empty', '#streak-step-chest']);
+    const v: StreakStripView = { state: 'alive', day: 3, total: 7, rewardDay: false, run: 3 };
+    const m = streakStripModel(v);
+    expect(m.day).toBe('Day 3 of 7');
+    expect(m.status).toBe('Solve a puzzle today for day 4.');
+    expect(m.kinds).toEqual(['done', 'done', 'done', 'next', 'empty', 'empty', 'empty']);
+    const p = pill(v);
+    expect(p.el.dataset.state).toBe('alive');
+    expect(p.el.getAttribute('aria-label')).toBe('Streak: day 3 of 7. Solve a puzzle today for day 4.');
   });
 
-  it('done: "Today counts!" with today\'s soft check; day 7 "Streak reward collected!" and the chest open', () => {
-    const s = strip({ state: 'done', day: 4, total: 7, rewardDay: false });
-    expect(s.el.dataset.today).toBe('1');
-    expect(q(s.el, '.streak-strip__text').textContent).toBe('Today counts!');
-    expect(qa(s.el, '.streak-step').map((e) => e.dataset.kind)).toEqual(['done', 'done', 'done', 'today', 'empty', 'empty', 'empty']);
-    expect(qa(s.el, '.streak-step')[3]?.querySelector('use')?.getAttribute('href')).toBe('#streak-step-today');
-    s.update({ state: 'done', day: 7, total: 7, rewardDay: true });
-    expect(q(s.el, '.streak-strip__text').textContent).toBe('Streak reward collected!');
-    expect(s.el.hasAttribute('data-reward')).toBe(true);
-    expect(s.el.getAttribute('aria-label')).toBe('Streak: day 7 of 7. Streak reward collected!');
+  it('done: "Today counts!" with today\'s soft check; day 7 "Streak reward collected!"', () => {
+    expect(streakStripModel({ state: 'done', day: 4, total: 7, rewardDay: false }).status).toBe('Today counts!');
+    expect(streakStepKinds(7, 4, 4, 0)).toEqual(['done', 'done', 'done', 'today', 'empty', 'empty', 'empty']);
+    const p = pill({ state: 'done', day: 4, total: 7, rewardDay: false, run: 11 });
+    expect(p.el.dataset.today).toBe('1');
+    expect(q(p.el, '.streak-pill__n').textContent).toBe('11');
+    p.update({ state: 'done', day: 7, total: 7, rewardDay: true, run: 14 });
+    expect(p.el.getAttribute('aria-label')).toBe('Streak: day 7 of 7. Streak reward collected!');
+    expect(q(p.el, '.streak-pill__n').textContent).toBe('14');
   });
 
   it('alive after a full cycle: day 7 shown, the next counted day is day 1 of a new cycle', () => {
@@ -166,15 +161,15 @@ const homeView = (over: Partial<HomeView> = {}): HomeView => ({
 });
 const homeCb = () => ({ onPlay: vi.fn(), onDaily: vi.fn(), onSettings: vi.fn(), onCard: vi.fn(), onEvent: vi.fn(), onLadder: vi.fn() });
 
-describe('Home: the chip in the lead slot, the strip under Play, the daily unlock copy (spec §2.5, §5.3, §6.1)', () => {
+describe('Home: the floating ranking button, the profile and streak pill in the top bar, the daily unlock copy (spec §2.5, §5.3, §6.1; Home layout 2026-10-11)', () => {
   it('without HomeView.ladder: today\'s period pill; with it: the chip (the pill hidden) that opens the sheet', () => {
     const cb = homeCb();
     const home = createHomeScreen(homeView(), cb);
     document.body.appendChild(home.el);
-    expect(q(home.el, '.top-bar .top-bar__slot .period-pill').hidden).toBe(false);
+    expect(q(home.el, '.home__hero .home__rank .period-pill').hidden).toBe(false);
     expect(home.el.querySelector('.ladder-chip')).toBeNull();
     home.update(homeView({ ladder: BRACKET }));
-    const chip = q(home.el, '.top-bar .top-bar__slot button.ladder-chip[data-state="bracket"]');
+    const chip = q(home.el, '.home__hero .home__rank button.ladder-chip[data-state="bracket"]');
     expect(q(home.el, '.period-pill').hidden).toBe(true);
     chip.click();
     expect(cb.onLadder).toHaveBeenCalledTimes(1);
@@ -184,16 +179,47 @@ describe('Home: the chip in the lead slot, the strip under Play, the daily unloc
     home.destroy();
   });
 
-  it('the streak strip sits right after Play, before the daily card; null hides it', () => {
-    const home = createHomeScreen(homeView({ streak: { state: 'alive', day: 3, total: 7, rewardDay: false } }), homeCb());
+  it('the streak pill sits in the top bar\'s centre with the days in a row; a tap hands over the sentence; null hides it', () => {
+    const cb = { ...homeCb(), onStreak: vi.fn() };
+    const home = createHomeScreen(homeView({ streak: { state: 'done', day: 1, total: 7, rewardDay: false, run: 8 } }), cb);
     document.body.appendChild(home.el);
-    const strip = q(home.el, '.home__play').nextElementSibling;
-    expect(strip?.classList.contains('streak-strip')).toBe(true);
-    expect(strip?.nextElementSibling?.classList.contains('daily-card')).toBe(true);
+    expect(home.el.querySelector('.streak-strip')).toBeNull();
+    const pill = q<HTMLButtonElement>(home.el, '.top-bar .top-bar__center button.streak-pill');
+    expect(pill.textContent).toBe('8');
+    pill.click();
+    expect(cb.onStreak).toHaveBeenCalledWith('Streak: day 1 of 7. Today counts!');
     expect(home.el.hasAttribute('data-streak')).toBe(true);
     home.update(homeView({ streak: null }));
-    expect(q(home.el, '.streak-strip').hidden).toBe(true);
+    expect(pill.hidden).toBe(true);
     expect(home.el.hasAttribute('data-streak')).toBe(false);
+    home.destroy();
+  });
+
+  it('the pill counts 0 with no live run and falls back to the cycle day without a run', () => {
+    expect(streakPillCount({ state: 'new', day: 0, total: 7, rewardDay: false, run: 0 })).toBe(0);
+    expect(streakPillCount({ state: 'none', day: 0, total: 7, rewardDay: false })).toBe(0);
+    expect(streakPillCount({ state: 'alive', day: 3, total: 7, rewardDay: false })).toBe(3);
+  });
+
+  it('the profile picture sits in the top bar\'s lead slot, named "Profile", and shows the ranking avatar', () => {
+    const cb = { ...homeCb(), onProfile: vi.fn() };
+    const home = createHomeScreen(homeView({ avatarId: 4 }), cb);
+    document.body.appendChild(home.el);
+    const profile = q<HTMLButtonElement>(home.el, '.top-bar .top-bar__slot button.home__profile');
+    expect(profile.getAttribute('aria-label')).toBe('Profile');
+    expect(profile.querySelector('.home__avatar use')?.getAttribute('href')).toBe('#avatar-4');
+    profile.click();
+    expect(cb.onProfile).toHaveBeenCalledTimes(1);
+    home.update(homeView({ avatarId: null }));
+    expect(profile.querySelector('.home__avatar use')).toBeNull();
+    home.destroy();
+  });
+
+  it('the daily pill shows the title without the date (kept in its name) and the status in its tab', () => {
+    const home = createHomeScreen(homeView({ daily: { state: 'solved', dateKey: '2026-10-06', n: 8, solvedMs: 58_000, unlockLevel: 21 } }), homeCb());
+    expect(q(home.el, '.daily-card__title').textContent).toBe('Daily puzzle');
+    expect(q(home.el, '.daily-card__tab .daily-card__sub').textContent).toBe('8×8 · Solved 0:58');
+    expect(q(home.el, '.daily-card').getAttribute('aria-label')).toContain('Daily puzzle');
     home.destroy();
   });
 
@@ -249,13 +275,12 @@ describe('victory: the streak row, the daily reward line and the ranking total (
     v.open(victoryProps({ reducedMotion: true, streak: { day: 7, total: 7, reward: { hints: 2, kitties: 2 } } }));
     expect(q(v.el, '.victory__streak-reward').textContent).toBe('Streak reward: +2 hints and +2 kitties');
     expect(q(v.el, '.victory__streak').hasAttribute('data-fill')).toBe(false);
-    // audit B6: the reward is paid, so the last step shows the open chest (as the Home strip does): data-reward on
+    // audit B6: the reward is paid, so the last step shows the open chest: data-reward on
     // the row, and the CSS rule that opens the chest names the victory row too
     expect(q(v.el, '.victory__streak').hasAttribute('data-reward')).toBe(true);
     const css = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../../../src/styles/overlay-chunk.css'), 'utf8');
     const rule = /([^{}]*)\{\s*--chest-open:\s*1;/.exec(css)?.[1] ?? '';
     expect(rule).toContain('.victory__streak[data-reward] .streak-step:last-child');
-    expect(rule).toContain('.streak-strip[data-reward] .streak-step:last-child');
     v.update(victoryProps({ streak: { day: 4, total: 7, reward: null } }));
     expect(q(v.el, '.victory__streak').hasAttribute('data-reward')).toBe(false);
     v.update(victoryProps({ streak: null }));

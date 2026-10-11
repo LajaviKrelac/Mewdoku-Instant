@@ -13,7 +13,8 @@ vi.mock('../../../src/ui/art/illustrations', () => ({
   },
 }));
 
-vi.mock('../../../src/ui/hud/top-bar', () => ({
+vi.mock('../../../src/ui/hud/top-bar', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../src/ui/hud/top-bar')>()),
   createTopBar: (props: unknown, cb: Record<string, (...a: unknown[]) => void>) => {
     rec.cb.set('topbar', cb);
     rec.calls.push(['topbar', 'create', props]);
@@ -161,11 +162,10 @@ describe('S1 home', () => {
     expect(q(play, '.btn__label').textContent).toBe('Continue · Level 41');
   });
 
-  it('keeps the daily date on one line (UX-15)', () => {
+  it('the daily pill shows the title without the date; the date stays in its name (Home layout 2026-10-11)', () => {
     const home = createHomeScreen(view(), callbacks());
-    const title = q(home.el, '.daily-card__title');
-    expect(title.textContent).toBe('Daily puzzle · Tue 6 Oct');
-    expect(Array.from(title.querySelectorAll('.nowrap')).map((e) => e.textContent)).toContain('Tue 6 Oct');
+    expect(q(home.el, '.daily-card__title').textContent).toBe('Daily puzzle');
+    expect(q(home.el, '.daily-card').getAttribute('aria-label')).toBe('Daily puzzle, Tue 6 Oct, 8×8, Not played yet');
     home.destroy();
   });
 
@@ -174,7 +174,7 @@ describe('S1 home', () => {
     const card = q(home.el, '.daily-card');
     const sub = (): string | null => q(card, '.daily-card__sub').textContent;
     expect(card.dataset.state).toBe('locked');
-    expect(q(card, '.daily-card__title').textContent).toBe('Daily puzzle · Tue 6 Oct');
+    expect(q(card, '.daily-card__title').textContent).toBe('Daily puzzle');
     expect(sub()).toBe('Unlocks after level 20');
     expect(card.querySelector('.icon-lock')).not.toBeNull();
     home.update(view());

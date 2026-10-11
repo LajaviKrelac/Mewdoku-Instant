@@ -30,6 +30,7 @@ export const catalog: LocaleCatalog = {
   // ── Home ───────────────────────────────────────────────────────────────────
   'home.play': 'Уровень {level}',
   'home.continue': 'Дальше · Уровень {level}',
+  'home.profile': 'Профиль',
   'home.daily.title': 'Пазл дня · {date}',
   'home.daily.size': '{n}×{n}',
   'home.daily.locked': 'Откроется после уровня {level}',

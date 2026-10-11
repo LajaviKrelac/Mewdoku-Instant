@@ -30,6 +30,7 @@ export const catalog: LocaleCatalog = {
   // ── Home ───────────────────────────────────────────────────────────────────
   'home.play': '第{level}关',
   'home.continue': '继续 · 第{level}关',
+  'home.profile': '个人资料',
   'home.daily.title': '每日谜题 · {date}',
   'home.daily.size': '{n}×{n}',
   'home.daily.locked': '通过第{level}关后解锁',

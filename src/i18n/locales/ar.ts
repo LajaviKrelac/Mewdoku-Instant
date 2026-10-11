@@ -32,6 +32,7 @@ export const catalog: LocaleCatalog = {
   // ── Home ───────────────────────────────────────────────────────────────────
   'home.play': 'المستوى {level}',
   'home.continue': 'متابعة · المستوى {level}',
+  'home.profile': 'الملف الشخصي',
   'home.daily.title': 'لغز اليوم · {date}',
   'home.daily.size': '{n}×{n}',
   'home.daily.locked': 'يُفتح بعد المستوى {level}',

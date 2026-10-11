@@ -242,9 +242,10 @@ test('4d · the victory rows: the level\'s points total, the fish kept and "This
   expect((await app(page))?.save.points.total).toBe(total);
 });
 
-test('4e · the daily streak (Phase 2e §5): the first win of the day → day 1 on the victory and on Home\'s strip, today done; saved', async ({ page }) => {
+test('4e · the daily streak (Phase 2e §5): the first win of the day → day 1 on the victory and on Home\'s streak pill, today done; saved', async ({ page }) => {
   await open(page, '?flags=-ladder', returning());
-  const strip = page.locator('.screen--home .streak-strip');
+  // Home layout (2026-10-11): the streak pill at the top centre (the days in a row) replaced the strip.
+  const strip = page.locator('.screen--home .top-bar .streak-pill');
   await expect(strip).toHaveAttribute('data-today', '0');
   await playLevel(page);
   const sol = await solution(page);
@@ -259,7 +260,7 @@ test('4e · the daily streak (Phase 2e §5): the first win of the day → day 1 
   expect(s?.dayStreak.dates).toEqual([today()]);
   await page.locator('[data-overlay="victory"] .victory__home').click();
   await ready(page, 'home');
-  await expect(strip).toHaveAttribute('data-day', '1');
+  await expect(strip).toHaveText('1');
   await expect(strip).toHaveAttribute('data-today', '1');
   await expect(strip).toHaveAttribute('data-state', 'done');
 });
@@ -269,7 +270,7 @@ test('4f · the daily streak across days (fake clock): the next day → day 2; a
   const T = new Date(2026, 9, 12, 12, 0, 0).getTime(); // local noon (the browser's time zone is the host's)
   await page.clock.install({ time: T });
   await open(page, '?flags=-ladder', returning());
-  const strip = page.locator('.screen--home .streak-strip');
+  const strip = page.locator('.screen--home .top-bar .streak-pill');
   const winOnce = async (day: number): Promise<void> => {
     await playLevel(page);
     const sol = await solution(page);
@@ -280,7 +281,7 @@ test('4f · the daily streak across days (fake clock): the next day → day 2; a
     await expect(row).toContainText(new RegExp(`day ${day} of ${cfg.dayStreak.cycleDays}`, 'i'));
     await page.locator('[data-overlay="victory"] .victory__home').click();
     await ready(page, 'home');
-    await expect(strip).toHaveAttribute('data-day', String(day));
+    await expect(strip).toHaveText(String(day));
     await expect(strip).toHaveAttribute('data-today', '1');
   };
   await winOnce(1);
@@ -290,7 +291,7 @@ test('4f · the daily streak across days (fake clock): the next day → day 2; a
   await ready(page, 'home');
   await expect(strip).toHaveAttribute('data-state', 'alive');
   await expect(strip).toHaveAttribute('data-today', '0');
-  await expect(strip).toContainText('Solve a puzzle today for day 2.');
+  await expect(strip).toHaveAttribute('aria-label', /Solve a puzzle today for day 2\./);
   await winOnce(2);
   expect((await app(page))?.save.dayStreak).toMatchObject({ run: 2, best: 2 });
   // A day skipped: the run starts again, said neutrally (no urgency, no warning).
@@ -298,8 +299,8 @@ test('4f · the daily streak across days (fake clock): the next day → day 2; a
   await page.reload();
   await ready(page, 'home');
   await expect(strip).toHaveAttribute('data-state', 'none');
-  await expect(strip).toHaveAttribute('data-broken', /.*/);
-  await expect(strip).toContainText('A new streak starts today.');
+  await expect(strip).toHaveText('0');
+  await expect(strip).toHaveAttribute('aria-label', 'A new streak starts today.');
   await winOnce(1);
   expect((await app(page))?.save.dayStreak).toMatchObject({ run: 1, best: 2 });
 });

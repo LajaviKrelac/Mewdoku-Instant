@@ -120,6 +120,8 @@ export interface LadderFlow {
   /** Home mounted: a throttled refresh, a queue flush and the next result card. */
   homeMounted(): void;
   openSheet(from: 'home' | 'settings', view?: 'list' | 'info'): void;
+  /** Home's profile picture: opens the name sheet; false when there is no ranking name to edit. */
+  openProfile(): boolean;
   settingsRows(): SettingsLadderRows | undefined;
   /** dayStreak.serverSkewCheck: false while the device clock is off by more than dayStreak.maxSkewMs. */
   streakClockOk(): boolean;
@@ -1093,6 +1095,11 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
       void loadChunk();
       deps.router.open('ladder', sheetProps(view));
       void refreshBracket().then(() => refreshOpenSheet());
+    },
+    openProfile() {
+      if (!session?.player && !save().ladder.me) return false;
+      openNameSheet();
+      return true;
     },
     settingsRows() {
       const me = save().ladder.me;

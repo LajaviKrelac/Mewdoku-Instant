@@ -99,6 +99,7 @@ export function selectStreakStrip(state: AppState, today: string, c: GameConfig 
     day: v.day,
     total: v.total,
     rewardDay: v.todayDone && v.day === v.total && rewardForDay(v.day, c) !== null,
+    run: v.alive ? v.run : 0,
   };
 }
 
@@ -131,6 +132,7 @@ export function selectHomeView(state: AppState, ctx: ViewContext, c: GameConfig 
     // A 'records' chip from the flow (no server) carries this week's real total from the save.
     ladder: ctx.ladderChip && ctx.ladderChip.state !== 'records' ? ctx.ladderChip : { state: 'records', period: { kind: c.period.kind, total: periodTotal(save, ctx.now, c) } },
     streak: selectStreakStrip(state, today, c),
+    avatarId: save.ladder.me?.avatarId ?? null,
   };
 }
 

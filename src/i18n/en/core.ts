@@ -20,6 +20,7 @@ export const enCore = {
   // ── Home (S1) ──────────────────────────────────────────────────────────────
   'home.play': 'Level {level}',
   'home.continue': 'Continue · Level {level}',
+  'home.profile': 'Profile',
   'home.daily.title': 'Daily puzzle · {date}',
   'home.daily.size': '{n}×{n}',
   'home.daily.locked': 'Unlocks after level {level}',

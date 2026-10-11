@@ -30,6 +30,7 @@ export const catalog: LocaleCatalog = {
   // ── Home ───────────────────────────────────────────────────────────────────
   'home.play': '레벨 {level}',
   'home.continue': '이어하기 · 레벨 {level}',
+  'home.profile': '프로필',
   'home.daily.title': '오늘의 퍼즐 · {date}',
   'home.daily.size': '{n}×{n}',
   'home.daily.locked': '레벨 {level} 이후 열림',

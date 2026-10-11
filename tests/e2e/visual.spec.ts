@@ -191,12 +191,12 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
     // Phase 2c §2.8: this week's fish at the lead, not a fish pill with a shop "+". Phase 2e (G3, spec §2.5):
     // the ranking chip holds the lead; with no ranking server it is the records chip (trophy + this week's
     // fish, named like the period pill) and the period pill stays hidden.
-    const chip = page.locator('.screen--home .top-bar .ladder-chip');
+    const chip = page.locator('.screen--home .home__rank .ladder-chip');
     await expect(chip).toBeVisible();
     await expect(chip).toHaveAttribute('data-state', 'records');
     await expect(chip).toHaveAttribute('aria-label', '39 fish this week');
     await expect(chip.locator('.ladder-chip__n')).toHaveText('39');
-    await expect(page.locator('.screen--home .top-bar .period-pill')).toBeHidden();
+    await expect(page.locator('.screen--home .home__rank .period-pill')).toBeHidden();
     await expect(page.locator('.fish-pill, .fish-pill__plus')).toHaveCount(0);
     await shot(page, 'home');
   });
@@ -851,24 +851,38 @@ const DAY_MS = 86_400_000;
 const streakSave = (): SaveData =>
   returning({ dayStreak: { dates: [dailyDateKey(NOW - 2 * DAY_MS), dailyDateKey(NOW - DAY_MS)], run: 2, best: 9, paid: [] } });
 
-test.describe('Phase 2e (G3): the ranking chip, the streak strip and the victory streak row', () => {
-  test('Home: the records chip at the lead and the streak strip under Play', async ({ page }) => {
+test.describe('Phase 2e (G3): the ranking chip, the streak pill and the victory streak row', () => {
+  test('Home (layout 2026-10-11): profile top left, streak pill top centre, the records chip floating at the left, Play and the daily pill low', async ({ page }) => {
     await open(page, streakSave());
-    const chip = page.locator('.screen--home .top-bar .ladder-chip');
+    const vw = page.viewportSize()?.width ?? 0;
+    const vh = page.viewportSize()?.height ?? 0;
+    const chip = page.locator('.screen--home .home__rank .ladder-chip');
     await expect(chip).toBeVisible();
     await expect(chip).toHaveAttribute('data-state', 'records');
-    const strip = page.locator('.screen--home .streak-strip');
-    await expect(strip).toBeVisible();
-    await expect(strip).toHaveAttribute('data-state', 'alive');
-    await expect(strip).toHaveAttribute('aria-label', 'Streak: day 2 of 7. Solve a puzzle today for day 3.');
-    // 7 steps (dayStreak.cycleDays), the last one the reward chest; never colour alone (the label says it).
-    await expect(strip.locator('.streak-step')).toHaveCount(7);
-    // The strip sits under Play, inside the screen, never under the stock row.
+    const pill = page.locator('.screen--home .top-bar .streak-pill');
+    await expect(pill).toBeVisible();
+    await expect(pill).toHaveAttribute('data-state', 'alive');
+    await expect(pill).toHaveText('2');
+    await expect(pill).toHaveAttribute('aria-label', 'Streak: day 2 of 7. Solve a puzzle today for day 3.');
+    const profile = (await page.locator('.screen--home .top-bar .home__profile').boundingBox())!;
+    const pillBox = (await pill.boundingBox())!;
+    const gear = (await page.locator('.screen--home .top-bar__btn--settings').boundingBox())!;
+    const chipBox = (await chip.boundingBox())!;
     const play = (await page.locator('.home__play').boundingBox())!;
-    const box = (await strip.boundingBox())!;
-    expect(box.y).toBeGreaterThanOrEqual(play.y + play.height - 0.5);
-    expect(box.x).toBeGreaterThanOrEqual(-0.5);
-    expect(box.x + box.width).toBeLessThanOrEqual((page.viewportSize()?.width ?? 0) + 0.5);
+    const daily = (await page.locator('.screen--home .daily-card').boundingBox())!;
+    // One top row: profile left, pill centred, gear right.
+    expect(profile.x).toBeLessThan(vw * 0.25);
+    expect(Math.abs(pillBox.x + pillBox.width / 2 - vw / 2)).toBeLessThan(2);
+    expect(gear.x).toBeGreaterThan(vw * 0.75);
+    expect(Math.abs(profile.y + profile.height / 2 - (pillBox.y + pillBox.height / 2))).toBeLessThan(2);
+    // The ranking button at the left edge, between the top row and Play; Play above the daily pill, both centred.
+    expect(chipBox.x).toBeLessThan(vw * 0.1);
+    expect(chipBox.y).toBeGreaterThan(profile.y + profile.height);
+    expect(chipBox.y + chipBox.height).toBeLessThan(play.y);
+    expect(daily.y).toBeGreaterThan(play.y + play.height);
+    expect(Math.abs(play.x + play.width / 2 - vw / 2)).toBeLessThan(2);
+    expect(Math.abs(daily.x + daily.width / 2 - vw / 2)).toBeLessThan(2);
+    expect(play.y).toBeGreaterThan(vh * 0.5);
     await page.screenshot({ path: join(OUT_2E, `G3-2e-home-${page.viewportSize()?.width ?? 0}.png`) });
   });
 

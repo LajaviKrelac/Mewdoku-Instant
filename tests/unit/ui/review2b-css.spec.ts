@@ -105,10 +105,11 @@ describe('sizes and text (A11Y-HUB-1, I18N-TEXT-1, UX-2, PAR-7)', () => {
     expect(decls('screens.css', '.event-card__title')).not.toMatch(/white-space:\s*nowrap/);
   });
 
-  it('the Home hero is centred with auto margins (never overflowing up under the top bar)', () => {
+  it('the Home hero starts under the top bar and the mascot takes the free room (never overflowing up under the bar)', () => {
     expect(decls('overlays.css', '.home__hero')).toMatch(/justify-content:\s*flex-start/);
-    expect(decls('overlays.css', '.home__hero > :first-child')).toMatch(/margin-top:\s*auto/);
-    expect(decls('overlays.css', '.home__hero > :last-child')).toMatch(/margin-bottom:\s*auto/);
+    // Home layout (2026-10-11): the wordmark near the top like the original's logo, the mascot centred in what is left.
+    expect(decls('overlays.css', '.home__hero > :first-child')).toMatch(/margin-top:\s*clamp\(/);
+    expect(decls('overlays.css', '.home__mascot')).toMatch(/margin-bottom:\s*auto/);
     expect(decls('screens.css', '.screen--home[data-event][data-banner] .home__mascot > svg')).toMatch(/width:\s*96px/);
   });
 

@@ -42,7 +42,6 @@
 /* ── 2. Icons that point ─────────────────────────────────────────────────── */
 
 [dir='rtl'] .btn__chev,
-[dir='rtl'] .daily-card__chev,
 [dir='rtl'] .event-card__chev {
   transform: scaleX(-1);
 }
@@ -123,3 +122,6 @@
 :root:lang(ja) {
   word-break: auto-phrase;
 }
+
+/* Home layout (2026-10-11): the floating ranking button sits at the inline start (screens.css places it left). */
+[dir='rtl'] .home__rank { right: -6px; left: auto; }

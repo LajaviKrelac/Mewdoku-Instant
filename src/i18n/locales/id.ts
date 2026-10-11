@@ -29,6 +29,7 @@ export const catalog: LocaleCatalog = {
   // ── Home ───────────────────────────────────────────────────────────────────
   'home.play': 'Level {level}',
   'home.continue': 'Lanjut · Level {level}',
+  'home.profile': 'Profil',
   'home.daily.title': 'Teka-teki harian · {date}',
   'home.daily.size': '{n}×{n}',
   'home.daily.locked': 'Terbuka setelah level {level}',

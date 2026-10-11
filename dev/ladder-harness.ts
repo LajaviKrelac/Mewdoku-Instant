@@ -28,7 +28,7 @@ import { mountLazyArt } from '../src/ui/art/lazy-art';
 import { mountSprite } from '../src/ui/art/sprite';
 import { mountStreakArt } from '../src/ui/art/streak-art';
 import { createLadderChip } from '../src/ui/hud/ladder-chip';
-import { createStreakStrip } from '../src/ui/hud/streak-strip';
+import { createStreakPill } from '../src/ui/hud/streak-strip';
 import { provideHomeExtras } from '../src/ui/screens/home-extras';
 import type { OverlayView } from '../src/ui/dom';
 import { applyMotion } from '../src/ui/fx/motion';
@@ -87,7 +87,7 @@ const NAMES = [
 mountSprite();
 // Phase 2e I-4: in the app these come with the lazy overlay chunk (app/overlay-chunk.ts).
 mountStreakArt();
-provideHomeExtras({ createLadderChip, createStreakStrip });
+provideHomeExtras({ createLadderChip, createStreakPill });
 mountLazyArt();
 mountLadderArt();
 const app = document.getElementById('app') as HTMLElement;

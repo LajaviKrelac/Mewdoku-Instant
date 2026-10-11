@@ -225,7 +225,7 @@ for (const c of CASES) {
       await bootHome(page, c);
       await expect(page.locator('.screen--home .ladder-chip')).toBeVisible();
       await expect(page.locator('.screen--home .period-pill')).toBeHidden();
-      await expect(page.locator('.screen--home .streak-strip')).toBeVisible();
+      await expect(page.locator('.screen--home .streak-pill')).toBeVisible();
       await expect(page.locator('.screen--home .fish-pill__plus')).toHaveCount(0);
       await page.locator('.home__play').click();
       await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');

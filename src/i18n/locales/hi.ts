@@ -31,6 +31,7 @@ export const catalog: LocaleCatalog = {
   // ── Home ───────────────────────────────────────────────────────────────────
   'home.play': 'लेवल {level}',
   'home.continue': 'जारी रखें · लेवल {level}',
+  'home.profile': 'प्रोफ़ाइल',
   'home.daily.title': 'आज की पहेली · {date}',
   'home.daily.size': '{n}×{n}',
   'home.daily.locked': 'लेवल {level} के बाद खुलेगी',

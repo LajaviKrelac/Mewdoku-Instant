@@ -81,6 +81,8 @@ export function splitTitle(title: string): { readonly name: string; readonly suf
 export interface TopBarSlots {
   /** Placed after the FB safe zone (Home's period pill, Phase 2c §2.8). The caller owns and destroys it. */
   readonly lead?: HTMLElement;
+  /** Centred in the title's column when the title is hidden (Home's streak pill). The caller owns and destroys it. */
+  readonly center?: HTMLElement;
 }
 
 export function createTopBar(props: TopBarProps, cb: TopBarCallbacks, slots?: TopBarSlots): View<TopBarProps> {
@@ -114,6 +116,12 @@ export function createTopBar(props: TopBarProps, cb: TopBarCallbacks, slots?: To
     slot.className = 'top-bar__slot';
     slot.appendChild(slots.lead);
     el.insertBefore(slot, title);
+  }
+  if (slots?.center) {
+    const mid = document.createElement('div');
+    mid.className = 'top-bar__center';
+    mid.appendChild(slots.center);
+    el.insertBefore(mid, title);
   }
 
   let cur: TopBarProps | null = null;

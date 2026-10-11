@@ -29,6 +29,7 @@ export const catalog: LocaleCatalog = {
   // ── Home ───────────────────────────────────────────────────────────────────
   'home.play': 'Level {level}',
   'home.continue': 'Weiter · Level {level}',
+  'home.profile': 'Profil',
   'home.daily.title': 'Tagesrätsel · {date}',
   'home.daily.size': '{n}×{n}',
   'home.daily.locked': 'Ab Level {level} verfügbar',

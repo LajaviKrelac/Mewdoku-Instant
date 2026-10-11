@@ -1480,9 +1480,9 @@
 
 /* ── Phase 2e (G3, spec §2.5, §5.3): the Home ranking chip and the streak strip (moved here from screens.css at
    I-4: both arrive with this chunk; screens.css keeps the lead slot and the strip's reserved row) ──
-   The chip is a button in the top bar's lead slot, in the period pill's look (a white pill, the trophy in
-   gold wash): "#5" and the fish, "Join", the trophy alone (off), or the period total (records). The strip
-   is a white card under the Play button: our flame, the day line with 7 paw steps, and one calm line. */
+   The chip is a button in the period pill's look (a white pill, the trophy in gold wash): "#5" and the fish, "Join",
+   the trophy alone (off), or the period total (records); on Home it floats (below). The strip left Home for the
+   streak pill (screens.css, 2026-10-11); its paw steps stay for the victory's streak row. */
 .ladder-chip { display: inline-flex; flex: none; align-items: center; min-width: 44px; height: 44px; padding: 0 14px 0 6px; padding-inline-start: 6px; padding-inline-end: 14px;
   border: 0; border-radius: var(--radius-pill); background: var(--card); box-shadow: var(--shadow-1);
   color: var(--ink); font-family: var(--font-display); font-weight: var(--display-weight); font-size: var(--fs-l); cursor: pointer;
@@ -1497,23 +1497,36 @@
 .ladder-chip__points[data-plain] { margin-inline-start: 3px; }
 .ladder-chip__points[data-plain] .ladder-chip__fish { display: none; }
 .ladder-chip__fish { width: 22px; height: 22px; margin-inline-end: 2px; }
-.streak-strip { display: flex; align-items: center; width: 100%; min-height: 48px; padding: 5px 14px; border-radius: var(--radius-l);
-  background: var(--card); box-shadow: var(--shadow-1); color: var(--ink); text-align: start; }
-.streak-strip__flame { flex: none; width: 30px; height: 30px; margin-inline-end: 10px; }
-.streak-strip__body { flex: 1; min-width: 0; }
-.streak-strip__top { display: flex; flex-wrap: wrap; align-items: center; }
-.streak-strip__day { margin-inline-end: 8px; font-family: var(--font-display); font-weight: var(--display-weight); white-space: nowrap; }
 .streak-steps { display: inline-flex; align-items: center; }
 .streak-step { width: 18px; height: 18px; margin-inline-end: 2px; }
 .streak-step[data-kind='next'] { --step-line: var(--accent-deep); }
-.streak-strip[data-reward] .streak-step:last-child,
 .victory__streak[data-reward] .streak-step:last-child { --chest-open: 1; --chest-shut: 0; }
-.streak-strip__text { color: var(--ink-2); font-size: var(--fs-s); line-height: 1.25; }
 @media (max-width: 359px) {
   .ladder-chip { font-size: var(--fs-m); }
-  .streak-strip { padding-inline-start: 10px; padding-inline-end: 10px; }
-  .streak-strip__flame { width: 24px; height: 24px; margin-inline-end: 8px; }
 }
+
+/* Home layout (2026-10-11): the chip floats at the left edge halfway down Home (the original's leaderboard button): the
+   trophy on a white disc with a gold ring, the rank and fish in a dark pill over the disc's lower edge. */
+.home__rank .ladder-chip { display: grid; grid-template-columns: 1fr auto auto 1fr; justify-items: center; height: auto;
+  min-width: 80px; padding: 0; background: none; box-shadow: none; color: #fff; font-size: var(--fs-m); }
+.home__rank .ladder-chip::before { content: ''; z-index: 1; grid-column: 2 / 4; grid-row: 2; align-self: stretch; justify-self: stretch; border-radius: var(--radius-pill);
+  background: var(--stage); }
+.home__rank .ladder-chip[data-state='off']::before { display: none; }
+.home__rank .ladder-chip__icon { grid-column: 1 / -1; grid-row: 1; width: 64px; height: 64px; margin-bottom: -12px; padding: 10px;
+  border: 3px solid var(--gold); border-radius: 50%; background: var(--card); box-shadow: var(--shadow-1); }
+.home__rank .ladder-chip__rank, .home__rank .ladder-chip__points { z-index: 2; grid-row: 2; margin: 0; padding: 3px 12px; }
+.home__rank .ladder-chip__rank { grid-column: 2; }
+.home__rank .ladder-chip__points { grid-column: 3; }
+.home__rank .ladder-chip__rank:not([hidden]) + .ladder-chip__points { padding-inline-start: 0; }
+.home__rank .ladder-chip__rank:not([hidden]) { padding-inline-end: 6px; }
+.home__rank .ladder-chip[data-state='join'] .ladder-chip__rank { color: var(--tap-text); }
+.home__rank .ladder-chip__fish { width: 20px; height: 20px; }
+/* Home's streak pill at the top centre (screens.css reserves its box): our flame and the days in a row. */
+.streak-pill { align-items: center; justify-content: center; padding: 0 18px 0 12px; border: 0; border-radius: var(--radius-pill);
+  background: var(--card); color: var(--amber-text); font-family: var(--font-display); font-weight: var(--display-weight);
+  font-size: var(--fs-xl); cursor: pointer; box-shadow: var(--shadow-1); }
+.streak-pill:active { transform: scale(0.95); }
+.streak-pill__flame { width: 28px; height: 28px; margin-inline-end: 8px; }
 
 /* ── Victory: the daily reward line and the streak row (spec §5.3, §6.1) ── */
 /* The sticky footer's ::after (stage colour) starts right under the actions: room for the primary's ring and

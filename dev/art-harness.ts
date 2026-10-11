@@ -36,7 +36,7 @@ import { PALETTE, regionColorsFor, xEdgeColor } from '../src/ui/art/palette';
 import { icon, mountSprite, type SymbolId } from '../src/ui/art/sprite';
 import { mountStreakArt } from '../src/ui/art/streak-art';
 import { createLadderChip } from '../src/ui/hud/ladder-chip';
-import { createStreakStrip } from '../src/ui/hud/streak-strip';
+import { createStreakPill } from '../src/ui/hud/streak-strip';
 import { provideHomeExtras } from '../src/ui/screens/home-extras';
 import { mountLazyArt } from '../src/ui/art/lazy-art';
 import { createBoardView, type BoardModel, type CatMood } from '../src/ui/board/board-view';
@@ -52,7 +52,7 @@ const root = document.getElementById('app') as HTMLElement;
 mountSprite();
 // Phase 2e I-4: in the app these come with the lazy overlay chunk (app/overlay-chunk.ts).
 mountStreakArt();
-provideHomeExtras({ createLadderChip, createStreakStrip });
+provideHomeExtras({ createLadderChip, createStreakPill });
 mountLazyArt(); // Phase 2d.1: the symbols the lazy chunks mount (board mouse, star, shards, the tickers' art)
 mountAccessories(); // the events chunk does this in the game
 applyMotion(root, q.get('rm') === '1');

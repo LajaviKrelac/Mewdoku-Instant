@@ -1,18 +1,17 @@
 // Owner: G3 (Phase 2e)
-// The daily streak strip on Home (spec §5.3, CONTRACTS §8; our own design, D-2e-12): under the Play button,
-// above the daily card, inside .home__actions. Our streak flame, 7 paw steps (empty, done, today-done, the
-// day-7 chest) and the text. Main bundle (small; the steps and the flame are first-load art, G2).
+// The daily streak's words and steps (spec §5.3, CONTRACTS §8; our own design, D-2e-12). It was a strip on Home
+// under the Play button (flame, 7 paw steps, the text); since the Home layout of 2026-10-11 Home shows the pill below
+// and the sentence as a toast, and the steps live on in the victory's streak row.
 //   none   "Solve a puzzle to start a streak."             7 empty
 //   new    "A new streak starts today."                    7 empty (a broken run; never a warning)
 //   alive  "Day 3 of 7 · Solve a puzzle today for day 4."  3 done, step 4 outlined
 //   done   "Day 4 of 7 · Today counts!"                    4 done, step 4 with a soft check
 //          "Day 7 of 7 · Streak reward collected!"         7 done, the chest open (rewardDay)
-// No fake urgency (§5.1): no countdown, no "you'll lose it", no red, no reminder. One role="img" element
-// named with the whole sentence; the steps are decorative and carry a shape (check, fill), never colour
-// alone (§7.7). The step builder is shared with the victory's streak row (victory-screen.ts).
-// Classes: .streak-strip[data-state=none|alive|done][data-day][data-today=0|1][data-broken?]
-//          > svg.streak-strip__flame .streak-strip__body(.streak-strip__top(.streak-strip__day .streak-steps)
-//            .streak-strip__text); .streak-steps > svg.streak-step[data-step][data-kind=empty|next|done|today]
+// No fake urgency (§5.1): no countdown, no "you'll lose it", no red, no reminder. The pill is named with the whole
+// sentence; the steps are decorative and carry a shape (check, fill), never colour alone (§7.7).
+// Classes: .streak-steps > svg.streak-step[data-step][data-kind=empty|next|done|today] (victory-screen.ts);
+//          button.streak-pill[data-state][data-today] > svg.streak-pill__flame .streak-pill__n (Home's top centre, the
+//          original's streak counter); a tap hands the sentence to the app (a toast).
 import { formatNumber, onLocaleChanged, t } from '../../i18n';
 import { icon, type SymbolId } from '../art/sprite';
 import { h, setText, type View } from '../dom';
@@ -26,6 +25,8 @@ export interface StreakStripView {
   readonly total: number;
   /** Today counted the cycle's last day (its reward was paid with the win). */
   readonly rewardDay: boolean;
+  /** The days in a row (the Home pill's number); absent: the day in the cycle. */
+  readonly run?: number;
 }
 
 /** One step's look: an outline, the next one to earn, a filled paw, today's filled paw with a soft check. */
@@ -82,42 +83,38 @@ export function streakStripModel(v: StreakStripView): { day: string | null; stat
   return { day: dayText, status, kinds, label: t('streak.a11y', { day: formatNumber(day), total: formatNumber(total), status }) };
 }
 
-export function createStreakStrip(view: StreakStripView): View<StreakStripView> {
-  const dayEl = h('span', { class: 'streak-strip__day' });
-  const steps = h('span', { class: 'streak-steps' });
-  const text = h('p', { class: 'streak-strip__text' });
+export interface StreakPillCallbacks {
+  /** A tap: the strip's sentence ("Streak: day 3 of 7. Today counts!"), for a toast. */
+  onPress(text: string): void;
+}
+
+/** The days in a row the Home pill shows: 0 with no live run. Pure (tests). */
+export function streakPillCount(v: StreakStripView): number {
+  if (v.state === 'none' || v.state === 'new') return 0;
+  return Math.max(0, Math.floor(v.run ?? v.day));
+}
+
+/** Home's streak pill at the top centre: our flame and the days in a row, named with the strip's sentence. */
+export function createStreakPill(view: StreakStripView, cb: StreakPillCallbacks): View<StreakStripView> {
+  const n = h('span', { class: 'streak-pill__n num' });
+  let label = '';
   const el = h(
-    'div',
-    { class: 'streak-strip', role: 'img' },
-    icon('icon-streak-flame', { class: 'streak-strip__flame' }),
-    h('div', { class: 'streak-strip__body' }, h('div', { class: 'streak-strip__top' }, dayEl, steps), text),
+    'button',
+    { type: 'button', class: 'streak-pill', on: { click: () => cb.onPress(label) } },
+    icon('icon-streak-flame', { class: 'streak-pill__flame' }),
+    n,
   );
   let cur = view;
-  let stepsKey = '';
-
   const render = (v: StreakStripView): void => {
     cur = v;
-    const m = streakStripModel(v);
-    const total = Math.max(1, Math.floor(v.total));
-    const day = Math.max(0, Math.min(total, Math.floor(v.day)));
+    label = streakStripModel(v).label;
     el.dataset.state = v.state === 'new' ? 'none' : v.state;
-    el.toggleAttribute('data-broken', v.state === 'new');
-    el.dataset.day = String(m.day === null ? 0 : day);
     el.dataset.today = v.state === 'done' ? '1' : '0';
-    el.toggleAttribute('data-reward', v.state === 'done' && v.rewardDay);
-    dayEl.hidden = m.day === null;
-    setText(dayEl, m.day ?? '');
-    setText(text, m.status);
-    el.setAttribute('aria-label', m.label);
-    const key = m.kinds.join(',');
-    if (key !== stepsKey) {
-      stepsKey = key;
-      renderStreakSteps(steps, m.kinds);
-    }
+    setText(n, formatNumber(streakPillCount(v)));
+    el.setAttribute('aria-label', label);
   };
   render(view);
   const offLocale = onLocaleChanged(() => render(cur));
-
   return {
     el,
     update: render,

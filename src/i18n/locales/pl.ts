@@ -30,6 +30,7 @@ export const catalog: LocaleCatalog = {
   // ── Home ───────────────────────────────────────────────────────────────────
   'home.play': 'Poziom {level}',
   'home.continue': 'Graj dalej · Poziom {level}',
+  'home.profile': 'Profil',
   'home.daily.title': 'Zagadka dnia · {date}',
   'home.daily.size': '{n}×{n}',
   'home.daily.locked': 'Dostępna po poziomie {level}',

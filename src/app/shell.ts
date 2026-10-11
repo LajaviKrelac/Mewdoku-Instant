@@ -322,6 +322,13 @@ export function createShell(deps: ShellDeps): Shell {
           if (lf) lf.openSheet('home');
           else deps.openRecordsSheet?.();
         },
+        // Home layout (2026-10-11): the profile picture opens the name sheet, else Settings; the streak pill's sentence.
+        onProfile: () => {
+          if (!ladderNow()?.openProfile()) shell.openSettings();
+        },
+        onStreak: (text) => {
+          if (text) router.toast(text);
+        },
         onCard: () => undefined, // Phase 3 hook
         onEvent: () => {
           const card = selectHomeView(store.get(), ctx(), c).event;

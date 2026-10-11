@@ -31,6 +31,7 @@ export const catalog: LocaleCatalog = {
   // ── Home ───────────────────────────────────────────────────────────────────
   'home.play': 'Bölüm {level}',
   'home.continue': 'Devam · Bölüm {level}',
+  'home.profile': 'Profil',
   'home.daily.title': 'Günün bulmacası · {date}',
   'home.daily.size': '{n}×{n}',
   'home.daily.locked': 'Bölüm {level} sonrası açılır',

@@ -65,11 +65,13 @@ const card = (state: HomeEventCardView['state'], over: Partial<HomeEventCardView
 });
 
 describe('Home: period pill, event card, banner (phase2c §2.8; phase2b §4.4, §3.2)', () => {
-  it('puts the period pill (this week\'s fish) in the top bar after the safe zone; no fish pill, no shop "+"', () => {
+  it('puts the period pill (this week\'s fish) in the floating ranking place; no fish pill, no shop "+"', () => {
     const cb = homeCb();
     const home = createHomeScreen(homeView({ fbSafeZone: true }), cb);
     document.body.appendChild(home.el);
-    const pill = q(home.el, '.top-bar .top-bar__slot .period-pill');
+    // Home layout (2026-10-11): the profile picture holds the top bar's lead slot (after the safe zone).
+    expect(home.el.querySelector('.top-bar .top-bar__slot .home__profile')).not.toBeNull();
+    const pill = q(home.el, '.home__hero .home__rank .period-pill');
     expect(pill.hasAttribute('data-in-game')).toBe(false);
     expect(q(pill, '.period-pill__n').textContent).toBe('42');
     expect(pill.getAttribute('role')).toBe('img');

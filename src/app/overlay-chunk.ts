@@ -20,11 +20,11 @@ import '../i18n/en-lazy'; // the lazy English strings (I-4): registered before a
 // then, ui/screens/home-extras.ts). Registered when the chunk evaluates, before any of its views is created.
 import { mountStreakArt } from '../ui/art/streak-art';
 import { createLadderChip } from '../ui/hud/ladder-chip';
-import { createStreakStrip } from '../ui/hud/streak-strip';
+import { createStreakPill } from '../ui/hud/streak-strip';
 import { provideHomeExtras } from '../ui/screens/home-extras';
 
 mountStreakArt();
-provideHomeExtras({ createLadderChip, createStreakStrip });
+provideHomeExtras({ createLadderChip, createStreakPill });
 
 export { createDailyResult } from '../ui/overlays/daily-result';
 export { createFailOverlay } from '../ui/overlays/fail-overlay';

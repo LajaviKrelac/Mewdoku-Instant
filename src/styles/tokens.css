@@ -60,6 +60,8 @@
   --badge: #dc2f2f; /* count badges: measured #e93636 darkened for white digits 4.68 */
   --badge-video: #03a84a; /* "watch a video" badge: measured #02be52 darkened, white mark 3.13 */
   --dot: #f34f4f; /* the gear's red dot */
+  --daily: #5e6fcf; /* ours: the Home daily pill (the original's periwinkle, deepened): white on it 4.52 */
+  --daily-deep: #4f5fbf; /* its bottom edge and status tab: white on it 5.64 */
   --toast-fill: #fff1c8; /* level-start tickers (2d.1 §5.2: re-sampled from the PNG still) */
   --toast-line: #e98e33;
   --rule-card: #fbf4ee; /* rule card fill: --ink on it 5.01 */

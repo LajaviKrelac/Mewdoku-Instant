@@ -17,10 +17,17 @@
 // it lands Home shows the period pill and keeps the strip's row (.streak-strip--pending, invisible), then renders
 // both in place.
 //
+// Home layout (2026-10-11, measured from the user's iPhone screenshot of the original's Home): the profile picture at
+// the top left (the top bar's lead slot, after the FB safe zone), the streak pill at the top centre, the gear at the top
+// right; the wordmark under the bar; the ranking button floating at the left edge halfway down the hero; the Play pill
+// and the daily pill (with its status tab hanging below) low on the screen, about 70 % of the width. The streak strip
+// left Home: the pill carries the run, and a tap tells the strip's sentence (HomeCallbacks.onStreak).
 // Classes: .screen.screen--home[data-banner][data-streak?] > .home__body (+ .home__bg, the scrolling board, last) > .home__hero(.home__wordmark .home__tagline .home__mascot)
 //          .home__actions(.home__cards > .event-card[data-state] .home__play .badge.badge--hard
-//          .streak-strip .daily-card[data-state] .home-card) .home__stock(.stock__item); the top bar's lead slot
-//          holds .home__lead > .period-pill | button.ladder-chip
+//          .daily-card[data-state] .home-card) .home__stock(.stock__item); the top bar's lead slot
+//          holds button.home__profile; its centre slot .home__streak > button.streak-pill | .streak-pill--pending;
+//          .home__hero > .home__rank > .period-pill | button.ladder-chip; .daily-card > .daily-card__icon
+//          .daily-card__title .daily-card__tab(.daily-card__sub)
 // Review fixes: the hero never overlaps the top bar or the cards below it (UX-2, I18N-LAYOUT-2): it is
 // centred with auto margins (overflow can only go down), and fitHero() shrinks the mascot (then
 // drops the tagline) until the hero fits the space the event card, the banner reserve and the
@@ -31,15 +38,14 @@ import type { DailyCardState } from '../../game/progression';
 import { formatClock, formatDuration, formatShortDate, onLocaleChanged, t, translate } from '../../i18n';
 import { homeBoardUrl } from '../art/home-board';
 import { mascotIllustration } from '../art/mascot';
-import { icon } from '../art/sprite';
+import { icon, type AvatarSymbol } from '../art/sprite';
 import { clear, h, setText, type View } from '../dom';
 import type { LadderChipView, createLadderChip } from '../hud/ladder-chip';
 import { createPeriodPill } from '../hud/pills';
-import type { StreakStripView, createStreakStrip } from '../hud/streak-strip';
+import type { StreakStripView, createStreakPill } from '../hud/streak-strip';
 import { homeExtras, whenHomeExtras } from './home-extras';
-import { createTopBar, type TopBarProps } from '../hud/top-bar';
+import { createTopBar, splitTitle, type TopBarProps } from '../hud/top-bar';
 import { createLocaleText } from '../locale-text';
-import { setTextKeepTogether } from '../overlays/overlay-base';
 
 /** The smallest Home mascot (CSS px) before the tagline, and then the mascot, give way (fitHero). */
 export const MASCOT_MIN_PX = 64;
@@ -121,12 +127,14 @@ export interface HomeView {
   readonly settingsDot: boolean;
   // ── Phase 2e (spec §2.5, §5.3; required since I-3) ──
   /**
-   * The ranking chip in the top bar's lead slot (replaces the period pill; its `records` state carries the pill's
+   * The ranking chip (the floating .home__rank button; replaces the period pill; its `records` state carries the pill's
    * content). null: the 2c period pill (not a button).
    */
   readonly ladder: LadderChipView | null;
-  /** The streak strip under the Play button; null: hidden. */
+  /** The streak pill at the top centre (it was the strip under the Play button); null: hidden. */
   readonly streak: StreakStripView | null;
+  /** The profile picture (save.ladder.me's avatar); absent or null: our default cat head. */
+  readonly avatarId?: number | null;
 }
 
 export interface HomeCallbacks {
@@ -139,6 +147,10 @@ export interface HomeCallbacks {
   onEvent(): void;
   /** Phase 2e §2.5: the ranking chip (opens the ranking sheet, overlay `ladder`). Required since I-3. */
   onLadder(): void;
+  /** The profile picture at the top left (the name sheet when there is a ranking name, else Settings). */
+  onProfile?(): void;
+  /** The streak pill: the strip's sentence ("Day 3 of 7 · Today counts!") to show as a toast. */
+  onStreak?(text: string): void;
 }
 
 /** "3 d 4 h" for a day or more, else "7 h 48 min" / "12 min" (event countdowns, phase2b §4.4). */
@@ -189,9 +201,10 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
     // Phase 2d §1.15, §2.2: the red dot on the gear (something in Settings not seen yet).
     settingsDot: v.settingsDot,
   });
-  // Phase 2c §2.8: the period pill at the top bar's lead, after the FB safe zone (not a button).
+  // Phase 2c §2.8: the period pill (not a button) in the ranking button's place until the chip arrives.
   const periodOf = (v: HomeView): { readonly kind: PeriodKind; readonly total: number } => v.period ?? { kind: cfg.period.kind, total: 0 };
   const periodPill = createPeriodPill(periodOf(view));
+  const L = createLocaleText();
   // Phase 2e §2.5: the ranking chip takes the pill's place when the app passes HomeView.ladder.
   let chip: ReturnType<typeof createLadderChip> | null = null;
   // Phase 2e I-4: the factories arrive with the overlay chunk; one re-render when they do.
@@ -202,11 +215,26 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
       render(last);
     });
   };
-  const lead = h('span', { class: 'home__lead' }, periodPill.el);
+  // The ranking button floats at the left edge, halfway down the hero (the original's place for its leaderboard).
+  const lead = h('div', { class: 'home__rank' }, periodPill.el);
+  // The profile picture: our cat head under the avatar, which draws once the ranking art is mounted.
+  const avatarUse = h('span', { class: 'home__avatar', 'aria-hidden': 'true' });
+  let avatarShown: number | null = null;
+  const profile = L.attr(
+    h(
+      'button',
+      { type: 'button', class: 'home__profile', on: { click: () => (cb.onProfile ? cb.onProfile() : cb.onSettings()) } },
+      icon('cat-head-flat', { class: 'home__avatar-base' }),
+      avatarUse,
+    ),
+    'aria-label',
+    () => t('home.profile'),
+  );
+  const streakSlot = h('div', { class: 'home__streak' });
   const topBar = createTopBar(
     topBarProps(view),
     { onHome: () => undefined, onSettings: () => cb.onSettings() },
-    { lead },
+    { lead: profile, center: streakSlot },
   );
 
   // phase2b §4.4 event card (above the Level button): art, title, status line, 4 px progress bar.
@@ -233,7 +261,6 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
   );
   let artFor: { id: string; fn: NonNullable<HomeEventCardView['art']> } | null = null;
 
-  const L = createLocaleText();
   // Primary level button.
   const playLabel = h('span', { class: 'btn__label' });
   const hardBadge = L.text(h('span', { class: 'badge badge--hard' }), () => t('common.hard'));
@@ -250,18 +277,19 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
   const dailyIcon = h('span', { class: 'daily-card__icon', 'aria-hidden': 'true' });
   const dailyTitle = h('span', { class: 'daily-card__title' });
   const dailySub = h('span', { class: 'daily-card__sub' });
+  // The original's daily pill: icon, title, and a tab hanging below with the status (size, solve time, lock).
   const daily = h(
     'button',
     { type: 'button', class: 'daily-card', on: { click: () => cb.onDaily() } },
     dailyIcon,
-    h('span', { class: 'daily-card__text' }, dailyTitle, dailySub),
-    icon('icon-chevron', { class: 'daily-card__chev' }),
+    dailyTitle,
+    h('span', { class: 'daily-card__tab' }, dailySub),
   );
 
   const cards = h('div', { class: 'home__cards' });
-  // Phase 2e §5.3: the streak strip (created on the first view that carries one).
-  let strip: ReturnType<typeof createStreakStrip> | null = null;
-  /** I-4: the strip's row while its factory is on its way (same box, invisible, hidden from assistive tech). */
+  // The streak pill (created on the first view that carries one).
+  let strip: ReturnType<typeof createStreakPill> | null = null;
+  /** I-4: the pill's box while its factory is on its way (same box, invisible, hidden from assistive tech). */
   let pendingStrip: HTMLElement | null = null;
   const hintsCount = h('span', { class: 'stock__count num' });
   const kittiesCount = h('span', { class: 'stock__count num' });
@@ -271,7 +299,7 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
   const mascot = L.attr(mascotIllustration('home', { label: t('a11y.mascot') }), 'aria-label', () => t('a11y.mascot'));
   const mascotBox = h('div', { class: 'home__mascot' }, mascot);
   const tagline = L.text(h('p', { class: 'home__tagline' }), () => t('app.tagline'));
-  const hero = h('div', { class: 'home__hero' }, L.text(h('h1', { class: 'home__wordmark' }), () => t('app.name')), tagline, mascotBox);
+  const hero = h('div', { class: 'home__hero' }, L.text(h('h1', { class: 'home__wordmark' }), () => t('app.name')), tagline, mascotBox, lead);
   // Home redesign: a new random board on every Home visit (art/home-board.ts), drawn here, no image file.
   const bg = h('div', { class: 'home__bg', 'aria-hidden': 'true' });
   bg.style.backgroundImage = homeBoardUrl(Math.floor(Math.random() * 0x7fffffff));
@@ -352,7 +380,7 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
     periodPill.el.hidden = true;
   };
 
-  /** Phase 2e §5.3: the strip after the Play button (before the daily card). */
+  /** The streak pill in the top bar's centre slot. */
   const renderStreak = (v: StreakStripView | null): void => {
     el.toggleAttribute('data-streak', v !== null);
     if (!v) {
@@ -362,19 +390,26 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
     }
     const x = homeExtras();
     if (!strip && !x) {
-      pendingStrip ??= h('div', { class: 'streak-strip streak-strip--pending', 'aria-hidden': 'true' });
-      if (!pendingStrip.isConnected) play.after(pendingStrip);
+      pendingStrip ??= h('div', { class: 'streak-pill streak-pill--pending', 'aria-hidden': 'true' });
+      if (!pendingStrip.isConnected) streakSlot.appendChild(pendingStrip);
       pendingStrip.hidden = false;
       awaitExtras();
       return;
     }
     if (!strip) {
-      strip = (x as NonNullable<typeof x>).createStreakStrip(v);
-      (pendingStrip ?? play).after(strip.el);
+      strip = (x as NonNullable<typeof x>).createStreakPill(v, { onPress: (text) => cb.onStreak?.(text) });
+      streakSlot.appendChild(strip.el);
       pendingStrip?.remove();
       pendingStrip = null;
     } else strip.update(v);
     strip.el.hidden = false;
+  };
+
+  const renderAvatar = (id: number | null): void => {
+    if (id === avatarShown) return;
+    avatarShown = id;
+    clear(avatarUse);
+    if (id !== null) avatarUse.appendChild(icon(`avatar-${id}` as AvatarSymbol));
   };
   let iconState: 'lock' | 'cal' | null = null;
 
@@ -420,6 +455,7 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
     periodPill.update(periodOf(v));
     renderLead(v.ladder);
     renderStreak(v.streak);
+    renderAvatar(v.avatarId ?? null);
     renderEvent(v.event);
     el.toggleAttribute('data-banner', v.bannerReserved);
     el.style.setProperty('--banner-reserve', `${cfg.ads.banner.reservePx}px`);
@@ -434,7 +470,8 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
     daily.dataset.state = d.state;
     // The date never breaks between day and month ("Wed 7" / "Oct", UX-15).
     const title = t('home.daily.title', { date });
-    if (dailyTitle.textContent !== title) setTextKeepTogether(dailyTitle, title, [date]);
+    // The pill shows the title's name ("Daily puzzle"); the date stays in its accessible name.
+    setText(dailyTitle, splitTitle(title).name);
     setText(dailySub, d.state === 'locked' ? status : t('home.daily.sub', { size, status }));
     daily.setAttribute('aria-label', t('home.daily.a11y', { date, size, status }));
     const wanted = d.state === 'locked' ? 'lock' : 'cal';

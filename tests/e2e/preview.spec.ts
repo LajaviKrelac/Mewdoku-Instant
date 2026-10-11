@@ -90,8 +90,8 @@ test.describe('the preview link (dist/preview-e2e)', () => {
     const s0 = (await app(page)).save;
     expect(s0.progress.level).toBe(37);
     expect(s0.stock).toEqual({ hints: 3, kitties: 2 });
-    await expect(page.locator('.screen--home .streak-strip')).toHaveAttribute('data-day', '6');
-    await expect(page.locator('.screen--home .streak-strip__text')).toHaveText('Solve a puzzle today for day 7.');
+    await expect(page.locator('.screen--home .streak-pill')).toHaveText('6');
+    await expect(page.locator('.screen--home .streak-pill')).toHaveAttribute('aria-label', 'Streak: day 6 of 7. Solve a puzzle today for day 7.');
     await expect(page.locator('.screen--home .daily-card')).not.toHaveAttribute('data-state', 'locked');
     await expect(page.locator('.screen--home .daily-card')).toHaveAttribute('data-state', 'not_played');
     // The ranking chip from the sample server's bracket (22 fish, 5th of 24).

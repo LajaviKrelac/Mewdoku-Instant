@@ -979,7 +979,8 @@ test('Phase 2e: Home at 320 × 568 — the ranking chip, Play, the streak strip,
       await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');
       await page.waitForTimeout(600);
       const label = `${ads} ${locale}`;
-      const sels = ['.screen--home button.ladder-chip', '.screen--home .home__play', '.screen--home .streak-strip', '.screen--home .daily-card', '.screen--home .event-card', '.screen--home .top-bar__btn--settings'];
+      // Home layout (2026-10-11): the profile picture and the streak pill in the top bar, the chip floating at the left.
+      const sels = ['.screen--home .home__profile', '.screen--home .streak-pill', '.screen--home button.ladder-chip', '.screen--home .home__play', '.screen--home .daily-card', '.screen--home .event-card', '.screen--home .top-bar__btn--settings'];
       const boxes = await boxesOf(page, sels);
       expect(boxes.map((b) => b.sel), label).toEqual(sels);
       for (let i = 0; i < boxes.length; i++) {

@@ -167,6 +167,7 @@ const NOTES: Readonly<Partial<Record<I18nKey, Partial<KeyMeta>>>> = {
   'common.off': { description: 'State text next to a toggle switch', maxLength: 6 },
   'home.play': { description: 'Home: the big play button', maxLength: 22 },
   'home.continue': { description: 'Home: the big play button when a level is half done', maxLength: 26 },
+  'home.profile': { description: 'Home: screen-reader name of the profile picture button (top left)', maxLength: 24 },
   'home.daily.title': { maxLength: 30 },
   'home.daily.size': { description: 'Board size', translatable: false },
   'home.daily.sub': { description: 'Daily card second line: size · status', translatable: false },

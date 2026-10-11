@@ -35,7 +35,7 @@ import { setInert, trapFocus } from '../src/ui/a11y/focus-trap';
 import { mountSprite } from '../src/ui/art/sprite';
 import { mountStreakArt } from '../src/ui/art/streak-art';
 import { createLadderChip } from '../src/ui/hud/ladder-chip';
-import { createStreakStrip } from '../src/ui/hud/streak-strip';
+import { createStreakPill } from '../src/ui/hud/streak-strip';
 import { provideHomeExtras } from '../src/ui/screens/home-extras';
 import { mountLazyArt } from '../src/ui/art/lazy-art';
 import type { OverlayView } from '../src/ui/dom';
@@ -65,7 +65,7 @@ const banner = q.get('banner') === '1';
 mountSprite();
 // Phase 2e I-4: in the app these come with the lazy overlay chunk (app/overlay-chunk.ts).
 mountStreakArt();
-provideHomeExtras({ createLadderChip, createStreakStrip });
+provideHomeExtras({ createLadderChip, createStreakPill });
 mountLazyArt(); // Phase 2d.1: the symbols the lazy chunks mount (board mouse, star, shards, the tickers' art)
 const app = document.getElementById('app') as HTMLElement;
 applyMotion(app, reduced);
