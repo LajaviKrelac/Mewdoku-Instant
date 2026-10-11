@@ -5,6 +5,7 @@
 // list, the ranking sheet (list, info, records, notice), the result card's three cases and the name sheet.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cfg } from '../../../src/app/config';
+import { formatNumber, setLocale, t, tn } from '../../../src/i18n';
 import { NICK_WORDS_V1 } from '../../../src/shared/nick-words';
 import {
   countdownText,
@@ -304,6 +305,30 @@ describe('bracket list: exactly the server rows (H-3, §10.6 #1)', () => {
     expect(rowLabel(r, true)).toBe('#5, Brave Noodle 12, you, 36 fish, 0 hearts');
     expect(rowLabel({ ...r, me: false, hearts: 1 }, true)).toBe('#5, Brave Noodle 12, 36 fish, 1 heart');
     expect(heartLabel({ ...r, me: false, hearts: 1 })).toBe('Give a heart to Brave Noodle 12, 1 heart');
+  });
+
+  it('RTL (Arabic): the copy follows the language, the names stay our English words, isolated with dir="auto"', async () => {
+    const list = createBracketList(view({ rows: rows(6, 2), waiting: 2 }), { onHeart: vi.fn() });
+    document.body.appendChild(list.el);
+    try {
+      expect(await setLocale('ar')).toBe('ar');
+      expect(document.documentElement.dir).toBe('rtl');
+      const items = qa(list.el, 'ol.rank-rows > li.rank-row');
+      // The names are never translated (glossary) and each is bidi-isolated (spec §2.4, C-31).
+      expect(items.map((li) => q(li, '.rank-row__name').textContent)).toEqual(NAMES.concat(NAMES[0] as string).slice(0, 6));
+      for (const li of items) expect(q(li, '.rank-row__name').getAttribute('dir')).toBe('auto');
+      // The lines and the a11y names re-render in Arabic on the locale change (A11Y-I18N-1), still the server's numbers.
+      expect(q(list.el, '.ranking__count').textContent).toBe(tn('ladder.players', 6, { count: formatNumber(6) }));
+      expect(q(list.el, '.ranking__count').textContent).not.toMatch(/players/);
+      const mine = q(list.el, '.rank-row[data-me="1"]');
+      expect(mine.getAttribute('aria-label')).toContain('Velvet Paws 3');
+      expect(mine.getAttribute('aria-label')).not.toMatch(/\byou\b|fish|hearts?/);
+      expect(q(mine, '.rank-row__you').textContent).toBe(t('ladder.you'));
+      expect(q(mine, '.rank-row__waiting').textContent).not.toMatch(/waiting/);
+    } finally {
+      await setLocale('en');
+      list.destroy();
+    }
   });
 });
 
@@ -754,7 +779,7 @@ describe('name sheet (overlay `nickname`, spec §2.7)', () => {
     const sheet = createNicknameSheet();
     document.body.appendChild(sheet.el);
     sheet.open(p);
-    expect(q(sheet.el, 'button.nickname__save').getAttribute('aria-busy')).toBe('');
+    expect(q(sheet.el, 'button.nickname__save').getAttribute('aria-busy')).toBe('true');
     expect(sheet.dismiss()).toBe(true);
     q(sheet.el, 'button.nickname__cancel').click();
     expect(p.onClose).not.toHaveBeenCalled();

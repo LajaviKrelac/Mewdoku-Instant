@@ -66,7 +66,7 @@ export interface SettingsProps {
 
 /** Phase 2e (CONTRACTS §8): the Settings ranking rows. */
 export interface SettingsLadderRows {
-  /** My ranking name (our words; rendered with textContent, dir="auto"). */
+  /** My ranking name (our words; rendered with textContent, dir="auto"); '' = no player yet (the name row and code hide). */
   readonly name: string;
   /** ALREADY formatted by the app ("7KQ2-M9XD"): ui/ imports shared/ for types only. null hides the line. */
   readonly code: string | null;
@@ -395,8 +395,10 @@ export function createSettingsModal(): OverlayView<SettingsProps> {
     const l = p.ladder;
     ladderGroup.hidden = !l;
     if (l) {
-      // Our words, the same in every locale: textContent only.
+      // Our words, the same in every locale: textContent only. An empty name (requests-G1 R2): not listed and no player
+      // on the server (after "Delete my ranking data"): no name row, no code; the switch and Delete stay to join again.
       if (ladderNameValue.textContent !== l.name) ladderNameValue.textContent = l.name;
+      ladderName.hidden = l.name === '';
       listedRow.hidden = !l.showListed;
       listedSwitch.setAttribute('aria-checked', String(l.listed));
       const state = listedSwitch.querySelector('.switch__state');
@@ -406,7 +408,7 @@ export function createSettingsModal(): OverlayView<SettingsProps> {
         else b.setAttribute('aria-disabled', 'true');
       }
       ladderOffline.hidden = l.online;
-      ladderCode.hidden = l.code === null;
+      ladderCode.hidden = l.code === null || l.name === '';
       if (l.code !== null) setText(ladderCode, t('settings.ladder.code', { code: l.code }));
     } else if (view === 'confirm') showView('main', false);
     shopLink.hidden = !p.onShop;

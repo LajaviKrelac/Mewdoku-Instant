@@ -29,6 +29,13 @@
 // (320 × 568, 390 × 844, 1280 × 800, with and without the band); the "+N" and the "Done!" labels stay
 // inside the viewport for a cat in each corner tile; in German at 320 × 568 with the band (and with 2×
 // text) the card stays below the bar and off the board, scrolling inside when its text cannot fit.
+// Phase 2e (G1, docs/phase2e/spec.md §10.3 layout, critic C-35): at 320 × 568, with and without the band,
+// in English and German: Home with the ranking chip, the streak strip, the daily card and the event card
+// (nothing overlaps, Play on screen without scrolling); the post-win panel with 50 real rows (a test pool
+// on the dev server) scrolls inside its card, no page overflow, the footer button on screen, every heart
+// a 44 × 44 hit area; the result card and the name sheet (12 avatars, both pickers, Save) fit or scroll
+// inside their dialogs. The web Home's ranking chip is a button at the bar's inline start: the FB safe
+// zone matters only in the FBIG build, where the chip sits after the zone (fbig.spec.ts checks it).
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -38,6 +45,7 @@ import type { LevelPack } from '../../src/engine/types';
 import { defaults } from '../../src/game/save';
 import { pointsRuleFor, runTotal } from '../../src/game/scoring';
 import type { InProgressV2, SaveData } from '../../src/game/types';
+import { devAdvance, devCron, fillPool, LADDER_URL, ladderUp, newPool } from './helpers/rank-players';
 
 type TestWindow = Window & { __mewdoku?: E2EHooks };
 
@@ -90,6 +98,8 @@ async function safeZoneClear(page: Page): Promise<void> {
     const out: string[] = [];
     for (const el of Array.from(document.querySelectorAll<HTMLElement>('button, a[href], [role="button"]'))) {
       if (el.closest('.screen--game')) continue;
+      // Phase 2e (spec §2.5): the ranking chip is the web bar's lead button (FBIG shifts it past the zone).
+      if (el.classList.contains('ladder-chip') && document.getElementById('app')?.dataset.platform !== 'fbig') continue;
       const r = el.getBoundingClientRect();
       if (r.width === 0 || r.height === 0 || el.closest('[hidden]')) continue;
       if (r.left < zone && r.top < zone) out.push(el.className || el.tagName);
@@ -888,5 +898,215 @@ test('2d.1: the "+N" and the "Done!" labels stay inside the viewport for a cat i
       expect(r.done.bottom, `${label}: label bottom`).toBeLessThanOrEqual(vh);
       await page.waitForTimeout(1_500); // the sequence ends before the next corner
     }
+  }
+});
+
+// ─────────────────────────── Phase 2e (G1) ───────────────────────────
+
+interface Box2e {
+  readonly sel: string;
+  readonly x: number;
+  readonly y: number;
+  readonly w: number;
+  readonly h: number;
+}
+
+/** The visible boxes of `sels` (one per selector, the first visible match). */
+async function boxesOf(page: Page, sels: readonly string[]): Promise<Box2e[]> {
+  return page.evaluate((list) => {
+    const out: Box2e[] = [];
+    for (const sel of list) {
+      const el = Array.from(document.querySelectorAll<HTMLElement>(sel)).find((e) => e.getBoundingClientRect().width > 0 && !e.closest('[hidden]'));
+      if (!el) continue;
+      const r = el.getBoundingClientRect();
+      out.push({ sel, x: r.left, y: r.top, w: r.width, h: r.height });
+    }
+    return out;
+  }, sels as string[]);
+}
+
+const overlaps = (a: Box2e, b: Box2e): boolean => a.x < b.x + b.w - 0.5 && b.x < a.x + a.w - 0.5 && a.y < b.y + b.h - 0.5 && b.y < a.y + a.h - 0.5;
+
+/** Every visible button of `root` inside the viewport, or the dialog's panel scrolls; each at least 44 × 44. */
+async function dialogFits(page: Page, root: string): Promise<{ problems: string[]; scrolls: boolean }> {
+  return page.evaluate((sel) => {
+    const r = document.querySelector(sel) as HTMLElement | null;
+    if (!r) return { problems: [`no ${sel}`], scrolls: false };
+    const panel = r.querySelector<HTMLElement>('.overlay__panel') ?? r;
+    let scrolls = false;
+    for (let el: HTMLElement | null = panel; el; el = el.parentElement === r ? null : el.parentElement) {
+      if (el.scrollHeight > el.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(el).overflowY)) scrolls = true;
+    }
+    for (const el of Array.from(panel.querySelectorAll<HTMLElement>('*'))) {
+      if (el.scrollHeight > el.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(el).overflowY)) scrolls = true;
+    }
+    const problems: string[] = [];
+    for (const b of Array.from(r.querySelectorAll<HTMLElement>('button, select, input, [role="radio"]'))) {
+      const box = b.getBoundingClientRect();
+      if (box.width === 0 || box.height === 0 || b.closest('[hidden]')) continue;
+      if (box.width < 44 - 0.5 || box.height < 44 - 0.5) problems.push(`${b.className || b.tagName} ${Math.round(box.width)}×${Math.round(box.height)}`);
+      const inside = box.left >= -0.5 && box.right <= innerWidth + 0.5 && box.top >= -0.5 && box.bottom <= innerHeight + 0.5;
+      if (!inside && !scrolls) problems.push(`${b.className || b.tagName} off screen`);
+    }
+    if (document.documentElement.scrollWidth > innerWidth) problems.push('page overflows sideways');
+    return { problems, scrolls };
+  }, root);
+}
+
+/** The local date key of `ms` in the page (the streak's and the daily's day, dayStartHour 0). */
+const localKey = (ms: number): string => {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+test('Phase 2e: Home at 320 × 568 — the ranking chip, Play, the streak strip, the daily and the event cards never overlap; Play on screen without scrolling (no band / band; en / de)', async ({ page }, info) => {
+  test.skip(info.project.name !== 'web-320', 'the small phone');
+  test.setTimeout(90_000);
+  const T = new Date(2026, 10, 15, 12, 0, 0).getTime(); // the Lantern Walk is on (its Home card shows)
+  await page.clock.install({ time: T });
+  for (const ads of ['unsupported', 'ok'] as const) {
+    for (const locale of ['en', 'de'] as const) {
+      const base = veteranSave(30);
+      const save: SaveData = { ...base, settings: { ...base.settings, locale }, dayStreak: { dates: [localKey(T - 86_400_000)], run: 3, best: 3, paid: [] } };
+      await page.goto(`/?ads=${ads}`);
+      await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen !== 'boot');
+      await page.evaluate((json) => (window as TestWindow).__mewdoku?.seedSave(json), JSON.stringify(save));
+      await page.reload();
+      await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');
+      await page.waitForTimeout(600);
+      const label = `${ads} ${locale}`;
+      const sels = ['.screen--home button.ladder-chip', '.screen--home .home__play', '.screen--home .streak-strip', '.screen--home .daily-card', '.screen--home .event-card', '.screen--home .top-bar__btn--settings'];
+      const boxes = await boxesOf(page, sels);
+      expect(boxes.map((b) => b.sel), label).toEqual(sels);
+      for (let i = 0; i < boxes.length; i++) {
+        for (let j = i + 1; j < boxes.length; j++) expect(overlaps(boxes[i] as Box2e, boxes[j] as Box2e), `${label}: ${boxes[i]?.sel} × ${boxes[j]?.sel}`).toBe(false);
+      }
+      const vp = page.viewportSize() ?? { width: 320, height: 568 };
+      const limit = ads === 'ok' ? await bannerTop(page) : vp.height;
+      const play = boxes.find((b) => b.sel.endsWith('.home__play')) as Box2e;
+      expect(play.y + play.h, `${label}: Play on screen`).toBeLessThanOrEqual(limit + 0.5);
+      for (const b of boxes) expect(b.x >= -0.5 && b.x + b.w <= vp.width + 0.5, `${label}: ${b.sel} inside`).toBe(true);
+      expect(await page.evaluate(() => window.scrollY)).toBe(0);
+      await noHorizontalOverflow(page);
+      expect(await hitAreaMisses(page, '.screen--home button.ladder-chip', 1), label).toEqual([]);
+    }
+  }
+});
+
+test('Phase 2e: the post-win panel with 50 real rows scrolls inside its card (no page overflow), its footer button on screen, every heart a 44 × 44 hit area', async ({ page }, info) => {
+  test.skip(info.project.name !== 'web-320', 'the small phone');
+  test.skip(!(await ladderUp()), `no ranking server at ${LADDER_URL}`);
+  test.setTimeout(150_000);
+  const pool = newPool('lay50');
+  await fillPool(pool, 49);
+  await page.goto(`/?ads=unsupported&ladderPool=${pool}`);
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen !== 'boot');
+  await page.evaluate((json) => (window as TestWindow).__mewdoku?.seedSave(json), JSON.stringify(veteranSave(30)));
+  await page.reload();
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.ladder?.()?.signedIn === true, undefined, { timeout: 15_000 });
+  await page.locator('.home__play').click();
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
+  await page.waitForTimeout(5_000); // past the server's soft solve floor
+  await page.evaluate(() => (window as TestWindow).__mewdoku?.solve());
+  const panel = page.locator('.overlay[data-overlay="ranking"]');
+  const rows = panel.locator('.rank-list[data-kind="bracket"] ol.rank-rows > li.rank-row');
+  await expect(rows).toHaveCount(50, { timeout: 20_000 });
+  await page.waitForTimeout(500);
+  const report = await page.evaluate(() => {
+    const ol = document.querySelector('.overlay[data-overlay="ranking"] ol.rank-rows') as HTMLElement;
+    let el: HTMLElement | null = ol;
+    while (el && !(el.scrollHeight > el.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(el).overflowY))) el = el.parentElement;
+    const list = el?.getBoundingClientRect() ?? null;
+    return {
+      scroller: el ? el.className || el.tagName : null,
+      inPanel: !!el && !!el.closest('.overlay[data-overlay="ranking"]'),
+      page: { w: document.documentElement.scrollWidth - innerWidth, h: document.documentElement.scrollHeight - innerHeight },
+      list: list ? { top: list.top, bottom: list.bottom } : null,
+    };
+  });
+  expect(report.scroller).not.toBeNull();
+  expect(report.inPanel).toBe(true);
+  expect(report.page.w).toBeLessThanOrEqual(0);
+  expect(report.page.h).toBeLessThanOrEqual(1);
+  const tap = await panel.locator('.ranking__tap').boundingBox();
+  const vp = page.viewportSize() ?? { width: 320, height: 568 };
+  expect(tap && tap.y >= 0 && tap.y + tap.height <= vp.height + 0.5).toBe(true);
+  // The hearts on screen (inside the list's visible part) each take a 44 × 44 tap: the box is at least 44 × 44
+  // and a tap lands on the heart at its centre and 21.5 px out along both axes. A heart is a pill (a disc at
+  // 320 px), and hit testing follows the rounded edge, so the square's corners are not probed here.
+  const misses = await page.evaluate((bounds) => {
+    const out: string[] = [];
+    const hearts = Array.from(document.querySelectorAll<HTMLElement>('.overlay[data-overlay="ranking"] ol.rank-rows button.rank-row__heart')).filter((b) => {
+      const r = b.getBoundingClientRect();
+      return r.width > 0 && bounds !== null && r.top - 22 >= bounds.top && r.bottom + 22 <= bounds.bottom;
+    });
+    if (hearts.length < 2) out.push(`only ${hearts.length} hearts in view`);
+    for (const el of hearts) {
+      const r = el.getBoundingClientRect();
+      const cx = r.left + r.width / 2;
+      const cy = r.top + r.height / 2;
+      if (r.width < 44 - 0.5 || r.height < 44 - 0.5) out.push(`heart box ${r.width.toFixed(2)}×${r.height.toFixed(2)}`);
+      for (const [dx, dy] of [[-21.5, 0], [21.5, 0], [0, -21.5], [0, 21.5], [0, 0]] as const) {
+        const hit = document.elementFromPoint(Math.min(innerWidth - 0.5, Math.max(0.5, cx + dx)), cy + dy);
+        if (!hit || !(hit === el || el.contains(hit))) out.push(`heart ${Math.round(r.width)}×${Math.round(r.height)} at (${dx}, ${dy}): ${hit ? hit.className || hit.tagName : 'nothing'}`);
+      }
+    }
+    return out;
+  }, report.list);
+  expect(misses).toEqual([]);
+});
+
+test('Phase 2e: the name sheet (12 avatars, both pickers, the number, Save) fits or scrolls inside its dialog at 320 × 568 (en, de)', async ({ page }, info) => {
+  test.skip(info.project.name !== 'web-320', 'the small phone');
+  test.skip(!(await ladderUp()), `no ranking server at ${LADDER_URL}`);
+  test.setTimeout(90_000);
+  for (const locale of ['en', 'de'] as const) {
+    const base = veteranSave(30);
+    await page.goto(`/?ads=unsupported&ladderPool=${newPool('layn')}`);
+    await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen !== 'boot');
+    await page.evaluate((json) => (window as TestWindow).__mewdoku?.seedSave(json), JSON.stringify({ ...base, settings: { ...base.settings, locale } }));
+    await page.reload();
+    await page.waitForFunction(() => (window as TestWindow).__mewdoku?.ladder?.()?.signedIn === true, undefined, { timeout: 15_000 });
+    await page.locator('.screen--home .top-bar__btn--settings').click();
+    await page.locator('[data-overlay="settings"] button.settings__ladder-name').click();
+    const sheet = page.locator('.overlay[data-overlay="nickname"]');
+    await expect(sheet).toBeVisible({ timeout: 10_000 });
+    await expect(sheet.locator('[role="radio"]')).toHaveCount(12);
+    await page.waitForTimeout(300);
+    const r = await dialogFits(page, '.overlay[data-overlay="nickname"]');
+    expect(r.problems, locale).toEqual([]);
+    await sheet.locator('button.nickname__save').scrollIntoViewIfNeeded();
+    await expect(sheet.locator('button.nickname__save')).toBeInViewport();
+  }
+});
+
+test('Phase 2e: the result card (a paid place, ×2) fits inside its dialog at 320 × 568 (en, de)', async ({ page }, info) => {
+  test.skip(info.project.name !== 'web-320', 'the small phone');
+  test.skip(!(await ladderUp()), `no ranking server at ${LADDER_URL}`);
+  test.setTimeout(150_000);
+  for (const locale of ['en', 'de'] as const) {
+    const pool = newPool('layr');
+    await fillPool(pool, 4);
+    const base = veteranSave(30);
+    await page.goto(`/?ads=ok&ladderPool=${pool}`);
+    await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen !== 'boot');
+    await page.evaluate((json) => (window as TestWindow).__mewdoku?.seedSave(json), JSON.stringify({ ...base, settings: { ...base.settings, locale } }));
+    await page.reload();
+    await page.waitForFunction(() => (window as TestWindow).__mewdoku?.ladder?.()?.signedIn === true, undefined, { timeout: 15_000 });
+    await page.locator('.home__play').click();
+    await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
+    await page.waitForTimeout(5_000);
+    await page.evaluate(() => (window as TestWindow).__mewdoku?.solve());
+    await expect(page.locator('.overlay[data-overlay="ranking"] .rank-list[data-kind="bracket"]')).toBeVisible({ timeout: 20_000 });
+    await devAdvance(pool, 24 * 3_600_000 + 60_000);
+    await devCron(pool);
+    await page.goto(`/?ads=ok&ladderPool=${pool}`);
+    const card = page.locator('.overlay[data-overlay="ladder_result"]');
+    await expect(card).toHaveAttribute('data-case', 'paid', { timeout: 20_000 });
+    await page.waitForTimeout(300);
+    const r = await dialogFits(page, '.overlay[data-overlay="ladder_result"]');
+    expect(r.problems, locale).toEqual([]);
+    await expect(card.locator('button.ladder-result__double')).toBeInViewport();
+    await expect(card.locator('button.ladder-result__collect')).toBeInViewport();
   }
 });

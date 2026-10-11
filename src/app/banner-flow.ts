@@ -33,7 +33,9 @@
 // and screenShown('game') inside the window (one timer instead of 2d's "skip this screen"). At once
 // when ads.banner.minReloadSec has passed since the last load, else ONE timer when it ends; one more
 // load ads.banner.rateLimitedRetrySec after a 'rate_limited' answer (once per hide). One timer at a
-// time; a new hide, a screen change or the win cancels it; never a loop. From ads.banner.untilDate
+// time; a new hide, a screen change or the win cancels it; never a loop. The victory between levels takes
+// the same one timer when it opens (or the ranking panel over it closes) inside the window (G1 resume: the
+// board's own re-shown banner had used the window, so the victory stayed bare). From ads.banner.untilDate
 // (a local date) the gate answers 'ended': no band, no load. The remote switches banner / bannerInPlay
 // (remote-config.ts) can only turn banners off; switchesChanged() hides one that is up. ad_banner
 // {screen, result} is logged once per load attempt. reshowAfterAnyHide false = the 2d.1 rule.
@@ -83,9 +85,11 @@ export interface BannerFlow {
   screenGone(): void;
   /**
    * A modal closed over `screen`: show again only when the reload window has passed. Phase 2d: never
-   * on the game screen (it shows again only on the next eligible screen mount).
+   * on the game screen (it shows again only on the next eligible screen mount). Phase 2e: on the game
+   * screen through reshowGame('modal'). `closing`: the overlay being closed (the store mirrors the router
+   * after the bus, so it may still be listed while its close is reported).
    */
-  modalClosed(): Promise<void>;
+  modalClosed(closing?: string): Promise<void>;
   /**
    * The No Ads entitlement may have changed (a purchase, the boot restore, a merged cloud save): when
    * the gate now says no, a banner that is up (or still loading) is hidden at once. The reserve stays
@@ -152,12 +156,25 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
    * hint card hides it again. `closingHint`: the hint card's own close is being reported (the store mirrors
    * the router after the bus, so the hint may still be listed).
    */
-  const gameScreenFree = (closingHint = false): boolean => {
+  const gameScreenFree = (closing: string | null = null): boolean => {
     const st = store.get();
     if (current?.screen !== 'game' || st.screen !== 'game' || !st.game) return false;
     if (st.game.status === 'won' || st.ui.adShowing || st.ui.inputLocked) return false;
-    return !st.overlays.some((id) => id !== 'coach' && !(closingHint && id === 'hint'));
+    return !st.overlays.some((id) => id !== 'coach' && id !== closing);
   };
+  /**
+   * Phase 2e (G1 resume): the victory between two levels is free (open, nothing over it, no ad showing).
+   * The ranking panel hides the banner before it (§3.2); when the board's own banner used the reload
+   * window, the victory gets one timer for the window's end too, so the banner stays "always there"
+   * through the level loop (U-b) without a load inside Meta's window.
+   */
+  const victoryFree = (closing: string | null = null): boolean => {
+    const st = store.get();
+    if (current?.screen !== 'victory' || st.ui.adShowing) return false;
+    return st.overlays.includes('victory') && !st.overlays.some((id) => id !== 'victory' && id !== 'coach' && id !== closing);
+  };
+  /** The screen on show may take the one re-show timer (the game screen and the victory). */
+  const reshowFree = (closing: string | null = null): boolean => (current?.screen === 'victory' ? victoryFree(closing) : gameScreenFree(closing));
 
   const setReserved = (on: boolean): void =>
     store.update((s) => (s.ui.bannerReserved === on ? s : { ...s, ui: { ...s.ui, bannerReserved: on } }));
@@ -218,7 +235,7 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
     reshow = clock.setTimeout(
       () => {
         reshow = null;
-        if (screenGen !== mine || shown || pending || !gameScreenFree()) return;
+        if (screenGen !== mine || shown || pending || !reshowFree()) return;
         void attempt(force).catch((error: unknown) => deps.onError?.(error));
       },
       Math.max(0, wait),
@@ -244,7 +261,7 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
   }
 
   /** `force` (Phase 2e: the one rate_limited retry) skips our own reload window, never the gate. */
-  async function attempt(force = false): Promise<void> {
+  async function attempt(force = false, closing: string | null = null): Promise<void> {
     const cur = current;
     const banner = api();
     if (!cur || !banner) return;
@@ -255,7 +272,7 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
       // screen stayed (no hide in between), so this screen reserves its band for it.
       if (shown || pending) setReserved(true);
       // Phase 2e: on the game screen, one timer loads it when the window ends (no skip).
-      else if (cur.screen === 'game' && anyHide() && gameScreenFree()) scheduleReshow(lastLoadAt + windowMs() - now, false);
+      else if ((cur.screen === 'game' || cur.screen === 'victory') && anyHide() && reshowFree(closing)) scheduleReshow(lastLoadAt + windowMs() - now, false);
       return;
     }
     lastLoadAt = now;
@@ -295,6 +312,19 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
     // Any failure keeps the reserve until the screen unmounts (nothing jumps).
   }
 
+  /** reshowGame with the overlay whose close is being reported (still listed in the store). */
+  async function reshow_(reason: BannerHideReason, closing: string | null): Promise<void> {
+    cancelReshow();
+    if (reason === 'hint' ? !c.ads.banner.hideDuringHint : !anyHide()) return;
+    if (shown || pending || !gameScreenFree(closing)) return;
+    const wait = lastLoadAt === null ? 0 : lastLoadAt + windowMs() - clock.perf();
+    if (wait <= 0) {
+      await attempt();
+      return;
+    }
+    scheduleReshow(wait, false);
+  }
+
   const flow: BannerFlow = {
     async screenShown(screen, opts) {
       screenGen++;
@@ -318,13 +348,13 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
       current = null;
       setReserved(false);
     },
-    async modalClosed() {
+    async modalClosed(closing) {
       if (current && current.screen === 'game') {
         // Phase 2e (spec §3.1): Settings, How to play, Shop, the name sheet … closed over the board.
-        if (anyHide()) await flow.reshowGame('modal');
+        if (anyHide()) await reshow_('modal', closing ?? null);
         return;
       }
-      if (current && !shown) await attempt();
+      if (current && !shown) await attempt(false, closing ?? null);
     },
     async entitlementChanged() {
       if (!store.get().save.purchases.noAds) return;
@@ -339,17 +369,7 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
     async hintClosed() {
       await flow.reshowGame('hint');
     },
-    async reshowGame(reason) {
-      cancelReshow();
-      if (reason === 'hint' ? !c.ads.banner.hideDuringHint : !anyHide()) return;
-      if (shown || pending || !gameScreenFree(reason === 'hint')) return;
-      const wait = lastLoadAt === null ? 0 : lastLoadAt + windowMs() - clock.perf();
-      if (wait <= 0) {
-        await attempt();
-        return;
-      }
-      scheduleReshow(wait, false);
-    },
+    reshowGame: (reason) => reshow_(reason, reason === 'hint' ? 'hint' : null),
     afterAd(kind) {
       void flow.reshowGame(kind).catch((error: unknown) => deps.onError?.(error));
     },

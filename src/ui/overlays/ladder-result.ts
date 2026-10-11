@@ -117,7 +117,8 @@ export function createLadderResult(): OverlayView<LadderResultProps> {
     setButtonLabel(ok, t('common.ok'));
     for (const b of [double, collect, ok]) {
       setGated(b, p.busy);
-      b.toggleAttribute('aria-busy', p.busy);
+      if (p.busy) b.setAttribute('aria-busy', 'true');
+      else b.removeAttribute('aria-busy');
     }
     // The router focuses [data-autofocus] on open: the first visible action.
     const first = !double.hidden ? double : !collect.hidden ? collect : ok;

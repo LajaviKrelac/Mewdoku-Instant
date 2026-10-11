@@ -148,6 +148,8 @@ export interface FakeGameScreen extends GameScreen {
   readonly departed: number[];
   /** phase2c §2.2: showPeriodCounter(total) calls, in order. */
   readonly counters: number[];
+  /** Phase 2e (requests-G3 R4): the kind passed with each showPeriodCounter call (undefined = none). */
+  readonly counterKinds: (string | undefined)[];
   /** Phase 2d.1 §5.5: playTickers(lines) calls, in order. */
   readonly tickers: (readonly [TickerLine, TickerLine])[];
 }
@@ -230,6 +232,7 @@ export function createFakeRouter(bus: AppBus, log: Log): FakeRouter {
         scrims: 0,
         departed: [],
         counters: [],
+        counterKinds: [],
         update: (v) => void (g.last = v),
         destroy: () => undefined,
         playEvent: (ev) => void g.played.push(ev.type),
@@ -241,7 +244,11 @@ export function createFakeRouter(bus: AppBus, log: Log): FakeRouter {
         // phase2c win-flow hooks (G2's GameScreen): no rects in Node, so the flow runs without a flight.
         lifeSlots: () => [],
         departLife: (slot) => void g.departed.push(slot),
-        showPeriodCounter: (total) => void g.counters.push(total),
+        // Phase 2e: the win flow passes the counter's kind ('ladder' while the ranking is active).
+        showPeriodCounter: (total: number, kind?: string) => {
+          g.counters.push(total);
+          g.counterKinds.push(kind);
+        },
         periodRect: () => null,
         periodLabel: () => undefined,
         glow: () => ({ done: Promise.resolve(), cancel: () => undefined, finish: () => undefined }),

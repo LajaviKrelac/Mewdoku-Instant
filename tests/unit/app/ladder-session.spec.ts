@@ -98,7 +98,27 @@ describe('the win is queued with the win (spec §2.3, critic C-25)', () => {
     ]);
     expect(props?.result).toEqual({ kind: 'ladder', gained: 3, total: 3 });
     expect(s.h.save().ladder.pending).toEqual([]);
+    // requests-G3 R4: the counter names my bracket's fish, and so does the victory's kept-fish row.
+    const g = s.h.router.game;
+    expect(g?.counterKinds.filter((k) => k !== undefined)).toEqual(['ladder']);
+    expect(g?.counters[0]).toBe(0); // my bracket's points before this win (none yet)
     await tapRanking(s.h);
+    expect(s.h.router.props.victory?.kept).toEqual({ fish: 3, max: 3, gained: 3, total: 3, kind: 'ladder' });
+  });
+
+  it('the ladder not active (not listed): the counter and the victory keep this week\'s records (no ladder kind)', async () => {
+    const s = setup();
+    await s.flow().start();
+    s.h.store.update((st) => ({ ...st, save: { ...st.save, ladder: { ...st.save.ladder, listed: false } } }));
+    await startLevel(s.h, 15);
+    winGame(s.h);
+    await s.h.settle(s.h.config.fx.winOverlayDelayMs);
+    await drain();
+    expect(s.h.router.game?.counterKinds.filter((k) => k !== undefined)).toEqual([s.h.config.period.kind]);
+    expect(s.h.router.props.ranking?.list).toMatchObject({ kind: 'records', reason: 'opted_out' });
+    expect(s.h.router.props.ranking?.result.kind).toBe('period');
+    await tapRanking(s.h);
+    expect(s.h.router.props.victory?.kept?.kind).toBe(s.h.config.period.kind);
   });
 
   it('the retired FB weekly board is never read (rank.fbPeriodBoard false)', async () => {

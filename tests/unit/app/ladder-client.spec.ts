@@ -139,6 +139,23 @@ describe('requests', () => {
     expect(s.fake.paths()).toEqual(['GET /v1/bracket', 'POST /v1/session', 'GET /v1/bracket']);
   });
 
+  it('onSignIn tells every successful sign-in (the implicit one after a 401 too); a throwing listener never fails it', async () => {
+    const s = setup();
+    const seen: string[] = [];
+    const off = s.client.onSignIn((r) => void seen.push(r.player.code));
+    s.client.onSignIn(() => {
+      throw new Error('listener');
+    });
+    expect((await s.client.signIn()).ok).toBe(true);
+    s.fake.expireTokens();
+    expect((await s.client.bracket()).ok).toBe(true);
+    expect(seen).toEqual(['7KQ2M9XD', '7KQ2M9XD']);
+    off();
+    s.client.signOut();
+    await s.client.signIn();
+    expect(seen).toHaveLength(2);
+  });
+
   it('the server-time offset is measured on every answer (serverNow, offsetMs, lastServerAt)', async () => {
     const s = setup({ skewMs: 90_000 });
     expect(s.client.offsetMs()).toBe(0);

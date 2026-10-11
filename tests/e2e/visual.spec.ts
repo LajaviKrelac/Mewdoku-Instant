@@ -33,15 +33,18 @@
 // first counted win. Captured as G3-2e-<screen>-<width>.png in docs/phase2e/screenshots/ (VISUAL_OUT_2E
 // overrides). The bracket, the sheet, the result card and the name sheet need the local ranking server
 // (lead L0b); until then G3 captured them from fixtures in a private harness (docs/phase2e/provenance-G3.md).
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Browser, type BrowserContextOptions, type Page, type Route, type TestInfo } from '@playwright/test';
 import type { E2EHooks } from '../../src/app/boot';
+import { cfg } from '../../src/app/config';
 import { dailyDateKey } from '../../src/game/progression';
 import { defaults } from '../../src/game/save';
 import { periodKeyAt } from '../../src/game/scoring';
 import type { SaveData } from '../../src/game/types';
+import { NICK_WORDS_V1 } from '../../src/shared/nick-words';
+import type { BracketRow, BracketView, PlayerView, ResultView, RulesView, SessionResponse, WinSubmission } from '../../src/shared/rank-api';
 
 type TestWindow = Window & { __mewdoku?: E2EHooks };
 
@@ -74,8 +77,12 @@ async function ready(page: Page, screen?: string): Promise<void> {
   );
 }
 
+/**
+ * Phase 2e: the 2b–2d captures and the 2e records chip show the personal-records path (`?flags=-ladder`, spec §7.3), also
+ * in an e2e build with a ranking origin (lead L0b); the ranking views have their own block at the end of this file.
+ */
 async function open(page: Page, save: SaveData): Promise<void> {
-  await page.goto('/');
+  await page.goto('/?flags=-ladder');
   await ready(page);
   await page.evaluate((json) => (window as TestWindow).__mewdoku?.seedSave(json), JSON.stringify(save));
   await page.reload();
@@ -764,6 +771,10 @@ test.describe('short phones with the banner band (review UX-1, UX-2, I18N-LAYOUT
           await page.locator('.screen--event .event__play').click();
         }
         await playUntilVictory(page);
+        // Phase 2e (requests-G1 R8): the victory's banner comes when the window of the board's last load ends (one timer,
+        // spec §3.1), never inside it.
+        await page.clock.fastForward(cfg.ads.banner.minReloadSec * 1000);
+        await page.clock.runFor(1500);
         const top = await bannerTop(page);
         await clearOfBand(page, '.victory__primary', top);
         if (variant !== 'daily') await clearOfBand(page, '.victory__home', top, 0);
@@ -874,4 +885,572 @@ test.describe('Phase 2e (G3): the ranking chip, the streak strip and the victory
     await page.waitForTimeout(900);
     await page.screenshot({ path: join(OUT_2E, `G3-2e-victory-${vp.width}.png`) });
   });
+});
+
+// ─────────────────────── Phase 2e (G3): the ranking views in the real app (a route fake of the ranking API) ───────────────────────
+//
+// Spec §10.3 "visual.spec.ts / i18n.spec.ts (G3): the panel, sheet, result card, name sheet, O2 with Buy, streak strip at
+// 320 / 390 / 1280 and in ar / de" and §7.7. The e2e builds talk to the ranking server at VITE_LADDER_URL (the web twin with
+// VITE_LADDER_WEB=anon; lead L0b). These captures answer the ranking routes inside the page (page.route) with fixed answers
+// in the server's wire shape (src/shared/rank-api.ts; the client checks them with its own parsers): a bracket of 37 with
+// my row 5th, a paid result card, my profile. Fixed rows and times, so a capture looks the same on every run.
+// TEST DATA ONLY (H-1): the names are our own word-list words, the counts are made up for layout, and nothing here reaches
+// a bundle (spec §10.6 #3). The real server flows (the rows equal the server's, hearts, claims, opt-out, delete) are G1's
+// ladder.spec.ts against the local dev server.
+// Skipped when the build has no ranking origin (the client never asks). The O2 Buy rows need payments: the FB e2e build
+// (E2E_FBIG_URL, default the fbig-e2e preview :4174) with the FBInstant stub, loaded as fbig.spec.ts loads it.
+// Variants: every web project at its own size; 402 × 874 (web-390, the recordings' phone); de and ar at 320 × 568
+// (web-320) with the i18n checks (no sideways overflow, no clipped button text, rtl in Arabic, names never translated).
+// The de/ar ranking checks live here rather than in i18n.spec.ts so the route fake has one home (a shared helper would be
+// a new file; requests-G3 R17). Captures: docs/phase2e/screenshots/G3-app-<view>-<variant>.png.
+
+const FBIG_URL = (process.env.E2E_FBIG_URL ?? 'http://127.0.0.1:4174').replace(/\/+$/, '');
+const FB_STUB_SRC = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../fixtures/fbinstant-stub.js'), 'utf8');
+const LADDER_ROUTE = /\/v1\/(config|session|wins|bracket|rewards|hearts|me)(\/[a-z/]*)?(\?.*)?$/;
+const HOUR = 3_600_000;
+const FAKE_BRACKET = 'mgk0b7q1z4a8';
+const FAKE_ENDED = 'mgjz1k2a9q3x';
+
+const FAKE_RULES: RulesView = {
+  periodMode: 'rolling',
+  durationMs: 24 * HOUR,
+  maxMembers: 50,
+  scoringModes: ['level', 'daily', 'event'],
+  places: [
+    { place: 1, hints: 2, kitties: 2 },
+    { place: 2, hints: 1, kitties: 1 },
+    { place: 3, hints: 1, kitties: 0 },
+  ],
+  minMembers: 5,
+  doubleByVideo: true,
+  claimTtlMs: 7 * 24 * HOUR,
+  hearts: { enabled: true, allowSelf: true, maxGivenPerBracket: 20 },
+  nickname: { freeText: false, changeCooldownMs: 24 * HOUR },
+};
+
+interface FakeOpts {
+  /** Players in my bracket (me included) at sign-in; 0 = no bracket yet (my next win opens one with me alone). */
+  readonly members?: number;
+  /** My points at sign-in (the others' are fixed, best first: 31, 31, 30, 29, 27, 27, 26, 25, …). */
+  readonly myPoints?: number;
+  /** Finished brackets of the last days (result cards). */
+  readonly results?: readonly ResultView[];
+  readonly pool?: 'web' | 'fb';
+}
+
+interface FakeLadder {
+  /** "METHOD /v1/path" of every call the page made. */
+  readonly calls: string[];
+}
+
+/** The other players of the fixture bracket: our own words, fixed points falling with the place. */
+function fakeOthers(n: number): { slot: number; nickname: string; avatarId: number; points: number; hearts: number; likedByMe: boolean }[] {
+  const top = [31, 31, 30, 29, 27, 27, 26, 25, 24];
+  return Array.from({ length: n }, (_, i) => ({
+    slot: i + 1,
+    nickname: `${NICK_WORDS_V1.adj[(i * 17 + 9) % NICK_WORDS_V1.adj.length]} ${NICK_WORDS_V1.noun[(i * 23 + 4) % NICK_WORDS_V1.noun.length]} ${((i * 37) % 99) + 1}`,
+    avatarId: (i * 5 + 1) % 12,
+    points: top[i] ?? Math.max(1, 24 - Math.floor((i - 8) * 0.8)),
+    hearts: i % 4,
+    likedByMe: i === 1,
+  }));
+}
+
+/** A finished bracket I took 2nd place in, with an unclaimed reward (the result card's paid case). */
+const paidResult = (now: number): ResultView => ({
+  bracketId: FAKE_ENDED,
+  endedAt: now - 2 * HOUR,
+  place: 2,
+  members: 37,
+  points: 31,
+  reward: { rewardId: `${FAKE_ENDED}:7`, place: 2, grant: { hints: 1, kitties: 1 }, canDouble: true, expiresAt: now + 5 * 24 * HOUR, claim: null },
+});
+
+/** Answers the ranking API inside the page (the e2e build's VITE_LADDER_URL, whatever its host). */
+async function fakeLadder(page: Page, o: FakeOpts = {}): Promise<FakeLadder> {
+  const calls: string[] = [];
+  const t0 = Date.now();
+  const pool = o.pool ?? 'web';
+  const endsAt = t0 + 7 * HOUR + 47 * 60_000 + 30_000;
+  let me: PlayerView = {
+    code: '7KQ2M9XD',
+    nickname: 'Velvet Pounce 27',
+    nick: { adj: 2, noun: 5, num: 27 },
+    avatarId: 4,
+    status: 'ok',
+    pool,
+    trust: pool === 'fb' ? 'signed' : 'anon',
+    listed: true,
+    nicknameChangeAt: null,
+  };
+  const members0 = o.members ?? 37;
+  let inBracket = members0 > 0;
+  const others = fakeOthers(Math.max(0, members0 - 1));
+  let myPoints = o.myPoints ?? 25;
+  const results = [...(o.results ?? [])];
+  const view = (): BracketView => {
+    const now = Date.now();
+    if (!inBracket) {
+      return { state: 'none', bracketId: null, pool, mode: 'rolling', openedAt: null, endsAt: null, members: 0, maxMembers: 50, rows: [], me: null, final: false, heartsNew: 0, result: null, serverTime: now };
+    }
+    const all = [...others.map((r) => ({ ...r, me: false })), { slot: 0, nickname: me.nickname, avatarId: me.avatarId, points: myPoints, hearts: others.length > 0 ? 2 : 0, likedByMe: false, me: true }];
+    all.sort((a, b) => b.points - a.points || Number(a.me) - Number(b.me));
+    const rows: BracketRow[] = all.map((r, k) => ({ rank: k + 1, slot: r.slot, nickname: r.nickname, avatarId: r.avatarId, points: r.points, hearts: r.hearts, me: r.me, likedByMe: r.likedByMe }));
+    return {
+      state: 'open',
+      bracketId: FAKE_BRACKET,
+      pool,
+      mode: 'rolling',
+      openedAt: endsAt - 24 * HOUR,
+      endsAt,
+      members: rows.length,
+      maxMembers: 50,
+      rows,
+      me: rows.find((r) => r.me) ?? null,
+      final: false,
+      heartsNew: 0,
+      result: null,
+      serverTime: now,
+    };
+  };
+  const session = (): SessionResponse => {
+    const v = view();
+    return {
+      token: `v1.${'e'.repeat(48)}.${'f'.repeat(32)}`,
+      expiresAt: Date.now() + 24 * HOUR,
+      player: me,
+      rules: FAKE_RULES,
+      results,
+      bracket: v.state === 'none' ? null : { state: v.state, bracketId: v.bracketId, rank: v.me?.rank ?? null, members: v.members, points: myPoints, endsAt: v.endsAt },
+      limits: { maxWinsPerRequest: 10, queueMax: 20 },
+      serverTime: Date.now(),
+    };
+  };
+
+  await page.route(LADDER_ROUTE, async (route: Route) => {
+    const req = route.request();
+    const path = new URL(req.url()).pathname.replace(/^.*?(\/v1\/)/, '/v1/');
+    const cors = {
+      'Access-Control-Allow-Origin': req.headers().origin ?? '*',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+      'Access-Control-Max-Age': '7200',
+      Vary: 'Origin',
+    };
+    if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
+    const key = `${req.method()} ${path}`;
+    calls.push(key);
+    const reply = (status: number, body: unknown): Promise<void> =>
+      route.fulfill({ status, headers: { ...cors, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, body: body === null ? '' : JSON.stringify(body) });
+    let body: Record<string, unknown> = {};
+    try {
+      body = JSON.parse(req.postData() ?? '{}') as Record<string, unknown>;
+    } catch {
+      body = {};
+    }
+    const now = Date.now();
+    switch (key) {
+      case 'GET /v1/config':
+        return reply(200, { switches: {}, ttlSec: 3600, serverTime: now });
+      case 'POST /v1/session/nonce':
+        return reply(200, { nonce: `n1.${(now + 300_000).toString(36)}.${'a'.repeat(16)}.${'b'.repeat(16)}`, expiresAt: now + 300_000, serverTime: now });
+      case 'POST /v1/session':
+        return reply(200, session());
+      case 'POST /v1/wins': {
+        const wins = (Array.isArray(body.wins) ? body.wins : []) as WinSubmission[];
+        inBracket = true;
+        myPoints += wins.reduce((n, w) => n + w.fish, 0);
+        return reply(200, { results: wins.map((w) => ({ winId: w.winId, verdict: 'accepted', points: w.fish })), windowPoints: myPoints, bracket: view(), serverTime: now });
+      }
+      case 'GET /v1/bracket':
+        return reply(200, view());
+      case 'POST /v1/hearts': {
+        const slot = Number(body.slot);
+        const row = others.find((r) => r.slot === slot);
+        if (row) {
+          row.hearts += 1;
+          row.likedByMe = true;
+        }
+        return reply(200, { bracketId: FAKE_BRACKET, slot, hearts: row?.hearts ?? 3, likedByMe: true, givenInBracket: 1, serverTime: now });
+      }
+      case 'POST /v1/rewards/claim': {
+        const r = results.find((x) => x.reward?.rewardId === body.rewardId);
+        if (!r?.reward) return reply(404, { error: { code: 'not_found', message: 'reward' }, serverTime: now });
+        const k = body.double === true ? 2 : 1;
+        return reply(200, { rewardId: r.reward.rewardId, grant: { hints: r.reward.grant.hints * k, kitties: r.reward.grant.kitties * k }, doubled: k === 2, claimedAt: now, place: r.place, alreadyClaimed: false, serverTime: now });
+      }
+      case 'PUT /v1/me/profile': {
+        const n = body.nickname as { adj?: number; noun?: number; num?: number } | undefined;
+        if (n && typeof n.adj === 'number' && typeof n.noun === 'number') {
+          const num = typeof n.num === 'number' ? n.num : 1;
+          me = { ...me, nick: { adj: n.adj, noun: n.noun, num }, nickname: `${NICK_WORDS_V1.adj[n.adj]} ${NICK_WORDS_V1.noun[n.noun]} ${num}`, nicknameChangeAt: now + 24 * HOUR };
+        }
+        if (typeof body.avatarId === 'number') me = { ...me, avatarId: body.avatarId };
+        if (typeof body.listed === 'boolean') me = { ...me, listed: body.listed };
+        return reply(200, { player: me, serverTime: now });
+      }
+      case 'GET /v1/me':
+        return reply(200, { player: me, data: { brackets: 4, wins30d: 63, rewards: 2, createdAt: now - 30 * 24 * HOUR }, serverTime: now });
+      case 'DELETE /v1/me':
+        return reply(204, null);
+      default:
+        return reply(404, { error: { code: 'not_found', message: path }, serverTime: now });
+    }
+  });
+  return { calls };
+}
+
+interface Variant {
+  /** The screenshot suffix ('size' = the project's own width). */
+  readonly id: string;
+  /** The project it runs in (null: every web project that runs visual.spec.ts). */
+  readonly project: string | null;
+  readonly ctx?: BrowserContextOptions;
+  /** The UI language this variant must show (the browser locale picks it). */
+  readonly lang?: 'de' | 'ar';
+  /** The FB stub's getLocale() for the O2 capture on the FB build. */
+  readonly fbLocale?: string;
+}
+
+const PHONE_320: BrowserContextOptions = { viewport: { width: 320, height: 568 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true };
+const VARIANTS: readonly Variant[] = [
+  { id: 'size', project: null },
+  { id: '402', project: 'web-390', ctx: { viewport: { width: 402, height: 874 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true } },
+  { id: 'de-320', project: 'web-320', lang: 'de', fbLocale: 'de_DE', ctx: { ...PHONE_320, locale: 'de-DE' } },
+  { id: 'ar-320', project: 'web-320', lang: 'ar', fbLocale: 'ar_AR', ctx: { ...PHONE_320, locale: 'ar-EG' } },
+];
+
+/** Runs `fn` on the variant's page: the test's own page, or a page of a fresh context with the variant's options. */
+async function onVariant(browser: Browser, page: Page, info: TestInfo, v: Variant, fn: (p: Page, suffix: string) => Promise<void>): Promise<void> {
+  test.skip(v.project !== null && info.project.name !== v.project, `variant ${v.id} runs in ${v.project}`);
+  if (!v.ctx) return fn(page, String(page.viewportSize()?.width ?? 0));
+  const ctx = await browser.newContext(v.ctx);
+  try {
+    await fn(await ctx.newPage(), v.id);
+  } finally {
+    await ctx.close();
+  }
+}
+
+const shot2e = (page: Page, name: string): Promise<Buffer> => page.screenshot({ path: join(OUT_2E, `G3-app-${name}.png`) });
+
+/** Opens the web build with the route fake and `save`; resolves once the ranking client signed in (else skips). */
+async function openRanked(page: Page, save: SaveData, o: FakeOpts = {}): Promise<FakeLadder> {
+  const fake = await fakeLadder(page, o);
+  await page.goto('/?ads=ok');
+  await ready(page);
+  await page.evaluate((json) => (window as TestWindow).__mewdoku?.seedSave(json), JSON.stringify(save));
+  await page.reload();
+  await ready(page, 'home');
+  const signedIn = await page
+    .waitForFunction(() => (window as TestWindow).__mewdoku?.ladder?.()?.signedIn === true, undefined, { timeout: 10_000 })
+    .then(() => true, () => false);
+  test.skip(!signedIn && !fake.calls.some((c) => c.startsWith('POST /v1/session')), 'this build has no ranking origin (VITE_LADDER_URL + VITE_LADDER_WEB=anon, lead L0b)');
+  expect(signedIn, `the client signed in (${fake.calls.join(', ')})`).toBe(true);
+  await page.waitForTimeout(500); // the Home mascot pops in
+  return fake;
+}
+
+/** The language checks of a variant: <html lang/dir>, and the given text holds none of the English words. */
+async function expectLang(page: Page, v: Variant, sample: string, english: RegExp): Promise<void> {
+  if (!v.lang) return;
+  await expect(page.locator('html')).toHaveAttribute('lang', v.lang);
+  await expect(page.locator('html')).toHaveAttribute('dir', v.lang === 'ar' ? 'rtl' : 'ltr');
+  expect(sample, `${v.lang}: "${sample}"`).not.toMatch(english);
+}
+
+/**
+ * Fit checks on small screens (spec §10.3 layout, §7.7): no sideways page scroll; every visible text and button of
+ * `root` inside the viewport sideways; no button's own text spills out of it or is cut by an ellipsis.
+ */
+async function expectFits(page: Page, root: string): Promise<void> {
+  const r = await page.evaluate((sel) => {
+    const out: string[] = [];
+    const w = window.innerWidth;
+    const host = document.querySelector(sel);
+    if (!host) return { scroll: 0, width: w, out: [`missing ${sel}`] };
+    for (const el of Array.from(host.querySelectorAll<HTMLElement>('*'))) {
+      if (el.closest('[hidden], [inert], .sr-only, [aria-hidden="true"]')) continue;
+      const s = getComputedStyle(el);
+      if (s.visibility === 'hidden' || s.display === 'none' || Number(s.opacity) === 0) continue;
+      const hasText = Array.from(el.childNodes).some((n) => n.nodeType === 3 && (n.textContent ?? '').trim() !== '');
+      if (!hasText && !el.matches('button')) continue;
+      const b = el.getBoundingClientRect();
+      if (b.width === 0 || b.height === 0) continue;
+      if (b.left < -1 || b.right > w + 1) out.push(`${el.className || el.tagName} outside: ${Math.round(b.left)}…${Math.round(b.right)}`);
+      const btn = el.closest<HTMLElement>('button');
+      if (btn && btn !== el && hasText) {
+        const a = btn.getBoundingClientRect();
+        if (b.left < a.left - 1 || b.right > a.right + 1) out.push(`${el.className} spills out of its button`);
+        if (s.textOverflow === 'ellipsis' && el.scrollWidth > el.clientWidth + 1) out.push(`${el.className} cut: "${el.textContent}"`);
+      }
+    }
+    // A dialog title never runs under its head's round buttons (a long German compound at 320 px).
+    for (const head of Array.from(host.querySelectorAll<HTMLElement>('.overlay__head'))) {
+      if (head.closest('[hidden]') || head.getClientRects().length === 0) continue;
+      const title = head.querySelector<HTMLElement>('.overlay__title');
+      if (!title) continue;
+      const range = document.createRange();
+      range.selectNodeContents(title);
+      const text = Array.from(range.getClientRects());
+      for (const btn of Array.from(head.querySelectorAll<HTMLElement>('button'))) {
+        if (btn.closest('[hidden]') || btn.getClientRects().length === 0) continue;
+        const b = btn.getBoundingClientRect();
+        if (text.some((t) => t.right > b.left + 1 && t.left < b.right - 1 && t.bottom > b.top + 1 && t.top < b.bottom - 1)) out.push(`title "${title.textContent}" under ${btn.className}`);
+      }
+    }
+    return { scroll: document.documentElement.scrollWidth, width: w, out };
+  }, root);
+  expect(r.scroll, 'page scrolls sideways').toBeLessThanOrEqual(r.width);
+  expect(r.out).toEqual([]);
+}
+
+/** `el` lies inside `scroller`'s visible box (vertically). */
+async function inScrollView(page: Page, scroller: string, el: string): Promise<boolean> {
+  return page.evaluate(
+    ([s, e]) => {
+      const a = document.querySelector(s as string)?.getBoundingClientRect();
+      const b = document.querySelector(e as string)?.getBoundingClientRect();
+      return !!a && !!b && b.top >= a.top - 1 && b.bottom <= a.bottom + 1;
+    },
+    [scroller, el],
+  );
+}
+
+/** A box inside the viewport. */
+async function inViewport(page: Page, sel: string): Promise<boolean> {
+  const b = await page.locator(sel).first().boundingBox();
+  const vp = page.viewportSize() ?? { width: 0, height: 0 };
+  return !!b && b.x >= -1 && b.y >= -1 && b.x + b.width <= vp.width + 1 && b.y + b.height <= vp.height + 1;
+}
+
+test.describe('Phase 2e (G3): the ranking views in the real app (route fake; spec §2.4–§2.7, §4.1, §7.7, §10.3)', () => {
+  for (const v of VARIANTS) {
+    test(`[${v.id}] the post-win panel: my bracket of 37, exactly the rows sent, my row centred, the footer in view`, async ({ browser, page }, info) => {
+      await onVariant(browser, page, info, v, async (p, suffix) => {
+        await openRanked(p, returning());
+        await p.locator('.home__play').click();
+        await p.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
+        await p.waitForTimeout(800);
+        await p.evaluate(() => {
+          if (!(window as TestWindow).__mewdoku?.solve()) throw new Error('solve failed');
+        });
+        const panel = p.locator('.overlay[data-overlay="ranking"]');
+        const list = panel.locator('.rank-list[data-kind="bracket"]');
+        await expect(list).toBeVisible({ timeout: 15_000 });
+        await expect(list).toHaveAttribute('data-stale', '0');
+        // Exactly the 37 rows sent, in their order; places 1–3 carry a medal AND the number; my row 5th (28 fish).
+        await expect(list.locator('ol.rank-rows > li.rank-row')).toHaveCount(37);
+        await expect(list.locator('ol.rank-rows > li.rank-row[data-rank="1"] .rank-row__medal svg')).toHaveCount(1);
+        await expect(list.locator('ol.rank-rows > li.rank-row[data-rank="4"] .rank-row__medal')).toBeHidden();
+        const mine = list.locator('ol.rank-rows > li.rank-row[data-me="1"]');
+        await expect(mine).toHaveAttribute('data-rank', '5');
+        await expect(mine.locator('.rank-row__name')).toHaveText('Velvet Pounce 27');
+        await expect(mine.locator('.rank-row__name')).toHaveAttribute('dir', 'auto');
+        await expect(panel.locator('.ranking__tap')).toBeEnabled({ timeout: 8_000 });
+        await p.waitForTimeout(500);
+        // On open the list scrolls so my row is in view; the pinned copy shows only while it is scrolled away.
+        expect(await inScrollView(p, '.overlay[data-overlay="ranking"] ol.rank-rows', '.overlay[data-overlay="ranking"] li.rank-row[data-me="1"]')).toBe(true);
+        await expect(list.locator('.rank-row--pinned')).toBeHidden();
+        // The 37 rows scroll inside the card; the footer stays on screen (spec §10.3 layout).
+        expect(await inViewport(p, '.overlay[data-overlay="ranking"] .ranking__tap')).toBe(true);
+        await expectFits(p, '.overlay[data-overlay="ranking"]');
+        const count = (await panel.locator('.ranking__count').textContent()) ?? '';
+        if (!v.lang) {
+          await expect(panel.locator('.ranking__title')).toHaveText('Daily ranking');
+          await expect(panel.locator('.ranking__sub')).toHaveText('+3 fish · Your total: 28');
+          expect(count).toBe('37 players');
+          await expect(panel.locator('.ranking__rewards')).toHaveText('The top 3 win hints and kitties.');
+        }
+        await expectLang(p, v, count + ((await panel.locator('.ranking__sub').textContent()) ?? ''), /\bplayers\b|Your total/);
+        await shot2e(p, `panel-${suffix}`);
+        // A drag inside the list scrolls it and never continues (spec §2.4 Taps); my pinned copy then shows.
+        await p.locator('.overlay[data-overlay="ranking"] ol.rank-rows').evaluate((el) => el.scrollTo({ top: el.scrollHeight }));
+        await p.waitForTimeout(200);
+        await expect(list.locator('.rank-row--pinned')).toBeVisible();
+        await expect(panel).toBeVisible();
+        await shot2e(p, `panel-scrolled-${suffix}`);
+      });
+    });
+
+    test(`[${v.id}] alone in a new bracket: my row only and "You're the only player in this ranking so far." (H-2, C-4)`, async ({ browser, page }, info) => {
+      test.skip(v.id === '402', 'the project sizes and de / ar only');
+      await onVariant(browser, page, info, v, async (p, suffix) => {
+        await openRanked(p, returning(), { members: 0, myPoints: 0 });
+        await expect(p.locator('.screen--home .ladder-chip')).toHaveAttribute('data-state', 'join');
+        await p.locator('.home__play').click();
+        await p.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
+        await p.waitForTimeout(800);
+        await p.evaluate(() => {
+          if (!(window as TestWindow).__mewdoku?.solve()) throw new Error('solve failed');
+        });
+        const panel = p.locator('.overlay[data-overlay="ranking"]');
+        const list = panel.locator('.rank-list[data-kind="bracket"]');
+        await expect(list).toBeVisible({ timeout: 15_000 });
+        // Exactly one row (mine) and the honest line: no placeholder, no promise that others will join.
+        await expect(list.locator('ol.rank-rows > li.rank-row')).toHaveCount(1);
+        await expect(list.locator('ol.rank-rows > li.rank-row[data-me="1"]')).toHaveAttribute('data-rank', '1');
+        await expect(list.locator('.ranking__alone')).toBeVisible();
+        if (!v.lang) {
+          await expect(list.locator('.ranking__alone')).toHaveText("You're the only player in this ranking so far.");
+          await expect(list.locator('.ranking__count')).toHaveText('1 player');
+          await expect(list.locator('.ranking__rewards')).toHaveText('Rewards need at least 5 players in this ranking.');
+        }
+        await expect(panel.locator('.ranking__tap')).toBeEnabled({ timeout: 8_000 });
+        await p.waitForTimeout(400);
+        await expectFits(p, '.overlay[data-overlay="ranking"]');
+        await shot2e(p, `panel-alone-${suffix}`);
+      });
+    });
+
+    test(`[${v.id}] Home chip → the ranking sheet (list, info), the name sheet from my row's pencil, the Settings rows`, async ({ browser, page }, info) => {
+      await onVariant(browser, page, info, v, async (p, suffix) => {
+        const fake = await openRanked(p, returning({ dayStreak: { dates: [dailyDateKey(NOW - DAY_MS)], run: 3, best: 9, paid: [] } }), { myPoints: 28 });
+        const chip = p.locator('.screen--home .ladder-chip');
+        await expect(chip).toHaveAttribute('data-state', 'bracket');
+        // (t() wraps interpolated values in bidi isolates in an RTL locale: compare without them.)
+        await expect.poll(async () => ((await chip.locator('.ladder-chip__rank').textContent()) ?? '').replace(/[\u2066-\u2069]/g, '')).toBe('#5');
+        await expect(chip.locator('.ladder-chip__n')).toHaveText('28');
+        expect(await inViewport(p, '.screen--home .ladder-chip')).toBe(true);
+        await shot2e(p, `home-${suffix}`);
+
+        await chip.click();
+        const sheet = p.locator('.overlay[data-overlay="ladder"]');
+        await expect(sheet.locator('.rank-list[data-kind="bracket"]')).toBeVisible({ timeout: 8_000 });
+        await expect(sheet.locator('ol.rank-rows > li.rank-row')).toHaveCount(37);
+        await expect(sheet.locator('li.rank-row[data-me="1"] .rank-row__edit')).toBeVisible();
+        // Spec §2.4 / §2.9: "Last updated" and the offline line only for a cached bracket with NO answer; here the
+        // server just answered GET /v1/bracket, so the list is fresh and its hearts can be given (requests-G3 R16, G1).
+        expect.soft(fake.calls).toContain('GET /v1/bracket');
+        await expect.soft(sheet.locator('.rank-list[data-kind="bracket"]'), 'a fresh answer is not stale (R16)').toHaveAttribute('data-stale', '0');
+        await p.waitForTimeout(500);
+        expect(await inScrollView(p, '.overlay[data-overlay="ladder"] ol.rank-rows', '.overlay[data-overlay="ladder"] li.rank-row[data-me="1"]')).toBe(true);
+        await expectFits(p, '.overlay[data-overlay="ladder"]');
+        await shot2e(p, `sheet-${suffix}`);
+
+        await sheet.locator('.ladder-sheet__info').click();
+        await expect(sheet.locator('.ladder-info')).toBeVisible();
+        const infoText = (await sheet.locator('.ladder-info').textContent()) ?? '';
+        if (!v.lang) {
+          expect(infoText).toContain('A ranking lasts 24 hours from its first win and holds up to 50 players.');
+          expect(infoText).toContain('the top 3 win hints and kitties if at least 5 players took part');
+          expect(infoText).toContain('never your Facebook name or photo');
+        }
+        await expectLang(p, v, infoText, /\bplayers\b|ranking lasts/);
+        await expectFits(p, '.overlay[data-overlay="ladder"]');
+        await shot2e(p, `info-${suffix}`);
+        await p.keyboard.press('Escape');
+        await expect(sheet.locator('.rank-list[data-kind="bracket"]')).toBeVisible();
+
+        await sheet.locator('li.rank-row[data-me="1"] .rank-row__edit').click();
+        const nick = p.locator('.overlay[data-overlay="nickname"]');
+        await expect(nick).toBeVisible({ timeout: 8_000 });
+        await expect(nick.locator('.nickname__preview .nickname__name')).toHaveText('Velvet Pounce 27');
+        await expect(nick.locator('[role="radiogroup"].nickname__avatars [role="radio"]')).toHaveCount(12);
+        await expect(nick.locator('select.nickname__adj')).toHaveValue('2');
+        await expect(nick.locator('select.nickname__noun')).toHaveValue('5');
+        await expect(nick.locator('input.nickname__num')).toHaveValue('27');
+        await expectFits(p, '.overlay[data-overlay="nickname"]');
+        await shot2e(p, `nick-${suffix}`);
+        // Save fits or scrolls inside the dialog (spec §10.3 layout).
+        await nick.locator('button.nickname__save').scrollIntoViewIfNeeded();
+        expect(await inViewport(p, '.overlay[data-overlay="nickname"] button.nickname__save')).toBe(true);
+        await p.keyboard.press('Escape');
+        await expect(nick).toBeHidden();
+        await p.keyboard.press('Escape');
+        await expect(sheet).toBeHidden();
+
+        await p.locator('.screen--home .top-bar__btn--settings').click();
+        const settings = p.locator('.overlay[data-overlay="settings"]');
+        const rows = settings.locator('.settings__ladder');
+        await expect(rows).toBeVisible();
+        await expect(rows.locator('.settings__ladder-value')).toHaveText('Velvet Pounce 27');
+        await expect(rows.locator('button.switch.settings__ladder-listed')).toHaveAttribute('aria-checked', 'true');
+        await expect(rows.locator('.settings__ladder-code')).toContainText('7KQ2-M9XD');
+        await rows.scrollIntoViewIfNeeded();
+        await expectFits(p, '.overlay[data-overlay="settings"]');
+        await shot2e(p, `settings-${suffix}`);
+        await rows.locator('.settings__ladder-delete').click();
+        await expect(settings.locator('.settings__view--confirm')).toBeVisible();
+        if (!v.lang) await expect(settings.locator('.settings__confirm-text')).toHaveText('Delete your ranking name, picture and results from our server? Your game progress stays.');
+        await expectFits(p, '.overlay[data-overlay="settings"]');
+        await shot2e(p, `settings-delete-${suffix}`);
+      });
+    });
+
+    test(`[${v.id}] the result card on Home: #2 of 37, the reward, ▶ Collect ×2 and Collect`, async ({ browser, page }, info) => {
+      await onVariant(browser, page, info, v, async (p, suffix) => {
+        await openRanked(p, returning(), { myPoints: 28, results: [paidResult(Date.now())] });
+        const card = p.locator('.overlay[data-overlay="ladder_result"]');
+        await expect(card).toHaveAttribute('data-case', 'paid', { timeout: 10_000 });
+        await expect(card.locator('button.ladder-result__double')).toBeVisible();
+        await expect(card.locator('button.ladder-result__collect')).toBeVisible();
+        await expect(card.locator('button.ladder-result__ok')).toBeHidden();
+        if (!v.lang) {
+          await expect(card.locator('.ladder-result__place')).toHaveText('You finished #2 of 37.');
+          await expect(card.locator('.ladder-result__line')).toHaveText('Your reward: +1 hint and +1 kitty');
+          await expect(card.locator('button.ladder-result__double')).toHaveAttribute('aria-label', 'Watch a video to collect twice the reward');
+        }
+        await expectLang(p, v, (await card.locator('.ladder-result__place').textContent()) ?? '', /You finished/);
+        await p.waitForTimeout(400);
+        await expectFits(p, '.overlay[data-overlay="ladder_result"]');
+        await shot2e(p, `result-${suffix}`);
+        // Collect: the server's grant, once; the card closes.
+        const before = await p.evaluate(() => (window as TestWindow).__mewdoku?.app().save.stock);
+        await card.locator('button.ladder-result__collect').click();
+        await expect(card).toBeHidden({ timeout: 8_000 });
+        await expect
+          .poll(async () => p.evaluate(() => (window as TestWindow).__mewdoku?.app().save.stock))
+          .toEqual({ hints: (before?.hints ?? 0) + 1, kitties: (before?.kitties ?? 0) + 1 });
+      });
+    });
+
+    test(`[${v.id}] O2 on the FB build: Watch video, "Buy 15 hints · $1.99", "Buy No Ads · $3.99" and its line`, async ({ browser, page }, info) => {
+      await onVariant(browser, page, info, v, async (p, suffix) => {
+        const up = await fetch(FBIG_URL).then((r) => r.ok, () => false);
+        test.skip(!up, `no FB e2e build at ${FBIG_URL} (E2E_FBIG_URL)`);
+        await fakeLadder(p, { pool: 'fb', myPoints: 28 });
+        await p.route('https://connect.facebook.net/**', (route) => route.fulfill({ status: 200, contentType: 'application/javascript', body: FB_STUB_SRC }));
+        const save = returning({ stock: { hints: 0, kitties: 3 } });
+        await p.addInitScript((config) => {
+          (window as unknown as { __FB_STUB_CONFIG__: unknown }).__FB_STUB_CONFIG__ = config;
+        }, { persist: false, data: { save }, ...(v.fbLocale ? { locale: v.fbLocale } : {}) });
+        await p.goto(`${FBIG_URL}/`);
+        await ready(p, 'home');
+        await p.waitForTimeout(500);
+        await p.locator('.home__play').click();
+        await p.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
+        // After the level-start tickers have crossed (they would show through the scrim).
+        await expect(p.locator('.game-fx .tickers')).toHaveCount(0, { timeout: 15_000 });
+        await p.locator('.tool-bar .tool--bulb').click();
+        const o2 = p.locator('.overlay[data-overlay="rewarded"]');
+        await expect(o2).toBeVisible();
+        const pack = o2.locator('button.rewarded__buy[data-product="hints_15"]');
+        const noAds = o2.locator('button.rewarded__buy[data-product="remove_ads"]');
+        await expect(pack).toHaveAttribute('data-state', 'ready', { timeout: 8_000 });
+        await expect(noAds).toHaveAttribute('data-state', 'ready');
+        await expect(o2.locator('button.rewarded__buy')).toHaveCount(2);
+        await expect(pack).toContainText('$1.99');
+        await expect(noAds).toContainText('$3.99');
+        await expect(o2.locator('.rewarded__buy-note')).toBeVisible();
+        if (!v.lang) {
+          await expect(pack.locator('.btn__label')).toHaveText('Buy 15 hints · $1.99');
+          await expect(noAds.locator('.btn__label')).toHaveText('Buy No Ads · $3.99');
+          await expect(o2.locator('.overlay__body')).toHaveText('Watch a short video for 1 hint, or buy a Bulb Bundle.');
+          await expect(o2.locator('.rewarded__buy-note')).toHaveText('Removes banners and full-screen ads. Videos for helpers stay.');
+        }
+        await expectLang(p, v, (await pack.textContent()) ?? '', /\bBuy\b|hints/);
+        await p.waitForTimeout(400); // the card's pop-in
+        // Every button and the No Ads line on screen without a scroll, also at 320 × 568 with the play band.
+        const panelFits = await o2.locator('.overlay__panel').evaluate((el) => el.scrollHeight <= el.clientHeight + 1);
+        expect(panelFits, 'O2 fits its dialog').toBe(true);
+        for (const b of ['.rewarded__accept', 'button.rewarded__buy[data-product="hints_15"]', 'button.rewarded__buy[data-product="remove_ads"]', '.rewarded__decline']) {
+          const box = await o2.locator(b).boundingBox();
+          expect(box && box.height >= 43.5 && box.width >= 43.5, `${b} ≥ 44 × 44`).toBe(true);
+        }
+        await expectFits(p, '.overlay[data-overlay="rewarded"]');
+        await shot2e(p, `o2-buy-${suffix}`);
+      });
+    });
+  }
 });

@@ -220,6 +220,19 @@ describe('game screen: win-flow hooks and event mode (phase2b §2.2, §4.4)', ()
     g.destroy();
   });
 
+  it('Phase 2e (spec §2.3, requests-G1 R1): the first counter call names its kind; "ladder" = my bracket, never "this week"', () => {
+    const g = createGameScreen(gameView(), gameCb());
+    document.body.appendChild(g.el);
+    g.showPeriodCounter(14, 'ladder');
+    expect(q(g.el, '.pills .period-pill[data-in-game]').getAttribute('aria-label')).toBe('14 fish in the daily ranking');
+    g.destroy();
+    const w = createGameScreen(gameView(), gameCb());
+    document.body.appendChild(w.el);
+    w.showPeriodCounter(39);
+    expect(q(w.el, '.pills .period-pill[data-in-game]').getAttribute('aria-label')).toBe(`39 fish this ${cfg.period.kind}`);
+    w.destroy();
+  });
+
   it('glow() lights the given cat cells of this board', async () => {
     const g = createGameScreen(gameView(), gameCb());
     document.body.appendChild(g.el);

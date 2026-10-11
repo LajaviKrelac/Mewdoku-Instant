@@ -5,9 +5,9 @@
 // records) with exactly the server's rows; the total; hearts (optimistic, exists, limit); result cards with
 // Collect / ×2 by video and the ledger (never twice, the repair); the name sheet; Show me in rankings;
 // Delete; the remote switch; the device-clock check for the streak.
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createFakeClock, type FakeClock } from '../../../src/app/clock';
-import { cfg } from '../../../src/app/config';
+import { cfg, mergeConfig, type GameConfig } from '../../../src/app/config';
 import { createEventBus, type AnalyticsEvent, type AppEventMap } from '../../../src/app/events';
 import { createLadderClient, type LadderClient } from '../../../src/app/ladder-client';
 import { createLadderFlow, ROWS_KEY, type LadderChunk, type LadderFlow } from '../../../src/app/ladder-flow';
@@ -15,6 +15,7 @@ import { queueWin } from '../../../src/app/ladder-origin';
 import { createStore, initialAppState, type AppState, type OverlayId, type Store } from '../../../src/app/store';
 import { defaults } from '../../../src/game/save';
 import type { SaveData } from '../../../src/game/types';
+import type { PlayerView } from '../../../src/shared/rank-api';
 import { createLadderFake, type LadderFake } from '../../fixtures/ladder-fake';
 import { NOW } from './harness';
 
@@ -51,6 +52,8 @@ interface Setup {
   flow: LadderFlow;
   storage: MemStorage;
   router: FakeRouter;
+  /** The router the flow uses (to open another overlay in a test). */
+  routerApi: Parameters<typeof createLadderFlow>[0]['router'];
   analytics: AnalyticsEvent[];
   saves: string[];
   updates: string[];
@@ -62,9 +65,20 @@ interface Setup {
   named(name: string): unknown[];
 }
 
-function setup(o: { save?: (s: SaveData) => SaveData; skewMs?: number; storage?: MemStorage; online?: () => boolean } = {}): Setup {
+function setup(
+  o: {
+    save?: (s: SaveData) => SaveData;
+    skewMs?: number;
+    storage?: MemStorage;
+    online?: () => boolean;
+    config?: GameConfig;
+    device?: boolean;
+    player?: Partial<PlayerView>;
+    rewarded?: boolean;
+  } = {},
+): Setup {
   const clock = createFakeClock(NOW);
-  const fake = createLadderFake({ now: () => clock.now(), ...(o.skewMs !== undefined ? { skewMs: o.skewMs } : {}) });
+  const fake = createLadderFake({ now: () => clock.now(), ...(o.skewMs !== undefined ? { skewMs: o.skewMs } : {}), ...(o.player ? { player: o.player } : {}) });
   const storage = o.storage ?? new MemStorage();
   const base: SaveData = { ...defaults(NOW - 30 * 86_400_000), tutorialDone: true, progress: { level: 58, completed: 57, best: {} }, stock: { hints: 0, kitties: 0 } };
   const store = createStore<AppState>({ ...initialAppState(o.save ? o.save(base) : base), screen: 'home' });
@@ -94,7 +108,16 @@ function setup(o: { save?: (s: SaveData) => SaveData; skewMs?: number; storage?:
     toast: (m: string) => void recorded.toasts.push(m),
     screen: () => 'home',
   };
-  const client = createLadderClient({ baseUrl: 'https://rank.test', platformId: 'web', device: () => ({ id: 'q2Vx8LmN4pRt6WyZ0aBc1D', secret: 'k9Jf3Hs7Ld2Qw5Er8Ty1Ui4Op6As0Df3Gh5Jk7Lz9Xa' }), clock, clientVersion: '0.2.0', contentVersion: 'content-test', fetch: fake.fetch });
+  const client = createLadderClient({
+    baseUrl: 'https://rank.test',
+    platformId: 'web',
+    device: () => (o.device === false ? null : { id: 'q2Vx8LmN4pRt6WyZ0aBc1D', secret: 'k9Jf3Hs7Ld2Qw5Er8Ty1Ui4Op6As0Df3Gh5Jk7Lz9Xa' }),
+    clock,
+    clientVersion: '0.2.0',
+    contentVersion: 'content-test',
+    fetch: fake.fetch,
+    ...(o.config ? { config: o.config } : {}),
+  });
   const watch = { ok: true, calls: 0 };
   const remote = { on: true };
   const flow = createLadderFlow({
@@ -106,7 +129,8 @@ function setup(o: { save?: (s: SaveData) => SaveData; skewMs?: number; storage?:
     clock,
     platformId: 'web',
     remoteOn: () => remote.on,
-    rewardedAvailable: () => true,
+    rewardedAvailable: () => o.rewarded ?? true,
+    ...(o.config ? { config: o.config } : {}),
     watchDouble: async () => {
       watch.calls++;
       return watch.ok;
@@ -126,6 +150,7 @@ function setup(o: { save?: (s: SaveData) => SaveData; skewMs?: number; storage?:
     flow,
     storage,
     router: recorded,
+    routerApi: router,
     analytics,
     saves,
     updates,
@@ -531,5 +556,432 @@ describe('the streak clock check (spec §5.1, dayStreak.serverSkewCheck)', () =>
     const ok = setup({ skewMs: 5_000 });
     await ok.flow.start();
     expect(ok.flow.streakClockOk()).toBe(true);
+  });
+});
+
+// ─────────── G1 resume: the remaining spec §10.1 rows of ladder-flow ───────────
+
+describe('sign-in outcomes (spec §2.2, §10.1)', () => {
+  it('no way to say who I am (no device credential / no identity API): no_api, records, no session call', async () => {
+    const s = setup({ device: false });
+    await s.flow.start();
+    expect(s.named('ladder_auth')).toEqual([{ platform: 'web', result: 'no_api' }]);
+    expect(s.flow.active()).toBe(false);
+    expect(s.fake.paths()).not.toContain('POST /v1/session');
+    expect(s.flow.settingsRows()).toBeUndefined();
+  });
+
+  it('the kill switch (503 disabled): records for the page load, no retry until the next boot', async () => {
+    const s = setup();
+    s.fake.failNext('/v1/session', 'disabled', 60_000);
+    await s.flow.start();
+    expect(s.named('ladder_auth')).toEqual([{ platform: 'web', result: 'disabled' }]);
+    expect(s.flow.active()).toBe(false);
+    s.queue(1);
+    s.flow.onWin({ winId: winId(1), mode: 'level', kept: 2 });
+    s.flow.homeMounted();
+    await s.settle(10 * 60_000);
+    expect(s.fake.paths().filter((p) => p === 'POST /v1/session')).toHaveLength(1);
+    expect(s.save().ladder.pending).toHaveLength(1); // the queue is kept
+    expect(s.flow.listState()).toMatchObject({ kind: 'records', reason: 'unavailable' });
+  });
+
+  it('a timeout: ladder_auth timeout; Home tries again later (the queue waits)', async () => {
+    const s = setup();
+    s.fake.hold = true;
+    const p = s.flow.start();
+    await s.settle(cfg.ladder.timeoutMs + 100);
+    await p;
+    expect(s.named('ladder_auth')).toEqual([{ platform: 'web', result: 'timeout' }]);
+    expect(s.fake.paths().filter((x) => x === 'POST /v1/session')).toHaveLength(1); // not twice in a row
+    s.fake.hold = false;
+    s.fake.release();
+    s.flow.homeMounted();
+    await s.settle(0);
+    expect(s.flow.debug().signedIn).toBe(true);
+  });
+
+  it('a suspended player (H-5): told, never shown a view; records with the paused note, the chip off', async () => {
+    const s = setup({ player: { status: 'suspended' } });
+    await s.flow.start();
+    expect(s.flow.active()).toBe(false);
+    s.queue(1);
+    s.flow.onWin({ winId: winId(1), mode: 'level', kept: 2 });
+    expect(s.flow.listState()).toMatchObject({ kind: 'records', reason: 'paused' });
+    expect(s.flow.chip()).toEqual({ state: 'off' });
+    await s.settle(0);
+    expect(s.fake.paths()).not.toContain('POST /v1/wins');
+    // A suspension answered on a later call (403 suspended) also ends the ladder for the page.
+    const t = setup();
+    await t.flow.start();
+    t.queue(1);
+    t.fake.failNext('/v1/wins', 'suspended');
+    t.flow.onWin({ winId: winId(1), mode: 'level', kept: 2 });
+    await t.settle(0);
+    expect(t.flow.listState()).toMatchObject({ kind: 'records', reason: 'paused' });
+  });
+});
+
+describe('rows rendered = rows returned (spec §10.6 #1, H-2, H-3)', () => {
+  it.each([1, 37, 50])('%i rows: exactly the server rows in its order with its ranks and count; never more', async (n) => {
+    const s = setup();
+    await s.flow.start();
+    for (let i = 0; i < n - 1; i++) s.fake.addOther({ nickname: `Other Cat ${i + 1}`, avatarId: i % 12, points: 100 - i });
+    s.queue(1, 3);
+    s.flow.onWin({ winId: winId(1), mode: 'level', kept: 3 });
+    await s.settle(0);
+    const st = s.flow.listState();
+    expect(st?.kind).toBe('bracket');
+    const view = st && st.kind === 'bracket' ? st.view : null;
+    const server = (await s.client.bracket()) as unknown as { ok: true; value: { rows: { rank: number; slot: number; nickname: string; points: number }[]; members: number } };
+    expect(view?.rows.map((r) => [r.rank, r.slot, r.name, r.points])).toEqual(server.value.rows.map((r) => [r.rank, r.slot, r.nickname, r.points]));
+    expect(view?.rows).toHaveLength(n);
+    expect(view?.members).toBe(n);
+    expect(view?.rows.filter((r) => r.me)).toHaveLength(1);
+    expect(view?.rewardsLine).toBe(n < s.fake.state.rules.minMembers ? 'min' : 'places');
+  });
+
+  it('0 rows (no bracket yet): no list is invented; the chip says Join', async () => {
+    const s = setup();
+    await s.flow.start();
+    expect(s.flow.chip()).toEqual({ state: 'join' });
+    s.flow.homeMounted();
+    await s.settle(0);
+    s.flow.openSheet('home');
+    await s.settle(0);
+    const sheet = s.router.props.ladder as { view: string; list: unknown };
+    expect(sheet.view).toBe('list');
+    expect(sheet.list).toBeNull(); // "Solve a puzzle to join the daily ranking." — never a placeholder row
+  });
+});
+
+describe('the Home chip and its refresh (spec §2.5, §2.2)', () => {
+  it('bracket state from the saved numbers (rank, count, fish, ends on the device clock); refreshed at most every ladder.homeRefreshMs', async () => {
+    const s = setup();
+    await s.flow.start();
+    s.fake.addOther({ nickname: 'Sleepy Whisker 27', avatarId: 1, points: 31 });
+    s.queue(1, 3);
+    s.flow.onWin({ winId: winId(1), mode: 'level', kept: 3 });
+    await s.settle(0);
+    const chip = s.flow.chip();
+    expect(chip).toMatchObject({ state: 'bracket', rank: 2, members: 2, points: 3 });
+    expect(chip.state === 'bracket' ? chip.endsAt : 0).toBe(s.fake.state.endsAt); // no skew in this setup
+    const reads = (): number => s.fake.paths().filter((p) => p === 'GET /v1/bracket').length;
+    s.flow.homeMounted();
+    await s.settle(0);
+    s.flow.homeMounted();
+    await s.settle(0);
+    expect(reads()).toBe(1);
+    await s.settle(cfg.ladder.homeRefreshMs);
+    s.flow.homeMounted();
+    await s.settle(0);
+    expect(reads()).toBe(2);
+    // A failed refresh keeps the cached values (never an error text on Home).
+    await s.settle(cfg.ladder.homeRefreshMs);
+    s.fake.offline = true;
+    s.flow.homeMounted();
+    await s.settle(0);
+    expect(s.flow.chip()).toMatchObject({ state: 'bracket', rank: 2, points: 3 });
+  });
+
+  it('flush triggers: after sign-in, at the next win, at Home mount and on the `online` event', async () => {
+    const listeners = new Map<string, () => void>();
+    vi.stubGlobal('addEventListener', (type: string, fn: () => void) => void listeners.set(type, fn));
+    vi.stubGlobal('removeEventListener', (type: string) => void listeners.delete(type));
+    try {
+      const s = setup();
+      s.fake.offline = true;
+      s.queue(1);
+      await s.flow.start(); // offline sign-in fails; the win waits
+      expect(s.save().ladder.pending).toHaveLength(1);
+      s.fake.offline = false;
+      listeners.get('online')?.();
+      await s.settle(0);
+      expect(s.save().ladder.pending).toEqual([]);
+      s.flow.dispose();
+      expect(listeners.has('online')).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe('hearts: exists and my own row (spec §2.8, P-L10)', () => {
+  it('heart_exists keeps the heart pressed silently; my own row takes one heart (self 1)', async () => {
+    const s = setup();
+    await s.flow.start();
+    s.fake.addOther({ nickname: 'Sleepy Whisker 27', avatarId: 1, points: 31, hearts: 2 });
+    s.queue(1);
+    s.flow.onWin({ winId: winId(1), mode: 'level', kept: 2 });
+    await s.settle(0);
+    const row = (slot: number) => {
+      const st = s.flow.listState();
+      return st && st.kind === 'bracket' ? st.view.rows.find((r) => r.slot === slot) : undefined;
+    };
+    s.fake.failNext('/v1/hearts', 'heart_exists');
+    s.flow.panelExtras().onHeart(0);
+    await s.settle(0);
+    expect(row(0)).toMatchObject({ hearts: 3, likedByMe: true, heartEnabled: false });
+    expect(s.router.toasts).toEqual([]);
+    expect(s.named('heart_give')).toEqual([{ result: 'exists', self: 0 }]);
+    const mine = row(1);
+    expect(mine?.me).toBe(true);
+    expect(mine?.heartEnabled).toBe(true); // hearts.allowSelf
+    s.flow.panelExtras().onHeart(1);
+    await s.settle(0);
+    expect(row(1)).toMatchObject({ hearts: 1, likedByMe: true, heartEnabled: false });
+    expect(s.named('heart_give')[1]).toEqual({ result: 'ok', self: 1 });
+  });
+});
+
+describe('result cards: the cap, order, rewardOnly, and ×2 after a failed claim (spec §2.6)', () => {
+  /** A device that signs in with `results` waiting on the server (paid places 1 and the rest unpaid). */
+  function withResults(results: { place: number; members: number; endedAt: number; paid: boolean }[], config?: GameConfig) {
+    const s = setup(config ? { config } : {});
+    s.fake.state.results = results.map((r, i) => {
+      const bracketId = `aaaaaaaaaa${String(i + 1).padStart(2, '0')}`;
+      return {
+        bracketId,
+        endedAt: r.endedAt,
+        place: r.place,
+        members: r.members,
+        points: 9,
+        reward: r.paid ? { rewardId: `${bracketId}:3`, place: 1 as const, grant: { hints: 2, kitties: 2 }, canDouble: true, expiresAt: NOW + 6 * 86_400_000, claim: null } : null,
+      };
+    });
+    return s;
+  }
+
+  it('more than ladder.maxResultCards waiting: the older rewards are collected without ×2 (toast), one card, the newest', async () => {
+    const results = [0, 1, 2, 3, 4].map((i) => ({ place: 1, members: 9, endedAt: NOW - (i + 1) * 3_600_000, paid: true }));
+    const s = withResults(results);
+    s.flow.homeMounted();
+    await s.settle(0);
+    const claims = s.fake.calls.filter((c) => c.path === '/v1/rewards/claim').map((c) => c.body as { rewardId: string; double: boolean });
+    expect(claims).toHaveLength(results.length - cfg.ladder.maxResultCards);
+    expect(claims.every((c) => c.double === false)).toBe(true);
+    expect(claims.map((c) => c.rewardId)).toEqual(['aaaaaaaaaa04:3', 'aaaaaaaaaa05:3']); // the oldest
+    expect(s.router.toasts).toContain('Collected!');
+    expect(s.router.open).toEqual(['ladder_result']);
+    expect(s.router.props.ladder_result).toMatchObject({ case: 'paid', place: 1 }); // the newest first
+    expect(s.save().stock).toEqual({ hints: 4, kitties: 4 });
+  });
+
+  it("'rewardOnly': unpaid results get no card; 'always' (default) shows them once, newest first", async () => {
+    const results = [
+      { place: 7, members: 30, endedAt: NOW - 3_600_000, paid: false },
+      { place: 9, members: 30, endedAt: NOW - 7_200_000, paid: false },
+    ];
+    const only = withResults(results, mergeConfig({ ladder: { resultCard: 'rewardOnly' } }));
+    only.flow.homeMounted();
+    await only.settle(0);
+    expect(only.router.open).toEqual([]);
+    const always = withResults(results);
+    always.flow.homeMounted();
+    await always.settle(0);
+    expect(always.router.props.ladder_result).toMatchObject({ case: 'none', place: 7 });
+    expect(always.save().ladder.resultsSeen).toEqual(['aaaaaaaaaa01']);
+  });
+
+  it('too few players: the top places get the "Not enough players" card (too_few), no reward, no claim', async () => {
+    const s = withResults([{ place: 1, members: 3, endedAt: NOW - 3_600_000, paid: false }]);
+    s.flow.homeMounted();
+    await s.settle(0);
+    expect(s.router.props.ladder_result).toMatchObject({ case: 'too_few', place: 1, members: 3, reward: null });
+  });
+
+  it('×2: the video completes but the claim fails → the reward id is kept; the next ×2 claims doubled WITHOUT a second video', async () => {
+    const s = withResults([{ place: 1, members: 9, endedAt: NOW - 3_600_000, paid: true }]);
+    s.flow.homeMounted();
+    await s.settle(0);
+    s.fake.failNext('/v1/rewards/claim', 'unavailable');
+    (s.router.props.ladder_result as { onDouble(): void }).onDouble();
+    await s.settle(0);
+    expect(s.watch.calls).toBe(1);
+    expect(s.save().ladder.doubleWatched).toEqual(['aaaaaaaaaa01:3']);
+    expect(s.router.toasts).toContain("Couldn't collect right now. We'll keep your reward for a few days.");
+    expect(s.save().stock).toEqual({ hints: 0, kitties: 0 });
+    // The card comes back on the next Home visit; ×2 now claims without a video.
+    s.flow.homeMounted();
+    await s.settle(0);
+    (s.router.props.ladder_result as { onDouble(): void }).onDouble();
+    await s.settle(0);
+    expect(s.watch.calls).toBe(1);
+    expect(s.save().stock).toEqual({ hints: 4, kitties: 4 });
+    expect(s.save().ladder.doubleWatched).toEqual([]);
+  });
+
+  it('no rewarded video available: no ×2 button (canDouble false), never a free ×2', async () => {
+    const s = setup({ rewarded: false });
+    s.fake.state.results = [
+      { bracketId: 'aaaaaaaaaa01', endedAt: NOW - 1000, place: 1, members: 9, points: 9, reward: { rewardId: 'aaaaaaaaaa01:3', place: 1, grant: { hints: 2, kitties: 2 }, canDouble: true, expiresAt: NOW + 86_400_000, claim: null } },
+    ];
+    s.flow.homeMounted();
+    await s.settle(0);
+    expect(s.router.props.ladder_result).toMatchObject({ case: 'paid', canDouble: false });
+  });
+});
+
+describe('the notice before the first submit (ladder.noticeFirst; spec §2.5, §7.8)', () => {
+  const NOTICE = mergeConfig({ ladder: { noticeFirst: true } });
+
+  it('on and not yet acknowledged: no request at all; Home opens the info view as a one-time dialog; OK → sign-in and the queued win sent', async () => {
+    const s = setup({ config: NOTICE });
+    s.queue(1);
+    await s.flow.start();
+    expect(s.fake.calls).toEqual([]);
+    expect(s.flow.active()).toBe(false);
+    expect(s.router.open).toEqual(['ladder']);
+    const sheet = s.router.props.ladder as { view: string; infoOnly: boolean; onClose(): void };
+    expect(sheet).toMatchObject({ view: 'info', infoOnly: true });
+    // A win before OK is queued and not sent; the panel shows my records.
+    s.flow.onWin({ winId: winId(1), mode: 'level', kept: 2 });
+    expect(s.flow.listState()).toMatchObject({ kind: 'records' });
+    sheet.onClose();
+    await s.settle(0);
+    expect(s.save().ladder.noticeSeen).toBe(true);
+    expect(s.fake.paths()).toContain('POST /v1/session');
+    expect(s.save().ladder.pending).toEqual([]);
+    expect(s.flow.active()).toBe(true);
+  });
+
+  it('acknowledged once: never again (the next page load signs in at once); off (the default): never shown', async () => {
+    const s = setup({ config: NOTICE, save: (b) => ({ ...b, ladder: { ...b.ladder, noticeSeen: true } }) });
+    await s.flow.start();
+    expect(s.router.open).toEqual([]);
+    expect(s.flow.active()).toBe(true);
+    const off = setup();
+    await off.flow.start();
+    off.flow.homeMounted();
+    await off.settle(0);
+    expect(off.router.open).not.toContain('ladder');
+    expect(off.save().ladder.noticeSeen).toBe(false);
+  });
+
+  it('not on Home (a modal open): the notice waits for the next Home mount; the chip entry opens it too', async () => {
+    const s = setup({ config: NOTICE });
+    s.routerApi.open('settings', {} as never);
+    await s.flow.start();
+    expect(s.router.open).toEqual(['settings']); // no notice over another modal
+    expect(s.fake.calls).toEqual([]);
+    s.routerApi.close('settings');
+    s.flow.homeMounted();
+    expect(s.router.open).toEqual(['settings', 'ladder']);
+    expect((s.router.props.ladder as { infoOnly: boolean }).infoOnly).toBe(true);
+    const chip = setup({ config: NOTICE });
+    chip.flow.openSheet('home');
+    expect(chip.router.open).toEqual(['ladder']);
+    expect((chip.router.props.ladder as { infoOnly: boolean }).infoOnly).toBe(true);
+    expect(chip.named('ladder_open')).toEqual([]);
+  });
+});
+
+describe('the streak clock check with dayStreak.serverSkewCheck on (spec §5.1, P-S7)', () => {
+  it('a device clock off by more than maxSkewMs (with a server time seen in the last 24 h): false; within: true; no server time: true', async () => {
+    const on = mergeConfig({ dayStreak: { serverSkewCheck: true } });
+    const off = setup({ skewMs: on.dayStreak.maxSkewMs + 60_000, config: on });
+    expect(off.flow.streakClockOk()).toBe(true); // no server time yet
+    await off.flow.start();
+    expect(off.flow.streakClockOk()).toBe(false);
+    await off.settle(86_400_000 + 1);
+    expect(off.flow.streakClockOk()).toBe(true); // the last server time is older than 24 h
+    const ok = setup({ skewMs: 60_000, config: on });
+    await ok.flow.start();
+    expect(ok.flow.streakClockOk()).toBe(true);
+  });
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe('a deletion on the server (an email request, spec §1.11; e2e #12)', () => {
+  it('the old token answers 401 → one sign-in again as a fresh player: the new name everywhere, the old rows never again', async () => {
+    const s = setup();
+    await s.flow.start();
+    s.fake.addOther({ nickname: 'Sleepy Whisker 27', avatarId: 1, points: 31 });
+    s.queue(1);
+    s.flow.onWin({ winId: winId(1), mode: 'level', kept: 2 });
+    await s.settle(0);
+    expect(s.storage.getItem(ROWS_KEY)).not.toBeNull();
+    // The server deleted the player: every token is gone and the next session is a new player.
+    s.fake.expireTokens();
+    s.fake.state.points = null;
+    s.fake.state.player = { ...s.fake.state.player, code: 'Z9Z9Z9Z9', nickname: 'Brave Comet 5', nick: { adj: 4, noun: 5, num: 5 } };
+    s.flow.panelExtras().onHeart(0);
+    await s.settle(0);
+    expect(s.fake.paths().filter((p) => p === 'POST /v1/session')).toHaveLength(2);
+    expect(s.save().ladder.me).toEqual({ name: 'Brave Comet 5', avatarId: 4, code: 'Z9Z9Z9Z9' });
+    expect(s.storage.getItem(ROWS_KEY)).toBeNull();
+    expect(s.flow.listState()).toBeNull(); // the old win's panel is gone with the old player
+    expect(s.flow.settingsRows()?.code).toBe('Z9Z9-Z9Z9');
+  });
+});
+
+describe('not listed: nothing leaves the device (spec §2.7, §2.9, §1.11)', () => {
+  it('after Delete the next page load sends nothing (no sign-in that would re-create the player); Settings can switch it on again', async () => {
+    const s = setup();
+    await s.flow.start();
+    s.flow.settingsRows()?.onDelete();
+    await s.settle(0);
+    // The next page load with the saved record.
+    const next = setup({ save: () => s.save() });
+    await next.flow.start();
+    next.flow.homeMounted();
+    await next.settle(10 * 60_000);
+    expect(next.fake.calls).toEqual([]);
+    expect(next.flow.chip()).toEqual({ state: 'off' });
+    const rows = next.flow.settingsRows();
+    expect(rows).toMatchObject({ name: '', code: null, listed: false });
+    rows?.onListed(true);
+    await next.settle(0);
+    expect(next.fake.paths()).toEqual(['POST /v1/session', 'PUT /v1/me/profile']);
+    expect(next.save().ladder).toMatchObject({ listed: true, me: { code: '7KQ2M9XD' } });
+    expect(next.flow.active()).toBe(true);
+  });
+
+  it('switched off (a player on the server): the boot does not sign in; the rows keep my name and code', async () => {
+    const me = { name: 'Velvet Pounce 27', avatarId: 4, code: '7KQ2M9XD' };
+    const s = setup({ save: (b) => ({ ...b, ladder: { ...b.ladder, listed: false, me } }) });
+    await s.flow.start();
+    s.flow.homeMounted();
+    await s.settle(0);
+    expect(s.fake.calls).toEqual([]);
+    expect(s.flow.settingsRows()).toMatchObject({ name: me.name, code: '7KQ2-M9XD', listed: false });
+  });
+});
+
+describe('"+N hearts from other players" (spec §2.8, ladder.heartsNotify)', () => {
+  it('shown with every answer that carries new hearts (the server resets its count on each read); never on a stale view', async () => {
+    const s = setup();
+    await s.flow.start();
+    s.fake.addOther({ nickname: 'Sleepy Whisker 27', avatarId: 1, points: 31 });
+    const panelHearts = (): number | undefined => {
+      const st = s.flow.listState();
+      return st && st.kind === 'bracket' ? st.view.heartsNew : undefined;
+    };
+    s.fake.state.heartsNew = 2;
+    s.queue(1);
+    s.flow.onWin({ winId: winId(1), mode: 'level', kept: 2 });
+    await s.settle(0);
+    expect(panelHearts()).toBe(2);
+    s.fake.state.heartsNew = 3;
+    s.queue(2, 1);
+    s.flow.onWin({ winId: winId(2), mode: 'level', kept: 1 });
+    await s.settle(0);
+    expect(panelHearts()).toBe(3); // a later answer's new hearts show too
+    s.fake.offline = true;
+    s.queue(3, 1);
+    s.flow.onWin({ winId: winId(3), mode: 'level', kept: 1 });
+    await s.settle(cfg.ladder.panelWaitMs);
+    expect(s.flow.listState()).toMatchObject({ kind: 'bracket', view: { heartsNew: 0 } });
+    // ladder.heartsNotify off: never shown.
+    const off = setup({ config: mergeConfig({ ladder: { heartsNotify: false } }) });
+    await off.flow.start();
+    off.fake.state.heartsNew = 2;
+    off.queue(1);
+    off.flow.onWin({ winId: winId(1), mode: 'level', kept: 2 });
+    await off.settle(0);
+    expect(off.flow.listState()).toMatchObject({ kind: 'bracket', view: { heartsNew: 0 } });
   });
 });

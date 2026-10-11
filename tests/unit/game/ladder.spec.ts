@@ -6,6 +6,17 @@
 import { describe, expect, it } from 'vitest';
 import { cfg, mergeConfig } from '../../../src/app/config';
 import {
+  emptyLadder,
+  encodeSolution,
+  enqueueWin,
+  mergeLadder,
+  parseClaimEntry,
+  readLadder,
+  toWinSubmission,
+  wireWin,
+  type WinInput,
+} from '../../../src/game/ladder';
+import {
   afterDelete,
   applyVerdicts,
   claimEntry,
@@ -13,25 +24,16 @@ import {
   counterBefore,
   currentFrom,
   droppedBy,
-  emptyLadder,
-  encodeSolution,
-  enqueueWin,
   isClaimed,
   isRunning,
   markDoubleWatched,
   markResultSeen,
-  mergeLadder,
-  parseClaimEntry,
   pruneAged,
-  readLadder,
   recordClaim,
   resultsToShow,
   sendable,
-  toWinSubmission,
   waitingFish,
-  wireWin,
-  type WinInput,
-} from '../../../src/game/ladder';
+} from '../../../src/game/ladder-sync';
 import type { LadderPendingWin, LadderRecord } from '../../../src/game/types';
 import { isWinSubmission, parseBracketView, type BracketView, type ResultView, type WinResult } from '../../../src/shared/rank-api';
 
@@ -276,7 +278,7 @@ describe('claims, repair and result cards (spec §2.6)', () => {
     rec = enqueueWin(rec, queued(1));
     rec = recordClaim(rec, { rewardId: 'aaaaaaaaaa01:11', grant: { hints: 1, kitties: 1 } });
     const d = afterDelete(rec);
-    expect(d).toEqual({ ...emptyLadder(), listed: false, claimed: rec.claimed });
+    expect(d).toEqual({ ...emptyLadder(), listed: false, claimed: rec.claimed, nickLineSeen: rec.nickLineSeen, noticeSeen: rec.noticeSeen });
   });
 });
 
@@ -289,6 +291,7 @@ describe('readLadder and mergeLadder (spec §7.1)', () => {
     doubleWatched: ['mgj1a0k3x9f2:12'],
     resultsSeen: ['mgj1a0k3x9f2'],
     nickLineSeen: true,
+    noticeSeen: true,
     me: { name: 'Velvet Pounce 27', avatarId: 4, code: '7KQ2M9XD' },
   });
 
@@ -308,6 +311,7 @@ describe('readLadder and mergeLadder (spec §7.1)', () => {
     ['a bad resultsSeen id', (d: Record<string, unknown>): unknown => (d.resultsSeen = ["'; DROP"]), (r: LadderRecord): void => void expect(r.resultsSeen).toEqual([]), 'ladder.resultsSeen'],
     ['me with a bad avatar', (d: Record<string, unknown>): unknown => ((d.me as Record<string, unknown>).avatarId = 12), (r: LadderRecord): void => void expect(r.me).toBeNull(), 'ladder.me'],
     ['me with a lowercase code', (d: Record<string, unknown>): unknown => ((d.me as Record<string, unknown>).code = '7kq2m9xd'), (r: LadderRecord): void => void expect(r.me).toBeNull(), 'ladder.me'],
+    ['noticeSeen not a boolean', (d: Record<string, unknown>): unknown => (d.noticeSeen = 1), (r: LadderRecord): void => void expect(r.noticeSeen).toBe(false), 'ladder.noticeSeen'],
   ] as const)('%s → its default, reported', (_name, patch, check, path) => {
     const d = JSON.parse(JSON.stringify(full())) as Record<string, unknown>;
     const out = patch(d);
@@ -317,7 +321,15 @@ describe('readLadder and mergeLadder (spec §7.1)', () => {
     expect(rep).toContain(path);
   });
 
-  it('merge: listed and me from the newer copy; pending union by winId then puzzleId; current by later fetchedAt; unions; nickLineSeen OR', () => {
+  it('noticeSeen (G1 addition, ladder.noticeFirst): a copy without it reads false and is not reported', () => {
+    const d = JSON.parse(JSON.stringify(full())) as Record<string, unknown>;
+    delete d.noticeSeen;
+    const rep: string[] = [];
+    expect(readLadder(d, cfg, rep).noticeSeen).toBe(false);
+    expect(rep).toEqual([]);
+  });
+
+  it('merge: listed and me from the newer copy; pending union by winId then puzzleId; current by later fetchedAt; unions; nickLineSeen and noticeSeen OR', () => {
     const a = full();
     const b: LadderRecord = {
       listed: false,
@@ -327,6 +339,7 @@ describe('readLadder and mergeLadder (spec §7.1)', () => {
       doubleWatched: [],
       resultsSeen: ['mgj1a0k3x9f3'],
       nickLineSeen: false,
+      noticeSeen: false,
       me: null,
     };
     const m = mergeLadder(a, b, b);
@@ -338,6 +351,8 @@ describe('readLadder and mergeLadder (spec §7.1)', () => {
     expect(m.doubleWatched).toEqual(['mgj1a0k3x9f2:12']);
     expect(m.resultsSeen).toEqual(['mgj1a0k3x9f2', 'mgj1a0k3x9f3']);
     expect(m.nickLineSeen).toBe(true);
+    expect(m.noticeSeen).toBe(true);
+    expect(mergeLadder({ ...a, noticeSeen: false }, b, b).noticeSeen).toBe(false);
     expect(mergeLadder(a, b, a).listed).toBe(true);
   });
 

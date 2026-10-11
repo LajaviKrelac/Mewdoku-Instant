@@ -26,8 +26,8 @@ import type { CellIndex } from '../engine/types';
 import { t } from '../i18n';
 import { ensureFxLayer, fishSizeFromRect, flyFish, type FlyFishOptions, type FxHandle } from '../ui/fx/fish-flight';
 import type { Clock, TimerId } from './clock';
-import { cfg, type GameConfig, type PeriodKind } from './config';
-import { fishKeptText } from '../ui/period-text';
+import { cfg, type GameConfig } from './config';
+import { fishKeptText, type FishTotalKind } from '../ui/period-text';
 
 export type WinFlowVariant = 'level' | 'daily' | 'event' | 'tutorial' | 'tutorial_replay' | 'restored';
 
@@ -39,8 +39,11 @@ export interface WinScreen {
   lifeSlots(): readonly { readonly slot: number; readonly rect: DOMRect }[];
   /** The life in `slot` leaves for the flight: it shows empty at once, no loss animation. Idempotent. */
   departLife(slot: number): void;
-  /** The period counter: fades in at the first call; a higher total later rolls + bumps. */
-  showPeriodCounter(total: number): void;
+  /**
+   * The period counter: fades in at the first call; a higher total later rolls + bumps. Phase 2e
+   * (requests-G3 R4): `kind` on the first call names the total ('ladder': my bracket's fish).
+   */
+  showPeriodCounter(total: number, kind?: FishTotalKind): void;
   /** Client rect of the counter's icon (flight target), null while hidden. */
   periodRect(): DOMRect | null;
   /** The rising "+N" chip at the counter. */
@@ -63,7 +66,11 @@ export interface WinFlowInput {
   readonly perFish: number;
   /** This period's leaderboard points before the win (0 after a rollover). */
   readonly periodBefore: number;
-  readonly periodKind: PeriodKind;
+  /**
+   * The counter's kind: this period (PeriodKind), or Phase 2e 'ladder' while the worldwide ranking is
+   * active (the counter then counts my bracket's fish, spec §2.3; requests-G3 R4).
+   */
+  readonly periodKind: FishTotalKind;
   readonly reducedMotion: boolean;
 }
 
@@ -331,10 +338,10 @@ export function createWinFlow(deps: WinFlowDeps): WinFlow {
         glow: () => {
           if (input.catCells.length > 0) handles.push(screen.glow(input.catCells));
         },
-        counter_in: () => screen.showPeriodCounter(before),
+        counter_in: () => screen.showPeriodCounter(before, input.periodKind),
         counter_total: () => {
           // §2.4 reduced: the counter shows the new total at once and the departing slots turn empty.
-          guard(() => screen.showPeriodCounter(total));
+          guard(() => screen.showPeriodCounter(total, input.periodKind));
           departAll();
         },
         flight: (late) => {

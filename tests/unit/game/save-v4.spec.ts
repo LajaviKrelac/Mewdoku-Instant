@@ -4,7 +4,8 @@
 import { describe, expect, it } from 'vitest';
 import { cfg } from '../../../src/app/config';
 import { countWin, emptyDayStreak, paidEntry } from '../../../src/game/day-streak';
-import { emptyLadder, recordClaim } from '../../../src/game/ladder';
+import { emptyLadder } from '../../../src/game/ladder';
+import { recordClaim } from '../../../src/game/ladder-sync';
 import { addPending, grantPending, isPending, pendingRecords, removePending } from '../../../src/game/purchases';
 import { defaults, merge, migrate, migrateReport, SAVE_VERSION } from '../../../src/game/save';
 import { readV3Fields } from '../../../src/game/save-v3';

@@ -7,6 +7,8 @@
 // a pool's clock, run its cron (finalise its brackets) and set its remote switches.
 //   E2E_LADDER_URL      the server the e2e builds were built against (VITE_LADDER_URL); default :8787
 //   E2E_FB_APP_SECRET   the dev server's FB_APP_SECRET (the stub's signing secret); default 'e2e-fb-app-secret'
+//   E2E_ADMIN_KEY       the dev server's ADMIN_KEY (server/dev/serve.ts DEV_DEFAULTS); for the suspension and
+//                       the email-request deletion tests only
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -15,6 +17,7 @@ import type { BracketView, PlayerView, SessionResponse, WinSubmission, WinsRespo
 
 export const LADDER_URL = (process.env.E2E_LADDER_URL ?? 'http://127.0.0.1:8787').replace(/\/+$/, '');
 export const FB_SECRET = process.env.E2E_FB_APP_SECRET ?? 'e2e-fb-app-secret';
+const ADMIN_KEY = process.env.E2E_ADMIN_KEY ?? 'mewdoku-dev-admin-key-0123456789abcdef0123456789';
 const CLIENT_VERSION = '0.2.0';
 
 const LEVELS = resolve(dirname(fileURLToPath(import.meta.url)), '../../../src/data/levels');
@@ -135,4 +138,29 @@ export async function ladderUp(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+async function admin(method: string, path: string): Promise<void> {
+  const res = await fetch(`${LADDER_URL}/admin/v1/${path}`, { method, headers: { Authorization: `Bearer ${ADMIN_KEY}` } });
+  if (!res.ok) throw new Error(`${method} /admin/v1/${path} → ${res.status} ${await res.text()}`);
+}
+/** Admin: suspend a player by code (the dev server's admin key). */
+export const adminSuspend = (code: string): Promise<void> => admin('POST', `players/${code}/suspend`);
+/** Admin: delete a player by code (an email deletion request, spec §1.11). */
+export const adminDelete = (code: string): Promise<void> => admin('DELETE', `players/${code}`);
+
+/** `n` other web players in `pool`, each with one win of level 2 worth `fish` (sessions in parallel, ten at a time). */
+export async function fillPool(pool: string, n: number, fish = 1): Promise<RankPlayer[]> {
+  const out: RankPlayer[] = [];
+  for (let i = 0; i < n; i += 10) {
+    const batch = await Promise.all(
+      Array.from({ length: Math.min(10, n - i) }, async () => {
+        const p = await webPlayer(pool);
+        await p.win([2], fish);
+        return p;
+      }),
+    );
+    out.push(...batch);
+  }
+  return out;
 }

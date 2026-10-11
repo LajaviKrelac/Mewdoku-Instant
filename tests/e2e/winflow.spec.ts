@@ -23,6 +23,7 @@
 // so "no Perfect ×N" is checked by its text.
 import { expect, test, type Page } from '@playwright/test';
 import type { E2EHooks } from '../../src/app/boot';
+import { ladderUp, LADDER_URL, newPool, webPlayer } from './helpers/rank-players';
 import { defaults } from '../../src/game/save';
 import { periodKeyAt, pointsRuleFor, runTotal } from '../../src/game/scoring';
 import type { SaveData } from '../../src/game/types';
@@ -468,3 +469,49 @@ for (const size of [null, { width: 320, height: 568 }] as const) {
     expect(r.seen).toBeGreaterThan(0);
   });
 }
+
+// ── Phase 2e (G1, spec §2.3, §2.4, §10.3 winflow): the same timing with the worldwide ranking (the dev
+// server, a test pool of its own); the counter's "before" value is my bracket's points from the cache. ──
+
+test('the ranking: the panel at the same time with the bracket list; the next win\'s counter starts at my bracket\'s points (the cache) and adds the kept fish', async ({ page }) => {
+  test.skip(!(await ladderUp()), `no ranking server at ${LADDER_URL}`);
+  test.setTimeout(90_000);
+  const pool = newPool('wf');
+  const rival = await webPlayer(pool);
+  await rival.win([2, 3]);
+  await page.goto(`/?ads=unsupported&ladderPool=${pool}`);
+  await page.waitForFunction(() => !!(window as TestWindow).__mewdoku && (window as TestWindow).__mewdoku?.app().screen !== 'boot');
+  await page.evaluate((json) => (window as TestWindow).__mewdoku?.seedSave(json), JSON.stringify(atLevel(30)));
+  await page.reload();
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.ladder?.()?.signedIn === true, undefined, { timeout: 10_000 });
+  for (const [k, before] of [[1, 0], [2, 3]] as const) {
+    await playNext(page);
+    await page.waitForTimeout(5_000); // past the server's soft solve floor
+    // Every value the in-game counter shows, in order.
+    await page.evaluate(() => {
+      const w = window as TestWindow & { __counter?: string[] };
+      w.__counter = [];
+      const seen = (): void => {
+        const pill = document.querySelector<HTMLElement>('.pills .period-pill[data-in-game]');
+        // Only what the player sees: the counter is built hidden at the board's mount (with 0).
+        if (!pill || !pill.checkVisibility({ opacityProperty: false, visibilityProperty: true })) return;
+        const n = pill.querySelector('.period-pill__n:last-child')?.textContent?.trim();
+        if (n && w.__counter?.at(-1) !== n) w.__counter?.push(n);
+      };
+      new MutationObserver(seen).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true });
+    });
+    const t0 = await solve(page);
+    const dt = await panelAfter(page, t0);
+    expect(dt).toBeGreaterThanOrEqual(4400);
+    expect(dt).toBeLessThanOrEqual(4800);
+    const list = page.locator('[data-overlay="ranking"] .rank-list[data-kind="bracket"]');
+    await expect(list).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('[data-overlay="ranking"]')).toContainText('Daily ranking');
+    const values = await page.evaluate(() => (window as TestWindow & { __counter?: string[] }).__counter ?? []);
+    expect(values[0], `win ${k}`).toBe(String(before));
+    expect(values.at(-1), `win ${k}`).toBe(String(before + 3));
+    await tapPanel(page);
+    await page.locator('[data-overlay="victory"] .victory__home').click();
+    await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');
+  }
+});

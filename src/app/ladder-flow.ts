@@ -16,6 +16,7 @@
 // Lazy: boot loads this module (with the client and the remote switches) only where the ranking origin is
 // in use; web-prod never does (no request at all).
 import { formatPlayerCode, parseBracketView, type BracketView, type ClaimResponse, type ResultView, type RulesView, type SessionResponse, AVATAR_COUNT, NICK_NUM_MAX, NICK_NUM_MIN } from '../shared/rank-api';
+import { wireWin } from '../game/ladder';
 import {
   afterDelete,
   applyVerdicts,
@@ -30,8 +31,7 @@ import {
   resultsToShow,
   sendable,
   waitingFish,
-  wireWin,
-} from '../game/ladder';
+} from '../game/ladder-sync';
 import { shufflePick } from '../game/nickname';
 import type { LadderRecord, ModeId, SaveData } from '../game/types';
 import { t } from '../i18n';
@@ -165,7 +165,6 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
   /** The win whose ladder_panel row was logged (once per win). */
   let panelLogged: WinState | null = null;
   let heartLimit = false;
-  let heartsShownFor = '';
   let cardBusy = false;
 
   const save = (): SaveData => store.get().save;
@@ -307,7 +306,7 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
     // leave a settled promise in `flushing` for good).
     const run = (async () => {
       {
-        if (!usable() || !listed()) return;
+        if (!usable() || !listed() || noticePending()) return;
         if (auth !== 'ok') {
           await start();
           if ((auth as AuthState) !== 'ok') return;
@@ -385,11 +384,53 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
     return p;
   }
 
+  // ── the notice before the first submit (ladder.noticeFirst; spec §2.5, §7.8, G-SRV-3) ──
+
+  /** ladder.noticeFirst and the notice not acknowledged yet: nothing leaves the device (no sign-in, no submit). */
+  const noticePending = (): boolean => c.ladder.noticeFirst && !save().ladder.noticeSeen;
+  let noticeOpen = false;
+  /**
+   * Opens the info view as a one-time dialog (OK only) where a result card could open (Home, no modal, not
+   * in the tutorial). OK (or Esc) acknowledges it: saved, then the sign-in and the first flush follow.
+   */
+  function openNotice(): boolean {
+    if (disposed || !noticePending() || noticeOpen || !deps.canOpenCard()) return false;
+    noticeOpen = true;
+    void loadChunk();
+    deps.router.open('ladder', {
+      ...sheetProps('info', true),
+      onClose: () => {
+        deps.router.close('ladder');
+        acknowledgeNotice();
+      },
+    });
+    return true;
+  }
+  function acknowledgeNotice(): void {
+    noticeOpen = false;
+    if (!noticePending()) return;
+    updateLadder((l) => ({ ...l, noticeSeen: true }));
+    deps.saves.touch();
+    emit('session');
+    void start()
+      .then(() => flush('notice'))
+      .then(() => nextCard());
+  }
+
   // ── sign-in (boot step 8) ──
 
   let starting: Promise<void> | null = null;
   function start(): Promise<void> {
     if (disposed || !remoteOn()) return Promise.resolve();
+    if (noticePending()) {
+      // ladder.noticeFirst: the notice comes first (opened here when Home shows, else at the next Home).
+      openNotice();
+      return Promise.resolve();
+    }
+    // Not listed ("Show me in rankings" off, or after Delete my ranking data): nothing leaves the device,
+    // not even a sign-in — a sign-in would re-create a deleted player on the server. Switching it on
+    // again signs in (setListed).
+    if (!listed()) return Promise.resolve();
     if (auth === 'ok' && client.signedIn()) return Promise.resolve();
     if (auth === 'rejected' || auth === 'disabled' || auth === 'suspended' || auth === 'no_api' || auth === 'old') return Promise.resolve();
     starting ??= (async () => {
@@ -403,40 +444,55 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
         emit('offline');
         return;
       }
-      auth = 'ok';
-      session = r.value;
-      rules = r.value.rules;
-      results = [...r.value.results].sort((a, b) => b.endedAt - a.endedAt);
+      // adopt() ran already (the client's onSignIn); it set auth.
       log({ name: 'ladder_auth', params: { platform: deps.platformId, result: 'ok' } });
-      const p = r.value.player;
-      // The server is the source of truth for the name, the picture, the code and "Show me in rankings".
-      updateLadder((l) => ({ ...l, listed: p.listed, me: { name: p.nickname, avatarId: p.avatarId, code: p.code } }));
-      if (p.status === 'suspended') auth = 'suspended';
-      // A bracket summary keeps my numbers fresh (no rows).
-      const b = r.value.bracket;
-      if (b && b.state !== 'none' && b.bracketId !== null && b.endsAt !== null) {
-        updateLadder((l) => ({
-          ...l,
-          current: {
-            bracketId: b.bracketId as string,
-            endsAt: b.endsAt as number,
-            serverOffsetMs: client.offsetMs(),
-            fetchedAt: clock.now(),
-            points: b.points,
-            rank: b.rank,
-            members: b.members,
-            maxMembers: l.current?.maxMembers ?? r.value.rules.maxMembers,
-          },
-        }));
-      } else if (b && b.state === 'none') updateLadder((l) => ({ ...l, current: null }));
-      repairClaims();
-      deps.saves.touch();
-      emit('session');
     })().finally(() => {
       starting = null;
     });
     return starting;
   }
+
+  /**
+   * Every successful session (the flow's sign-in, and the client's implicit one after a 401 — e.g. after an
+   * email deletion request the next call signs in as a fresh player): the server is the source of truth for
+   * the name, the picture, the code and "Show me in rankings"; my bracket's numbers (no rows); the results
+   * (cards, the claim repair).
+   */
+  function adopt(sr: SessionResponse): void {
+    if (disposed) return;
+    const fresh = session !== null && session.player.code !== sr.player.code;
+    session = sr;
+    rules = sr.rules;
+    results = [...sr.results].sort((a, b) => b.endedAt - a.endedAt);
+    auth = sr.player.status === 'suspended' ? 'suspended' : 'ok';
+    if (fresh) {
+      // Another player now (my data was deleted on the server): nothing of the old one is shown again.
+      win = null;
+      dropCache();
+    }
+    const p = sr.player;
+    updateLadder((l) => ({ ...l, listed: p.listed, me: { name: p.nickname, avatarId: p.avatarId, code: p.code } }));
+    const b = sr.bracket;
+    if (b && b.state !== 'none' && b.bracketId !== null && b.endsAt !== null) {
+      updateLadder((l) => ({
+        ...l,
+        current: {
+          bracketId: b.bracketId as string,
+          endsAt: b.endsAt as number,
+          serverOffsetMs: client.offsetMs(),
+          fetchedAt: clock.now(),
+          points: b.points,
+          rank: b.rank,
+          members: b.members,
+          maxMembers: l.current?.maxMembers ?? sr.rules.maxMembers,
+        },
+      }));
+    } else if (b && b.state === 'none') updateLadder((l) => ({ ...l, current: null }));
+    repairClaims();
+    deps.saves.touch();
+    emit('session');
+  }
+  const offSignIn = client.onSignIn((sr) => adopt(sr));
 
   /** §1.6 / §2.6 step 5: a claim the server has but this device's ledger lacks is applied once. */
   function repairClaims(): void {
@@ -485,6 +541,8 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
       doubleByVideo: r.doubleByVideo,
       heartsEnabled: r.hearts.enabled,
       paidPlaces: r.places.length,
+      // The info view's "lasts N hours" line comes from the server's rule (requests-G3 R10).
+      durationMs: r.durationMs,
     };
   }
 
@@ -507,13 +565,10 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
     const paidPlaces = r?.places.length ?? 0;
     const minMembers = r?.minMembers ?? 0;
     const me = save().ladder.me;
-    // "+3 hearts from other players" once per new count (ladder.heartsNotify).
-    const heartsKey = `${view.bracketId}:${view.heartsNew}:${view.serverTime}`;
-    let heartsNew = 0;
-    if (c.ladder.heartsNotify && view.heartsNew > 0 && !stale && (heartsShownFor === '' || heartsShownFor === heartsKey)) {
-      heartsNew = view.heartsNew;
-      heartsShownFor = heartsKey;
-    }
+    // "+3 hearts from other players" (ladder.heartsNotify): the server counts the hearts since my last
+    // bracket read and resets the count with each read, so every answer that carries some is new; a cached
+    // (stale) view never repeats it.
+    const heartsNew = c.ladder.heartsNotify && view.heartsNew > 0 && !stale ? view.heartsNew : 0;
     const firstLine = !save().ladder.nickLineSeen && me && view.me ? me.name : null;
     return {
       bracketId: view.bracketId as string,
@@ -883,7 +938,16 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
   }
 
   function active(): boolean {
-    return remoteOn() && listed() && auth !== 'suspended' && auth !== 'rejected' && auth !== 'disabled' && auth !== 'no_api' && auth !== 'old';
+    return (
+      remoteOn() &&
+      listed() &&
+      !noticePending() &&
+      auth !== 'suspended' &&
+      auth !== 'rejected' &&
+      auth !== 'disabled' &&
+      auth !== 'no_api' &&
+      auth !== 'old'
+    );
   }
 
   // ── the bus: flush when the device is online again ──
@@ -898,7 +962,9 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
 
   const flow: LadderFlow = {
     active,
-    start: () => start().then(() => flush('start')),
+    // The first flush follows a successful sign-in only (a failed one is tried again by the next trigger:
+    // Home, a win, `online`), so a boot never signs in twice in a row.
+    start: () => start().then(() => (auth === 'ok' ? flush('start') : undefined)),
     onWin(ref) {
       if (!active()) {
         // Not listed, paused, refused or switched off: the panel shows my records with the matching note
@@ -971,6 +1037,10 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
     homeMounted() {
       if (disposed) return;
       void loadChunk();
+      if (noticePending()) {
+        openNotice();
+        return;
+      }
       void (async () => {
         if (auth === 'idle' || auth === 'error') await start();
         await refreshBracket();
@@ -979,6 +1049,8 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
       })();
     },
     openSheet(from, view = 'list') {
+      // ladder.noticeFirst: the notice first (its OK starts the ranking).
+      if (noticePending() && openNotice()) return;
       log({ name: 'ladder_open', params: { from } });
       sheetView = view;
       void loadChunk();
@@ -987,10 +1059,14 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
     },
     settingsRows() {
       const me = save().ladder.me;
-      if (!me || auth === 'no_api' || auth === 'rejected' || auth === 'old') return undefined;
+      if (auth === 'no_api' || auth === 'rejected' || auth === 'old') return undefined;
+      // A listed player shows the rows once signed in (my name and code); a player who is not listed
+      // (switched off, or after Delete) always gets them, so "Show me in rankings" can be turned on again —
+      // without a player on the server the name is '' and the code null (requests-G1: G3 hides the name row).
+      if (!me && listed()) return undefined;
       return {
-        name: me.name,
-        code: me.code ? formatPlayerCode(me.code) : null,
+        name: me?.name ?? '',
+        code: me?.code ? formatPlayerCode(me.code) : null,
         listed: listed(),
         showListed: c.ladder.optOutAllowed,
         online: online() && usable(),
@@ -1009,6 +1085,7 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
     debug: () => ({ active: active(), signedIn: client.signedIn(), pending: save().ladder.pending.length, current: save().ladder.current }),
     dispose() {
       disposed = true;
+      offSignIn();
       clock.clearTimeout(retryTimer);
       try {
         globalThis.removeEventListener?.('online', onOnline);

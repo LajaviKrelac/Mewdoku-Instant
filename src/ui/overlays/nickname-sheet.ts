@@ -214,7 +214,9 @@ export function createNicknameSheet(): OverlayView<NicknameSheetProps> {
     status.hidden = line === '';
     const blocked = p.state === 'offline' || p.state === 'saving' || (cooling() && nameChanged()) || (!nameChanged() && !avatarChanged());
     setGated(save, blocked);
-    save.toggleAttribute('aria-busy', p.state === 'saving');
+    // aria-busy needs the value "true" (an empty value reads as false).
+    if (p.state === 'saving') save.setAttribute('aria-busy', 'true');
+    else save.removeAttribute('aria-busy');
     const lock = p.state === 'saving';
     for (const c of [adj, noun, num] as const) c.disabled = lock || p.state === 'offline';
     setGated(shuffle, lock || p.state === 'offline');

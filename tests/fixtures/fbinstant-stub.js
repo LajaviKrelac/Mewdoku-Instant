@@ -64,6 +64,8 @@
 //                   retired fish_250 / fish_900 can no longer be bought. An `unconsumed` entry needs only
 //                   a productID: { productID: 'fish_250' } is filled in as an unconsumed 'charge' with
 //                   token 'stub-unconsumed-<n>-<productID>' (an old fish pack bought before 2c).
+//                   Phase 2e: purchaseDelayMs (default 0) keeps FB's purchase dialog "open" that long;
+//                   consumeDelayMs (default 0) delays consumePurchaseAsync.
 // Phase 2e (G1, docs/phase2e/spec.md §1.3, §4.4, §10.3; CONTRACTS §5):
 //   signing         { secret: 'e2e-fb-app-secret', playerId?: string, issuedAtSkewSec?: number }
 //                   player.getSignedPlayerInfoAsync(payload) signs {algorithm, issued_at, player_id,
@@ -159,6 +161,10 @@
       readyDelayMs: 0,
       catalog: STUB_CATALOG,
       purchase: 'ok',
+      // Phase 2e (G1 resume): how long FB's purchase dialog stays open (the timer pause test), and how long
+      // consumePurchaseAsync takes (the consume-first order is visible in the save meanwhile).
+      purchaseDelayMs: 0,
+      consumeDelayMs: 0,
       unconsumed: [],
       errors: { getCatalogAsync: [], getPurchasesAsync: [], consumePurchaseAsync: [] },
     },
@@ -958,7 +964,9 @@
         };
         purchasesList.push(p);
         writePurchases();
-        return Promise.resolve(copy(p));
+        return wait(cfg.payments.purchaseDelayMs || 0).then(function () {
+          return copy(p);
+        });
       },
       getPurchasesAsync: function () {
         record('payments.getPurchasesAsync');
@@ -982,9 +990,11 @@
         if (err) return Promise.reject(err);
         for (var i = 0; i < purchasesList.length; i++) {
           if (purchasesList[i].purchaseToken === token && !purchasesList[i].isConsumed) {
-            purchasesList[i].isConsumed = true;
-            writePurchases();
-            return Promise.resolve();
+            var item = purchasesList[i];
+            return wait(cfg.payments.consumeDelayMs || 0).then(function () {
+              item.isConsumed = true;
+              writePurchases();
+            });
           }
         }
         return Promise.reject(fbError('INVALID_PARAM', 'unknown or consumed token'));

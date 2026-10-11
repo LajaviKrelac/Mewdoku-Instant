@@ -214,7 +214,8 @@ export function createRewardedPrompt(): OverlayView<RewardedPromptProps> {
       r.btn.setAttribute('aria-label', buyA11y(b));
       // One purchase at a time: while one is in flight every other row is gated too, whatever state it came with.
       setGated(r.btn, b.state !== 'ready' || inFlight);
-      r.btn.toggleAttribute('aria-busy', b.state === 'loading' || b.state === 'busy');
+      if (b.state === 'loading' || b.state === 'busy') r.btn.setAttribute('aria-busy', 'true');
+      else r.btn.removeAttribute('aria-busy');
     }
     buys.hidden = rows.length === 0;
     shell.panel.dataset.buy = String(rows.length);
@@ -239,11 +240,12 @@ export function createRewardedPrompt(): OverlayView<RewardedPromptProps> {
     ok.hidden = !countdown;
     // The preferred first focus follows the visible primary button (Phase 2e §4.6: Watch video when present,
     // else the first Buy, else Not now / OK).
-    accept.toggleAttribute('data-autofocus', !countdown);
-    ok.toggleAttribute('data-autofocus', countdown);
     // Phase 2e: the Buy rows; while a purchase is in flight every button is disabled (aria-disabled keeps focus).
     const wasBusy = shell.panel.hasAttribute('data-purchasing');
     const inFlight = renderBuys(p);
+    const firstBuy = buys.hidden ? null : buys.querySelector<HTMLButtonElement>('button.rewarded__buy');
+    const preferred = !countdown ? accept : (firstBuy ?? ok);
+    for (const b of [accept, ok, ...Array.from(buyRows.values(), (r) => r.btn)]) b.toggleAttribute('data-autofocus', b === preferred);
     shell.panel.toggleAttribute('data-purchasing', inFlight);
     for (const b of [accept, notNow, ok]) setGated(b, inFlight);
     // After a cancel (busy → ready) focus returns to the Buy that was tapped.

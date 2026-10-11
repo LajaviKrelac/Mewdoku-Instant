@@ -323,7 +323,7 @@ describe('O2 with Buy rows (spec §4.1, §4.6, §9.4)', () => {
     const b = q(card.el, 'button.rewarded__buy');
     expect(b.dataset.state).toBe('loading');
     expect(q(b, '.btn__label').textContent).toBe('Buy 15 hints · …');
-    expect(b.getAttribute('aria-busy')).toBe('');
+    expect(b.getAttribute('aria-busy')).toBe('true');
     expect(b.getAttribute('aria-label')).toBe('Getting the price…');
     b.click();
     expect(p.onBuy).not.toHaveBeenCalled();
@@ -341,7 +341,7 @@ describe('O2 with Buy rows (spec §4.1, §4.6, §9.4)', () => {
     card.update({ ...p, buy: [{ ...PACK, state: 'busy' }, { ...NOADS, state: 'disabled' }] });
     expect(q(card.el, 'button.rewarded__buy')).toBe(first);
     expect(first.dataset.state).toBe('busy');
-    expect(first.getAttribute('aria-busy')).toBe('');
+    expect(first.getAttribute('aria-busy')).toBe('true');
     for (const b of qa(card.el, 'button')) if (!b.hidden && !b.classList.contains('overlay__close')) expect(b.getAttribute('aria-disabled'), b.className).toBe('true');
     expect(card.dismiss()).toBe(true);
     expect(p.onDecline).not.toHaveBeenCalled();
@@ -391,6 +391,11 @@ describe('O2 with Buy rows (spec §4.1, §4.6, §9.4)', () => {
     expect(q(card.el, '.overlay__body').textContent).toBe('Next free hint in 1:30');
     expect(q(card.el, '.rewarded__ok').hidden).toBe(false);
     expect(qa(card.el, 'button.rewarded__buy')).toHaveLength(2);
+    // §4.6: no Watch video here, so the first Buy takes the first focus (not OK).
+    expect(q(card.el, 'button.rewarded__buy').hasAttribute('data-autofocus')).toBe(true);
+    expect(q(card.el, '.rewarded__ok').hasAttribute('data-autofocus')).toBe(false);
+    card.update(o2({ variant: 'countdown', nextFreeAt: 90_000, buy: [] }));
+    expect(q(card.el, '.rewarded__ok').hasAttribute('data-autofocus')).toBe(true);
     card.update(o2({ variant: 'free' }));
     expect(q(card.el, '.overlay__body').textContent).toBe("Here's a free hint.");
     expect(q(card.el, '.rewarded__accept .btn__label').textContent).toBe('Take it');
@@ -497,6 +502,21 @@ describe('Settings: the "Worldwide ranking" rows (spec §2.7, §9.4)', () => {
     expect(q(s.el, '.settings__ladder-code').hidden).toBe(true);
     s.update(settingsProps({ showListed: false }));
     expect(q(s.el, '.settings__ladder-listed-row').hidden).toBe(true);
+  });
+
+  it('no player yet (name "", after Delete): no name row and no code; the switch and Delete stay to join again (requests-G1 R2)', () => {
+    const s = createSettingsModal();
+    document.body.appendChild(s.el);
+    s.open(settingsProps({ name: '', code: null, listed: false }));
+    expect(q(s.el, '.settings__ladder').hidden).toBe(false);
+    expect(q(s.el, '.settings__ladder-name').hidden).toBe(true);
+    expect(q(s.el, '.settings__ladder-code').hidden).toBe(true);
+    expect(q(s.el, '.settings__ladder-listed-row').hidden).toBe(false);
+    expect(q(s.el, 'button.settings__ladder-listed').getAttribute('aria-checked')).toBe('false');
+    expect(q(s.el, 'button.settings__ladder-delete').hidden).toBe(false);
+    s.update(settingsProps({}));
+    expect(q(s.el, '.settings__ladder-name').hidden).toBe(false);
+    expect(q(s.el, '.settings__ladder-code').hidden).toBe(false);
   });
 });
 

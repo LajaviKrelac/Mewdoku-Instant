@@ -63,6 +63,11 @@ export interface LadderClient {
   signedIn(): boolean;
   /** Forgets the token (after DELETE /v1/me the next call signs in afresh). */
   signOut(): void;
+  /**
+   * Every successful sign-in, the flow's own and the implicit one after a 401 (e.g. the player's data was
+   * deleted by an email request: the next call signs in as a fresh player). Returns an unsubscribe.
+   */
+  onSignIn(fn: (s: SessionResponse) => void): () => void;
 }
 
 /** The device credential of the anonymous web mode (spec §1.3): 22 / 43 base64url characters. */
@@ -153,6 +158,7 @@ export function createLadderClient(deps: LadderClientDeps): LadderClient {
   let offset = 0;
   let lastAt: number | null = null;
   let signing: Promise<LadderResult<SessionResponse>> | null = null;
+  const signInListeners = new Set<(s: SessionResponse) => void>();
 
   const fail = (code: LadderFailureCode, retryAfterMs?: number): LadderResult<never> =>
     retryAfterMs === undefined ? { ok: false, code } : { ok: false, code, retryAfterMs };
@@ -263,6 +269,13 @@ export function createLadderClient(deps: LadderClientDeps): LadderClient {
       token = r.value.token;
       // The server's expiry on the device clock, a minute early.
       tokenExpiresAt = r.value.expiresAt - offset - 60_000;
+      for (const fn of [...signInListeners]) {
+        try {
+          fn(r.value);
+        } catch {
+          // a listener's problem never fails the sign-in
+        }
+      }
     }
     return r;
   }
@@ -289,6 +302,10 @@ export function createLadderClient(deps: LadderClientDeps): LadderClient {
     signOut() {
       token = null;
       tokenExpiresAt = 0;
+    },
+    onSignIn(fn) {
+      signInListeners.add(fn);
+      return () => void signInListeners.delete(fn);
     },
   };
   return client;

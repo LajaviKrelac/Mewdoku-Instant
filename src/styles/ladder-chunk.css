@@ -739,6 +739,11 @@
     min-width: 44px;
     padding: 0 4px;
   }
+
+  /* The name sheet's title next to the tag and Close ("Dein Ranglistenname"): one step smaller. */
+  .nickname .overlay__title {
+    font-size: var(--fs-xl);
+  }
 }
 
 /* Short screens: the dialog scrolls inside itself; trim the preview and the gaps first. */

@@ -359,6 +359,12 @@ export interface LadderRecord {
   resultsSeen: string[];
   /** nick.first.line was shown. */
   nickLineSeen: boolean;
+  /**
+   * The ranking notice (ladder.noticeFirst: the info view as a one-time dialog before the first submit,
+   * spec §2.5, §7.8) was acknowledged. Not in spec §7.1's table (G1 addition, requests-G1 notes): merged by
+   * OR like nickLineSeen; a v4 copy without it reads false (not reported as corrupt).
+   */
+  noticeSeen: boolean;
   /** My ranking name, picture and player code as the server last said (the offline display), or null. */
   me: { name: string; avatarId: number; code: string } | null;
 }

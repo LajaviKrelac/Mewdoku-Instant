@@ -4,6 +4,8 @@ Status: workstream D draft (phase 2d G1: the banner during play, B7–B9) · Dat
 
 **Phase 2c update (G3, 2026-10-09; [fish-lives-spec](../phase2c/fish-lives-spec.md) §4, §5.3).** Fish are the lives, and the fish kept at a win are the leaderboard points of the current UTC week (user, first-hand, 2026-10-09). So the dashboard needs **one period board** (`period_points`, §3) instead of `paw_points` + `daily_fastest`, and **three products** (§4): the fish packs are retired. Changed below: §1 (map example and key rules), §3 (boards), §4 (products), §6 (L3, new L6), §8 (checklist).
 
+**Phase 2e update (G1, 2026-10-11; [phase2e spec](../phase2e/spec.md) §3, §4, §1.3, §11.4).** The worldwide ranking runs on **our own server** (D-2e-4): the FB `period_points` board is retired (`rank.fbPeriodBoard: false`) and no leaderboard is needed for it; the event boards stay only until gate G1 is read. New: one rewarded placement ID **per helper** (optional, each falls back to the shared one), the `rank_double` placement, the in-play purchases on the out-of-helpers card (the same three products, consume first), iOS purchases built behind a switch (off), and `getSignedPlayerInfoAsync` for the ranking's sign-in. Everything new is in **§9** below; the rows of §1–§8 that it supersedes are marked there.
+
 This page lists everything the FB build expects to exist on Meta's side: the leaderboards, the ad placements and the in-app products, and the build-time `VITE_FB_*` values that connect them. It also lists every SDK behaviour our code relies on that **nobody has verified on developers.facebook.com yet** (§6). Until each item is verified, the code runs in the fallback the spec gives it, so nothing here blocks the build; it blocks only switching the related feature on in production.
 
 How we know what we know (tags as in parity-spec §0.4):
@@ -146,3 +148,51 @@ Everything below except the [05: confirmed] rows is **unverified**. "If wrong" s
 - [ ] Tournaments: G2 items T1–T4 and the reward policy; `groupChallenges` stays off until then.
 - [ ] The three products (`remove_ads`, `hints_15`, `kitties_8`) created with the default prices; `fish_250` / `fish_900` not created (deactivated in a test app that has them); P1–P7 checked with a test purchase on facebook.com and Android, including a refund (G5).
 - [ ] Interstitial frequency policy vs. 120/100/90 s (G6).
+
+## 9. Phase 2e (G1, 2026-10-11)
+
+Spec: [phase2e/spec.md](../phase2e/spec.md) §3 (ads), §4 (purchases in play), §1.3 and §2 (the ranking's sign-in), §11.4 (the user's dashboard steps). Code: `src/platform/fb/{fb-ads,fb-probe,index}.ts`, `src/app/{shop-flow,helper-flows,banner-flow,ladder-client}.ts`, `tests/fixtures/fbinstant-stub.js`.
+
+### 9.1 Build-time values (adds to §1)
+
+| Variable | Value | Effect when empty |
+|---|---|---|
+| `VITE_FB_PLACEMENT_REWARDED_HINT`, `_KITTY`, `_MOUSE`, `_REVIVE`, `_RANK_DOUBLE` | One rewarded placement ID per helper (Monetization Manager), for per-placement figures (spec §3.4) | That helper uses `VITE_FB_PLACEMENT_REWARDED` (a build with the shared ID only behaves as before 2e). `fbBuildTag()` reports which were given, as flags, never the values |
+| `VITE_LADDER_URL` | The ranking server, `https://rank.<domain>` (staging: `https://mewdoku-rank-staging.<account>.workers.dev`) | No ranking: every surface shows the personal records (never a broken build). A release build pointing at a `workers.dev` or `staging` host fails the release check (spec §10.6 #6) |
+| `VITE_FB_LEADERBOARDS` (changed) | Only the **event** boards, and only once gate G1 shows global leaderboards still work; `period_points` is not read or written any more (`rank.fbPeriodBoard: false`, D-2e-4) | The event screen's Top list shows personal results (as on the web) |
+
+### 9.2 Ad placements and loading (supersedes the pacing notes of §2)
+
+| Placement | Type | Used where (2e) | Notes |
+|---|---|---|---|
+| interstitial | Interstitial | `next_level`, `event_next`, `daily_done`; `retry` on every 2nd Retry only (`ads.interstitial.retryEveryN`); **new `fail_home`** (the fail card's Home) | After every level from 10 completed levels, a floor between full-screen ads (`ads.interstitial.cooldownSec`, **30 s after the L1 flip**), 60 s session grace, never with No Ads (spec §3.2, P-I1…P-I5). G6: check Meta's frequency rules against "every level + 30 s floor" |
+| rewarded (shared, or one per helper, §9.1) | Rewarded video | `hint`, `kitty`, `mouse`, `revive`; **new `rank_double`** (Collect ×2 on a ranking result) | No Ads keeps rewarded videos. At most `ads.maxPreloadedRewarded` (2) instances held (ADS_TOO_MANY_INSTANCES is reported from about 3), preloaded by priority: `hint` at 0 hints, else `kitty` at 0 kitties, else `mouse` on a board, plus `revive` at the last fish (spec §3.4). G11 on a device |
+| banner | Banner | Home, victory, event screen and the game screen (unchanged screens) | **Back after every hide** on the game screen (a modal's close, every interstitial or rewarded video, every purchase dialog, the hint card), at once when the 46 s window has passed (`ads.banner.minReloadSec`, **46 after the L1 flip**), else one timer; first on level 10's board (`ads.banner.fromCompletedLevels` **9 after the L1 flip**); **off from 2027-03-31** (`ads.banner.untilDate`, local date) or earlier by the remote switches `banner` / `bannerInPlay` (spec §3.1, §7.4) |
+
+Every FB ad load (all kinds) keeps a **30 s floor per placement ID** (`ads.minLoadGapMs`): a load asked earlier is scheduled for the end of the floor, never sent early. After a no-fill the reload waits `ads.reloadDelaysMs` (**30 / 60 / 120 s after the L1 flip**), then waits for the next show request (no tight loop).
+
+### 9.3 In-app products (adds to §4; the products are unchanged)
+
+- **No new product, no mouse pack** (U-d). The out-of-hints card offers `hints_15` then `remove_ads`; the out-of-kitties card `kitties_8` then `remove_ads`; the mouse card nothing (`iap.o2Products`). No Ads is hidden once owned and carries its own line ("Removes banners and full-screen ads. Videos for helpers stay."). Prices only from `getCatalogAsync` (prefetched after `onReady`, cached 10 min); a product missing from the catalogue hides only its row.
+- **Consume first** (D-2e-10; `iap.grantBeforeConsume` **false after the L1 flip**), guarded by the intent ledger `save.purchases.pending`: the token is saved as "paid, not granted" (a critical save), then `consumePurchaseAsync`, then the grant. Exactly once at every crash point (spec §4.2 table). **Supersedes §4's "Grant order" bullet** and row P7. Mention the order in the purchase review notes (G5) together with a screen recording of the in-play purchase (out of hints → Buy → +15, one used at once).
+- **iOS** (U-c, D-2e-11): `paymentsSupported` no longer hard-codes iOS off; `Capabilities.paymentsIos` says the platform is iOS, and the app sells there only with `iap.iosEnabled` (default **false**) or the remote switch `iapIos: true` (`RC_SWITCHES` on the ranking server, spec §11.5). **Supersedes §4's "iOS is not eligible" bullet and row P8** until G10 is checked. The boot restore delivers an unconsumed paid purchase on iOS even with the switch off.
+- FB's purchase dialog pauses the level's timer (pause reason `purchase`) and mutes our audio; the banner gets its re-show after it.
+
+### 9.4 SDK behaviours (adds to §6)
+
+| # | Behaviour the code assumes | Where | Source | If wrong |
+|---|---|---|---|---|
+| I1 | `player.getSignedPlayerInfoAsync(requestPayload)` (listed by `getSupportedAPIs()`) answers `getPlayerID()` and `getSignature()` = `<b64url sig>.<b64url payload>`, HMAC-SHA256 with the app secret over the payload text, the payload carrying `algorithm`, `issued_at`, `player_id`, `request_payload` | `fb/index.ts` (`identity`), server `core/fb-signature.ts` | Meta's signed-request format of older SDKs; Meta's 2026 plugin (base64url, HMAC) [search: Meta docs] | No sign-in: the ranking shows personal records. **G-SRV-2** (the lead's probe bundle, spec §11.6) |
+| A1 | A load request for the same placement ID within 30 s is refused or throttled; 30–60 s after a no-fill is the advised retry | `fb-ads.ts` | [search: Meta docs] (R-A3) | Fewer ads than possible (never more). G11 |
+| A2 | About three preloaded rewarded instances raise `ADS_TOO_MANY_INSTANCES` | `fb-ads.ts` (cap 2) | [search: Meta docs] (A10) | Lower `ads.maxPreloadedRewarded`. G11 |
+| A3 | A banner during play, back after every hide, until Meta retires banners (2027-03-31) is acceptable (U-b: the user accepted the policy risk) | `banner-flow.ts` | [search: Meta docs] advise against banners in gameplay | Turn it off without a release: remote `bannerInPlay: false`; or `ads.banner.duringPlay: false` in a build. G4 |
+| P9 | On iOS, `getPlatform()` is `'IOS'` and the payments APIs may be listed; whether Meta allows selling in the FB iPhone app now is unknown | `fb-probe.ts` | [uncertain] (U-c) | Keep `iapIos` off. G10: the user checks Meta's current rules and makes one test purchase on an iPhone before turning `iapIos` on |
+| P10 | Consuming before granting is what Meta asks for (P-e) | `shop-flow.ts` | [search: Meta docs] | `iap.grantBeforeConsume: true` restores 2b's order (one config value). G5 |
+
+### 9.5 Checklist additions (adds to §8)
+
+- [ ] Rewarded placements per helper created (optional) and given to the lead as `VITE_FB_PLACEMENT_REWARDED_{HINT,KITTY,MOUSE,REVIVE,RANK_DOUBLE}`; G11 (the 30 s floor, the preload cap) checked on a device.
+- [ ] `fish_week_v1` (`period_points`) **not** needed any more; remove it from `VITE_FB_LEADERBOARDS`.
+- [ ] The probe (spec §11.6) green on facebook.com, Android, iOS and Messenger.com (G-SRV-1, G-SRV-2) before an FB release with `VITE_LADDER_URL` set.
+- [ ] The purchase review (G5) with the in-play recording and the consume-first note; iOS purchases stay off until G10 (then `RC_SWITCHES = '{"iapIos": true}'`).
+- [ ] Interstitial frequency (G6) against "every level from level 10 with a 30 s floor, every 2nd Retry, the fail card's Home".

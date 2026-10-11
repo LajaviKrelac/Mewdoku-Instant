@@ -6,12 +6,18 @@
 // line; a heart (+1, pressed, kept after a reload); the Home chip → the sheet with the same rows; offline →
 // the cached rows marked stale, the queued win sent once the server is back; a crash right after WON (the
 // first submit aborted, then a reload) → the win sent once; "Show me in rankings" off → records.
+// G1 resume (§10.3 #5, #8–#12): a ranking ends → the result card → Collect ×2 (mock video) → +4 / +4 once;
+// too few players → "Not enough players"; Settings → Delete → my row gone, a new player code when I join
+// again; a suspended player → records + the paused line; the name sheet (pick, save, the cooldown line);
+// the web-prod path (no ranking origin) sends not one request (the remote switches included); a deletion
+// on the server (an email request) → the old token signs in again as a fresh player and the old row never
+// comes back. My own row takes one heart.
 // Skipped when the ranking server is not running (E2E_LADDER_URL, default :8787).
 import { expect, test, type Page } from '@playwright/test';
 import type { E2EHooks } from '../../src/app/boot';
 import { defaults } from '../../src/game/save';
 import type { SaveData } from '../../src/game/types';
-import { LADDER_URL, ladderUp, newPool, webPlayer, type RankPlayer } from './helpers/rank-players';
+import { adminDelete, adminSuspend, devAdvance, devCron, LADDER_URL, ladderUp, newPool, webPlayer, type RankPlayer } from './helpers/rank-players';
 
 type TestWindow = Window & { __mewdoku?: E2EHooks };
 
@@ -26,8 +32,8 @@ const atLevel = (level: number): SaveData => ({
   progress: { level, completed: level - 1, best: {} },
 });
 
-async function openApp(page: Page, pool: string, save: SaveData = atLevel(20)): Promise<void> {
-  await page.goto(`/?ads=unsupported&ladderPool=${pool}`);
+async function openApp(page: Page, pool: string, save: SaveData = atLevel(20), ads = 'unsupported'): Promise<void> {
+  await page.goto(`/?ads=${ads}&ladderPool=${pool}`);
   await page.waitForFunction(() => !!(window as TestWindow).__mewdoku && (window as TestWindow).__mewdoku?.app().screen !== 'boot');
   await page.evaluate((json) => (window as TestWindow).__mewdoku?.seedSave(json), JSON.stringify(save));
   await page.reload();
@@ -109,6 +115,9 @@ test('a win: the panel lists exactly the server bracket (rows, order, ranks, cou
   expect(save?.ladder.pending).toEqual([]);
   expect(save?.ladder.current).toMatchObject({ points: 3, members: 4 });
   expect(JSON.stringify(save)).not.toContain(server.rows.find((r) => !r.me && r.rank === 1)?.nickname ?? '#');
+  // requests-G3 R4: the victory's kept-fish row names my bracket's total, not this week's.
+  await panel(page).locator('.ranking__tap').click();
+  await expect(page.locator('[data-overlay="victory"] .victory__period')).toHaveText('Your total: 3', { timeout: 10_000 });
 });
 
 test('alone in a bracket: one row (mine) and the alone line, no placeholder rows', async ({ page }) => {
@@ -135,6 +144,11 @@ test('a heart on another row: +1 and pressed at once, kept by the server (a relo
   await expect(heart).toHaveAttribute('aria-pressed', 'true');
   await expect(heart.locator('.rank-row__hearts')).toHaveText(String(before + 1));
   await expect.poll(async () => (await (a as RankPlayer).bracket()).rows.find((r) => r.me)?.hearts, { timeout: 5_000 }).toBe(before + 1);
+  // My own row takes one heart too (hearts.allowSelf, orig L5), then it is pressed for good.
+  const mine = bracketList(page).locator('ol.rank-rows > li.rank-row[data-me="1"] button.rank-row__heart');
+  await mine.click();
+  await expect(mine).toHaveAttribute('aria-pressed', 'true');
+  await expect.poll(async () => (await (a as RankPlayer).bracket()).rows.find((r) => !r.me)?.hearts, { timeout: 5_000 }).toBe(1);
   // The server keeps it: the sheet after a reload shows the heart pressed.
   await tapThrough(page);
   await page.reload();
@@ -245,4 +259,223 @@ test('"Show me in rankings" off: the next win shows my records with the opted-ou
   await tapThrough(page);
   await expect(page.locator('button.ladder-chip')).toHaveAttribute('data-state', 'off');
   expect(wins).toEqual([]);
+});
+
+/** The overlays open now (a closed overlay may stay in the DOM, hidden). */
+const overlays = (page: Page) => page.evaluate(() => (window as TestWindow).__mewdoku?.app().overlays ?? []);
+
+/** The stock in the live save. */
+const stock = (page: Page) => page.evaluate(() => (window as TestWindow).__mewdoku?.app().save.stock ?? null);
+
+/** The pool's bracket ends (24 h + the finalisation grace on its own clock) and its cron finalises it. */
+async function endBracket(pool: string): Promise<void> {
+  await devAdvance(pool, 24 * 3_600_000 + 60_000);
+  await devCron(pool);
+}
+
+test('a ranking ends: the result card (#1 of 5) → Collect ×2 plays the video → +4 hints, +4 kitties once; the next Home visit shows no card', async ({ page }) => {
+  test.setTimeout(120_000);
+  const pool = newPool('lad5');
+  await others(pool, [1, 1, 1, 1]);
+  await openApp(page, pool, atLevel(20), 'ok');
+  await winNext(page);
+  await expect(bracketList(page)).toBeVisible({ timeout: 15_000 });
+  await tapThrough(page);
+  const before = await stock(page);
+  await endBracket(pool);
+  await page.reload();
+  const card = page.locator('.overlay[data-overlay="ladder_result"]');
+  await expect(card).toHaveAttribute('data-case', 'paid', { timeout: 15_000 });
+  await expect(card).toContainText('You finished #1 of 5.');
+  await card.locator('button.ladder-result__double').click();
+  await expect.poll(() => stock(page), { timeout: 20_000 }).toEqual({ hints: (before?.hints ?? 0) + 4, kitties: (before?.kitties ?? 0) + 4 });
+  await expect.poll(() => overlays(page)).not.toContain('ladder_result');
+  const s = await page.evaluate(() => (window as TestWindow).__mewdoku?.app().save.ladder);
+  expect(s?.claimed).toHaveLength(1);
+  // Again (a new page load): no card, no second grant.
+  await page.reload();
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.ladder?.()?.signedIn === true, undefined, { timeout: 10_000 });
+  await page.waitForTimeout(1_500);
+  expect(await overlays(page)).not.toContain('ladder_result');
+  expect(await stock(page)).toEqual({ hints: (before?.hints ?? 0) + 4, kitties: (before?.kitties ?? 0) + 4 });
+});
+
+test('a 2-player ranking ends with me first: "Not enough players took part for rewards this time." and no reward', async ({ page }) => {
+  test.setTimeout(90_000);
+  const pool = newPool('lad5b');
+  await others(pool, [1]);
+  await openApp(page, pool);
+  await winNext(page);
+  await expect(bracketList(page)).toBeVisible({ timeout: 15_000 });
+  await tapThrough(page);
+  const before = await stock(page);
+  await endBracket(pool);
+  await page.reload();
+  const card = page.locator('.overlay[data-overlay="ladder_result"]');
+  await expect(card).toHaveAttribute('data-case', 'too_few', { timeout: 15_000 });
+  await expect(card).toContainText('You finished #1 of 2.');
+  await expect(card).toContainText('Not enough players took part for rewards this time.');
+  await expect(card.locator('button.ladder-result__collect:visible, button.ladder-result__double:visible')).toHaveCount(0);
+  await card.locator('button.ladder-result__ok').click();
+  await expect.poll(() => overlays(page)).not.toContain('ladder_result');
+  expect(await stock(page)).toEqual(before);
+});
+
+/** Home → Settings (the "Worldwide ranking" rows once signed in). */
+async function openSettings(page: Page): Promise<void> {
+  await page.locator('.screen--home').getByRole('button', { name: 'Settings' }).click();
+  await expect(page.locator('[data-overlay="settings"] .settings__ladder')).toBeVisible({ timeout: 10_000 });
+}
+
+async function closeAll(page: Page): Promise<void> {
+  await expect(async () => {
+    const open = await page.evaluate(() => (window as TestWindow).__mewdoku?.app().overlays ?? []);
+    if (open.length > 0) await page.keyboard.press('Escape');
+    expect(await page.evaluate(() => (window as TestWindow).__mewdoku?.app().overlays ?? [])).toEqual([]);
+  }).toPass({ timeout: 5_000 });
+}
+
+test('Settings → Delete my ranking data: my row leaves the other players\' view; joining again makes a new player (a new code)', async ({ page }) => {
+  test.setTimeout(90_000);
+  const pool = newPool('lad8');
+  const [a] = await others(pool, [6]);
+  await openApp(page, pool);
+  await winNext(page);
+  await expect(bracketList(page)).toBeVisible({ timeout: 15_000 });
+  await tapThrough(page);
+  expect((await (a as RankPlayer).bracket()).members).toBe(2);
+  const oldCode = await page.evaluate(() => (window as TestWindow).__mewdoku?.app().save.ladder.me?.code);
+  await openSettings(page);
+  await page.locator('[data-overlay="settings"] button.settings__ladder-delete').click();
+  await page.locator('[data-overlay="settings"] .settings__confirm-delete').click();
+  await expect(page.getByText('Your ranking data was deleted.')).toBeVisible({ timeout: 10_000 });
+  await expect.poll(async () => (await (a as RankPlayer).bracket()).members, { timeout: 5_000 }).toBe(1);
+  expect((await (a as RankPlayer).bracket()).rows.every((r) => r.me)).toBe(true);
+  const after = await page.evaluate(() => (window as TestWindow).__mewdoku?.app().save.ladder);
+  expect(after).toMatchObject({ listed: false, me: null, current: null, pending: [] });
+  await closeAll(page);
+  await expect(page.locator('button.ladder-chip')).toHaveAttribute('data-state', 'off');
+  // Joining again: "Show me in rankings" on → a fresh player (a new code), placed by the next win.
+  await openSettings(page);
+  const listed = page.locator('[data-overlay="settings"] .settings__ladder-listed');
+  await expect(listed).toHaveAttribute('aria-checked', 'false');
+  await listed.click();
+  await expect(listed).toHaveAttribute('aria-checked', 'true', { timeout: 10_000 });
+  await closeAll(page);
+  const newCode = await page.evaluate(() => (window as TestWindow).__mewdoku?.app().save.ladder.me?.code);
+  expect(newCode).toBeTruthy();
+  expect(newCode).not.toBe(oldCode);
+  await winNext(page);
+  await expect(bracketList(page)).toBeVisible({ timeout: 15_000 });
+  await expect.poll(async () => (await (a as RankPlayer).bracket()).members, { timeout: 5_000 }).toBe(2);
+});
+
+test('a suspended player (admin): told with the paused line and shown their records, never a view without their row; nothing sent', async ({ page }) => {
+  test.setTimeout(90_000);
+  const pool = newPool('lad9');
+  await others(pool, [6]);
+  await openApp(page, pool);
+  const code = await page.evaluate(() => (window as TestWindow).__mewdoku?.app().save.ladder.me?.code ?? '');
+  expect(code).toMatch(/^[0-9A-Z]{8}$/);
+  await adminSuspend(code);
+  await page.reload();
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');
+  await expect(page.locator('button.ladder-chip')).toHaveAttribute('data-state', 'off', { timeout: 10_000 });
+  const wins: string[] = [];
+  page.on('request', (r) => {
+    if (r.url().startsWith(`${LADDER_URL}/v1/wins`)) wins.push(r.method());
+  });
+  await winNext(page);
+  await expect(panel(page).locator('.rank-list[data-kind="records"]')).toBeVisible({ timeout: 15_000 });
+  await expect(panel(page)).toContainText('Your ranking is paused. Here are your own records.');
+  await expect(panel(page).locator('.rank-row:visible')).toHaveCount(0);
+  expect(wins).toEqual([]);
+});
+
+test('the name sheet: pick two words and a number, save → the new name in the panel; a second change inside the cooldown says when', async ({ page }) => {
+  test.setTimeout(90_000);
+  const pool = newPool('lad10');
+  const [a] = await others(pool, [6]);
+  await openApp(page, pool);
+  await openSettings(page);
+  await page.locator('[data-overlay="settings"] button.settings__ladder-name').click();
+  const sheet = page.locator('.overlay[data-overlay="nickname"]');
+  await expect(sheet).toBeVisible({ timeout: 10_000 });
+  await sheet.locator('select.nickname__adj').selectOption({ index: 3 });
+  await sheet.locator('select.nickname__noun').selectOption({ index: 5 });
+  await sheet.locator('input.nickname__num').fill('42');
+  const adj = (await sheet.locator('select.nickname__adj option:checked').textContent())?.trim() ?? '';
+  const noun = (await sheet.locator('select.nickname__noun option:checked').textContent())?.trim() ?? '';
+  const name = `${adj} ${noun} 42`;
+  await sheet.locator('button.nickname__save').click();
+  await expect(page.getByText('Name saved.')).toBeVisible({ timeout: 10_000 });
+  await expect.poll(() => overlays(page)).not.toContain('nickname');
+  expect(await page.evaluate(() => (window as TestWindow).__mewdoku?.app().save.ladder.me?.name)).toBe(name);
+  await closeAll(page);
+  await winNext(page);
+  await expect(bracketList(page)).toBeVisible({ timeout: 15_000 });
+  expect((await rowTexts(page)).find((r) => r.me === '1')?.name).toBe(name);
+  expect((await (a as RankPlayer).bracket()).rows.find((r) => !r.me)?.nickname).toBe(name);
+  await tapThrough(page);
+  // A second change: the server's cooldown → the sheet says when.
+  await openSettings(page);
+  await page.locator('[data-overlay="settings"] button.settings__ladder-name').click();
+  await expect(sheet).toBeVisible({ timeout: 10_000 });
+  await sheet.locator('select.nickname__adj').selectOption({ index: 1 });
+  await sheet.locator('button.nickname__save').click();
+  await expect(sheet).toContainText('You can change your name again', { timeout: 10_000 });
+  expect(await page.evaluate(() => (window as TestWindow).__mewdoku?.app().save.ladder.me?.name)).toBe(name);
+});
+
+test('the web-prod path (no ranking origin, ?flags=-ladder ≡ ladder.web off): not one request to the ranking origin, /v1/config included; records everywhere', async ({ page }) => {
+  test.setTimeout(90_000);
+  const seen: string[] = [];
+  page.on('request', (r) => {
+    if (r.url().startsWith(LADDER_URL)) seen.push(`${r.method()} ${new URL(r.url()).pathname}`);
+  });
+  await page.goto('/?ads=unsupported&flags=-ladder');
+  await page.waitForFunction(() => !!(window as TestWindow).__mewdoku && (window as TestWindow).__mewdoku?.app().screen !== 'boot');
+  await page.evaluate((json) => (window as TestWindow).__mewdoku?.seedSave(json), JSON.stringify(atLevel(20)));
+  await page.reload();
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');
+  await page.waitForTimeout(2_000); // boot step 8 (idle) has run
+  expect(await page.evaluate(() => (window as TestWindow).__mewdoku?.ladder?.()?.active)).toBe(false);
+  const chip = page.locator('button.ladder-chip');
+  await expect(chip).toHaveAttribute('data-state', 'records');
+  await chip.click();
+  await expect(page.locator('.overlay[data-overlay="ladder"] .ladder-sheet[data-view="records"]')).toBeVisible({ timeout: 10_000 });
+  await closeAll(page);
+  await page.locator('.screen--home').getByRole('button', { name: 'Settings' }).click();
+  await expect(page.locator('[data-overlay="settings"]')).toBeVisible();
+  await expect(page.locator('[data-overlay="settings"] .settings__ladder')).toBeHidden();
+  await closeAll(page);
+  await winNext(page);
+  await expect(panel(page).locator('.rank-list[data-kind="records"]')).toBeVisible({ timeout: 15_000 });
+  await tapThrough(page);
+  expect(await page.evaluate(() => (window as TestWindow).__mewdoku?.app().save.ladder.pending)).toEqual([]);
+  expect(seen).toEqual([]);
+});
+
+test('a deletion on the server (an email request): the old token signs in once more as a fresh player; the old row never comes back', async ({ page }) => {
+  test.setTimeout(90_000);
+  const pool = newPool('lad12');
+  const [a] = await others(pool, [6]);
+  await openApp(page, pool);
+  await winNext(page);
+  await expect(bracketList(page)).toBeVisible({ timeout: 15_000 });
+  const oldCode = await page.evaluate(() => (window as TestWindow).__mewdoku?.app().save.ladder.me?.code ?? '');
+  await adminDelete(oldCode);
+  await expect.poll(async () => (await (a as RankPlayer).bracket()).members, { timeout: 5_000 }).toBe(1);
+  const sessions: string[] = [];
+  page.on('request', (r) => {
+    if (r.url() === `${LADDER_URL}/v1/session` && r.method() === 'POST') sessions.push('session');
+  });
+  // A heart with the old in-memory token → 401 → one sign-in again (a fresh player) → not a member any more.
+  const heart = bracketList(page).locator('ol.rank-rows > li.rank-row[data-me="0"] button.rank-row__heart').first();
+  await heart.click();
+  await expect.poll(() => page.evaluate(() => (window as TestWindow).__mewdoku?.app().save.ladder.me?.code), { timeout: 10_000 }).not.toBe(oldCode);
+  expect(sessions).toHaveLength(1);
+  await expect.poll(async () => (await (a as RankPlayer).bracket()).members, { timeout: 5_000 }).toBe(1);
+  expect((await (a as RankPlayer).bracket()).rows.find((r) => !r.me)).toBeUndefined();
+  expect((await (a as RankPlayer).bracket()).rows[0]?.hearts).toBe(0); // the heart never landed
 });

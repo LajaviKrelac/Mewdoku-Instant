@@ -13,7 +13,7 @@ import { cfg, type DeepPartial, type GameConfig } from '../../../src/app/config'
 import { createShell, type Shell } from '../../../src/app/shell';
 import type { SaveData } from '../../../src/game/types';
 import type { AdResult } from '../../../src/platform/types';
-import { createHarness, startLevel, winGame, type FakePlatform, type Harness } from './harness';
+import { createHarness, startLevel, tapRanking, winGame, type FakePlatform, type Harness } from './harness';
 
 const veteran = (s: SaveData): SaveData => ({ ...s, progress: { level: 15, completed: 14, best: {} }, stock: { hints: 0, kitties: 3 } });
 const WINDOW = cfg.ads.banner.minReloadSec * 1000;
@@ -122,6 +122,40 @@ describe('back after every hide (spec §3.1, GAP-B1)', () => {
     expect(shows(h)).toBe(2);
     await h.settle(5 * WINDOW);
     expect(shows(h)).toBe(2); // one timer, no loop
+  });
+
+  it("the close reported while the store still lists the modal (the app's bus order): still re-shown", async () => {
+    const { h, flow } = play();
+    await startLevel(h, 15);
+    h.store.update((s) => ({ ...s, overlays: ['settings'] }));
+    await flow.hide();
+    await h.settle(WINDOW + 1);
+    await flow.modalClosed('settings'); // 'settings' is still in st.overlays at this moment
+    expect(banner(h)).toEqual(['banner:show', 'banner:hide', 'banner:show']);
+    // Another modal still open: nothing.
+    h.store.update((s) => ({ ...s, overlays: ['settings', 'how_to_play'] }));
+    await flow.hide();
+    await h.settle(WINDOW + 1);
+    await flow.modalClosed('settings');
+    expect(shows(h)).toBe(2);
+  });
+
+  it('the victory inside the window (the ranking panel hid the board\'s banner): one load when the window ends, never before', async () => {
+    const { h } = play();
+    await startLevel(h, 15);
+    expect(shows(h)).toBe(1);
+    await h.settle(10_000);
+    winGame(h);
+    await h.settle(h.config.fx.winOverlayDelayMs);
+    await tapRanking(h);
+    expect(h.store.get().overlays).toContain('victory');
+    expect(shows(h)).toBe(1); // inside the window: no load yet
+    await h.settle(WINDOW - 10_000 - h.config.fx.winOverlayDelayMs - 5_000);
+    expect(shows(h)).toBe(1);
+    await h.settle(10_000);
+    expect(shows(h)).toBe(2);
+    await h.settle(5 * WINDOW);
+    expect(shows(h)).toBe(2); // one timer
   });
 
   it('closed after the window: a new load at once', async () => {

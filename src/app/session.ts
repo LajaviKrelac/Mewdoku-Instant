@@ -439,7 +439,10 @@ export function createSession(deps: SessionDeps): Session {
     const firstRunTutorial = w.summary.mode === 'tutorial' && !w.summary.replay;
     // §3.2: the victory screen may carry a banner in its own reserved band (set before the props are built).
     if (deps.banners) void deps.banners.screenShown('victory', { firstRunTutorial }).catch(() => undefined);
-    const data = selectVictoryView(store.get(), viewCtx(), w.summary, { praise: w.praise }, c);
+    // requests-G3 R4: while the ladder is active the kept-fish row shows my bracket's total ('ladder').
+    const lf = w.ladder ? ladderFlow() : null;
+    const ladderTotal = lf && lf.active() ? lf.panelTotal() : null;
+    const data = selectVictoryView(store.get(), viewCtx(), w.summary, { praise: w.praise, ladderTotal }, c);
     const m = w.meta;
     router.open('victory', {
       ...data,
@@ -517,6 +520,8 @@ export function createSession(deps: SessionDeps): Session {
     if (book.save.stock !== before.stock) bus.emit('stock', { hints: book.save.stock.hints, kitties: book.save.stock.kitties });
     if (m.mode === 'level' && m.level !== null) deps.levels.prefetch(m.level + 1);
     if (useLadder && flowAtWon) flowAtWon.onWin({ winId: ladderWinId, mode: s.mode, kept: s.counted ? s.kept : 0 });
+    /** Phase 2e §2.3: the ladder counts this win's fish (the counter and the victory's row show my bracket's). */
+    const ladderCounts = useLadder && !!flowAtWon && flowAtWon.active();
     router.close('coach');
     if (!restored) timers.later(c.fx.winHappyDelayMs, () => fx.play({ sfx: 'win', haptic: c.haptics.win }));
 
@@ -586,8 +591,9 @@ export function createSession(deps: SessionDeps): Session {
       kept: gained > 0 ? s.kept : 0,
       perFish: c.period.pointsPerFish,
       // Phase 2e §2.3: with the ladder, my bracket's points from the last answer (0 when none is running).
-      periodBefore: useLadder && flowAtWon && flowAtWon.active() ? flowAtWon.counterBefore() : (s.period?.before ?? 0),
-      periodKind: s.period?.kind ?? c.period.kind,
+      periodBefore: ladderCounts ? flowAtWon.counterBefore() : (s.period?.before ?? 0),
+      // requests-G3 R4: while the ladder is active the counter names my bracket's fish ('ladder').
+      periodKind: ladderCounts ? 'ladder' : (s.period?.kind ?? c.period.kind),
       reducedMotion: store.get().ui.reducedMotion,
     });
   }

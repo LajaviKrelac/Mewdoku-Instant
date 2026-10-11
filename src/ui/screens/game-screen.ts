@@ -49,6 +49,7 @@ import { createPills, type LifeSlotRect, type PillsProps } from '../hud/pills';
 import { createRuleChips, type RuleChip, type RuleChipsProps } from '../hud/rule-chips';
 import { createToolBar, type ToolBarProps } from '../hud/tool-bar';
 import { h, type View } from '../dom';
+import type { FishTotalKind } from '../period-text';
 
 export interface GameView {
   readonly mode: ModeId;
@@ -134,8 +135,12 @@ export interface GameScreen extends View<GameView> {
   lifeSlots(): readonly LifeSlotRect[];
   /** Phase 2c §2.2: the life in `slot` leaves for the win flight: it shows empty at once, no loss animation. Idempotent. */
   departLife(slot: number): void;
-  /** Phase 2c §2.2 t = 1 000: shows the period counter (fade in at the first call); a higher total later rolls + bumps. */
-  showPeriodCounter(total: number): void;
+  /**
+   * Phase 2c §2.2 t = 1 000: shows the period counter (fade in at the first call); a higher total later rolls + bumps.
+   * Phase 2e (spec §2.3; requests-G1 R1): `kind` on the first call names the total ('ladder': my bracket's fish,
+   * "14 fish in the daily ranking"; absent: this period's, as in 2c).
+   */
+  showPeriodCounter(total: number, kind?: FishTotalKind): void;
   /** Phase 2c §2.3: client rect of the counter's icon (flight target), null while hidden. */
   periodRect(): DOMRect | null;
   /** Phase 2c §2.2: the rising "+N" chip at the counter. */
@@ -654,7 +659,7 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
     focusBoard: () => focusBoard(),
     lifeSlots: () => pills.lifeSlots(),
     departLife: (slot) => pills.departLife(slot),
-    showPeriodCounter: (total) => pills.showPeriodCounter(total),
+    showPeriodCounter: (total, kind) => pills.showPeriodCounter(total, kind),
     periodRect: () => pills.periodRect(),
     periodLabel: (text) => pills.periodLabel(text),
     glow: (cells) => playGlow(board.el, cells, current.reducedMotion),

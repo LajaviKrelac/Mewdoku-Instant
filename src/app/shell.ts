@@ -172,7 +172,7 @@ export function createShell(deps: ShellDeps): Shell {
     if (id === 'settings') settingsSeen();
   });
   const offClose = deps.bus.on('overlay:close', ({ id }) => {
-    if (MODALS.includes(id) && bannerScreen() && !router.stack().some((o) => MODALS.includes(o))) void deps.banners?.modalClosed().catch(() => undefined);
+    if (MODALS.includes(id) && bannerScreen() && !router.stack().some((o) => MODALS.includes(o))) void deps.banners?.modalClosed(id).catch(() => undefined);
   });
 
   // Phase 2e §9.3: the ranking changed (session, wins, a claim, a profile change …): Home and Settings re-render.
@@ -402,6 +402,10 @@ export function createShell(deps: ShellDeps): Shell {
       router.open('how_to_play', {
         showSkip: firstRun,
         showReplay: done,
+        // Phase 2e (requests-G3 R6): the points note names the daily ranking while it is active; the
+        // streak note with dayStreak.cycleDays while the streak is on (Appendix A howto.ladder / howto.streak).
+        ...(ladderNow()?.active() ? { ladder: true } : {}),
+        ...(c.dayStreak.enabled && isFlagOn('dayStreak') ? { streakDays: c.dayStreak.cycleDays } : {}),
         onSkip: () => {
           router.closeAll();
           deps.session().onSkipTutorial();

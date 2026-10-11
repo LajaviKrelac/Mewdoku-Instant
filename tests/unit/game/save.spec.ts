@@ -53,7 +53,7 @@ function full(): SaveData {
     rank: { pending: { event_lantern_walk_2026: 3_000_123 }, lastSubmitAt: NOW - 20_000 },
     streak: { current: 2, best: 6 },
     period: { key: '2026-10-05', total: 42, bestKey: '2026-09-28', bestTotal: 57 },
-    ladder: { listed: true, pending: [], current: null, claimed: [], doubleWatched: [], resultsSeen: [], nickLineSeen: false, me: null },
+    ladder: { listed: true, pending: [], current: null, claimed: [], doubleWatched: [], resultsSeen: [], nickLineSeen: false, noticeSeen: false, me: null },
     dayStreak: { dates: [], run: 0, best: 0, paid: [] },
   };
 }
@@ -99,7 +99,7 @@ describe('defaults (04 §4.3)', () => {
       rank: { pending: {}, lastSubmitAt: 0 },
       streak: { current: 0, best: 0 },
       period: { key: '', total: 0, bestKey: '', bestTotal: 0 },
-      ladder: { listed: true, pending: [], current: null, claimed: [], doubleWatched: [], resultsSeen: [], nickLineSeen: false, me: null },
+      ladder: { listed: true, pending: [], current: null, claimed: [], doubleWatched: [], resultsSeen: [], nickLineSeen: false, noticeSeen: false, me: null },
       dayStreak: { dates: [], run: 0, best: 0, paid: [] },
     });
   });

@@ -26,6 +26,7 @@
 // (§5.3); "no Perfect ×N" is checked by its text.
 import { expect, test, type Page } from '@playwright/test';
 import type { E2EHooks } from '../../src/app/boot';
+import { cfg } from '../../src/app/config';
 import type { Puzzle } from '../../src/engine/types';
 import { mouseSeed, pickMouseCells } from '../../src/game/mouse';
 import { defaults } from '../../src/game/save';
@@ -219,8 +220,10 @@ test('4c · no shop on the web (phase2c §5.2): no fish pill "+" on Home, no Sho
   expect((await app(page))?.save).not.toHaveProperty('wallet');
 });
 
-test('4d · the victory rows: the level\'s points total, the fish kept and "This week"; no "Perfect ×N"', async ({ page }) => {
-  await open(page, '', returning());
+test('4d · the victory rows: the level\'s points total, the fish kept and "This week"; no "Perfect ×N" (web-prod, ?flags=-ladder)', async ({ page }) => {
+  // Phase 2e (requests-G3 R4): with the ranking active the row names my bracket's total instead
+  // ("Your total: 3", ladder.spec.ts); the weekly records path is web-prod's (?flags=-ladder).
+  await open(page, '?flags=-ladder', returning());
   await playLevel(page);
   const sol = await solution(page);
   for (let r = 0; r < sol.length; r++) await dbl(page, r * sol.length + (sol[r] as number));
@@ -255,6 +258,56 @@ test('4e · the daily streak (Phase 2e §5): the first win of the day → day 1 
   await expect(strip).toHaveAttribute('data-day', '1');
   await expect(strip).toHaveAttribute('data-today', '1');
   await expect(strip).toHaveAttribute('data-state', 'done');
+});
+
+test('4f · the daily streak across days (fake clock): the next day → day 2; a skipped day → "A new streak starts today." and day 1', async ({ page }) => {
+  test.setTimeout(90_000);
+  const T = new Date(2026, 9, 12, 12, 0, 0).getTime(); // local noon (the browser's time zone is the host's)
+  await page.clock.install({ time: T });
+  await open(page, '?flags=-ladder', returning());
+  const strip = page.locator('.screen--home .streak-strip');
+  const winOnce = async (day: number): Promise<void> => {
+    await playLevel(page);
+    const sol = await solution(page);
+    for (let r = 0; r < sol.length; r++) await dbl(page, r * sol.length + (sol[r] as number));
+    await continueFromPanel(page);
+    const row = page.locator('[data-overlay="victory"] .victory__streak');
+    await expect(row).toHaveAttribute('data-day', String(day));
+    await expect(row).toContainText(new RegExp(`day ${day} of ${cfg.dayStreak.cycleDays}`, 'i'));
+    await page.locator('[data-overlay="victory"] .victory__home').click();
+    await ready(page, 'home');
+    await expect(strip).toHaveAttribute('data-day', String(day));
+    await expect(strip).toHaveAttribute('data-today', '1');
+  };
+  await winOnce(1);
+  // The next day.
+  await page.clock.setSystemTime(T + 86_400_000);
+  await page.reload();
+  await ready(page, 'home');
+  await expect(strip).toHaveAttribute('data-state', 'alive');
+  await expect(strip).toHaveAttribute('data-today', '0');
+  await expect(strip).toContainText('Solve a puzzle today for day 2.');
+  await winOnce(2);
+  expect((await app(page))?.save.dayStreak).toMatchObject({ run: 2, best: 2 });
+  // A day skipped: the run starts again, said neutrally (no urgency, no warning).
+  await page.clock.setSystemTime(T + 3 * 86_400_000);
+  await page.reload();
+  await ready(page, 'home');
+  await expect(strip).toHaveAttribute('data-state', 'none');
+  await expect(strip).toHaveAttribute('data-broken', /.*/);
+  await expect(strip).toContainText('A new streak starts today.');
+  await winOnce(1);
+  expect((await app(page))?.save.dayStreak).toMatchObject({ run: 1, best: 2 });
+});
+
+test('4g · no Buy row on the web (no payments): the out-of-hints card offers the video only', async ({ page }) => {
+  await open(page, '', returning({ stock: { hints: 0, kitties: 3 } }));
+  await playLevel(page);
+  await hintTool(page).click();
+  const o2 = page.locator('.overlay[data-overlay="rewarded"]');
+  await expect(o2).toBeVisible();
+  await expect(o2.getByRole('button', { name: 'Watch video' })).toBeVisible();
+  await expect(o2.locator('.rewarded__buy')).toHaveCount(0);
 });
 
 test('5 · reload mid-level restores the exact board', async ({ page }) => {
@@ -300,12 +353,19 @@ test('7 · dragging paints Xs', async ({ page }) => {
   expect((await game(page))?.cells.slice(0, n)).toEqual(new Array(n).fill(1));
 });
 
-test('8 · the daily is locked before level 20 and opens after it', async ({ page }) => {
-  await open(page, '', returning({ progress: { level: 20, completed: 19, best: {} } }));
+test('8 · the daily is locked until level daily.unlockAfterLevel is solved and opens after it; an earlier unlock is kept (Phase 2e §6.1)', async ({ page }) => {
+  // The values come from cfg (20 today; 21 after the lead's L1 flip, D-2e-13), so this stays right through it.
+  const U = cfg.daily.unlockAfterLevel;
+  await open(page, '', returning({ progress: { level: U, completed: U - 1, best: {} } }));
   await page.locator('.daily-card').click();
-  await expect(page.getByText('Solve level 20 to open the daily puzzle.')).toBeVisible();
+  await expect(page.getByText(`Solve level ${U} to open the daily puzzle.`)).toBeVisible();
   expect((await app(page))?.screen).toBe('home');
-  await open(page, '', returning({ progress: { level: 21, completed: 20, best: {} } }));
+  await open(page, '', returning({ progress: { level: U + 1, completed: U, best: {} } }));
+  await page.locator('.daily-card').click();
+  await playing(page);
+  expect((await game(page))?.id).toBe(`D${today()}`);
+  // daily.keepEarlierUnlock: a player who opened the daily under an earlier rule (a daily record) keeps it.
+  await open(page, '', returning({ progress: { level: U, completed: U - 1, best: {} }, daily: { '2026-10-05': [90_000, 0, 0, 0] } }));
   await page.locator('.daily-card').click();
   await playing(page);
   expect((await game(page))?.id).toBe(`D${today()}`);

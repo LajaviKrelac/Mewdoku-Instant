@@ -70,7 +70,9 @@ const CASES: readonly Case[] = [
 const strip = (s: string): string => s.replace(/[⁦-⁩]/g, '').trim();
 
 async function bootHome(page: Page, c: Case): Promise<void> {
-  const url = c.pseudo ? '/?i18n=pseudo' : '/';
+  // Phase 2e: the records path (`?flags=-ladder`, spec §7.3) also in an e2e build with a ranking origin; the ranking views
+  // in de and ar are checked in visual.spec.ts ("the ranking views in the real app").
+  const url = c.pseudo ? '/?i18n=pseudo&flags=-ladder' : '/?flags=-ladder';
   await page.goto(url);
   await page.waitForFunction(() => {
     const app = (window as TestWindow).__mewdoku?.app();
@@ -257,7 +259,7 @@ for (const c of CASES) {
 
 const IN_EVENT_MS = new Date('2026-11-16T12:00:00Z').getTime();
 
-async function seededHome(page: Page, patch: Record<string, unknown> = {}, query = '/'): Promise<void> {
+async function seededHome(page: Page, patch: Record<string, unknown> = {}, query = '/?flags=-ladder'): Promise<void> {
   await page.goto(query);
   await page.waitForFunction(() => {
     const app = (window as TestWindow).__mewdoku?.app();

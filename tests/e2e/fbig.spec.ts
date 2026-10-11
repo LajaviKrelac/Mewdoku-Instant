@@ -46,6 +46,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
 import type { E2EHooks } from '../../src/app/boot';
+import { cfg } from '../../src/app/config';
 import type { AppState } from '../../src/app/store';
 import { defaults } from '../../src/game/save';
 import type { SaveData } from '../../src/game/types';
@@ -395,6 +396,8 @@ test.describe('FBIG layout', () => {
   test('the FB safe zone holds no control on Home or in a level', async ({ page }) => {
     await openGame(page, { data: { save: seededSave(12, 11) } });
     expect(await page.evaluate(() => document.getElementById('app')?.dataset.platform)).toBe('fbig');
+    // Phase 2e §2.5: the ranking chip (a button) sits in the top bar's lead slot, after the safe zone.
+    await expect(page.locator('.screen--home button.ladder-chip')).toBeVisible();
     expect(await safeZoneHits(page)).toEqual([]);
     await startLevel(page);
     expect(await safeZoneHits(page)).toEqual([]);
@@ -551,6 +554,82 @@ test.describe('FBIG Phase 2e: buying helpers on the out-of-helpers card (spec §
     expect(s.purchases.pending).toEqual([]);
   });
 
+  test('O2 Buy, the grant order (iap.grantBeforeConsume; consume first after the L1 flip, D-2e-10): while FB consumes, the save shows the order', async ({ page }) => {
+    await outOfHints(page, { payments: { consumeDelayMs: 2_000 } });
+    const buy = o2(page).locator('button.rewarded__buy[data-product="hints_15"]');
+    await expect(buy).toHaveAttribute('data-state', 'ready', { timeout: 8_000 });
+    await buy.click();
+    await expect.poll(() => count(page, 'payments.consumePurchaseAsync'), { timeout: 8_000 }).toBe(1);
+    const during = (await appState(page)).save;
+    const granted = during.purchases.tokens.some((t) => t.startsWith('hints_15|'));
+    if (cfg.iap.grantBeforeConsume) {
+      // 2b's order (today's value): recorded and granted before the consume.
+      expect(granted).toBe(true);
+      expect(during.stock.hints).toBe(15);
+      expect(during.purchases.pending).toEqual([]);
+    } else {
+      // Consume first: the token sits in the intent ledger (saved), nothing granted yet.
+      expect(granted).toBe(false);
+      expect(during.stock.hints).toBe(0);
+      expect(during.purchases.pending).toHaveLength(1);
+      expect(during.purchases.pending[0]).toMatch(/^hints_15\|stub-token-/);
+      const mirrored = await page.evaluate(() => Object.keys(localStorage).map((k) => localStorage.getItem(k) ?? '').find((v) => v.includes('stub-token-')) ?? '');
+      expect(mirrored).toContain('stub-token-'); // the critical save's local mirror holds the intent
+    }
+    await expect.poll(async () => (await appState(page)).save.stock.hints, { timeout: 8_000 }).toBe(14);
+    const after = (await appState(page)).save;
+    expect(after.purchases.pending).toEqual([]);
+    expect(after.purchases.tokens.some((t) => t.startsWith('hints_15|'))).toBe(true);
+    expect(await count(page, 'payments.consumePurchaseAsync')).toBe(1);
+  });
+
+  test("FB's purchase dialog pauses the level's timer (pause 'purchase', spec §4.3)", async ({ page }) => {
+    await outOfHints(page, { payments: { purchaseDelayMs: 3_000 } });
+    const noAds = o2(page).locator('button.rewarded__buy[data-product="remove_ads"]');
+    await expect(noAds).toHaveAttribute('data-state', 'ready', { timeout: 8_000 });
+    const elapsed = (): Promise<number> => page.evaluate(() => (window as TestWindow).__mewdoku?.state()?.elapsedMs ?? -1);
+    const e0 = await elapsed();
+    const t0 = Date.now();
+    await noAds.click();
+    await expect(o2(page).locator('button.rewarded__buy[data-state="busy"]')).toHaveCount(1);
+    await expect.poll(async () => (await appState(page)).save.purchases.noAds, { timeout: 10_000 }).toBe(true);
+    const real = Date.now() - t0;
+    const e1 = await elapsed();
+    expect(real).toBeGreaterThanOrEqual(3_000);
+    expect(e1 - e0).toBeLessThan(real - 2_000); // the 3 s dialog did not count
+  });
+
+  test('O2 at 320 × 568 with both Buy rows and the No Ads line: every control inside the screen (or the card scrolls), at least 44 × 44', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 568 });
+    await outOfHints(page);
+    await expect(o2(page).locator('button.rewarded__buy[data-product="hints_15"]')).toHaveAttribute('data-state', 'ready', { timeout: 8_000 });
+    await expect(o2(page).locator('.rewarded__buy-note')).toBeVisible();
+    // Measure the card at rest: its pop-in starts at scale 0.97, and the bounding boxes include the transform.
+    await page.waitForFunction(() => {
+      const panel = document.querySelector('.overlay[data-overlay="rewarded"] .overlay__panel');
+      return !!panel && panel.getAnimations({ subtree: true }).every((a) => a.playState !== 'running' || a.effect?.getTiming().iterations === Infinity);
+    });
+    const report = await page.evaluate(() => {
+      const root = document.querySelector('.overlay[data-overlay="rewarded"]') as HTMLElement;
+      const panel = root.querySelector('.overlay__panel') as HTMLElement | null;
+      const scrolls = !!panel && panel.scrollHeight > panel.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(panel).overflowY);
+      const out: { cls: string; w: number; h: number; inside: boolean }[] = [];
+      for (const b of Array.from(root.querySelectorAll<HTMLButtonElement>('button'))) {
+        const r = b.getBoundingClientRect();
+        if (r.width === 0 || r.height === 0) continue;
+        out.push({ cls: b.className, w: r.width, h: r.height, inside: r.left >= 0 && r.right <= innerWidth + 0.5 && r.top >= 0 && r.bottom <= innerHeight + 0.5 });
+      }
+      return { scrolls, buttons: out, overflowX: document.documentElement.scrollWidth - innerWidth };
+    });
+    expect(report.overflowX).toBeLessThanOrEqual(0);
+    expect(report.buttons.length).toBeGreaterThanOrEqual(4); // video, two Buy rows, Not now
+    for (const b of report.buttons) {
+      expect(b.w, b.cls).toBeGreaterThanOrEqual(44);
+      expect(b.h, b.cls).toBeGreaterThanOrEqual(44);
+      if (!report.scrolls) expect(b.inside, b.cls).toBe(true);
+    }
+  });
+
   test('O2 No Ads: the entitlement at once, O2 stays open without its row (it gave no helper)', async ({ page }) => {
     await outOfHints(page);
     const noAds = o2(page).locator('button.rewarded__buy[data-product="remove_ads"]');
@@ -561,6 +640,17 @@ test.describe('FBIG Phase 2e: buying helpers on the out-of-helpers card (spec §
     await expect(o2(page).locator('button.rewarded__buy')).toHaveCount(1);
     await expect(o2(page).locator('button.rewarded__buy[data-product="hints_15"]')).toBeVisible();
     expect((await appState(page)).save.stock.hints).toBe(0);
+    await expect(stubBanner(page)).toHaveCount(0); // banners stop at once
+    // The next level's interstitial is gated no_ads (logged with its gate, never shown).
+    await page.keyboard.press('Escape');
+    await expect.poll(async () => (await appState(page)).overlays).toEqual([]);
+    await solve(page);
+    await toVictory(page);
+    await sel.victoryNext(page).click();
+    await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
+    expect(await stub(page, (s) => s.calls.filter((c) => c.name === 'ad.showAsync' && c.args[0] === 'interstitial').length)).toBe(0);
+    const logged = await stub(page, (s) => s.calls.filter((c) => c.name === 'logEvent' && c.args[0] === 'ad_interstitial').map((c) => c.args[2]));
+    expect(logged).toContainEqual(expect.objectContaining({ trigger: 'next_level', result: 'gated', gate: 'no_ads' }));
   });
 
   test('iOS: no Buy row with the iOS switch off (the build default); the remote switch iapIos on brings the rows', async ({ page }) => {
@@ -924,7 +1014,7 @@ test.describe('FBIG banner during play (phase 2d §1.16, D-2d-15)', () => {
     await helpersClearOfStubBanner(page);
   });
 
-  test('a fresh banner on the game screen once the reload window has passed; Settings hides it and closing does not bring it back', async ({ page }) => {
+  test('a fresh banner on the game screen once the reload window has passed; Settings hides it and (2e) closing brings it back, once', async ({ page }) => {
     test.setTimeout(90_000);
     const t0 = Date.UTC(2026, 9, 7, 10, 0, 0);
     await openGame(page, { persist: false, data: { save: seededSave(12, 11) } }, { clockAt: t0 });
@@ -939,16 +1029,20 @@ test.describe('FBIG banner during play (phase 2d §1.16, D-2d-15)', () => {
     await expect.poll(() => count(page, 'loadBannerAdAsync')).toBe(1); // at the entry's end
     await expect(stubBanner(page)).toBeVisible();
     await helpersClearOfStubBanner(page);
-    // Settings over the game hides it; closing it, even after the window, does not reload on this screen.
+    // Settings over the game hides it; Phase 2e (§3.1, ads.banner.reshowAfterAnyHide): closing it after the
+    // window brings a new one at once (2d kept it down until the next screen), and only one.
     await page.locator('.screen--game .top-bar__btn--settings').click();
     await expect(page.locator('[data-overlay="settings"]')).toBeVisible();
     await expect.poll(() => count(page, 'hideBannerAdAsync')).toBeGreaterThanOrEqual(1);
     await expect(stubBanner(page)).toHaveCount(0);
     await page.clock.fastForward(61_000);
     await closeOverlays(page);
+    await expect.poll(() => count(page, 'loadBannerAdAsync')).toBe(2);
+    await expect(stubBanner(page)).toBeVisible();
+    await helpersClearOfStubBanner(page);
+    await page.clock.fastForward(180_000);
     await page.waitForTimeout(300);
-    expect(await count(page, 'loadBannerAdAsync')).toBe(1);
-    await expect(stubBanner(page)).toHaveCount(0);
+    expect(await count(page, 'loadBannerAdAsync')).toBe(2);
   });
 
   test("the mouse's video: the banner is hidden before the rewarded ad shows", async ({ page }) => {
@@ -1116,3 +1210,140 @@ for (const locale of ['en_US', 'ar_AR'] as const) {
     });
   }
 }
+
+// ── Phase 2e (G1, spec §3.1–§3.2, §10.3 fbig): the ad cadence and the banner during levels. The values come
+// from cfg (fromCompletedLevels, the cooldown table, retryEveryN), so these stay right through the L1 flips
+// (10 → 9, [120/100/90 s] → [30 s]). ──
+
+const interstitials = (page: Page): Promise<number> => stub(page, (s) => s.calls.filter((c) => c.name === 'ad.showAsync' && c.args[0] === 'interstitial').length);
+
+/** Three wrong cats → the fail card. */
+async function failBoard(page: Page): Promise<void> {
+  const cols = (await page.evaluate(() => (window as TestWindow).__mewdoku!.solution())) ?? [];
+  let made = 0;
+  for (let row = 0; row < cols.length && made < 3; row++) {
+    const col = ((cols[row] as number) + 2) % cols.length; // never this row's cat
+    await sel.cell(page, row, col).dblclick();
+    await page.waitForTimeout(400); // the cell lock after a cat
+    made++;
+  }
+  await expect(page.locator('[data-overlay="fail"] .fail__retry')).toBeEnabled({ timeout: 8_000 });
+}
+
+test.describe('FBIG Phase 2e: the ad cadence and the banner during levels', () => {
+  // Two tests: one browser context shares localStorage (the save's local mirror), so a second page would
+  // merge the first page's progress.
+  test('the first banner comes on the board after ads.banner.fromCompletedLevels completed levels (level 10\'s board after the L1 flip)', async ({ page }) => {
+    const F = cfg.ads.banner.fromCompletedLevels;
+    await openGame(page, { persist: false, data: { save: seededSave(F + 1, F) } });
+    await startLevel(page);
+    await expect(page.locator('.screen--game')).toHaveAttribute('data-banner', '');
+    await expect(stubBanner(page)).toBeVisible();
+  });
+
+  test('one completed level fewer: no band on the board and no banner call', async ({ page }) => {
+    const F = cfg.ads.banner.fromCompletedLevels;
+    await openGame(page, { persist: false, data: { save: seededSave(F, F - 1) } });
+    await startLevel(page);
+    await page.waitForTimeout(1_000);
+    await expect(page.locator('.screen--game')).not.toHaveAttribute('data-banner', '');
+    expect(await count(page, 'loadBannerAdAsync')).toBe(0);
+  });
+
+  test("a first run's tutorial board: no band, no banner call", async ({ page }) => {
+    await openGame(page, {});
+    await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().session?.mode === 'tutorial');
+    await page.waitForTimeout(1_500);
+    expect(await count(page, 'loadBannerAdAsync')).toBe(0);
+    await expect(page.locator('.screen--game')).not.toHaveAttribute('data-banner', '');
+  });
+
+  test('every level from the start level: three levels in a row, each followed by an interstitial once the floor between full-screen ads has passed', async ({ page }) => {
+    test.setTimeout(180_000);
+    const t0 = Date.UTC(2026, 9, 7, 10, 0, 0);
+    const floorMs = (Math.max(...cfg.ads.interstitial.cooldownSec.map((x) => x.sec)) + 1) * 1000;
+    await openGame(page, { persist: false, data: { save: seededSave(15, 14) } }, { clockAt: t0 });
+    await startLevel(page);
+    for (let i = 1; i <= 3; i++) {
+      await page.clock.fastForward(Math.max(floorMs, (cfg.ads.interstitial.sessionGraceSec + 1) * 1000));
+      await solve(page);
+      await page.clock.fastForward(5_000);
+      await toVictory(page);
+      await sel.victoryNext(page).click();
+      await expect.poll(() => interstitials(page), { timeout: 10_000 }).toBe(i);
+      await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing', undefined, { timeout: 15_000 });
+    }
+  });
+
+  test('Retry: an interstitial on every ads.interstitial.retryEveryN-th Retry only (P-I4)', async ({ page }) => {
+    test.setTimeout(120_000);
+    const n = cfg.ads.interstitial.retryEveryN;
+    const t0 = Date.UTC(2026, 9, 7, 10, 0, 0);
+    await openGame(page, { persist: false, data: { save: seededSave(15, 14) } }, { clockAt: t0 });
+    await startLevel(page);
+    await page.clock.fastForward((cfg.ads.interstitial.sessionGraceSec + 1) * 1000);
+    for (let r = 1; r <= n; r++) {
+      await failBoard(page);
+      await page.locator('[data-overlay="fail"] .fail__retry').click();
+      await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing', undefined, { timeout: 15_000 });
+      if (r < n) expect(await interstitials(page)).toBe(0);
+      else await expect.poll(() => interstitials(page)).toBe(1);
+    }
+    const gated = await stub(page, (s) => s.calls.filter((c) => c.name === 'logEvent' && c.args[0] === 'ad_interstitial').map((c) => c.args[2]));
+    expect(gated).toContainEqual(expect.objectContaining({ trigger: 'retry', result: 'gated', gate: 'retry_cadence' }));
+  });
+
+  test("the fail card's Home: an interstitial first (fail_home, P-I5), then Home", async ({ page }) => {
+    test.setTimeout(90_000);
+    const t0 = Date.UTC(2026, 9, 7, 10, 0, 0);
+    await openGame(page, { persist: false, data: { save: seededSave(15, 14) } }, { clockAt: t0 });
+    await startLevel(page);
+    await page.clock.fastForward((cfg.ads.interstitial.sessionGraceSec + 1) * 1000);
+    await failBoard(page);
+    await page.locator('[data-overlay="fail"] .fail__home').click();
+    await expect.poll(() => interstitials(page), { timeout: 10_000 }).toBe(1);
+    await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home', undefined, { timeout: 10_000 });
+  });
+
+  test('the banner is back on the next board after the next-level interstitial (one load when the window ends)', async ({ page }) => {
+    test.setTimeout(120_000);
+    const t0 = Date.UTC(2026, 9, 7, 10, 0, 0);
+    await openGame(page, { persist: false, data: { save: seededSave(12, 11) } }, { clockAt: t0 });
+    await expect.poll(() => count(page, 'loadBannerAdAsync')).toBe(1);
+    await startLevel(page);
+    await page.clock.fastForward(Math.max((cfg.ads.interstitial.sessionGraceSec + 1) * 1000, (cfg.ads.banner.minReloadSec + 1) * 1000));
+    await solve(page, { clock: true });
+    await page.clock.fastForward(5_000);
+    await toVictory(page);
+    await stub(page, (s) => s.clearCalls());
+    await sel.victoryNext(page).click();
+    await expect.poll(() => interstitials(page), { timeout: 10_000 }).toBe(1);
+    await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing', undefined, { timeout: 15_000 });
+    await expect(page.locator('.screen--game')).toHaveAttribute('data-banner', '');
+    await page.clock.fastForward((cfg.ads.banner.minReloadSec + 1) * 1000);
+    await expect.poll(() => count(page, 'loadBannerAdAsync'), { timeout: 10_000 }).toBeGreaterThanOrEqual(1);
+    await expect(stubBanner(page)).toBeVisible();
+    await helpersClearOfStubBanner(page);
+  });
+
+  test('after a kitty video: hidden before the video, back on the board when it ends', async ({ page }) => {
+    test.setTimeout(90_000);
+    const t0 = Date.UTC(2026, 9, 7, 10, 0, 0);
+    await openGame(page, { persist: false, data: { save: seededSave(12, 11, (s) => ({ ...s, stock: { hints: 3, kitties: 0 } })) } }, { clockAt: t0 });
+    await expect.poll(() => count(page, 'loadBannerAdAsync')).toBe(1);
+    await startLevel(page);
+    await expect(stubBanner(page)).toBeVisible();
+    await page.clock.fastForward((cfg.ads.banner.minReloadSec + 1) * 1000);
+    await stub(page, (s) => s.clearCalls());
+    await page.locator('.screen--game .tool--paw').click();
+    await sel.watchVideo(page).click();
+    await expect.poll(() => seqOf(page, 'ad.showAsync', 'rewarded'), { timeout: 10_000 }).toHaveLength(1);
+    const shows = await seqOf(page, 'ad.showAsync', 'rewarded');
+    const hides = await seqOf(page, 'hideBannerAdAsync');
+    expect(hides.some((h) => h < (shows[0] ?? 0))).toBe(true);
+    await expect.poll(() => count(page, 'loadBannerAdAsync'), { timeout: 10_000 }).toBe(1);
+    const loads = await seqOf(page, 'loadBannerAdAsync');
+    expect(loads[0] ?? 0).toBeGreaterThan(shows[0] ?? 0);
+    await expect(stubBanner(page)).toBeVisible();
+  });
+});
