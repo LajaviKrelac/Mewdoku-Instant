@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Mewdoku ranking probe</title>
+    <!-- Owner: lead (Phase 2e, spec §11.6). A private test build only: never released. -->
+    <script src="https://connect.facebook.net/en_US/fbinstant.8.0.js"></script>
+    <style>
+      :root { color-scheme: light; font: 15px/1.4 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+      body { margin: 0; padding: 16px; background: #fff8ef; color: #2b2321; }
+      h1 { margin: 0 0 4px; font-size: 20px; }
+      #target, #status { margin: 0 0 10px; color: #6b5a55; font-size: 13px; word-break: break-all; }
+      ol { margin: 0 0 12px; padding-left: 20px; }
+      li { margin: 0 0 8px; word-break: break-word; }
+      li b { display: inline-block; min-width: 64px; }
+      li[data-state='ok'] b { color: #1f7a3a; }
+      li[data-state='fail'] b { color: #b3261e; }
+      li[data-state='skip'] b, li[data-state='info'] b { color: #6b5a55; }
+      textarea { box-sizing: border-box; width: 100%; height: 160px; font: 12px/1.35 ui-monospace, Menlo, Consolas, monospace; }
+      button { margin: 8px 8px 0 0; min-height: 44px; padding: 0 18px; border: 0; border-radius: 22px; background: #e8743b; color: #fff; font: 600 15px system-ui, sans-serif; }
+      button:disabled { opacity: 0.5; }
+    </style>
+  </head>
+  <body>
+    <h1>Ranking probe</h1>
+    <p id="target"></p>
+    <p id="status">Starting…</p>
+    <ol id="lines"></ol>
+    <textarea id="text" readonly aria-label="Results to copy"></textarea>
+    <button id="copy" type="button">Copy results</button><button id="again" type="button">Run again</button>
+    <script type="module" src="./probe.ts"></script>
+  </body>
+</html>

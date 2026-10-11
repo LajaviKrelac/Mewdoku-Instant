@@ -111,6 +111,9 @@
 // was re-set the same way: JS 74 → 23.3 (22.7: hint card, RPC, sounds, generator, grader) and CSS 34.6 → 7.2 (7.0: the
 // events chunk). CSS (49.1 / 49.3), font, index.html and the 2d.1 rows are within and unchanged.
 //
+// Phase 2e I-4: every dir measured is also run through scripts/release-check.ts (test data in any bundle; the release
+// rules in dist/release-*), and a problem fails the check like a budget does.
+//
 // Usage: tsx scripts/size-check.ts [distDir …] [--json]
 //   No dirs → every existing one of dist/web, dist/fbig, dist/release-web and dist/release-fbig. A dir
 //   whose name contains "fbig" also gets the FB file-count budget.
@@ -118,6 +121,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { gzipSync } from 'node:zlib';
+import { checkBundle, isReleaseDir } from './release-check';
 
 export interface SizeBudget {
   readonly label: string;
@@ -346,6 +350,12 @@ export function main(argv: readonly string[]): void {
       all[relative(root, dir) || dir] = r;
       ok &&= r.ok;
       if (!json) console.log(formatReport(relative(root, dir) || dir, r));
+      // Phase 2e (spec §10.5 #1, §10.6 #3 and #6): no test data in any bundle; a release one carries no e2e hooks, dev
+      // routes, e2e ids or staging / workers.dev / local URLs (scripts/release-check.ts).
+      const problems = checkBundle(dir);
+      for (const p of problems) console.error(`size-check: ${relative(root, dir) || dir}: ${p}`);
+      if (problems.length > 0) ok = false;
+      else if (!json) console.log(`  bundle check: ok${isReleaseDir(dir) ? ' (release rules: no test data, e2e hooks, dev routes or staging / local URLs)' : ' (no test data)'}`);
     } catch (err) {
       ok = false;
       console.error(`size-check: ${(err as Error).message}`);

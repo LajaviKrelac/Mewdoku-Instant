@@ -13,6 +13,7 @@
     "build:release": "vite build --mode release && vite build --mode release-fbig && npm run i18n:check -- --release",
     "zip:fbig": "tsx scripts/zip-fbig.ts",
     "zip:fbig:preview": "tsx scripts/zip-fbig.ts --preview",
+    "probe": "tsx scripts/rank-probe.ts",
     "preview": "vite preview --outDir dist/web",
     "preview:e2e": "vite preview --mode e2e --host 127.0.0.1 --port 4173 --strictPort",
     "preview:fbig-e2e": "vite preview --mode fbig --outDir dist/fbig-e2e --host 127.0.0.1 --port 4174 --strictPort",

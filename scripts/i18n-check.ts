@@ -14,6 +14,10 @@
 //   --release: every release locale other than 'en' has a catalogue that passes, and a line in
 //              docs/i18n/review-log.md; the release outputs (dist/release-web, dist/release-fbig)
 //              contain no locale chunk (assets/locale-<id>-*.js) outside i18n.releaseLocales.
+//   always (Phase 2e, lead; docs/phase2e/spec.md §10.6 #4, H-2): honestyProblems() on the English — no invented
+//              statistic ("players online", "most players" …), no literal player count ("{count} players" only in the
+//              keys the server's number or rule fills), no literal "top 3" / "7 days" in the ranking and streak copy
+//              (the counts come from rules.places and dayStreak.cycleDays), no urgency, no promise that queued fish count.
 // Options: --quiet (no warnings), --locale <id> (check one catalogue), --write-drafted-from (record
 // the current English of every key a catalogue translates, after a translation pass).
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -279,6 +283,45 @@ export function draftedFromSnapshot(): Record<string, string> {
   return { ...(en as Record<string, string>) };
 }
 
+/**
+ * The English keys a player count may appear in: each is filled by the ranking server's members or rules (spec §2.4,
+ * H-2) or, for the 2b FB leaderboards (rank.entries.*), by the platform's own entry count.
+ */
+export const PLAYER_COUNT_KEYS: readonly string[] = [
+  'ladder.info.window.rolling',
+  'ladder.info.window.utcDay',
+  'ladder.info.rewards.one',
+  'ladder.info.rewards.other',
+  'ladder.players.one',
+  'ladder.players.other',
+  'ladder.rewards.min',
+  'rank.entries.one',
+  'rank.entries.other',
+];
+
+/**
+ * Phase 2e honesty (spec §10.6 #4, H-2, H-4, §5.1), on the English (the source of every catalogue): an error per
+ * value that claims a statistic the server does not provide, names a player count outside PLAYER_COUNT_KEYS (or a
+ * literal number of players anywhere), hard-codes "top 3" or "7 days" in the ranking and streak copy, presses with
+ * urgency, or promises that a queued win will count.
+ */
+export function honestyProblems(source: Strings = en): string[] {
+  const out: string[] = [];
+  const allowed = new Set(PLAYER_COUNT_KEYS);
+  for (const [k, v] of Object.entries(source)) {
+    if (typeof v !== 'string') continue;
+    if (/online now|players online|% of (?:all )?players|most players|everyone is|join thousands|millions of/i.test(v)) out.push(`honesty: ${k} claims a statistic ("${v}")`);
+    if (/\b\d[\d,.]*\s+(?:other\s+)?players?\b/i.test(v)) out.push(`honesty: ${k} names a literal player count ("${v}")`);
+    if (/\{\w+\}\s+(?:other\s+)?players?\b/i.test(v) && !allowed.has(k)) out.push(`honesty: ${k} shows a player count outside the server-fed keys ("${v}")`);
+    if (/^(?:ladder|rank|streak|howto\.streak|victory\.streak|victory\.daily)/.test(k)) {
+      if (/\btop\s+(?:3|three)\b|\b(?:7|seven)\s+days?\b/i.test(v)) out.push(`honesty: ${k} hard-codes a rule ("${v}"): use the rules' placeholder`);
+      if (/hurry|don't lose|lose your streak|last chance|before it'?s too late/i.test(v)) out.push(`honesty: ${k} presses with urgency ("${v}")`);
+      if (/will be (?:sent|counted)|will count|guaranteed/i.test(v)) out.push(`honesty: ${k} promises what the server decides ("${v}")`);
+    }
+  }
+  return out;
+}
+
 async function main(argv: readonly string[]): Promise<number> {
   const quiet = argv.includes('--quiet');
   const only = argv.includes('--locale') ? argv[argv.indexOf('--locale') + 1] : undefined;
@@ -288,7 +331,7 @@ async function main(argv: readonly string[]): Promise<number> {
   }
   const catalogs = await loadCatalogs();
   const draftedFrom = readDraftedFrom();
-  const problems = [...checkLocaleLists()];
+  const problems = [...checkLocaleLists(), ...honestyProblems()];
   let warningCount = 0;
   for (const [id, cat] of Object.entries(catalogs) as [LocaleId, Strings][]) {
     if (only && id !== only) continue;

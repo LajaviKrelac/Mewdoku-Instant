@@ -133,3 +133,23 @@ describe('ranking-name word lists (spec §1.8, CONTRACTS §2.3)', () => {
     expect(cfg.ladder.panelRows).toBe(0);
   });
 });
+
+// Phase 2e I-4 (lead, spec §10.6 #4): the same honesty rules as a scripts/ check (`npm run i18n:check` fails on them).
+describe('i18n-check honestyProblems (spec §10.6 #4)', () => {
+  it('passes the shipped English and fails each kind of dishonest copy', async () => {
+    const { honestyProblems, PLAYER_COUNT_KEYS } = await import('../../../scripts/i18n-check');
+    expect(honestyProblems(en)).toEqual([]);
+    for (const k of PLAYER_COUNT_KEYS) expect(k in en, k).toBe(true);
+    const bad: Record<string, string> = {
+      'ladder.alone': '1,204 players online now',
+      'ladder.info.fish': 'You and 40 players are racing',
+      'streak.text': 'Win {count} players over',
+      'ladder.rewards.line.other': 'The top 3 win hints',
+      'howto.streak': 'Play 7 days in a row',
+      'streak.next': "Hurry, don't lose your streak!",
+      'ladder.offline': 'Your fish will count later',
+    };
+    const problems = honestyProblems(bad);
+    for (const k of Object.keys(bad)) expect(problems.some((p) => p.includes(` ${k} `)), k).toBe(true);
+  });
+});

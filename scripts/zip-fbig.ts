@@ -12,6 +12,10 @@
 //     .gz/.br files, the e2e test hooks (a dist/fbig-e2e build), more than 500 files (platform cap,
 //     05 §5.3) and a zip over 1 MB (ours). Warned: more than 100 files or a zip over 750 KB
 //     (the §11 budget).
+//   - Phase 2e (scripts/release-check.ts; spec §10.5 #1, §10.6 #3 and #6): always refused, test data (the e2e signing
+//     secret, the dev admin key, the synthetic pool, fixture names) or a secret-shaped string; refused in a release
+//     zip, a call to a dev-only route, an e2e placement / leaderboard id, or a URL on a staging, workers.dev or local
+//     host (VITE_LADDER_URL must be the production ranking origin).
 //   - Warned for a release zip: an empty VITE_FB_* placement or leaderboard id (the build's
 //     `mewdoku-fb-ids:` marker, src/platform/fb/index.ts): that feature is silently off in the
 //     released game (no interstitials, free rewarded fallback, no banner, personal records only).
@@ -25,6 +29,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { zipSync, type Zippable } from 'fflate';
 import { cfg } from '../src/app/config';
 import { FB_MAX_FILES, listFiles, LOCALE_CHUNK } from './size-check';
+import { releaseProblems, testDataProblems } from './release-check';
 
 export interface ZipResult {
   readonly file: string;
@@ -145,6 +150,13 @@ export function zipFbig(opts: ZipOptions = {}): ZipResult {
   const js = files.filter((f) => f.path.endsWith('.js')).map((f) => ({ path: f.path, text: readFileSync(join(distDir, f.path), 'utf8') }));
   const hooks = js.filter((f) => f.text.includes(E2E_MARKER));
   if (hooks.length > 0) problems.push(`refusing a build with the e2e test hooks (${hooks.map((f) => f.path).join(', ')}): zip a release or preview build`);
+  // Phase 2e (spec §10.5 #1, §10.6 #3 and #6; scripts/release-check.ts): no test data in any zip; a release zip has no
+  // dev routes, e2e ids or staging / workers.dev / local URLs (a release build must never reach the staging ranking).
+  const texts = files
+    .filter((f) => /\.(?:js|css|html|json)$/i.test(f.path))
+    .map((f) => ({ path: f.path, text: f.path.endsWith('.js') ? (js.find((j) => j.path === f.path)?.text ?? '') : readFileSync(join(distDir, f.path), 'utf8') }));
+  problems.push(...testDataProblems(texts));
+  if (release) problems.push(...releaseProblems(texts).filter((p) => !p.includes('"__mewdoku"')));
   if (release) {
     const allowed = new Set(opts.releaseLocales ?? cfg.i18n.releaseLocales);
     const stray = localeChunkIds(files.map((f) => f.path)).filter((id) => !allowed.has(id));
