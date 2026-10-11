@@ -31,8 +31,9 @@
 // Phase 2e (G3, spec §2.5, §5.3, §9.4): Home's lead is the ranking chip (the records chip while no ranking
 // server is configured) and the streak strip sits under Play; the victory gains the streak row on the day's
 // first counted win. Captured as G3-2e-<screen>-<width>.png in docs/phase2e/screenshots/ (VISUAL_OUT_2E
-// overrides). The bracket, the sheet, the result card and the name sheet need the local ranking server
-// (lead L0b); until then G3 captured them from fixtures in a private harness (docs/phase2e/provenance-G3.md).
+// overrides). The ranking views themselves (the post-win panel's bracket, the sheet, the result card, the name sheet,
+// the Settings rows) and O2's Buy rows on the FB build are the last block of this file ("the ranking views in the real
+// app"), with the ranking API answered inside the page; the 2b–2d captures keep the records path (`?flags=-ladder`).
 import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
