@@ -317,3 +317,52 @@
 .home__lead { display: flex; align-items: center; }
 .home__actions > .streak-strip { margin-top: 10px; }
 .streak-strip--pending { display: block; width: 100%; min-height: 48px; visibility: hidden; }
+
+/* ── Home redesign (2026-10-11): the scrolling grid background, after the app icon ──
+   .home__bg is the screen's last child (the top bar stays :first-child), absolutely placed behind the content:
+   the screen root is its stacking context, so z-index -1 puts the layer above the page colour and under every
+   card. The layer is a 200vmax square around the screen's centre, turned -27° like the icon's grid, and it
+   slides one tile (--home-tile) along its own x axis, so on screen the bands drift up and to the right and the
+   loop has no seam. Only transform animates (a composited layer). Reduced motion: still. */
+.screen--home { z-index: 0; background-color: var(--home-base); }
+.home__bg {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: -1;
+  width: 200vmax;
+  height: 200vmax;
+  margin-top: -100vmax;
+  margin-left: -100vmax;
+  background-image: var(--home-art);
+  background-size: var(--home-tile) var(--home-tile);
+  pointer-events: none;
+  transform: rotate(-27deg);
+  animation: home-bg-drift 48s linear infinite; /* fx.css */
+  will-change: transform;
+}
+/* A soft light from the top, as on the icon. */
+.home__bg::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0) 45%);
+}
+/* On the grid the title is a white sticker word with a dark edge (white on --ink-deep 14.6:1), and the tagline
+   sits on a white pill (--ink on --card 5.45:1): neither depends on the colours under it. */
+.screen--home .home__wordmark {
+  color: #fff;
+  -webkit-text-stroke: 0.16em var(--ink-deep);
+  paint-order: stroke fill;
+  text-shadow: 0 0.08em 0 var(--ink-deep);
+}
+.screen--home .home__tagline {
+  padding: 4px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  box-shadow: var(--shadow-1);
+  color: var(--ink);
+}

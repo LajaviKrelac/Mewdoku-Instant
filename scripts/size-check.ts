@@ -116,6 +116,11 @@
 // the waiting line under the victory's total, the Settings name row's two-line layout below 360 px, the danger Delete,
 // the open chest on the victory's day 7). A lazy chunk: the first load is unchanged by it. Every other row is within.
 //
+// Home redesign (user decision, 2026-10-11): the scrolling board behind Home (tokens.css --home-art, a 2.7 KB SVG
+// tile from scripts/home-art.ts: irregular regions in eight colours, and the .home__bg layer in screens.css) is on the
+// first screen, so it is first-load CSS: CSS 49.3 → 54.4 (52.8 measured in web and FBIG, + about 3 %). The first-load
+// total and gzip rows stay within.
+//
 // Phase 2e I-4: every dir measured is also run through scripts/release-check.ts (test data in any bundle; the release
 // rules in dist/release-*), and a problem fails the check like a budget does.
 //
@@ -180,7 +185,7 @@ export const BUDGETS: readonly SizeBudget[] = [
   { label: 'Main JS', pattern: /^assets\/index-[^/]*\.js$/, maxBytes: 360 * KB, fromHtml: 'js', firstLoad: true },
   // Only the stylesheets index.html links (the first-load sheet and, since 2d.1 I-4, the coach chunk's); the lazy
   // chunks' stylesheets are the lazy CSS rows.
-  { label: 'CSS', pattern: /^$/, maxBytes: 49.3 * KB, fromHtml: 'css', firstLoad: true },
+  { label: 'CSS', pattern: /^$/, maxBytes: 54.4 * KB, fromHtml: 'css', firstLoad: true },
   // The latin-ext face (tr, pl) is fetched only when such glyphs appear (unicode-range, phase2b §6.6).
   { label: 'Font (lazy)', pattern: /-ext-[^/]*\.woff2$/, maxBytes: LISTED },
   { label: 'Font', pattern: /\.woff2$/, maxBytes: 17 * KB, firstLoad: true },

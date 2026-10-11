@@ -618,3 +618,12 @@
 [data-motion='reduced'] .fx-dot {
   display: none;
 }
+
+/* Home redesign (2026-10-11): the background grid slides one tile, then loops (screens.css .home__bg). */
+@keyframes home-bg-drift {
+  from { transform: rotate(-27deg) translate3d(0, 0, 0); }
+  to { transform: rotate(-27deg) translate3d(var(--home-tile), 0, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home__bg { animation: none; }
+}
