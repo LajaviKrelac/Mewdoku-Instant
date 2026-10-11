@@ -1,6 +1,6 @@
 # Phase 2e status: the worldwide ranking, ads, purchases in play, the daily streak and the daily challenge
 
-Status: **built and integrated** (I-1 … I-6, 2026-10-11) on `claude/mewdoku-instant`. Every gate inside our environment is green (types, 2 969 unit tests, 178 server tests, the i18n / palette / level checks, all six builds within budget with the bundle checks, both zips, two consecutive full Playwright runs of 307 tests with no retry, the look and helper comparisons; §5). What remains is outside it: the release gates of §8, which need your accounts and a phone (the first one is the probe, §7).
+Status: **built, integrated and audited** (I-1 … I-6, then the audit fix round of §10.1, 2026-10-11) on `claude/mewdoku-instant`. Every gate inside our environment is green after the last change (types, 2 973 unit tests, 190 server tests, the i18n / palette / level checks, all six builds within budget with the bundle checks, both zips, two consecutive full Playwright runs of 312 tests with no retry, the look and helper comparisons, a first run taking input at 4.26 s; §4, §5). The two audits' 26 findings are all fixed (§10.1); what remains is outside our environment (the release gates of §8, which need your accounts and a phone; the first one is the probe, §7) or a product call (§10.2).
 
 Spec: [spec.md](spec.md) (the decision record §0, the server §1, the game §2–§6, cross-cutting §7, the deployment guide §11) · Interfaces: [CONTRACTS.md](CONTRACTS.md) (final; §14 lists what changed at integration) · Requests: [G1](requests-G1.md), [G2](requests-G2.md), [G3](requests-G3.md), [G4](requests-G4.md) (all closed) · Provenance: [provenance.md](../provenance.md) §13.
 
@@ -56,17 +56,19 @@ Also new: save v4 (the ranking queue, the streak, the purchase ledger), remote s
 
 ### 4.1 Method
 
-The 2b method (STATUS-2b §4): the FBIG e2e twin built with `VITE_LADDER_URL=http://127.0.0.1:8787` and the local ranking server running, served uncompressed (`Accept-Encoding: identity`) by `vite preview`, the FB SDK replaced by our stub, Chromium with the cache disabled, CPU 4× slower, DevTools' Slow 4G (562.5 ms, 1.44 Mbit/s), a 390 × 844 phone; "ready" = the first screen interactive (a first run's tutorial board playing; a returning player's Home with Play). Median of 3 runs. All on one machine, the same day.
+The 2b method (STATUS-2b §4): the FBIG e2e twin built with `VITE_LADDER_URL=http://127.0.0.1:8787` and the local ranking server running, served uncompressed (`Accept-Encoding: identity`) by `vite preview`, the FB SDK replaced by our stub (routed, so **its download is not counted**), Chromium with the cache disabled, CPU 4× slower, DevTools' Slow 4G (562.5 ms, 1.44 Mbit/s), a 390 × 844 phone. Median of 3 runs, on one machine, the same day. Two milestones for a first run since the audit (A-L1): **board shown** (the tutorial board and the coach's card on screen) and **accepts input** (the game status `playing`: taps count; the 4.5 s requirement is read against this one). A returning player: Home with an enabled Play.
 
 ### 4.2 Results
 
-| Build | First run (new player) | Returning player | First-load bytes at ready (8 requests) |
-|---|---|---|---|
-| Pre-2e (`3389380`, the 2d.1 final tree) | 3.67 s | 3.55 s | 426 KB |
-| 2e as built (start of I-4) | 4.00 s (4.03 / 4.00 / 3.97) | 3.85 s | 479 KB |
-| **2e after I-4** | **3.85 s (3.93 / 3.85 / 3.81; an earlier set the same hour 3.91, and 3.85 right after the cuts)** | **3.71 s** | 451 KB |
+| Build | First run: board shown | First run: accepts input | Returning player | First-load bytes (8 requests) |
+|---|---|---|---|---|
+| Pre-2e (`3389380`, the 2d.1 final tree) | 3.67 s | — | 3.55 s | 426 KB |
+| 2e as built (start of I-4) | 4.00 s | — | 3.85 s | 479 KB |
+| 2e after I-4 (as reported at I-6) | 3.85 s | not measured (the audit: 4.48–4.53 s) | 3.71 s | 451 KB |
+| Audit fix round, before the START fix | 3.92 s | **4.54 s** (4.56 / 4.54 / 4.52): over 4.5 s | 3.78 s | 451.5 KB |
+| **Audit fix round, final** | **3.94 s** (3.93 / 3.98 / 3.94) | **4.26 s** (4.26 / 4.41 / 4.24; an earlier set the same hour 4.21) | **3.71 s** (3.70 / 3.71 / 4.54) | 451.6 KB |
 
-The hard requirement (≤ 4.5 s) is met with room; the target "near 3.71 s" (the 2d.1 value on its machine) is about 0.15–0.2 s away. What is left of the difference to pre-2e is the 2e code a first screen or a win needs (§4.3); the next cuts are structural (§10).
+The I-6 report's 3.85 s was the moment the board and the coach appeared; taps counted only after the 700 ms entry wave, so measured to "accepts input" the first run was at the 4.5 s ceiling (audit A-L1). The session now starts the board when its own wave ends (`BoardView.playEntry()` returns `entryEndMs(n)`: 408 ms on the 4 × 4 tutorial board; `board-types.ts` always said so) instead of after the fixed 700 ms: **the first run takes input at 4.26 s**, ≈ 0.25 s inside the requirement (the FB SDK download is on top on a real phone). The board-shown milestone is unchanged by the audit fixes (3.90–3.94 s); what is left of the difference to pre-2e is the 2e code a first screen or a win needs (§4.3), and the next cuts are structural (§10.2).
 
 ### 4.3 What went lazy, and what the first load still carries
 
@@ -84,49 +86,50 @@ Still in the first load, and why: the streak engine (a win counts the day at onc
 
 | Row | Ceiling (was) | Measured: web · FBIG · FBIG e2e (release-web · release-FBIG) |
 |---|---|---|
-| Main JS (entry + modulepreload chunks) | **360** (332) | 330.4 · 346.2 · **349.5** (329.1 · 345.0) |
+| Main JS (entry + modulepreload chunks) | **360** (332) | 330.8 · 346.7 · **350.0** (329.6 · 345.5) |
 | CSS (first load) | 49.3 | 49.1 everywhere |
 | Font · `index.html` | 17 · 1.14 | 16.7 · 1.03–1.11 |
-| **First-load total** | **427** (398) | 397.1 · 413.1 · **416.3** (395.9 · 411.9) |
-| **First load + 1 locale** | **470** (429) | 437.8 · 453.7 · **457.0** |
-| **First load, gzip** | **158** (148.5) | 146.5 · 151.8 · **153.4** (146.2 · 151.6) |
+| **First-load total** | **427** (398) | 397.6 · 413.5 · **416.8** (396.4 · 412.3) |
+| **First load + 1 locale** | **470** (429) | 437.7 · 453.6 · **456.9** |
+| **First load, gzip** | **158** (148.5) | 146.7 · 152.0 · **153.6** (146.3 · 151.7) |
 | Worker JS (lazy) | 18.5 | 18.1 |
-| Locale chunk (each of 16) | **41.9** (29.3) | 40.7 (hi) |
+| Locale chunk (each of 16) | **41.9** (29.3) | 40.2 (hi; 40.7 before the audit removed four keys) |
 | Lazy JS: optional (`events`, `fb-social`, `social-flows`) | 29.3 | 13.3 · 27.1 |
 | Lazy JS: fx chunk · board motion · lazy art | 15.3 · 3.8 · 4.4 | 14.9 · 3.7 · 4.3 |
-| Lazy JS: ladder (`ladder-*`) | **30.5** (26, L0 placeholder) | 29.7 |
+| Lazy JS: ladder (`ladder-*`) | **30.5** (26, L0 placeholder) | 30.0 |
 | Lazy JS: ladder boot (`ladder-boot-*`) | **34.9** (new) | 33.9 |
-| Lazy JS: overlay chunk (`overlay-chunk-*`) | **56.2** (new) | 54.6 |
-| Lazy JS: English strings (`en-lazy-*`) | **13.6** (new) | 13.2 |
+| Lazy JS: overlay chunk (`overlay-chunk-*`) | **56.2** (new) | 55.2 |
+| Lazy JS: English strings (`en-lazy-*`) | **13.6** (new) | 12.9 |
 | Lazy JS: core (the rest: hint card, RPC, sounds, generator, grader) | **23.3** (74, before the split) | 22.7 |
 | Lazy CSS: fx chunk · board motion | 3.26 · 6.4 | 3.16 · 6.24 |
-| Lazy CSS: ladder (`ladder-chunk-*`) | **11.05** (4, L0 placeholder) | 10.7 |
-| Lazy CSS: overlay chunk | **32** (new) | 31.1 |
+| Lazy CSS: ladder (`ladder-chunk-*`) | **11.05** (4, L0 placeholder) | 11.0 |
+| Lazy CSS: overlay chunk | **33.5** (32 at I-4; raised at the audit fix round) | 32.5 (31.1 at I-4) |
 | Lazy CSS: the rest (`events-chunk-*`) | **7.2** (34.6, before the split) | 7.0 |
-| FB zip files · zips | 100 files; ≤ 1 MB | release 73 files · 365.7 KB; preview 89 files · 502 KB |
+| FB zip files · zips | 100 files; ≤ 1 MB | release 73 files · 366.4 KB; preview 89 files · 501.7 KB |
 
-New rows: the overlay chunk (JS, CSS), the ladder boot chunk and the lazy English strings; the ladder chunk's two L0 placeholder rows (the spec's estimates, 26 / 4 KB) re-set to measured; the core lazy rows re-set to what is left once the new rows split out. Recorded in `scripts/size-check.ts` (history comment), `tests/unit/platform/scripts.spec.ts` and 04 §9.
+Measured after the audit fix round (all six dists within budget). The audit's layout fixes added 1.5 KB to the overlay chunk's stylesheet (the victory's fit step 4 and its transition-free measuring, the waiting line, the Settings name row below 360 px, the danger Delete, the day-7 open chest): its ceiling went 32 → 33.5 KB (measured + about 3 %), a lazy chunk; the first load grew 0.5 KB (`ladder.waiting` and the waiting total are first-load code). At I-4: new rows: the overlay chunk (JS, CSS), the ladder boot chunk and the lazy English strings; the ladder chunk's two L0 placeholder rows (the spec's estimates, 26 / 4 KB) re-set to measured; the core lazy rows re-set to what is left once the new rows split out. Recorded in `scripts/size-check.ts` (history comment), `tests/unit/platform/scripts.spec.ts` and 04 §9.
 
-## 5. Verification (I-6)
+## 5. Verification (I-6, re-run after the audit fix round)
 
-All on `claude/mewdoku-instant` with the I-6 fixes of §10 item 3 in the tree, 2026-10-11 (Node 22, 4 CPUs). Every gate was run after the last code change.
+All on `claude/mewdoku-instant` with every audit fix in the tree, 2026-10-11 (Node 22, 4 CPUs). Every gate below was run after the last code change.
 
 | Gate | Result |
 |---|---|
 | `npx tsc --noEmit` | 0 errors |
-| `npx vitest run` | 144 files, **2 969 tests passed** (the new guards: `first-load-strings.spec.ts`, `release-check.spec.ts`, `rank-probe.spec.ts`, the honesty test in `catalogs-2e.spec.ts`, the new size rows in `scripts.spec.ts`) |
-| `npm --prefix server run verify` | typecheck (3 projects); 17 files, **178 tests passed** (incl. the new "10 concurrent first wins in an empty pool open ONE bracket", which fails without the pool guard: 10 brackets); `solutions:check` ok (35 generated boards re-made; levels ≤ L3000, dailies ≤ 2030-12-31, 3 events) |
-| `npm run i18n:check` (and `-- --release`) | OK, 17 catalogues, the honesty check clean; 6 width warnings (§10 item 5) |
+| `npx vitest run` | 144 files, **2 973 tests passed** (I-6: 2 969; the audit's new tests: `session-2d.spec` A-L1, `hud-2e.spec` B5, B6, B9, B15, `catalogs-2e.spec` A-H2, and the B4, B7, B10–B14 assertions in existing tests) |
+| `npm --prefix server run verify` | typecheck (3 projects); 18 files, **190 tests passed** (I-6: 178; the audit's `audit-a.spec.ts` with A-S1 … A-S4 now plain tests, and A-S2, A-S5, A-S6, A-T1 tests in `pipeline`, `rules` and `ops`); `solutions:check` ok (levels ≤ L3000, dailies ≤ 2030-12-31, 3 events) |
+| Revert checks (each fix reverted alone, its test run, the file restored by checksum) | A-S1, A-S2 (both guards), A-S3 (budget), A-S4 (both guards), A-S5 (both parts), A-S6, A-T1 (wins, flags), A-H2, A-L1, B1, B2/B8/A-C1, B3, B4, B5, B6, B12, B13, the reduced-motion fit: every one failed without its fix (§10.1) |
+| `npm run i18n:check` (and `-- --release`) | OK, 17 catalogues, the honesty check clean on every English key and every draft (A-H2); 6 width warnings (§10.2 item 7) |
 | `npm run palette:check` · `npm run levels:verify` | OK · 10 level packs, 27 daily months, 3 event packs, 0 issues |
-| Builds | web, FBIG, e2e, FBIG e2e, release-web, release-FBIG, the probe: all built |
-| `npm run size` on all six dists | **within budget** everywhere (§4.4; the FBIG e2e first load measured 416.3–416.4 KB from build to build against 427); bundle checks ok: no test data in any dist, the release rules clean on both release dists |
-| `npm run zip:fbig` (+ `--preview`) | release 73 files · 365.7 KB; preview 89 files · 502.0 KB; the release bundle check ran before zipping |
-| Playwright, all four projects (web-390, web-320, web-1280, fbig-390), `--retries=0`, against the local ranking server started by the config | **run A: 307 passed, 0 failed, 0 flaky (16.1 min); run B, right after: 307 passed, 0 failed, 0 flaky (16.2 min)**. 93 skipped in each, all viewport-bound (`test.skip` on the other phone sizes in `visual.spec.ts` 50, `layout.spec.ts` 23, `visual-board.spec.ts` 10, `i18n.spec.ts` 10); no test skipped for any other reason |
+| Builds | web, FBIG, e2e, FBIG e2e, release-web, release-FBIG: all built (the probe bundle is unchanged since I-6 and was not rebuilt) |
+| `npm run size` on all six dists | **within budget** everywhere (§4.4; the overlay chunk's CSS ceiling raised 32 → 33.5 KB); bundle checks ok: no test data in any dist, the release rules clean on both release dists |
+| `npm run zip:fbig` (+ `--preview`) | release 73 files · 366.4 KB; preview 89 files · 501.7 KB; the release bundle check ran before zipping |
+| Load time (§4, median of 3) | first run: board shown 3.94 s, **accepts input 4.26 s**; returning player 3.71 s; 451.6 KB in 8 requests |
+| Playwright, all four projects (web-390, web-320, web-1280, fbig-390), `--retries=0`, against the local ranking server started by the config | **run C: 312 passed, 0 failed, 0 flaky (16.4 min); run D, right after: 312 passed, 0 failed, 0 flaky (16.6 min)**. 100 skipped in each, all viewport-bound (`test.skip` on the other projects' sizes); no test skipped for any other reason. Before them: run A 309 / 3 failed (the e2e name checks compared the server's text with the display no-break space, B7: the specs now read it as a space) and run B 311 / 1 failed (a visual test measured a transient label between `count()` and `boundingBox()`: now measured once); neither was a product failure |
 | `dev/look-compare.ts` · `dev/helpers-compare.ts` | 105 pass, 0 FAIL (19 info) · 105 pass, 0 FAIL (25 info, 10 design) |
-| The probe | built against the local server and run in Chromium with our FB stub: five steps OK and the origin line; a wrong secret and a missing API show the expected red lines (§7) |
-| FINAL screenshots | 56 (§11), each looked at; one regression found and fixed (the German Settings label, §10 item 3), the four variants re-captured after the fix |
+| FINAL screenshots | 72 (§11): the 28 the fixes changed re-captured and 16 added; each looked at |
 
-Found and fixed during I-6 (each with a test, none weakened): the server's pool race (the first full Playwright run's 50-row layout test saw 49 players in the bracket); the G1 cadence test's seed after the L1 flip; the German Settings row at 320 px. Each Playwright run re-writes the visual specs' review captures in `docs/phase2d/screenshots/` and `docs/phase2e/screenshots/` (`G2-*`, `G3-*`); the changed PNGs in the tree are those captures (no assertion compares their bytes).
+Each Playwright run re-writes the visual specs' review captures in `docs/phase2d/screenshots/` and `docs/phase2e/screenshots/` (`G2-*`, `G3-*`) and the compares write theirs in `docs/phase2d/screenshots/`; the changed PNGs in the tree outside `FINAL-*` are those captures (no assertion compares their bytes).
 
 ## 6. Provisional decisions (all built; each changes with its key, then a test update)
 
@@ -205,12 +208,12 @@ Two independent audits (A: the server and the honesty rules; B: the UI in the bu
 
 | Finding | Verdict | What changed | Test (fails without the fix) |
 |---|---|---|---|
-| **A-S1** (major) a burst of > ≈ 51 first wins in an empty pool lost wins as `already_counted` | **fixed** | `postWins` places a win in ≤ 8 tries (join, create, or my bracket; a create that loses the pool guard means a joinable bracket exists); still unplaced → `503 unavailable` + `retryAfterMs`, never a final verdict; the client keeps its queue. Probed: 60/120/200 concurrent first wins all counted at once; 300 → 100 answered 503 and all counted on the retry, brackets 50 × 6 | `audit-a.spec` "[A-S1 …] 120 concurrent first wins" (`PLACE_TRIES` 1 → fails) |
+| **A-S1** (major) a burst of > ≈ 51 first wins in an empty pool lost wins as `already_counted` | **fixed** | `postWins` places a win in ≤ 8 tries (join, create, or my bracket; a create that loses the pool guard means a joinable bracket exists); still unplaced → `503 unavailable` + `retryAfterMs`, never a final verdict; the client keeps its queue. Probed: 60/120/200 concurrent first wins all counted at once; 300 → 100 answered 503 and all 300 were counted after one resend (none lost, no bracket over 50) | `audit-a.spec` "[A-S1 …] 120 concurrent first wins" (`PLACE_TRIES` 1 → fails) |
 | **A-S2** (major) fake ids past the solution table took 1st place | **fixed** | Past the table a win must have a size from the table's tail (8–12 today) and, for a level, a verified baseline within `maxLevelJump` (30); else rejected and flagged `unverified` / `bad_solution` for the admin | `audit-a.spec` "[A-S2 …]", `pipeline.spec` "[audit A-S2]" (either guard removed → fails) |
-| **A-S3** (minor) the bracket cap and the play-time budget could be spent twice by parallel requests of one player | **fixed** | The wins write token (`players.wtok`, migration 0002): every statement of a wins batch is guarded by the token the request read, the player row sets a new one; a request that lost re-evaluates (≤ 4 times, then 503) | `audit-a.spec` "[A-S3 …] budget" (8 accepted of ≤ 2 with the guard removed); the cap test fails too in most interleavings |
+| **A-S3** (minor) the bracket cap and the play-time budget could be spent twice by parallel requests of one player | **fixed** | The wins write token (`players.wtok`, migration 0002): every statement of a wins batch is guarded by the token the request read, the player row sets a new one; a request that lost re-evaluates (≤ 4 times, then 503) | `audit-a.spec` "[A-S3 …] budget" (8 accepted of ≤ 2 with the guard removed); the cap test fails too in some interleavings (170 member wins of a cap of 150) |
 | **A-S4** (minor) a delete racing a first win left an orphan member row | **fixed** (in `d892e45`, re-checked) | `freeGuard` requires the player row; the wins token now also requires it | `audit-a.spec` "[A-S4 …]" (both guards reverted → orphan member row) |
 | **A-T1** (minor) the deletion test compared with a literal key | **fixed** | `ops.spec.ts` captures the real key before the delete and checks members, wins, rewards and flags with it; the audit's own test stays | removing `DELETE FROM wins` or `… flags` from `deletePlayer` → `ops.spec` fails |
-| **A-L1** (minor) "ready" was the board shown, not taking input | **fixed** | §4 reports both milestones. Measured to "accepts input" the first run was 4.54 s (over 4.5 s): the session waited the full 700 ms entry on every board although `BoardView.playEntry()` returns the wave's real end (408 ms on the 4 × 4 tutorial board; the contract in `board-types.ts`); START now follows it → **4.21 s** | `session-2d.spec` "[audit A-L1]" (fixed 700 ms → fails) |
+| **A-L1** (minor) "ready" was the board shown, not taking input | **fixed** | §4 reports both milestones. Measured to "accepts input" the first run was 4.54 s (over 4.5 s): the session waited the full 700 ms entry on every board although `BoardView.playEntry()` returns the wave's real end (408 ms on the 4 × 4 tutorial board; the contract in `board-types.ts`); START now follows it → **4.26 s** (median of 3; 4.21 in an earlier set) | `session-2d.spec` "[audit A-L1]" (fixed 700 ms → fails) |
 | **A-C1** (minor) the German Settings fix had no assertion | **fixed** | An e2e geometry check at 320 × 568 in de, en and ar, with the server's name and with the longest name the word lists make: label and name never overlap, the name is never cut, the label is one line, both inside the row | `i18n.spec` "Settings, the ranking name row … (audit A-C1, B2, B8)" (the 320 px layout reverted → fails in all three) |
 | **A-S5** (minor) production could run the anonymous web pool by default | **fixed** | `web.mode` defaults to `records`; production runs `anon` only with `WEB_MODE=anon` itself (a `CONFIG_OVERRIDES` value is ignored there, with a problem line) | `rules.spec` "[audit A-S5]" |
 | **A-H1** (minor) offline header "Your total: 6" while my row showed 3 + "+3 waiting" | **fixed** (with B9) | The panel subtitle and the victory's total are the server's; queued fish follow as "+3 waiting" (the victory: a second line in its pill) | `ladder-flow.spec`, `ladder-session.spec`, `hud-2e.spec`, `ladder-2e.spec` |
@@ -235,7 +238,7 @@ Two independent audits (A: the server and the honesty rules; B: the UI in the bu
 ### 10.2 What is left
 
 1. **Gates outside our environment** (§8): nothing of the ranking can be switched on for real players before G-SRV-4 (Cloudflare), G-SRV-1 / G-SRV-2 (the probe), G-SRV-3 / G-LEGAL (privacy) and G-NAME (the API domain); purchases wait for G5, iOS purchases for G10. The release build is safe meanwhile: with `VITE_LADDER_URL` empty it shows the personal records.
-2. **Load time:** a first run takes input at 4.21 s (board shown 3.90 s; returning player 3.71 s; Slow 4G, the FB SDK download excluded, §4). The 4.5 s requirement is met with ≈ 0.3 s; the next cuts are structural and were not done: the FB-only shop flow and its ledger behind a lazy loader (≈ 7 KB), the win queue's checks behind the ladder chunk, per-locale lazy parts.
+2. **Load time:** a first run takes input at 4.26 s (board shown 3.94 s; returning player 3.71 s; Slow 4G, the FB SDK download excluded, §4). The 4.5 s requirement is met with ≈ 0.25 s (one run of three took 4.41 s); the next cuts are structural and were not done: the FB-only shop flow and its ledger behind a lazy loader (≈ 7 KB), the win queue's checks behind the ladder chunk, per-locale lazy parts.
 3. **Anti-cheat, not done (A-S2 option c):** members with unresolved `unverified` or `level_jump` flags still take paid places. With the size and baseline rules a made-up id past the table no longer counts, but a scripted client that solves the shipped level packs can still climb; that is bounded by the existing floors (size minimum solve times, the play-time budget, the bracket cap) and visible to the admin through the flags. Deciding whether flagged members are paid is a product call (spec §1.6), not a fix.
 4. **A burst far beyond real traffic** (hundreds of first wins in one pool within the same instant) answers some requests 503; the client keeps those wins and resends them after `retryAfterMs` (2 s), so nothing is lost, but a live win answered 503 shows the panel's offline state ("Last updated …") until the resend. A player racing itself (two devices, or a script) sees the same 503 when it loses the wins token four times.
 5. **The win's own counter (B9 / A-H1, by design):** during the win, before the server answers, the in-game counter's fish flight and its live announcement still count this win's fish into "Your total" — the counter estimate of spec §2.3. The panel and the victory, shown after the answer (or its timeout), carry the server's total and "+N waiting".

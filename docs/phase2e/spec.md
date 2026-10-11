@@ -1498,7 +1498,7 @@ Two independent audits; the full verdict list and the numbers are in [STATUS-2e]
 | §2.7 | The Settings group is titled "Daily ranking" (the feature's one name); below 360 px the player's name has its own line; "Delete" is drawn in the danger red, Cancel is the primary |
 | Appendix A | `ladder.alone` = "You're the only player in this ranking." (no "so far") |
 | §6 / victory | A 4th fit step (no hero art) for the daily on a streak's day 7 with the banner band at 320 × 568; the fit measures with transitions off |
-| §7.9 (load) | START at the board's own entry end (`entryEndMs(n)`, ≤ `fx.boardEntryMs`): a first run takes input at 4.21 s (it was 4.54 s, measured to "accepts input") |
+| §7.9 (load) | START at the board's own entry end (`entryEndMs(n)`, ≤ `fx.boardEntryMs`): a first run takes input at 4.26 s (it was 4.54 s, measured to "accepts input") |
 
 ## Appendix A. English strings (ours; G3 adds them at S0 in `src/i18n/en/ui-2e.ts`)
 
