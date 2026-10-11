@@ -35,10 +35,16 @@ upload; this note records the result and what is left.
 - Phone browser (MOBILE_WEB), 2026-10-11 17:45 UTC: all five checks OK; `issued_at` present (+0 s); same Origin
   and referrer origin as WEB.
 
+## Game build on Facebook
+
+- 2026-10-11: the game test build (`bebbe7b`, staging ranking) opens and plays on Facebook. Staging recorded the
+  user's real FB player (signed, pool `fb`) and three wins, L2–L4 (17:43–18:10 UTC), all `accepted`, no flags; the
+  player is in a bracket. The smoke-test player sits in the separate `fb:synthetic` pool, so it never shares a
+  bracket with real players.
+
 ## Left (the user, in the App Dashboard)
 
 1. Run the probe build (already in Testing) on the Android app, the iPhone app and messenger.com; paste each
    "Copy results" text back (STATUS-2e §7).
-2. Then move the game build to Testing and play it.
-3. With the other three results: add any new origin to production `ALLOWED_ORIGINS`; if every surface shows
+2. With the other three results: add any new origin to production `ALLOWED_ORIGINS`; if every surface shows
    `issued_at`, set `signature.requireIssuedAt` to true (server/src/core/config.ts).
