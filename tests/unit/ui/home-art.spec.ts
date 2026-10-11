@@ -5,7 +5,8 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { CELL, colours, HOME_COLOURS, homeBoardSvg, homeBoardUrl, markCells, N, regions } from '../../../src/ui/art/home-board';
+import { PALETTE } from '../../../src/ui/art/palette';
+import { CELL, colours, desaturate, HOME_COLOURS, HOME_SATURATION, homeBoardSvg, homeBoardUrl, markCells, N, regions } from '../../../src/ui/art/home-board';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const SEEDS = [1, 7, 42, 12345, 987654321, 2147483646];
@@ -49,5 +50,14 @@ describe('the Home board', () => {
     expect(homeBoardUrl(5)).toBe(homeBoardUrl(5));
     expect(homeBoardUrl(5)).not.toBe(homeBoardUrl(6));
     expect(homeBoardUrl(5)).toMatch(/^url\("data:image\/svg\+xml,%3Csvg/);
+  });
+
+  it('desaturates only on Home: the board palette is untouched, hue and lightness kept', () => {
+    expect(PALETTE[5]).toBe('#48B5B2');
+    expect(desaturate('#48B5B2', 1)).toBe('#48b5b2');
+    expect(desaturate('#808080', 0.5)).toBe('#808080');
+    expect(desaturate('#ff0000', 0)).toBe('#808080');
+    expect(HOME_COLOURS).toContain(desaturate('#48B5B2', HOME_SATURATION));
+    expect(HOME_COLOURS).not.toContain('#48b5b2');
   });
 });

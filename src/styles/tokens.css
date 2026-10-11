@@ -108,8 +108,8 @@
 
   /* ── Home redesign (2026-10-11): the scrolling board behind Home ──
      art/home-board.ts draws the tile in the client (a new board every visit); --home-tile is its size (10 cells of
-     72 px), and --home-base fills the screen until it has painted (Lagoon). */
-  --home-base: #48b5b2;
+     72 px), and --home-base fills the screen until it has painted (Lagoon, desaturated like the board). */
+  --home-base: #619c9b;
   --home-tile: 720px;
   --side-dot-a: rgba(229, 112, 16, 0.1); /* desktop side pattern */
   --side-dot-b: rgba(147, 90, 90, 0.06);

@@ -5,8 +5,29 @@
 // visit draws a new board; screens.css .home__bg repeats the tile, turns it and slides it one tile, then loops.
 import { PALETTE as BOARD, PALETTE_CORE } from './palette';
 
-/** The in-game board colours, the 11 core ones (Cocoa only appears on 12 × 12 boards). */
-export const HOME_COLOURS: readonly string[] = PALETTE_CORE.map((i) => (BOARD[i] as string).toLowerCase());
+/** How much colour Home keeps of the board's (HSL saturation × this): calmer than the game, same hues. */
+export const HOME_SATURATION = 0.55;
+
+/** `hex` with its HSL saturation scaled by `k` (hue and lightness kept). */
+export function desaturate(hex: string, k: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => v / 255) as [number, number, number];
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const d = max - min;
+  if (d === 0) return hex.toLowerCase();
+  const s = (d / (1 - Math.abs(2 * l - 1))) * k;
+  const h = max === r ? ((g - b) / d + 6) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs((h % 2) - 1));
+  const [r1, g1, b1] = h < 1 ? [c, x, 0] : h < 2 ? [x, c, 0] : h < 3 ? [0, c, x] : h < 4 ? [0, x, c] : h < 5 ? [x, 0, c] : [c, 0, x];
+  const m = l - c / 2;
+  return `#${[r1, g1, b1].map((v) => Math.round((v + m) * 255).toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** The in-game board colours, the 11 core ones (Cocoa only appears on 12 × 12 boards), desaturated for Home. */
+export const HOME_COLOURS: readonly string[] = PALETTE_CORE.map((i) => desaturate(BOARD[i] as string, HOME_SATURATION));
 /** Cells per tile side and the cell size in CSS px (N × CELL = tokens.css --home-tile). */
 export const N = 10;
 export const CELL = 72;
