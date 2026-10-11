@@ -42,9 +42,21 @@ upload; this note records the result and what is left.
   player is in a bracket. The smoke-test player sits in the separate `fb:synthetic` pool, so it never shares a
   bracket with real players.
 
-## Left (the user, in the App Dashboard)
+- The user confirmed the game also works in the iPhone Facebook app and in Safari. Workers Logs: 8 real FB
+  sign-ins, all 200, all with `issued_at`; wins accepted; a nickname change saved.
+- Since staging version `45526ad5` (2026-10-11 18:17 UTC) each FB sign-in log line carries `origin`. Read it with
+  the Workers observability API (the account token can): `POST https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/observability/telemetry/query`
+  with `{"queryId":"origins","timeframe":{"from":<ms>,"to":<ms>},"view":"events","limit":100,"parameters":{"filters":[{"key":"$metadata.service","operation":"eq","type":"string","value":"mewdoku-rank-staging"}]}}`;
+  the lines are in `result.events.events[].source` (`route`, `origin`, `fields`).
 
-1. Run the probe build (already in Testing) on the Android app, the iPhone app and messenger.com; paste each
-   "Copy results" text back (STATUS-2e §7).
-2. With the other three results: add any new origin to production `ALLOWED_ORIGINS`; if every surface shows
-   `issued_at`, set `signature.requireIssuedAt` to true (server/src/core/config.ts).
+## Left
+
+- Before the production deploy: confirm the iPhone app's `origin` (any new value goes into production
+  `ALLOWED_ORIGINS`).
+- Android app and Messenger: not tested (the user deferred them). Until the Android app is checked,
+  `signature.requireIssuedAt` stays false.
+
+## Left (the user, when convenient)
+
+1. Open the game once more in the iPhone Facebook app (any time; it confirms the app's `origin` in the log).
+2. Later: the Android Facebook app (the probe or the game build), then `signature.requireIssuedAt` can go on.

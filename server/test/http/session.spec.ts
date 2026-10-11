@@ -30,6 +30,18 @@ describe('session: FB', () => {
     expect((await json(again)).error).toMatchObject({ code: 'nonce_replay' });
   });
 
+  it('logs the signed payload fields and the Origin of each FB sign-in (G-SRV-1: the surfaces\' real origins)', async () => {
+    const t = makeTestApp();
+    const origin = 'https://apps-1234.apps.fbsbx.com';
+    expect((await post(t, fbBody(t, await nonceOf(t)), { origin })).status).toBe(200);
+    expect((await post(t, fbBody(t, await nonceOf(t), '43'))).status).toBe(200);
+    const lines = t.logs.filter((l) => l.route === 'POST /v1/session');
+    expect(lines.map((l) => [l.fields, l.origin])).toEqual([
+      ['algorithm,issued_at,player_id,request_payload', origin],
+      ['algorithm,issued_at,player_id,request_payload', 'none'],
+    ]);
+  });
+
   it('a forged signature, another id, a stale issued_at, an expired or foreign nonce are refused', async () => {
     const t = makeTestApp();
     const code = async (r: Promise<Response>): Promise<string> => (parseApiError(await json(await r))?.error.code ?? 'parse')!;

@@ -123,6 +123,8 @@ export async function postSession(ctx: Ctx): Promise<Response> {
     id = sig.playerId;
     trust = 'signed';
     ctx.fields.fields = sig.fields.join(',');
+    // G-SRV-1: the origin each FB surface really sends (a host, never personal data), for the production allow-list.
+    ctx.fields.origin = (ctx.req.headers.get('Origin') ?? 'none').slice(0, 200);
   } else {
     if (s.cfg.web.mode !== 'anon') return fail('web_disabled', 'web ranking is off');
     pool = poolFor('web', devPool, false);
