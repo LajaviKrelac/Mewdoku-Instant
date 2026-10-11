@@ -17,7 +17,7 @@
 // Phase 2e (G1, docs/phase2e/spec.md §2.5–§2.7, §5.3, §6.1): "today" is dailyDateKey (daily.dayStartHour);
 // Home's top-bar lead slot is the ranking chip (the ladder flow's while it is loaded, else the records
 // chip) and opens the ranking sheet (records mode without a server); Home mounted → the flow's throttled
-// refresh, queue flush and the next result card; Settings gets the "Worldwide ranking" rows; every
+// refresh, queue flush and the next result card; Settings gets the "Daily ranking" rows; every
 // `ladder:update` re-renders Home and open Settings. The ranking overlays are banner-hiding modals.
 import type { AudioEngine } from '../audio/audio-engine';
 import { isEventLive, type EventDef } from '../game/events';
@@ -263,7 +263,7 @@ export function createShell(deps: ShellDeps): Shell {
             },
           }
         : {}),
-      // Phase 2e §2.7: "Worldwide ranking" (FB with the ladder, or web anon); absent = hidden.
+      // Phase 2e §2.7: "Daily ranking" (FB with the ladder, or web anon); absent = hidden.
       ...(ladderNow()?.settingsRows() ? { ladder: ladderNow()?.settingsRows() } : {}),
       // review PAR-5: the Feedback row, from config (empty by default = no row); on FBIG only with
       // support.feedbackOnFbig (Meta's external-link rules, parity-spec §0.7, §14).

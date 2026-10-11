@@ -433,7 +433,7 @@ export const catalog: LocaleCatalog = {
   'ladder.rewards.line.one': 'Platz 1 gewinnt Tipps und Kätzchen.',
   'ladder.rewards.line.other': 'Die besten {count} gewinnen Tipps und Kätzchen.',
   'ladder.rewards.min': 'Belohnungen gibt es ab {count} Spielern in dieser Rangliste.',
-  'ladder.alone': 'Du bist bisher allein in dieser Rangliste.',
+  'ladder.alone': 'Du bist allein in dieser Rangliste.',
   'ladder.waiting': '+{count} wartend',
   'ladder.offline': 'Du bist offline. Wir versuchen, deine Fische zu senden, sobald du wieder online bist.',
   'ladder.stale': 'Stand von {time}',
@@ -494,7 +494,6 @@ export const catalog: LocaleCatalog = {
   'nick.first.line': 'Das bist du in der Rangliste: {name}. Name und Bild kannst du in den Einstellungen ändern.',
   'nick.avatar.a11y': 'Bild {index} von {count}',
   'nick.edit.a11y': 'Ranglistenname und Bild ändern',
-  'settings.ladder.title': 'Weltweite Rangliste',
   'settings.ladder.name': 'Ranglisten\u00ADname', // a soft hyphen: the Settings row may break it at 320 px (I-6)
   'settings.ladder.join': 'In Ranglisten zeigen',
   'settings.ladder.code': 'Spielercode {code}',

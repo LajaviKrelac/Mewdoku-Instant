@@ -10,6 +10,7 @@ import { NICK_WORDS_V1 } from '../../../src/shared/nick-words';
 import {
   countdownText,
   createBracketList,
+  displayName,
   heartLabel,
   nextTickMs,
   rewardsLineText,
@@ -108,7 +109,9 @@ describe('bracket list: exactly the server rows (H-3, §10.6 #1)', () => {
     expect(items).toHaveLength(n);
     expect(items.map((li) => li.dataset.rank)).toEqual(v.rows.map((r) => String(r.rank)));
     expect(items.map((li) => li.dataset.slot)).toEqual(v.rows.map((r) => String(r.slot)));
-    expect(items.map((li) => q(li, '.rank-row__name').textContent)).toEqual(v.rows.map((r) => r.name));
+    // The server's names, character for character, except the one no-break space before the number (audit B7).
+    expect(items.map((li) => q(li, '.rank-row__name').textContent?.replace(/\u00A0/gu, ' '))).toEqual(v.rows.map((r) => r.name));
+    expect(items.map((li) => q(li, '.rank-row__name').textContent)).toEqual(v.rows.map((r) => displayName(r.name)));
     // The count is the server's members, never the rows we drew.
     expect(q(list.el, '.ranking__count').textContent).toBe(n === 1 ? '1 player' : `${n} players`);
     // The pinned copy is outside the list and carries no data attributes (never counted as a row).
@@ -127,11 +130,11 @@ describe('bracket list: exactly the server rows (H-3, §10.6 #1)', () => {
     expect(q(list.el, '.ranking__count').textContent).toBe('4 players');
   });
 
-  it('alone: my row and "You\'re the only player in this ranking so far." (C-4: no promise that others join)', () => {
+  it('alone: my row and "You\'re the only player in this ranking." (C-4: no promise that others join)', () => {
     const list = createBracketList(view({ rows: rows(1, 1) }), { onHeart: vi.fn() });
     expect(qa(list.el, 'ol.rank-rows > li')).toHaveLength(1);
     expect(q(list.el, '.ranking__alone').hidden).toBe(false);
-    expect(q(list.el, '.ranking__alone').textContent).toBe("You're the only player in this ranking so far.");
+    expect(q(list.el, '.ranking__alone').textContent).toBe("You're the only player in this ranking.");
     // The card hugs the one row (no empty white below it).
     expect(q(list.el, 'ol.rank-rows').hasAttribute('data-single')).toBe(true);
     expect(list.el.textContent).not.toMatch(/join as|more players/i);
@@ -170,7 +173,8 @@ describe('bracket list: exactly the server rows (H-3, §10.6 #1)', () => {
     expect(mine.dataset.rank).toBe('5');
     expect(q(mine, '.rank-row__you').textContent).toBe('You');
     expect(q(mine, '.rank-row__waiting').textContent).toBe('+2 waiting');
-    expect(mine.getAttribute('aria-label')).toBe('#5, Brave Noodle 12, you, 36 fish, 0 hearts');
+    // audit B11: the waiting chip is in my row's name too (its visible words)
+    expect(mine.getAttribute('aria-label')).toBe('#5, Brave Noodle 12, you, 36 fish, 0 hearts, +2 waiting');
     const other = q(list.el, 'ol > li[data-rank="2"]');
     expect(other.getAttribute('aria-label')).toBe('#2, Velvet Paws 3, 39 fish, 1 heart');
     expect(q(other, '.rank-row__you').hidden).toBe(true);
@@ -304,6 +308,14 @@ describe('bracket list: exactly the server rows (H-3, §10.6 #1)', () => {
     const r = rows(5)[4] as BracketRowView;
     expect(rowLabel(r, true)).toBe('#5, Brave Noodle 12, you, 36 fish, 0 hearts');
     expect(rowLabel({ ...r, me: false, hearts: 1 }, true)).toBe('#5, Brave Noodle 12, 36 fish, 1 heart');
+    // audit B11: my row's waiting fish; never on another player's row
+    expect(rowLabel(r, true, 3)).toBe('#5, Brave Noodle 12, you, 36 fish, 0 hearts, +3 waiting');
+    expect(rowLabel(r, false, 3)).toBe('#5, Brave Noodle 12, you, 36 fish, +3 waiting');
+    expect(rowLabel({ ...r, me: false }, true, 3)).toBe('#5, Brave Noodle 12, 36 fish, 0 hearts');
+    // audit B7: the number keeps to the word before it (display only)
+    expect(displayName('Cheerful Dumpling 99')).toBe('Cheerful Dumpling\u00A099');
+    expect(displayName('Velvet Pounce 7')).toBe('Velvet Pounce\u00A07');
+    expect(displayName('<b>x</b>')).toBe('<b>x</b>');
     expect(heartLabel({ ...r, me: false, hearts: 1 })).toBe('Give a heart to Brave Noodle 12, 1 heart');
   });
 
@@ -315,7 +327,7 @@ describe('bracket list: exactly the server rows (H-3, §10.6 #1)', () => {
       expect(document.documentElement.dir).toBe('rtl');
       const items = qa(list.el, 'ol.rank-rows > li.rank-row');
       // The names are never translated (glossary) and each is bidi-isolated (spec §2.4, C-31).
-      expect(items.map((li) => q(li, '.rank-row__name').textContent)).toEqual(NAMES.concat(NAMES[0] as string).slice(0, 6));
+      expect(items.map((li) => q(li, '.rank-row__name').textContent)).toEqual(NAMES.concat(NAMES[0] as string).slice(0, 6).map(displayName));
       for (const li of items) expect(q(li, '.rank-row__name').getAttribute('dir')).toBe('auto');
       // The lines and the a11y names re-render in Arabic on the locale change (A11Y-I18N-1), still the server's numbers.
       expect(q(list.el, '.ranking__count').textContent).toBe(tn('ladder.players', 6, { count: formatNumber(6) }));
@@ -361,12 +373,24 @@ describe('ranking panel: the bracket state (spec §2.4, §9.4)', () => {
     panel.open(panelProps());
     expect(q(panel.el, '.ranking__title').textContent).toBe('Daily ranking');
     expect(q(panel.el, '.ranking__sub').textContent).toBe('+2 fish · Your total: 14');
+    // audit B9 / A-H1: unanswered (offline), the server's total and the queued fish apart, as my row shows them
+    panel.update(panelProps({ result: { kind: 'ladder', gained: 3, total: 3, waiting: 3 } }));
+    expect(q(panel.el, '.ranking__sub').textContent).toBe('+3 fish · Your total: 3 · +3\u00A0waiting');
+    panel.update(panelProps());
     // Worded: never forced LTR (.num) in Arabic.
     expect(q(panel.el, '.ranking__sub').classList.contains('num')).toBe(false);
     const list = q(document, '.overlay[data-overlay=ranking] .rank-list[data-kind=bracket][data-stale="0"]');
     expect(list.querySelector(':scope > ol.rank-rows')).not.toBeNull();
     expect(qa(list, 'ol.rank-rows > li.rank-row')).toHaveLength(37);
-    expect(q(panel.el, '.ranking__meta').textContent).toBe('Ends in 7 h 48 min · 37 players');
+    // audit B10: the dot is drawn (aria-hidden); a screen reader hears the list separator instead of a run-on
+    const meta = q(panel.el, '.ranking__meta');
+    const textOf = (skip: string): string =>
+      Array.from(meta.childNodes)
+        .filter((n) => !(n instanceof HTMLElement && (n.matches(skip) || n.hidden)))
+        .map((n) => n.textContent)
+        .join('');
+    expect(textOf('.sr-only')).toBe('Ends in 7 h 48 min · 37 players'); // what is seen
+    expect(textOf('[aria-hidden="true"]')).toBe('Ends in 7 h 48 min, 37 players'); // what is read
     expect(q(panel.el, '.ranking__rewards').textContent).toBe('The top 3 win hints and kitties.');
     expect(q(panel.el, 'button.ranking__info').hidden).toBe(false);
     expect(q(panel.el, 'button.ranking__info').getAttribute('aria-label')).toBe('How it works');

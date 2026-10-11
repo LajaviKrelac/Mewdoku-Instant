@@ -316,6 +316,8 @@ export function selectVictoryView(
      * this win: the kept-fish row then reads "+2 · Your total: 14" (kind 'ladder'). Absent / null: this period's.
      */
     readonly ladderTotal?: number | null;
+    /** Audit B9 / A-H1: fish still waiting to be sent ("· +3 waiting" after the server's total); absent = 0. */
+    readonly ladderWaiting?: number;
   },
   c: GameConfig = cfg,
 ): VictoryData {
@@ -364,7 +366,7 @@ export function selectVictoryView(
     kept:
       p && p.gained > 0
         ? opts.ladderTotal !== undefined && opts.ladderTotal !== null
-          ? { fish: win.kept, max: Math.max(win.maxKept, win.kept), gained: p.gained, total: opts.ladderTotal, kind: 'ladder' }
+          ? { fish: win.kept, max: Math.max(win.maxKept, win.kept), gained: p.gained, total: opts.ladderTotal, kind: 'ladder', waiting: opts.ladderWaiting ?? 0 }
           : { fish: win.kept, max: Math.max(win.maxKept, win.kept), gained: p.gained, total: p.total, kind: p.kind }
         : null,
     daily,

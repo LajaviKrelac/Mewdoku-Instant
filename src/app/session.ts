@@ -400,7 +400,7 @@ export function createSession(deps: SessionDeps): Session {
     // (only while the ladder is active: its records keep this week's subtitle).
     const ladderExtras = lf && lf.active()
       ? {
-          result: { kind: 'ladder' as const, gained: w.summary.counted ? w.summary.kept : 0, total: lf.panelTotal() },
+          result: { kind: 'ladder' as const, gained: w.summary.counted ? w.summary.kept : 0, total: lf.panelTotal(), waiting: lf.panelWaiting() },
           ...lf.panelExtras(),
         }
       : {};
@@ -445,7 +445,8 @@ export function createSession(deps: SessionDeps): Session {
     // requests-G3 R4: while the ladder is active the kept-fish row shows my bracket's total ('ladder').
     const lf = w.ladder ? ladderFlow() : null;
     const ladderTotal = lf && lf.active() ? lf.panelTotal() : null;
-    const data = selectVictoryView(store.get(), viewCtx(), w.summary, { praise: w.praise, ladderTotal }, c);
+    const ladderWaiting = lf && lf.active() ? lf.panelWaiting() : 0;
+    const data = selectVictoryView(store.get(), viewCtx(), w.summary, { praise: w.praise, ladderTotal, ladderWaiting }, c);
     const m = w.meta;
     router.open('victory', {
       ...data,
@@ -818,8 +819,13 @@ export function createSession(deps: SessionDeps): Session {
    * §1.16: the entry's end is when the game screen may show its banner.
    */
   function playBoardEntry(start: 'level' | 'hard' | 'retry' | null): void {
+    // Audit A-L1: START when the board's own wave ends (BoardView.playEntry's entryEndMs(n), the contract of
+    // board-types.ts: 408 ms for the 4 × 4 tutorial board, the reduced-motion fade 150 ms), never later than
+    // fx.boardEntryMs; it waited the full 700 ms on every board, so a first run took input ≈ 0.3 s after its wave.
+    let startInMs = c.fx.boardEntryMs;
     if (screen) {
-      screen.playEntry();
+      const end = screen.playEntry();
+      if (typeof end === 'number' && Number.isFinite(end) && end >= 0) startInMs = Math.min(end, c.fx.boardEntryMs);
       fx.play({ sfx: 'board_in' });
       const lines = start !== null && c.fx.tickers.enabled ? tickerLines(start === 'retry') : null;
       if (lines) {
@@ -827,7 +833,7 @@ export function createSession(deps: SessionDeps): Session {
         fx.guard(() => scr.playTickers(lines));
       }
     }
-    timers.later(c.fx.boardEntryMs, () => {
+    timers.later(startInMs, () => {
       dispatch({ type: 'START' });
       const m = meta();
       if (m) bannerScreenShown(m);

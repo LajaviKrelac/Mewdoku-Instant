@@ -1114,3 +1114,109 @@ test('Phase 2e: the result card (a paid place, ×2) fits inside its dialog at 32
     await expect(card.locator('button.ladder-result__collect')).toBeInViewport();
   }
 });
+
+/**
+ * Audit B1: the daily victory on a streak's day 7 carries the most lines of any victory (Solved, the stats, "Next
+ * puzzle", the streak row with its reward line, the points and the fish pill). At 320 × 568 every line must sit above
+ * the sticky Done (fit step 4 with the banner band), in English and German, on the records path and with the ranking's
+ * "Your total".
+ */
+test('Phase 2e (audit B1): the daily victory on a streak\'s day 7 at 320 × 568 — every line above Done, nothing to scroll (en, de; records and ranking)', async ({ page }, info) => {
+  test.skip(info.project.name !== 'web-320', 'the small phone');
+  test.setTimeout(180_000);
+  const ladder = await ladderUp();
+  const DAY = 86_400_000;
+  // With the banner band (ads=ok) the content needs fit step 4 (it ran under Done before the fix); without it, step 3.
+  const runs: (readonly ['records' | 'ranking', 'ok' | 'unsupported', 'en' | 'de'])[] = [
+    ['records', 'ok', 'en'],
+    ['records', 'ok', 'de'],
+    ['records', 'unsupported', 'de'],
+    ...(ladder ? ([['ranking', 'ok', 'en'], ['ranking', 'ok', 'de']] as const) : []),
+  ];
+  for (const [path, ads, locale] of runs) {
+    const label = `${path} ${locale} ads=${ads}`;
+    const now = Date.now();
+    const base = veteranSave(30); // the daily is unlocked after level 21
+    const save: SaveData = {
+      ...base,
+      settings: { ...base.settings, locale },
+      // six days in a row up to yesterday: today's first win is the cycle's day 7 (its reward)
+      dayStreak: { dates: [6, 5, 4, 3, 2, 1].map((d) => localKey(now - d * DAY)), run: 6, best: 6, paid: [] },
+    };
+    await page.goto(path === 'records' ? `/?ads=${ads}&flags=-ladder` : `/?ads=${ads}&ladderPool=${newPool('b1v')}`);
+    await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen !== 'boot');
+    await page.evaluate((json) => (window as TestWindow).__mewdoku?.seedSave(json), JSON.stringify(save));
+    await page.reload();
+    await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');
+    if (path === 'ranking') await page.waitForFunction(() => (window as TestWindow).__mewdoku?.ladder?.()?.signedIn === true, undefined, { timeout: 15_000 });
+    await page.locator('.daily-card').click();
+    await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
+    if (path === 'ranking') await page.waitForTimeout(5_000); // past the server's soft solve floor
+    await page.evaluate(() => (window as TestWindow).__mewdoku?.solve());
+    const panel = page.locator('.overlay[data-overlay="ranking"]');
+    await expect(panel.locator('.ranking__tap')).toBeEnabled({ timeout: 20_000 });
+    await panel.locator('.ranking__tap').click();
+    const victory = page.locator('.overlay[data-overlay="victory"]');
+    await expect(victory.locator('.victory')).toHaveAttribute('data-variant', 'daily', { timeout: 6_000 });
+    await expect(victory.locator('.victory__streak')).toHaveAttribute('data-day', '7');
+    await expect(victory.locator('.victory__streak-reward')).toBeVisible();
+    await expect(victory.locator('.victory__kept')).toBeVisible();
+    await page.waitForTimeout(900); // the button delay and the fit's second frame
+    const r = await page.evaluate(() => {
+      const scroller = document.querySelector('.overlay[data-overlay="victory"]') as HTMLElement;
+      const actions = (scroller.querySelector('.victory__actions') as HTMLElement).getBoundingClientRect();
+      const out: string[] = [];
+      for (const sel of ['.victory__praise', '.victory__sub', '.victory__daily', '.victory__daily-reward', '.victory__streak', '.victory__streak-reward', '.victory__points', '.victory__kept']) {
+        const el = scroller.querySelector<HTMLElement>(sel);
+        if (!el || el.closest('[hidden]')) continue;
+        const b = el.getBoundingClientRect();
+        if (b.height === 0) continue;
+        if (b.bottom > actions.top + 0.5) out.push(`${sel} ends at ${b.bottom.toFixed(1)}, under Done's footer (from ${actions.top.toFixed(1)})`);
+        if (b.top < -0.5) out.push(`${sel} starts above the screen (${b.top.toFixed(1)})`);
+      }
+      return { out, overflow: scroller.scrollHeight - scroller.clientHeight, fit: scroller.querySelector('.victory')?.getAttribute('data-fit') ?? null };
+    });
+    expect(r.out, `${label} (fit ${r.fit})`).toEqual([]);
+    expect(r.overflow, `${label}: content taller than the screen (fit ${r.fit})`).toBeLessThanOrEqual(1);
+    await expect(victory.locator('.victory__primary')).toBeInViewport({ ratio: 1 });
+    await noHorizontalOverflow(page);
+  }
+});
+
+/**
+ * Found while checking audit B1: with reduced motion every property transitions for 150 ms (fx.css), so fit() measured
+ * each step before its sizes applied and ran to its last step (or, before step 4, left the content under Done). It now
+ * measures with transitions off: the level victory on a streak's day 7 at 320 × 568 keeps its (smaller) hero and fits.
+ */
+test('Phase 2e (fix lead): reduced motion — the victory fit measures each step at once (day 7 at 320 × 568 keeps a smaller hero, nothing under Done)', async ({ page }, info) => {
+  test.skip(info.project.name !== 'web-320', 'the small phone');
+  test.setTimeout(90_000);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const now = Date.now();
+  const base = veteranSave(30);
+  const save: SaveData = { ...base, dayStreak: { dates: [6, 5, 4, 3, 2, 1].map((d) => localKey(now - d * 86_400_000)), run: 6, best: 6, paid: [] } };
+  await page.goto('/?ads=unsupported&flags=-ladder');
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen !== 'boot');
+  await page.evaluate((json) => (window as TestWindow).__mewdoku?.seedSave(json), JSON.stringify(save));
+  await page.reload();
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');
+  await expect(page.locator('[data-motion="reduced"]').first()).toBeAttached();
+  await page.locator('.home__play').click();
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
+  await page.evaluate(() => (window as TestWindow).__mewdoku?.solve());
+  await page.locator('.overlay[data-overlay="ranking"] .ranking__tap').click({ timeout: 20_000 });
+  const victory = page.locator('.overlay[data-overlay="victory"]');
+  await expect(victory.locator('.victory__streak')).toHaveAttribute('data-day', '7', { timeout: 6_000 });
+  await page.waitForTimeout(900);
+  const r = await page.evaluate(() => {
+    const sc = document.querySelector('.overlay[data-overlay="victory"]') as HTMLElement;
+    const root = sc.querySelector('.victory') as HTMLElement;
+    const actions = (sc.querySelector('.victory__actions') as HTMLElement).getBoundingClientRect();
+    const kept = (sc.querySelector('.victory__kept') as HTMLElement).getBoundingClientRect();
+    return { fit: Number(root.dataset.fit ?? '0'), stage: getComputedStyle(sc.querySelector('.victory__stage') as Element).display, overflow: sc.scrollHeight - sc.clientHeight, gap: actions.top - kept.bottom };
+  });
+  expect(r.fit, 'a compaction step before the last one fits').toBeLessThan(4);
+  expect(r.stage).not.toBe('none');
+  expect(r.overflow).toBeLessThanOrEqual(1);
+  expect(r.gap, 'the fish pill above Done').toBeGreaterThanOrEqual(0);
+});

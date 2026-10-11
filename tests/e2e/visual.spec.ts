@@ -448,8 +448,9 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
     await shot(page, 'score-winflow');
     // Critic C10: a running "+3" sits inside the period counter, never over the bar's columns.
     const label = page.locator('.pills .period-pill__label');
-    if (await label.count()) {
-      const lb = (await label.boundingBox()) as { y: number; height: number };
+    // The label is transient: measured once, null when it has already gone (it may leave between a count and a measure).
+    const lb = (await label.count()) ? await label.boundingBox() : null;
+    if (lb) {
       const pills = (await hud(page)).pills as Box;
       expect(lb.y).toBeGreaterThanOrEqual(pills.top - 8);
     }
@@ -1274,7 +1275,7 @@ test.describe('Phase 2e (G3): the ranking views in the real app (route fake; spe
       });
     });
 
-    test(`[${v.id}] alone in a new bracket: my row only and "You're the only player in this ranking so far." (H-2, C-4)`, async ({ browser, page }, info) => {
+    test(`[${v.id}] alone in a new bracket: my row only and "You're the only player in this ranking." (H-2, C-4)`, async ({ browser, page }, info) => {
       test.skip(v.id === '402', 'the project sizes and de / ar only');
       await onVariant(browser, page, info, v, async (p, suffix) => {
         await openRanked(p, returning(), { members: 0, myPoints: 0 });
@@ -1293,7 +1294,7 @@ test.describe('Phase 2e (G3): the ranking views in the real app (route fake; spe
         await expect(list.locator('ol.rank-rows > li.rank-row[data-me="1"]')).toHaveAttribute('data-rank', '1');
         await expect(list.locator('.ranking__alone')).toBeVisible();
         if (!v.lang) {
-          await expect(list.locator('.ranking__alone')).toHaveText("You're the only player in this ranking so far.");
+          await expect(list.locator('.ranking__alone')).toHaveText("You're the only player in this ranking.");
           await expect(list.locator('.ranking__count')).toHaveText('1 player');
           await expect(list.locator('.ranking__rewards')).toHaveText('Rewards need at least 5 players in this ranking.');
         }

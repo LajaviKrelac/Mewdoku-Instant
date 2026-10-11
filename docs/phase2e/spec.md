@@ -743,7 +743,7 @@ tap         the victory (the streak row, §5.3) → primary → the interstitial
 ```
 
 - **Rows** are exactly the server's rows in its order with its ranks (H-3); `ladder.panelRows` 0 lists all of them in a scroll list (P-L15). Places 1–3 carry our medal **and** their number. My row is highlighted (`--accent-soft`) with a "You" tag; on open the list scrolls so my row is in the middle; when I scroll it away, a copy pins to the bottom of the list (`aria-hidden`; the real row stays in the list). Queued fish show on my row as a "+2 waiting" chip, and my rank stays the server's last one.
-- **Not full:** exactly its members; "37 players" is the server's `members`; alone: my row and the line `ladder.alone` ("You're the only player in this ranking so far." — critic pass: the first draft added "More players join as they solve puzzles", which is false once the 2 h join window has closed). Never a placeholder (H-2).
+- **Not full:** exactly its members; "37 players" is the server's `members`; alone: my row and the line `ladder.alone` ("You're the only player in this ranking." — critic pass: the first draft added "More players join as they solve puzzles", which is false once the 2 h join window has closed; audit B14 then dropped the critic pass's "so far" for the same reason). Never a placeholder (H-2).
 - **Copy follows the server's rules, never constants** (critic pass): the rewards lines name the number of paid places from `rules.places.length` ("The top 3 …", or "First place …" when only one place pays; Appendix A's `.one` / `.other` keys), the minimum from `rules.minMembers`, the ×2 line only with `rules.doubleByVideo`; the info view's window line from `rules.periodMode` and `durationMs`. A server key change never leaves stale copy.
 - **Names:** our English words in every locale, rendered with `textContent` and `dir="auto"` on `.rank-row__name` (bidi isolation in RTL rows; interpolated names already get first-strong isolates from `t()`).
 - **Countdown:** "Ends in 7 h 48 min" from `formatDuration(endsAt − serverNow)`, refreshed every `ladder.countdownTickMs`, never announced; "Ends in less than a minute" in the last minute; "Final results" at or after `endsAt`.
@@ -794,7 +794,7 @@ No Ads keeps rewarded videos (opt-in), so ×2 stays for No Ads owners. Without r
 ### 2.7 Name, picture, Settings
 
 - **Name and picture:** the server generates both at the first session (§1.8); the first-panel line tells the player (§2.4). **Edit** in Settings → "Ranking name" or the pencil on my row in the sheet: the overlay **`nickname`** — a preview row, the avatar grid (a radio group of 12), two pickers (first word, second word) and the number, Shuffle, Save, Cancel. Save → `PUT /v1/me/profile`: ok → toast `nick.saved`, `save.ladder.nick` / `avatar` updated; 409 cooldown → "You can change your name again {time}"; 422 → `nick.rejected`, the sheet stays; offline → Save disabled with `nick.offline`.
-- **Settings → "Worldwide ranking"** (FB with the ladder active, or web anon): "Ranking name" (opens the sheet), "Show me in rankings" (a switch; P-L14), "Delete my ranking data" (a confirm dialog), and the player code as plain text ("Player code 7KQ2-M9XD"; needed for email deletion requests).
+- **Settings → "Daily ranking"** (titled "Worldwide ranking" until audit B14; FB with the ladder active, or web anon): "Ranking name" (opens the sheet), "Show me in rankings" (a switch; P-L14), "Delete my ranking data" (a confirm dialog), and the player code as plain text ("Player code 7KQ2-M9XD"; needed for email deletion requests).
 - **Show me in rankings off:** `PUT /v1/me/profile {listed: false}` → my rows in open brackets are hidden; nothing is submitted; the panel and sheet show the records with `ladder.optedOut`; the chip shows "off"; queued wins stay on the device (sent if switched on again within their 24 h). **On again:** `{listed: true}`; I join a bracket with my next counted win. Offline: the switch and Delete are disabled with the line `settings.ladder.offline` (both need the server's answer).
 - **Delete:** `DELETE /v1/me` → toast `settings.ladder.deleted`; the local ladder fields reset (queue, cache, ledgers keep only what prevents a double grant: `claimed` stays); the client signs out and the player becomes not listed. Rejoining later creates a fresh player with a new code and a new name (the server seeds the generated name with the key and the creation time; requests-G1 R3).
 - **Not listed at boot** (as built, requests-G1 R7): a player who is not listed never signs in at boot (a sign-in would re-create a deleted player on the server); the Settings rows stay (with the name row hidden while there is no player) so "Show me in rankings" can be switched on again, and switching it on signs in.
@@ -1482,6 +1482,24 @@ An independent critic checked this spec and [CONTRACTS](CONTRACTS.md) against th
 
 ---
 
+
+## 13a. Audit fix round (fix lead, 2026-10-11, after integration)
+
+Two independent audits; the full verdict list and the numbers are in [STATUS-2e](STATUS-2e.md) §10. What changed the spec's behaviour (each row has a test that fails without it):
+
+| Where | Change |
+|---|---|
+| §1.5, §1.9 (wins) | A wins request never answers a final verdict for a win it did not store: unplaced wins (a burst of first wins in one pool) are tried again (≤ 8 places), else the request answers `503 unavailable` with `retryAfterMs` and the client keeps its queue. Every wins batch carries the player's wins token (`players.wtok`), so a player racing itself cannot pass the bracket cap or spend the play-time budget twice |
+| §1.9.2 (past the table) | A win for a puzzle past the solution table counts only with a size the table's tail shows, and (levels) for a player whose verified baseline is within `antiCheat.maxLevelJump` of it; a first win can never be a made-up id past the table |
+| §1.14 (stats) | The hourly rollup moves its watermark in the same batch as its sums, guarded by the value it read (no double count) |
+| §1.16, D-2e-5 | `web.mode` defaults to `records`; production runs the anonymous web pool only with `WEB_MODE=anon` |
+| §2.3, §2.4, H-4 | The panel's and the victory's total is the server's; fish still queued follow as "+3 waiting" (never added in) |
+| §2.4, §7.7 | The header's dot is read as a comma; my row's name says "+2 waiting"; a name's number keeps to its word |
+| §2.7 | The Settings group is titled "Daily ranking" (the feature's one name); below 360 px the player's name has its own line; "Delete" is drawn in the danger red, Cancel is the primary |
+| Appendix A | `ladder.alone` = "You're the only player in this ranking." (no "so far") |
+| §6 / victory | A 4th fit step (no hero art) for the daily on a streak's day 7 with the banner band at 320 × 568; the fit measures with transitions off |
+| §7.9 (load) | START at the board's own entry end (`entryEndMs(n)`, ≤ `fx.boardEntryMs`): a first run takes input at 4.21 s (it was 4.54 s, measured to "accepts input") |
+
 ## Appendix A. English strings (ours; G3 adds them at S0 in `src/i18n/en/ui-2e.ts`)
 
 ```ts
@@ -1497,7 +1515,7 @@ An independent critic checked this spec and [CONTRACTS](CONTRACTS.md) against th
 'ladder.rewards.line.one': 'First place wins hints and kitties.',
 'ladder.rewards.line.other': 'The top {count} win hints and kitties.',
 'ladder.rewards.min': 'Rewards need at least {count} players in this ranking.',
-'ladder.alone': "You're the only player in this ranking so far.",   // critic pass: no promise that others will join
+'ladder.alone': "You're the only player in this ranking.",   // critic pass: no promise that others will join (audit B14: no "so far")
 'ladder.waiting': '+{count} waiting',
 'ladder.offline': "You're offline. We'll try to send your fish when you're back online.",   // critic pass: H-4, no promise
 'ladder.stale': 'Last updated {time}',
@@ -1539,7 +1557,7 @@ An independent critic checked this spec and [CONTRACTS](CONTRACTS.md) against th
 'ladder.result.tooFew': 'Not enough players took part for rewards this time.',
 'ladder.collect': 'Collect',
 'ladder.collectDouble': 'Collect ×2',
-'ladder.collectDouble.a11y': 'Watch a video to collect twice the reward',
+// 'ladder.collectDouble.a11y' removed (audit B12, B13): ×2 is named by its visible label and described by the visible line ladder.info.double
 'ladder.claimed': 'Collected!',
 'ladder.claim.error': "Couldn't collect right now. We'll keep your reward for a few days.",
 // Ranking name and picture
@@ -1559,7 +1577,7 @@ An independent critic checked this spec and [CONTRACTS](CONTRACTS.md) against th
 'nick.first.line': 'This is you in the ranking: {name}. You can change your name and picture in Settings.',
 'nick.avatar.a11y': 'Picture {index} of {count}',
 // Settings
-'settings.ladder.title': 'Worldwide ranking',
+// 'settings.ladder.title' removed (audit B14): the Settings group is titled rank.title.period.day ("Daily ranking"), the feature's one name
 'settings.ladder.name': 'Ranking name',
 'settings.ladder.join': 'Show me in rankings',
 'settings.ladder.code': 'Player code {code}',
@@ -1577,10 +1595,10 @@ An independent critic checked this spec and [CONTRACTS](CONTRACTS.md) against th
 'rewarded.body.buy.hint': 'Watch a short video for 1 hint, or buy a Bulb Bundle.',
 'rewarded.body.buy.kitty': 'Watch a short video for 1 kitty, or buy a Kitty Basket.',
 'rewarded.buy.label': 'Buy {items} · {price}',
-'rewarded.buy.a11y': 'Buy {name}, {items}, {price}',
+// 'rewarded.buy.a11y' removed (audit B12, WCAG 2.5.3): a Buy row's name starts with its visible label ("Buy 15 hints · $1.99, Bulb Bundle")
 'rewarded.buy.noAds.label': 'Buy No Ads · {price}',
 'rewarded.buy.noAds.note': 'Removes banners and full-screen ads. Videos for helpers stay.',
-'rewarded.buy.noAds.a11y': 'Buy No Ads, {price}. Removes banners and full-screen ads. Videos for helpers stay.',
+// 'rewarded.buy.noAds.a11y' removed (audit B12): the row's name is its label and its line ("Buy No Ads · $3.99. Removes banners …")
 'rewarded.buy.loading': 'Getting the price…',
 // Daily streak
 'streak.day': 'Day {day} of {total}',

@@ -17,7 +17,8 @@
 //   always (Phase 2e, lead; docs/phase2e/spec.md §10.6 #4, H-2): honestyProblems() on the English — no invented
 //              statistic ("players online", "most players" …), no literal player count ("{count} players" only in the
 //              keys the server's number or rule fills), no literal "top 3" / "7 days" in the ranking and streak copy
-//              (the counts come from rules.places and dayStreak.cycleDays), no urgency, no promise that queued fish count.
+//              (the counts come from rules.places and dayStreak.cycleDays), no urgency, no promise that queued fish count
+//              (urgency and promises in every key since audit A-H2), and no urgency word of URGENCY_WORDS in a locale draft.
 // Options: --quiet (no warnings), --locale <id> (check one catalogue), --write-drafted-from (record
 // the current English of every key a catalogue translates, after a translation pass).
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -303,7 +304,9 @@ export const PLAYER_COUNT_KEYS: readonly string[] = [
  * Phase 2e honesty (spec §10.6 #4, H-2, H-4, §5.1), on the English (the source of every catalogue): an error per
  * value that claims a statistic the server does not provide, names a player count outside PLAYER_COUNT_KEYS (or a
  * literal number of players anywhere), hard-codes "top 3" or "7 days" in the ranking and streak copy, presses with
- * urgency, or promises that a queued win will count.
+ * urgency, or promises that a queued win will count. Audit A-H2: urgency and promises are checked in EVERY key (the
+ * rewarded video, the shop, any later copy), not only the ranking and streak keys; the locale drafts get their own
+ * urgency check (localeHonestyProblems).
  */
 export function honestyProblems(source: Strings = en): string[] {
   const out: string[] = [];
@@ -315,9 +318,50 @@ export function honestyProblems(source: Strings = en): string[] {
     if (/\{\w+\}\s+(?:other\s+)?players?\b/i.test(v) && !allowed.has(k)) out.push(`honesty: ${k} shows a player count outside the server-fed keys ("${v}")`);
     if (/^(?:ladder|rank|streak|howto\.streak|victory\.streak|victory\.daily)/.test(k)) {
       if (/\btop\s+(?:3|three)\b|\b(?:7|seven)\s+days?\b/i.test(v)) out.push(`honesty: ${k} hard-codes a rule ("${v}"): use the rules' placeholder`);
-      if (/hurry|don't lose|lose your streak|last chance|before it'?s too late/i.test(v)) out.push(`honesty: ${k} presses with urgency ("${v}")`);
-      if (/will be (?:sent|counted)|will count|guaranteed/i.test(v)) out.push(`honesty: ${k} promises what the server decides ("${v}")`);
     }
+    if (URGENCY_EN.test(v)) out.push(`honesty: ${k} presses with urgency ("${v}")`);
+    if (/will be (?:sent|counted)|will count|guaranteed/i.test(v)) out.push(`honesty: ${k} promises what the server decides ("${v}")`);
+  }
+  return out;
+}
+
+/** English urgency (spec §5.1: no urgency anywhere; audit A-H2). */
+const URGENCY_EN = /\bhurry\b|don't lose|lose your streak|last chance|before it'?s too late|\bact now\b|\bonly today\b|\bexpires? soon\b|\bdon't miss\b/i;
+
+/**
+ * Audit A-H2: urgency words per locale, for the AI drafts (spec §5.1; the English rule above does not see them). Plain
+ * substrings of the pressing phrases ("hurry", "last chance", "don't lose / miss", "before it's too late"), chosen so
+ * the shipped drafts' calm copy never matches; a hit fails `npm run i18n:check` and goes to the human review.
+ */
+export const URGENCY_WORDS: Readonly<Partial<Record<LocaleId, readonly string[]>>> = {
+  // (not the bare 'أسرع': it is also "the fastest", rank.title.daily)
+  ar: ['سارع', 'أسرع الآن', 'فرصة أخيرة', 'الفرصة الأخيرة', 'لا تفقد', 'لا تفوت', 'قبل فوات الأوان'],
+  de: ['beeil', 'letzte chance', 'verlier nicht', 'verpass nicht', 'bevor es zu spät'],
+  es: ['date prisa', 'apúrate', 'última oportunidad', 'no pierdas', 'no te pierdas', 'antes de que sea tarde'],
+  fr: ['dépêche', 'dernière chance', 'ne perds pas', 'ne rate pas', 'avant qu’il ne soit trop tard', "avant qu'il ne soit trop tard"],
+  hi: ['जल्दी करें', 'जल्दी करो', 'आखिरी मौका', 'आख़िरी मौका', 'मत खोएं', 'मत खोइए', 'देर हो जाए'],
+  id: ['buruan', 'cepatlah', 'kesempatan terakhir', 'jangan sampai kehilangan', 'jangan lewatkan', 'sebelum terlambat'],
+  it: ['sbrigati', 'affrettati', 'ultima occasione', 'ultima possibilità', 'non perdere', 'prima che sia troppo tardi'],
+  ja: ['急いで', '最後のチャンス', '失わないで', '見逃さないで', '手遅れ'],
+  ko: ['서두르', '마지막 기회', '잃지 마', '놓치지 마', '늦기 전에'],
+  pl: ['pospiesz', 'ostatnia szansa', 'nie strać', 'nie przegap', 'zanim będzie za późno'],
+  'pt-BR': ['corra', 'apresse', 'última chance', 'não perca', 'antes que seja tarde'],
+  ru: ['скорее', 'поторопи', 'последний шанс', 'не потеряй', 'не упусти', 'пока не поздно'],
+  th: ['รีบ', 'โอกาสสุดท้าย', 'อย่าพลาด', 'ก่อนจะสายเกินไป'],
+  tr: ['acele et', 'son şans', 'kaybetme', 'kaçırma', 'çok geç olmadan'],
+  vi: ['nhanh lên', 'cơ hội cuối', 'đừng để mất', 'đừng bỏ lỡ', 'trước khi quá muộn'],
+  'zh-Hans': ['赶快', '快点', '最后机会', '别错过', '不要错过', '不要失去', '为时已晚'],
+};
+
+/** Audit A-H2: a locale draft's urgency, per URGENCY_WORDS (case-insensitive substrings). */
+export function localeHonestyProblems(locale: LocaleId, catalog: Strings): string[] {
+  const words = URGENCY_WORDS[locale] ?? [];
+  const out: string[] = [];
+  for (const [k, v] of Object.entries(catalog)) {
+    if (typeof v !== 'string') continue;
+    const low = v.toLocaleLowerCase(locale);
+    const hit = words.find((w) => low.includes(w.toLocaleLowerCase(locale)));
+    if (hit !== undefined) out.push(`honesty: ${locale}: ${k} presses with urgency ("${hit}" in "${v}")`);
   }
   return out;
 }
@@ -336,7 +380,7 @@ async function main(argv: readonly string[]): Promise<number> {
   for (const [id, cat] of Object.entries(catalogs) as [LocaleId, Strings][]) {
     if (only && id !== only) continue;
     const r = checkCatalog(id, cat, { draftedFrom });
-    problems.push(...r.errors);
+    problems.push(...r.errors, ...localeHonestyProblems(id, cat));
     warningCount += r.warnings.length;
     if (!quiet) for (const w of r.warnings) console.warn(`i18n-check: warning: ${w}`);
   }

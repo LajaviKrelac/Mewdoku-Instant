@@ -105,8 +105,13 @@ export interface LadderFlow {
   onWin(win: LadderWinRef): void;
   /** The post-win panel's list for the current win; null = not the ladder's (the records path). */
   listState(): RankingListState | null;
-  /** The panel subtitle ("+2 fish · Your total: 14"): the server's total, or my estimate while unanswered. */
+  /**
+   * The panel subtitle's and the victory's total ("+2 fish · Your total: 14"): the server's, from this win's answer,
+   * else its last known one (audit B9 / A-H1, H-4: queued fish are never added in; see panelWaiting).
+   */
   panelTotal(): number;
+  /** Fish waiting to be sent (the queue; the "+3 waiting" my row shows), shown after the total; 0 = none. */
+  panelWaiting(): number;
   /** The panel's extra props: the bracket list factory, hearts and the info button. */
   panelExtras(): { bracketList?: BracketListFactory; onHeart(slot: number): void; onInfo(): void };
   /** My bracket's points before this win (the period counter's before value), else 0. */
@@ -1041,7 +1046,10 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
     panelTotal() {
       const view = win?.view;
       if (win?.state === 'answered' && view?.me) return view.me.points;
-      return counterOf(save().ladder, clock.now()) + (win?.ref.kept ?? 0);
+      return counterOf(save().ladder, clock.now());
+    },
+    panelWaiting() {
+      return waitingFish(save().ladder);
     },
     panelExtras() {
       return {

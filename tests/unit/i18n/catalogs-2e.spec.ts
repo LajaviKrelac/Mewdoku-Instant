@@ -6,7 +6,7 @@
 // every purchase button starts with the language's word for "Buy"; the width limits are noted for
 // translators; the word lists are ours, plain, unique and append-only from the CONTRACTS starters.
 import { describe, expect, it } from 'vitest';
-import { cfg } from '../../../src/app/config';
+import { cfg, type LocaleId } from '../../../src/app/config';
 import { en, EN_PARTS } from '../../../src/i18n/en';
 import { displayWidth, META, sampleText } from '../../../src/i18n/meta';
 import { NICK_WORDS_V1, RETIRED_V1 } from '../../../src/shared/nick-words';
@@ -19,8 +19,8 @@ const CATALOGS = await loadCatalogs();
 
 describe('Phase 2e English (Appendix A, ours)', () => {
   it('the keys live in en/ui-2e.ts (first load) and en/lazy.ts (enLazyUi2e) and read as specified', () => {
-    expect(KEYS.length).toBeGreaterThanOrEqual(110);
-    expect(E2['ladder.alone']).toBe("You're the only player in this ranking so far.");
+    expect(KEYS.length).toBeGreaterThanOrEqual(105); // 110 until the audit fix round removed four unused keys
+    expect(E2['ladder.alone']).toBe("You're the only player in this ranking."); // audit B14: no "so far"
     expect(E2['ladder.offline']).toBe("You're offline. We'll try to send your fish when you're back online.");
     expect(E2['rewarded.buy.label']).toBe('Buy {items} · {price}');
     expect(E2['rewarded.buy.noAds.note']).toBe('Removes banners and full-screen ads. Videos for helpers stay.');
@@ -151,5 +151,23 @@ describe('i18n-check honestyProblems (spec §10.6 #4)', () => {
     };
     const problems = honestyProblems(bad);
     for (const k of Object.keys(bad)) expect(problems.some((p) => p.includes(` ${k} `)), k).toBe(true);
+  });
+
+  it('[audit A-H2] urgency and promises in any key (the rewarded video, the shop), and urgency words in the locale drafts', async () => {
+    const { honestyProblems, localeHonestyProblems, URGENCY_WORDS } = await import('../../../scripts/i18n-check');
+    const bad: Record<string, string> = {
+      'rewarded.body.hint': 'Hurry: watch a video before it is gone',
+      'shop.product.hints_15.desc': 'Last chance: 15 hints',
+      'rewarded.buy.noAds.note': 'Your next reward will count twice',
+    };
+    const problems = honestyProblems(bad);
+    for (const k of Object.keys(bad)) expect(problems.some((p) => p.includes(` ${k} `)), k).toBe(true);
+    // every draft catalogue has a word list, and the shipped drafts pass it
+    for (const id of cfg.i18n.locales) if (id !== 'en') expect(URGENCY_WORDS[id]?.length ?? 0, id).toBeGreaterThan(0);
+    const drafts = await loadCatalogs();
+    for (const [id, cat] of Object.entries(drafts)) expect(localeHonestyProblems(id as LocaleId, cat as Record<string, string>), id).toEqual([]);
+    expect(localeHonestyProblems('de', { 'rewarded.body.hint': 'Beeil dich: nur heute!' })).toHaveLength(1);
+    expect(localeHonestyProblems('fr', { 'streak.next': 'Dernière chance pour ta série' })).toHaveLength(1);
+    expect(localeHonestyProblems('ar', { 'rank.title.daily': 'الأسرع اليوم' })).toEqual([]); // "the fastest", not "hurry"
   });
 });

@@ -85,6 +85,8 @@ describe('the win is queued with the win (spec §2.3, critic C-25)', () => {
     expect(critical?.ladder.pending[0]).toMatchObject({ source: 'pack', fish: 3, contentVersion: 'content-test', cats: '02413' });
     await s.h.settle(s.h.config.fx.winOverlayDelayMs);
     expect(s.h.router.props.ranking?.list).toEqual({ kind: 'loading' });
+    // audit B9 / A-H1 (H-4): unanswered, the total is the server's (none yet) and the queued fish wait apart
+    expect(s.h.router.props.ranking?.result).toEqual({ kind: 'ladder', gained: 3, total: 0, waiting: 3 });
     s.fake().hold = false;
     s.fake().release();
     await drain();
@@ -96,14 +98,14 @@ describe('the win is queued with the win (spec §2.3, critic C-25)', () => {
       [1, 'Sleepy Whisker 27', 31],
       [2, 'Velvet Pounce 27', 3],
     ]);
-    expect(props?.result).toEqual({ kind: 'ladder', gained: 3, total: 3 });
+    expect(props?.result).toEqual({ kind: 'ladder', gained: 3, total: 3, waiting: 0 });
     expect(s.h.save().ladder.pending).toEqual([]);
     // requests-G3 R4: the counter names my bracket's fish, and so does the victory's kept-fish row.
     const g = s.h.router.game;
     expect(g?.counterKinds.filter((k) => k !== undefined)).toEqual(['ladder']);
     expect(g?.counters[0]).toBe(0); // my bracket's points before this win (none yet)
     await tapRanking(s.h);
-    expect(s.h.router.props.victory?.kept).toEqual({ fish: 3, max: 3, gained: 3, total: 3, kind: 'ladder' });
+    expect(s.h.router.props.victory?.kept).toEqual({ fish: 3, max: 3, gained: 3, total: 3, kind: 'ladder', waiting: 0 });
   });
 
   it('the ladder not active (not listed): the counter and the victory keep this week\'s records (no ladder kind)', async () => {

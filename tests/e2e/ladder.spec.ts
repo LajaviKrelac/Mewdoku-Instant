@@ -60,12 +60,13 @@ const bracketList = (page: Page) => panel(page).locator('.rank-list[data-kind="b
 /** The server's rows only (the pinned copy of my row is aria-hidden and not counted). */
 const rows = (page: Page) => bracketList(page).locator('ol.rank-rows > li.rank-row');
 
+/** The rows as shown; a name's no-break space before its number (audit B7, display only) reads as the server's space. */
 async function rowTexts(page: Page): Promise<{ rank: string | null; me: string | null; name: string; points: string }[]> {
   return rows(page).evaluateAll((els) =>
     els.map((el) => ({
       rank: el.getAttribute('data-rank'),
       me: el.getAttribute('data-me'),
-      name: el.querySelector('.rank-row__name')?.textContent?.trim() ?? '',
+      name: el.querySelector('.rank-row__name')?.textContent?.replace(/\u00A0/g, ' ').trim() ?? '',
       points: el.querySelector('.rank-row__points')?.textContent?.replace(/\D+/g, '') ?? '',
     })),
   );
@@ -131,7 +132,7 @@ test('alone in a bracket: one row (mine) and the alone line, no placeholder rows
   await expect(bracketList(page)).toBeVisible({ timeout: 15_000 });
   await expect(rows(page)).toHaveCount(1);
   await expect(rows(page).first()).toHaveAttribute('data-me', '1');
-  await expect(panel(page).locator('.ranking__alone')).toHaveText("You're the only player in this ranking so far.");
+  await expect(panel(page).locator('.ranking__alone')).toHaveText("You're the only player in this ranking.");
 });
 
 test('a heart on another row: +1 and pressed at once, kept by the server (a reload shows it pressed)', async ({ page }) => {
@@ -178,7 +179,7 @@ test('the Home chip shows my rank and fish; it opens the sheet with the same row
   const sheet = page.locator('.overlay[data-overlay="ladder"]');
   await expect(sheet).toBeVisible();
   const sheetRows = await sheet.locator('ol.rank-rows > li.rank-row').evaluateAll((els) =>
-    els.map((el) => ({ rank: el.getAttribute('data-rank'), name: el.querySelector('.rank-row__name')?.textContent?.trim() ?? '' })),
+    els.map((el) => ({ rank: el.getAttribute('data-rank'), name: el.querySelector('.rank-row__name')?.textContent?.replace(/\u00A0/g, ' ').trim() ?? '' })),
   );
   expect(sheetRows).toEqual(panelRows.map((r) => ({ rank: r.rank, name: r.name })));
 });
@@ -325,7 +326,7 @@ test('a 2-player ranking ends with me first: "Not enough players took part for r
   expect(await stock(page)).toEqual(before);
 });
 
-/** Home → Settings (the "Worldwide ranking" rows once signed in). */
+/** Home → Settings (the "Daily ranking" rows once signed in). */
 async function openSettings(page: Page): Promise<void> {
   await page.locator('.screen--home').getByRole('button', { name: 'Settings' }).click();
   await expect(page.locator('[data-overlay="settings"] .settings__ladder')).toBeVisible({ timeout: 10_000 });

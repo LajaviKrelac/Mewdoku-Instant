@@ -22,6 +22,8 @@ export const enUi2e = {
   'ladder.sub.other': '+{count} fish · Your total: {total}',
   // The victory's kept-fish row and the in-game counter while the ranking is active (G3, beyond Appendix A).
   'ladder.total': 'Your total: {total}',
+  // Queued fish (my row's chip; audit B9 / A-H1: also after the total on the panel and the victory while unanswered).
+  'ladder.waiting': '+{count} waiting',
   'ladder.pill.one': '{count} fish in the daily ranking',
   'ladder.pill.other': '{count} fish in the daily ranking',
   'ladder.claimed': 'Collected!',

@@ -696,7 +696,7 @@ export type RankingListState =
 // The records kind widens its reason: 'local' | 'unavailable' | 'opted_out' | 'paused'.
 export type RankingResultView =
   | /* … */
-  | { readonly kind: 'ladder'; readonly gained: number; readonly total: number };   // "+2 fish · Your total: 14"
+  | { readonly kind: 'ladder'; readonly gained: number; readonly total: number; readonly waiting?: number };   // "+2 fish · Your total: 14" (audit B9: "· +2 waiting" while queued)
 export interface RankingPanelProps {
   /* … */
   onHeart?(slot: number): void;               // optional until I-3
@@ -919,4 +919,27 @@ All additive unless marked; every row is in the code and covered by `npx tsc --n
 | `scripts/size-check.ts` rows | New: `Lazy JS (ladder boot)`, `Lazy JS (overlay chunk)`, `Lazy JS (English)`, `Lazy CSS (overlay chunk)`; ceilings in 04 §9 and STATUS-2e §4 |
 | `scripts/rank-probe.ts` (`npm run probe -- --url <staging>`): `buildProbe`, `zipProbe`, `probeUrl`, `PROBE_VERSION`; `dev/rank-probe/` (`run-probe.ts`: `runProbe(deps)`, `reportText`, `signatureFacts`, `b64urlText`) | Gates G-SRV-1 / G-SRV-2 (spec §11.6) |
 | `playwright.config.ts`: `E2E_FB_APP_SECRET` (exported), the ranking dev server as a `webServer` on 8787, `E2E_LADDER_URL` | L0b |
+
+### 14.6 Audit fix round (fix lead, 2026-10-11; STATUS-2e §10)
+
+All in the code and covered by `npx tsc --noEmit`, `npx vitest run` and `npm --prefix server run verify`.
+
+| Member | Note |
+|---|---|
+| `migrations/0002_wins_token.sql`: `players.wtok TEXT NOT NULL DEFAULT ''`; `PlayerRow.wtok` | Expand-only. The wins write token (A-S3) |
+| `WriteWinsInput.cas: { expect, next }`; `WriteWinsResult.applied: boolean` | Every statement of a wins batch is guarded by `players.wtok = expect`; the player row (last) sets `next`. `applied` false: nothing of the batch was written (a concurrent request of the player, a lost join or create, my bracket stopped) |
+| `POST /v1/wins`: `503 unavailable` + `retryAfterMs` (2 000) | When the wins could not be placed in ≤ 8 tries, or 4 evaluations kept losing to the same player's other request: **never** a final verdict for an unplaced win (A-S1); the client keeps its queue (`ladder-flow.ts` already retried `unavailable`); wins this request did store answer `duplicate` with their points on the retry. No wire type changed |
+| `ContentLookup.tailSizes(mode)`; `TAIL_LEVELS` 200, `TAIL_DAILIES` 56 | A win past the table must have a size from the table's tail and (levels) a baseline within `antiCheat.maxLevelJump`; else `rejected` `bad_solution` / `bad_puzzle_id` with an `unverified` flag (A-S2) |
+| `SqlStore.writeStats(day, add, set, mark): Promise<boolean>`; `setMeta` removed | The rollup's watermark moves in the same batch as the sums, guarded by the value read (A-S6); `stats_at` is `"<ms>:<nonce>"` |
+| `DEFAULT_CONFIG.web.mode` `'records'` | Production runs the anonymous web pool only with `WEB_MODE=anon` itself (A-S5) |
+| `LadderFlow.panelWaiting()`; `panelTotal()` = the server's total only | B9 / A-H1 (H-4): queued fish are shown apart, never added in |
+| `RankingResultView` `'ladder'` + `waiting?`; `VictoryProps.kept.waiting?`; `selectVictoryView(…, { ladderWaiting? })`; `periodTotalText(kind, total, waiting?)`, `periodResultText(kind, gained, total, waiting?)`, `fishKeptText(kind, kept, total, waiting?)` | The panel subtitle "+3 fish · Your total: 3 · +3 waiting"; the victory's pill a second line `.victory__waiting` |
+| `bracket-list.ts`: `rowLabel(r, hearts, waiting?)`, `displayName(name)`; `.ranking__sep-sr.sr-only` | B11 (my row's name ends ", +2 waiting"), B7 (a no-break space before the name's number), B10 (the header's dot read as the list separator) |
+| `FIT_LEVELS` 4; `.victory[data-fit='4']`; `.victory[data-measuring]` | B1 (step 4: no hero art, a tighter streak row); the fit measures with transitions off (reduced motion's 150 ms transitions made every step look ineffective) |
+| `.victory__streak[data-reward]` | B6: the open chest on the victory's day 7 |
+| `session.ts` `playBoardEntry`: START at `GameScreen.playEntry()`'s returned `entryEndMs(n)` (≤ `fx.boardEntryMs`) | A-L1: as `board-types.ts` always specified; a 4 × 4 board takes input at 408 ms, not 700 |
+| English keys: removed `settings.ladder.title`, `ladder.collectDouble.a11y`, `rewarded.buy.a11y`, `rewarded.buy.noAds.a11y`; `ladder.waiting` moved to the first-load table; `ladder.alone` = "You're the only player in this ranking." | B14, B12, B9 |
+| `buyA11y(b)` starts with `buyLabel(b)`; the result card's ×2 has no `aria-label` and is described by `.ladder-result__double-note` (`ladder.info.double`) | B12, B13 (WCAG 2.5.3 label in name; the video said in words) |
+| `scripts/i18n-check.ts`: `URGENCY_WORDS`, `localeHonestyProblems(locale, catalog)`; urgency and promises checked in every English key | A-H2 |
+| `scripts/size-check.ts`: `Lazy CSS (overlay chunk)` 32 → 33.5 KB | 32.5 measured; 04 §9 |
 

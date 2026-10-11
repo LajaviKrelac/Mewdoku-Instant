@@ -123,7 +123,7 @@ describe('size-check', () => {
     // and the I-4 rows: the ladder boot chunk, the overlay chunk (JS, CSS) and the lazy English strings.
     expect([max('Lazy JS (ladder)'), max('Lazy CSS (ladder)')]).toEqual([30_500, 11_050]);
     expect([max('Lazy JS (ladder boot)'), max('Lazy JS (overlay chunk)'), max('Lazy JS (English)'), max('Lazy CSS (overlay chunk)')]).toEqual([
-      34_900, 56_200, 13_600, 32_000,
+      34_900, 56_200, 13_600, 33_500, // the overlay chunk's CSS 32 → 33.5 at the audit fix round
     ]);
     expect(FB_MAX_FILES).toBe(100);
   });
@@ -307,7 +307,7 @@ describe('size-check', () => {
       'assets/ladder-boot-Ab3_x-9Z.js': 34_900, // each at its ceiling
       'assets/overlay-chunk-Qw7-e2Rt.js': 56_200,
       'assets/en-lazy-hpVVNp3-.js': 13_600,
-      'assets/overlay-chunk-CbqOliHw.css': 32_000,
+      'assets/overlay-chunk-CbqOliHw.css': 33_500,
       'assets/events-chunk-B7w1u0ro.css': 7_000,
     });
     const r = checkSizes(d, { fb: false });
@@ -315,7 +315,7 @@ describe('size-check', () => {
     expect(row('Lazy JS (ladder boot)')).toMatchObject({ bytes: 34_900, ok: true });
     expect(row('Lazy JS (overlay chunk)')).toMatchObject({ bytes: 56_200, ok: true });
     expect(row('Lazy JS (English)')).toMatchObject({ bytes: 13_600, ok: true });
-    expect(row('Lazy CSS (overlay chunk)')).toMatchObject({ bytes: 32_000, ok: true });
+    expect(row('Lazy CSS (overlay chunk)')).toMatchObject({ bytes: 33_500, ok: true });
     // not counted twice: the core rows hold only the rest (the fake's 2-character overlay-chunk-77.js, the events sheet)
     expect(row('Lazy JS (core)')?.bytes).toBe(18_000);
     expect(row('Lazy CSS')?.bytes).toBe(7_000);
@@ -326,7 +326,7 @@ describe('size-check', () => {
       ['assets/ladder-boot-Ab3_x-9Z.js', 34_901, 'Lazy JS (ladder boot)'],
       ['assets/overlay-chunk-Qw7-e2Rt.js', 56_201, 'Lazy JS (overlay chunk)'],
       ['assets/en-lazy-hpVVNp3-.js', 13_601, 'Lazy JS (English)'],
-      ['assets/overlay-chunk-CbqOliHw.css', 32_001, 'Lazy CSS (overlay chunk)'],
+      ['assets/overlay-chunk-CbqOliHw.css', 33_501, 'Lazy CSS (overlay chunk)'],
       ['assets/events-chunk-B7w1u0ro.css', 7_201, 'Lazy CSS'],
     ] as const) {
       const o = tempDir('web');

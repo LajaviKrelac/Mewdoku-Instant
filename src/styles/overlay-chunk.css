@@ -847,6 +847,14 @@
   white-space: nowrap;
 }
 
+/* Audit B9 / A-H1: fish waiting to be sent, under the server's total (never added into it). */
+.victory__waiting {
+  display: block;
+  color: var(--accent-text);
+  font-size: var(--fs-s);
+  line-height: 1.15;
+}
+
 .victory__event {
   width: 100%;
   max-width: 320px;
@@ -943,6 +951,15 @@
 
 .overlay[data-overlay='victory'] .btn:focus-visible {
   outline-color: var(--tap-text);
+}
+
+/* fit() measures each step with transitions off (also the reduced-motion 150 ms ones of fx.css), so a step's
+   sizes apply at once. */
+.victory[data-measuring],
+.victory[data-measuring] *,
+.victory[data-measuring] *::before,
+.victory[data-measuring] *::after {
+  transition: none !important;
 }
 
 /* fit() steps (victory-screen.ts): a smaller hero while the content is taller than the screen;
@@ -1352,7 +1369,7 @@
   }
 }
 
-/* ── Settings: the "Worldwide ranking" group (spec §2.7) ── */
+/* ── Settings: the "Daily ranking" group (spec §2.7) ── */
 .settings__ladder {
   border-top: 1px solid var(--line);
 }
@@ -1382,12 +1399,52 @@
   text-overflow: ellipsis;
 }
 
-/* I-6 (lead, FINAL screenshots): a one-word label longer than its share ("Ranglistenname" at 320 px) breaks inside the
-   word (hyphenated where the language allows) instead of running under the name. */
+/* I-6 (lead), audit B2: a one-word label longer than its share breaks only where the language allows (the German
+   catalogue's soft hyphen, "Ranglisten-name"), never at an arbitrary letter (overflow-wrap: anywhere did). */
 .settings__ladder-name .btn__label {
   min-width: 0;
-  overflow-wrap: anywhere;
-  hyphens: auto;
+  overflow-wrap: break-word;
+  hyphens: manual;
+}
+
+/* Audit B2, B8: on the narrowest phones (320–359 px) the label and my name never squeeze each other: the label on its
+   line, my whole name on the next (it wraps rather than being cut), the chevron at the end of both. */
+@media (max-width: 359px) {
+  .settings__ladder-name.btn {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'label chev' 'value chev';
+    align-items: center;
+    column-gap: 8px;
+    row-gap: 2px;
+    padding-block: 8px;
+  }
+
+  .settings__ladder-name.btn > * + * {
+    margin-inline-start: 0;
+  }
+
+  .settings__ladder-name .btn__label {
+    grid-area: label;
+    justify-self: stretch;
+  }
+
+  .settings__ladder-name .settings__ladder-value {
+    grid-area: value;
+    /* at the label's side in either direction (the name's own dir="auto" would put a Latin name left in Arabic) */
+    justify-self: start;
+    max-width: none;
+    margin: 0;
+    overflow: visible;
+    white-space: normal;
+    text-overflow: clip;
+    text-align: start;
+    overflow-wrap: anywhere;
+  }
+
+  .settings__ladder-name .btn__chev {
+    grid-area: chev;
+  }
 }
 
 .settings__ladder .switch[aria-disabled='true'],
@@ -1406,6 +1463,12 @@
 
 .settings__confirm-text {
   text-align: start;
+}
+
+/* Audit B15: the irreversible Delete in the danger red on a white button (never the orange of Level N or Watch
+   video); Cancel is the primary. */
+.settings__confirm-delete.btn--secondary {
+  color: var(--danger);
 }
 
 /* The delete confirmation's title between Back and Close: one step smaller on the narrowest phones (320–359 px). */

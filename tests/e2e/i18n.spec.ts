@@ -36,6 +36,8 @@ import { catalog as ja } from '../../src/i18n/locales/ja';
 import { catalog as ru } from '../../src/i18n/locales/ru';
 import { catalog as th } from '../../src/i18n/locales/th';
 import { en } from '../../src/i18n/en';
+import { NICK_WORDS_V1 } from '../../src/shared/nick-words';
+import { ladderUp, LADDER_URL, newPool } from './helpers/rank-players';
 
 type TestWindow = Window & { __mewdoku?: E2EHooks };
 
@@ -680,6 +682,76 @@ for (const c of HINT_CASES) {
         expect(b.dir).toBe(c.rtl ? 'rtl' : 'ltr');
       }
       await shot(page, info, { name: c.name, browser: c.browser, lang: c.lang, settingsTitle: '', livesLabel: '' }, '2d1-label');
+    });
+  });
+}
+
+// ── Audit A-C1, B2, B8 (the fix lead): Settings → the ranking name row at 320 × 568, measured ──
+// The I-6 fix was only seen on a short name. Here the row carries the real (server) name, then the LONGEST name the
+// word lists can make (its text swapped in the DOM, for layout only): the label and my name never overlap, my name is
+// never cut (no ellipsis), the label stays whole (German "Ranglistenname" may break only at its soft hyphen, and at
+// 320 px it has a line of its own), and the row stays inside the dialog.
+const longestName = (): string => {
+  const longest = (ws: readonly string[]): string => ws.reduce((a, b) => (b.length > a.length ? b : a), '');
+  return `${longest(NICK_WORDS_V1.adj)} ${longest(NICK_WORDS_V1.noun)} 99`;
+};
+
+for (const c of [
+  { name: 'de', browser: 'de-DE', lang: 'de' },
+  { name: 'en', browser: 'en-US', lang: 'en' },
+  { name: 'ar', browser: 'ar-EG', lang: 'ar' },
+] as const) {
+  test.describe(`Settings, the ranking name row in ${c.name} at 320 px (audit A-C1, B2, B8)`, () => {
+    test.use({ locale: c.browser });
+
+    test('the label and my name never overlap, my name is whole, the label is not broken inside a word', async ({ page }, info) => {
+      test.skip(info.project.name !== 'web-320', 'the small phone');
+      test.skip(!(await ladderUp()), `no ranking server at ${LADDER_URL}`);
+      await seededHome(page, {}, `/?ads=unsupported&ladderPool=${newPool('ac1')}`);
+      await page.waitForFunction((lang) => document.documentElement.lang === lang, c.lang);
+      await page.waitForFunction(() => (window as TestWindow).__mewdoku?.ladder?.()?.signedIn === true, undefined, { timeout: 15_000 });
+      await page.locator('.screen--home .top-bar__btn--settings').click();
+      const row = page.locator('[data-overlay="settings"] button.settings__ladder-name');
+      await expect(row).toBeVisible({ timeout: 10_000 });
+      await expect(row.locator('.settings__ladder-value')).not.toHaveText('');
+      for (const variant of ['server name', 'longest name'] as const) {
+        if (variant === 'longest name') await row.locator('.settings__ladder-value').evaluate((el, name) => (el.textContent = name), longestName());
+        await page.waitForTimeout(100);
+        const m = await row.evaluate((btn) => {
+          const label = btn.querySelector('.btn__label') as HTMLElement;
+          const value = btn.querySelector('.settings__ladder-value') as HTMLElement;
+          const chev = btn.querySelector('.btn__chev') as Element;
+          const panel = btn.closest('.overlay__panel') as HTMLElement;
+          const r = (e: Element): { l: number; r: number; t: number; b: number } => {
+            const x = e.getBoundingClientRect();
+            return { l: x.left, r: x.right, t: x.top, b: x.bottom };
+          };
+          const lineH = parseFloat(getComputedStyle(label).lineHeight) || parseFloat(getComputedStyle(label).fontSize) * 1.1;
+          return {
+            label: r(label),
+            value: r(value),
+            chev: r(chev),
+            row: r(btn),
+            panel: r(panel),
+            labelLines: Math.round(label.getBoundingClientRect().height / lineH),
+            valueCut: value.scrollWidth > value.clientWidth + 1,
+            valueText: value.textContent ?? '',
+          };
+        });
+        const tag = `${c.name} ${variant} "${m.valueText}"`;
+        const overlap = Math.max(0, Math.min(m.label.r, m.value.r) - Math.max(m.label.l, m.value.l)) * Math.max(0, Math.min(m.label.b, m.value.b) - Math.max(m.label.t, m.value.t));
+        expect(overlap, `${tag}: the label and my name overlap`).toBe(0);
+        expect(m.valueCut, `${tag}: my name is cut`).toBe(false);
+        expect(m.labelLines, `${tag}: the label wraps (a word broken)`).toBe(1);
+        for (const [what, b] of [['label', m.label], ['name', m.value]] as const) {
+          expect(b.l, `${tag}: ${what} inside the row`).toBeGreaterThanOrEqual(m.row.l - 0.5);
+          expect(b.r, `${tag}: ${what} inside the row`).toBeLessThanOrEqual(m.row.r + 0.5);
+          expect(Math.max(0, Math.min(b.r, m.chev.r) - Math.max(b.l, m.chev.l)) * Math.max(0, Math.min(b.b, m.chev.b) - Math.max(b.t, m.chev.t)), `${tag}: ${what} under the chevron`).toBe(0);
+        }
+        expect(m.row.r, `${tag}: the row inside the dialog`).toBeLessThanOrEqual(m.panel.r + 0.5);
+        await noOverflow(page);
+      }
+      await shot(page, info, { name: c.name, browser: c.browser, lang: c.lang, settingsTitle: '', livesLabel: '' }, 'settings-ranking-longest');
     });
   });
 }

@@ -221,8 +221,8 @@ export const enLazyUi2e = {
   'ladder.rewards.line.one': 'First place wins hints and kitties.',
   'ladder.rewards.line.other': 'The top {count} win hints and kitties.',
   'ladder.rewards.min': 'Rewards need at least {count} players in this ranking.',
-  'ladder.alone': "You're the only player in this ranking so far.",
-  'ladder.waiting': '+{count} waiting',
+  // Audit B14: no "so far" (once the join window has closed nobody else can join; C-4: never suggest that others will).
+  'ladder.alone': "You're the only player in this ranking.",
   'ladder.offline': "You're offline. We'll try to send your fish when you're back online.",
   'ladder.stale': 'Last updated {time}',
   'ladder.unavailable': "The ranking couldn't load right now. Here are your own records.",
@@ -293,7 +293,6 @@ export const enLazyUi2e = {
   'nick.edit.a11y': 'Change your ranking name and picture',
 
   // ── Settings (§2.7) ────────────────────────────────────────────────────────
-  'settings.ladder.title': 'Worldwide ranking',
   'settings.ladder.name': 'Ranking name',
   'settings.ladder.join': 'Show me in rankings',
   // {code} arrives formatted ("7KQ2-M9XD"); never translated.

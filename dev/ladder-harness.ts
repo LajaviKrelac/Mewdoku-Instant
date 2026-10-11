@@ -406,8 +406,18 @@ const VIEWS: Record<string, () => void> = {
   'panel-alone': () => panel({ kind: 'bracket', view: bracket({ rows: rows(1, 1), members: 1, rewardsLine: 'min' }) }, { result: { kind: 'ladder', gained: 3, total: 3 } }),
   'panel-small': () => panel({ kind: 'bracket', view: bracket({ rows: rows(3, 2), members: 3, rewardsLine: 'min' }) }),
   'panel-stale': () =>
-    panel({ kind: 'bracket', view: bracket({ stale: { at: NOW - 11 * 60_000 }, waiting: 2 }) }, { result: { kind: 'ladder', gained: 2, total: 14 } }),
+    // audit B9 / A-H1: the header carries the server's total (my row's 28) and the queued fish apart, as my row does
+    panel({ kind: 'bracket', view: bracket({ stale: { at: NOW - 11 * 60_000 }, waiting: 2 }) }, { result: { kind: 'ladder', gained: 2, total: 28, waiting: 2 } }),
   'panel-records': () => panel({ kind: 'records', records: RECORDS, reason: 'unavailable' }),
+  // audit B7: the longest names the word lists make; the number keeps to its word ("Dumpling 99"), never alone
+  'panel-long-names': () =>
+    panel({
+      kind: 'bracket',
+      view: bracket({
+        rows: rows(8, 5, (r) => (r.me ? {} : { name: `${['Cheerful', 'Friendly', 'Curious', 'Sparkly'][r.rank % 4]} ${['Dumpling', 'Snowball', 'Cinnamon', 'Whisker'][r.rank % 4]} ${99 - r.rank}` })),
+        members: 8,
+      }),
+    }),
   'panel-loading': () => panel({ kind: 'bracket', view: bracket() }, { bracketList: undefined }),
   // the ranking sheet (spec §2.5)
   'sheet-list': () => sheet(),
@@ -444,6 +454,19 @@ const VIEWS: Record<string, () => void> = {
   // victory (spec §5.3, §6.1)
   'victory-streak': () => victory(),
   'victory-day7': () => victory({ streak: { day: 7, total: 7, reward: { hints: 2, kitties: 2 } } }),
+  // audit B9 / A-H1: offline, the kept-fish row shows the server's total and the queued fish apart
+  'victory-offline': () => victory({ kept: { fish: 2, max: 3, gained: 2, total: 28, kind: 'ladder', waiting: 2 } }),
+  // audit B1: the tallest victory (the daily on a streak's day 7); &banner=1 reserves the banner band (fit step 4 at 320 × 568)
+  'victory-daily-day7': () =>
+    victory({
+      variant: 'daily',
+      level: null,
+      nextLevel: null,
+      kept: { fish: 3, max: 3, gained: 3, total: 17, kind: 'ladder' },
+      daily: { dateKey: '2026-10-10', ms: 188_000, mistakes: 0, hints: 0, kitties: 0, nextPuzzleAt: NOW + 9 * H },
+      streak: { day: 7, total: 7, reward: { hints: 2, kitties: 2 } },
+      bannerReserved: q.get('banner') === '1',
+    } as Partial<VictoryProps>),
   'victory-daily': () =>
     victory({
       variant: 'daily',

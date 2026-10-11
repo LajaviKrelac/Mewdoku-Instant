@@ -4,6 +4,9 @@
 // strip placement, the victory's streak row and daily reward line, O2's Buy rows in their four states (and
 // the countdown variant with Buy), the Settings ranking rows with the delete confirmation, How to play's
 // ranking and streak notes, and the in-game counter's 'ladder' name.
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cfg } from '../../../src/app/config';
 import { createLadderChip, ladderChipLabel, type LadderChipView } from '../../../src/ui/hud/ladder-chip';
@@ -246,6 +249,17 @@ describe('victory: the streak row, the daily reward line and the ranking total (
     v.open(victoryProps({ reducedMotion: true, streak: { day: 7, total: 7, reward: { hints: 2, kitties: 2 } } }));
     expect(q(v.el, '.victory__streak-reward').textContent).toBe('Streak reward: +2 hints and +2 kitties');
     expect(q(v.el, '.victory__streak').hasAttribute('data-fill')).toBe(false);
+    // audit B6: the reward is paid, so the last step shows the open chest (as the Home strip does): data-reward on
+    // the row, and the CSS rule that opens the chest names the victory row too
+    expect(q(v.el, '.victory__streak').hasAttribute('data-reward')).toBe(true);
+    const css = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../../../src/styles/overlay-chunk.css'), 'utf8');
+    const rule = /([^{}]*)\{\s*--chest-open:\s*1;/.exec(css)?.[1] ?? '';
+    expect(rule).toContain('.victory__streak[data-reward] .streak-step:last-child');
+    expect(rule).toContain('.streak-strip[data-reward] .streak-step:last-child');
+    v.update(victoryProps({ streak: { day: 4, total: 7, reward: null } }));
+    expect(q(v.el, '.victory__streak').hasAttribute('data-reward')).toBe(false);
+    v.update(victoryProps({ streak: null }));
+    expect(q(v.el, '.victory__streak').hasAttribute('data-reward')).toBe(false);
   });
 
   it('no row on a second win the same day (null), on the tutorial, or from a stale numeric prop', () => {
@@ -277,6 +291,25 @@ describe('victory: the streak row, the daily reward line and the ranking total (
     expect(periodPillLabel('ladder', 1)).toBe('1 fish in the daily ranking');
     expect(periodResultText('ladder', 2, 14)).toBe('+2 fish · Your total: 14');
     expect(fishKeptText('ladder', 1, 9)).toBe('You kept 1 fish. Your ranking total: 9.');
+  });
+
+  it('[audit B9 / A-H1] fish waiting to be sent: the server\'s total, then "+3 waiting" (never added in; my row says the same)', () => {
+    const v = createVictoryScreen();
+    document.body.appendChild(v.el);
+    v.open(victoryProps({ kept: { fish: 3, max: 3, gained: 3, total: 3, kind: 'ladder', waiting: 3 } }));
+    expect(q(v.el, '.victory__period-text').textContent).toBe('Your total: 3');
+    expect(q(v.el, '.victory__waiting').hidden).toBe(false);
+    expect(q(v.el, '.victory__waiting').textContent).toBe('+3 waiting'); // a line of its own: the pill fits 320 px
+    expect(q(v.el, '.victory__kept').getAttribute('aria-label')).toBe('You kept 3 fish. Your ranking total: 3. +3 waiting');
+    expect(periodTotalText('ladder', 3, 3)).toBe('Your total: 3 · +3\u00A0waiting');
+    expect(periodResultText('ladder', 3, 3, 3)).toBe('+3 fish · Your total: 3 · +3\u00A0waiting');
+    expect(periodResultText('ladder', 0, 3, 2)).toBe('Your total: 3 · +2\u00A0waiting');
+    expect(periodResultText('ladder', 3, 6, 0)).toBe('+3 fish · Your total: 6'); // counted: no waiting part
+    expect(periodResultText('week', 3, 42, 5)).toBe('+3 fish · This week: 42'); // the records never carry it
+    // counted: no waiting line
+    v.update(victoryProps({ kept: { fish: 3, max: 3, gained: 3, total: 6, kind: 'ladder', waiting: 0 } }));
+    expect(q(v.el, '.victory__period').textContent).toBe('Your total: 6');
+    expect(q(v.el, '.victory__waiting').hidden).toBe(true);
   });
 });
 
@@ -473,7 +506,7 @@ function settingsProps(ladder?: Partial<SettingsLadderRows>): SettingsProps {
   };
 }
 
-describe('Settings: the "Worldwide ranking" rows (spec §2.7, §9.4)', () => {
+describe('Settings: the "Daily ranking" rows (spec §2.7, §9.4; the group was "Worldwide ranking" until audit B14)', () => {
   it('absent without SettingsProps.ladder (web-prod, no server)', () => {
     const s = createSettingsModal();
     document.body.appendChild(s.el);
@@ -488,7 +521,7 @@ describe('Settings: the "Worldwide ranking" rows (spec §2.7, §9.4)', () => {
     s.open(p);
     const group = q(s.el, '.settings__ladder');
     expect(group.hidden).toBe(false);
-    expect(q(group, '.settings__group-title').textContent).toBe('Worldwide ranking');
+    expect(q(group, '.settings__group-title').textContent).toBe('Daily ranking'); // audit B14: the feature's one name
     const name = q(group, 'button.settings__ladder-name');
     expect(q(name, '.btn__label').textContent).toBe('Ranking name');
     expect(q(name, '.settings__ladder-value').textContent).toBe('Velvet Pounce 27');
@@ -515,6 +548,11 @@ describe('Settings: the "Worldwide ranking" rows (spec §2.7, §9.4)', () => {
     q(s.el, 'button.settings__ladder-delete').click();
     expect(q(s.el, '.settings').dataset.view).toBe('confirm');
     expect(q(s.el, '.settings__confirm-text').textContent).toBe('Delete your ranking name, picture and results from our server? Your game progress stays.');
+    // audit B15: the irreversible Delete is not the orange primary; Cancel is, and has the focus
+    expect(q(s.el, '.settings__confirm-delete').classList.contains('btn--primary')).toBe(false);
+    expect(q(s.el, '.settings__confirm-delete').classList.contains('btn--secondary')).toBe(true);
+    expect(q(s.el, '.settings__confirm-cancel').classList.contains('btn--primary')).toBe(true);
+    expect(document.activeElement).toBe(q(s.el, '.settings__confirm-cancel'));
     q(s.el, '.settings__confirm-cancel').click();
     expect(q(s.el, '.settings').dataset.view).toBe('main');
     expect(p.ladder?.onDelete).not.toHaveBeenCalled();

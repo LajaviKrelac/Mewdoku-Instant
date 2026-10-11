@@ -529,7 +529,7 @@
 }
 
 .ladder-result__double-note {
-  margin: -2px 0 2px;
+  margin: 6px 0 4px;
   color: var(--ink-2);
   font-size: var(--fs-s);
   line-height: 1.3;

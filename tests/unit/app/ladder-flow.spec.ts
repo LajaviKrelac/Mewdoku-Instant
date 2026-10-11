@@ -312,7 +312,9 @@ describe("the panel's list (spec §2.4, §0.4)", () => {
     s.flow.onWin({ winId: winId(1), mode: 'level', kept: 3 });
     await s.settle(0);
     expect(s.flow.listState()).toEqual({ kind: 'loading' });
-    expect(s.flow.panelTotal()).toBe(3); // my estimate while unanswered (0 before + 3 kept)
+    // audit B9 / A-H1 (H-4): while unanswered, the server's last total (none yet: 0) and the queued fish apart
+    expect(s.flow.panelTotal()).toBe(0);
+    expect(s.flow.panelWaiting()).toBe(3);
     s.fake.hold = false;
     s.fake.release();
     await s.settle(0);
@@ -327,6 +329,7 @@ describe("the panel's list (spec §2.4, §0.4)", () => {
     expect(view?.members).toBe(3);
     expect(view?.stale).toBeNull();
     expect(s.flow.panelTotal()).toBe(3);
+    expect(s.flow.panelWaiting()).toBe(0); // counted: nothing waits any more
     expect(s.named('ladder_panel')).toEqual([{ state: 'bracket', rows: 3, rank: 2, ms: 0 }]);
   });
 
@@ -348,6 +351,9 @@ describe("the panel's list (spec §2.4, §0.4)", () => {
     expect(view?.stale).not.toBeNull();
     expect(view?.rows.find((r) => r.me)?.points).toBe(2); // the server's number, never a guess
     expect(view?.waiting).toBe(1); // the queued fish shown as waiting
+    // audit B9 / A-H1: the header and the victory agree with my row: the server's 2, the 1 queued fish apart
+    expect(s.flow.panelTotal()).toBe(2);
+    expect(s.flow.panelWaiting()).toBe(1);
     // A fresh device (no cache) offline: my records.
     const fresh = setup();
     fresh.fake.offline = true;

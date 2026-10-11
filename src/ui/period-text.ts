@@ -12,12 +12,21 @@ import { formatNumber, t, tn } from '../i18n';
 /** A fish total's kind: this period's records (PeriodKind) or my bracket of the daily ranking (Phase 2e). */
 export type FishTotalKind = PeriodKind | 'ladder';
 
-/** "This week: 42" (period.total.<kind>); Phase 2e 'ladder': "Your total: 14". */
-export function periodTotalText(kind: FishTotalKind, total: number): string {
+/**
+ * Audit B9 / A-H1 (H-4): queued fish are never in a total. While wins wait to be sent, the 'ladder' total is the
+ * server's last one and the queued fish follow it as "+3 waiting" (the words my row uses), never added in.
+ */
+function withWaiting(text: string, waiting: number): string {
+  // The waiting part stays on one line ("+2" never alone at a line end): no-break spaces inside it.
+  return waiting > 0 ? `${text} · ${t('ladder.waiting', { count: formatNumber(waiting) }).replace(/ /g, '\u00A0')}` : text;
+}
+
+/** "This week: 42" (period.total.<kind>); Phase 2e 'ladder': "Your total: 14" ("Your total: 3 · +3 waiting"). */
+export function periodTotalText(kind: FishTotalKind, total: number, waiting = 0): string {
   const n = formatNumber(total);
   switch (kind) {
     case 'ladder':
-      return t('ladder.total', { total: n });
+      return withWaiting(t('ladder.total', { total: n }), waiting);
     case 'day':
       return t('period.total.day', { total: n });
     case 'month':
@@ -78,12 +87,15 @@ export function periodBestLabel(kind: PeriodKind): string {
   }
 }
 
-/** "You kept 2 fish. Your total this week: 42." (a11y.fishKept.<kind>, plural on the fish kept); 'ladder': "… Your ranking total: 14." */
-export function fishKeptText(kind: FishTotalKind, kept: number, total: number): string {
+/**
+ * "You kept 2 fish. Your total this week: 42." (a11y.fishKept.<kind>, plural on the fish kept); 'ladder': "… Your
+ * ranking total: 14." and, while fish wait to be sent, "… Your ranking total: 3. +3 waiting" (audit B9).
+ */
+export function fishKeptText(kind: FishTotalKind, kept: number, total: number, waiting = 0): string {
   const p = { count: formatNumber(kept), total: formatNumber(total) };
   switch (kind) {
     case 'ladder':
-      return tn('a11y.fishKept.ladder', kept, p);
+      return waiting > 0 ? `${tn('a11y.fishKept.ladder', kept, p)} ${t('ladder.waiting', { count: formatNumber(waiting) })}` : tn('a11y.fishKept.ladder', kept, p);
     case 'day':
       return tn('a11y.fishKept.day', kept, p);
     case 'month':
@@ -105,10 +117,13 @@ export function howtoPointsText(kind: PeriodKind): string {
   }
 }
 
-/** "+2 fish · This week: 42" when the win added fish, else "This week: 42" (§2.6 subtitle). */
-export function periodResultText(kind: FishTotalKind, gained: number, total: number): string {
-  const totalText = periodTotalText(kind, total);
+/**
+ * "+2 fish · This week: 42" when the win added fish, else "This week: 42" (§2.6 subtitle); 'ladder' with fish
+ * waiting to be sent: "+3 fish · Your total: 3 · +3 waiting" (the server's total, audit B9 / A-H1).
+ */
+export function periodResultText(kind: FishTotalKind, gained: number, total: number, waiting = 0): string {
+  const totalText = periodTotalText(kind, total, waiting);
   if (gained <= 0) return totalText;
-  if (kind === 'ladder') return tn('ladder.sub', gained, { count: formatNumber(gained), total: formatNumber(total) });
+  if (kind === 'ladder') return withWaiting(tn('ladder.sub', gained, { count: formatNumber(gained), total: formatNumber(total) }), waiting);
   return tn('rank.sub.period', gained, { count: formatNumber(gained), total: totalText });
 }

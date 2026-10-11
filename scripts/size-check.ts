@@ -111,6 +111,11 @@
 // was re-set the same way: JS 74 → 23.3 (22.7: hint card, RPC, sounds, generator, grader) and CSS 34.6 → 7.2 (7.0: the
 // events chunk). CSS (49.1 / 49.3), font, index.html and the 2d.1 rows are within and unchanged.
 //
+// Phase 2e audit fix round (fix lead, 2026-10-11): the overlay chunk's stylesheet 32 → 33.5 KB (32.5 measured in every
+// build; + about 3 %): the audit's layout fixes live there (the victory's fit step 4 and its transition-free measuring,
+// the waiting line under the victory's total, the Settings name row's two-line layout below 360 px, the danger Delete,
+// the open chest on the victory's day 7). A lazy chunk: the first load is unchanged by it. Every other row is within.
+//
 // Phase 2e I-4: every dir measured is also run through scripts/release-check.ts (test data in any bundle; the release
 // rules in dist/release-*), and a problem fails the check like a budget does.
 //
@@ -207,7 +212,7 @@ export const BUDGETS: readonly SizeBudget[] = [
   // placeholder ceiling re-set at I-4).
   { label: 'Lazy CSS (ladder)', pattern: /^assets\/ladder-chunk-[\w-]{8}\.css$/, maxBytes: 11.05 * KB },
   // Phase 2e I-4: the overlay chunk's stylesheet (with Home's chip and strip since I-4), on its own row.
-  { label: 'Lazy CSS (overlay chunk)', pattern: /^assets\/overlay-chunk-[\w-]{8}\.css$/, maxBytes: 32 * KB },
+  { label: 'Lazy CSS (overlay chunk)', pattern: /^assets\/overlay-chunk-[\w-]{8}\.css$/, maxBytes: 33.5 * KB },
   // The rest: the events chunk's stylesheet (re-set at 2e I-4 when the overlay chunk's row split out).
   { label: 'Lazy CSS', pattern: /^assets\/[^/]*\.css$/, maxBytes: 7.2 * KB },
   { label: 'Event packs', pattern: /^assets\/[a-z][a-z-]*-\d{4}-[^/]*\.json$/, maxBytes: LISTED },

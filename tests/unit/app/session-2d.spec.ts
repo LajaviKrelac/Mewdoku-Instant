@@ -132,6 +132,30 @@ describe('level-start trigger (2d §1.14; 2d.1 §5.5: the two tickers replace th
     await h.settle(h.config.fx.boardEntryMs);
     expect(h.game().status).toBe('playing');
   });
+
+  it('[audit A-L1] START when the board\'s own wave ends (playEntry\'s entryEndMs), never later than fx.boardEntryMs', async () => {
+    const withEntry = (ms: number): Harness => {
+      const h = createHarness();
+      const show = h.router.showGame.bind(h.router);
+      h.router.showGame = ((view, cb) => {
+        const g = show(view, cb);
+        return Object.assign(g, { playEntry: () => ms });
+      }) as typeof h.router.showGame;
+      return h;
+    };
+    // a 4 × 4 board's wave ends at 408 ms (board-fx.ts entryEndMs): it takes input then, not at 700 ms
+    const small = withEntry(408);
+    await small.session.start({ mode: 'level', level: 5 });
+    await small.settle(407);
+    expect(small.game().status).toBe('ready');
+    await small.settle(1);
+    expect(small.game().status).toBe('playing');
+    // a board reporting more than the cap still starts at fx.boardEntryMs
+    const long = withEntry(5_000);
+    await long.session.start({ mode: 'level', level: 5 });
+    await long.settle(long.config.fx.boardEntryMs);
+    expect(long.game().status).toBe('playing');
+  });
 });
 
 // ─────────────────────────────── the mouse (§1.12) ───────────────────────────────

@@ -503,7 +503,7 @@ test.describe('FBIG rankings (Phase 2e §2.10: the FB weekly board retired; the 
     const list = page.locator('.overlay[data-overlay="ranking"] .rank-list[data-kind="bracket"]');
     await expect(list).toBeVisible({ timeout: 15_000 });
     const ui = await list.locator('ol.rank-rows > li.rank-row').evaluateAll((els) =>
-      els.map((el) => [el.getAttribute('data-rank'), el.querySelector('.rank-row__name')?.textContent?.trim() ?? '', el.getAttribute('data-me')]),
+      els.map((el) => [el.getAttribute('data-rank'), el.querySelector('.rank-row__name')?.textContent?.replace(/\u00A0/g, ' ').trim() ?? '', el.getAttribute('data-me')]),
     );
     const server = await rival.bracket();
     expect(ui).toEqual(server.rows.map((r) => [String(r.rank), r.nickname, r.me ? '0' : '1']));

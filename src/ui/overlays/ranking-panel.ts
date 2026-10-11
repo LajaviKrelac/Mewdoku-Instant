@@ -181,8 +181,11 @@ export type RankingResultView =
   | { readonly kind: 'event'; readonly solved: number; readonly total: number }
   /** Phase 2c §2.6: "+2 fish · This week: 42" (gained > 0), else "This week: 42". */
   | { readonly kind: 'period'; readonly gained: number; readonly total: number; readonly periodKind: PeriodKind }
-  /** Phase 2e §2.4: "+2 fish · Your total: 14" (my points in my current ranking; the estimate while offline). */
-  | { readonly kind: 'ladder'; readonly gained: number; readonly total: number };
+  /**
+   * Phase 2e §2.4: "+2 fish · Your total: 14" (my points in my current ranking, as the server last said). Audit B9 /
+   * A-H1: fish still waiting to be sent are never added in; `waiting` > 0 appends "· +3 waiting" (as my row shows).
+   */
+  | { readonly kind: 'ladder'; readonly gained: number; readonly total: number; readonly waiting?: number };
 
 export interface RankingPanelProps {
   readonly board: RankingBoardKind;
@@ -244,7 +247,7 @@ export function resultText(r: RankingResultView): string {
     case 'period':
       return periodResultText(r.periodKind, r.gained, r.total);
     case 'ladder':
-      return periodResultText('ladder', r.gained, r.total);
+      return periodResultText('ladder', r.gained, r.total, r.waiting ?? 0);
   }
 }
 

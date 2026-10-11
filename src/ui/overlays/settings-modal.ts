@@ -1,4 +1,4 @@
-// Owner: B (Phase 2b); G3 (Phase 2e: the "Worldwide ranking" rows and the delete confirmation)
+// Owner: B (Phase 2b); G3 (Phase 2e: the "Daily ranking" rows and the delete confirmation)
 // O5 settings (02 §5 O5, §14) with the "About & credits" sub-view (version, font licence, privacy link).
 // Toggles call onChange(patch) at once; the app saves and re-renders through update(). Esc in a
 // sub-view returns to the list; otherwise Esc, × and scrim taps call onClose.
@@ -6,7 +6,7 @@
 // locales this build contains, a radio group), Shop and Remove ads. Each is shown only when its prop
 // is present (no look rows: one theme, §1.9).
 // Phase 2e (G3, spec §2.7, §9.4; CONTRACTS §8): with SettingsProps.ladder (FB with the ranking active, or the
-// web in anon mode; absent = rows hidden) a "Worldwide ranking" group: "Ranking name" (the name, opens the
+// web in anon mode; absent = rows hidden) a "Daily ranking" group (audit B14; it was "Worldwide ranking"): "Ranking name" (the name, opens the
 // name sheet), "Show me in rankings" (a switch, when ladder.optOutAllowed), "Delete my ranking data" (opens a
 // confirmation view: "Delete your ranking name, picture and results from our server? Your game progress
 // stays." Delete / Cancel) and the player code as plain text ("Player code 7KQ2-M9XD", formatted by the
@@ -60,7 +60,7 @@ export interface SettingsProps {
    * rules are checked). Absent or empty = row hidden.
    */
   readonly feedbackUrl?: string;
-  /** Phase 2e §2.7: the "Worldwide ranking" rows; absent = hidden (web-prod, no server). */
+  /** Phase 2e §2.7: the "Daily ranking" rows; absent = hidden (web-prod, no server). */
   readonly ladder?: SettingsLadderRows;
 }
 
@@ -178,7 +178,7 @@ export function createSettingsModal(): OverlayView<SettingsProps> {
     icon('icon-chevron', { class: 'btn__chev' }),
   );
 
-  // ── Phase 2e: the "Worldwide ranking" group ──
+  // ── Phase 2e: the "Daily ranking" group ──
   const ladderNameValue = h('span', { class: 'settings-row__value settings__ladder-value', dir: 'auto' });
   const ladderName = linkRow(() => t('settings.ladder.name'), () => props?.ladder?.onName(), 'settings__ladder-name', ladderNameValue);
   const listedId = nextId('set-listed');
@@ -208,7 +208,8 @@ export function createSettingsModal(): OverlayView<SettingsProps> {
   const ladderGroup = h(
     'div',
     { class: 'settings__ladder', role: 'group', 'aria-labelledby': ladderTitleId, hidden: true },
-    L.text(h('h3', { class: 'settings__group-title', id: ladderTitleId }), () => t('settings.ladder.title')),
+    // Audit B14: the feature's one name, as the panel, the sheet, the chip and How to play call it ("Daily ranking").
+    L.text(h('h3', { class: 'settings__group-title', id: ladderTitleId }), () => t('rank.title.period.day')),
     ladderName,
     listedRow,
     ladderDelete,
@@ -332,9 +333,11 @@ export function createSettingsModal(): OverlayView<SettingsProps> {
   // ── Phase 2e: the delete confirmation (a view of its own, so focus and Esc stay in the dialog) ──
   const confirmTitleId = nextId('confirm-title');
   const confirmBack = backButton();
+  // Audit B15: the irreversible Delete is never drawn as the orange "go on" button: a white button with the
+  // --danger text; Cancel (where the focus starts) is the primary.
   const confirmDelete = L.label(
     makeButton({
-      variant: 'primary',
+      variant: 'secondary',
       label: '',
       block: true,
       className: 'settings__confirm-delete',
@@ -346,7 +349,7 @@ export function createSettingsModal(): OverlayView<SettingsProps> {
     }),
     () => t('settings.ladder.delete.ok'),
   );
-  const confirmCancel = L.label(makeButton({ variant: 'ghost', label: '', className: 'settings__confirm-cancel', onPress: () => showView('main') }), () => t('common.cancel'));
+  const confirmCancel = L.label(makeButton({ variant: 'primary', label: '', block: true, className: 'settings__confirm-cancel', onPress: () => showView('main') }), () => t('common.cancel'));
   const confirmView = h(
     'div',
     { class: 'settings__view settings__view--confirm', hidden: true, role: 'group', 'aria-labelledby': confirmTitleId },

@@ -35,7 +35,8 @@
 //            .victory__sub .victory__daily .victory__event(.victory__bar .victory__milestone)
 //            .victory__daily-reward .victory__streak[data-day](.victory__streak-text .streak-steps .victory__streak-reward)
 //            .victory__reward(.victory__points(.victory__points-icon .victory__points-text)
-//              .victory__kept[data-count](.victory__fishes > .victory__fish[data-kept] .victory__plus .victory__period))
+//              .victory__kept[data-count](.victory__fishes > .victory__fish[data-kept] .victory__plus
+//                .victory__period(.victory__period-text .victory__waiting[hidden])))
 //            .victory__actions(.victory__primary .victory__home))
 import { cfg, type PeriodKind } from '../../app/config';
 import type { Reward } from '../../game/events';
@@ -96,7 +97,15 @@ export interface VictoryProps {
    * Phase 2c §2.7: the fish-kept row (`fish` of `max` lives kept, "+`gained`", the period `total`
    * after the win); null when the win added no leaderboard points (tutorial, not counted, mode excluded).
    */
-  readonly kept: { readonly fish: number; readonly max: number; readonly gained: number; readonly total: number; readonly kind: FishTotalKind } | null;
+  readonly kept: {
+    readonly fish: number;
+    readonly max: number;
+    readonly gained: number;
+    readonly total: number;
+    readonly kind: FishTotalKind;
+    /** Audit B9 / A-H1 ('ladder' only): fish waiting to be sent, shown after the server's total ("· +3 waiting"), never added in. */
+    readonly waiting?: number;
+  } | null;
   readonly daily: VictoryDailyView | null;
   readonly event: VictoryEventView | null;
   /** fx.winButtonDelayMs (600): the primary button turns active this long after open. */
@@ -200,7 +209,11 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
   const fishes = h('span', { class: 'victory__fishes', 'aria-hidden': 'true' });
   let fishFor = '';
   const plus = h('span', { class: 'victory__plus num', 'aria-hidden': 'true' });
-  const periodLine = h('span', { class: 'victory__period', 'aria-hidden': 'true' });
+  // Audit B9 / A-H1: the total is the server's; fish still waiting to be sent are a second, smaller line
+  // ("+2 waiting", as my ranking row shows them), so the pill never grows past a 320 px screen.
+  const periodText = h('span', { class: 'victory__period-text' });
+  const waitingLine = h('span', { class: 'victory__waiting', hidden: true });
+  const periodLine = h('span', { class: 'victory__period', 'aria-hidden': 'true' }, periodText, waitingLine);
   const keptId = nextId('victory-kept');
   const kept = h('div', { class: 'victory__kept', role: 'img', id: keptId }, fishes, plus, periodLine);
   const reward = h('div', { class: 'victory__reward' }, pointsRow, kept);
@@ -279,12 +292,19 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
   };
   const fit = (): void => {
     if (!shell.isOpen() || !scroller.isConnected) return;
-    setFit(
-      fitLevel((lv) => {
-        setFit(lv);
-        return scroller.scrollHeight - scroller.clientHeight;
-      }),
-    );
+    // Measured with transitions off (data-measuring): with reduced motion every property transitions for 150 ms
+    // (fx.css), so a step measured at once still had the last step's sizes and the fit ran to its last step.
+    root.setAttribute('data-measuring', '');
+    try {
+      setFit(
+        fitLevel((lv) => {
+          setFit(lv);
+          return scroller.scrollHeight - scroller.clientHeight;
+        }),
+      );
+    } finally {
+      root.removeAttribute('data-measuring');
+    }
   };
   let fitRaf = 0;
   const win = (): Window | null => shell.el.ownerDocument.defaultView;
@@ -352,8 +372,11 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
         }
       }
       setText(plus, t('fish.plus', { count: formatNumber(k.gained) }));
-      setText(periodLine, periodTotalText(k.kind, k.total));
-      kept.setAttribute('aria-label', fishKeptText(k.kind, k.fish, k.total));
+      setText(periodText, periodTotalText(k.kind, k.total));
+      const waitingN = k.kind === 'ladder' ? Math.max(0, Math.floor(k.waiting ?? 0)) : 0;
+      waitingLine.hidden = waitingN === 0;
+      setText(waitingLine, waitingN > 0 ? t('ladder.waiting', { count: formatNumber(waitingN) }) : '');
+      kept.setAttribute('aria-label', fishKeptText(k.kind, k.fish, k.total, k.waiting ?? 0));
     } else {
       delete kept.dataset.count;
     }

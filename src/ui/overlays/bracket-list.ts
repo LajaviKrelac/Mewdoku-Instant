@@ -5,7 +5,7 @@
 //
 // Honesty (H-1 … H-3, H-8): the rows are EXACTLY the server's rows, in its order, with its ranks; the count
 // is the server's `members`; a bracket that is not full shows exactly its members, alone shows my row and
-// "You're the only player in this ranking so far."; nothing here ever adds, pads, trims or re-ranks a row
+// "You're the only player in this ranking." (audit B14: no "so far"); nothing here ever adds, pads, trims or re-ranks a row
 // (ladder.panelRows > 0 shows a contiguous window of the server's rows around mine, never a made-up one).
 // Names are rendered with textContent and dir="auto" (bidi-isolated in RTL rows), the same English words
 // in every locale. Queued fish show on my row as "+2 waiting"; my rank stays the server's last one.
@@ -16,11 +16,12 @@
 // (aria-hidden, shown while my row is scrolled out of view), "+3 hearts from other players", and once the
 // first-time line "This is you in the ranking: …".
 // A11y (§7.7): the list is role="list"; each row is a listitem named "#5, Brave Noodle 12, you, 14 fish,
-// 2 hearts"; the rows are not tab stops, only their heart buttons (and, in the sheet, my row's pencil) are;
+// 2 hearts" (my row adds ", +2 waiting" while fish wait, audit B11; the header's dot is read as a comma, B10);
+// the rows are not tab stops, only their heart buttons (and, in the sheet, my row's pencil) are;
 // a heart is "Give a heart to Velvet Paws 3, 1 heart" with aria-pressed. Reduced motion: no heart pop.
 //
 // Classes: .rank-list.rank-list--bracket[data-kind=bracket][data-stale=0|1]
-//          > .ranking__meta(.ranking__countdown .ranking__count) .ranking__rewards .ranking__stale .ranking__offline
+//          > .ranking__meta(.ranking__countdown .ranking__sep[aria-hidden] .ranking__sep-sr.sr-only .ranking__count) .ranking__rewards .ranking__stale .ranking__offline
 //            .ranking__alone ol.rank-rows[role=list] > li.rank-row[data-rank][data-me=0|1][data-slot]
 //              > .rank-row__place(.rank-row__medal? .rank-row__num) .rank-row__avatar .rank-row__who(.rank-row__name
 //                .rank-row__line(.rank-row__tags(.rank-row__you .rank-row__waiting) button.rank-row__edit?)) .rank-row__points(.rank-row__pts)
@@ -73,11 +74,23 @@ export function rewardsLineText(v: Pick<BracketListView, 'rewardsLine' | 'paidPl
 const heartsText = (n: number): string => tn('ladder.hearts', n, { count: formatNumber(n) });
 const fishText = (n: number): string => tn('fish.count', n, { count: formatNumber(n) });
 
-/** A row's listitem name: "#5, Brave Noodle 12, you, 14 fish, 2 hearts" (spec §7.7). */
-export function rowLabel(r: BracketRowView, hearts: boolean): string {
+/**
+ * A row's listitem name: "#5, Brave Noodle 12, you, 14 fish, 2 hearts" (spec §7.7). Audit B11: my row with fish
+ * waiting to be sent ends with the chip's own words ("…, 2 hearts, +3 waiting"), so a screen reader hears them too.
+ */
+export function rowLabel(r: BracketRowView, hearts: boolean, waiting = 0): string {
   const p = { rank: formatNumber(r.rank), name: r.name, fish: fishText(r.points), hearts: hearts ? heartsText(r.hearts) : '' };
   const s = r.me ? t('ladder.row.me.a11y', p) : t('ladder.row.a11y', p);
-  return hearts ? s : s.replace(/[,،、]\s*$/u, '');
+  const label = hearts ? s : s.replace(/[,،、]\s*$/u, '');
+  return r.me && waiting > 0 ? `${label}${t('list.separator')}${t('ladder.waiting', { count: formatNumber(waiting) })}` : label;
+}
+
+/**
+ * The name as shown (audit B7): the number stays with the word before it ("Cheerful" / "Dumpling 99", never a
+ * lone "99" on its own line at 320 px). Display only: the text is the server's, with one no-break space.
+ */
+export function displayName(name: string): string {
+  return name.replace(/ (\d+)$/u, '\u00A0$1');
 }
 
 /** A heart button's name: "Give a heart to Velvet Paws 3, 1 heart" / "Give yourself a heart, 2 hearts". */
@@ -170,7 +183,7 @@ function buildRow(cb: BracketListCallbacks, interactive: boolean): RowParts {
         el.dataset.rank = String(r.rank);
         el.dataset.me = r.me ? '1' : '0';
         el.dataset.slot = String(r.slot);
-        el.setAttribute('aria-label', rowLabel(r, v.hearts));
+        el.setAttribute('aria-label', rowLabel(r, v.hearts, r.me ? v.waiting : 0));
       }
       const m = r.rank >= 1 && r.rank <= 3 ? r.rank : 0;
       if (m !== medal) {
@@ -187,7 +200,8 @@ function buildRow(cb: BracketListCallbacks, interactive: boolean): RowParts {
         avatar.appendChild(icon(avatarSymbol(r.avatarId), { class: 'rank-row__avatar-art' }));
       }
       // textContent only (XSS; spec §1.8, §10.5 #7).
-      if (name.textContent !== r.name) name.textContent = r.name;
+      const shownName = displayName(r.name);
+      if (name.textContent !== shownName) name.textContent = shownName;
       you.hidden = !r.me;
       setText(you, t('ladder.you'));
       const wait = r.me && v.waiting > 0 ? v.waiting : 0;
@@ -239,8 +253,11 @@ export function createBracketList(view: BracketListView, cb: BracketListCallback
   mountLadderArt(typeof document === 'undefined' ? undefined : document);
   const countdown = h('span', { class: 'ranking__countdown' });
   const sep = h('span', { class: 'ranking__sep', 'aria-hidden': 'true' }, ' · ');
+  // Audit B10: the dot is drawn only; screen readers get the locale's list separator ("Ends in 7 h 48 min, 37
+  // players"), never the two parts run together.
+  const sepSr = h('span', { class: 'ranking__sep-sr sr-only' });
   const count = h('span', { class: 'ranking__count' });
-  const meta = h('p', { class: 'ranking__meta' }, countdown, sep, count);
+  const meta = h('p', { class: 'ranking__meta' }, countdown, sep, sepSr, count);
   const rewards = h('p', { class: 'ranking__rewards' });
   const stale = h('p', { class: 'ranking__stale' });
   const offline = h('p', { class: 'ranking__offline' });
@@ -293,6 +310,8 @@ export function createBracketList(view: BracketListView, cb: BracketListCallback
     const text = countdownText(cur.endsAt, now, cur.final);
     countdown.hidden = text === null;
     sep.hidden = text === null;
+    sepSr.hidden = text === null;
+    setText(sepSr, t('list.separator'));
     setText(countdown, text ?? '');
     const next = cur.final ? null : nextTickMs(cur.endsAt, now);
     if (next !== null) tick = setTimeout(renderCountdown, next);
