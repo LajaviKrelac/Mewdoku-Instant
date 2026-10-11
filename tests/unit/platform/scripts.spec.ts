@@ -106,7 +106,7 @@ describe('size-check', () => {
   it('has the recorded ceilings (measured + about 3 %: 2b lead decision 2026-10-09; main JS and the first-load totals re-set at 2c.1, L7; main JS, CSS, the first-load totals and the lazy CSS at 2d I-4; main JS, CSS, index.html, the first-load totals and the locale chunk at 2d.1 I-4; main JS, the first-load totals, the locale chunk, the ladder rows and the core lazy rows at 2e I-4, 04 §9)', () => {
     const max = (label: string) => BUDGETS.find((b) => b.label === label)?.maxBytes;
     expect([max('Main JS'), max('CSS'), max('Font'), max('index.html'), FIRST_LOAD_MAX, FIRST_LOAD_LOCALE_MAX, FIRST_LOAD_GZIP_MAX]).toEqual([
-      360_000, 54_400, 17_000, 1_140, 427_000, 470_000, 158_000,
+      360_000, 51_700, 17_000, 1_140, 427_000, 470_000, 158_000,
     ]);
     // The first-load total still binds: below the sum of its rows' ceilings.
     expect(FIRST_LOAD_MAX).toBeLessThan((max('Main JS') ?? 0) + (max('CSS') ?? 0) + (max('Font') ?? 0) + (max('index.html') ?? 0));

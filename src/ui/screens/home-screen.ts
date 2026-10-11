@@ -17,7 +17,7 @@
 // it lands Home shows the period pill and keeps the strip's row (.streak-strip--pending, invisible), then renders
 // both in place.
 //
-// Classes: .screen.screen--home[data-banner][data-streak?] > .home__body (+ .home__bg, the scrolling grid, last) > .home__hero(.home__wordmark .home__tagline .home__mascot)
+// Classes: .screen.screen--home[data-banner][data-streak?] > .home__body (+ .home__bg, the scrolling board, last) > .home__hero(.home__wordmark .home__tagline .home__mascot)
 //          .home__actions(.home__cards > .event-card[data-state] .home__play .badge.badge--hard
 //          .streak-strip .daily-card[data-state] .home-card) .home__stock(.stock__item); the top bar's lead slot
 //          holds .home__lead > .period-pill | button.ladder-chip
@@ -29,6 +29,7 @@ import { cfg, type PeriodKind } from '../../app/config';
 import type { EventDef } from '../../game/events';
 import type { DailyCardState } from '../../game/progression';
 import { formatClock, formatDuration, formatShortDate, onLocaleChanged, t, translate } from '../../i18n';
+import { homeBoardUrl } from '../art/home-board';
 import { mascotIllustration } from '../art/mascot';
 import { icon } from '../art/sprite';
 import { clear, h, setText, type View } from '../dom';
@@ -271,6 +272,9 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
   const mascotBox = h('div', { class: 'home__mascot' }, mascot);
   const tagline = L.text(h('p', { class: 'home__tagline' }), () => t('app.tagline'));
   const hero = h('div', { class: 'home__hero' }, L.text(h('h1', { class: 'home__wordmark' }), () => t('app.name')), tagline, mascotBox);
+  // Home redesign: a new random board on every Home visit (art/home-board.ts), drawn here, no image file.
+  const bg = h('div', { class: 'home__bg', 'aria-hidden': 'true' });
+  bg.style.backgroundImage = homeBoardUrl(Math.floor(Math.random() * 0x7fffffff));
   const el = h(
     'div',
     { class: 'screen screen--home' },
@@ -282,8 +286,8 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
       h('div', { class: 'home__actions' }, eventCard, play, daily, cards),
       h('div', { class: 'home__stock stock' }, hintsItem, kittiesItem),
     ),
-    // Home redesign: the scrolling grid behind everything (screens.css .home__bg); last, so the top bar stays first.
-    h('div', { class: 'home__bg', 'aria-hidden': 'true' }),
+    // Home redesign: the scrolling board behind everything (screens.css .home__bg); last, so the top bar stays first.
+    bg,
   );
 
   // ── fitHero (UX-2, I18N-LAYOUT-2) ──

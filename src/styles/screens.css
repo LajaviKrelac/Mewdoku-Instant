@@ -318,23 +318,23 @@
 .home__actions > .streak-strip { margin-top: 10px; }
 .streak-strip--pending { display: block; width: 100%; min-height: 48px; visibility: hidden; }
 
-/* ── Home redesign (2026-10-11): the scrolling grid background, after the app icon ──
-   .home__bg is the screen's last child (the top bar stays :first-child), absolutely placed behind the content:
-   the screen root is its stacking context, so z-index -1 puts the layer above the page colour and under every
-   card. The layer is a 200vmax square around the screen's centre, turned -27° like the icon's grid, and it
-   slides one tile (--home-tile) along its own x axis, so on screen the bands drift up and to the right and the
-   loop has no seam. Only transform animates (a composited layer). Reduced motion: still. */
+/* ── Home redesign (2026-10-11): the scrolling board background ──
+   .home__bg is the screen's last child (the top bar stays :first-child), absolutely placed behind the content: the
+   screen root is its stacking context, so z-index -1 puts the layer above the page colour and under every card.
+   home-screen.ts sets its background-image (art/home-board.ts: one seamless --home-tile square, repeated). The layer
+   is turned -27° and slides one tile along its own x axis, from half a tile back to half a tile on, then loops; it
+   is 200vmax (more than the screen's diagonal) plus one tile square, so no edge comes into view at any point of the
+   slide. Only transform animates (a composited layer). Reduced motion: still. */
 .screen--home { z-index: 0; background-color: var(--home-base); }
 .home__bg {
   position: absolute;
   top: 50%;
   left: 50%;
   z-index: -1;
-  width: 200vmax;
-  height: 200vmax;
-  margin-top: -100vmax;
-  margin-left: -100vmax;
-  background-image: var(--home-art);
+  width: calc(200vmax + var(--home-tile));
+  height: calc(200vmax + var(--home-tile));
+  margin-top: calc(-100vmax - var(--home-tile) / 2);
+  margin-left: calc(-100vmax - var(--home-tile) / 2);
   background-size: var(--home-tile) var(--home-tile);
   pointer-events: none;
   transform: rotate(-27deg);
