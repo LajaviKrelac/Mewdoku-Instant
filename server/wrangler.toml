@@ -84,9 +84,11 @@ RANKING_ENABLED = "true"
 PERIOD_MODE = "rolling"
 WEB_MODE = "records"
 DEV_ROUTES = "false"
-# Set from the origins G-SRV-1 records (spec §11.3): the game's exact https://apps-<APP_ID>.apps.fbsbx.com is
-# preferred to the wildcard (which admits every Instant Game); add the web origin; `null` only if measured.
-ALLOWED_ORIGINS = "https://*.apps.fbsbx.com"
+# Set from the origins G-SRV-1 records (spec §11.3): the game's exact https://apps-<APP_ID>.apps.fbsbx.com rather
+# than the wildcard (which admits every Instant Game). Probe 2026-10-11, facebook.com (WEB): Origin
+# https://apps-2382571989149479.apps.fbsbx.com. Add any other origin the Android, iOS and Messenger runs record;
+# add the web origin when it exists; `null` only if measured.
+ALLOWED_ORIGINS = "https://apps-2382571989149479.apps.fbsbx.com"
 MIN_CLIENT_VERSION = "0.0.0"
 RC_SWITCHES = "{}"
 CONFIG_OVERRIDES = ""

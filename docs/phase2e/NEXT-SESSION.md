@@ -27,10 +27,16 @@ upload; this note records the result and what is left.
 - Each successful upload adds a build to Web Hosting; never retry one that succeeded.
 - Allowed hosts needed: `graph.facebook.com` (token) and `graph-video.facebook.com` (upload).
 
+## Probe results
+
+- facebook.com (WEB), 2026-10-11 17:23 UTC: all five checks OK; `issued_at` present (+0 s); Origin
+  `https://apps-2382571989149479.apps.fbsbx.com` (referrer origin `https://shield-apps-2382571989149479.apps.fbsbx.com`).
+  That origin is now the production `ALLOWED_ORIGINS` in `server/wrangler.toml` (production is not deployed yet).
+
 ## Left (the user, in the App Dashboard)
 
-1. Instant Games → Web Hosting: move the probe build to **Testing**; open it on facebook.com, the Android app,
-   the iPhone app and messenger.com; paste each "Copy results" text back (STATUS-2e §7).
+1. Run the probe build (already in Testing) on the Android app, the iPhone app and messenger.com; paste each
+   "Copy results" text back (STATUS-2e §7).
 2. Then move the game build to Testing and play it.
-3. With the four probe results: set production `ALLOWED_ORIGINS` to the game's exact
-   `https://apps-<FB_APP_ID>.apps.fbsbx.com` origin (plus any other origin the probe recorded), spec §11.3.
+3. With the other three results: add any new origin to production `ALLOWED_ORIGINS`; if every surface shows
+   `issued_at`, set `signature.requireIssuedAt` to true (server/src/core/config.ts).
