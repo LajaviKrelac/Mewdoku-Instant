@@ -82,6 +82,11 @@ upload; this note records the result and what is left.
   ranking (rivals need the server deploy)". Checked first: tsc, 3,093 unit tests, 277 server tests, i18n. The
   first-load CSS measured 52.4 KB against its 51.7 KB ceiling (the combo bar's styles on top of the Home changes; not
   a platform limit). The computer rivals show only after the staging server is deployed with migration 0003.
+- 2026-10-12 UTC, staging server (user approval): migration `0003_rivals.sql` applied to `mewdoku-rank-staging`
+  (3 columns added, nothing removed), then `wrangler deploy --env staging` from `7da24d2` with `RIVALS="on"` (version
+  `260f5e67-664b-4e8a-8f95-7c28b2e5a78b`). `/v1/health` ok, db ok. Only brackets created after the deploy get computer
+  rivals; a running bracket finishes as it started. Rollback: `wrangler rollback --env staging` (the old code ignores
+  the new columns) or `CONFIG_OVERRIDES {"rivals":{"pools":[]}}`.
 
 ## Left
 
