@@ -7,6 +7,11 @@
 // (tests/unit/layering.spec.ts). Its stylesheet keeps the barrel's name (assets/ladder-chunk-*.css).
 import '../styles/ladder-chunk.css';
 import '../i18n/en-lazy'; // the lazy English strings (I-4)
+import { mountLadderArt } from '../ui/art/ladder-art';
+
+// Home cleanup (2026-10-12): the avatars as soon as the chunk lands (Home's mount loads it), so Home's profile
+// picture shows the player's avatar without waiting for a ranking overlay to open.
+mountLadderArt();
 
 export { createLadderSheet } from '../ui/overlays/ladder-sheet';
 export { createLadderResult } from '../ui/overlays/ladder-result';

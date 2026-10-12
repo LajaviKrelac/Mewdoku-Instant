@@ -397,8 +397,22 @@ test.describe('FBIG layout', () => {
       return out;
     });
 
-  test('the FB safe zone holds no control on Home or in a level', async ({ page }) => {
+  // 2026-10-12: the safe zone is flag fbSafeZone (off by default; the FB app's bar sits above the game). These checks
+  // keep the rule working for when it is turned on.
+  const SAFE = { query: '?flags=fbSafeZone' };
+
+  test('by default (no safe zone) the profile picture and the back arrow sit at the top left, as on the web', async ({ page }) => {
     await openGame(page, { data: { save: seededSave(12, 11) } });
+    expect(await page.evaluate(() => document.documentElement.hasAttribute('data-fb-safe'))).toBe(false);
+    const profile = (await page.locator('.screen--home .home__profile').boundingBox())!;
+    expect(profile.x).toBeLessThan(30);
+    await startLevel(page);
+    const back = (await page.locator('.screen--game .top-bar__btn--back').boundingBox())!;
+    expect(back.x).toBeLessThan(64);
+  });
+
+  test('the FB safe zone holds no control on Home or in a level', async ({ page }) => {
+    await openGame(page, { data: { save: seededSave(12, 11) } }, SAFE);
     expect(await page.evaluate(() => document.getElementById('app')?.dataset.platform)).toBe('fbig');
     // Phase 2e §2.5: the ranking chip (a button) sits in the top bar's lead slot, after the safe zone.
     await expect(page.locator('.screen--home button.ladder-chip')).toBeVisible();
@@ -410,7 +424,7 @@ test.describe('FBIG layout', () => {
   });
 
   test('a first run boots straight into the tutorial with the safe zone clear', async ({ page }) => {
-    await openGame(page, {});
+    await openGame(page, {}, SAFE);
     await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().session?.mode === 'tutorial');
     expect(await safeZoneHits(page)).toEqual([]);
   });
@@ -914,7 +928,7 @@ for (const locale of ['en_US', 'ar_AR'] as const) {
 
     test('Settings, About, How to play, the shop, in-game Settings and the board-anchored hint card (2d.1)', async ({ page }) => {
       test.setTimeout(60_000);
-      await openGame(page, { locale, persist: false, data: { save: seededSave(12, 11) } });
+      await openGame(page, { locale, persist: false, data: { save: seededSave(12, 11) } }, { query: '?flags=fbSafeZone' });
       await expect(page.locator('.home__play')).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.hasAttribute('data-fb-safe'))).toBe(true);
       if (locale === 'ar_AR') await expect.poll(() => page.evaluate(() => document.documentElement.dir)).toBe('rtl');
@@ -1175,7 +1189,7 @@ test.describe('FBIG banner during play (phase 2d §1.16, D-2d-15)', () => {
   });
 });
 
-// ── Phase 2d §1.1: the game screen keeps the FB safe zone clear (the back disc moves; in Arabic the gear) ──
+// ── Phase 2d §1.1: with the safe zone on, the game screen keeps it clear (the back disc moves; in Arabic the gear) ──
 
 for (const locale of ['en_US', 'ar_AR'] as const) {
   for (const viewport of [
@@ -1184,7 +1198,8 @@ for (const locale of ['en_US', 'ar_AR'] as const) {
   ] as const) {
     test(`FBIG game screen at ${viewport.width} × ${viewport.height} (${locale}): no control in the top-left 64 × 64; the Level column clear of the discs`, async ({ page }) => {
       await page.setViewportSize(viewport);
-      await openGame(page, { locale, persist: false, data: { save: seededSave(12, 11) } });
+      // 2026-10-12: with flag fbSafeZone (off by default).
+      await openGame(page, { locale, persist: false, data: { save: seededSave(12, 11) } }, { query: '?flags=fbSafeZone' });
       await page.locator('.home__play').click();
       await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
       await page.waitForTimeout(300);

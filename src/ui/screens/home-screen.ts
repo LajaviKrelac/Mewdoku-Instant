@@ -24,7 +24,7 @@
 // left Home: the pill carries the run, and a tap tells the strip's sentence (HomeCallbacks.onStreak).
 // Classes: .screen.screen--home[data-banner][data-streak?] > .home__body (+ .home__bg, the scrolling board, last) > .home__hero(.home__wordmark .home__tagline .home__mascot)
 //          .home__actions(.home__cards > .event-card[data-state] .home__play .badge.badge--hard
-//          .daily-card[data-state] .home-card) .home__stock(.stock__item); the top bar's lead slot
+//          .daily-card[data-state] .home-card); the top bar's lead slot
 //          holds button.home__profile; its centre slot .home__streak > button.streak-pill | .streak-pill--pending;
 //          .home__hero > .home__rank > .period-pill | button.ladder-chip; .daily-card > .daily-card__icon
 //          .daily-card__title .daily-card__tab(.daily-card__sub)
@@ -70,6 +70,8 @@ export interface DailyCardView {
   readonly solvedMs: number | null;
   /** daily.unlockAfterLevel, for "Unlocks after level 20". */
   readonly unlockLevel: number;
+  /** When today's puzzle ends (the next day start, epoch ms): the tab counts down to it until it is solved. */
+  readonly endsAt?: number;
 }
 
 /**
@@ -177,6 +179,13 @@ export function eventStatusText(e: HomeEventCardView): string {
   }
 }
 
+/** The daily tab's countdown: "07:48:12" (hours, minutes, seconds, zero-padded; clamps at 0). */
+export function formatCountdown(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const p2 = (n: number): string => String(n).padStart(2, '0');
+  return `${p2(Math.floor(total / 3600))}:${p2(Math.floor((total % 3600) / 60))}:${p2(total % 60)}`;
+}
+
 /** The daily card's status line ("Not played yet", "Solved 4:12", "Unlocks after level 20"). */
 export function dailyStatusText(d: DailyCardView): string {
   switch (d.state) {
@@ -270,20 +279,20 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
     { type: 'button', class: 'btn btn--primary btn--block btn--lg home__play', 'data-autofocus': '', on: { click: () => cb.onPlay() } },
     playLabel,
     hardBadge,
-    icon('icon-chevron', { class: 'btn__chev' }),
   );
 
   // Daily card.
   const dailyIcon = h('span', { class: 'daily-card__icon', 'aria-hidden': 'true' });
   const dailyTitle = h('span', { class: 'daily-card__title' });
-  const dailySub = h('span', { class: 'daily-card__sub' });
+  const dailySub = h('span', { class: 'daily-card__sub num' });
+  const dailyCheck = h('span', { class: 'daily-card__check', 'aria-hidden': 'true', hidden: true });
   // The original's daily pill: icon, title, and a tab hanging below with the status (size, solve time, lock).
   const daily = h(
     'button',
     { type: 'button', class: 'daily-card', on: { click: () => cb.onDaily() } },
     dailyIcon,
     dailyTitle,
-    h('span', { class: 'daily-card__tab' }, dailySub),
+    h('span', { class: 'daily-card__tab' }, dailyCheck, dailySub),
   );
 
   const cards = h('div', { class: 'home__cards' });
@@ -291,10 +300,6 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
   let strip: ReturnType<typeof createStreakPill> | null = null;
   /** I-4: the pill's box while its factory is on its way (same box, invisible, hidden from assistive tech). */
   let pendingStrip: HTMLElement | null = null;
-  const hintsCount = h('span', { class: 'stock__count num' });
-  const kittiesCount = h('span', { class: 'stock__count num' });
-  const hintsItem = h('span', { class: 'stock__item stock__item--hints', role: 'img' }, icon('icon-bulb', { class: 'stock__icon' }), hintsCount);
-  const kittiesItem = h('span', { class: 'stock__item stock__item--kitties', role: 'img' }, icon('icon-paw', { class: 'stock__icon' }), kittiesCount);
 
   const mascot = L.attr(mascotIllustration('home', { label: t('a11y.mascot') }), 'aria-label', () => t('a11y.mascot'));
   const mascotBox = h('div', { class: 'home__mascot' }, mascot);
@@ -312,7 +317,6 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
       { class: 'home__body' },
       hero,
       h('div', { class: 'home__actions' }, eventCard, play, daily, cards),
-      h('div', { class: 'home__stock stock' }, hintsItem, kittiesItem),
     ),
     // Home redesign: the scrolling board behind everything (screens.css .home__bg); last, so the top bar stays first.
     bg,
@@ -447,6 +451,33 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
     }
   };
 
+  // The daily tab: a once-a-second countdown to the next puzzle while today's is not solved.
+  let tick = 0;
+  let tabEndsAt: number | null = null;
+  const stopTick = (): void => {
+    if (tick) win()?.clearInterval(tick);
+    tick = 0;
+  };
+  const showCountdown = (): void => {
+    if (tabEndsAt === null) return;
+    const left = tabEndsAt - Date.now();
+    setText(dailySub, formatCountdown(left));
+    if (left <= 0) stopTick();
+  };
+  const renderTab = (d: DailyCardView, status: string): void => {
+    dailyCheck.hidden = d.state !== 'solved';
+    if (d.state === 'locked' || d.state === 'solved' || d.endsAt === undefined) {
+      stopTick();
+      tabEndsAt = null;
+      setText(dailySub, d.state === 'solved' ? formatClock(d.solvedMs ?? 0) : d.state === 'locked' ? status : '');
+      return;
+    }
+    tabEndsAt = d.endsAt;
+    showCountdown();
+    const w = win();
+    if (!tick && w && tabEndsAt > Date.now()) tick = w.setInterval(showCountdown, 1000);
+  };
+
   let last = view;
   const render = (v: HomeView): void => {
     last = v;
@@ -459,7 +490,8 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
     renderEvent(v.event);
     el.toggleAttribute('data-banner', v.bannerReserved);
     el.style.setProperty('--banner-reserve', `${cfg.ads.banner.reservePx}px`);
-    setText(playLabel, v.continueLevel ? t('home.continue', { level: v.level }) : t('home.play', { level: v.level }));
+    // Home cleanup (2026-10-12): always "Level 38", also with a board in progress (Play resumes it).
+    setText(playLabel, t('home.play', { level: v.level }));
     hardBadge.hidden = !v.hard;
     play.dataset.hard = String(v.hard);
 
@@ -472,7 +504,8 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
     const title = t('home.daily.title', { date });
     // The pill shows the title's name ("Daily puzzle"); the date stays in its accessible name.
     setText(dailyTitle, splitTitle(title).name);
-    setText(dailySub, d.state === 'locked' ? status : t('home.daily.sub', { size, status }));
+    // Home cleanup (2026-10-12): the tab shows the lock line, a check and the solve time, or the time left today.
+    renderTab(d, status);
     daily.setAttribute('aria-label', t('home.daily.a11y', { date, size, status }));
     const wanted = d.state === 'locked' ? 'lock' : 'cal';
     if (wanted !== iconState) {
@@ -480,11 +513,6 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
       clear(dailyIcon);
       dailyIcon.appendChild(icon(wanted === 'lock' ? 'icon-lock' : 'icon-calendar'));
     }
-
-    setText(hintsCount, String(v.hints));
-    setText(kittiesCount, String(v.kitties));
-    hintsItem.setAttribute('aria-label', t('home.stock.hints', { count: v.hints }));
-    kittiesItem.setAttribute('aria-label', t('home.stock.kitties', { count: v.kitties }));
 
     if (v.extraCards !== lastCards) {
       lastCards = v.extraCards;
@@ -513,6 +541,7 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
     destroy() {
       offLocale();
       L.dispose();
+      stopTick();
       w0?.removeEventListener('resize', scheduleFit);
       if (fitRaf) win()?.cancelAnimationFrame(fitRaf);
       topBar.destroy();

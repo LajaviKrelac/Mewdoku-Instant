@@ -50,6 +50,7 @@ describe('flags', () => {
       groupChallenges: false,
       ladder: true,
       dayStreak: true,
+      fbSafeZone: false,
     });
     for (const id of Object.keys(DEFAULT_FLAGS) as (keyof typeof DEFAULT_FLAGS)[]) expect(isFlagOn(id)).toBe(DEFAULT_FLAGS[id]);
     setFlagOverrides(parseFlagParam('?flags=-events,groupChallenges'));
@@ -81,7 +82,12 @@ describe('selectHomeView', () => {
     };
     v = selectHomeView(initialAppState(withSlot), { ...ctx, platformId: 'fbig' });
     expect(v.continueLevel).toBe(true);
-    expect(v.fbSafeZone).toBe(true);
+    // 2026-10-12: the FB safe zone only with flag fbSafeZone (off by default).
+    expect(v.fbSafeZone).toBe(false);
+    setFlagOverrides({ fbSafeZone: true });
+    expect(selectHomeView(initialAppState(withSlot), { ...ctx, platformId: 'fbig' }).fbSafeZone).toBe(true);
+    expect(selectHomeView(initialAppState(withSlot), ctx).fbSafeZone).toBe(false);
+    setFlagOverrides({});
     expect(v.daily).toMatchObject({ state: 'solved', solvedMs: 252_000 });
   });
 

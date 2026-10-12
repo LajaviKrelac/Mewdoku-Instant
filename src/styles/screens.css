@@ -320,6 +320,8 @@
   border-radius: 16px; background: var(--rule-tile-2); color: var(--r7); cursor: pointer; box-shadow: var(--shadow-1); }
 .home__profile:active { transform: scale(0.95); }
 .home__profile svg { position: absolute; top: 0; left: 0; width: 48px; height: 48px; }
+/* Our cat head stands in, smaller, until the avatar art arrives with the ranking chunk (the avatar's disc covers it). */
+.home__profile > svg { top: 7px; left: 7px; width: 34px; height: 34px; }
 /* The streak pill's box (its look comes with the overlay chunk, like the pill): reserved while it is on its way. */
 .streak-pill { display: inline-flex; min-width: 104px; height: 40px; }
 .streak-pill--pending { visibility: hidden; }

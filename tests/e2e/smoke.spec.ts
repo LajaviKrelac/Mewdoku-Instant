@@ -328,7 +328,7 @@ test('5 · reload mid-level restores the exact board', async ({ page }) => {
   const before = (await game(page))?.cells;
   await page.reload();
   await ready(page, 'home');
-  await expect(page.locator('.home__play')).toContainText('Continue');
+  await expect(page.locator('.home__play')).toContainText('Level 5');
   await page.locator('.home__play').click();
   await playing(page);
   expect((await game(page))?.cells).toEqual(before);

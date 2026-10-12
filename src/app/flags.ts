@@ -16,7 +16,11 @@ export type FlagId =
   | 'rankings'
   | 'groupChallenges'
   | 'ladder'
-  | 'dayStreak';
+  | 'dayStreak'
+  // FB's top-left 64 × 64 "safe zone" (05 §5.5, inferred): on, the FBIG build keeps its controls out of it. Off by
+  // default since 2026-10-12: on the user's iPhone the FB app draws its logo and menu in its own bar ABOVE the game,
+  // so the shift only pushed the profile picture and the back arrow out of place. `?flags=fbSafeZone` turns it on.
+  | 'fbSafeZone';
 
 export const DEFAULT_FLAGS: Readonly<Record<FlagId, boolean>> = Object.freeze({
   autoX: false,
@@ -30,6 +34,7 @@ export const DEFAULT_FLAGS: Readonly<Record<FlagId, boolean>> = Object.freeze({
   groupChallenges: false,
   ladder: true,
   dayStreak: true,
+  fbSafeZone: false,
 });
 
 const FLAG_IDS = Object.keys(DEFAULT_FLAGS) as FlagId[];

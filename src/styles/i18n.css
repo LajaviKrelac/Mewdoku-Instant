@@ -102,11 +102,6 @@
   text-align: left;
 }
 
-[dir='rtl'] .home__play .btn__chev {
-  right: auto;
-  left: 22px;
-}
-
 /* A button's price that follows its label ("شراء $3.99"): .num is forced LTR above, so its logical
    margin (base.css .btn > * + *) resolves to its outer edge. The gap goes on the side facing the
    label (review UX-10; physical, as the other offsets in this section). */

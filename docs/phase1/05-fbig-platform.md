@@ -185,6 +185,8 @@ The NAV_FLOATING platform menu overlays a corner of the game. We **reserve the t
 
 *inferred.* The exact position and size of the menu must be checked on device in Phase 4.
 
+> **2026-10-12 (user's iPhone, FB app, first-hand):** the FB app draws its logo, menu and close button in its own black bar **above** the game; nothing floats over the game's top-left corner. The shift only pushed Home's profile picture and the game screen's back arrow out of place, so the safe zone is now flag `fbSafeZone`, **off by default** (`src/app/flags.ts`; `?flags=fbSafeZone` turns it on, and the FBIG e2e keeps checking the rule with it). Android and facebook.com are not checked yet.
+
 ## 6. Ads plan
 
 > **Phase 2b** (parity-spec §3; fb-dashboard B1–B6): banners are in use on FBIG through `loadBannerAdAsync(placementID, 'bottom')` (which loads and shows) and `hideBannerAdAsync()`, on Home, the victory screen and the event screen only, from 10 completed levels, with a 58 px reserve and a 60 s reload window, and only when `getSupportedAPIs()` lists both banner calls. Hidden before a transition to the game screen, before any interstitial or rewarded ad, and while a modal is open. The interstitial cadence (120 / 100 / 90 s) is unchanged; new triggers `event_next` (interstitial) and `group_double` (rewarded). A "No Ads" purchase ends interstitials and banners.
