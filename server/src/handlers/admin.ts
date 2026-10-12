@@ -8,8 +8,8 @@ import { DAY, utcDateKey } from '../core/clock';
 import { generateNick, renderNick } from '../core/nickname';
 import { sha256 } from '../core/crypto';
 import { newRowId } from '../core/ids';
-import { decodeFinalRivals, isRivalSlot, liveRivalCount, RIVAL_SLOT_BASE, rivalAt, rivalRoster } from '../core/rivals';
-import { finalPlan, finalTable, liveTable } from '../core/table';
+import { decodeFinalRivals, isRivalSlot, RIVAL_SLOT_BASE, rivalAt, rivalRoster } from '../core/rivals';
+import { finalPlan, finalTable, liveRivalCountOf, liveTable } from '../core/table';
 import { authAdmin } from '../http/auth';
 import type { Ctx } from '../http/context';
 import { fail, json, noContent } from '../http/errors';
@@ -39,10 +39,16 @@ async function playerByCode(ctx: Ctx, code: string): Promise<PlayerRow> {
 }
 
 /**
- * GET /admin/v1/brackets/{id}[?at=<ms>][&live=1] (D-2e-24, design §7): the bracket's table as players see it at
- * `at` (clamped to [opened_at, min(now, ends_at)]; default now), every row labelled `player` or `rival`, plus the
- * retired rivals (index ≥ K) and the hidden players. A final bracket answers its frozen table; `live=1`
- * recomputes it at ends_at (the audit "frozen equals live"). Read-only (not logged); the seed never appears.
+ * GET /admin/v1/brackets/{id}[?at=<ms>][&live=1] (D-2e-24, design §7): the bracket's table, every row labelled
+ * `player` or `rival`, plus the retired rivals (index ≥ K) and the hidden players. A final bracket answers its
+ * frozen table; `live=1` recomputes it at ends_at (the audit "frozen equals live"). Read-only (not logged); the
+ * seed never appears.
+ * 2026-10-12, D-2e-24 (review fixes): `at` (clamped to [opened_at, min(now, ends_at)]; default now) moves ONLY the
+ * computer players. The real rows carry their current points and scoredAt, and K (which rivals are live, which
+ * retired) counts from the current next_slot, so with the default `at` = now this is the table players see, while
+ * a past `at` is not a rebuild of the table they saw then. Admin always shows and labels the computer players
+ * (H-9), under the emergency `rivals.hide` too: a final bracket's snapshot is what refinalize re-ranks with
+ * whatever `hide` says (finalPlan), and `bracket.rivals.hidden` says that players currently see none of them.
  */
 async function adminBracketView(ctx: Ctx, id: string): Promise<Response> {
   const s = ctx.s;
@@ -56,13 +62,13 @@ async function adminBracketView(ctx: Ctx, id: string): Promise<Response> {
   const final = b.finalized_at !== null;
   const live = ctx.url.searchParams.get('live') === '1';
   const at = final ? b.ends_at : Math.min(Math.max(asked, b.opened_at), Math.max(b.opened_at, Math.min(now, b.ends_at)));
-  const hide = s.cfg.rivals.hide;
   const [members, hearts] = await Promise.all([s.store.adminBracket(id), s.store.bracketHearts(id)]);
   const realTo = new Map<number, number>();
   for (const h of hearts) if (isRivalSlot(h.to_slot)) realTo.set(h.to_slot, (realTo.get(h.to_slot) ?? 0) + 1);
-  const table = final && !live ? finalTable(b, members, hide) : liveTable(b, members, at, hide);
+  // hide = false: admin lists the computer players under `hide` too (H-9; `rivals.hidden` reports the switch).
+  const table = final && !live ? finalTable(b, members, false) : liveTable(b, members, at, false);
   const roster = rivalRoster(b.rivals, b);
-  const k = roster ? liveRivalCount(roster, b) : 0;
+  const k = roster ? liveRivalCountOf(roster, b, members) : 0; // the same K as the table (a join between the reads)
   const bySlot = new Map(members.map((m) => [m.slot, m]));
   const rows = table.map((r) => {
     const common = { rank: r.rank, kind: r.kind, slot: r.slot, nickname: r.nickname, avatarId: r.avatar, points: r.points, scoredAt: r.scoredAt };
@@ -111,6 +117,7 @@ async function adminBracketView(ctx: Ctx, id: string): Promise<Response> {
             live: k,
             present: rows.filter((r) => r.kind === 'rival').length,
             topFinal,
+            hidden: s.cfg.rivals.hide,
           }
         : null,
     },

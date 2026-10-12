@@ -10,7 +10,7 @@ import type { RankWrite, RewardWrite } from '../store/sql-store';
 import { paidPlaces, rankRows } from './brackets';
 import type { ServerConfig } from './config';
 import { rewardId } from './ids';
-import { decodeFinalRivals, encodeFinalRivals, isRivalSlot, liveRivalCount, RIVAL_SLOT_BASE, rivalAt, rivalNames, rivalRoster, type FinalRival } from './rivals';
+import { decodeFinalRivals, encodeFinalRivals, isRivalSlot, liveRivalCount, RIVAL_SLOT_BASE, rivalAt, rivalNames, rivalRoster, type FinalRival, type Roster } from './rivals';
 
 /** One row of a bracket table: a real member or a computer player (playerKey null). */
 export interface TableRow {
@@ -36,14 +36,29 @@ function realRows(members: readonly MemberRow[]): TableRow[] {
 }
 
 /**
+ * K for a bracket row and its member list. The two are separate reads (bracketView, the admin route: no
+ * transaction between them), so a join that commits in between leaves a stale next_slot beside the new member;
+ * K counted from that next_slot would show next_slot + 1 real rows plus max_members − next_slot rivals
+ * (max_members + 1 rows, which the parser rejects) and bring back for one view the rival that join retired.
+ * 2026-10-12, D-2e-24 (review fix): K counts from max(next_slot, 1 + the highest member slot). A member's slot
+ * is the next_slot it joined at and next_slot never drops (deletes keep it), so with consistent reads this is
+ * next_slot and nothing changes; with a stale bracket row it is the next_slot after that join.
+ */
+export function liveRivalCountOf(roster: Roster, b: Pick<BracketRow, 'next_slot' | 'max_members'>, members: readonly Pick<MemberRow, 'slot'>[]): number {
+  let next = b.next_slot;
+  for (const m of members) if (m.slot + 1 > next) next = m.slot + 1;
+  return liveRivalCount(roster, { next_slot: next, max_members: b.max_members });
+}
+
+/**
  * The rivals shown at `at` (clamped to [opened_at, ends_at]): none under `hide` or without a valid tag;
- * otherwise rival i < K that has arrived. Names avoid every member's nickname, hidden rows included.
+ * otherwise rival i < K (liveRivalCountOf) that has arrived. Names avoid every member's nickname, hidden rows included.
  */
 function liveRivalRows(b: BracketRow, members: readonly MemberRow[], at: number, hide: boolean): TableRow[] {
   if (hide) return [];
   const roster = rivalRoster(b.rivals, b);
   if (!roster) return [];
-  const k = liveRivalCount(roster, b);
+  const k = liveRivalCountOf(roster, b, members);
   const t = clampTo(b, at);
   const present: { slot: number; points: number; scoredAt: number; hearts: number }[] = [];
   for (let i = 0; i < k; i++) {

@@ -453,7 +453,7 @@ export interface Env {
 export default { fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response>, scheduled(ev, env, ctx): Promise<void> };
 ```
 
-`ServerConfig` mirrors spec §1.16 (defaults in `core/config.ts`, overridden by `Env` variables where named). `core/*` never touches `Env`, `fetch`, `Date.now()` or D1. 2026-10-12: `Env` also carries `RIVALS?: string` (`on` | `off`) and `ServerConfig.rivals` (§15); the store, migration and route additions for computer rivals are listed in §15.2.
+`ServerConfig` mirrors spec §1.16 (defaults in `core/config.ts`, overridden by `Env` variables where named). `core/*` never touches `Env`, `fetch`, `Date.now()` or D1. 2026-10-12: `Env` also carries `RIVALS?: string` (`on` | `off`; through `AppEnv` → `ConfigVars`) and `ServerConfig` gains `rivals` (§15); the store, migration and route additions for computer rivals are listed in §15.2.
 
 ---
 
