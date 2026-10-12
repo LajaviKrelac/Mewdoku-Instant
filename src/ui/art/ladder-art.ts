@@ -12,7 +12,7 @@
 // - nick-tag: a collar (Coral, dashed stitching) with a round gold tag on a ring (a paw engraved) and a little
 //   bell beside it; no bone;
 // - icon-pencil, icon-shuffle, icon-info: edit, shuffle and info glyphs in the icon set's 2-unit round line
-//   with the soft --icon-fill wash;
+//   with the soft --icon-fill wash; icon-stopwatch (leaderboard update): a gold stopwatch for the countdown pill;
 // - reward-chest, reward-chest-open: the wooden chest with the fish-shaped lock (chestArt below).
 // Lazy only: the `ladder` chunk mounts them (mountLadderArt adds these symbols to the sprite once). Nothing in
 // the main bundle may import this module (spec §7.9); the lazy-art chunk, which the board's motion and the
@@ -227,6 +227,14 @@ export function ladderArtSymbols(): string {
       'icon-shuffle',
       '0 0 24 24',
       `<path d="M3.6 7.4h2.8c4.6 0 6.6 9.2 11.2 9.2h2.6M3.6 16.6h2.8c1.6 0 2.8-1.1 3.8-2.6m3.6-4c1-1.5 2.2-2.6 3.8-2.6h2.6M17.6 4.6l2.8 2.8-2.8 2.8M17.6 13.8l2.8 2.8-2.8 2.8" ${LINE}/>`,
+    ),
+    // Leaderboard update: a round stopwatch (a crown button, a side button, one hand) for the countdown pill.
+    sym(
+      'icon-stopwatch',
+      '0 0 24 24',
+      `<circle cx="12" cy="13.4" r="7.6" style="fill:${gold}" stroke="${deep}" stroke-width="1.8"/><circle cx="12" cy="13.4" r="5.4" fill="#fff"/>` +
+        `<path d="M10 3.4h4M12 3.4v2.4M18.2 6.4l1.4 1.4" stroke="${deep}" stroke-width="2" stroke-linecap="round"/>` +
+        `<path d="M12 13.4V9.8M12 13.4l2.4 1.4" stroke="${deep}" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="13.4" r="1.1" fill="${deep}"/>`,
     ),
     sym(
       'icon-info',

@@ -1,11 +1,11 @@
 // Owner: G4 (Phase 2e). SQL hygiene (spec §1.2, §1.10, §10.5 #8, §10.6 #2): every statement the app prepares
 // during a full scenario reads by key or index range (EXPLAIN QUERY PLAN never shows a full SCAN of a table:
 // D1 bills every row a scan touches, critic C-18); SQL is built from bound parameters only; exactly one
-// statement inserts a `members` row (the join after an accepted win, H-1).
+// statement inserts a `members` row (the join after an accepted win, or the sign-in join; H-1).
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { admin, DAY, HOUR, makeTestApp, playersWithWins, SERVER_DIR } from '../helpers/harness';
+import { admin, DAY, HOUR, makeTestApp, playersWithWins, SERVER_DIR, TestPlayer } from '../helpers/harness';
 
 const TABLES = ['meta', 'players', 'brackets', 'members', 'wins', 'hearts', 'rewards', 'flags', 'seen_nonces', 'ip_quota', 'tombstones', 'admin_log', 'stats_daily'];
 
@@ -23,6 +23,10 @@ async function scenario(): Promise<Set<string>> {
   await ps[1]!.profile({ listed: true });
   await ps[2]!.win('L99'); // a level jump flag
   await ps[3]!.me();
+  // Leaderboard update: the auto-join at sign-in and the presence ping.
+  const joiner = new TestPlayer(t, 'x-join', { join: true });
+  await joiner.signIn();
+  await joiner.presence('playing');
   t.clock.advance(DAY + HOUR);
   for (const p of ps) await p.signIn();
   const ended = await ps[0]!.bracket();

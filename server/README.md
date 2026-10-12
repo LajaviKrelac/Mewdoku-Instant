@@ -7,16 +7,22 @@ One Cloudflare Worker + one D1 (SQLite) database. All domain logic sits behind `
 ```
 src/worker.ts        export default { fetch, scheduled } — builds the app once per isolate
 src/app.ts           createApp(deps): routing, CORS, kill switch, errors, one JSON log line per request
-src/handlers/        health config session wins bracket rewards hearts profile me admin dev + views
+src/handlers/        health config session (+ join) wins bracket presence rewards hearts profile me admin dev + views
 src/core/            PURE: fb-signature nonce token ids brackets wins anticheat nickname moderation config clock crypto version
 src/content/         the solution table (generated/solutions.ts, ≈ 59 KB) and its lookup rule
 src/store/           SqlStore (every SQL statement) · sql-db.ts (SqlDb) · drivers/d1.ts · drivers/node-sqlite.ts
 src/moderation/      our name blocklist
-migrations/          0001_init.sql, 0002_wins_token.sql (applied in order by wrangler and by the Node driver)
+migrations/          0001_init.sql, 0002_wins_token.sql, 0003_presence.sql (applied in order by wrangler and by the Node driver)
 dev/serve.ts         the Node dev server (what Playwright starts)
 scripts/             build-solutions.ts (offline table + drift check) · load.ts · smoke.ts · client.ts
 test/                unit/ http/ contract/ (golden fixtures shared with the client) workers/
 ```
+
+## Leaderboard update (auto-join and activity)
+
+- `POST /v1/session` with `join: true` (the client sends it) puts a listed player who is in no running bracket into one at once, with 0 fish (`bracket.joinOnSession`, default on). Same guarded batch as a win's join; a 0-fish member is never paid.
+- `POST /v1/presence {state: 'online' | 'playing'}` updates my own row's activity in my running bracket (`bracket` rate bucket; `presence.enabled`). Every row carries `seenAt` (the latest of the ping, the last counted win and the join; null while presence is off) and `playing`; the client turns them into "Online now", "Playing now" or "2m ago".
+- Deploy order: `db:migrate:staging` (0003 adds `members.active_at` and `members.playing`) **before** `deploy:staging`.
 
 ## Run
 

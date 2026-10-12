@@ -527,5 +527,18 @@ export const catalog: LocaleCatalog = {
   'victory.streakReward': 'Récompense de série : {reward}',
   'howto.streak': 'Résous au moins une grille par jour pour construire une série. Tous les {days} jours d’affilée, tu gagnes une récompense d’indices et de minous. Si tu manques un jour, la série reprend au jour 1.',
   'victory.dailyReward': 'Récompense du jour : {reward}',
+  // ── Leaderboard update ──
+  'ladder.status.online': 'En ligne',
+  'ladder.status.playing': 'En partie',
+  'ladder.status.minutes': 'il y a {count} min',
+  'ladder.status.hours': 'il y a {count} h',
+  'ladder.status.days': 'il y a {count} j',
+  'ladder.session.title': 'Nouveau classement',
+  'ladder.session.body': 'Résous des grilles pour récolter des poissons et monter dans le classement. Regarde jusqu’où tu peux grimper avant la fin de ce classement !',
+  'ladder.session.ok': 'Compris',
+  'ladder.climb.first': 'Magnifique ! Tu es à la première place !',
+  'ladder.climb.up': 'Bien joué ! Tu grimpes à la place {rank} !',
+  'ladder.info.window.rollingJoin': 'Un classement dure {hours} heures et compte jusqu’à {count} joueurs. Quand il se termine, tu en rejoins un nouveau la prochaine fois que tu ouvres le jeu.',
+  'ladder.info.activity': 'Les joueurs de ton classement voient ta dernière activité et si tu es en train de résoudre une grille.',
   ...LOCALE_NAMES,
 };

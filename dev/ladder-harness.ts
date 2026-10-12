@@ -37,6 +37,7 @@ import type { StreakStripView } from '../src/ui/hud/streak-strip';
 import { createBracketList } from '../src/ui/overlays/bracket-list';
 import { createHowToPlay } from '../src/ui/overlays/how-to-play';
 import { createLadderResult, type LadderResultProps } from '../src/ui/overlays/ladder-result';
+import { createLadderSession } from '../src/ui/overlays/ladder-session';
 import { createLadderSheet, type LadderRulesView, type LadderSheetProps } from '../src/ui/overlays/ladder-sheet';
 import { createNicknameSheet, type NicknameSheetProps } from '../src/ui/overlays/nickname-sheet';
 import {
@@ -149,6 +150,8 @@ const homeCallbacks = {
 
 // ─────────────────────────────── ranking fixtures ───────────────────────────────
 
+const ACTIVITY_AGO = [20_000, 50_000, 4 * 60_000, 11 * 60_000, 47 * 60_000, 3 * H];
+
 /** `n` rows, best first; my row at rank `me` (0 = none). Points fall with the rank; some ties. */
 function rows(n: number, me = 5, over: (r: BracketRowView) => Partial<BracketRowView> = () => ({})): BracketRowView[] {
   return Array.from({ length: n }, (_, i) => {
@@ -162,6 +165,9 @@ function rows(n: number, me = 5, over: (r: BracketRowView) => Partial<BracketRow
       me: i + 1 === me,
       likedByMe: i === 1,
       heartEnabled: i + 1 !== me,
+      // Leaderboard update: a spread of activity ("Playing now", "Online now", "4m ago" … "3h ago").
+      seenAt: Date.now() - (ACTIVITY_AGO[i % ACTIVITY_AGO.length] ?? 0),
+      playing: i % ACTIVITY_AGO.length === 0,
       ...(i + 1 === me ? { name: 'Velvet Pounce 27', avatarId: 4 } : {}),
     };
     return { ...r, ...over(r) };
@@ -209,6 +215,8 @@ function fromFixture(fx: { response: { body: unknown } }, over: Partial<BracketL
       me: r.me,
       likedByMe: r.likedByMe,
       heartEnabled: !r.likedByMe,
+      seenAt: r.seenAt === null ? null : Date.now() - (v.serverTime - r.seenAt),
+      playing: r.playing,
     })),
     members: v.members,
     // Shown against the harness's clock: the same distance to the end as in the fixture.
@@ -275,6 +283,12 @@ function sheetProps(over: Partial<LadderSheetProps> = {}): LadderSheetProps {
 function sheet(over: Partial<LadderSheetProps> = {}): void {
   home();
   openOverlay(createLadderSheet(), sheetProps(over));
+}
+
+/** Leaderboard update: the "New ranking" card (a bracket the sign-in just joined: 23:59:54 left). */
+function session(): void {
+  home();
+  openOverlay(createLadderSession(), { endsAt: Date.now() + 24 * H - 6000, now: () => Date.now(), avatarId: 4, reducedMotion: reduced, onClose: log('onClose') });
 }
 
 function result(over: Partial<LadderResultProps> = {}): void {
@@ -427,6 +441,7 @@ const VIEWS: Record<string, () => void> = {
   'sheet-info-only': () => sheet({ view: 'info', infoOnly: true, list: null }),
   'sheet-records': () => sheet({ view: 'records', list: null, recordsReason: 'opted_out' }),
   // the result card (spec §2.6)
+  session: () => session(),
   'result-paid': () => result(),
   'result-paid-no-video': () => result({ canDouble: false, place: 1, reward: { hints: 2, kitties: 1 } }),
   'result-too-few': () => result({ case: 'too_few', place: 1, members: 3, reward: null, canDouble: false }),

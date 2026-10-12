@@ -91,7 +91,9 @@ export type IconSymbol =
   | 'nick-tag'
   | 'icon-pencil'
   | 'icon-shuffle'
-  | 'icon-info';
+  | 'icon-info'
+  // Leaderboard update: the countdown pill's stopwatch (ladder-art.ts).
+  | 'icon-stopwatch';
 /** Phase 2e: avatar ids 0 … AVATAR_COUNT − 1 (src/shared/rank-api.ts, 12, append-only; P-L13). */
 export type AvatarIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
 /** Phase 2e: one of our 12 avatars (art/ladder-art.ts). */

@@ -114,7 +114,9 @@ export type OverlayId =
   // Phase 2e (spec §2.5–§2.7): the ranking sheet, a ranking's result card and the name sheet (lazy `ladder` chunk).
   | 'ladder'
   | 'ladder_result'
-  | 'nickname';
+  | 'nickname'
+  // Leaderboard update: the "New ranking" card (the sign-in joined a new bracket).
+  | 'ladder_session';
 
 /** What the player asked to play. phase2b §4.4 adds event puzzles (`index` 0-based). */
 export type SessionRequest =

@@ -1,4 +1,4 @@
-// Owner: G3 (Phase 2e)
+// Owner: G3 (Phase 2e); leaderboard update (the podium, the activity pills, the rank-up)
 // The bracket list (spec §2.4, §2.8, §7.7, §9.4; CONTRACTS §8): MY BRACKET of the worldwide daily ranking,
 // shared by the post-win panel (overlay `ranking`, which receives this factory from the lazy `ladder`
 // chunk) and the ranking sheet (overlay `ladder`). Lazy `ladder` chunk only.
@@ -10,30 +10,47 @@
 // Names are rendered with textContent and dir="auto" (bidi-isolated in RTL rows), the same English words
 // in every locale. Queued fish show on my row as "+2 waiting"; my rank stays the server's last one.
 //
-// Layout (top to bottom): "Ends in 7 h 48 min · 37 players" (countdown never announced), the rewards line,
-// "Last updated 14:02" + the offline line (a cached bracket), the alone line, the scroll list of rows (my
-// row highlighted with a "You" tag; places 1–3 carry our medal AND their number), the pinned copy of my row
-// (aria-hidden, shown while my row is scrolled out of view), "+3 hearts from other players", and once the
+// Leaderboard update (user: "it looks like this", the reference's leaderboard): above the list, the countdown as a
+// stopwatch pill ("23:48:55", ticking each second; the worded "Ends in 7 h 48 min" stays for screen readers) and a
+// podium of the first three rows (2nd, 1st, 3rd from the inline start; only the places that exist, never a
+// placeholder): each a framed picture on a gold, periwinkle or apricot step with our medal, the name, the fish and,
+// for a paid place, our reward chest. Every row (podium and list) carries its status pill: "Online now" or "Playing
+// now" while the server saw that player within ladder.presence.nowMs, else "4m ago" / "3h ago" / "1d ago"; no pill
+// without the server's seenAt. The podium is aria-hidden (the list below reads every row, status included).
+// The rank-up (playClimb, the post-win panel): my fish count up, then my row rides up to its new place while the
+// rows it passes step down and the list follows it; a podium place of mine pops in with confetti. It animates
+// between the server's two answers only (my place before the win, as the server last said, and now).
+//
+// Layout (top to bottom): the stopwatch pill, "37 players" (with the countdown words for screen readers only), the
+// podium, the rewards line, "Last updated 14:02" + the offline line (a cached bracket), the alone line, the scroll
+// list of rows (my row highlighted with a "You" tag; places 1–3 carry our medal AND their number), the pinned copy of
+// my row (aria-hidden, shown while my row is scrolled out of view), "+3 hearts from other players", and once the
 // first-time line "This is you in the ranking: …".
 // A11y (§7.7): the list is role="list"; each row is a listitem named "#5, Brave Noodle 12, you, 14 fish,
-// 2 hearts" (my row adds ", +2 waiting" while fish wait, audit B11; the header's dot is read as a comma, B10);
-// the rows are not tab stops, only their heart buttons (and, in the sheet, my row's pencil) are;
-// a heart is "Give a heart to Velvet Paws 3, 1 heart" with aria-pressed. Reduced motion: no heart pop.
+// 2 hearts, Online now" (my row adds ", +2 waiting" while fish wait, audit B11; the header's dot is read as a
+// comma, B10); the rows are not tab stops, only their heart buttons (and, in the sheet, my row's pencil) are;
+// a heart is "Give a heart to Velvet Paws 3, 1 heart" with aria-pressed. Reduced motion: no heart pop, no climb
+// and no confetti (the final places at once).
 //
-// Classes: .rank-list.rank-list--bracket[data-kind=bracket][data-stale=0|1]
-//          > .ranking__meta(.ranking__countdown .ranking__sep[aria-hidden] .ranking__sep-sr.sr-only .ranking__count) .ranking__rewards .ranking__stale .ranking__offline
-//            .ranking__alone ol.rank-rows[role=list] > li.rank-row[data-rank][data-me=0|1][data-slot]
+// Classes: .rank-list.rank-list--bracket[data-kind=bracket][data-stale=0|1][data-climbing?]
+//          > .lb-timer(.lb-timer__icon .lb-timer__text)
+//            .ranking__meta(.ranking__countdown.sr-only .ranking__sep[aria-hidden] .ranking__sep-sr.sr-only .ranking__count)
+//            .lb-podium[aria-hidden] > .lb-pod[data-place=1|2|3][data-me=0|1] > (.lb-pod__frame .lb-pod__step(.lb-pod__medal
+//              .lb-pod__num) .lb-pod__name .lb-pod__fish(.lb-pod__pts) .lb-pod__gift? .lb-status) .lb-confetti?
+//            .ranking__rewards .ranking__stale .ranking__offline .ranking__alone
+//            ol.rank-rows[role=list] > li.rank-row[data-rank][data-me=0|1][data-slot]
 //              > .rank-row__place(.rank-row__medal? .rank-row__num) .rank-row__avatar .rank-row__who(.rank-row__name
-//                .rank-row__line(.rank-row__tags(.rank-row__you .rank-row__waiting) button.rank-row__edit?)) .rank-row__points(.rank-row__pts)
-//                button.rank-row__heart[aria-pressed] > .rank-row__hearts
+//                .rank-row__line(.rank-row__tags(.rank-row__you .rank-row__waiting) .lb-status button.rank-row__edit?))
+//                .rank-row__points(.rank-row__pts) .rank-row__gift? button.rank-row__heart[aria-pressed] > .rank-row__hearts
 //            .rank-row.rank-row--pinned[aria-hidden=true] .ranking__hearts-new .ranking__first
+//          .lb-status[data-status=online|playing|away]
 import { cfg } from '../../app/config';
 import { formatDuration, formatNumber, getLocale, onLocaleChanged, t, tn } from '../../i18n';
 import { avatarSymbol, HEART_POP, HEART_POP_MS, mountLadderArt } from '../art/ladder-art';
 import { icon } from '../art/sprite';
 import { h, setText } from '../dom';
 import '../../styles/ladder-chunk.css';
-import type { BracketListCallbacks, BracketListHandle, BracketListView, BracketRowView } from './ranking-panel';
+import type { BracketListCallbacks, BracketListHandle, BracketListView, BracketRowView, ClimbResult } from './ranking-panel';
 
 /** "Ends in 7 h 48 min" / "Ends in less than a minute" / "Final results" (spec §2.4 Countdown). */
 export function countdownText(endsAt: number | null, now: number, final: boolean): string | null {
@@ -54,6 +71,13 @@ export function nextTickMs(endsAt: number | null, now: number, tickMs: number = 
   return Math.max(250, Math.min(tickMs, toEdge));
 }
 
+/** Leaderboard update: the stopwatch pill's "23:48:55" (hours, minutes, seconds, zero-padded; clamps at 0; Latin digits). */
+export function clockText(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const p2 = (n: number): string => String(n).padStart(2, '0');
+  return `${p2(Math.floor(total / 3600))}:${p2(Math.floor((total % 3600) / 60))}:${p2(total % 60)}`;
+}
+
 /** "14:02": a clock time in the active locale, Latin digits (the stale line). */
 export function timeOfDay(ms: number): string {
   try {
@@ -71,18 +95,38 @@ export function rewardsLineText(v: Pick<BracketListView, 'rewardsLine' | 'paidPl
   return null;
 }
 
+export type StatusKind = 'online' | 'playing' | 'away';
+
+/**
+ * Leaderboard update: a row's status pill from the server's seenAt and playing (device clock), or null without
+ * seenAt. Seen within `nowMs`: "Playing now" / "Online now"; else "4m ago", "3h ago", "1d ago" (whole units, down).
+ * My own row is "Online now" (I am looking at it) unless the server says I am playing.
+ */
+export function statusOf(r: Pick<BracketRowView, 'seenAt' | 'playing' | 'me'>, now: number, nowMs: number = cfg.ladder.presence.nowMs): { kind: StatusKind; text: string } | null {
+  if (r.seenAt === null) return null;
+  const age = Math.max(0, now - r.seenAt);
+  if (r.me || age < nowMs) return r.playing && !r.me ? { kind: 'playing', text: t('ladder.status.playing') } : { kind: 'online', text: t('ladder.status.online') };
+  const minutes = Math.floor(age / 60_000);
+  if (minutes < 60) return { kind: 'away', text: t('ladder.status.minutes', { count: formatNumber(Math.max(1, minutes)) }) };
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return { kind: 'away', text: t('ladder.status.hours', { count: formatNumber(hours) }) };
+  return { kind: 'away', text: t('ladder.status.days', { count: formatNumber(Math.floor(hours / 24)) }) };
+}
+
 const heartsText = (n: number): string => tn('ladder.hearts', n, { count: formatNumber(n) });
 const fishText = (n: number): string => tn('fish.count', n, { count: formatNumber(n) });
 
 /**
  * A row's listitem name: "#5, Brave Noodle 12, you, 14 fish, 2 hearts" (spec §7.7). Audit B11: my row with fish
  * waiting to be sent ends with the chip's own words ("…, 2 hearts, +3 waiting"), so a screen reader hears them too.
+ * Leaderboard update: the row's status ("Online now", "4m ago") ends it when there is one.
  */
-export function rowLabel(r: BracketRowView, hearts: boolean, waiting = 0): string {
+export function rowLabel(r: BracketRowView, hearts: boolean, waiting = 0, status: string | null = null): string {
   const p = { rank: formatNumber(r.rank), name: r.name, fish: fishText(r.points), hearts: hearts ? heartsText(r.hearts) : '' };
   const s = r.me ? t('ladder.row.me.a11y', p) : t('ladder.row.a11y', p);
-  const label = hearts ? s : s.replace(/[,،、]\s*$/u, '');
-  return r.me && waiting > 0 ? `${label}${t('list.separator')}${t('ladder.waiting', { count: formatNumber(waiting) })}` : label;
+  let label = hearts ? s : s.replace(/[,،、]\s*$/u, '');
+  if (r.me && waiting > 0) label = `${label}${t('list.separator')}${t('ladder.waiting', { count: formatNumber(waiting) })}`;
+  return status ? `${label}${t('list.separator')}${status}` : label;
 }
 
 /**
@@ -90,7 +134,7 @@ export function rowLabel(r: BracketRowView, hearts: boolean, waiting = 0): strin
  * lone "99" on its own line at 320 px). Display only: the text is the server's, with one no-break space.
  */
 export function displayName(name: string): string {
-  return name.replace(/ (\d+)$/u, '\u00A0$1');
+  return name.replace(/ (\d+)$/u, ' $1');
 }
 
 /** A heart button's name: "Give a heart to Velvet Paws 3, 1 heart" / "Give yourself a heart, 2 hearts". */
@@ -112,9 +156,28 @@ export function visibleRows(rows: readonly BracketRowView[], panelRows: number):
   return rows.slice(start, start + n);
 }
 
+/** A paid place shows our reward chest (only while the rewards line names the places: enough players, H-4). */
+const paidPlace = (rank: number, v: Pick<BracketListView, 'rewardsLine' | 'paidPlaces'>): boolean => v.rewardsLine === 'places' && rank >= 1 && rank <= v.paidPlaces;
+
+/** One status pill (shared by the rows and the podium); hidden without a status. */
+function statusPill(): { el: HTMLElement; set(s: { kind: StatusKind; text: string } | null): void } {
+  const el = h('span', { class: 'lb-status' });
+  return {
+    el,
+    set(s) {
+      el.hidden = s === null;
+      if (!s) return;
+      el.dataset.status = s.kind;
+      setText(el, s.text);
+    },
+  };
+}
+
 interface RowParts {
   readonly el: HTMLElement;
   update(r: BracketRowView, v: BracketListView): void;
+  /** The fish shown on the row (the rank-up's count). */
+  setPoints(n: number): void;
 }
 
 /**
@@ -133,10 +196,13 @@ function buildRow(cb: BracketListCallbacks, interactive: boolean): RowParts {
   const you = h('span', { class: 'rank-row__you' });
   const waiting = h('span', { class: 'rank-row__waiting' });
   const tags = h('span', { class: 'rank-row__tags', 'aria-hidden': 'true' }, you, waiting);
-  const line = h('span', { class: 'rank-row__line' }, tags);
+  const status = statusPill();
+  status.el.setAttribute('aria-hidden', 'true');
+  const line = h('span', { class: 'rank-row__line' }, tags, status.el);
   const who = h('span', { class: 'rank-row__who' }, name, line);
   const pts = h('span', { class: 'rank-row__pts num' });
   const points = h('span', { class: 'rank-row__points', 'aria-hidden': 'true' }, icon('icon-fish', { class: 'rank-row__fish' }), pts);
+  const gift = h('span', { class: 'rank-row__gift', 'aria-hidden': 'true' }, icon('reward-chest', { class: 'rank-row__gift-art' }));
   const heartCount = h('span', { class: 'rank-row__hearts num' });
   const heartIcon = h('span', { class: 'rank-row__heart-icon' });
   const heart = interactive
@@ -152,7 +218,7 @@ function buildRow(cb: BracketListCallbacks, interactive: boolean): RowParts {
     );
     line.appendChild(edit);
   }
-  el.append(points, heart);
+  el.append(points, gift, heart);
   if (!interactive) {
     el.setAttribute('aria-hidden', 'true');
     el.setAttribute('inert', '');
@@ -174,16 +240,21 @@ function buildRow(cb: BracketListCallbacks, interactive: boolean): RowParts {
 
   return {
     el,
+    setPoints(n) {
+      setText(pts, formatNumber(n));
+    },
     update(r, v) {
       const changedLike = liked !== null && !liked && r.likedByMe;
       cur = r;
       sent = false;
       heart.removeAttribute('aria-busy');
+      const st = statusOf(r, v.now());
+      status.set(st);
       if (interactive) {
         el.dataset.rank = String(r.rank);
         el.dataset.me = r.me ? '1' : '0';
         el.dataset.slot = String(r.slot);
-        el.setAttribute('aria-label', rowLabel(r, v.hearts, r.me ? v.waiting : 0));
+        el.setAttribute('aria-label', rowLabel(r, v.hearts, r.me ? v.waiting : 0, st?.text ?? null));
       }
       const m = r.rank >= 1 && r.rank <= 3 ? r.rank : 0;
       if (m !== medal) {
@@ -208,8 +279,8 @@ function buildRow(cb: BracketListCallbacks, interactive: boolean): RowParts {
       waiting.hidden = wait === 0;
       if (wait) setText(waiting, t('ladder.waiting', { count: formatNumber(wait) }));
       tags.hidden = you.hidden && waiting.hidden;
-      line.hidden = tags.hidden;
       setText(pts, formatNumber(r.points));
+      gift.hidden = !paidPlace(r.rank, v);
       heart.hidden = !v.hearts;
       if (r.likedByMe !== liked) {
         liked = r.likedByMe;
@@ -249,15 +320,80 @@ function buildRow(cb: BracketListCallbacks, interactive: boolean): RowParts {
   };
 }
 
+interface PodParts {
+  readonly el: HTMLElement;
+  update(r: BracketRowView | null, v: BracketListView): void;
+  setPoints(n: number): void;
+}
+
+/** One podium place (decorative: the list reads the same row). Hidden while the server has no row at that place. */
+function buildPod(place: 1 | 2 | 3): PodParts {
+  const frame = h('span', { class: 'lb-pod__frame' });
+  const num = h('span', { class: 'lb-pod__num num' }, String(place));
+  const medal = h('span', { class: 'lb-pod__medal' }, icon(`medal-${place}`, { class: 'lb-pod__medal-art' }), num);
+  const name = h('span', { class: 'lb-pod__name', dir: 'auto' });
+  const pts = h('span', { class: 'lb-pod__pts num' });
+  const fish = h('span', { class: 'lb-pod__fish' }, icon('icon-fish', { class: 'lb-pod__fish-art' }), pts);
+  const gift = h('span', { class: 'lb-pod__gift' }, icon('reward-chest', { class: 'lb-pod__gift-art' }));
+  const status = statusPill();
+  const step = h('span', { class: 'lb-pod__step' }, medal, name, fish, gift, status.el);
+  const el = h('div', { class: 'lb-pod', dataset: { place: String(place) } }, frame, step);
+  let avatarId = -1;
+  return {
+    el,
+    setPoints(n) {
+      setText(pts, formatNumber(n));
+    },
+    update(r, v) {
+      el.hidden = r === null;
+      if (!r) return;
+      el.dataset.me = r.me ? '1' : '0';
+      if (r.avatarId !== avatarId) {
+        avatarId = r.avatarId;
+        frame.textContent = '';
+        frame.appendChild(icon(avatarSymbol(r.avatarId), { class: 'lb-pod__avatar' }));
+      }
+      const shown = displayName(r.name);
+      if (name.textContent !== shown) name.textContent = shown;
+      setText(pts, formatNumber(r.points));
+      gift.hidden = !paidPlace(r.rank, v);
+      status.set(statusOf(r, v.now()));
+    },
+  };
+}
+
+/** Confetti pieces for a new podium place of mine (decorative; region colours; CSS animates them). */
+function confetti(host: HTMLElement): void {
+  const box = h('span', { class: 'lb-confetti', 'aria-hidden': 'true' });
+  for (let i = 0; i < 18; i++) {
+    const piece = h('i', { class: 'lb-confetti__bit' });
+    piece.style.setProperty('--x', `${(i * 37) % 100}%`);
+    piece.style.setProperty('--d', `${(i % 6) * 70}ms`);
+    piece.style.setProperty('--c', `var(--r${i % 12})`);
+    piece.style.setProperty('--r', `${(i * 53) % 360}deg`);
+    box.appendChild(piece);
+  }
+  host.appendChild(box);
+  setTimeout(() => box.remove(), 2400);
+}
+
+const easeInOut = (x: number): number => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+
 export function createBracketList(view: BracketListView, cb: BracketListCallbacks): BracketListHandle {
   mountLadderArt(typeof document === 'undefined' ? undefined : document);
-  const countdown = h('span', { class: 'ranking__countdown' });
+  const timerText = h('span', { class: 'lb-timer__text num' });
+  const timer = h('div', { class: 'lb-timer', 'aria-hidden': 'true' }, icon('icon-stopwatch', { class: 'lb-timer__icon' }), timerText);
+  // The worded countdown is for screen readers (the stopwatch pill shows it); never announced as it changes.
+  const countdown = h('span', { class: 'ranking__countdown sr-only' });
   const sep = h('span', { class: 'ranking__sep', 'aria-hidden': 'true' }, ' · ');
   // Audit B10: the dot is drawn only; screen readers get the locale's list separator ("Ends in 7 h 48 min, 37
   // players"), never the two parts run together.
   const sepSr = h('span', { class: 'ranking__sep-sr sr-only' });
   const count = h('span', { class: 'ranking__count' });
   const meta = h('p', { class: 'ranking__meta' }, countdown, sep, sepSr, count);
+  sep.hidden = true; // the visible line is the count alone (the stopwatch pill shows the time)
+  const pods = { 1: buildPod(1), 2: buildPod(2), 3: buildPod(3) } as const;
+  const podium = h('div', { class: 'lb-podium', 'aria-hidden': 'true' }, pods[2].el, pods[1].el, pods[3].el);
   const rewards = h('p', { class: 'ranking__rewards' });
   const stale = h('p', { class: 'ranking__stale' });
   const offline = h('p', { class: 'ranking__offline' });
@@ -270,7 +406,9 @@ export function createBracketList(view: BracketListView, cb: BracketListCallback
   const el = h(
     'div',
     { class: 'rank-list rank-list--bracket', dataset: { kind: 'bracket' } },
+    timer,
     meta,
+    podium,
     rewards,
     stale,
     offline,
@@ -285,6 +423,11 @@ export function createBracketList(view: BracketListView, cb: BracketListCallback
   const rows = new Map<number, RowParts>();
   let order = '';
   let tick: ReturnType<typeof setTimeout> | null = null;
+  let clockTick: ReturnType<typeof setTimeout> | null = null;
+  let statusTick: ReturnType<typeof setInterval> | null = null;
+  let climbing = false;
+  let climbRaf = 0;
+  let destroyed = false;
 
   const myRow = (): HTMLElement | null => ol.querySelector<HTMLElement>('.rank-row[data-me="1"]');
 
@@ -292,7 +435,7 @@ export function createBracketList(view: BracketListView, cb: BracketListCallback
   const updatePinned = (): void => {
     const mine = myRow();
     const meRow = cur.rows.find((r) => r.me);
-    if (!mine || !meRow || ol.scrollHeight <= ol.clientHeight + 1) {
+    if (climbing || !mine || !meRow || ol.scrollHeight <= ol.clientHeight + 1) {
       pinned.el.hidden = true;
       return;
     }
@@ -309,12 +452,31 @@ export function createBracketList(view: BracketListView, cb: BracketListCallback
     const now = cur.now();
     const text = countdownText(cur.endsAt, now, cur.final);
     countdown.hidden = text === null;
-    sep.hidden = text === null;
     sepSr.hidden = text === null;
     setText(sepSr, t('list.separator'));
     setText(countdown, text ?? '');
     const next = cur.final ? null : nextTickMs(cur.endsAt, now);
     if (next !== null) tick = setTimeout(renderCountdown, next);
+  };
+
+  /** The stopwatch pill: hh:mm:ss once a second on the second's edge; "Final results" once ended. */
+  const renderClock = (): void => {
+    if (clockTick !== null) clearTimeout(clockTick);
+    clockTick = null;
+    if (destroyed) return;
+    const left = cur.endsAt === null ? null : cur.endsAt - cur.now();
+    timer.hidden = cur.endsAt === null && !cur.final;
+    const ended = cur.final || (left !== null && left <= 0);
+    timer.toggleAttribute('data-ended', ended);
+    setText(timerText, ended ? t('ladder.ended') : clockText(left ?? 0));
+    if (!ended && left !== null) clockTick = setTimeout(renderClock, (left % 1000) + 20);
+  };
+
+  const renderPodium = (v: BracketListView): void => {
+    // The podium shows the first three server rows (never a placeholder for a missing place).
+    for (const place of [1, 2, 3] as const) pods[place].update(v.rows.find((r) => r.rank === place) ?? null, v);
+    podium.hidden = v.rows.length === 0;
+    podium.dataset.count = String(Math.min(3, v.rows.filter((r) => r.rank <= 3).length));
   };
 
   const render = (v: BracketListView): void => {
@@ -334,6 +496,7 @@ export function createBracketList(view: BracketListView, cb: BracketListCallback
     const isAlone = v.members === 1 && v.rows.length === 1 && v.rows[0]?.me === true;
     alone.hidden = !isAlone;
     if (isAlone) setText(alone, t('ladder.alone'));
+    renderPodium(v);
 
     const shown = visibleRows(v.rows, v.panelRows);
     // One row: the card hugs it (no empty white below); two or more keep the card's two-row minimum.
@@ -368,23 +531,128 @@ export function createBracketList(view: BracketListView, cb: BracketListCallback
     first.hidden = v.firstLineName === null;
     if (v.firstLineName !== null) setText(first, t('nick.first.line', { name: v.firstLineName }));
     renderCountdown();
+    renderClock();
     updatePinned();
   };
   render(view);
   const offLocale = onLocaleChanged(() => render(cur));
+  // The status pills age ("Online now" → "4m ago") while the list is open.
+  statusTick = setInterval(() => {
+    if (!climbing) render(cur);
+  }, 30_000);
+
+  const centerOn = (top: number, height: number): number => Math.max(0, Math.min(ol.scrollHeight - ol.clientHeight, top - (ol.clientHeight - height) / 2));
+
+  /** The rank-up (see the header). Pure presentation between two server answers; resolves when done. */
+  const playClimb = (from: { readonly rank: number | null; readonly points: number }, reducedMotion: boolean): Promise<ClimbResult> => {
+    const me = cur.rows.find((r) => r.me);
+    const shown = visibleRows(cur.rows, cur.panelRows);
+    const toIdx = me ? shown.findIndex((r) => r.me) : -1;
+    if (!me || toIdx < 0) return Promise.resolve({ fromRank: from.rank, toRank: me?.rank ?? 0, climbed: false });
+    const toRank = me.rank;
+    const climbed = from.rank === null || from.rank > toRank;
+    const mineRow = rows.get(me.slot);
+    const win = el.ownerDocument.defaultView;
+    const pod = toRank <= 3 ? pods[toRank as 1 | 2 | 3] : null;
+    const result: ClimbResult = { fromRank: from.rank, toRank, climbed };
+    if (reducedMotion || !mineRow || !win?.requestAnimationFrame) return Promise.resolve(result);
+    // Where my row starts: its old place in this list (as the server last said), or just below the last row.
+    const fromIdx = Math.min(shown.length - 1, from.rank === null ? shown.length - 1 : toIdx + Math.max(0, from.rank - toRank));
+    const rowEls = shown.map((r) => rows.get(r.slot)?.el ?? null);
+    const tops = rowEls.map((e) => (e ? e.offsetTop : 0));
+    const step = shown.length > 1 ? Math.max(40, (tops[tops.length - 1]! - tops[0]!) / (shown.length - 1)) : mineRow.el.offsetHeight;
+    const extra = from.rank === null ? 1 : 0; // a newcomer starts one row below the list
+    const span = fromIdx - toIdx + extra;
+    const myTop = mineRow.el.offsetTop;
+    const myH = mineRow.el.offsetHeight;
+    climbing = true;
+    pinned.el.hidden = true;
+    el.toggleAttribute('data-climbing', true);
+    mineRow.el.classList.add('is-climbing');
+    const passed = rowEls.slice(toIdx + 1, fromIdx + 1);
+    // Start: my row at its old place, the rows I pass one place higher (where they were), my old fish.
+    const place = (y: number): void => {
+      mineRow.el.style.transform = `translateY(${((y - toIdx) * step).toFixed(1)}px) scale(1.04)`;
+      passed.forEach((e, k) => {
+        if (!e) return;
+        const i = toIdx + 1 + k;
+        const off = Math.max(0, Math.min(1, y - (i - 1)));
+        e.style.transform = off > 0 ? `translateY(${(-off * step).toFixed(1)}px)` : '';
+      });
+      ol.scrollTop = centerOn(myTop + (y - toIdx) * step, myH);
+    };
+    const yStart = toIdx + span;
+    place(yStart);
+    mineRow.setPoints(from.points);
+    if (pod) pod.setPoints(from.points);
+    if (pod && climbed) pod.el.classList.add('is-waiting');
+    const COUNT_MS = 650;
+    const CLIMB_MS = Math.min(1600, 520 + span * 110);
+    return new Promise<ClimbResult>((resolve) => {
+      const t0 = win.performance?.now?.() ?? Date.now();
+      const done = (): void => {
+        climbRaf = 0;
+        mineRow.el.style.transform = '';
+        mineRow.el.classList.remove('is-climbing');
+        for (const e of passed) if (e) e.style.transform = '';
+        climbing = false;
+        el.removeAttribute('data-climbing');
+        if (!destroyed) {
+          render(cur);
+          centerAfter();
+          if (pod && climbed) {
+            pod.el.classList.remove('is-waiting');
+            pod.el.classList.add('is-popping');
+            confetti(podium);
+            setTimeout(() => pod.el.classList.remove('is-popping'), 900);
+          } else if (!climbed) {
+            mineRow.el.classList.add('is-pulsing');
+            setTimeout(() => mineRow.el.classList.remove('is-pulsing'), 700);
+          }
+        }
+        resolve(result);
+      };
+      const frame = (): void => {
+        if (destroyed) return done();
+        const now = win.performance?.now?.() ?? Date.now();
+        const e = now - t0;
+        // 1) the fish count up on my row (and my podium place), 2) the ride up.
+        const c = Math.min(1, e / COUNT_MS);
+        const pts = Math.round(from.points + (me.points - from.points) * easeInOut(c));
+        mineRow.setPoints(pts);
+        if (pod) pod.setPoints(pts);
+        const k = Math.max(0, Math.min(1, (e - COUNT_MS) / CLIMB_MS));
+        place(yStart - span * easeInOut(k));
+        if (k >= 1) return done();
+        climbRaf = win.requestAnimationFrame(frame);
+      };
+      climbRaf = win.requestAnimationFrame(frame);
+    });
+  };
+
+  const centerAfter = (): void => {
+    const mine = myRow();
+    if (mine && ol.scrollHeight > ol.clientHeight) ol.scrollTop = centerOn(mine.offsetTop, mine.offsetHeight);
+    updatePinned();
+  };
 
   return {
     el,
-    update: render,
-    centerMe() {
-      const mine = myRow();
-      if (mine && ol.scrollHeight > ol.clientHeight) {
-        ol.scrollTop = Math.max(0, mine.offsetTop - (ol.clientHeight - mine.offsetHeight) / 2);
-      }
-      updatePinned();
+    update(v) {
+      // A refresh during the rank-up waits for its end (the climb renders the newest view when it lands).
+      if (climbing) cur = v;
+      else render(v);
     },
+    centerMe() {
+      if (!climbing) centerAfter();
+    },
+    playClimb,
     destroy() {
+      destroyed = true;
       if (tick !== null) clearTimeout(tick);
+      if (clockTick !== null) clearTimeout(clockTick);
+      if (statusTick !== null) clearInterval(statusTick);
+      if (climbRaf) el.ownerDocument.defaultView?.cancelAnimationFrame(climbRaf);
       tick = null;
       offLocale();
       ol.removeEventListener('scroll', updatePinned);

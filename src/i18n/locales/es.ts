@@ -527,5 +527,18 @@ export const catalog: LocaleCatalog = {
   'victory.streakReward': 'Premio de racha: {reward}',
   'howto.streak': 'Resuelve al menos un tablero al día para crear una racha. Cada {days} días seguidos ganas un premio de pistas y gatitos. Si te saltas un día, la racha vuelve a empezar desde el día 1.',
   'victory.dailyReward': 'Premio del día: {reward}',
+  // ── Leaderboard update ──
+  'ladder.status.online': 'En línea',
+  'ladder.status.playing': 'Jugando ahora',
+  'ladder.status.minutes': 'hace {count} min',
+  'ladder.status.hours': 'hace {count} h',
+  'ladder.status.days': 'hace {count} d',
+  'ladder.session.title': 'Nuevo ranking',
+  'ladder.session.body': 'Resuelve tableros para juntar peces y subir en el ranking. ¡Mira hasta dónde puedes llegar antes de que termine este ranking!',
+  'ladder.session.ok': 'Entendido',
+  'ladder.climb.first': '¡Excelente! ¡Estás en el primer puesto!',
+  'ladder.climb.up': '¡Muy bien! ¡Subiste al puesto {rank}!',
+  'ladder.info.window.rollingJoin': 'Un ranking dura {hours} horas y admite hasta {count} jugadores. Cuando termina, entras en uno nuevo la próxima vez que abres el juego.',
+  'ladder.info.activity': 'Los jugadores de tu ranking ven cuándo fue tu última actividad y si estás resolviendo un tablero.',
   ...LOCALE_NAMES,
 };

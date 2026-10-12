@@ -529,5 +529,18 @@ export const catalog: LocaleCatalog = {
   'victory.streakReward': 'Seri ödülü: {reward}',
   'howto.streak': 'Seri oluşturmak için her gün en az bir bulmaca çöz. Art arda her {days} günde ipucu ve pisiden oluşan bir ödül kazanırsın. Bir günü kaçırırsan seri 1. günden yeniden başlar.',
   'victory.dailyReward': 'Günlük ödül: {reward}',
+  // ── Leaderboard update ──
+  'ladder.status.online': 'Çevrimiçi',
+  'ladder.status.playing': 'Şu an oynuyor',
+  'ladder.status.minutes': '{count} dk önce',
+  'ladder.status.hours': '{count} sa önce',
+  'ladder.status.days': '{count} gün önce',
+  'ladder.session.title': 'Yeni sıralama',
+  'ladder.session.body': 'Bulmaca çöz, balık topla ve sıralamada yüksel. Bu sıralama bitmeden ne kadar yükselebileceğine bir bak!',
+  'ladder.session.ok': 'Anladım',
+  'ladder.climb.first': 'Harika! Birinci sıradasın!',
+  'ladder.climb.up': 'Güzel! {rank}. sıraya yükseldin!',
+  'ladder.info.window.rollingJoin': 'Bir sıralama {hours} saat sürer ve en çok {count} oyuncu alır. Bittiğinde, oyunu bir sonraki açışında yeni bir sıralamaya katılırsın.',
+  'ladder.info.activity': 'Sıralamandaki oyuncular, en son ne zaman aktif olduğunu ve şu an bir bulmaca oynayıp oynamadığını görür.',
   ...LOCALE_NAMES,
 };

@@ -496,5 +496,18 @@ export const catalog: LocaleCatalog = {
   'victory.streakReward': 'Thưởng chuỗi: {reward}',
   'howto.streak': 'Giải ít nhất một câu đố mỗi ngày để tạo chuỗi. Cứ {days} ngày liên tiếp bạn nhận thưởng gợi ý và mèo con. Nếu bỏ lỡ một ngày, chuỗi bắt đầu lại từ ngày 1.',
   'victory.dailyReward': 'Thưởng hằng ngày: {reward}',
+  // ── Leaderboard update ──
+  'ladder.status.online': 'Trực tuyến',
+  'ladder.status.playing': 'Đang chơi',
+  'ladder.status.minutes': '{count} phút trước',
+  'ladder.status.hours': '{count} giờ trước',
+  'ladder.status.days': '{count} ngày trước',
+  'ladder.session.title': 'Xếp hạng mới',
+  'ladder.session.body': 'Giải câu đố để gom cá và leo hạng. Xem bạn lên được cao đến đâu trước khi xếp hạng này kết thúc nhé!',
+  'ladder.session.ok': 'Đã hiểu',
+  'ladder.climb.first': 'Tuyệt vời! Bạn đang đứng hạng nhất!',
+  'ladder.climb.up': 'Hay lắm! Bạn đã lên hạng {rank}!',
+  'ladder.info.window.rollingJoin': 'Một bảng xếp hạng kéo dài {hours} giờ và có tối đa {count} người chơi. Khi bảng kết thúc, lần tới mở trò chơi, bạn sẽ vào một bảng mới.',
+  'ladder.info.activity': 'Người chơi trong xếp hạng của bạn thấy được lần cuối bạn hoạt động và bạn có đang chơi câu đố hay không.',
   ...LOCALE_NAMES,
 };

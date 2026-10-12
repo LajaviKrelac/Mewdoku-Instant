@@ -15,6 +15,7 @@ mountLadderArt();
 
 export { createLadderSheet } from '../ui/overlays/ladder-sheet';
 export { createLadderResult } from '../ui/overlays/ladder-result';
+export { createLadderSession } from '../ui/overlays/ladder-session';
 export { createNicknameSheet } from '../ui/overlays/nickname-sheet';
 export { createBracketList } from '../ui/overlays/bracket-list';
 export { NICK_WORDS_V1, RETIRED_V1 } from '../shared/nick-words';

@@ -527,5 +527,18 @@ export const catalog: LocaleCatalog = {
   'victory.streakReward': 'Premio serie: {reward}',
   'howto.streak': 'Risolvi almeno un puzzle al giorno per costruire una serie. Ogni {days} giorni di fila vinci un premio di indizi e mici. Se salti un giorno, la serie riparte dal giorno 1.',
   'victory.dailyReward': 'Premio del giorno: {reward}',
+  // ── Leaderboard update ──
+  'ladder.status.online': 'Online ora',
+  'ladder.status.playing': 'Sta giocando',
+  'ladder.status.minutes': '{count} min fa',
+  'ladder.status.hours': '{count} h fa',
+  'ladder.status.days': '{count} g fa',
+  'ladder.session.title': 'Nuova classifica',
+  'ladder.session.body': 'Risolvi i puzzle per raccogliere pesci e salire in classifica. Guarda fin dove riesci ad arrivare prima che questa classifica finisca!',
+  'ladder.session.ok': 'Capito',
+  'ladder.climb.first': 'Meraviglioso! Sei al primo posto!',
+  'ladder.climb.up': 'Ottimo! Hai raggiunto il posto {rank}!',
+  'ladder.info.window.rollingJoin': 'Una classifica dura {hours} ore e accoglie fino a {count} giocatori. Quando finisce, entri in una nuova la prossima volta che apri il gioco.',
+  'ladder.info.activity': 'I giocatori della tua classifica vedono la tua ultima attività e se stai giocando un puzzle.',
   ...LOCALE_NAMES,
 };

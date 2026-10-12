@@ -332,6 +332,26 @@ export const enLazyUi2e = {
 
   // ── The daily (shown only when daily.reward is not zero, §6.1) ──────────────
   'victory.dailyReward': 'Daily reward: {reward}',
+
+  // ── Leaderboard update (the podium leaderboard, auto-join, activity, the rank-up) ──
+  // A row's status, from the server's own data for that one player (seenAt, playing); never a count or an estimate.
+  'ladder.status.online': 'Online now',
+  'ladder.status.playing': 'Playing now',
+  // Last seen, short: {count} is a whole number of minutes / hours / days.
+  'ladder.status.minutes': '{count}m ago',
+  'ladder.status.hours': '{count}h ago',
+  'ladder.status.days': '{count}d ago',
+  // The card on Home when the sign-in joined a new ranking (no win in it yet).
+  'ladder.session.title': 'New ranking',
+  'ladder.session.body': 'Solve puzzles to collect fish and climb the ranking. See how high you can get before this ranking ends!',
+  'ladder.session.ok': 'Got it',
+  // The bubble after a win moved me up ({rank} formatted).
+  'ladder.climb.first': "Wonderful! You're in first place!",
+  'ladder.climb.up': 'Nice! You climbed to #{rank}!',
+  // The info view when the sign-in joins (ladder.autoJoin): no "first win" rule any more.
+  'ladder.info.window.rollingJoin':
+    'A ranking lasts {hours} hours and holds up to {count} players. When it ends, you join a new one the next time you open the game.',
+  'ladder.info.activity': 'Players in your ranking see when you were last active and whether you are playing a puzzle.',
 } as const;
 
 /** The lazy keys of ./events.ts (enEvents). */

@@ -96,6 +96,13 @@ export interface BracketRowView {
   readonly likedByMe: boolean;
   /** The heart button is enabled (hearts on, not yet given, under the cap, not offline). */
   readonly heartEnabled: boolean;
+  /**
+   * Leaderboard update: the server's last activity of this player on the DEVICE clock (the app applied the offset);
+   * null: no status ("Online now", "Playing now", "2m ago") is shown.
+   */
+  readonly seenAt: number | null;
+  /** The server's "in a puzzle" for this player ("Playing now" while seenAt is recent). */
+  readonly playing: boolean;
 }
 
 /** My bracket for the panel and the sheet (CONTRACTS §8). Never carries an invented row or count. */
@@ -151,7 +158,21 @@ export interface BracketListHandle {
   update(view: BracketListView): void;
   /** Scrolls my row to the middle of the list (after the list is shown and laid out). */
   centerMe(): void;
+  /**
+   * Leaderboard update (the post-win rank-up): my fish count up from `from.points`, then my row rides up from
+   * `from.rank` (null: from below the list) to its place in the current view, the rows it passes stepping down; a
+   * new podium place pops in with confetti. Resolves once it has played (at once with reduced motion or without
+   * my row). Never changes a row, a rank or a number: it animates between the server's last two answers.
+   */
+  playClimb?(from: { readonly rank: number | null; readonly points: number }, reducedMotion: boolean): Promise<ClimbResult>;
   destroy(): void;
+}
+
+/** What the rank-up showed: my place before and now (the panel's bubble). */
+export interface ClimbResult {
+  readonly fromRank: number | null;
+  readonly toRank: number;
+  readonly climbed: boolean;
 }
 
 /**
@@ -556,8 +577,10 @@ export function createRankingPanel(): OverlayView<RankingPanelProps> {
       title,
       records
         ? t('ladder.records.title')
-        : ladder
-          ? t('rank.title.period.day')
+        : p.list.kind === 'bracket'
+          ? t('common.leaderboard') // leaderboard update: the ribbon title over the podium leaderboard
+          : ladder
+            ? t('rank.title.period.day')
           : rankTitle(p.board, p.eventNameKey, p.periodKind ?? (p.result.kind === 'period' ? p.result.periodKind : cfg.period.kind)),
     );
     // Its glyph and the sheet it opens come with the lazy `ladder` chunk: no factory yet, no (i) (never a blank disc).

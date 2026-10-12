@@ -14,6 +14,7 @@ import type {
   HeartResponse,
   MeResponse,
   ProfileRequest,
+  PresenceResponse,
   ProfileResponse,
   SessionResponse,
   WinSubmission,
@@ -191,6 +192,8 @@ export interface PlayerOpts {
   readonly secret?: string;
   readonly origin?: string;
   readonly clientVersion?: string;
+  /** Leaderboard update: the session asks to join a bracket at once (auto-join). */
+  readonly join?: boolean;
 }
 
 /** A test client acting through the public API only. */
@@ -228,6 +231,7 @@ export class TestPlayer {
       body = { platform: 'web', device: this.device, clientVersion: this.opts.clientVersion ?? '0.2.0', contentVersion: CONTENT };
     }
     if (this.opts.devPool) body.devPool = this.opts.devPool;
+    if (this.opts.join !== undefined) body.join = this.opts.join;
     return this.t.fetch('/v1/session', { method: 'POST', headers: { 'content-type': 'text/plain', ...(this.opts.origin ? { origin: this.opts.origin } : {}) }, body: JSON.stringify(body) });
   }
 
@@ -261,6 +265,16 @@ export class TestPlayer {
     const r = await this.rawBracket();
     if (r.status !== 200) throw new Error(`bracket ${r.status}: ${await r.text()}`);
     return json<BracketView>(r);
+  }
+
+  rawPresence(state: string): Promise<Response> {
+    return this.t.fetch('/v1/presence', { method: 'POST', headers: this.headers(), body: JSON.stringify({ state }) });
+  }
+
+  async presence(state: 'online' | 'playing'): Promise<PresenceResponse> {
+    const r = await this.rawPresence(state);
+    if (r.status !== 200) throw new Error(`presence ${r.status}: ${await r.text()}`);
+    return json<PresenceResponse>(r);
   }
 
   rawClaim(rewardId: string, double = false): Promise<Response> {

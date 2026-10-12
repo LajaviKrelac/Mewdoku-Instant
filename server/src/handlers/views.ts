@@ -133,7 +133,17 @@ export function noneView(pool: string, cfg: ServerConfig, now: number): BracketV
   };
 }
 
-const toWire = (m: MemberRow, rank: number, myKey: string, liked: ReadonlySet<number>): WireRow => ({
+/**
+ * Leaderboard update: a row's last activity — the latest of its presence ping, its last counted win and its join
+ * (rows from before migration 0003 have active_at 0) — or null while presence is off.
+ */
+export function seenAtOf(m: Pick<MemberRow, 'active_at' | 'scored_at' | 'joined_at'>, presence: boolean): number | null {
+  if (!presence) return null;
+  const a = m.active_at ?? 0;
+  return Math.max(a, m.scored_at, m.joined_at);
+}
+
+const toWire = (m: MemberRow, rank: number, myKey: string, liked: ReadonlySet<number>, presence: boolean): WireRow => ({
   rank,
   slot: m.slot,
   nickname: m.nickname,
@@ -142,6 +152,8 @@ const toWire = (m: MemberRow, rank: number, myKey: string, liked: ReadonlySet<nu
   hearts: m.hearts,
   me: m.player_key === myKey,
   likedByMe: liked.has(m.slot),
+  seenAt: seenAtOf(m, presence),
+  playing: presence && m.playing === 1,
 });
 
 /**
@@ -165,11 +177,11 @@ export async function bracketView(s: Services, player: Pick<PlayerRow, 'key' | '
     rows = members
       .filter((m) => m.hidden === 0 && m.final_rank !== null)
       .sort((x, y) => (x.final_rank as number) - (y.final_rank as number))
-      .map((m) => toWire(m, m.final_rank as number, player.key, liked));
+      .map((m) => toWire(m, m.final_rank as number, player.key, liked, s.cfg.presence.enabled));
     count = b.final_members ?? rows.length;
   } else {
     const visible = members.filter((m) => m.hidden === 0);
-    rows = rankRows(visible.map((m) => ({ ...m, scoredAt: m.scored_at }))).map((m) => toWire(m, m.rank, player.key, liked));
+    rows = rankRows(visible.map((m) => ({ ...m, scoredAt: m.scored_at }))).map((m) => toWire(m, m.rank, player.key, liked, s.cfg.presence.enabled));
     count = rows.length;
   }
   const fresh = heartsNew(mine.hearts, mine.hearts_self, mine.hearts_seen);

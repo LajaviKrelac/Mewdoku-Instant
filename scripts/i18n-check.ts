@@ -290,6 +290,7 @@ export function draftedFromSnapshot(): Record<string, string> {
  */
 export const PLAYER_COUNT_KEYS: readonly string[] = [
   'ladder.info.window.rolling',
+  'ladder.info.window.rollingJoin',
   'ladder.info.window.utcDay',
   'ladder.info.rewards.one',
   'ladder.info.rewards.other',
@@ -313,7 +314,10 @@ export function honestyProblems(source: Strings = en): string[] {
   const allowed = new Set(PLAYER_COUNT_KEYS);
   for (const [k, v] of Object.entries(source)) {
     if (typeof v !== 'string') continue;
-    if (/online now|players online|% of (?:all )?players|most players|everyone is|join thousands|millions of/i.test(v)) out.push(`honesty: ${k} claims a statistic ("${v}")`);
+    // Leaderboard update: "Online now" is allowed only as one row's status (the server's seenAt for that player).
+    if (/online now|players online|% of (?:all )?players|most players|everyone is|join thousands|millions of/i.test(v) && !(k === 'ladder.status.online' && v === 'Online now')) {
+      out.push(`honesty: ${k} claims a statistic ("${v}")`);
+    }
     if (/\b\d[\d,.]*\s+(?:other\s+)?players?\b/i.test(v)) out.push(`honesty: ${k} names a literal player count ("${v}")`);
     if (/\{\w+\}\s+(?:other\s+)?players?\b/i.test(v) && !allowed.has(k)) out.push(`honesty: ${k} shows a player count outside the server-fed keys ("${v}")`);
     if (/^(?:ladder|rank|streak|howto\.streak|victory\.streak|victory\.daily)/.test(k)) {

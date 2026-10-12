@@ -15,6 +15,7 @@
 //          > .overlay__head(button.overlay__back? h2.overlay__title button.ladder-sheet__info? button.overlay__close)
 //          .ladder-sheet__body(.rank-list--bracket | .ladder-sheet__join | ul.ladder-info > li | .rank-records + .rank-list__note)
 //          .ladder-sheet__ok (info-only)
+import { cfg } from '../../app/config';
 import { formatNumber, t, tn } from '../../i18n';
 import { mountLadderArt } from '../art/ladder-art';
 import { icon, type SymbolId } from '../art/sprite';
@@ -65,7 +66,9 @@ export function infoLines(rules: LadderRulesView | null): { icon: SymbolId; text
   if (rules) {
     const count = formatNumber(rules.maxMembers);
     const hours = formatNumber(Math.max(1, Math.round((rules.durationMs ?? 86_400_000) / 3_600_000)));
-    out.push({ icon: 'icon-users', text: rules.periodMode === 'utc_day' ? t('ladder.info.window.utcDay', { count }) : t('ladder.info.window.rolling', { count, hours }) });
+    // Leaderboard update: with the sign-in join (ladder.autoJoin) a new ranking starts when the game is next opened.
+    const rolling = cfg.ladder.autoJoin ? t('ladder.info.window.rollingJoin', { count, hours }) : t('ladder.info.window.rolling', { count, hours });
+    out.push({ icon: 'icon-users', text: rules.periodMode === 'utc_day' ? t('ladder.info.window.utcDay', { count }) : rolling });
     if (rules.paidPlaces > 0) {
       out.push({ icon: 'icon-trophy', text: tn('ladder.info.rewards', rules.paidPlaces, { count: formatNumber(rules.paidPlaces), min: formatNumber(rules.minMembers) }) });
       if (rules.doubleByVideo) out.push({ icon: 'icon-play-video', text: t('ladder.info.double') });
@@ -73,6 +76,8 @@ export function infoLines(rules: LadderRulesView | null): { icon: SymbolId; text
     if (rules.heartsEnabled) out.push({ icon: 'icon-heart-line', text: t('ladder.info.hearts') });
   }
   out.push({ icon: 'nick-tag', text: t('ladder.info.names') });
+  // Leaderboard update: what the others see of my activity ("Online now", "4m ago").
+  if (cfg.ladder.presence.enabled) out.push({ icon: 'icon-stopwatch', text: t('ladder.info.activity') });
   out.push({ icon: 'icon-gear', text: t('ladder.info.privacy') });
   return out;
 }
@@ -197,7 +202,8 @@ export function createLadderSheet(): OverlayView<LadderSheetProps> {
     info.hidden = !(v === 'list' && props?.list) || infoOnly;
     close.hidden = infoOnly;
     ok.parentElement!.hidden = !infoOnly;
-    setText(title, v === 'info' ? t('ladder.info') : v === 'records' ? t('ladder.records.title') : t('rank.title.period.day'));
+    // Leaderboard update: the list view is titled "Leaderboard" (the orange ribbon).
+    setText(title, v === 'info' ? t('ladder.info') : v === 'records' ? t('ladder.records.title') : t('common.leaderboard'));
     if (v === 'list' && listHandle && shell.isOpen()) listHandle.centerMe();
     if (!moveFocus) return;
     if (v === 'info') (back.hidden ? (infoOnly ? ok : close) : back).focus();

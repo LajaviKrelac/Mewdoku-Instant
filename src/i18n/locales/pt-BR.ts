@@ -528,5 +528,18 @@ export const catalog: LocaleCatalog = {
   'victory.streakReward': 'Prêmio da sequência: {reward}',
   'howto.streak': 'Resolva pelo menos um quebra-cabeça por dia para criar uma sequência. A cada {days} dias seguidos, você ganha um prêmio de dicas e gatinhos. Se perder um dia, a sequência recomeça do dia 1.',
   'victory.dailyReward': 'Prêmio do dia: {reward}',
+  // ── Leaderboard update ──
+  'ladder.status.online': 'Online agora',
+  'ladder.status.playing': 'Jogando agora',
+  'ladder.status.minutes': 'há {count} min',
+  'ladder.status.hours': 'há {count} h',
+  'ladder.status.days': 'há {count} d',
+  'ladder.session.title': 'Novo ranking',
+  'ladder.session.body': 'Resolva quebra-cabeças para juntar peixes e subir no ranking. Veja até onde você consegue chegar antes que este ranking termine!',
+  'ladder.session.ok': 'Entendi',
+  'ladder.climb.first': 'Maravilha! Você está em primeiro lugar!',
+  'ladder.climb.up': 'Boa! Você subiu para a posição {rank}!',
+  'ladder.info.window.rollingJoin': 'Um ranking dura {hours} horas e tem até {count} jogadores. Quando ele termina, você entra em um novo na próxima vez que abrir o jogo.',
+  'ladder.info.activity': 'Os jogadores do seu ranking veem sua última atividade e se você está jogando um quebra-cabeça.',
   ...LOCALE_NAMES,
 };

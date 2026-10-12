@@ -21,6 +21,7 @@ import {
   AVATAR_COUNT,
   validateClaimRequest,
   validateHeartRequest,
+  validatePresenceRequest,
   validateProfileRequest,
   validateSessionRequest,
   validateWinsRequest,
@@ -30,6 +31,7 @@ import {
   type HealthResponse,
   type HeartResponse,
   type MeResponse,
+  type PresenceResponse,
   type ProfileResponse,
   type SessionResponse,
   type WinResult,
@@ -319,12 +321,17 @@ export function createSampleServer(deps: SampleServerDeps = {}): SampleServer {
         hearts: points >= 20 ? int(1, 6) : int(0, 2),
         scoredAt: Math.min(now - MIN, scored),
         joinedAt: openedAt + Math.floor((Math.min(span, cfg.bracket.joinWindowMs) * i) / Math.max(1, others.length)),
+        // Leaderboard update: sample activity (they never act; a few look online or in a puzzle right now).
+        ...(i % 5 === 0 ? { activeAt: now - int(0, 50) * 1000, playing: true } : i % 5 === 2 ? { activeAt: now - int(5, 60) * 1000 } : {}),
       });
     });
     return b;
   }
 
-  function addMember(b: MBracket, m: { key: string; nickname: string; avatar: number; points: number; wins: number; hearts: number; scoredAt: number; joinedAt: number }): MMember {
+  function addMember(
+    b: MBracket,
+    m: { key: string; nickname: string; avatar: number; points: number; wins: number; hearts: number; scoredAt: number; joinedAt: number; activeAt?: number; playing?: boolean },
+  ): MMember {
     const row: MMember = {
       bracket_id: b.id,
       slot: b.next_slot,
@@ -340,6 +347,8 @@ export function createSampleServer(deps: SampleServerDeps = {}): SampleServer {
       joined_at: m.joinedAt,
       hidden: 0,
       final_rank: null,
+      active_at: m.activeAt ?? m.scoredAt,
+      playing: m.playing === true ? 1 : 0,
     };
     (st.members[b.id] ??= []).push(row);
     b.next_slot++;
@@ -438,6 +447,10 @@ export function createSampleServer(deps: SampleServerDeps = {}): SampleServer {
       await endDay(p, now);
     }
     if (p.cur_bracket !== null && (p.cur_ends_at ?? 0) <= now) await finalizeIfDue(services, p.cur_bracket, now);
+    // Leaderboard update (server/src/handlers/join.ts): the auto-join, else "Online now" on my running row.
+    const mine = running(p, now);
+    if (v.value.join === true && cfg.bracket.joinOnSession && p.listed === 1 && !mine) join(p, createBracket(now - int(10, 80) * MIN, FRESH_OTHERS, now), 0, 0, now);
+    else if (mine) presence(p, now, false);
     const results = await resultsFor(services, p.key, now);
     const view = await bracketView(services, p, now);
     const token = `pv1.${randomBase36(rng, 32)}`;
@@ -491,6 +504,8 @@ export function createSampleServer(deps: SampleServerDeps = {}): SampleServer {
         m.points += d.points;
         m.wins += 1;
         m.scored_at = now;
+        m.active_at = now;
+        m.playing = 0;
         st.wins.push({ player_key: p.key, puzzle_id: d.win.puzzleId, win_id: d.win.winId, points: d.points, at: now });
       }
       if (st.wins.length > WINS_KEPT) st.wins.splice(0, st.wins.length - WINS_KEPT);
@@ -508,6 +523,23 @@ export function createSampleServer(deps: SampleServerDeps = {}): SampleServer {
       bracket: view.state === 'none' ? null : view,
       serverTime: now,
     };
+    return ok(res);
+  }
+
+  /** server/src/store/sql-store.ts setPresence: my visible row of my running bracket. */
+  function presence(p: MPlayer, now: number, playing: boolean): boolean {
+    const b = running(p, now);
+    const m = b ? memberOf(b.id, p.key) : null;
+    if (!m || m.hidden !== 0 || !cfg.presence.enabled) return false;
+    m.active_at = now;
+    m.playing = playing ? 1 : 0;
+    return true;
+  }
+
+  function postPresence(p: MPlayer, body: unknown, now: number): SampleAnswer {
+    const v = validatePresenceRequest(body);
+    if (!v.ok) return fail('bad_request', v.path);
+    const res: PresenceResponse = { updated: p.listed === 1 && presence(p, now, v.value.state === 'playing'), serverTime: now };
     return ok(res);
   }
 
@@ -655,6 +687,8 @@ export function createSampleServer(deps: SampleServerDeps = {}): SampleServer {
         return postWins(authed(auth, now), body, now);
       case 'GET /v1/bracket':
         return ok(await bracketView(services, authed(auth, now), now));
+      case 'POST /v1/presence':
+        return postPresence(authed(auth, now), body, now);
       case 'POST /v1/rewards/claim':
         return postClaim(authed(auth, now), body, now);
       case 'POST /v1/hearts':

@@ -1022,7 +1022,20 @@ async function fakeLadder(page: Page, o: FakeOpts = {}): Promise<FakeLadder> {
     }
     const all = [...others.map((r) => ({ ...r, me: false })), { slot: 0, nickname: me.nickname, avatarId: me.avatarId, points: myPoints, hearts: others.length > 0 ? 2 : 0, likedByMe: false, me: true }];
     all.sort((a, b) => b.points - a.points || Number(a.me) - Number(b.me));
-    const rows: BracketRow[] = all.map((r, k) => ({ rank: k + 1, slot: r.slot, nickname: r.nickname, avatarId: r.avatarId, points: r.points, hearts: r.hearts, me: r.me, likedByMe: r.likedByMe }));
+    // Leaderboard update: fixed activity per place ("Playing now", "Online now", "Nm ago"; mine is now).
+    const ago = [0, 30_000, 4 * 60_000, 11 * 60_000, 47 * 60_000, 3 * HOUR];
+    const rows: BracketRow[] = all.map((r, k) => ({
+      rank: k + 1,
+      slot: r.slot,
+      nickname: r.nickname,
+      avatarId: r.avatarId,
+      points: r.points,
+      hearts: r.hearts,
+      me: r.me,
+      likedByMe: r.likedByMe,
+      seenAt: r.me ? now : now - (ago[k % ago.length] as number),
+      playing: !r.me && k % ago.length === 0,
+    }));
     return {
       state: 'open',
       bracketId: FAKE_BRACKET,

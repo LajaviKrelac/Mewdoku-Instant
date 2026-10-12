@@ -59,6 +59,8 @@ function rows(n: number, me = 5, over: (r: BracketRowView) => Partial<BracketRow
       me: i + 1 === me,
       likedByMe: false,
       heartEnabled: true,
+      seenAt: null,
+      playing: false,
     };
     return { ...r, ...over(r) };
   });

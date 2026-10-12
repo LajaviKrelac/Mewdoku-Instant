@@ -497,5 +497,18 @@ export const catalog: LocaleCatalog = {
   'victory.streakReward': '连续打卡奖励：{reward}',
   'howto.streak': '每天至少完成一道谜题即可累积连续打卡。每连续{days}天可获得提示和猫咪奖励。如果漏掉一天，连续打卡会从第1天重新开始。',
   'victory.dailyReward': '每日奖励：{reward}',
+  // ── Leaderboard update ──
+  'ladder.status.online': '在线',
+  'ladder.status.playing': '正在解谜',
+  'ladder.status.minutes': '{count}分钟前',
+  'ladder.status.hours': '{count}小时前',
+  'ladder.status.days': '{count}天前',
+  'ladder.session.title': '新的排行',
+  'ladder.session.body': '完成谜题来收集小鱼，在排行中步步上升。看看在这个排行结束前，你能升到多高！',
+  'ladder.session.ok': '知道了',
+  'ladder.climb.first': '太棒了！你是第1名！',
+  'ladder.climb.up': '不错！你升到了第{rank}名！',
+  'ladder.info.window.rollingJoin': '每个排行持续{hours}小时，最多容纳{count}名玩家。排行结束后，你会在下次打开游戏时加入新的排行。',
+  'ladder.info.activity': '你所在排行的玩家能看到你最近一次活跃的时间，以及你是否正在解谜。',
   ...LOCALE_NAMES,
 };

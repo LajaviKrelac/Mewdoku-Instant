@@ -527,5 +527,18 @@ export const catalog: LocaleCatalog = {
   'victory.streakReward': 'Serienbelohnung: {reward}',
   'howto.streak': 'Löse jeden Tag mindestens ein Rätsel, um eine Serie aufzubauen. Alle {days} Tage in Folge gibt es eine Belohnung aus Tipps und Kätzchen. Verpasst du einen Tag, beginnt die Serie wieder bei Tag 1.',
   'victory.dailyReward': 'Tagesbelohnung: {reward}',
+  // ── Leaderboard update ──
+  'ladder.status.online': 'Jetzt online',
+  'ladder.status.playing': 'Spielt gerade',
+  'ladder.status.minutes': 'vor {count} Min.',
+  'ladder.status.hours': 'vor {count} Std.',
+  'ladder.status.days': 'vor {count} Tg.',
+  'ladder.session.title': 'Neue Rangliste',
+  'ladder.session.body': 'Löse Rätsel, sammle Fische und klettere in der Rangliste nach oben. Schau mal, wie weit du kommst, bevor diese Rangliste endet!',
+  'ladder.session.ok': 'Alles klar',
+  'ladder.climb.first': 'Wunderbar! Du bist auf Platz 1!',
+  'ladder.climb.up': 'Super! Du bist auf Platz {rank} geklettert!',
+  'ladder.info.window.rollingJoin': 'Eine Rangliste läuft {hours} Stunden und fasst bis zu {count} Spieler. Wenn sie endet, kommst du beim nächsten Öffnen des Spiels in eine neue.',
+  'ladder.info.activity': 'Die Spieler in deiner Rangliste sehen, wann du zuletzt aktiv warst und ob du gerade ein Rätsel löst.',
   ...LOCALE_NAMES,
 };

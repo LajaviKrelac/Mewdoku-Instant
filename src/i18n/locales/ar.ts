@@ -654,5 +654,18 @@ export const catalog: LocaleCatalog = {
   'victory.streakReward': 'جائزة السلسلة: {reward}',
   'howto.streak': 'حل لغزًا واحدًا على الأقل كل يوم لتبني سلسلة. كل {days} أيام متتالية تمنحك جائزة من التلميحات والقُطيطات. إذا فاتك يوم، تبدأ السلسلة من جديد من اليوم 1.',
   'victory.dailyReward': 'جائزة اليوم: {reward}',
+  // ── Leaderboard update ──
+  'ladder.status.online': 'متصل الآن',
+  'ladder.status.playing': 'يلعب الآن',
+  'ladder.status.minutes': 'منذ {count} د',
+  'ladder.status.hours': 'منذ {count} س',
+  'ladder.status.days': 'منذ {count} ي',
+  'ladder.session.title': 'ترتيب جديد',
+  'ladder.session.body': 'حل الألغاز لتجمع السمكات وتصعد في الترتيب. اكتشف إلى أي مدى يمكنك الصعود قبل أن ينتهي هذا الترتيب!',
+  'ladder.session.ok': 'فهمت',
+  'ladder.climb.first': 'رائع! أنت في المركز الأول!',
+  'ladder.climb.up': 'أحسنت! صعدت إلى المركز {rank}!',
+  'ladder.info.window.rollingJoin': 'يستمر الترتيب {hours} ساعة، ولا يزيد عدد لاعبيه على {count}. عندما ينتهي، تنضم إلى ترتيب جديد في المرة التالية التي تفتح فيها اللعبة.',
+  'ladder.info.activity': 'يرى اللاعبون في ترتيبك متى كنت نشطًا آخر مرة، وما إذا كنت تلعب لغزًا الآن.',
   ...LOCALE_NAMES,
 };
