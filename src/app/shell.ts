@@ -163,7 +163,10 @@ export function createShell(deps: ShellDeps): Shell {
    * window). The victory screen is a banner screen too, although it is an overlay on the game screen
    * (reviews L2B-1, FB2B-2: the shop opened from its fish pill "+" left the banner over its Buy buttons).
    */
-  const MODALS: readonly OverlayId[] = ['settings', 'how_to_play', 'shop', 'ranking', 'group_result', 'daily_result', 'ladder', 'ladder_result', 'nickname', 'ladder_session'];
+  // Leaderboard update: the "New ranking" card (`ladder_session`) is not listed: a small once-per-ranking note on
+  // Home that leaves the banner up (a hide on Home is not re-shown inside Meta's 60 s window, so it would cost the
+  // banner for no reason).
+  const MODALS: readonly OverlayId[] = ['settings', 'how_to_play', 'shop', 'ranking', 'group_result', 'daily_result', 'ladder', 'ladder_result', 'nickname'];
   // Phase 2d §1.16: the game screen too (its band; O4, O1, O2 and the coach are not in MODALS).
   const bannerScreen = (): boolean =>
     router.screen() === 'home' || router.screen() === 'event' || router.screen() === 'game' || router.isOpen('victory');
