@@ -40,7 +40,9 @@ export async function settleHome(page: Page, timeout = 15_000): Promise<void> {
     .catch(() => undefined);
   const ok = newRankingOk(page);
   if (await ok.isVisible().catch(() => false)) {
-    await ok.click();
+    // A DOM click, not locator.click(): the locator handler watches this very button and would close the card
+    // first, leaving the click waiting on a hidden button.
+    await ok.evaluate((el) => (el as HTMLElement).click()).catch(() => undefined);
     await ok.waitFor({ state: 'hidden' });
   }
 }
