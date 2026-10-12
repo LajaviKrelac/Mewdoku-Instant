@@ -72,6 +72,10 @@ upload; this note records the result and what is left.
   merged in: combo points, the combo bar's row, the Home cleanup, no FB safe-zone shift), comment "Game test build
   0.1.0 1159c9d - combo points + Home cleanup, no FB safe-zone shift, staging ranking, no ads/IAP ids yet". Checked
   first: npm run verify (3,055 unit tests, 191 server tests), 318 e2e tests; the size check still flags CSS 52.4 / 51.7 KB.
+- 2026-10-12 UTC: `mewdoku-instant-fbig-preview-0.1.0-80fdfe8.zip` (505,868 bytes; the combo bonus × the fish left:
+  base + base × 10 % × (combo − 1) × fish), comment "Game test build 0.1.0 80fdfe8 - combo bonus x fish left, staging
+  ranking, no ads/IAP ids yet". Checked first: npm run verify (3,057 unit tests, 191 server tests); the e2e suite was
+  not run on this commit (stopped on request); the size check still flags CSS 52.4 / 51.7 KB.
 
 ## Left
 
