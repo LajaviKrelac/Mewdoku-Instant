@@ -794,8 +794,8 @@ The top bar's lead slot (today the period pill, not a button) becomes the **rank
 
 | State | Chip | Accessible name |
 |---|---|---|
-| In a running bracket (fresh or cached) with an end time | trophy and a ticking countdown "07:48:12" (hh:mm:ss, every second while shown, clamped at 00:00:00) | "Daily ranking: #5 of 37, 14 fish. Ends in 7 h 48 min." (minute text, changed only when the text changes; never a live region) |
-| In a running bracket without an end time (or without a rank) | trophy "#5" · fish "14" (the fish alone without a rank) | as above, without the time (or "Daily ranking: 14 fish") |
+| In a running bracket (fresh or cached) with an end time | trophy and a ticking countdown "07:48:12" (hh:mm:ss, every second while shown, clamped at 00:00:00) | "Daily ranking: #5 of 37, 14 fish. Ends in 7 h 48 min." (without a rank from the server: "Daily ranking: 14 fish. Ends in 7 h 48 min."); minute text, changed only when the text changes; never a live region |
+| In a running bracket without an end time | trophy "#5" · fish "14" (the fish alone without a rank) | "Daily ranking: #5 of 37, 14 fish. …" (without a rank: "Daily ranking: 14 fish") |
 | No bracket now (none since the last ended) | trophy "Join" | "Daily ranking: solve a puzzle to join." |
 | Not listed | trophy only | "Daily ranking: off." |
 | Web without anon, or no server | today's period pill content ("14 fish this week") | today's `period.pill.*` |
@@ -1441,7 +1441,7 @@ The remote switches live in `server/wrangler.toml` under `[env.production] vars`
 
 | To … | Set |
 |---|---|
-| Turn computer rivals **on** (rollout: migration 0003 applied, the client with the disclosure line released first, staging soaked 48 h, a deploy with `RIVALS = "off"`, then a non-gradual deploy with) | `RIVALS = "on"` |
+| Turn computer rivals **on** (after the rollout steps: migration 0003 applied, the client with the disclosure line released, a 48 h staging soak audited, a deploy with `RIVALS = "off"`; then this, as a non-gradual deploy so two versions never serve one bracket) | `RIVALS = "on"` |
 | Make them easier or harder (new brackets only) | `CONFIG_OVERRIDES = '{"rivals":{"strength":90}}'` (80 easier, 120 harder; 50…200) |
 | Hide the disclosure line (only after the user decides, §12 Q-CP1) | `CONFIG_OVERRIDES = '{"rivals":{"disclose":false}}'` |
 | Stop them gently | first `'{"rivals":{"pools":[]}}'` (no new tags; running brackets keep their rivals and the line stays), hold 48 h, then `RIVALS = "off"` (the line goes) |
