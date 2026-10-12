@@ -1480,3 +1480,11 @@
     font-size: 11px;
   }
 }
+
+/* Very short screens (≤ 640 px tall): the post-win panel drops the podium (rows 1–3 keep their medals and chests),
+   so my row and its neighbours have room in the list; the sheet keeps its compact podium. */
+@media (max-height: 640px) {
+  .overlay[data-overlay='ranking'] .lb-podium {
+    display: none;
+  }
+}
