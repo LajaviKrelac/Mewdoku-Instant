@@ -1125,11 +1125,7 @@
   background: transparent;
 }
 
-/* ── The rank-up (playClimb): my row rides above the others; the list follows it (no user scroll meanwhile) ── */
-.rank-list--bracket[data-climbing] .rank-rows {
-  overflow: hidden;
-}
-
+/* ── The rank-up (playClimb): my row rides above the others; the list follows it (scrolled each frame) ── */
 .rank-row.is-climbing {
   position: relative;
   z-index: 2;

@@ -19,3 +19,28 @@ export function gotItNewRanking(t: typeof base): void {
     await gotItOn(page);
   });
 }
+
+type HookWindow = Window & { __mewdoku?: { ladder?(): { active: boolean; homeSettled?: boolean } } };
+
+/**
+ * Home with the ranking settled: waits until a Home visit's ranking steps ran (or the ranking is not in use), then
+ * closes the "New ranking" card if it opened. For checks that read the page without an action or an assertion that
+ * the locator handler would see (hit areas, element-from-point, screenshots).
+ */
+export async function settleHome(page: Page, timeout = 15_000): Promise<void> {
+  await page
+    .waitForFunction(
+      () => {
+        const l = (window as HookWindow).__mewdoku?.ladder?.();
+        return !l || !l.active || l.homeSettled === true;
+      },
+      undefined,
+      { timeout },
+    )
+    .catch(() => undefined);
+  const ok = newRankingOk(page);
+  if (await ok.isVisible().catch(() => false)) {
+    await ok.click();
+    await ok.waitFor({ state: 'hidden' });
+  }
+}

@@ -47,7 +47,7 @@ import { pointsRuleFor, runTotal } from '../../src/game/scoring';
 import type { InProgressV2, SaveData } from '../../src/game/types';
 import { devAdvance, devCron, fillPool, LADDER_URL, ladderUp, newPool } from './helpers/rank-players';
 import { watchStrings } from './helpers/strings';
-import { gotItNewRanking } from './helpers/new-ranking';
+import { gotItNewRanking, settleHome } from './helpers/new-ranking';
 
 // Phase 2e I-4: no screen of these tests may ask for an English string that no loaded table has.
 watchStrings(test);
@@ -67,6 +67,8 @@ async function boot(page: Page, save?: SaveData): Promise<void> {
     await page.evaluate((json) => (window as TestWindow).__mewdoku?.seedSave(json), JSON.stringify(save));
     await page.reload();
     await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');
+    // Leaderboard update: the sign-in joins a ranking; its "New ranking" card is closed before Home is measured.
+    await settleHome(page);
   }
 }
 
@@ -981,6 +983,7 @@ test('Phase 2e: Home at 320 × 568 — the ranking chip, Play, the streak strip,
       await page.evaluate((json) => (window as TestWindow).__mewdoku?.seedSave(json), JSON.stringify(save));
       await page.reload();
       await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');
+      await settleHome(page);
       await page.waitForTimeout(600);
       const label = `${ads} ${locale}`;
       // Home layout (2026-10-11): the profile picture and the streak pill in the top bar, the chip floating at the left.
@@ -1020,6 +1023,8 @@ test('Phase 2e: the post-win panel with 50 real rows scrolls inside its card (no
   const panel = page.locator('.overlay[data-overlay="ranking"]');
   const rows = panel.locator('.rank-list[data-kind="bracket"] ol.rank-rows > li.rank-row');
   await expect(rows).toHaveCount(50, { timeout: 20_000 });
+  // Leaderboard update: measured once the rank-up has landed (rows move while it plays).
+  await expect(panel.locator('.rank-list[data-climbing]')).toHaveCount(0, { timeout: 5_000 });
   await page.waitForTimeout(500);
   const report = await page.evaluate(() => {
     const ol = document.querySelector('.overlay[data-overlay="ranking"] ol.rank-rows') as HTMLElement;

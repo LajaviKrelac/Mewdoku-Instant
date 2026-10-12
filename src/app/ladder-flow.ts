@@ -153,7 +153,7 @@ export interface LadderFlow {
   /** Prefetches the lazy `ladder` chunk (Home idle, a scored board's mount). */
   prefetchChunk(): void;
   /** e2e hook (window.__mewdoku.ladder()). */
-  debug(): { active: boolean; signedIn: boolean; pending: number; current: LadderRecord['current'] };
+  debug(): { active: boolean; signedIn: boolean; pending: number; current: LadderRecord['current']; homeSettled: boolean };
   dispose(): void;
 }
 
@@ -1100,6 +1100,8 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
     }
   }
   let sessionCardShown: string | null = readSessionCard();
+  /** e2e (debug): a Home visit's steps ran to the end (the cards had their chance to open). */
+  let homeSettled = false;
 
   /**
    * Once per bracket, on Home with nothing else open (result cards first): a running bracket with no fish of mine
@@ -1243,6 +1245,7 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
         await nextCard();
         maybeSessionCard();
         setPresence('online');
+        homeSettled = true;
       })();
     },
     openSheet(from, view = 'list') {
@@ -1284,7 +1287,7 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
       return Math.abs(client.offsetMs()) <= c.dayStreak.maxSkewMs;
     },
     prefetchChunk: () => void loadChunk(),
-    debug: () => ({ active: active(), signedIn: client.signedIn(), pending: save().ladder.pending.length, current: save().ladder.current }),
+    debug: () => ({ active: active(), signedIn: client.signedIn(), pending: save().ladder.pending.length, current: save().ladder.current, homeSettled }),
     dispose() {
       disposed = true;
       offSignIn();

@@ -38,7 +38,7 @@ import { catalog as th } from '../../src/i18n/locales/th';
 import { en } from '../../src/i18n/en';
 import { NICK_WORDS_V1 } from '../../src/shared/nick-words';
 import { ladderUp, LADDER_URL, newPool } from './helpers/rank-players';
-import { gotItNewRanking } from './helpers/new-ranking';
+import { gotItNewRanking, settleHome } from './helpers/new-ranking';
 
 // Leaderboard update: the "New ranking" card is closed with Got it whenever it shows.
 gotItNewRanking(test);
@@ -280,6 +280,7 @@ async function seededHome(page: Page, patch: Record<string, unknown> = {}, query
   await page.goto(query);
   await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');
   await page.waitForTimeout(400);
+  await settleHome(page); // leaderboard update: the "New ranking" card (a ranking pool joins at sign-in)
 }
 
 const visibleText = (page: Page, sel: string): Promise<string> =>
