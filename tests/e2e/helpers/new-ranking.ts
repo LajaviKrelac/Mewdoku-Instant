@@ -6,10 +6,16 @@ import { type Page, test as base } from '@playwright/test';
 
 export const newRankingOk = (page: Page) => page.locator('.overlay[data-overlay="ladder_session"] .ladder-session__ok');
 
+/** The handler on one page (a page a test makes itself, outside the `page` fixture, calls it too). */
+export async function gotItOn(page: Page): Promise<Page> {
+  await page.addLocatorHandler(newRankingOk(page), async (ok) => {
+    await ok.click();
+  });
+  return page;
+}
+
 export function gotItNewRanking(t: typeof base): void {
   t.beforeEach(async ({ page }) => {
-    await page.addLocatorHandler(newRankingOk(page), async (ok) => {
-      await ok.click();
-    });
+    await gotItOn(page);
   });
 }

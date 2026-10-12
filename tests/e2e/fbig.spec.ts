@@ -52,7 +52,7 @@ import { defaults } from '../../src/game/save';
 import type { SaveData } from '../../src/game/types';
 import { devSwitches, fbPlayer, LADDER_URL, ladderUp, newPool } from './helpers/rank-players';
 import { watchStrings } from './helpers/strings';
-import { gotItNewRanking } from './helpers/new-ranking';
+import { gotItNewRanking, gotItOn } from './helpers/new-ranking';
 
 // Phase 2e I-4: no screen of these tests may ask for an English string that no loaded table has.
 watchStrings(test);
@@ -274,7 +274,7 @@ test.describe('FBIG save robustness', () => {
 
     // A session whose read fails outright (on a device with no mirror yet) never wins the next
     // merge with its fresh defaults.
-    const p1 = await context.newPage();
+    const p1 = await gotItOn(await context.newPage());
     await p1.addInitScript(() => localStorage.clear());
     const failing = Array(12).fill('NETWORK_FAILURE');
     await openGame(p1, { data: { save: cloud }, persist: false, errors: { getDataAsync: failing } });
@@ -282,7 +282,7 @@ test.describe('FBIG save robustness', () => {
     await p1.waitForTimeout(800); // the session's mirror write (defaults, fresh updatedAt)
     expect(await stub(p1, (st) => st.count('player.setDataAsync'))).toBe(0);
     await p1.close();
-    const p2 = await context.newPage();
+    const p2 = await gotItOn(await context.newPage());
     await openGame(p2, { data: { save: cloud }, persist: false });
     const merged = (await appState(p2)).save;
     expect(merged.progress.level).toBe(40);
@@ -295,7 +295,7 @@ test.describe('FBIG save robustness', () => {
     expect((await appState(page)).save.progress.level).toBe(40);
     await page.waitForTimeout(800); // A's mirror is written
     await page.close();
-    const b = await context.newPage();
+    const b = await gotItOn(await context.newPage());
     await openGame(b, { playerId: 'player-B', persist: false });
     const s = await appState(b);
     expect(s.save.progress.level).toBe(1);
@@ -327,7 +327,7 @@ test.describe('FBIG save robustness', () => {
     await expect(sel.playButton(page)).toBeVisible();
     await page.close();
 
-    const p2 = await context.newPage();
+    const p2 = await gotItOn(await context.newPage());
     await loadGame(p2, { persist: false, errors: { startGameAsync: ['INVALID_OPERATION', 'INVALID_OPERATION'] } });
     await expect(p2.getByRole('alert')).toContainText("The game couldn't start.");
     await expect(p2.getByText('Oops, something hiccupped. You can keep playing.')).toHaveCount(0);
@@ -685,7 +685,7 @@ test.describe('FBIG Phase 2e: buying helpers on the out-of-helpers card (spec §
     test.skip(!(await ladderUp()), `no ranking server at ${LADDER_URL} (the remote switches)`);
     const pool = newPool('fbios');
     await devSwitches(pool, { iapIos: true });
-    const page2 = await page.context().newPage();
+    const page2 = await gotItOn(await page.context().newPage());
     // The first page cached its pool-less answer (localStorage['mewdoku.rc.v1'], ladder.ttlSec): start clean.
     await page2.addInitScript(() => localStorage.removeItem('mewdoku.rc.v1'));
     await outOfHints(page2, { presets: ['ios'] }, { query: `?ladderPool=${pool}` });

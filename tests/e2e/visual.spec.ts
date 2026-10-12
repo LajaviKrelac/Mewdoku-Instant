@@ -46,7 +46,7 @@ import { catIncrement, comboPoints, comboRuleFor, comboRunMax, periodKeyAt, poin
 import type { SaveData } from '../../src/game/types';
 import { NICK_WORDS_V1 } from '../../src/shared/nick-words';
 import type { BracketRow, BracketView, PlayerView, ResultView, RulesView, SessionResponse, WinSubmission } from '../../src/shared/rank-api';
-import { gotItNewRanking } from './helpers/new-ranking';
+import { gotItNewRanking, gotItOn } from './helpers/new-ranking';
 
 // Leaderboard update: the "New ranking" card is closed with Got it whenever it shows.
 gotItNewRanking(test);
@@ -349,7 +349,7 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
   test('402 × 874 with the recording\'s safe areas and the banner: the rows at the measured positions (±2 px)', async ({ browser }, info) => {
     test.skip(info.project.name !== 'web-390', 'one phone size: the recording\'s');
     const ctx = await browser.newContext({ viewport: { width: 402, height: 874 }, deviceScaleFactor: 3, hasTouch: true, isMobile: true });
-    const page = await ctx.newPage();
+    const page = await gotItOn(await ctx.newPage());
     await page.goto('/?ads=ok');
     await ready(page);
     await page.evaluate((json) => (window as TestWindow).__mewdoku?.seedSave(json), JSON.stringify(recordingSave()));
@@ -750,7 +750,7 @@ test.describe('Phase 2d.1 helpers (helpers-spec §7.7): tickers, "+N", star, cou
     test.skip(info.project.name !== 'web-390', 'the recordings\' phone');
     test.setTimeout(120_000);
     const ctx = await browser.newContext({ viewport: { width: 402, height: 874 }, deviceScaleFactor: 3, hasTouch: true, isMobile: true });
-    const page = await ctx.newPage();
+    const page = await gotItOn(await ctx.newPage());
     await helperGame(page, undefined, true);
     await tickersMid(page, 'tickers-en');
     await kittyMoments(page, 'en', true);
@@ -1170,7 +1170,7 @@ async function onVariant(browser: Browser, page: Page, info: TestInfo, v: Varian
   if (!v.ctx) return fn(page, String(page.viewportSize()?.width ?? 0));
   const ctx = await browser.newContext(v.ctx);
   try {
-    await fn(await ctx.newPage(), v.id);
+    await fn(await gotItOn(await ctx.newPage()), v.id);
   } finally {
     await ctx.close();
   }
