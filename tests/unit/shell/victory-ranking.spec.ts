@@ -540,4 +540,45 @@ describe('victory screen (§2.5; Phase 2c §2.7; 2c.1 §10.3)', () => {
     // A stray 2b fish milestone (Reward.fish was deleted at I-3) is never shown.
     expect(rewardText({ fish: 100, kitties: 3 } as Parameters<typeof rewardText>[0])).toBe('+3 kitties');
   });
+
+  it('2026-10-12 (compare §D1): update() re-renders the ranking total in place; the opening\'s streak fill and event bar run on', () => {
+    vi.useFakeTimers();
+    const p = victoryProps({
+      variant: 'event',
+      level: null,
+      nextLevel: null,
+      kept: { fish: 3, max: 3, gained: 3, total: 22, kind: 'ladder', waiting: 3 },
+      streak: { day: 4, total: 7, reward: null },
+      event: { nameKey: 'event.lantern.name' as I18nKey, index: 6, total: 21, solvedBefore: 6, solvedAfter: 7, reward: null, last: false },
+    });
+    const v = openVictory(p);
+    expect(q(v.el, '.victory__period-text').textContent).toBe('Your total: 22');
+    expect(q(v.el, '.victory__waiting').hidden).toBe(false);
+    // The ranking answer lands 100 ms after the tap: the server's total, nothing waiting any more.
+    vi.advanceTimersByTime(100);
+    v.update({ ...p, kept: { fish: 3, max: 3, gained: 3, total: 25, kind: 'ladder', waiting: 0 } });
+    expect(q(v.el, '.victory__plus').textContent).toBe('+3');
+    expect(q(v.el, '.victory__period-text').textContent).toBe('Your total: 25');
+    expect(q(v.el, '.victory__waiting').hidden).toBe(true);
+    expect(q(v.el, '.victory__kept').getAttribute('aria-label')).toBe('You kept 3 fish. Your ranking total: 25.');
+    // The opening's animations are not cut short: today's streak step keeps its fill, the bar still waits for its own.
+    expect(q(v.el, '.victory__streak').hasAttribute('data-fill')).toBe(true);
+    const bar = q(v.el, '.victory__bar');
+    expect(bar.getAttribute('aria-valuenow')).toBe('6');
+    expect(q(v.el, '.victory').classList.contains('victory--bar-static')).toBe(true);
+    vi.advanceTimersByTime(cfg.fx.overlayFadeMs);
+    expect(bar.getAttribute('aria-valuenow')).toBe('7');
+    expect(q(v.el, '.victory').classList.contains('victory--bar-static')).toBe(false);
+    // The primary's gate is the open's (600 ms), untouched by the update.
+    expect(q(v.el, '.victory__primary').getAttribute('aria-disabled')).toBe('true');
+    vi.advanceTimersByTime(cfg.fx.winButtonDelayMs);
+    expect(q(v.el, '.victory__primary').hasAttribute('aria-disabled')).toBe(false);
+    // The server counted none of this win's fish (the session sends no kept row): the row goes, the points stay.
+    v.update({ ...p, kept: null });
+    expect(q(v.el, '.victory__kept').hidden).toBe(true);
+    expect(q(v.el, '.victory__points').hidden).toBe(false);
+    // A later re-render (no animation pending) still sets the bar.
+    v.update({ ...p, event: { ...(p.event as NonNullable<VictoryProps['event']>), solvedAfter: 8 } });
+    expect(bar.getAttribute('aria-valuenow')).toBe('8');
+  });
 });

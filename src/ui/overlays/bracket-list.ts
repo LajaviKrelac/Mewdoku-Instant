@@ -11,10 +11,10 @@
 // in every locale. Queued fish show on my row as "+2 waiting"; my rank stays the server's last one.
 //
 // Layout (top to bottom): "Ends in 7 h 48 min · 37 players" (countdown never announced), the rewards line,
-// "Last updated 14:02" + the offline line (a cached bracket), the alone line, the scroll list of rows (my
-// row highlighted with a "You" tag; places 1–3 carry our medal AND their number), the pinned copy of my row
-// (aria-hidden, shown while my row is scrolled out of view), "+3 hearts from other players", and once the
-// first-time line "This is you in the ranking: …".
+// "Last updated 14:02" (a cached bracket) + the offline line (only when known offline), the alone line, the
+// scroll list of rows (my row highlighted with a "You" tag; places 1–3 carry our medal AND their number), the
+// pinned copy of my row (aria-hidden, shown while my row is scrolled out of view), "+3 hearts from other
+// players", and once the first-time line "This is you in the ranking: …".
 // A11y (§7.7): the list is role="list"; each row is a listitem named "#5, Brave Noodle 12, you, 14 fish,
 // 2 hearts" (my row adds ", +2 waiting" while fish wait, audit B11; the header's dot is read as a comma, B10);
 // the rows are not tab stops, only their heart buttons (and, in the sheet, my row's pencil) are;
@@ -35,12 +35,16 @@ import { h, setText } from '../dom';
 import '../../styles/ladder-chunk.css';
 import type { BracketListCallbacks, BracketListHandle, BracketListView, BracketRowView } from './ranking-panel';
 
-/** "Ends in 7 h 48 min" / "Ends in less than a minute" / "Final results" (spec §2.4 Countdown). */
+/**
+ * "Ends in 7 h 48 min" / "Ends in less than a minute" / "Final results" (spec §2.4 Countdown). 2026-10-12 (compare
+ * §D3): "Final results" only over the server's final standings (`final`); a bracket whose end passed without them
+ * (a list left open over the end, or the server's view inside its finalising grace) shows no countdown line.
+ */
 export function countdownText(endsAt: number | null, now: number, final: boolean): string | null {
   if (final) return t('ladder.ended');
   if (endsAt === null) return null;
   const left = endsAt - now;
-  if (left <= 0) return t('ladder.ended');
+  if (left <= 0) return null;
   if (left < 60_000) return t('ladder.endsSoon');
   return t('ladder.endsIn', { time: formatDuration(left) });
 }
@@ -325,11 +329,11 @@ export function createBracketList(view: BracketListView, cb: BracketListCallback
     rewards.hidden = rw === null;
     setText(rewards, rw ?? '');
     stale.hidden = !v.stale;
-    offline.hidden = !v.stale;
-    if (v.stale) {
-      setText(stale, t('ladder.stale', { time: timeOfDay(v.stale.at) }));
-      setText(offline, t('ladder.offline'));
-    }
+    // 2026-10-12 (verify C9): "You're offline" only when the app knows it is (not on a 503, a timeout or a boot
+    // from the stored cache): there the neutral "Last updated hh:mm" stands alone.
+    offline.hidden = !v.stale?.offline;
+    if (v.stale) setText(stale, t('ladder.stale', { time: timeOfDay(v.stale.at) }));
+    if (v.stale?.offline) setText(offline, t('ladder.offline'));
     // Alone: exactly my row (H-2; C-4: no promise that others will join).
     const isAlone = v.members === 1 && v.rows.length === 1 && v.rows[0]?.me === true;
     alone.hidden = !isAlone;

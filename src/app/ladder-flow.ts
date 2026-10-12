@@ -12,7 +12,8 @@
 // ("Last updated hh:mm"), or the player's own records. Queued fish are shown as waiting, never promised.
 // A rejected win is dropped quietly. The token lives in the client's memory only; the cached ROWS (other
 // players' names) live in memory and localStorage['mewdoku.ladder.rows.v1'] only, dropped once endsAt
-// passed; the save keeps my numbers only (save.ladder.current).
+// passed (an ended bracket's view, its final standings, in memory only: 2026-10-12); the save keeps my
+// numbers only (save.ladder.current).
 // Lazy: boot loads this module (with the client and the remote switches) only where the ranking origin is
 // in use; web-prod never does (no request at all).
 import { formatPlayerCode, type BracketView, type ClaimResponse, type ResultView, type RulesView, type SessionResponse, AVATAR_COUNT, NICK_NUM_MAX, NICK_NUM_MIN } from '../shared/rank-api';
@@ -23,6 +24,7 @@ import {
   applyVerdicts,
   claimsToRepair,
   counterBefore as counterOf,
+  counterBeforeWin,
   currentFrom,
   isRunning,
   markDoubleWatched,
@@ -112,6 +114,12 @@ export interface LadderFlow {
   panelTotal(): number;
   /** Fish waiting to be sent (the queue; the "+3 waiting" my row shows), shown after the total; 0 = none. */
   panelWaiting(): number;
+  /**
+   * 2026-10-12 (compare §D2): whether the server's answer counted this win's fish: true when it added points
+   * (accepted, flagged, a duplicate of a counted win), false when it added none (rejected, already counted),
+   * null while it has not answered for this win (sending, failed, queued, not sent).
+   */
+  winCounted(): boolean | null;
   /** The panel's extra props: the bracket list factory, hearts and the info button. */
   panelExtras(): { bracketList?: BracketListFactory; onHeart(slot: number): void; onInfo(): void };
   /** My bracket's points before this win (the period counter's before value), else 0. */
@@ -137,6 +145,7 @@ interface WinState {
   readonly at: number;
   state: 'sending' | 'answered' | 'failed';
   view: BracketView | null;
+  /** The points the server's answer gave this win (winCounted), even when it came after the panel gave up; null = none yet. */
   gained: number | null;
 }
 
@@ -151,6 +160,13 @@ interface CachedRows {
 }
 
 const modeOf = (puzzleId: string): ModeId => (puzzleId.startsWith('D') ? 'daily' : puzzleId.startsWith('E') ? 'event' : 'level');
+
+/**
+ * 2026-10-12 (review): the server finalises an ended bracket bracket.finalizeGraceMs (30 s, server/src/core/config.ts)
+ * after its end, lazily on a read; inside that grace it answers 'ended' without `final` and without the result. A read
+ * this long after the end (the grace plus a margin for the clocks) gets the final standings and the result card.
+ */
+const FINAL_AFTER_MS = 32_000;
 
 export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
   const c = deps.config ?? cfg;
@@ -172,7 +188,34 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
   let win: WinState | null = null;
   /** The win whose ladder_panel row was logged (once per win). */
   let panelLogged: WinState | null = null;
-  let heartLimit = false;
+  /** 2026-10-12 (verify D4): the bracket whose heart cap was reached; the cap is per bracket, so the next one has hearts again. */
+  let heartLimitIn: string | null = null;
+  /**
+   * 2026-10-12 (compare §D3, verify C8): the server's view of my bracket after it ENDED (GET /v1/bracket answers it
+   * for a day, `final` once finalised), with the offset of its answer. Memory only: the stored rows cache keeps
+   * open brackets alone. Shown while it is still my bracket (save.ladder.current), so "Final results" stands over
+   * the server's standings, never over the win-time ones.
+   */
+  let endedView: { readonly view: BracketView; readonly offset: number } | null = null;
+  /** 2026-10-12 (review): the one re-read after the finalising grace (scheduleFinalRead), and the bracket it is for. */
+  let finalTimer: TimerId | null = null;
+  let finalTimerFor: string | null = null;
+  /**
+   * 2026-10-12 (verify C9): the last call failed for want of a network (fetch rejected) or the browser went
+   * offline; any answer clears it. Only then (or with navigator.onLine false) does a stale list add "You're
+   * offline" — a 503, a timeout or a boot from the stored cache show "Last updated hh:mm" alone.
+   */
+  let netDown = false;
+  /**
+   * 2026-10-12 (verify C9): "+N hearts from other players" once per arrival. The server resets its count with each
+   * read, so unseen counts add up; the display that shows the line first (a win's panel, an opened sheet) keeps it
+   * while it re-renders, and no later display repeats it.
+   */
+  let heartsNote: { readonly bracketId: string; readonly n: number; shownBy: object | null } | null = null;
+  /** 2026-10-12 (verify C9): the display that showed the first-time name line (it keeps it while open). */
+  let nickLineBy: object | null = null;
+  /** The ranking sheet opened last (a display for the once-only lines while it shows its list). */
+  let sheetDisplay: object = {};
   let cardBusy = false;
   /**
    * The cached bracket came from a server answer of THIS page load and no call has failed since (requests-G3
@@ -270,9 +313,37 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
       if (view.state === 'open') {
         storeCache(view);
         cacheFresh = true;
+      } else if (view.bracketId !== null) {
+        // 2026-10-12 (compare §D3): 'ended' (a bracket id and not open): the server's standings of the ended
+        // bracket replace its open copy.
+        endedView = { view, offset: client.offsetMs() };
+        if (cached && cached.view.bracketId === view.bracketId) dropCache();
+        // 2026-10-12 (review): read inside the server's finalising grace (the chip's 00:00:00): not final yet.
+        if (!view.final && view.endsAt !== null) scheduleFinalRead(view.bracketId, view.endsAt - client.offsetMs());
+      }
+      if (view.heartsNew > 0 && view.bracketId !== null) {
+        // 2026-10-12: added to the hearts not shown yet; once shown, a later arrival starts a new line.
+        const h = heartsNote;
+        heartsNote = { bracketId: view.bracketId, n: view.heartsNew + (h && h.bracketId === view.bracketId && !h.shownBy ? h.n : 0), shownBy: null };
       }
       if (view.result && !results.some((r) => r.bracketId === view.result?.bracketId)) results = [view.result, ...results];
     }
+  }
+
+  /**
+   * 2026-10-12 (review): once per bracket, a re-read after its finalising grace (FINAL_AFTER_MS from `endAt`, device
+   * clock) when its ended view came without the final standings, so a player waiting on Home after the chip's
+   * 00:00:00 gets them and the result card. Off Home it reads nothing: the next Home mount does (endedReadDue).
+   */
+  function scheduleFinalRead(bracketId: string, endAt: number): void {
+    if (disposed || finalTimerFor === bracketId) return;
+    finalTimerFor = bracketId;
+    clock.clearTimeout(finalTimer);
+    finalTimer = clock.setTimeout(() => {
+      finalTimer = null;
+      if (disposed || deps.router.screen() !== 'home') return;
+      void refreshBracket().then(() => nextCard());
+    }, Math.max(0, endAt + FINAL_AFTER_MS - clock.now()));
   }
 
   function failureToAuth(code: LadderFailureCode): AuthState | null {
@@ -299,6 +370,7 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
 
   function noteFailure(code: LadderFailureCode): void {
     cacheFresh = false;
+    netDown = code === 'network';
     const a = failureToAuth(code);
     if (a) {
       auth = a;
@@ -364,6 +436,7 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
             return;
           }
           backoffStep = 0;
+          netDown = false;
           const answered = r.value;
           updateLadder((l) => applyVerdicts(l, answered.results));
           for (const res of answered.results) {
@@ -458,6 +531,7 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
       const r = await client.signIn();
       if (!r.ok) {
         cacheFresh = false;
+        netDown = r.code === 'network';
         const a = failureToAuth(r.code);
         auth = a ?? 'error';
         const result = r.code === 'no_api' ? 'no_api' : r.code === 'timeout' ? 'timeout' : r.code === 'disabled' ? 'disabled' : a === 'rejected' || a === 'old' || a === 'suspended' ? 'rejected' : 'error';
@@ -486,9 +560,12 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
     rules = sr.rules;
     results = [...sr.results].sort((a, b) => b.endedAt - a.endedAt);
     auth = sr.player.status === 'suspended' ? 'suspended' : 'ok';
+    netDown = false;
     if (fresh) {
       // Another player now (my data was deleted on the server): nothing of the old one is shown again.
       win = null;
+      endedView = null;
+      heartsNote = null;
       dropCache();
     }
     const p = sr.player;
@@ -567,11 +644,13 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
     };
   }
 
-  function listView(view: BracketView, stale: { at: number } | null, offsetMs: number): BracketListView {
+  /** `display`: the panel or sheet that renders this list (the once-only lines are its own); null = not rendered. */
+  function listView(view: BracketView, stale: { at: number } | null, offsetMs: number, display: object | null): BracketListView {
     const r = rules ?? cached?.rules ?? null;
     const heartsOn = r?.hearts.enabled ?? false;
     const allowSelf = r?.hearts.allowSelf ?? true;
     const on = online() && !stale;
+    const capped = heartLimitIn === view.bracketId; // a shown view always has a bracket id
     const rows: BracketRowView[] = view.rows.map((row) => ({
       rank: row.rank,
       slot: row.slot,
@@ -581,16 +660,17 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
       hearts: row.hearts,
       me: row.me,
       likedByMe: row.likedByMe,
-      heartEnabled: heartsOn && on && !heartLimit && !row.likedByMe && (allowSelf || !row.me),
+      heartEnabled: heartsOn && on && !capped && !row.likedByMe && (allowSelf || !row.me),
     }));
     const paidPlaces = r?.places.length ?? 0;
     const minMembers = r?.minMembers ?? 0;
     const me = save().ladder.me;
     // "+3 hearts from other players" (ladder.heartsNotify): the server counts the hearts since my last
-    // bracket read and resets the count with each read, so every answer that carries some is new; a cached
-    // (stale) view never repeats it.
-    const heartsNew = c.ladder.heartsNotify && view.heartsNew > 0 && !stale ? view.heartsNew : 0;
-    const firstLine = !save().ladder.nickLineSeen && me && view.me ? me.name : null;
+    // bracket read and resets the count with each read. 2026-10-12: shown by the display that claimed it
+    // (claimLines), never again by a later one; a cached (stale) view never shows it.
+    const hn = heartsNote;
+    const heartsNew = c.ladder.heartsNotify && !stale && display && hn?.shownBy === display && hn.bracketId === view.bracketId ? hn.n : 0;
+    const firstLine = display && nickLineBy === display && me && view.me ? me.name : null;
     return {
       bracketId: view.bracketId as string,
       rows,
@@ -601,8 +681,9 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
       paidPlaces,
       minMembers,
       heartsNew,
-      waiting: waitingFish(save().ladder),
-      stale,
+      // 2026-10-12 (review): never on an ended bracket: a queued win sent after the end counts in the next one (§1.3).
+      waiting: view.state === 'open' ? waitingFish(save().ladder) : 0,
+      stale: stale ? { at: stale.at, offline: netDown || !online() } : null,
       firstLineName: firstLine,
       panelRows: c.ladder.panelRows,
       hearts: heartsOn,
@@ -623,27 +704,58 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
     deps.saves.touch();
   }
 
-  function currentList(): { list: BracketListView; stale: boolean } | null {
+  /**
+   * The bracket the panel and the sheet show now, with its stale mark and its answer's offset; null = none.
+   * `forWin`: the post-win panel's win (its list); null = the sheet's (and a heart's) bracket.
+   */
+  function shownBracket(forWin: WinState | null = null): { view: BracketView; stale: { at: number } | null; offset: number } | null {
     // requests-G3 R16: the cache holds the NEWEST answer (every answer with an open bracket is stored, the win's
     // own included); it is current while it came from this page load and no call failed since, else it is the
-    // stale view ("Last updated …", hearts off). The win's answer is used only when it was not cached (a bracket
-    // that is no longer open).
+    // stale view ("Last updated …", hearts off).
     const live = liveCache();
-    if (live) {
-      if (cacheFresh && online()) return { list: listView(live.view, null, live.offset), stale: false };
-      return { list: listView(live.view, { at: live.at }, live.offset), stale: true };
+    if (live) return { view: live.view, stale: cacheFresh && online() ? null : { at: live.at }, offset: live.offset };
+    // 2026-10-12 (compare §D3, verify C8): once my bracket ended, the server's view of it ("Final results" when it
+    // is final). The win's own answer is no fallback any more: an open one is always cached, so it only ever
+    // stood in after the end — the win-time standings under "Final results". Without the server's view nothing
+    // is shown (the sheet's join line, as the chip's "Join"; the panel's records) until the read after the end
+    // brings it (refreshBracket).
+    const cur = save().ladder.current;
+    const ev = endedView;
+    if (!ev || cur?.bracketId !== ev.view.bracketId) return null;
+    // 2026-10-12 (review): a win's panel shows the ended bracket only when the server's answer to THIS win named it
+    // (it counted there before the end, or it was answered with my ended bracket). A win after the end lands in the
+    // next bracket (spec §1.3), so one without that answer (late, failed, offline) shows my records, as before.
+    if (forWin && forWin.view?.bracketId !== ev.view.bracketId) return null;
+    return { view: ev.view, stale: null, offset: ev.offset };
+  }
+
+  /**
+   * `display`: the panel or sheet rendering the list now (it claims the once-only lines); null = not rendered.
+   * `forWin`: the post-win panel's win (shownBracket); null = the sheet.
+   */
+  function currentList(display: object | null, forWin: WinState | null = null): { list: BracketListView; stale: boolean } | null {
+    const s = shownBracket(forWin);
+    if (!s) return null;
+    // 2026-10-12 (verify C9): the once-only lines go to the display that renders the list: the first-time name
+    // line is marked seen only then (never while the panel draws its skeleton), and both lines stay on that
+    // display's later re-renders (a heart, the chunk landing, an answer) instead of vanishing.
+    const hn = heartsNote;
+    if (display) {
+      if (!save().ladder.nickLineSeen && s.view.me) {
+        nickLineBy = display;
+        markNickLineSeen(); // (not without my name: the line then waits for the next display)
+      }
+      if (hn && !hn.shownBy && !s.stale && hn.bracketId === s.view.bracketId) hn.shownBy = display;
     }
-    const fresh = win?.view ?? null;
-    if (fresh && fresh.state !== 'none' && fresh.bracketId !== null && win?.state === 'answered') {
-      return { list: listView(fresh, null, client.offsetMs()), stale: false };
-    }
-    return null;
+    return { list: listView(s.view, s.stale, s.offset, display), stale: s.stale !== null };
   }
 
   // ── hearts (spec §2.8) ──
 
   async function heart(slot: number): Promise<void> {
-    const src = win?.view && win.view.bracketId ? win.view : liveCache()?.view ?? null;
+    // 2026-10-12 (verify B2): the bracket on screen (the panel and the sheet both show shownBracket()), never the
+    // win-time one after a newer answer moved me on.
+    const src = shownBracket()?.view ?? null;
     if (!src || src.bracketId === null) return;
     const row = src.rows.find((r) => r.slot === slot);
     if (!row || row.likedByMe) return;
@@ -656,6 +768,7 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
       });
       if (win?.view && win.view.bracketId === bracketId) win.view = fix(win.view);
       if (cached && cached.view.bracketId === bracketId) cached = { ...cached, view: fix(cached.view) };
+      if (endedView && endedView.view.bracketId === bracketId) endedView = { ...endedView, view: fix(endedView.view) };
       emit('heart');
       refreshOpenSheet();
     };
@@ -665,7 +778,7 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
     if (r.ok) {
       patch(r.value.hearts, true);
       log({ name: 'heart_give', params: { result: 'ok', self } });
-      if (rules && r.value.givenInBracket >= rules.hearts.maxGivenPerBracket) heartLimit = true;
+      if (rules && r.value.givenInBracket >= rules.hearts.maxGivenPerBracket) heartLimitIn = bracketId;
       return;
     }
     if (r.code === 'heart_exists') {
@@ -673,7 +786,7 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
       return; // stays pressed, silently
     }
     if (r.code === 'heart_limit') {
-      heartLimit = true;
+      heartLimitIn = bracketId;
       patch(row.hearts, false);
       log({ name: 'heart_give', params: { result: 'limit', self } });
       return;
@@ -813,11 +926,12 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
 
   let sheetView: LadderSheetProps['view'] = 'list';
   function sheetProps(view: LadderSheetProps['view'], infoOnly = false): LadderSheetProps {
-    const cl = view === 'records' ? null : currentList();
-    if (cl) markNickLineSeen();
     const live = active();
+    const shown = live || view === 'info' ? view : 'records';
+    // 2026-10-12: only a sheet opened on its list renders it (an info view opened on its own never shows it).
+    const cl = view === 'records' ? null : currentList(shown === 'list' ? sheetDisplay : null);
     return {
-      view: live || view === 'info' ? view : 'records',
+      view: shown,
       list: cl ? cl.list : null,
       records: deps.records(),
       rules: rulesView(),
@@ -942,6 +1056,8 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
     results = [];
     win = null;
     auth = 'idle';
+    endedView = null;
+    heartsNote = null;
     dropCache();
     updateLadder((l) => afterDelete(l, c));
     deps.saves.critical();
@@ -949,16 +1065,32 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
     emit('deleted');
   }
 
+  /**
+   * 2026-10-12 (compare §D3; review): reads after my bracket ended that skip the throttle: the first one after the end,
+   * and, while its final view has not come, the first one after the server's finalising grace (FINAL_AFTER_MS) — the
+   * read at the chip's 00:00:00 lands inside that grace and gets neither the final standings nor the result card. A
+   * failed one waits for the throttle like any other.
+   */
+  function endedReadDue(now: number): boolean {
+    const cur = save().ladder.current;
+    if (!cur) return false;
+    const endAt = cur.endsAt - cur.serverOffsetMs; // device clock
+    const due = (at: number): boolean => lastHomeRefresh < at && at <= now;
+    const final = endedView !== null && endedView.view.bracketId === cur.bracketId && endedView.view.final;
+    return due(endAt) || (!final && due(endAt + FINAL_AFTER_MS));
+  }
+
   async function refreshBracket(): Promise<void> {
     if (auth !== 'ok' || !listed() || !usable()) return;
     const now = clock.now();
-    if (now - lastHomeRefresh < c.ladder.homeRefreshMs) return;
+    if (!endedReadDue(now) && now - lastHomeRefresh < c.ladder.homeRefreshMs) return;
     lastHomeRefresh = now;
     const r = await client.bracket();
     if (!r.ok) {
       noteFailure(r.code);
       return; // Home keeps its cached values, never an error text
     }
+    netDown = false;
     applyView(r.value);
     if (r.value.state === 'none') updateLadder((l) => ({ ...l, current: null }));
     deps.saves.touch();
@@ -981,9 +1113,13 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
   }
 
   // ── the bus: flush when the device is online again ──
-  const onOnline = (): void => void flush('online');
+  const onOnline = (): void => {
+    netDown = false; // 2026-10-12: back online (a stale list keeps "Last updated" until an answer)
+    void flush('online');
+  };
   const onOffline = (): void => {
     cacheFresh = false;
+    netDown = true;
   };
   try {
     globalThis.addEventListener?.('online', onOnline);
@@ -1037,9 +1173,10 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
         log({ name: 'ladder_panel', params: { state, rows, rank, ms: Math.max(0, clock.now() - (win?.at ?? clock.now())) } });
       };
       if (win.state === 'sending' && clock.now() - win.at < c.ladder.panelWaitMs) return { kind: 'loading' };
-      const cl = currentList();
+      // 2026-10-12 (verify C9): the panel renders the list only with the chunk's factory (panelExtras); before
+      // it lands it draws the skeleton, so this win's panel claims the once-only lines only then.
+      const cl = currentList(chunk ? win : null, win);
       if (cl) {
-        markNickLineSeen();
         const me = cl.list.rows.find((r) => r.me);
         shown(cl.stale ? 'stale' : 'bracket', cl.list.rows.length, me?.rank ?? 0);
         return { kind: 'bracket', view: cl.list };
@@ -1055,6 +1192,7 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
     panelWaiting() {
       return waitingFish(save().ladder);
     },
+    winCounted: () => (win && win.gained !== null ? win.gained > 0 : null),
     panelExtras() {
       return {
         ...(chunk ? { bracketList: chunk.createBracketList } : {}),
@@ -1062,7 +1200,8 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
         onInfo: () => flow.openSheet('home', 'info'),
       };
     },
-    counterBefore: () => (active() ? counterOf(save().ladder, clock.now()) : 0),
+    // 2026-10-12 (verify C7): with my earlier queued fish (this win's own left out), as the panel's "+N waiting".
+    counterBefore: () => (active() ? counterBeforeWin(save().ladder, clock.now(), win?.ref.winId ?? null, c) : 0),
     chip() {
       if (!listed() || auth === 'suspended') return { state: 'off' };
       // No server (refused, or the sign-in failed) and no cached bracket still running: today's period pill (§2.5).
@@ -1092,6 +1231,7 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
       if (noticePending() && openNotice()) return;
       log({ name: 'ladder_open', params: { from } });
       sheetView = view;
+      sheetDisplay = {}; // a new display: the once-only lines are not repeated
       void loadChunk();
       deps.router.open('ladder', sheetProps(view));
       void refreshBracket().then(() => refreshOpenSheet());
@@ -1131,6 +1271,7 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
       disposed = true;
       offSignIn();
       clock.clearTimeout(retryTimer);
+      clock.clearTimeout(finalTimer);
       try {
         globalThis.removeEventListener?.('online', onOnline);
         globalThis.removeEventListener?.('offline', onOffline);

@@ -1325,9 +1325,18 @@ test.describe('Phase 2e (G3): the ranking views in the real app (route fake; spe
         const fake = await openRanked(p, returning({ dayStreak: { dates: [dailyDateKey(NOW - DAY_MS)], run: 3, best: 9, paid: [] } }), { myPoints: 28 });
         const chip = p.locator('.screen--home .ladder-chip');
         await expect(chip).toHaveAttribute('data-state', 'bracket');
+        // 2026-10-12 (01 row 7.1.7): the dark pill shows the time left (the fake's bracket ends 7 h 47 min 30 s after
+        // it started answering), ticking each second; rank, count and fish moved to the name.
+        const time = chip.locator('.ladder-chip__time');
+        await expect(time).toBeVisible();
+        await expect(time).toHaveText(/^07:[34]\d:\d\d$/);
+        const shown = await time.textContent();
+        await expect.poll(() => time.textContent(), { timeout: 3_000 }).not.toBe(shown);
+        await expect(chip.locator('.ladder-chip__rank')).toBeHidden();
+        await expect(chip.locator('.ladder-chip__points')).toBeHidden();
         // (t() wraps interpolated values in bidi isolates in an RTL locale: compare without them.)
-        await expect.poll(async () => ((await chip.locator('.ladder-chip__rank').textContent()) ?? '').replace(/[\u2066-\u2069]/g, '')).toBe('#5');
-        await expect(chip.locator('.ladder-chip__n')).toHaveText('28');
+        const name = async (): Promise<string> => ((await chip.getAttribute('aria-label')) ?? '').replace(/[\u2066-\u2069]/g, '');
+        await expect.poll(name).toMatch(v.lang ? /(?=.*\b5\b)(?=.*\b37\b)(?=.*\b28\b)/ : /^Daily ranking: #5 of 37, 28 fish\. Ends in 7 h \d+ min\.$/);
         expect(await inViewport(p, '.screen--home .ladder-chip')).toBe(true);
         await shot2e(p, `home-${suffix}`);
 

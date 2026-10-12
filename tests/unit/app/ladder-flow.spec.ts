@@ -75,6 +75,10 @@ function setup(
     device?: boolean;
     player?: Partial<PlayerView>;
     rewarded?: boolean;
+    /** Wraps the fake's fetch (an answer the fake does not make, e.g. an ended bracket's view). */
+    fetch?: (inner: typeof fetch) => typeof fetch;
+    /** The lazy chunk's loader (default: CHUNK at once). */
+    loadChunk?: () => Promise<LadderChunk | null>;
   } = {},
 ): Setup {
   const clock = createFakeClock(NOW);
@@ -115,7 +119,7 @@ function setup(
     clock,
     clientVersion: '0.2.0',
     contentVersion: 'content-test',
-    fetch: fake.fetch,
+    fetch: o.fetch ? o.fetch(fake.fetch) : fake.fetch,
     ...(o.config ? { config: o.config } : {}),
   });
   const watch = { ok: true, calls: 0 };
@@ -135,7 +139,7 @@ function setup(
       watch.calls++;
       return watch.ok;
     },
-    loadChunk: async () => CHUNK,
+    loadChunk: o.loadChunk ?? (async () => CHUNK),
     storage,
     online: o.online ?? (() => true),
     records: () => ({ rows: [] }) as never,
@@ -1059,5 +1063,438 @@ describe('"+N hearts from other players" (spec §2.8, ladder.heartsNotify)', () 
     off.flow.onWin({ winId: winId(1), mode: 'level', kept: 2 });
     await off.settle(0);
     expect(off.flow.listState()).toMatchObject({ kind: 'bracket', view: { heartsNew: 0 } });
+  });
+});
+
+// ─────────────── 2026-10-12: post-win flow and ladder fixes (compare §D3–D4; verify B2, C7–C9) ───────────────
+
+describe('ladder fixes 2026-10-12 (compare §D3–D4; verify B2, C7–C9)', () => {
+  type SheetList = { bracketId: string; final: boolean; heartsNew: number; stale: { at: number; offline: boolean } | null; firstLineName: string | null; rows: { rank: number; slot: number; name: string; points: number; hearts: number; likedByMe: boolean; heartEnabled: boolean; me: boolean }[] };
+  const sheetOf = (s: Setup): { list: SheetList | null; onHeart(slot: number): void } => s.router.props.ladder as never;
+  const panelOf = (s: Setup): SheetList => {
+    const st = s.flow.listState();
+    if (!st || st.kind !== 'bracket') throw new Error(`panel: ${st?.kind ?? 'null'}`);
+    return st.view as unknown as SheetList;
+  };
+  /**
+   * A fetch that answers GET /v1/bracket with `ended.view` once set (the fake has no ended view of its own); a
+   * function is called per read (a view that changes with the clock). `ended.reads` counts the reads it answered.
+   */
+  function endedServer(): { ended: { view: unknown; reads: number }; wrap: (inner: typeof fetch) => typeof fetch; offline: () => boolean; bind(s: Setup): void } {
+    let bound: Setup | null = null;
+    const ended: { view: unknown; reads: number } = { view: null, reads: 0 };
+    return {
+      ended,
+      offline: () => bound?.fake.offline ?? false,
+      bind: (s) => void (bound = s),
+      wrap: (inner) =>
+        (async (input: RequestInfo | URL, init?: RequestInit) => {
+          const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+          const get = (init?.method ?? 'GET').toUpperCase() === 'GET';
+          if (ended.view !== null && get && url.includes('/v1/bracket') && !bound?.fake.offline) {
+            ended.reads++;
+            const view: unknown = typeof ended.view === 'function' ? (ended.view as () => unknown)() : ended.view;
+            return new Response(JSON.stringify(view), { status: 200, headers: { 'Content-Type': 'application/json' } });
+          }
+          return inner(input, init);
+        }) as typeof fetch,
+    };
+  }
+
+  it('#1 after my bracket ended: nothing (the join line) until the server\'s view of it is read, then its final standings — never the win-time rows under "Final results"', async () => {
+    const srv = endedServer();
+    const s = setup({ fetch: srv.wrap });
+    srv.bind(s);
+    await s.flow.start();
+    s.fake.addOther({ nickname: 'Sleepy Whisker 27', avatarId: 1, points: 31 });
+    s.queue(1, 3);
+    s.flow.onWin({ winId: winId(1), mode: 'level', kept: 3 });
+    await s.settle(0);
+    const bracketId = s.fake.state.bracketId;
+    const open = (await s.client.bracket()) as unknown as { ok: true; value: Record<string, unknown> & { endsAt: number } };
+    // The period ends in this page load; no read since (offline).
+    s.fake.offline = true;
+    await s.settle(open.value.endsAt - s.clock.now() + 1);
+    s.flow.openSheet('home');
+    await s.settle(0);
+    expect(s.flow.chip()).toEqual({ state: 'join' });
+    expect(sheetOf(s).list).toBeNull(); // before: the win-time view (3 fish, not stale), its countdown "Final results"
+    s.routerApi.close('ladder');
+    // Online again: the server answers the ended bracket, finalised (a late win from another device counted: 5).
+    const me = { rank: 2, slot: 1, nickname: 'Velvet Pounce 27', avatarId: 0, points: 5, hearts: 0, me: true, likedByMe: false };
+    srv.ended.view = {
+      ...open.value,
+      state: 'ended',
+      final: true,
+      members: 2,
+      rows: [{ rank: 1, slot: 0, nickname: 'Sleepy Whisker 27', avatarId: 1, points: 31, hearts: 0, me: false, likedByMe: false }, me],
+      me,
+      heartsNew: 0,
+      result: null,
+      serverTime: s.clock.now(),
+    };
+    s.fake.offline = false;
+    await s.settle(cfg.ladder.homeRefreshMs);
+    s.flow.openSheet('home');
+    await s.settle(0);
+    const l = sheetOf(s).list;
+    expect(l?.bracketId).toBe(bracketId);
+    expect(l?.final).toBe(true); // "Final results" over the server's standings
+    expect(l?.stale).toBeNull();
+    expect(l?.rows.map((r) => [r.rank, r.name, r.points])).toEqual([
+      [1, 'Sleepy Whisker 27', 31],
+      [2, 'Velvet Pounce 27', 5],
+    ]);
+    expect(s.flow.chip()).toEqual({ state: 'join' }); // no running bracket: Join, as before
+    // A new bracket (my next win) takes over from the ended one.
+    s.fake.endBracket();
+    srv.ended.view = null;
+    s.queue(2, 2);
+    s.flow.onWin({ winId: winId(2), mode: 'level', kept: 2 });
+    await s.settle(0);
+    expect(panelOf(s).bracketId).toBe(s.fake.state.bracketId);
+    expect(panelOf(s).final).toBe(false);
+  });
+
+  it('#1 the first read after my bracket ended is not throttled (ladder.homeRefreshMs)', async () => {
+    const srv = endedServer();
+    const s = setup({ fetch: srv.wrap });
+    srv.bind(s);
+    await s.flow.start();
+    s.queue(1, 3);
+    s.flow.onWin({ winId: winId(1), mode: 'level', kept: 3 });
+    await s.settle(0);
+    const reads = (): number => s.fake.paths().filter((p) => p === 'GET /v1/bracket').length;
+    const endsAt = s.fake.state.endsAt;
+    await s.settle(endsAt - s.clock.now() - 20_000);
+    s.flow.homeMounted(); // a read 20 s before the end
+    await s.settle(0);
+    expect(reads()).toBe(1);
+    await s.settle(21_000); // 1 s past the end, inside the throttle
+    s.flow.openSheet('home');
+    await s.settle(0);
+    expect(reads()).toBe(2); // before: throttled (1)
+    s.flow.homeMounted();
+    await s.settle(0);
+    expect(reads()).toBe(2); // then the throttle again
+  });
+
+  it('#2 the heart cap is per bracket: heart_limit in one bracket leaves the next one\'s hearts on', async () => {
+    const s = setup();
+    await s.flow.start();
+    s.fake.addOther({ nickname: 'Sleepy Whisker 27', avatarId: 1, points: 31 });
+    s.queue(1);
+    s.flow.onWin({ winId: winId(1), mode: 'level', kept: 2 });
+    await s.settle(0);
+    s.fake.failNext('/v1/hearts', 'heart_limit');
+    s.flow.panelExtras().onHeart(0);
+    await s.settle(0);
+    expect(panelOf(s).rows.some((r) => r.heartEnabled)).toBe(false);
+    // The period ends; my next win lands in a new bracket.
+    s.fake.endBracket();
+    s.fake.addOther({ nickname: 'Cozy Biscuit 41', avatarId: 7, points: 4 });
+    s.queue(2);
+    s.flow.onWin({ winId: winId(2), mode: 'level', kept: 2 });
+    await s.settle(0);
+    const v = panelOf(s);
+    expect(v.bracketId).toBe(s.fake.state.bracketId);
+    expect(v.rows.find((r) => r.slot === 0)).toMatchObject({ name: 'Cozy Biscuit 41', heartEnabled: true }); // before: false
+  });
+
+  it('#3 "You\'re offline" only when known offline: a 503, a timeout or a boot from the stored cache show "Last updated" alone', async () => {
+    const storage = new MemStorage();
+    const s = setup({ storage });
+    await s.flow.start();
+    s.fake.addOther({ nickname: 'Sleepy Whisker 27', avatarId: 1, points: 31 });
+    s.queue(1, 3);
+    s.flow.onWin({ winId: winId(1), mode: 'level', kept: 3 });
+    await s.settle(0);
+    // A 503 on the next win's submit.
+    s.fake.failNext('/v1/wins', 'unavailable');
+    s.queue(2, 1);
+    s.flow.onWin({ winId: winId(2), mode: 'level', kept: 1 });
+    await s.settle(0);
+    expect(panelOf(s).stale).toMatchObject({ offline: false });
+    // A timeout (no answer within the panel's wait).
+    s.fake.hold = true;
+    s.queue(3, 1);
+    s.flow.onWin({ winId: winId(3), mode: 'level', kept: 1 });
+    await s.settle(cfg.ladder.panelWaitMs);
+    expect(panelOf(s).stale).toMatchObject({ offline: false });
+    s.fake.hold = false;
+    s.fake.release();
+    await s.settle(cfg.ladder.timeoutMs);
+    // No network (fetch rejects): the offline line.
+    s.fake.offline = true;
+    s.queue(4, 1);
+    s.flow.onWin({ winId: winId(4), mode: 'level', kept: 1 });
+    await s.settle(cfg.ladder.panelWaitMs);
+    expect(panelOf(s).stale).toMatchObject({ offline: true });
+    s.flow.dispose();
+    // A new page load from the stored cache, before any call: "Last updated" alone; with the device offline, both.
+    const boot = setup({ storage });
+    boot.flow.openSheet('home');
+    expect(sheetOf(boot).list?.stale).toMatchObject({ offline: false });
+    boot.flow.dispose();
+    const off = setup({ storage, online: () => false });
+    off.flow.openSheet('home');
+    expect(sheetOf(off).list?.stale).toMatchObject({ offline: true });
+    off.flow.dispose();
+  });
+
+  it('#3 the browser\'s offline event adds the offline line; its online event takes it off (still "Last updated" until an answer)', async () => {
+    const listeners = new Map<string, () => void>();
+    vi.stubGlobal('addEventListener', (type: string, fn: () => void) => void listeners.set(type, fn));
+    vi.stubGlobal('removeEventListener', (type: string) => void listeners.delete(type));
+    try {
+      const storage = new MemStorage();
+      const first = setup({ storage });
+      await first.flow.start();
+      first.queue(1, 3);
+      first.flow.onWin({ winId: winId(1), mode: 'level', kept: 3 });
+      await first.settle(0);
+      first.flow.dispose();
+      const s = setup({ storage }); // a new page load with the stored cache
+      listeners.get('offline')?.();
+      s.flow.openSheet('home');
+      expect(sheetOf(s).list?.stale).toMatchObject({ offline: true });
+      s.routerApi.close('ladder');
+      listeners.get('online')?.();
+      s.flow.openSheet('home');
+      expect(sheetOf(s).list?.stale).toMatchObject({ offline: false });
+      await s.settle(0);
+      s.flow.dispose();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('#4 "+N hearts" once per arrival: the display that shows it keeps it; a later one never repeats it; unseen counts add up', async () => {
+    const s = setup();
+    await s.flow.start();
+    s.fake.addOther({ nickname: 'Sleepy Whisker 27', avatarId: 1, points: 31 });
+    s.queue(1);
+    s.flow.onWin({ winId: winId(1), mode: 'level', kept: 2 });
+    await s.settle(0);
+    const homeRead = async (hearts: number): Promise<void> => {
+      s.fake.state.heartsNew = hearts;
+      await s.settle(cfg.ladder.homeRefreshMs);
+      s.flow.homeMounted();
+      await s.settle(0);
+    };
+    // A Home read brings 2 new hearts while no list is on screen.
+    await homeRead(2);
+    s.flow.openSheet('home'); // its own read is throttled: the cached view
+    await s.settle(0);
+    expect(sheetOf(s).list?.heartsNew).toBe(2);
+    sheetOf(s).onHeart(0); // a re-render of the same sheet keeps the line
+    await s.settle(0);
+    expect(sheetOf(s).list?.rows.find((r) => r.slot === 0)?.likedByMe).toBe(true);
+    expect(sheetOf(s).list?.heartsNew).toBe(2);
+    s.routerApi.close('ladder');
+    s.flow.openSheet('home'); // the same cached view, a new display
+    await s.settle(0);
+    expect(sheetOf(s).list?.stale).toBeNull();
+    expect(sheetOf(s).list?.heartsNew).toBe(0); // before: 2 again (every fresh re-render of the cached view)
+    s.routerApi.close('ladder');
+    // Two reads bring 1, then 3 while no list is on screen: both arrivals show, once.
+    await homeRead(1);
+    await homeRead(3);
+    s.flow.openSheet('home');
+    await s.settle(0);
+    expect(sheetOf(s).list?.heartsNew).toBe(4); // before: 3 (the newest answer only; the 1 was lost)
+    // A win's answer with new hearts: its panel shows them.
+    s.fake.state.heartsNew = 5;
+    s.queue(2, 1);
+    s.flow.onWin({ winId: winId(2), mode: 'level', kept: 1 });
+    await s.settle(0);
+    expect(panelOf(s).heartsNew).toBe(5);
+  });
+
+  it('#5 the first-time name line: marked seen only when rendered (not under the skeleton), kept by that panel, not shown again', async () => {
+    let land: (m: LadderChunk) => void = () => undefined;
+    const s = setup({ loadChunk: () => new Promise<LadderChunk>((r) => (land = r)) });
+    await s.flow.start();
+    s.fake.addOther({ nickname: 'Sleepy Whisker 27', avatarId: 1, points: 31 });
+    const name = s.save().ladder.me?.name;
+    expect(name).toBeTruthy();
+    s.queue(1, 3);
+    s.flow.onWin({ winId: winId(1), mode: 'level', kept: 3 });
+    await s.settle(0);
+    expect(s.flow.panelExtras().bracketList).toBeUndefined(); // the panel draws its skeleton
+    panelOf(s);
+    expect(s.save().ladder.nickLineSeen).toBe(false); // before: marked seen here, so never shown
+    land(CHUNK);
+    await s.settle(0);
+    expect(s.updates).toContain('bracket');
+    expect(panelOf(s).firstLineName).toBe(name);
+    expect(s.save().ladder.nickLineSeen).toBe(true);
+    s.flow.panelExtras().onHeart(0); // a later re-render of the same panel keeps it (before: it vanished)
+    await s.settle(0);
+    expect(panelOf(s).firstLineName).toBe(name);
+    s.queue(2, 1);
+    s.flow.onWin({ winId: winId(2), mode: 'level', kept: 1 });
+    await s.settle(0);
+    expect(panelOf(s).firstLineName).toBeNull(); // the next win: once only
+    s.flow.openSheet('home');
+    await s.settle(0);
+    expect(sheetOf(s).list?.firstLineName).toBeNull();
+  });
+
+  it('#6 consecutive offline wins: the counter starts from my earlier queued fish too, as the panel shows them waiting', async () => {
+    const s = setup();
+    await s.flow.start();
+    s.queue(1, 3);
+    s.flow.onWin({ winId: winId(1), mode: 'level', kept: 3 });
+    await s.settle(0);
+    expect(s.flow.panelTotal()).toBe(3);
+    s.fake.offline = true;
+    s.queue(2, 3);
+    s.flow.onWin({ winId: winId(2), mode: 'level', kept: 3 });
+    expect(s.flow.counterBefore()).toBe(3); // this win's own fish are added by the counter as they land
+    await s.settle(cfg.ladder.panelWaitMs);
+    s.queue(3, 2);
+    s.flow.onWin({ winId: winId(3), mode: 'level', kept: 2 });
+    expect(s.flow.counterBefore()).toBe(6); // before: 3 again (3 → 5 after 3 → 6)
+    await s.settle(cfg.ladder.panelWaitMs);
+    // The panel: the server's 3 and "+5 waiting" = 8 = the counter's 6 + this win's 2.
+    expect(s.flow.panelTotal()).toBe(3);
+    expect(s.flow.panelWaiting()).toBe(5);
+  });
+
+  it('#7 a heart goes to the bracket on screen, not the win-time one after an answer moved me on', async () => {
+    const s = setup();
+    await s.flow.start();
+    s.fake.addOther({ nickname: 'Sleepy Whisker 27', avatarId: 1, points: 31 });
+    s.queue(1);
+    s.flow.onWin({ winId: winId(1), mode: 'level', kept: 2 });
+    await s.settle(0);
+    // A win on another device: the server has me in a new bracket now; Home reads it.
+    s.fake.endBracket();
+    s.fake.addOther({ nickname: 'Cozy Biscuit 41', avatarId: 7, points: 9 });
+    s.fake.state.points = 4;
+    await s.settle(cfg.ladder.homeRefreshMs);
+    s.flow.homeMounted();
+    await s.settle(0);
+    s.flow.openSheet('home');
+    await s.settle(0);
+    expect(sheetOf(s).list?.bracketId).toBe(s.fake.state.bracketId);
+    sheetOf(s).onHeart(0);
+    await s.settle(0);
+    const sent = s.fake.calls.filter((c) => c.path === '/v1/hearts').at(-1);
+    expect(sent?.body).toMatchObject({ bracketId: s.fake.state.bracketId, slot: 0 }); // before: the old bracket (not_member)
+    expect(sheetOf(s).list?.rows.find((r) => r.slot === 0)).toMatchObject({ name: 'Cozy Biscuit 41', hearts: 1, likedByMe: true });
+    expect(s.named('heart_give')).toEqual([{ result: 'ok', self: 0 }]);
+  });
+
+  /** My bracket after one win of 3 fish (others: Sleepy Whisker 27 on 31), its open view and its end (server clock). */
+  async function wonOnce(srv: ReturnType<typeof endedServer>): Promise<{ s: Setup; bracketId: string; open: Record<string, unknown> & { endsAt: number } }> {
+    const s = setup({ fetch: srv.wrap });
+    srv.bind(s);
+    await s.flow.start();
+    s.fake.addOther({ nickname: 'Sleepy Whisker 27', avatarId: 1, points: 31 });
+    s.queue(1, 3);
+    s.flow.onWin({ winId: winId(1), mode: 'level', kept: 3 });
+    await s.settle(0);
+    const r = (await s.client.bracket()) as unknown as { ok: true; value: Record<string, unknown> & { endsAt: number } };
+    return { s, bracketId: s.fake.state.bracketId as string, open: r.value };
+  }
+  const meRow = { rank: 2, slot: 1, nickname: 'Velvet Pounce 27', avatarId: 0, points: 3, hearts: 0, me: true, likedByMe: false };
+  const otherRow = { rank: 1, slot: 0, nickname: 'Sleepy Whisker 27', avatarId: 1, points: 31, hearts: 0, me: false, likedByMe: false };
+
+  it('review 2026-10-12: my ended bracket read, then a win after its end with no answer (offline, a 503): its panel shows my records, never the ended standings; no list of an ended bracket shows queued fish', async () => {
+    const srv = endedServer();
+    const { s, bracketId, open } = await wonOnce(srv);
+    await s.settle(open.endsAt - s.clock.now() + 60_000);
+    srv.ended.view = { ...open, state: 'ended', final: true, members: 2, rows: [otherRow, meRow], me: meRow, heartsNew: 0, result: null, serverTime: s.clock.now() };
+    s.flow.homeMounted();
+    await s.settle(0);
+    // The win that counted there: its panel (still the current win) shows the final standings.
+    expect(panelOf(s)).toMatchObject({ bracketId, final: true, stale: null });
+    // Offline: a win after the end (it will count in the next bracket, never in the ended one).
+    s.fake.offline = true;
+    s.queue(2, 2);
+    s.flow.onWin({ winId: winId(2), mode: 'level', kept: 2 });
+    await s.settle(cfg.ladder.panelWaitMs);
+    expect(s.flow.listState()).toMatchObject({ kind: 'records' }); // before: the ended bracket, "Final results", "+2 waiting"
+    expect(s.flow.panelWaiting()).toBe(2); // the subtitle's "+2 waiting" stays
+    // The sheet still shows the server's view of my ended bracket, without the fish that wait for the next one.
+    s.flow.openSheet('home');
+    await s.settle(0);
+    const l = sheetOf(s).list as (SheetList & { waiting: number }) | null;
+    expect(l).toMatchObject({ bracketId, final: true, waiting: 0 }); // before: waiting 2
+    s.routerApi.close('ladder');
+    // Online, but the next win's submit gets a 503: records too.
+    s.fake.offline = false;
+    s.fake.failNext('/v1/wins', 'unavailable');
+    s.queue(3, 1);
+    s.flow.onWin({ winId: winId(3), mode: 'level', kept: 1 });
+    await s.settle(0);
+    expect(s.flow.listState()).toMatchObject({ kind: 'records' });
+  });
+
+  /** The server's view of my ended bracket at each read: final, with my result, once its finalising grace (30 s) passed. */
+  const finalisingView = (s: Setup, open: Record<string, unknown> & { endsAt: number }, bracketId: string) => (): unknown => {
+    const final = s.clock.now() >= open.endsAt + 30_000; // server/src/core/config.ts bracket.finalizeGraceMs
+    return {
+      ...open,
+      state: 'ended',
+      final,
+      members: 2,
+      rows: [otherRow, meRow],
+      me: meRow,
+      heartsNew: 0,
+      result: final ? { bracketId, endedAt: open.endsAt, place: 2, members: 2, points: 3, reward: null } : null,
+      serverTime: s.clock.now(),
+    };
+  };
+
+  it('review 2026-10-12: the read at the chip\'s 00:00:00 lands inside the server\'s finalising grace; while Home shows, one re-read after it brings the final standings and the result card', async () => {
+    const srv = endedServer();
+    const { s, bracketId, open } = await wonOnce(srv);
+    srv.ended.view = finalisingView(s, open, bracketId);
+    await s.settle(open.endsAt - s.clock.now() + 20);
+    s.flow.homeMounted(); // the chip's onEnded
+    await s.settle(0);
+    expect(srv.ended.reads).toBe(1);
+    expect(s.router.open).not.toContain('ladder_result');
+    await s.settle(10_000);
+    s.flow.homeMounted(); // inside the grace: throttled as before
+    await s.settle(0);
+    expect(srv.ended.reads).toBe(1);
+    await s.settle(22_000); // past the grace (+32 s): the flow reads once more
+    expect(srv.ended.reads).toBe(2); // before: none until 60 s after the first read and a further Home mount
+    expect(s.router.open).toContain('ladder_result');
+    expect(s.router.props.ladder_result).toMatchObject({ place: 2, members: 2 });
+    s.routerApi.close('ladder_result');
+    s.flow.openSheet('home');
+    await s.settle(0);
+    expect(sheetOf(s).list).toMatchObject({ bracketId, final: true }); // "Final results"
+    expect(srv.ended.reads).toBe(2); // the throttle again
+    await s.settle(120_000);
+    expect(srv.ended.reads).toBe(2); // once per bracket, never a loop
+  });
+
+  it('review 2026-10-12: away from Home over the grace, nothing is read; the next Home mount after it skips the throttle (final standings, result card)', async () => {
+    const srv = endedServer();
+    const { s, bracketId, open } = await wonOnce(srv);
+    srv.ended.view = finalisingView(s, open, bracketId);
+    await s.settle(open.endsAt - s.clock.now() + 20);
+    s.flow.homeMounted();
+    await s.settle(0);
+    expect(srv.ended.reads).toBe(1);
+    const router = s.routerApi as { screen: () => string };
+    router.screen = () => 'game';
+    await s.settle(40_000);
+    expect(srv.ended.reads).toBe(1); // in a game: no read
+    router.screen = () => 'home';
+    s.flow.homeMounted(); // 40 s after the end, 40 s after the last read
+    await s.settle(0);
+    expect(srv.ended.reads).toBe(2); // before: throttled (homeRefreshMs) until 60 s after the read at 00:00:00
+    expect(s.router.open).toContain('ladder_result');
+    s.routerApi.close('ladder_result');
+    s.flow.homeMounted();
+    await s.settle(0);
+    expect(srv.ended.reads).toBe(2);
   });
 });

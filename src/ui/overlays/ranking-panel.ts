@@ -7,7 +7,8 @@
 // A tap anywhere, Enter, Space or Esc continues once `tapMinMs` has passed since open (dismiss()
 // handles Esc). role="dialog" labelled by the title; a live region reads the rank and points.
 // The footer is a real button (data-autofocus), so keyboard and screen-reader users land on it; it
-// stays aria-disabled until the gate, then pulses (rank.tapPulseMs). On continue the panel fades out
+// stays aria-disabled until the gate, then fades in over 200 ms and pulses (rank.tapPulseMs; 2026-10-12: the
+// pulse waits out the fade, overlay-chunk.css). On continue the panel fades out
 // over rank.panelOutMs (.is-leaving) while the app closes it and opens the victory screen.
 // Reduced motion (§2.7): the whole overlay fades in over fx.reducedMotionFadeMs (WAAPI, so the global
 // reduced-motion CSS rule does not cut it), no pop and no pulse.
@@ -118,8 +119,12 @@ export interface BracketListView {
   readonly heartsNew: number;
   /** Queued fish shown on my row ("+2 waiting"); 0 = none. */
   readonly waiting: number;
-  /** A cached bracket shown while offline or down: "Last updated hh:mm" (+ the offline line). */
-  readonly stale: { readonly at: number } | null;
+  /**
+   * A cached bracket shown while offline or down: "Last updated hh:mm"; `offline` adds the offline line
+   * (2026-10-12: only when the device is offline or the last call failed for want of a network, never on a
+   * 503, a timeout or a boot from the stored cache).
+   */
+  readonly stale: { readonly at: number; readonly offline: boolean } | null;
   /** My ranking name for nick.first.line, shown once; else null. */
   readonly firstLineName: string | null;
   /** ladder.panelRows (0 = every row, in a scroll list). */

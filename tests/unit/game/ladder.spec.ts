@@ -22,6 +22,7 @@ import {
   claimEntry,
   claimsToRepair,
   counterBefore,
+  counterBeforeWin,
   currentFrom,
   droppedBy,
   isClaimed,
@@ -211,6 +212,18 @@ describe('the cached bracket and the counter (spec §2.3)', () => {
     expect(isRunning(rec.current, T + 3_600_000 - 5001)).toBe(true);
     expect(counterBefore(rec, T + 3_600_000 - 5000)).toBe(0); // the device clock + the offset reached endsAt
     expect(counterBefore(emptyLadder(), T)).toBe(0);
+  });
+
+  it('counterBeforeWin (2026-10-12, verify C7): + my earlier queued fish (not this win, not aged) while my bracket runs', () => {
+    let rec: LadderRecord = { ...emptyLadder(), current: currentFrom(view(), T) };
+    rec = enqueueWin(rec, queued(1, { kept: 3 }, T - cfg.ladder.pendingMaxAgeMs - 1)); // aged: dropped at the next flush
+    rec = enqueueWin(rec, queued(2, { kept: 3 }));
+    rec = enqueueWin(rec, queued(3, { kept: 2 })); // this win: the counter adds its fish as they land
+    expect(counterBeforeWin(rec, T, uuid(3))).toBe(16 + 3);
+    expect(counterBeforeWin(rec, T, null)).toBe(16 + 3 + 2);
+    expect(counterBefore(rec, T)).toBe(16); // the server's own number is unchanged (the panel's total)
+    expect(counterBeforeWin(rec, T + 3_600_000 - 5000, uuid(3))).toBe(0); // no running bracket: 0
+    expect(counterBeforeWin(emptyLadder(), T, null)).toBe(0);
   });
 });
 

@@ -407,7 +407,7 @@ const VIEWS: Record<string, () => void> = {
   'panel-small': () => panel({ kind: 'bracket', view: bracket({ rows: rows(3, 2), members: 3, rewardsLine: 'min' }) }),
   'panel-stale': () =>
     // audit B9 / A-H1: the header carries the server's total (my row's 28) and the queued fish apart, as my row does
-    panel({ kind: 'bracket', view: bracket({ stale: { at: NOW - 11 * 60_000 }, waiting: 2 }) }, { result: { kind: 'ladder', gained: 2, total: 28, waiting: 2 } }),
+    panel({ kind: 'bracket', view: bracket({ stale: { at: NOW - 11 * 60_000, offline: true }, waiting: 2 }) }, { result: { kind: 'ladder', gained: 2, total: 28, waiting: 2 } }),
   'panel-records': () => panel({ kind: 'records', records: RECORDS, reason: 'unavailable' }),
   // audit B7: the longest names the word lists make; the number keeps to its word ("Dumpling 99"), never alone
   'panel-long-names': () =>

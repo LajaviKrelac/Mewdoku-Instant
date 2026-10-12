@@ -121,6 +121,11 @@
 // the drift and the wordmark's sticker look: CSS 49.3 → 51.7 (50.2 measured in web and FBIG, + about 3 %). Main JS,
 // the first-load total and gzip stay within.
 //
+// Post-win and ranking fixes (lead decision, 2026-10-12): the ladder boot chunk 34.9 → 36.4 KB (35.35 measured in web,
+// 35.30 in FBIG; + about 3 %): the flow now keeps the server's ended view, re-reads the final standings once after the
+// server's finalising grace, keeps the hearts and first-time lines per display, tells "offline" from a slow answer and
+// counts queued fish in the HUD counter. A lazy chunk: the first load is unchanged by it.
+//
 // Phase 2e I-4: every dir measured is also run through scripts/release-check.ts (test data in any bundle; the release
 // rules in dist/release-*), and a problem fails the check like a budget does.
 //
@@ -204,7 +209,7 @@ export const BUDGETS: readonly SizeBudget[] = [
   { label: 'Lazy JS (ladder)', pattern: /^assets\/ladder-[\w-]{8}\.js$/, maxBytes: 30.5 * KB },
   // Phase 2e I-4: the ladder's sign-in, sync, remote config and response parsers (src/app/ladder-boot.ts), loaded after
   // the first screen when the ranking is on.
-  { label: 'Lazy JS (ladder boot)', pattern: /^assets\/ladder-boot-[\w-]{8}\.js$/, maxBytes: 34.9 * KB },
+  { label: 'Lazy JS (ladder boot)', pattern: /^assets\/ladder-boot-[\w-]{8}\.js$/, maxBytes: 36.4 * KB },
   // Phase 2e I-4: the overlay chunk (src/app/overlay-chunk.ts: every core overlay, Home's chip and strip), on its own row.
   { label: 'Lazy JS (overlay chunk)', pattern: /^assets\/overlay-chunk-[\w-]{8}\.js$/, maxBytes: 56.2 * KB },
   // Phase 2e I-4: the English strings only lazy chunks show (src/i18n/en-lazy.ts), shared by those chunks.

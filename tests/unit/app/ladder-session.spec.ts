@@ -143,6 +143,99 @@ describe('the win is queued with the win (spec §2.3, critic C-25)', () => {
     expect(s.fake().calls).toEqual([]);
   });
 
+  it('consecutive offline wins (2026-10-12, verify C7): the counter starts from my earlier queued fish too, as the panel shows them waiting', async () => {
+    const s = setup();
+    await s.flow().start();
+    const win = async (level: number): Promise<void> => {
+      await startLevel(s.h, level);
+      winGame(s.h);
+      await drain();
+      await s.h.settle(s.h.config.fx.winOverlayDelayMs);
+      await drain();
+    };
+    await win(15); // answered: my bracket has 3
+    expect(s.h.router.game?.counters[0]).toBe(0);
+    await tapRanking(s.h);
+    s.fake().offline = true;
+    await win(16);
+    expect(s.h.router.game?.counters[0]).toBe(3);
+    await s.h.settle(s.h.config.ladder.panelWaitMs);
+    await drain();
+    await tapRanking(s.h);
+    await win(17);
+    expect(s.h.router.game?.counters[0]).toBe(6); // before: 3 again (the HUD restarted from the server's last number)
+    await s.h.settle(s.h.config.ladder.panelWaitMs);
+    await drain();
+    // The panel: the server's 3 and the 6 queued fish apart (3 + 6 = the counter's 6 + this win's 3).
+    expect(s.h.router.props.ranking?.result).toEqual({ kind: 'ladder', gained: 3, total: 3, waiting: 6 });
+  });
+
+  it('2026-10-12 (compare §D1, verify C6): an answer after the panel\'s tap reaches the open victory (reduced motion: the gate opens at 1.8 s)', async () => {
+    const s = setup();
+    await s.flow().start();
+    s.fake().addOther({ nickname: 'Sleepy Whisker 27', avatarId: 1, points: 31 });
+    s.h.store.update((st) => ({ ...st, ui: { ...st.ui, reducedMotion: true } }));
+    await startLevel(s.h, 15);
+    s.fake().hold = true;
+    winGame(s.h);
+    const w = s.h.config.fx.win;
+    await s.h.settle(w.reduced.rankingAtMs + w.reduced.tapMinMs);
+    expect(s.h.router.props.ranking?.list).toEqual({ kind: 'loading' });
+    await tapRanking(s.h);
+    expect(s.h.router.isOpen('ranking')).toBe(false);
+    expect(s.h.router.props.victory?.kept).toEqual({ fish: 3, max: 3, gained: 3, total: 0, kind: 'ladder', waiting: 3 });
+    const opened = s.h.router.props.victory;
+    s.fake().hold = false;
+    s.fake().release();
+    await drain();
+    await s.h.settle(0);
+    // The server's total, nothing waiting; the rest of the victory stays as opened.
+    expect(s.h.router.props.victory?.kept).toEqual({ fish: 3, max: 3, gained: 3, total: 3, kind: 'ladder', waiting: 0 });
+    expect(s.h.router.props.victory).toEqual({ ...opened, kept: s.h.router.props.victory?.kept });
+    expect(s.h.router.props.victory?.onPrimary).toBe(opened?.onPrimary);
+  });
+
+  it('2026-10-12 (compare §D2): a win the server did not count claims no "+3 fish": the panel shows the total alone, the victory no kept row', async () => {
+    const s = setup();
+    await s.flow().start();
+    s.fake().addOther({ nickname: 'Sleepy Whisker 27', avatarId: 1, points: 31 });
+    const win = async (level: number): Promise<void> => {
+      await startLevel(s.h, level);
+      winGame(s.h);
+      await drain();
+      await s.h.settle(s.h.config.fx.winOverlayDelayMs);
+      await drain();
+    };
+    await win(15); // accepted: my bracket has 3
+    expect(s.h.router.props.ranking?.result).toEqual({ kind: 'ladder', gained: 3, total: 3, waiting: 0 });
+    await tapRanking(s.h);
+    expect(s.h.router.props.victory?.kept).toMatchObject({ gained: 3, total: 3 });
+    // The second win is rejected (its answer before the panel).
+    s.fake().verdict('00000000-0000-4000-8000-000000000002', 'rejected', 'too_fast');
+    await win(16);
+    expect(s.h.save().ladder.pending).toEqual([]);
+    expect(s.h.router.props.ranking?.list.kind).toBe('bracket');
+    expect(s.h.router.props.ranking?.result).toEqual({ kind: 'ladder', gained: 0, total: 3, waiting: 0 });
+    await tapRanking(s.h);
+    expect(s.h.router.props.victory?.kept).toBeNull();
+    expect(s.h.router.props.victory?.pointsEarned).toBeGreaterThan(0); // the level's points row stays
+    // The third, already counted, answers after the tap: the open victory drops its row then (no error text anywhere).
+    s.fake().verdict('00000000-0000-4000-8000-000000000003', 'already_counted');
+    await startLevel(s.h, 17);
+    s.fake().hold = true;
+    winGame(s.h);
+    await s.h.settle(s.h.config.fx.winOverlayDelayMs);
+    expect(s.h.router.props.ranking?.result).toEqual({ kind: 'ladder', gained: 3, total: 3, waiting: 3 }); // not answered yet
+    await tapRanking(s.h);
+    expect(s.h.router.props.victory?.kept).toEqual({ fish: 3, max: 3, gained: 3, total: 3, kind: 'ladder', waiting: 3 });
+    s.fake().hold = false;
+    s.fake().release();
+    await drain();
+    await s.h.settle(0);
+    expect(s.h.router.props.victory?.kept).toBeNull();
+    expect(s.h.router.toasts).toEqual([]);
+  });
+
   it('offline at WON: the win stays queued (saved), the panel falls back after ladder.panelWaitMs', async () => {
     const s = setup();
     await s.flow().start();

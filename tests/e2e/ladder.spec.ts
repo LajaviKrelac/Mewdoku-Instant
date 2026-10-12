@@ -163,7 +163,7 @@ test('a heart on another row: +1 and pressed at once, kept by the server (a relo
   await expect(sheet.locator('li.rank-row[data-me="0"] button.rank-row__heart').first()).toHaveAttribute('aria-pressed', 'true', { timeout: 10_000 });
 });
 
-test('the Home chip shows my rank and fish; it opens the sheet with the same rows', async ({ page }) => {
+test('the Home chip counts down and names my rank and fish; it opens the sheet with the same rows', async ({ page }) => {
   const pool = newPool('lad4');
   await others(pool, [9]);
   await openApp(page, pool);
@@ -173,8 +173,10 @@ test('the Home chip shows my rank and fish; it opens the sheet with the same row
   await tapThrough(page);
   const chip = page.locator('button.ladder-chip');
   await expect(chip).toHaveAttribute('data-state', 'bracket');
-  await expect(chip.locator('.ladder-chip__rank')).toContainText('2');
-  await expect(chip.locator('.ladder-chip__points')).toContainText('3');
+  // 2026-10-12 (01 row 7.1.7): the dark pill shows the time left (hh:mm:ss, ticking); rank and fish are in the name.
+  await expect(chip).toHaveAttribute('aria-label', /^Daily ranking: #2 of \d+, 3 fish\. Ends in /);
+  await expect(chip.locator('.ladder-chip__time')).toHaveText(/^\d{2}:\d{2}:\d{2}$/);
+  await expect(chip.locator('.ladder-chip__rank')).toBeHidden();
   await chip.click();
   const sheet = page.locator('.overlay[data-overlay="ladder"]');
   await expect(sheet).toBeVisible();

@@ -123,7 +123,7 @@ describe('size-check', () => {
     // and the I-4 rows: the ladder boot chunk, the overlay chunk (JS, CSS) and the lazy English strings.
     expect([max('Lazy JS (ladder)'), max('Lazy CSS (ladder)')]).toEqual([30_500, 11_050]);
     expect([max('Lazy JS (ladder boot)'), max('Lazy JS (overlay chunk)'), max('Lazy JS (English)'), max('Lazy CSS (overlay chunk)')]).toEqual([
-      34_900, 56_200, 13_600, 33_500, // the overlay chunk's CSS 32 → 33.5 at the audit fix round
+      36_400, 56_200, 13_600, 33_500, // the overlay chunk's CSS 32 → 33.5 at the audit fix round; ladder boot 34.9 → 36.4 (2026-10-12)
     ]);
     expect(FB_MAX_FILES).toBe(100);
   });
@@ -304,7 +304,7 @@ describe('size-check', () => {
     const d = tempDir('web');
     fakeBuild(d);
     writeTree(d, {
-      'assets/ladder-boot-Ab3_x-9Z.js': 34_900, // each at its ceiling
+      'assets/ladder-boot-Ab3_x-9Z.js': 36_400, // each at its ceiling
       'assets/overlay-chunk-Qw7-e2Rt.js': 56_200,
       'assets/en-lazy-hpVVNp3-.js': 13_600,
       'assets/overlay-chunk-CbqOliHw.css': 33_500,
@@ -312,7 +312,7 @@ describe('size-check', () => {
     });
     const r = checkSizes(d, { fb: false });
     const row = (label: string) => r.rows.find((x) => x.label === label);
-    expect(row('Lazy JS (ladder boot)')).toMatchObject({ bytes: 34_900, ok: true });
+    expect(row('Lazy JS (ladder boot)')).toMatchObject({ bytes: 36_400, ok: true });
     expect(row('Lazy JS (overlay chunk)')).toMatchObject({ bytes: 56_200, ok: true });
     expect(row('Lazy JS (English)')).toMatchObject({ bytes: 13_600, ok: true });
     expect(row('Lazy CSS (overlay chunk)')).toMatchObject({ bytes: 33_500, ok: true });
@@ -323,7 +323,7 @@ describe('size-check', () => {
     expect(row('Lazy JS (ladder)')?.bytes).toBe(0);
     expect(r.ok).toBe(true);
     for (const [file, bytes, label] of [
-      ['assets/ladder-boot-Ab3_x-9Z.js', 34_901, 'Lazy JS (ladder boot)'],
+      ['assets/ladder-boot-Ab3_x-9Z.js', 36_401, 'Lazy JS (ladder boot)'],
       ['assets/overlay-chunk-Qw7-e2Rt.js', 56_201, 'Lazy JS (overlay chunk)'],
       ['assets/en-lazy-hpVVNp3-.js', 13_601, 'Lazy JS (English)'],
       ['assets/overlay-chunk-CbqOliHw.css', 33_501, 'Lazy CSS (overlay chunk)'],

@@ -68,6 +68,9 @@ describe('Home before and after the overlay chunk (Phase 2e I-4)', () => {
     expect(pill.getAttribute('aria-label')).toBe('Streak: day 3 of 7. Solve a puzzle today for day 4.');
     const chip = q<HTMLButtonElement>(home.el, '.home__hero .home__rank button.ladder-chip[data-state="bracket"]');
     expect(q(home.el, '.period-pill').hidden).toBe(true);
+    // 2026-10-12: the chip lands counting down in its dark pill (rank and fish in its name).
+    expect(q(chip, '.ladder-chip__time').textContent).toBe('00:16:40');
+    expect(chip.getAttribute('aria-label')).toBe('Daily ranking: #5 of 37, 14 fish. Ends in 16 min.');
     chip.click();
     expect(callbacks.onLadder).toHaveBeenCalledTimes(1);
     // Later renders update the same chip and strip.

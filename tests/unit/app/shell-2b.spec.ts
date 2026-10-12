@@ -13,6 +13,7 @@ import { createEventFlow, bundledEventDefs, type EventsChunk } from '../../../sr
 import { setFlagOverrides } from '../../../src/app/flags';
 import { createEventTopFlow } from '../../../src/app/event-top-flow';
 import { createRankingFlow } from '../../../src/app/ranking-flow';
+import type { LadderFlow } from '../../../src/app/ladder-flow';
 import { createShell, type Shell } from '../../../src/app/shell';
 import { createShopFlow, type ShopFlow } from '../../../src/app/shop-flow';
 import { eventEnd, eventStart, type EventDef } from '../../../src/game/events';
@@ -37,6 +38,7 @@ function setup(
     shop?: (real: ShopFlow) => ShopFlow;
     config?: GameConfig;
     applyLocale?: (o: 'auto' | LocaleId) => Promise<LocaleId | undefined> | void;
+    ladder?: () => LadderFlow | null;
   } = {},
 ) {
   const h = createHarness({
@@ -93,6 +95,7 @@ function setup(
     eventTop,
     ...(opts.locales ? { applyLocale: opts.applyLocale ?? ((o: string) => void locales.push(o)) } : {}),
     ...(opts.config ? { config: opts.config } : {}),
+    ...(opts.ladder ? { ladder: opts.ladder } : {}),
   });
   return { h, shell, locales, banners };
 }
@@ -314,6 +317,20 @@ describe('shell: shop, hub, settings rows (§5.5, §6.8, §8.5; phase2c §5.2, �
     expect(h.router.homeView).not.toHaveProperty('showTrophy');
     expect(typeof h.router.homeCb?.onLadder).toBe('function');
     expect(h.router.homeView?.ladder).toMatchObject({ state: 'records' }); // no ranking server in this harness
+  });
+
+  it('2026-10-12: the chip\'s countdown reached 0: Home re-renders with the flow\'s chip at once and the Home refresh runs', () => {
+    let chip: ReturnType<LadderFlow['chip']> = { state: 'bracket', rank: 5, members: 37, points: 14, endsAt: 1, now: () => 0 };
+    let mounted = 0;
+    const flow = { chip: () => chip, homeMounted: () => void mounted++, active: () => true } as unknown as LadderFlow;
+    const { h, shell } = setup((s) => s, { ladder: () => flow });
+    shell.showHome();
+    mounted = 0; // showHome's own refresh
+    expect(h.router.homeView?.ladder).toMatchObject({ state: 'bracket', rank: 5 });
+    chip = { state: 'join' }; // the bracket has ended (the flow's chip() reads the clock)
+    h.router.homeCb?.onLadderEnded?.();
+    expect(h.router.homeView?.ladder).toEqual({ state: 'join' });
+    expect(mounted).toBe(1);
   });
 
   it('the event Top list never labels the event total as "This puzzle" (review RANK-1)', async () => {

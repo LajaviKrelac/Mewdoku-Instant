@@ -94,10 +94,12 @@ test.describe('the preview link (dist/preview-e2e)', () => {
     await expect(page.locator('.screen--home .streak-pill')).toHaveAttribute('aria-label', 'Streak: day 6 of 7. Solve a puzzle today for day 7.');
     await expect(page.locator('.screen--home .daily-card')).not.toHaveAttribute('data-state', 'locked');
     await expect(page.locator('.screen--home .daily-card')).toHaveAttribute('data-state', 'not_played');
-    // The ranking chip from the sample server's bracket (22 fish, 5th of 24).
+    // The ranking chip from the sample server's bracket (22 fish, 5th of 24): 2026-10-12 (01 row 7.1.7) its dark pill
+    // shows the time left (hh:mm:ss, ticking); rank and fish are in its name.
     const chip = page.locator('.screen--home button.ladder-chip');
-    await expect(chip.locator('.ladder-chip__points')).toContainText('22', { timeout: 10_000 });
-    await expect(chip.locator('.ladder-chip__rank')).toContainText('5');
+    await expect(chip).toHaveAttribute('aria-label', /^Daily ranking: #5 of \d+, 22 fish\. Ends in /, { timeout: 10_000 });
+    await expect(chip.locator('.ladder-chip__time')).toHaveText(/^\d{2}:\d{2}:\d{2}$/);
+    await expect(chip.locator('.ladder-chip__points')).toBeHidden();
     await page.waitForTimeout(600);
     await shot(page, '02-home-returning');
 
@@ -238,7 +240,7 @@ test.describe('the preview link (dist/preview-e2e)', () => {
     await hideMenu(page);
     // Once the first bracket answer is in (a sheet opened before it keeps the join line: the ladder flow does not
     // re-render an open sheet when that answer lands).
-    await expect(page.locator('.screen--home button.ladder-chip .ladder-chip__points')).toContainText('22', { timeout: 10_000 });
+    await expect(page.locator('.screen--home button.ladder-chip')).toHaveAttribute('aria-label', /, 22 fish\./, { timeout: 10_000 });
     await page.waitForFunction(() => localStorage.getItem('mewdoku.ladder.rows.v1') !== null, undefined, { timeout: 10_000 });
     await page.locator('.screen--home button.ladder-chip').click();
     const sheet = page.locator('.overlay[data-overlay="ladder"]');

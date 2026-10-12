@@ -39,6 +39,7 @@ import { advance, filterTutorialAction, tutorialStep } from '../game/tutorial';
 import type { PuzzleSource } from '../game/levels-repo';
 import type { Action, BoardKey, GameEvent, GameState, ModeId, RuleFlags } from '../game/types';
 import type { RankingListState, RankScoreView } from '../ui/overlays/ranking-panel';
+import type { VictoryProps } from '../ui/overlays/victory-screen';
 import { periodRankTitle } from '../ui/period-text';
 import type { GameScreen, GameScreenCallbacks, GameView } from '../ui/screens/game-screen';
 import type { TickerLine } from '../ui/fx/tickers';
@@ -55,7 +56,7 @@ import { feedbackFor, failEvent, levelParam, mistakeEvent, startEvents, winBookk
 import { createFeedbackPlayer, createSessionTimers, defaultColors, defaultPraise, overlayProps, withoutSlot, withSlot, type SaveSlot } from './session-parts';
 import { createTransitions } from './session-transitions';
 import { shallowEqual, type AppState, type OverlayId, type SessionMeta, type SessionRequest } from './store';
-import { asTutorialStep, boardKindOf, boardLocked, personalRecords, selectGameView, selectRankingView, selectVictoryView, type ViewContext } from './views';
+import { asTutorialStep, boardKindOf, boardLocked, personalRecords, selectGameView, selectRankingView, selectVictoryView, type VictoryData, type ViewContext } from './views';
 import { createWinFlow, victoryCrossfadeMs, type WinFlowVariant } from './win-flow';
 
 export type { GameCommands, Session, SessionDeps } from './session-types';
@@ -324,6 +325,8 @@ export function createSession(deps: SessionDeps): Session {
     logged: boolean;
     /** Phase 2e §2.3: the worldwide ranking gives this win's panel its list (the flow was active at WON). */
     readonly ladder: boolean;
+    /** The victory's props as opened (2026-10-12: a later ladder answer re-renders its kept-fish row); null = not open yet. */
+    victory: VictoryProps | null;
   } | null = null;
 
   /** Phase 2e: the loaded ladder flow, or null. */
@@ -397,10 +400,12 @@ export function createSession(deps: SessionDeps): Session {
     const band = w.summary.period ? { periodKey: w.summary.period.key } : undefined;
     const lf = w.ladder ? ladderFlow() : null;
     // Phase 2e §2.4: "+2 fish · Your total: 14", the bracket list factory, hearts and the info button
-    // (only while the ladder is active: its records keep this week's subtitle).
+    // (only while the ladder is active: its records keep this week's subtitle). 2026-10-12 (compare §D2): once the
+    // server's answer counted none of this win's fish (rejected, already counted), no "+2 fish" for it: the
+    // subtitle reads "Your total: 14" alone, as after any win that did not count (no error text).
     const ladderExtras = lf && lf.active()
       ? {
-          result: { kind: 'ladder' as const, gained: w.summary.counted ? w.summary.kept : 0, total: lf.panelTotal(), waiting: lf.panelWaiting() },
+          result: { kind: 'ladder' as const, gained: w.summary.counted && lf.winCounted() !== false ? w.summary.kept : 0, total: lf.panelTotal(), waiting: lf.panelWaiting() },
           ...lf.panelExtras(),
         }
       : {};
@@ -436,19 +441,27 @@ export function createSession(deps: SessionDeps): Session {
     logPanel(w);
   }
 
+  function victoryData(w: NonNullable<typeof win>): VictoryData {
+    // requests-G3 R4: while the ladder is active the kept-fish row shows my bracket's total ('ladder').
+    const lf = w.ladder ? ladderFlow() : null;
+    const on = lf !== null && lf.active();
+    const ladderTotal = on ? lf.panelTotal() : null;
+    const ladderWaiting = on ? lf.panelWaiting() : 0;
+    const data = selectVictoryView(store.get(), viewCtx(), w.summary, { praise: w.praise, ladderTotal, ladderWaiting }, c);
+    // 2026-10-12 (compare §D2): the server's answer counted none of this win's fish (rejected, already counted): no
+    // kept-fish row, as after any win that did not count (never "+3" beside a total without them, no error text).
+    return on && lf.winCounted() === false ? { ...data, kept: null } : data;
+  }
+
   function openVictory(): void {
     const w = win;
     if (!w) return;
     const firstRunTutorial = w.summary.mode === 'tutorial' && !w.summary.replay;
     // §3.2: the victory screen may carry a banner in its own reserved band (set before the props are built).
     if (deps.banners) void deps.banners.screenShown('victory', { firstRunTutorial }).catch(() => undefined);
-    // requests-G3 R4: while the ladder is active the kept-fish row shows my bracket's total ('ladder').
-    const lf = w.ladder ? ladderFlow() : null;
-    const ladderTotal = lf && lf.active() ? lf.panelTotal() : null;
-    const ladderWaiting = lf && lf.active() ? lf.panelWaiting() : 0;
-    const data = selectVictoryView(store.get(), viewCtx(), w.summary, { praise: w.praise, ladderTotal, ladderWaiting }, c);
+    const data = victoryData(w);
     const m = w.meta;
-    router.open('victory', {
+    w.victory = {
       ...data,
       now: () => clock.now(),
       onPrimary: () => {
@@ -456,7 +469,8 @@ export function createSession(deps: SessionDeps): Session {
         else void session.onNext();
       },
       onHome: () => session.onHome(),
-    });
+    };
+    router.open('victory', w.victory);
     deps.rankings?.closeList();
     // UX-4: a crossfade. The victory opens over the ranking panel at the tap and fades in (the overlay
     // fade, fx.overlayFadeMs; reduced: fx.screenReducedMs); the panel, fading out under it, closes
@@ -548,6 +562,7 @@ export function createSession(deps: SessionDeps): Session {
       panelOpen: false,
       logged: false,
       ladder: useLadder,
+      victory: null,
     };
     const w = win;
     // §5.5 steps 2 then 3, from t = 0 so the panel is ready in time (deadline rank.fetchTimeoutMs):
@@ -1099,7 +1114,16 @@ export function createSession(deps: SessionDeps): Session {
     // Phase 2e §2.4: the ladder answered (or gave up): the open panel re-renders its list and total.
     bus.on('ladder:update', () => {
       const w = win;
-      if (w && w.ladder && w.panelOpen && router.isOpen('ranking')) router.update('ranking', rankingProps(w, panelTapMinMs));
+      if (!w || !w.ladder) return;
+      if (w.panelOpen && router.isOpen('ranking')) router.update('ranking', rankingProps(w, panelTapMinMs));
+      // 2026-10-12 (compare §D1, verify C6): an answer after the panel's tap (the gate opens at 5.7 s, 1.8 s with
+      // reduced motion; the panel waits up to ladder.panelWaitMs) reaches the open victory too: its kept-fish row
+      // re-renders with the new total and waiting fish (the rest of its props stay as opened).
+      const v = w.victory;
+      if (v && router.isOpen('victory')) {
+        w.victory = { ...v, kept: victoryData(w).kept };
+        router.update('victory', w.victory);
+      }
     }),
     bus.on('overlay:failed', ({ id }) => onOverlayFailed(id)),
   ];

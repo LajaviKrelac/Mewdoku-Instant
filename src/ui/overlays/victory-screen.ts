@@ -16,6 +16,9 @@
 // ads.banner.reservePx band free under the buttons.
 // Esc and Enter: Enter presses the focused primary (autofocus); Esc is ignored (a choice is needed).
 // Reduced motion: a crossfade of fx.screenReducedMs (WAAPI), static rays, no progress-bar fill.
+// update() re-renders in place (2026-10-12: the session sends a late ranking answer's kept-fish row this way);
+// the opening's bar fill and streak fill run on through it (its refit's measuring leaves the fill's transition on:
+// overlay-chunk.css).
 // Lazy overlay chunk.
 //
 // Review fixes: a dark full-screen overlay like the fail card (PAR-3, the original's "dark full-screen
@@ -186,6 +189,8 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
   const delay = createDelay();
   const ticker = createTicker();
   const barDelay = createDelay();
+  /** The opening's event-bar fill is still waiting for barDelay (2026-10-12: a re-render leaves the bar alone then). */
+  let barPending = false;
 
   const L = createLocaleText();
   const title = h('h2', { class: 'victory__praise', id: shell.titleId });
@@ -392,11 +397,14 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
         // §4.5: the bar animates from the old to the new value (400 ms CSS transition), after it shows.
         root.classList.add('victory--bar-static');
         setBar(e.solvedBefore, e.total);
+        barPending = true;
         barDelay.start(cfg.fx.overlayFadeMs, () => {
+          barPending = false;
           root.classList.remove('victory--bar-static');
           setBar(e.solvedAfter, e.total);
         });
-      } else if (!opening || p.reducedMotion) {
+      } else if (p.reducedMotion || (!opening && !barPending)) {
+        // 2026-10-12: a re-render (a late ladder answer, session.ts) never cuts the opening's bar fill short.
         setBar(e.solvedAfter, e.total);
       }
     }
@@ -418,8 +426,9 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
         streakSteps.dataset.key = key;
         renderStreakSteps(streakSteps, streakStepKinds(total, day, day, 0));
       }
-      // Today's step fills in once on open (CSS; none with reduced motion).
-      streak.toggleAttribute('data-fill', opening && !p.reducedMotion);
+      // Today's step fills in once on open (CSS; none with reduced motion). 2026-10-12: set on open only, so a
+      // re-render during the fill (a late ladder answer, session.ts) does not cut it short.
+      if (opening) streak.toggleAttribute('data-fill', !p.reducedMotion);
       const sr = st.reward;
       streakReward.hidden = !(sr && ((sr.hints ?? 0) > 0 || (sr.kitties ?? 0) > 0));
       if (sr && !streakReward.hidden) setText(streakReward, t('victory.streakReward', { reward: rewardText(sr) }));
@@ -478,6 +487,7 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
     close() {
       delay.cancel();
       barDelay.cancel();
+      barPending = false;
       ticker.stop();
       stopFit();
       win()?.removeEventListener('resize', refit);
@@ -487,6 +497,7 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
     destroy() {
       delay.cancel();
       barDelay.cancel();
+      barPending = false;
       ticker.stop();
       stopFit();
       win()?.removeEventListener('resize', refit);

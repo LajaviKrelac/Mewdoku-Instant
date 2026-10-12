@@ -238,7 +238,10 @@ describe('bracket list: exactly the server rows (H-3, §10.6 #1)', () => {
   it('the countdown: hours and minutes, "less than a minute", "Final results"; refreshed, never a live region', () => {
     expect(countdownText(NOW + 7 * H + 48 * 60_000, NOW, false)).toBe('Ends in 7 h 48 min');
     expect(countdownText(NOW + 59_000, NOW, false)).toBe('Ends in less than a minute');
-    expect(countdownText(NOW, NOW, false)).toBe('Final results');
+    // 2026-10-12 (compare §D3): "Final results" only over the server's final standings; an end that passed
+    // without them shows no countdown line.
+    expect(countdownText(NOW, NOW, false)).toBeNull();
+    expect(countdownText(NOW - H, NOW, true)).toBe('Final results');
     expect(countdownText(NOW + H, NOW, true)).toBe('Final results');
     expect(countdownText(null, NOW, false)).toBeNull();
     expect(nextTickMs(NOW + 90_000, NOW, 60_000)).toBe(30_001);
@@ -255,19 +258,41 @@ describe('bracket list: exactly the server rows (H-3, §10.6 #1)', () => {
     expect(cd.textContent).toBe('Ends in less than a minute');
     now += 60_000;
     vi.advanceTimersByTime(60_000);
+    // Left open over the end: the open-time rows are not final, so no "Final results" (and no dot before the count).
+    expect(cd.hidden).toBe(true);
+    expect(q(list.el, '.ranking__sep').hidden).toBe(true);
+    expect(list.el.textContent).not.toContain('Final results');
+    // The server's final view.
+    list.update(view({ endsAt: NOW, final: true, now: () => now }));
+    expect(cd.hidden).toBe(false);
     expect(cd.textContent).toBe('Final results');
     list.destroy();
   });
 
   it('stale (a cached bracket while offline): "Last updated hh:mm" + the honest offline line; data-stale', () => {
-    const list = createBracketList(view({ stale: { at: NOW - 3 * H } }), { onHeart: vi.fn() });
+    const list = createBracketList(view({ stale: { at: NOW - 3 * H, offline: true } }), { onHeart: vi.fn() });
     expect(list.el.dataset.stale).toBe('1');
     expect(q(list.el, '.ranking__stale').textContent).toMatch(/^Last updated \d{1,2}:\d{2}/);
+    expect(q(list.el, '.ranking__offline').hidden).toBe(false);
     expect(q(list.el, '.ranking__offline').textContent).toBe("You're offline. We'll try to send your fish when you're back online.");
     expect(list.el.textContent).not.toMatch(/will be (sent|counted)/i);
     list.update(view());
     expect(list.el.dataset.stale).toBe('0');
     expect(q(list.el, '.ranking__stale').hidden).toBe(true);
+    expect(q(list.el, '.ranking__offline').hidden).toBe(true);
+  });
+
+  it('stale but not known offline (a 503, a timeout, a boot from the stored cache): "Last updated hh:mm" alone (2026-10-12)', () => {
+    const list = createBracketList(view({ stale: { at: NOW - 3 * H, offline: false } }), { onHeart: vi.fn() });
+    expect(list.el.dataset.stale).toBe('1');
+    expect(q(list.el, '.ranking__stale').hidden).toBe(false);
+    expect(q(list.el, '.ranking__stale').textContent).toMatch(/^Last updated \d{1,2}:\d{2}/);
+    expect(q(list.el, '.ranking__offline').hidden).toBe(true);
+    expect(list.el.textContent).not.toContain("You're offline");
+    // Then the device goes offline: the line joins.
+    list.update(view({ stale: { at: NOW - 3 * H, offline: true } }));
+    expect(q(list.el, '.ranking__offline').hidden).toBe(false);
+    list.destroy();
   });
 
   it('hearts received and the first-time line', () => {

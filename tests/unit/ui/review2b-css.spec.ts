@@ -50,6 +50,13 @@ describe('victory screen (PAR-3, UX-1, UX-13)', () => {
     expect(decls('overlay-chunk.css', '.victory__col')).toMatch(/z-index:\s*0/);
     expect(decls('overlay-chunk.css', '.victory__rays')).toMatch(/z-index:\s*-1/);
   });
+
+  it("2026-10-12 (review): fit()'s measuring switches transitions off everywhere but the event bar's fill, so a re-render mid-fill (a late ranking answer) never jumps it to the end", () => {
+    expect(decls('overlay-chunk.css', '.victory[data-measuring] *:not(.victory__bar-fill)')).toMatch(/transition:\s*none !important/);
+    expect(decls('overlay-chunk.css', '.victory[data-measuring] *')).toBe(''); // no rule left that reaches the fill
+    expect(decls('overlay-chunk.css', '.victory[data-measuring]')).toMatch(/transition:\s*none !important/);
+    expect(decls('overlay-chunk.css', '.victory__bar-fill')).toMatch(/transition:\s*width 400ms/);
+  });
 });
 
 describe('FB safe zone (UX-3, UX-9)', () => {
@@ -148,5 +155,22 @@ describe('final integration: label, input lock, scrim hand-off, panel fade', () 
   it('UX-4: the ranking panel\'s leave fades its content, never its scrim', () => {
     expect(decls('overlay-chunk.css', ".overlay[data-overlay='ranking'].is-leaving")).toBe('');
     expect(decls('overlay-chunk.css', ".overlay[data-overlay='ranking'].is-leaving .overlay__panel")).toMatch(/opacity:\s*0/);
+  });
+
+  it('2026-10-12 (verify C1, B1): the ranking footer fades in, then pulses from full opacity; it leaves with the panel', () => {
+    const footer = decls('overlay-chunk.css', ".overlay[data-overlay='ranking'] .ranking__tap.btn");
+    expect(footer).toMatch(/opacity:\s*0/);
+    const fade = /transition:\s*opacity (\d+)ms ease/.exec(footer)?.[1];
+    expect(fade).toBe('200');
+    expect(decls('overlay-chunk.css', ".overlay[data-overlay='ranking'].is-ready .ranking__tap.btn")).toMatch(/opacity:\s*1/);
+    // The pulse waits out the fade (its delay) and starts where the fade ends (opacity 1): the transition plays, no jump.
+    const pulse = decls('overlay-chunk.css', ".overlay[data-overlay='ranking'].is-ready .ranking__tap");
+    expect(pulse).toMatch(new RegExp(`animation:\\s*tap-pulse var\\(--pulse-ms, 1400ms\\) ease-in-out ${fade}ms infinite`));
+    expect(css('overlay-chunk.css')).toMatch(/@keyframes tap-pulse\s*\{\s*0%,\s*100%\s*\{\s*opacity:\s*1;\s*\}\s*50%\s*\{\s*opacity:\s*0\.55;\s*\}\s*\}/);
+    // The footer sits in the panel and fades with it; its own leave rule never applied (removed).
+    expect(decls('overlay-chunk.css', ".overlay[data-overlay='ranking'].is-leaving .ranking__tap")).toBe('');
+    // Reduced motion: no pulse (the fade stays), by the app root's data-motion or the panel's own data-reduced.
+    expect(decls('overlay-chunk.css', "[data-motion='reduced'] .overlay[data-overlay='ranking'] .ranking__tap")).toMatch(/animation:\s*none/);
+    expect(decls('overlay-chunk.css', ".overlay[data-overlay='ranking'][data-reduced] .ranking__tap")).toMatch(/animation:\s*none/);
   });
 });
