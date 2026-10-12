@@ -8,7 +8,7 @@ import { fixedColorsFor, getMode, MODES, rulesFor } from '../../../src/game/mode
 import { reduce } from '../../../src/game/reducer';
 import { encodeCells } from '../../../src/game/save';
 import { CellState, type InProgressV2, type ModeId } from '../../../src/game/types';
-import { cell, dbl, lostState, makePuzzle, P5, P5G, playing, R5, run, S5, SOL5, tap, wonState, WRONG5 } from './fixtures';
+import { baseRules, cell, dbl, lostState, makePuzzle, P5, P5G, playing, R5, run, S5, SOL5, tap, wonState, WRONG5 } from './fixtures';
 
 /** A valid level slot for P5 built from a real game state. */
 function slotOf(actions: Parameters<typeof run>[1], savedAt = 123): InProgressV2 {
@@ -201,8 +201,15 @@ describe('phase2c.1 §3.2.3: level points in the slot (restore exactly, else der
   ];
 
   it.each(BAD)('$name → derived, the board kept (no RangeError)', ({ slot }) => {
-    const g = restoreGame(P5, slot());
+    // The base per-cat rule's bounds (no combo); the combo's wider upper bound has its own case below.
+    const g = restoreGame(P5, slot(), baseRules('level'));
     expect(g).toMatchObject({ ...derivedWithMistake, catsPlaced: 3, mistakes: 1, status: 'ready' });
+  });
+
+  it('with the combo the upper bound is every cat at its highest combo with every fish: comboRunMax(k − s, 3) + comboRunMax(s, 3)', () => {
+    // run 1 after the mistake, 2 cats before it: at most (576 + 874) + 576 = 2 026 with 3 fish
+    expect(restoreGame(P5, { ...exact(), points: 2_026 }).levelPoints).toBe(2_026);
+    expect(restoreGame(P5, { ...exact(), points: 2_027 })).toMatchObject(derivedWithMistake);
   });
 
   it('(a) a Given\'s row in scoredRows → derived; givens never score (P5G, row 2 given)', () => {

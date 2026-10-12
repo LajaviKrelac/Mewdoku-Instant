@@ -71,22 +71,25 @@ export function comboWindowMs(c: number, r: ComboRule): number {
 }
 
 /**
- * A cat's increment at combo xc: round(increment × (100 + bonusPct × (c − 1)) / 100); the increment
- * itself for c ≤ 1 or with no combo rule. Default config: 672 at x2 → 739, 768 at x3 → 922.
+ * A cat's points at combo xc with `lives` fish left at that moment (user, 2026-10-12):
+ * increment + increment × bonusPct % × (c − 1) × lives, rounded. The increment itself at x1, with no
+ * combo rule or with no lives. Default config, 3 fish: 672 at x2 → 874, 768 at x3 → 1 229, 864 at x4 → 1 642.
  */
-export function comboPoints(increment: number, c: number, r: ComboRule | null | undefined): number {
+export function comboPoints(increment: number, c: number, r: ComboRule | null | undefined, lives: number): number {
   if (!r || !Number.isFinite(c) || c <= 1) return increment;
-  return Math.round((increment * (100 + r.bonusPct * (Math.floor(c) - 1))) / 100);
+  const l = Number.isFinite(lives) ? Math.max(0, Math.floor(lives)) : 0;
+  return Math.round(increment + (increment * r.bonusPct * (Math.floor(c) - 1) * l) / 100);
 }
 
 /**
- * The most an unbroken run of k cats can total with the combo: every cat at the highest combo it can
- * reach (the s-th cat at xs). Equals runTotal(k, p) with no combo rule. The restore's upper bound.
+ * The most an unbroken run of k cats can total with the combo and at most `lives` fish: every cat at
+ * the highest combo it can reach (the s-th at xs) with every fish kept. Equals runTotal(k, p) with no
+ * combo rule. The restore's upper bound.
  */
-export function comboRunMax(k: number, p: PointsRule, r: ComboRule | null | undefined): number {
+export function comboRunMax(k: number, p: PointsRule, r: ComboRule | null | undefined, lives: number): number {
   const n = Number.isFinite(k) ? Math.floor(k) : 0;
   let sum = 0;
-  for (let s = 1; s <= n; s++) sum += comboPoints(catIncrement(s, p), s, r);
+  for (let s = 1; s <= n; s++) sum += comboPoints(catIncrement(s, p), s, r, lives);
   return sum;
 }
 

@@ -50,8 +50,8 @@ export interface PointsRule {
 /**
  * The combo (user, 2026-10-12; cfg.levelPoints.combo): scoring cats found in quick succession raise a
  * combo x1, x2, …; each one restarts a countdown of window(c) = max(minWindowMs, windowMs −
- * windowStepMs × (c − 1)) ms of game time, and a cat at combo xc is worth its increment × (100 +
- * bonusPct × (c − 1)) %.
+ * windowStepMs × (c − 1)) ms of game time, and a cat at combo xc with L fish left is worth
+ * increment + increment × bonusPct % × (c − 1) × L.
  */
 export interface ComboRule {
   readonly windowMs: number;

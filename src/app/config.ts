@@ -998,8 +998,9 @@ export interface GameConfig {
      * windowMs (game time) and the combo is x1. A scoring cat found before the countdown runs out raises
      * the combo by one and restarts the countdown, windowStepMs shorter each time, never below
      * minWindowMs (10 s, 8 s, 6 s, 4 s, 2 s, 2 s …). The countdown running out or a mistake ends it.
-     * A cat at combo xc is worth its increment × (100 + bonusPct × (c − 1)) %, rounded: 576, 672 × 110 %,
-     * 768 × 120 %, … The combo never takes points away.
+     * A cat at combo xc with L fish left at that moment is worth increment + increment × bonusPct % ×
+     * (c − 1) × L, rounded (user, 2026-10-12): with 3 fish 576, 672 + 67.2 × 1 × 3 = 874,
+     * 768 + 76.8 × 2 × 3 = 1 229, … The combo never takes points away.
      */
     readonly combo: {
       readonly windowMs: number;

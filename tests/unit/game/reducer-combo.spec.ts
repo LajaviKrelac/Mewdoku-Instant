@@ -1,7 +1,7 @@
 // The combo (user, 2026-10-12; cfg.levelPoints.combo): the first scoring cat starts a countdown of
 // 10 s of game time at combo x1; a scoring cat before it runs out raises the combo by one and restarts
 // it 2 s shorter (never below 2 s); the countdown running out or a mistake ends the combo. A cat at
-// combo xc is worth its increment × (100 + 10 × (c − 1)) %, rounded.
+// combo xc with L fish left at that moment is worth increment + increment × 10 % × (c − 1) × L, rounded.
 import { describe, expect, it } from 'vitest';
 import { newGame, restoreGame, toInProgress } from '../../../src/game/factory';
 import { rulesFor } from '../../../src/game/modes';
@@ -37,19 +37,21 @@ describe('combo rule (scoring.ts)', () => {
     expect([1, 2, 3, 4, 5, 6, 12].map((c) => comboWindowMs(c, RULE))).toEqual([10_000, 8_000, 6_000, 4_000, 2_000, 2_000, 2_000]);
   });
 
-  it("the user's examples: x2 pays 672 × 110 %, x3 768 × 120 %, x4 864 × 130 %", () => {
+  it("the user's formula, base + base × 10 % × (combo − 1) × fish: with 3 fish x2 874, x3 1 229, x4 1 642", () => {
     const p = rulesFor('level').points;
-    expect(comboPoints(catIncrement(1, p), 1, RULE)).toBe(576);
-    expect(comboPoints(catIncrement(2, p), 2, RULE)).toBe(Math.round(672 * 1.1)); // 739
-    expect(comboPoints(catIncrement(3, p), 3, RULE)).toBe(Math.round(768 * 1.2)); // 922
-    expect(comboPoints(catIncrement(4, p), 4, RULE)).toBe(Math.round(864 * 1.3)); // 1 123
-    expect(comboPoints(672, 5, null)).toBe(672);
+    expect(comboPoints(catIncrement(1, p), 1, RULE, 3)).toBe(576);
+    expect(comboPoints(catIncrement(2, p), 2, RULE, 3)).toBe(Math.round(672 + 672 * 0.1 * 1 * 3)); // 874
+    expect(comboPoints(catIncrement(3, p), 3, RULE, 3)).toBe(Math.round(768 + 768 * 0.1 * 2 * 3)); // 1 229
+    expect(comboPoints(catIncrement(4, p), 4, RULE, 3)).toBe(Math.round(864 + 864 * 0.1 * 3 * 3)); // 1 642
+    // fewer fish, a smaller bonus; none without a combo rule or without fish
+    expect([3, 2, 1, 0].map((l) => comboPoints(672, 2, RULE, l))).toEqual([874, 806, 739, 672]);
+    expect(comboPoints(672, 5, null, 3)).toBe(672);
   });
 
   it('comboRunMax is runTotal without a combo, and every cat at its highest combo with one', () => {
     const p = rulesFor('level').points;
-    expect(comboRunMax(10, p, null)).toBe(runTotal(10, p));
-    expect(comboRunMax(3, p, RULE)).toBe(576 + 739 + 922);
+    expect(comboRunMax(10, p, null, 3)).toBe(runTotal(10, p));
+    expect(comboRunMax(3, p, RULE, 3)).toBe(576 + 874 + 1_229);
   });
 
   it('modes: every scored mode has the combo; the tutorial has none', () => {
@@ -64,8 +66,14 @@ describe('combo in the reducer', () => {
     const t = play(start(), [dbl(sol10(0)), tick(1_000), dbl(sol10(1)), tick(1_000), dbl(sol10(2)), tick(1_000), dbl(sol10(3))]);
     const pts = points(t.events);
     expect(pts.map((e) => e.combo)).toEqual([1, 2, 3, 4]);
-    expect(pts.map((e) => e.gained)).toEqual([576, 739, 922, 1_123]);
-    expect(t.state).toMatchObject({ combo: 4, comboWindowMs: 4_000, comboEndsMs: 3_000 + 4_000, levelPoints: 576 + 739 + 922 + 1_123 });
+    expect(pts.map((e) => e.gained)).toEqual([576, 874, 1_229, 1_642]);
+    expect(t.state).toMatchObject({ combo: 4, comboWindowMs: 4_000, comboEndsMs: 3_000 + 4_000, levelPoints: 576 + 874 + 1_229 + 1_642 });
+  });
+
+  it('the bonus counts the fish left at that moment: after a mistake (2 fish) the next x2 pays less', () => {
+    // C (x1), M (2 fish, combo and run end), C (x1), C (x2 at 2 fish: 672 + 67.2 × 2 = 806)
+    const t = play(start(), [dbl(sol10(0)), dbl(wrong10(5)), dbl(sol10(1)), tick(500), dbl(sol10(2))]);
+    expect(points(t.events).map((e) => [e.gained, e.combo])).toEqual([[576, 1], [576, 1], [806, 2]]);
   });
 
   it('the countdown is game time: just before it ends the combo goes on; reaching it ends the combo', () => {
@@ -109,7 +117,7 @@ describe('combo in the reducer', () => {
 
   it('RETRY ends the combo; a restore starts without one but keeps the combo points', () => {
     const s = play(start(P5), [dbl(SOL5[0] as number), dbl(SOL5[1] as number), dbl(WRONG5[0] as number), dbl(SOL5[2] as number), dbl(SOL5[3] as number)]).state;
-    expect(s).toMatchObject({ combo: 2, levelPoints: 576 + 739 + 576 + 739 });
+    expect(s).toMatchObject({ combo: 2, levelPoints: 576 + 874 + 576 + 806 }); // the last x2 at 2 fish
     const g = restoreGame(P5, toInProgress(s, 0));
     expect(g).toMatchObject({ combo: 0, comboWindowMs: 0, levelPoints: s.levelPoints, catStreak: 2 });
     const lost = play(start(P5), [dbl(SOL5[0] as number), ...WRONG5.slice(0, 3).map((c) => dbl(c))]).state;
@@ -118,7 +126,7 @@ describe('combo in the reducer', () => {
 
   it('a mistake-free slot with combo points restores exactly; one above every combo is derived', () => {
     const s = play(start(P5), SOL5.slice(0, 4).map((c) => dbl(c))).state;
-    expect(s.levelPoints).toBe(comboRunMax(4, s.rules.points, RULE));
+    expect(s.levelPoints).toBe(comboRunMax(4, s.rules.points, RULE, 3));
     expect(restoreGame(P5, toInProgress(s, 0)).levelPoints).toBe(s.levelPoints);
     const inflated = { ...toInProgress(s, 0), points: s.levelPoints + 1 };
     expect(restoreGame(P5, inflated).levelPoints).toBe(runTotal(4, s.rules.points));

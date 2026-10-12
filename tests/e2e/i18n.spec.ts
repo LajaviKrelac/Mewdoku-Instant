@@ -11,7 +11,7 @@
 // fbig.spec.ts (G3); each locale checks the lives pill's label (its own "fish left" copy) and the
 // victory's kept-fish row, level points and streak chip at 320 px instead. Phase 2c.1 (fish-lives-spec
 // §10.8): there is no streak chip; de, fr and ar at 320 px solve a 12×12 level for the largest level
-// total ("21,907": twelve cats in a row, each at its highest combo, in each locale's number format) and check that the pills row never overflows (the
+// total ("39,228": twelve cats in a row, each at its highest combo with 3 fish, in each locale's number format) and check that the pills row never overflows (the
 // counter centred, clear of the cat counter and the lives, also while the period counter takes the cat
 // counter's cell) and that the victory's points row fits.
 // Phase 2d (G3, look-spec §1.4–§1.13, §5.3): the game screen's new HUD per locale: the game bar's
@@ -471,8 +471,8 @@ interface PointsCase {
 const POINTS_CASES: readonly PointsCase[] = [
   { name: 'de', browser: 'de-DE', lang: 'de', row: de['points.count.other'] ?? '', label: de['game.points.a11y'] ?? '' },
   { name: 'fr', browser: 'fr-FR', lang: 'fr', row: fr['points.count.other'] ?? '', label: fr['game.points.a11y'] ?? '' },
-  // 21 907 ends in 07, Arabic's "few" form.
-  { name: 'ar', browser: 'ar-EG', lang: 'ar', rtl: true, row: ar['points.count.few'] ?? '', label: ar['game.points.a11y'] ?? '' },
+  // 39 228 ends in 28, Arabic's "many" form.
+  { name: 'ar', browser: 'ar-EG', lang: 'ar', rtl: true, row: ar['points.count.many'] ?? '', label: ar['game.points.a11y'] ?? '' },
 ];
 
 /** Phase 2d §1.5: the heads pill (or the win flow's period counter over it) and the fish pill: disjoint, inside the row. */
@@ -543,7 +543,7 @@ for (const c of POINTS_CASES) {
   test.describe(`level points in ${c.name} at 320 px (2c.1 §10.8; Phase 2d: the Score column)`, () => {
     test.use({ locale: c.browser });
 
-    test('the row fits with "21,907" in the locale\'s format, and the victory points row fits', async ({ page }, info) => {
+    test('the row fits with "39,228" in the locale\'s format, and the victory points row fits', async ({ page }, info) => {
       test.skip(info.project.name !== 'web-320', 'the small phone is the tight case');
       await seededHome(page, { progress: { level: 310, completed: 309, best: {} } });
       await page.waitForFunction((lang) => document.documentElement.lang === lang, c.lang);
@@ -560,7 +560,7 @@ for (const c of POINTS_CASES) {
       await expect(n).toBeVisible();
       await rowFits(page, '.pill--heads'); // twelve found heads, before the period counter takes the cell (t = 1 000)
       // 2d.1 §2.5: the last stars land at ≈ 1.33 s and the Score counts up to the total (was: the roll).
-      const want = new Intl.NumberFormat(c.lang === 'ar' ? 'ar-u-nu-latn' : c.lang).format(21907); // comboRunMax(12)
+      const want = new Intl.NumberFormat(c.lang === 'ar' ? 'ar-u-nu-latn' : c.lang).format(39228); // comboRunMax(12, 3 fish)
       const norm = (v: string): string => strip(v).replace(/[\u00a0\u202f]/g, ' ');
       await expect.poll(async () => norm((await n.textContent()) ?? ''), { timeout: 4000 }).toBe(norm(want));
       const shown = strip((await n.textContent()) ?? '');

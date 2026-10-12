@@ -12,7 +12,8 @@
 // mouse's MARKED keeps its pick order (the visit order).
 // The combo (user, 2026-10-12; scoring.ts): a scoring cat found while the combo's countdown runs
 // (elapsedMs < comboEndsMs) raises it by one, else starts it at x1; either way the countdown restarts
-// with comboWindowMs(combo). The cat's increment gets the combo's bonus (comboPoints). A MISTAKE ends
+// with comboWindowMs(combo). The cat's increment gets the combo's bonus × the fish left now
+// (comboPoints, s.hearts). A MISTAKE ends
 // the combo; so does a TICK that reaches comboEndsMs.
 import { newGame } from './factory';
 import { catIncrement, comboPoints, comboWindowMs } from './scoring';
@@ -168,7 +169,7 @@ function withCat(s: GameState, cell: CellIndex, source: CatSource, t: number, ev
       comboWindow = comboWindowMs(combo, rule);
       comboEndsMs = s.elapsedMs + comboWindow;
     }
-    const gained = comboPoints(catIncrement(catStreak, s.rules.points), combo, rule);
+    const gained = comboPoints(catIncrement(catStreak, s.rules.points), combo, rule, s.hearts);
     levelPoints += gained;
     if (gained > 0) events.push({ type: 'POINTS', cell, gained, total: levelPoints, streak: catStreak, combo });
   }

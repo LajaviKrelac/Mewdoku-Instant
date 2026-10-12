@@ -414,7 +414,7 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
 
   test('the Score on a 12×12 level: 11 cats in a row, each "+N" over its tile, the star, the count-up, and the win flow', async ({ page }) => {
     // Level 310 is 12×12; 11 cats in a row, each inside the combo's countdown (the s-th at combo xs),
-    // reach comboRunMax(11) = 18,480; the winning cat adds 1,632 at x1 (the wait outlasts the 2 s) or 3,427 at x12.
+    // with 3 fish reach comboRunMax(11, 3) = 32,210; the winning cat adds 1,632 at x1 (the wait outlasts the 2 s) or 7,018 at x12.
     await open(page, returning({ progress: { level: 310, completed: 309, best: {} } }));
     const sol = await startLevel(page);
     await page.waitForSelector('.game-fx[data-celebrate=ready]', { state: 'attached', timeout: 10_000 });
@@ -426,12 +426,12 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
       await cell(page, r * n + (sol[r] as number)).dblclick();
       if (r < n - 2) await page.waitForTimeout(350);
     }
-    // 2d.1 §2.5: the 11th cat's "+3,072" (1,536 at combo x11) pops one pitch above its tile (inside the
+    // 2d.1 §2.5: the 11th cat's "+6,144" (1,536 + 153.6 × 10 × 3 at combo x11) pops one pitch above its tile (inside the
     // viewport); a star flies to the Score, which then counts up. No chip in the bar.
     const rule = pointsRuleFor('level');
     const combo = comboRuleFor('level');
     const fmt = (x: number): string => x.toLocaleString('en-US');
-    await expect(page.locator('.game-fx svg.fx-plus text').last()).toHaveText(`+${fmt(comboPoints(catIncrement(11, rule), 11, combo))}`);
+    await expect(page.locator('.game-fx svg.fx-plus text').last()).toHaveText(`+${fmt(comboPoints(catIncrement(11, rule), 11, combo, 3))}`);
     await page.waitForTimeout(300);
     const mid = await hud(page);
     expect((mid.plus as Box).left, '"+N" inside the viewport').toBeGreaterThanOrEqual(-0.5);
@@ -441,14 +441,14 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
     await shot(page, 'score-plus');
     await expect(page.locator('.game-fx .fx-star').last()).toBeAttached({ timeout: 1500 });
     await shot(page, 'score-star');
-    const eleven = comboRunMax(11, rule, combo);
+    const eleven = comboRunMax(11, rule, combo, 3);
     await expect(page.locator('.points-pill__n')).toHaveText(fmt(eleven), { timeout: 4000 });
     await expect(page.locator('.pill--heads .head[data-done]')).toHaveCount(11);
     await shot(page, 'score-hud');
     await cell(page, (n - 1) * n + (sol[n - 1] as number)).dblclick();
     await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'won');
     const final = (await page.evaluate(() => (window as TestWindow).__mewdoku?.state()?.levelPoints)) ?? 0;
-    expect([1, 12].map((c) => eleven + comboPoints(catIncrement(12, rule), c, combo))).toContain(final);
+    expect([1, 12].map((c) => eleven + comboPoints(catIncrement(12, rule), c, combo, 3))).toContain(final);
     await expect(page.locator('.points-pill[data-final] .points-pill__n:not(.is-out)')).toHaveText(fmt(final));
     const counter = page.locator('.pills .period-pill[data-in-game]');
     await expect(counter).toBeVisible({ timeout: 4000 });

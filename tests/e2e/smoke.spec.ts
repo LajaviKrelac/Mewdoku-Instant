@@ -236,8 +236,8 @@ test('4d · the victory rows: the level\'s points total, the fish kept and "This
   await expect(victory.locator('.victory__kept')).toHaveAttribute('data-count', '3');
   await expect(victory.locator('.victory__period')).toHaveText('This week: 3');
   // 2c.1: n cats in a row, 96 × (5 + s) each; each found well inside the combo's countdown, so the
-  // s-th at combo xs (+10 % per step): comboRunMax(n).
-  const total = comboRunMax(sol.length, pointsRuleFor('level'), comboRuleFor('level'));
+  // s-th at combo xs: + 10 % × (s − 1) × 3 fish (no mistake): comboRunMax(n, 3).
+  const total = comboRunMax(sol.length, pointsRuleFor('level'), comboRuleFor('level'), 3);
   await expect(victory.locator('.victory__points')).toHaveText(`${total.toLocaleString('en-US')} points`);
   await expect(victory.getByText(/Perfect ×/)).toHaveCount(0); // 2c.1; `.victory__streak` is the 2e daily streak row
   expect((await app(page))?.save.points.total).toBe(total);
@@ -558,7 +558,7 @@ async function pointsShow(page: Page, text: string): Promise<void> {
   await expect(points(page).locator('.points-pill__n').last()).toHaveText(text);
 }
 
-test('18 · level points: two cats 1,315 (the 2nd at combo x2); a mistake keeps them; the next cat 1,891; a reload resumes points and run (next 2,563); Retry 0', async ({ page }) => {
+test('18 · level points: two cats 1,450 (the 2nd at combo x2 with 3 fish); a mistake keeps them; the next cat 2,026; a reload resumes points and run (next 2,698); Retry 0', async ({ page }) => {
   await open(page, '?ads=unsupported', returning());
   await playLevel(page);
   await expect(points(page)).toBeVisible();
@@ -568,23 +568,23 @@ test('18 · level points: two cats 1,315 (the 2nd at combo x2); a mistake keeps 
   const cat = (r: number): number => r * n + (sol[r] as number);
   await dbl(page, cat(0));
   await dbl(page, cat(1));
-  await pointsShow(page, '1,315'); // 576 + 672 × 110 % (combo x2)
+  await pointsShow(page, '1,450'); // 576 + (672 + 67.2 × 1 × 3) (combo x2, 3 fish)
   const [w1, w2, w3] = await wrongCells(page, 3);
   await dbl(page, w1 as number);
-  await pointsShow(page, '1,315'); // a mistake takes nothing away
+  await pointsShow(page, '1,450'); // a mistake takes nothing away
   await dbl(page, cat(2));
-  await pointsShow(page, '1,891'); // the run and the combo restarted: +576
+  await pointsShow(page, '2,026'); // the run and the combo restarted: +576
   // The local save (save.localDebounceMs) holds the board with its points; a reload resumes both.
   await page.waitForTimeout(800);
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('mewdoku.save.v1') ?? 'null') as SaveData | null);
-  expect(stored?.inProgress.level).toMatchObject({ points: 1_891, catStreak: 1 });
+  expect(stored?.inProgress.level).toMatchObject({ points: 2_026, catStreak: 1 });
   await page.reload();
   await ready(page, 'home');
   await page.locator('.home__play').click();
   await playing(page);
-  await pointsShow(page, '1,891');
+  await pointsShow(page, '2,026');
   await dbl(page, cat(3));
-  await pointsShow(page, '2,563'); // the run was restored exactly: the 2nd cat in a row adds 672 (a reload starts no combo)
+  await pointsShow(page, '2,698'); // the run was restored exactly: the 2nd cat in a row adds 672 (a reload starts no combo)
   // Fail and Retry: a new attempt starts at 0.
   await dbl(page, w2 as number);
   await dbl(page, w3 as number);
