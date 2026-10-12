@@ -391,6 +391,7 @@ export const catalog: LocaleCatalog = {
   'howto.levelPoints': 'Chaque chat trouvé rapporte des points, et chaque chat trouvé d’affilée sans erreur en rapporte plus que le précédent. Une erreur ne t’enlève jamais de points, mais le chat suivant recommence le compte. Les chats posés par un indice ou par le minou comptent aussi.',
   // ── Phase 2d: the Score column, the mouse, the start toast, the gear's dot (AI draft 2026-10-10, unreviewed) ──
   'game.score': 'Points',
+  'game.combo': 'Combo x{count}',
   'common.settings.new': 'Réglages, du nouveau',
   'game.tool.mouse': 'Souris',
   'game.tool.mouse.a11y': 'Souris : barre {count} cases sans chat',

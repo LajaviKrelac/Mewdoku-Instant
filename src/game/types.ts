@@ -47,6 +47,19 @@ export interface PointsRule {
   readonly step: number;
 }
 
+/**
+ * The combo (user, 2026-10-12; cfg.levelPoints.combo): scoring cats found in quick succession raise a
+ * combo x1, x2, …; each one restarts a countdown of window(c) = max(minWindowMs, windowMs −
+ * windowStepMs × (c − 1)) ms of game time, and a cat at combo xc with L fish left is worth
+ * increment + increment × bonusPct % × (c − 1) × L.
+ */
+export interface ComboRule {
+  readonly windowMs: number;
+  readonly windowStepMs: number;
+  readonly minWindowMs: number;
+  readonly bonusPct: number;
+}
+
 export interface RuleFlags {
   // set per mode by modes.ts (Phase 3 hook)
   readonly mistakeModel: 'solution'; // only model in Phase 2 (02 §2)
@@ -57,6 +70,8 @@ export interface RuleFlags {
   readonly heartsOnRevive: number; // cfg.revive.heartsRestored (1)
   /** Phase 2c.1 §3.1: level points per correct cat (scoring.pointsRuleFor). */
   readonly points: PointsRule;
+  /** The combo (scoring.comboRuleFor); null or absent: no combo (the tutorial, a mode that scores nothing). */
+  readonly combo?: ComboRule | null;
 }
 
 export interface GameState {
@@ -87,6 +102,15 @@ export interface GameState {
    * regionsDone). A removal never clears a bit, so a cat put back in that row scores nothing.
    */
   readonly scoredRows: number;
+  /**
+   * The combo (ComboRule): 0 = none running, else xN of the last scoring cat. A MISTAKE, RETRY, a
+   * restore and the countdown running out (a TICK reaching comboEndsMs) set it back to 0.
+   */
+  readonly combo: number;
+  /** elapsedMs at which the running combo ends (meaningless while combo = 0). */
+  readonly comboEndsMs: number;
+  /** The whole countdown of the running combo, window(combo) ms (the bar's full width); 0 with no combo. */
+  readonly comboWindowMs: number;
 }
 
 export type Move =
@@ -149,9 +173,10 @@ export type GameEvent =
   | { type: 'LOST' }
   /**
    * Phase 2c.1 §3.2.2: right after the CAT_PLACED that scored, only when gained > 0: the increment,
-   * the new running total (GameState.levelPoints) and the run s (GameState.catStreak).
+   * the new running total (GameState.levelPoints) and the run s (GameState.catStreak). `combo`: the
+   * combo this cat reached (GameState.combo; 0 when the rules have no combo).
    */
-  | { type: 'POINTS'; cell: CellIndex; gained: number; total: number; streak: number }
+  | { type: 'POINTS'; cell: CellIndex; gained: number; total: number; streak: number; combo: number }
   /**
    * Phase 2d.1 §4.1: after MARKED / CAT_PLACED / POINTS / REGION_DONE and before WON. A unit is complete
    * when it holds its cat (Cat or Given) and every other tile is Mark or Wrong; listed once per unit

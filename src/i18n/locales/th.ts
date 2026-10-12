@@ -375,6 +375,7 @@ export const catalog: LocaleCatalog = {
   'howto.levelPoints': 'แมวทุกตัวที่คุณหาเจอจะได้แต้ม และแมวแต่ละตัวที่หาเจอติดกันโดยไม่ผิดจะได้แต้มมากกว่าตัวก่อนหน้า การผิดไม่ทำให้แต้มหายไป แต่แมวตัวถัดไปจะเริ่มนับใหม่ แมวที่คำใบ้หรือเหมียววางให้ก็นับด้วย',
   // ── Phase 2d: the Score column, the mouse, the start toast, the gear's dot (AI draft 2026-10-10, unreviewed) ──
   'game.score': 'คะแนน',
+  'game.combo': 'คอมโบ x{count}',
   'common.settings.new': 'การตั้งค่า มีของใหม่',
   'game.tool.mouse': 'หนู',
   'game.tool.mouse.a11y': 'หนู: กากบาท {count} ช่องที่ไม่มีแมว',

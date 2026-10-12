@@ -789,6 +789,13 @@ export interface GameConfig {
       readonly topSpareMax: number;
       /** Top bar band (back and gear discs centred at bar / 2). */
       readonly bar: number;
+      /**
+       * The combo bar's row, right under the bar (user, 2026-10-12): always reserved, so nothing moves
+       * when a combo starts or ends. Its 22 come out of three measured gaps (barToPills 10.3 → 4.3,
+       * rulesToBoard 25.7 → 17.7, boardToTools 53 → 45), so the stack's height, the scale s and the
+       * board are the same as without it at every size (the 22 px tile minimum at 320 × 568 holds).
+       */
+      readonly combo: number;
       readonly barToPills: number;
       /** Heads pill and fish pill height. */
       readonly pills: number;
@@ -986,6 +993,21 @@ export interface GameConfig {
     readonly firstIncrement: number;
     /** Each further correct cat in a row adds this much more than the one before (s ≥ 2): 96. User, first-hand, 2026-10-10. */
     readonly step: number;
+    /**
+     * The COMBO (user, 2026-10-12; inspired by Goods Sort): the first scoring cat starts a countdown of
+     * windowMs (game time) and the combo is x1. A scoring cat found before the countdown runs out raises
+     * the combo by one and restarts the countdown, windowStepMs shorter each time, never below
+     * minWindowMs (10 s, 8 s, 6 s, 4 s, 2 s, 2 s …). The countdown running out or a mistake ends it.
+     * A cat at combo xc with L fish left at that moment is worth increment + increment × bonusPct % ×
+     * (c − 1) × L, rounded (user, 2026-10-12): with 3 fish 576, 672 + 67.2 × 1 × 3 = 874,
+     * 768 + 76.8 × 2 × 3 = 1 229, … The combo never takes points away.
+     */
+    readonly combo: {
+      readonly windowMs: number;
+      readonly windowStepMs: number;
+      readonly minWindowMs: number;
+      readonly bonusPct: number;
+    };
   };
   /**
    * Phase 2c §4: LEADERBOARD POINTS [DECISION: default, user may change]. A counted win in a mode of
@@ -1484,13 +1506,14 @@ export const cfg: GameConfig = deepFreeze({
       compactScale: 0.85,
       topSpareMax: 62,
       bar: 52,
-      barToPills: 10.3,
+      combo: 22,
+      barToPills: 4.3,
       pills: 31.3,
       pillsToRules: 8.3,
       rules: 60.3,
       rulesGrowMax: 2,
-      rulesToBoard: 25.7,
-      boardToTools: 53,
+      rulesToBoard: 17.7,
+      boardToTools: 45,
       tools: 60.3,
       toolsToBanner: 23.4,
       bottom: 12.3,
@@ -1523,7 +1546,8 @@ export const cfg: GameConfig = deepFreeze({
   fish: { perWin: 3, hardBonus: 2, dailyBonus: 2, tutorial: 3, groupParticipation: 10, max: 999_999 },
   shop: { hintFish: 15, kittyFish: 30 },
   points: { perSize: 5, hardMultiplier: 2, flawless: 10, unaided: 10, daily: 15, event: 5, max: 2_000_000_000 },
-  levelPoints: { perSize: 10, hardMultiplier: 2, streakStep: 10, streakCap: 10, modes: ['level', 'daily', 'event'], firstIncrement: 576, step: 96 },
+  levelPoints: { perSize: 10, hardMultiplier: 2, streakStep: 10, streakCap: 10, modes: ['level', 'daily', 'event'], firstIncrement: 576, step: 96,
+    combo: { windowMs: 10_000, windowStepMs: 2_000, minWindowMs: 2_000, bonusPct: 10 } },
   period: { kind: 'week', pointsPerFish: 1, modes: ['level', 'daily', 'event'], max: 99_999 },
   events: { teaseHours: 72, cardEndsSoonHours: 48 },
   rank: {

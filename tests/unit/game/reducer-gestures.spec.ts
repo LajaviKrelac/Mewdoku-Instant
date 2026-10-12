@@ -132,7 +132,7 @@ describe('02 §8 mistake model', () => {
     expect(r.state.catsPlaced).toBe(1);
     expect(r.events).toEqual([
       { type: 'CAT_PLACED', cell: cell(3, 1), source: 'player' },
-      { type: 'POINTS', cell: cell(3, 1), gained: 576, total: 576, streak: 1 },
+      { type: 'POINTS', cell: cell(3, 1), gained: 576, total: 576, streak: 1, combo: 0 },
       { type: 'REGION_DONE', region: 3 }, // D
     ]);
     expect(r.state.regionsDone).toBe(1 << 3);

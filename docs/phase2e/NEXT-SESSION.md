@@ -65,6 +65,17 @@ upload; this note records the result and what is left.
 - 2026-10-12: `mewdoku-instant-fbig-preview-0.1.0-3778d6b.zip` (504.5 KB, 89 files; the Home cleanup and no FB
   safe-zone shift by default), comment "Game test build 0.1.0 3778d6b - home cleanup, no FB safe-zone shift, staging
   ranking, no ads/IAP ids yet". Checked first: tsc, 2,942 unit tests, the FBIG e2e (59), size budget.
+- 2026-10-12 UTC: `mewdoku-instant-fbig-preview-0.1.0-b8bb947.zip` (505,775 bytes; the combo points and the combo
+  bar's row), comment "Game test build 0.1.0 b8bb947 - combo points + combo bar row, staging ranking, no ads/IAP ids
+  yet". Checked first: tsc, 3,054 unit tests, 317 e2e tests; the size check flags CSS 52.6 / 51.7 KB (the combo bar).
+- 2026-10-12 UTC: `mewdoku-instant-fbig-preview-0.1.0-1159c9d.zip` (505,846 bytes; the default branch with the combo
+  merged in: combo points, the combo bar's row, the Home cleanup, no FB safe-zone shift), comment "Game test build
+  0.1.0 1159c9d - combo points + Home cleanup, no FB safe-zone shift, staging ranking, no ads/IAP ids yet". Checked
+  first: npm run verify (3,055 unit tests, 191 server tests), 318 e2e tests; the size check still flags CSS 52.4 / 51.7 KB.
+- 2026-10-12 UTC: `mewdoku-instant-fbig-preview-0.1.0-80fdfe8.zip` (505,868 bytes; the combo bonus × the fish left:
+  base + base × 10 % × (combo − 1) × fish), comment "Game test build 0.1.0 80fdfe8 - combo bonus x fish left, staging
+  ranking, no ads/IAP ids yet". Checked first: npm run verify (3,057 unit tests, 191 server tests); the e2e suite was
+  not run on this commit (stopped on request); the size check still flags CSS 52.4 / 51.7 KB.
 
 ## Left
 

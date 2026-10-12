@@ -4,7 +4,8 @@
 // Phase 2d (look-spec §1.1): the game screen is a top-down stack of the rows and gaps measured on the
 // user's recording at 402 CSS px (layout.game), all scaled by one factor s (width- or height-bound),
 // with the square board card in it; the spare height goes above the bar (at most topSpareMax × s) and
-// the rest below. (The 2b row names topBar and chips were deleted at 2d I-3; pills and tools carry the 2d rows.)
+// the rest below. The combo bar has its own row under the bar (layout.game.combo, user 2026-10-12).
+// (The 2b row names topBar and chips were deleted at 2d I-3; pills and tools carry the 2d rows.)
 import { cfg, type GameConfig } from '../../app/config';
 import type { CellIndex } from '../../engine/types';
 
@@ -37,6 +38,8 @@ export interface GameLayout {
   readonly top: number;
   /** Row heights in px: bar and rules (both grown by the text scale: barH, rulesH of look-spec §1.1), pills, tools (the disc diameter). */
   readonly bar: number;
+  /** The combo bar's row under the bar (layout.game.combo × s). */
+  readonly combo: number;
   readonly pills: number;
   readonly rules: number;
   readonly tools: number;
@@ -94,7 +97,7 @@ export function computeLayout(input: LayoutInput, c: GameConfig = cfg): GameLayo
   const B = banner ? c.ads.banner.bannerPx : 0;
   const toolsToBanner = banner ? G.toolsToBanner : 0;
   const fixed =
-    G.bar + G.barToPills + G.pills + G.pillsToRules + G.rules + G.rulesToBoard + G.boardToTools + G.tools + toolsToBanner + G.bottom;
+    G.bar + G.combo + G.barToPills + G.pills + G.pillsToRules + G.rules + G.rulesToBoard + G.boardToTools + G.tools + toolsToBanner + G.bottom;
   const card = G.refWidth - 2 * G.cardMargin;
   const sW = Math.min(vw, G.refWidth * G.maxScale) / G.refWidth;
   const sH = (A - B) / (fixed + card);
@@ -121,6 +124,7 @@ export function computeLayout(input: LayoutInput, c: GameConfig = cfg): GameLayo
     compact,
     top,
     bar,
+    combo: G.combo * s,
     pills,
     rules,
     tools,

@@ -391,6 +391,7 @@ export const catalog: LocaleCatalog = {
   'howto.levelPoints': 'Jede Katze, die du findest, bringt Punkte, und jede weitere Katze in Folge ohne Fehler bringt mehr als die davor. Ein Fehler nimmt dir nie Punkte weg, aber mit der nächsten Katze beginnt die Zählung von vorn. Katzen, die ein Tipp oder das Kätzchen setzt, zählen auch.',
   // ── Phase 2d: the Score column, the mouse, the start toast, the gear's dot (AI draft 2026-10-10, unreviewed) ──
   'game.score': 'Punkte',
+  'game.combo': 'Kombo x{count}',
   'common.settings.new': 'Einstellungen, etwas Neues',
   'game.tool.mouse': 'Maus',
   'game.tool.mouse.a11y': 'Maus: streicht {count} Felder ohne Katze durch',

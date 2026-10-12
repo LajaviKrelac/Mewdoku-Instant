@@ -114,6 +114,59 @@
   padding: 0;
 }
 
+/* The combo bar (user, 2026-10-12; combo-bar.ts): its own row of the stack right under the bar
+   (layout.game.combo, --combo-row; always reserved, so nothing moves when it shows or hides), centred.
+   The fill empties from the inline end (scaleX, linear). */
+.game__combo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--combo-row);
+}
+
+.combo-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  box-sizing: border-box;
+  width: calc(var(--s) * 150px);
+  height: calc(var(--s) * 20px);
+  border: calc(var(--s) * 2px) solid var(--combo-deep);
+  border-radius: 999px;
+  background: var(--combo-track);
+  pointer-events: none;
+}
+
+.combo-bar[hidden] {
+  display: none;
+}
+
+.combo-bar__fill {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, var(--combo-hi), var(--combo));
+  transform-origin: left center;
+}
+
+[dir='rtl'] .combo-bar__fill {
+  transform-origin: right center;
+}
+
+.combo-bar__text {
+  position: relative;
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  font-size: calc(var(--s) * 0.78rem);
+  line-height: 1;
+  color: #fff;
+  white-space: nowrap;
+  text-shadow:
+    0 0 calc(var(--s) * 2px) var(--combo-ink),
+    0 calc(var(--s) * 1px) 0 var(--combo-ink);
+}
+
 /* The discs and the span between them sit at their static position (the inline start) moved by
    margin-inline-start, so the bar mirrors in RTL on its own. The FB safe zone (§1.1): the disc at the
    physical left moves right by --fb-s (LTR: back) or --fb-e (RTL: gear), set by game-screen.ts. */

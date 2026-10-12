@@ -462,6 +462,7 @@ export const catalog: LocaleCatalog = {
   'howto.levelPoints': 'كل قطة تجدها تمنحك نقاطًا، وكل قطة تجدها على التوالي دون خطأ تمنحك أكثر من التي قبلها. الخطأ لا ينقص نقاطك أبدًا، لكن العدّ يبدأ من جديد مع القطة التالية. القطط التي يضعها التلميح أو القُطيطة تُحتسب أيضًا.',
   // ── Phase 2d: the Score column, the mouse, the start toast, the gear's dot (AI draft 2026-10-10, unreviewed) ──
   'game.score': 'النقاط',
+  'game.combo': 'كومبو ×{count}',
   'common.settings.new': 'الإعدادات، يوجد جديد',
   'game.tool.mouse': 'الفأر',
   'game.tool.mouse.a11y': 'الفأر: يشطب {count} خانات بلا قطة',

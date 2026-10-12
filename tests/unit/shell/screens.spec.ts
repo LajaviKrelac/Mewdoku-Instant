@@ -340,7 +340,7 @@ describe('S2 game', () => {
     // The pills get the board's colours and found regions for the heads (§1.6).
     game.update(view({ board: { ...view().board, regionsDone: 0b101 } }));
     expect(lastOf('pills', 'update')).toMatchObject({ regionsDone: 0b101, boardId: 'L37', n: 5 });
-    const ev = { type: 'POINTS', cell: 7, gained: 672, total: 1248, streak: 2 } as const;
+    const ev = { type: 'POINTS', cell: 7, gained: 672, total: 1248, streak: 2, combo: 0 } as const;
     game.playEvent(ev);
     expect(callsOf('topbar', 'playEvent')).toEqual([ev]);
     expect(callsOf('pills', 'playEvent')).toEqual([ev]);

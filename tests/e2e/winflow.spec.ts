@@ -4,7 +4,7 @@
 // save.period.total = 6.
 // Phase 2c.1 (G1, §10.3, §10.8): the level-points counter stays centred in the pills row with the
 // level's total ([data-final]) until the scrim; the period counter appears in the cat counter's place;
-// the victory shows the level's total (runTotal(n) for a mistake-free solve); save.streak is never
+// the victory shows the level's total (comboRunMax(n, 3 fish) for a mistake-free instant solve); save.streak is never
 // written; the panel times are unchanged.
 // The post-win flow end to end (phase2b §2.2, §2.7, §2.13) on the web e2e build: solve through the
 // hook → rewards saved at once → the in-game period counter counts +3 → the ranking panel → tap → the
@@ -25,7 +25,7 @@ import { expect, test, type Page } from '@playwright/test';
 import type { E2EHooks } from '../../src/app/boot';
 import { ladderUp, LADDER_URL, newPool, webPlayer } from './helpers/rank-players';
 import { defaults } from '../../src/game/save';
-import { periodKeyAt, pointsRuleFor, runTotal } from '../../src/game/scoring';
+import { catIncrement, comboPoints, comboRuleFor, comboRunMax, periodKeyAt, pointsRuleFor } from '../../src/game/scoring';
 import type { SaveData } from '../../src/game/types';
 import { watchStrings } from './helpers/strings';
 
@@ -95,10 +95,17 @@ async function tapPanel(page: Page): Promise<void> {
   await panel.locator('.ranking__tap').click();
 }
 
-/** The level's total of an unbroken run over the current board, as English formats it ("3,840"). */
+/**
+ * The level's total of an unbroken run over the current board, as English formats it: the hook's
+ * solve places every cat at once, so each one also raises the combo, its bonus × the fish left now
+ * (comboRunMax; 5×5 with 3 fish → 6,433).
+ */
 async function fullRun(page: Page): Promise<{ total: number; text: string }> {
-  const n = await page.evaluate(() => (window as TestWindow).__mewdoku?.state()?.puzzle.n ?? 0);
-  const total = runTotal(n, pointsRuleFor('level'));
+  const { n, hearts } = await page.evaluate(() => {
+    const s = (window as TestWindow).__mewdoku?.state();
+    return { n: s?.puzzle.n ?? 0, hearts: s?.hearts ?? 0 };
+  });
+  const total = comboRunMax(n, pointsRuleFor('level'), comboRuleFor('level'), hearts);
   return { total, text: total.toLocaleString('en-US') };
 }
 
@@ -214,9 +221,9 @@ test('2c.1: the points counter stays visible with the level\'s total until the s
   await page.locator('.cell').nth(sol[0] as number).dblclick();
   await page.waitForTimeout(350);
   await mistakes(page, 1);
-  const t0 = await solve(page); // cats 2…n: a new run after the mistake
+  const t0 = await solve(page); // cats 2…n: a new run (and combo) after the mistake
   const rule = pointsRuleFor('level');
-  const total = rule.first + runTotal(n - 1, rule);
+  const total = rule.first + comboRunMax(n - 1, rule, comboRuleFor('level'), 2); // 2 fish after the mistake
   const text = total.toLocaleString('en-US');
   const pts = score(page);
   await expect(pts).toHaveAttribute('data-final', '');
@@ -261,14 +268,20 @@ test('2d.1 §2.5: the last cat\'s star and count-up end on the level\'s total wi
   }
   await page.waitForTimeout(2_000); // the earlier stars have landed
   const rule = pointsRuleFor('level');
-  const before = runTotal(n - 1, rule).toLocaleString('en-US');
-  const total = runTotal(n, rule).toLocaleString('en-US');
+  const combo = comboRuleFor('level');
+  const sum = comboRunMax(n - 1, rule, combo, 3); // each cat well inside the combo's countdown, 3 fish
+  const before = sum.toLocaleString('en-US');
   const num = page.locator('.top-bar--game .points-pill__n');
   await expect(num).toHaveText(before);
   const last = (n - 1) * n + (sol[n - 1] as number);
   await page.locator('.cell').nth(last).dblclick();
   const t0 = await page.evaluate(() => performance.now());
   await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'won');
+  // After the 2 s wait the combo may or may not have run out: the last cat is at its combo or at x1.
+  const won = await page.evaluate(() => (window as TestWindow).__mewdoku?.state());
+  const lastPts = (won?.levelPoints ?? 0) - sum;
+  expect([comboPoints(catIncrement(n, rule), 1, combo, 3), comboPoints(catIncrement(n, rule), n, combo, 3)]).toContain(lastPts);
+  const total = (sum + lastPts).toLocaleString('en-US');
   // The period counter takes the heads pill's place at t = 1 000 (2c times, unchanged).
   const shownAt = await page.waitForFunction(
     (start) => {

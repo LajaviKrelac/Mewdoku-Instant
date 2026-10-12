@@ -167,6 +167,11 @@ describe('selectGameView', () => {
     // A board whose rules score nothing ({0, 0}: a mode dropped from levelPoints.modes) hides the counter.
     const off = { ...lvl, rules: { ...lvl.rules, points: { first: 0, step: 0 } } };
     expect(selectGameView(state({ game: off, session: meta('level') }), ctx)?.points).toBeNull();
+    // The combo bar: what is left of the countdown on the game's clock; null with no combo.
+    expect(selectGameView(state({ game: lvl, session: meta('level') }), ctx)?.combo).toBeNull();
+    const combo = { ...lvl, elapsedMs: 3_000, combo: 2, comboWindowMs: 8_000, comboEndsMs: 9_000 };
+    expect(selectGameView(state({ game: combo, session: meta('level') }), ctx)?.combo).toEqual({ count: 2, windowMs: 8_000, leftMs: 6_000, running: true });
+    expect(selectGameView(state({ game: { ...combo, status: 'won' as const }, session: meta('level') }), ctx)?.combo?.running).toBe(false);
   });
 });
 

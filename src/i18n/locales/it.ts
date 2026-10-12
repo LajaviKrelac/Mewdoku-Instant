@@ -391,6 +391,7 @@ export const catalog: LocaleCatalog = {
   'howto.levelPoints': 'Ogni gatto che trovi vale punti, e ogni gatto trovato di fila senza errori vale più del precedente. Un errore non ti toglie mai punti, ma con il gatto successivo il conto riparte. Valgono anche i gatti piazzati da un indizio o dal micio.',
   // ── Phase 2d: the Score column, the mouse, the start toast, the gear's dot (AI draft 2026-10-10, unreviewed) ──
   'game.score': 'Punti',
+  'game.combo': 'Combo x{count}',
   'common.settings.new': 'Impostazioni, c\'è una novità',
   'game.tool.mouse': 'Topo',
   'game.tool.mouse.a11y': 'Topo: barra {count} caselle senza gatto',

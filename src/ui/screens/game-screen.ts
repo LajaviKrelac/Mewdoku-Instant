@@ -31,7 +31,7 @@
 // tool button is disabled, the coach's "Got it" goes away) it is moved back to the board.
 //
 // Classes: .screen.screen--game[data-mode][data-status][data-compact][data-banner] > header.top-bar--game
-//          + main.game__col (.game__hud .game__stage .game__tools) + .game__scrim + .game-fx[data-celebrate]; vars of §4.7
+//          + main.game__col (.game__hud (.game__combo > .combo-bar, .pills, rules) .game__stage .game__tools) + .game__scrim + .game-fx[data-celebrate]; vars of §4.7
 import type { CellIndex } from '../../engine/types';
 import type { EventDef } from '../../game/events';
 import type { FxHandle } from '../fx/fish-flight';
@@ -44,6 +44,7 @@ import { cfg } from '../../app/config';
 import { formatShortDate, onLocaleChanged, t, translate } from '../../i18n';
 import { createBoardView, loadMouseRun, type BoardHighlight, type BoardModel } from '../board/board-view';
 import { computeLayout, readViewport, type GameLayout, type ViewportInfo } from '../board/layout';
+import { createComboBar, type ComboBarProps } from '../hud/combo-bar';
 import { createGameBar, type GameBarProps } from '../hud/game-bar';
 import { createPills, type LifeSlotRect, type PillsProps } from '../hud/pills';
 import { createRuleChips, type RuleChip, type RuleChipsProps } from '../hud/rule-chips';
@@ -94,6 +95,11 @@ export interface GameView {
    * levelPoints.modes). Required since 2c.1 I-3.
    */
   readonly points: number | null;
+  /**
+   * The combo bar under the game bar (user, 2026-10-12): the running combo, its whole countdown and
+   * what is left of it, and whether the game clock runs. Absent or null: no combo (the bar hides).
+   */
+  readonly combo?: { readonly count: number; readonly windowMs: number; readonly leftMs: number; readonly running: boolean } | null;
   /** Phase 2d §1.11: which helper pulses now (fx.helperPulse.target); null = none. */
   readonly pulse: 'paw' | 'bulb' | null;
   /** Phase 2d §1.12: the third helper, shown (cfg.mouse.enabled, not the tutorial, the mode allows the kitty) and enabled. */
@@ -260,6 +266,13 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
     reducedMotion: v.reducedMotion,
     starPoints: starMode(v),
   });
+  const comboProps = (v: GameView): ComboBarProps => ({
+    count: v.combo?.count ?? 0,
+    windowMs: v.combo?.windowMs ?? 0,
+    leftMs: v.combo?.leftMs ?? 0,
+    running: v.combo?.running === true,
+    reducedMotion: v.reducedMotion,
+  });
   const pillsProps = (v: GameView): PillsProps => ({
     catsPlaced: v.catsPlaced,
     n: v.board.n,
@@ -303,6 +316,8 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
       if (!locked()) cb.onSettings();
     },
   });
+  // The combo bar has its own row in the stack, between the game bar and the pills (--combo-row).
+  const comboBar = createComboBar(comboProps(view));
   const pills = createPills(pillsProps(view));
   const chips = createRuleChips(chipsProps(view));
   const board = createBoardView(
@@ -329,7 +344,7 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
     { class: 'screen screen--game' },
     topBar.el,
     // The play area is the page's main landmark (Home uses <main> too).
-    h('main', { class: 'game__col' }, h('div', { class: 'game__hud' }, pills.el, chips.el), stage, h('div', { class: 'game__tools' }, tools.el)),
+    h('main', { class: 'game__col' }, h('div', { class: 'game__hud' }, h('div', { class: 'game__combo' }, comboBar.el), pills.el, chips.el), stage, h('div', { class: 'game__tools' }, tools.el)),
     scrim,
     gameFx,
   );
@@ -454,6 +469,7 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
       '--col-w': px(next.colW),
       '--y-top': px(next.top),
       '--bar': px(next.bar),
+      '--combo-row': px(next.combo),
       '--pills': px(next.pills),
       '--rules': px(next.rules),
       '--chips': px(next.rules),
@@ -479,7 +495,7 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
     for (const [k, v] of Object.entries(vars)) el.style.setProperty(k, v);
     el.dataset.compact = String(next.compact);
     el.toggleAttribute('data-banner', next.band > 0);
-    const toolsTop = next.top + next.bar + g.barToPills + next.pills + g.pillsToRules + next.rules + g.rulesToBoard + next.board + g.boardToTools;
+    const toolsTop = next.top + next.bar + next.combo + g.barToPills + next.pills + g.pillsToRules + next.rules + g.rulesToBoard + next.board + g.boardToTools;
     publishBand(
       next.band > 0 ? g.toolsToBanner + next.band : 0,
       g.bottom + vp.safeBottom,
@@ -553,6 +569,7 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
     else delete el.dataset.eventTheme;
     if (!prev || prev.event?.def.theme.accessory !== v.event?.def.theme.accessory) board.setAccessory(v.event?.def.theme.accessory ?? null);
     topBar.update(barProps(v));
+    comboBar.update(comboProps(v));
     if (!prev || (prev.chromeLocked === true) !== (v.chromeLocked === true)) renderChromeLock(v.chromeLocked === true);
     pills.update(pillsProps(v));
     chips.update(chipsProps(v));
@@ -702,6 +719,7 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
         for (const k of ['--play-band', '--play-band-bottom', '--toast-bottom']) root.style.removeProperty(k);
         root.removeAttribute('data-play-band');
       }
+      comboBar.destroy();
       topBar.destroy();
       pills.destroy();
       chips.destroy();

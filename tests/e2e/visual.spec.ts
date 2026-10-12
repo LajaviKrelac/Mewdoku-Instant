@@ -42,7 +42,7 @@ import type { E2EHooks } from '../../src/app/boot';
 import { cfg } from '../../src/app/config';
 import { dailyDateKey } from '../../src/game/progression';
 import { defaults } from '../../src/game/save';
-import { periodKeyAt } from '../../src/game/scoring';
+import { catIncrement, comboPoints, comboRuleFor, comboRunMax, periodKeyAt, pointsRuleFor } from '../../src/game/scoring';
 import type { SaveData } from '../../src/game/types';
 import { NICK_WORDS_V1 } from '../../src/shared/nick-words';
 import type { BracketRow, BracketView, PlayerView, ResultView, RulesView, SessionResponse, WinSubmission } from '../../src/shared/rank-api';
@@ -362,7 +362,9 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
     const g = await expectStack(page);
     const near = (got: number, want: number, what: string): void => expect(Math.abs(got - want), `${what}: ${got.toFixed(1)} vs ${want}`).toBeLessThanOrEqual(2);
     const b = (x: Box | null): Box => x as Box;
-    // look-spec §1.1, §1.4–§1.11 (the original's measured positions at 402 × 874).
+    // look-spec §1.1, §1.4–§1.11 (the original's measured positions at 402 × 874), with the combo bar's row
+    // (user, 2026-10-12): 22 under the bar, paid by barToPills −6, rulesToBoard −8, boardToTools −8, so the pills
+    // and the rules sit 16 lower, the board 8 lower, and the helpers and the banner where they were.
     near((b(g.back).left + b(g.back).right) / 2, 31.5, 'back centre x');
     near((b(g.back).top + b(g.back).bottom) / 2, 88.0, 'back centre y');
     near((b(g.gear).left + b(g.gear).right) / 2, 370.0, 'gear centre x');
@@ -372,11 +374,11 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
     near((b(g.score).left + b(g.score).right) / 2, 252.0, 'Score column centre');
     near(b(g.heads).left, 12.0, 'heads pill left');
     near(b(g.heads).right, 282.0, 'heads pill right');
-    near(b(g.heads).top, 124.3, 'pills top');
+    near(b(g.heads).top, 140.3, 'pills top');
     near(b(g.lives).left, 293.3, 'fish pill left');
-    near(b(g.rules).top, 164.0, 'rules top');
+    near(b(g.rules).top, 180.0, 'rules top');
     near(b(g.rules).left, 13.3, 'rules left');
-    near(b(g.board).top, 250.0, 'board top');
+    near(b(g.board).top, 258.0, 'board top');
     near(b(g.board).left, 5.67, 'board left');
     near(b(g.tools).top, 694.0, 'helpers top');
     near((b(g.tools).left + b(g.tools).right) / 2, 98.8, 'kitty centre x');
@@ -411,7 +413,8 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
   }
 
   test('the Score on a 12×12 level: 11 cats in a row, each "+N" over its tile, the star, the count-up, and the win flow', async ({ page }) => {
-    // Level 310 is 12×12; 11 cats in a row reach 11,616, the winning cat 13,248.
+    // Level 310 is 12×12; 11 cats in a row, each inside the combo's countdown (the s-th at combo xs),
+    // with 3 fish reach comboRunMax(11, 3) = 32,210; the winning cat adds 1,632 at x1 (the wait outlasts the 2 s) or 7,018 at x12.
     await open(page, returning({ progress: { level: 310, completed: 309, best: {} } }));
     const sol = await startLevel(page);
     await page.waitForSelector('.game-fx[data-celebrate=ready]', { state: 'attached', timeout: 10_000 });
@@ -423,9 +426,12 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
       await cell(page, r * n + (sol[r] as number)).dblclick();
       if (r < n - 2) await page.waitForTimeout(350);
     }
-    // 2d.1 §2.5: the 11th cat's "+1,536" pops one pitch above its tile (inside the viewport); a star
-    // flies to the Score, which then counts up. No chip in the bar.
-    await expect(page.locator('.game-fx svg.fx-plus text').last()).toHaveText('+1,536');
+    // 2d.1 §2.5: the 11th cat's "+6,144" (1,536 + 153.6 × 10 × 3 at combo x11) pops one pitch above its tile (inside the
+    // viewport); a star flies to the Score, which then counts up. No chip in the bar.
+    const rule = pointsRuleFor('level');
+    const combo = comboRuleFor('level');
+    const fmt = (x: number): string => x.toLocaleString('en-US');
+    await expect(page.locator('.game-fx svg.fx-plus text').last()).toHaveText(`+${fmt(comboPoints(catIncrement(11, rule), 11, combo, 3))}`);
     await page.waitForTimeout(300);
     const mid = await hud(page);
     expect((mid.plus as Box).left, '"+N" inside the viewport').toBeGreaterThanOrEqual(-0.5);
@@ -435,11 +441,15 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
     await shot(page, 'score-plus');
     await expect(page.locator('.game-fx .fx-star').last()).toBeAttached({ timeout: 1500 });
     await shot(page, 'score-star');
-    await expect(page.locator('.points-pill__n')).toHaveText('11,616', { timeout: 4000 });
+    const eleven = comboRunMax(11, rule, combo, 3);
+    await expect(page.locator('.points-pill__n')).toHaveText(fmt(eleven), { timeout: 4000 });
     await expect(page.locator('.pill--heads .head[data-done]')).toHaveCount(11);
     await shot(page, 'score-hud');
     await cell(page, (n - 1) * n + (sol[n - 1] as number)).dblclick();
-    await expect(page.locator('.points-pill[data-final] .points-pill__n:not(.is-out)')).toHaveText('13,248');
+    await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'won');
+    const final = (await page.evaluate(() => (window as TestWindow).__mewdoku?.state()?.levelPoints)) ?? 0;
+    expect([1, 12].map((c) => eleven + comboPoints(catIncrement(12, rule), c, combo, 3))).toContain(final);
+    await expect(page.locator('.points-pill[data-final] .points-pill__n:not(.is-out)')).toHaveText(fmt(final));
     const counter = page.locator('.pills .period-pill[data-in-game]');
     await expect(counter).toBeVisible({ timeout: 4000 });
     await expect(page.locator('.pill--heads')).toBeHidden({ timeout: 1000 });

@@ -426,6 +426,7 @@ export const catalog: LocaleCatalog = {
   'howto.levelPoints': 'Каждая найденная кошка приносит очки, а каждая следующая кошка подряд без ошибок — больше, чем предыдущая. Ошибка никогда не отнимает очки, но со следующей кошки счёт начинается заново. Кошки, поставленные подсказкой или котиком, тоже считаются.',
   // ── Phase 2d: the Score column, the mouse, the start toast, the gear's dot (AI draft 2026-10-10, unreviewed) ──
   'game.score': 'Очки',
+  'game.combo': 'Комбо x{count}',
   'common.settings.new': 'Настройки, есть новое',
   'game.tool.mouse': 'Мышка',
   'game.tool.mouse.a11y': 'Мышка: вычёркивает {count} клетки без кошки',

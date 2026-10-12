@@ -261,6 +261,16 @@ export function selectGameView(state: AppState, ctx: ViewContext, c: GameConfig 
     catsPlaced: game.catsPlaced,
     // phase2c.1 §3.2.5: the attempt's running total; null hides the counter (a mode that scores nothing).
     points: game.rules.points.first > 0 ? game.levelPoints : null,
+    // The combo bar (user, 2026-10-12): what is left of the countdown on the game's own clock.
+    combo:
+      game.combo > 0
+        ? {
+            count: game.combo,
+            windowMs: game.comboWindowMs,
+            leftMs: Math.max(0, game.comboEndsMs - game.elapsedMs),
+            running: (game.status === 'playing' || game.status === 'hint' || game.status === 'kitty') && !ui.paused && !ui.adShowing,
+          }
+        : null,
     status: game.status,
     hints: save.stock.hints,
     kitties: save.stock.kitties,

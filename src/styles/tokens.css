@@ -60,6 +60,11 @@
   --badge: #dc2f2f; /* count badges: measured #e93636 darkened for white digits 4.68 */
   --badge-video: #03a84a; /* "watch a video" badge: measured #02be52 darkened, white mark 3.13 */
   --dot: #f34f4f; /* the gear's red dot */
+  --combo: #4cc23a; /* the combo bar's fill (user, 2026-10-12: a green bar, like Goods Sort) */
+  --combo-hi: #6bd65a; /* the top of its gradient */
+  --combo-deep: #2c8a22; /* its edge and the empty track's ink */
+  --combo-track: #d9efd3; /* the emptied part of the bar */
+  --combo-ink: #1d5c16; /* the outline of the white "Combo x3": 8.02 behind the white */
   --daily: #5e6fcf; /* ours: the Home daily pill (the original's periwinkle, deepened): white on it 4.52 */
   --daily-deep: #4f5fbf; /* its bottom edge and status tab: white on it 5.64 */
   --toast-fill: #fff1c8; /* level-start tickers (2d.1 §5.2: re-sampled from the PNG still) */

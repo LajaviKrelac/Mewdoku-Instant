@@ -391,6 +391,7 @@ export const catalog: LocaleCatalog = {
   'howto.levelPoints': 'Cada gato que encuentras da puntos, y cada gato seguido sin errores da más que el anterior. Un error nunca te quita puntos, pero con el siguiente gato la cuenta vuelve a empezar. Los gatos que coloca una pista o el gatito también cuentan.',
   // ── Phase 2d: the Score column, the mouse, the start toast, the gear's dot (AI draft 2026-10-10, unreviewed) ──
   'game.score': 'Puntos',
+  'game.combo': 'Combo x{count}',
   'common.settings.new': 'Ajustes, hay novedades',
   'game.tool.mouse': 'Ratoncito',
   'game.tool.mouse.a11y': 'Ratoncito: tacha {count} casillas sin gato',

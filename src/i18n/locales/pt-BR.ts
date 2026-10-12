@@ -392,6 +392,7 @@ export const catalog: LocaleCatalog = {
   'howto.levelPoints': 'Cada gato que você encontra vale pontos, e cada gato seguido sem erros vale mais que o anterior. Um erro nunca tira pontos, mas o próximo gato começa a contagem de novo. Gatos colocados por uma dica ou pelo gatinho também contam.',
   // ── Phase 2d: the Score column, the mouse, the start toast, the gear's dot (AI draft 2026-10-10, unreviewed) ──
   'game.score': 'Pontos',
+  'game.combo': 'Combo x{count}',
   'common.settings.new': 'Ajustes, há novidades',
   'game.tool.mouse': 'Ratinho',
   'game.tool.mouse.a11y': 'Ratinho: risca {count} casas sem gato',

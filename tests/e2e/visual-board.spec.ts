@@ -159,8 +159,9 @@ test.describe('Phase 2d visual review: the board (look-spec §1.8–§1.10, §5.
     }));
     expect(look).toEqual({ fill: 'rgb(255, 255, 255)', stroke: 'none', edge: 'none' });
     // the HUD the capture shows (DOM contract, look-spec §4.6): three fish, the score of two cats in a row
+    // (the second at combo x2 with 3 fish: 576 + 672 + 67.2 × 1 × 3)
     await expect(page.locator('.pill--lives .life[data-full]')).toHaveCount(3);
-    await expect(page.locator('.points-pill__n')).toHaveText('1,248');
+    await expect(page.locator('.points-pill__n')).toHaveText('1,450');
     await page.waitForTimeout(400);
     await boardShot(page, 'game');
   });

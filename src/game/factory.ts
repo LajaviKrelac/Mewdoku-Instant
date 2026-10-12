@@ -6,8 +6,8 @@
 import type { Puzzle } from '../engine/types';
 import { rulesFor } from './modes';
 import { decodeCells, encodeCells, isNonNegSafeInt, validateSlot } from './save-fields';
-import { runTotal } from './scoring';
-import { CellState, type GameState, type InProgressV2, type ModeId, type PointsRule, type RuleFlags } from './types';
+import { comboRunMax, runTotal } from './scoring';
+import { CellState, type ComboRule, type GameState, type InProgressV2, type ModeId, type PointsRule, type RuleFlags } from './types';
 
 /**
  * Fresh attempt: givens only, full hearts, counters 0, empty move log, status 'ready' (04 §4.2 RETRY).
@@ -39,6 +39,9 @@ export function newGame(puzzle: Puzzle, mode: ModeId, rules: RuleFlags = rulesFo
     levelPoints: 0,
     catStreak: 0,
     scoredRows: 0,
+    combo: 0,
+    comboEndsMs: 0,
+    comboWindowMs: 0,
   };
 }
 
@@ -77,7 +80,11 @@ export function restoreGame(puzzle: Puzzle, slot: InProgressV2, rules?: RuleFlag
     openHint: null,
     moves: [],
     // Phase 2c.1 §3.2.3: levelPoints, catStreak, scoredRows (from the slot, or derived).
-    ...slotPoints(puzzle, cells, slot, flags.points),
+    ...slotPoints(puzzle, cells, slot, flags.points, flags.combo, flags.heartsPerAttempt),
+    // The combo is not saved: a restored attempt starts without one.
+    combo: 0,
+    comboEndsMs: 0,
+    comboWindowMs: 0,
   };
 }
 
@@ -122,13 +129,17 @@ function rowMasks(n: number, cells: Readonly<Uint8Array>): { cat: number; given:
  * [DECISION] (D20): scoredRows = the rows holding a Cat (k), and with 0 mistakes catStreak = k and
  * points = runTotal(k) (exact unless a cat had been removed); with mistakes, catStreak = 0 and points
  * = k × first, the lowest total those k cats can have, so a restore never inflates points. Deriving
- * is not an error (no RangeError; the board is kept).
+ * is not an error (no RangeError; the board is kept). With a `combo` rule (user, 2026-10-12) a run's
+ * upper bound is comboRunMax with `lives` = the attempt's full fish (every cat at its highest combo,
+ * no fish lost) instead of runTotal, and (d) becomes runTotal(k) ≤ points ≤ comboRunMax(k).
  */
-export function slotPoints(puzzle: Puzzle, cells: Readonly<Uint8Array>, slot: InProgressV2, rule: PointsRule): AttemptPoints {
+export function slotPoints(puzzle: Puzzle, cells: Readonly<Uint8Array>, slot: InProgressV2, rule: PointsRule, combo?: ComboRule | null, lives = 0): AttemptPoints {
   const n = puzzle.n;
   const rows = rowMasks(n, cells);
   /** The lowest total of k scored cats whose last run is s long: runTotal(s) + (k − s) × first. */
   const low = (s: number, k: number): number => runTotal(s, rule) + (k - s) * rule.first;
+  /** The highest total of a run of k cats: every cat at its highest combo with every fish (runTotal(k) with no combo). */
+  const high = (k: number): number => comboRunMax(k, rule, combo, lives);
   const { points, catStreak, scoredRows } = slot;
   if (isNonNegSafeInt(points) && isNonNegSafeInt(catStreak) && isNonNegSafeInt(scoredRows)) {
     const k = popcount(scoredRows);
@@ -138,8 +149,8 @@ export function slotPoints(puzzle: Puzzle, cells: Readonly<Uint8Array>, slot: In
       (scoredRows & rows.given) === 0 &&
       catStreak <= k &&
       low(catStreak, k) <= points &&
-      points <= runTotal(k - catStreak, rule) + runTotal(catStreak, rule) &&
-      // (d): with catStreak = k the two bounds meet, so points = runTotal(k) is already checked.
+      points <= high(k - catStreak) + high(catStreak) &&
+      // (d): with catStreak = k and no combo the two bounds meet, so points = runTotal(k) is already checked.
       (slot.mistakes !== 0 || catStreak === k);
     if (ok) return { levelPoints: points, catStreak, scoredRows };
   }

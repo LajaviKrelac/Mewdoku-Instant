@@ -375,6 +375,7 @@ export const catalog: LocaleCatalog = {
   'howto.levelPoints': 'ねこを見つけるたびにポイントがもらえます。ミスなしで続けて見つけると、1匹ごとに前よりも多くもらえます。ミスしてもポイントは減りませんが、次のねこから数え直しになります。ヒントやこねこが置いたねこも数えます。',
   // ── Phase 2d: the Score column, the mouse, the start toast, the gear's dot (AI draft 2026-10-10, unreviewed) ──
   'game.score': 'スコア',
+  'game.combo': 'コンボ x{count}',
   'common.settings.new': '設定（新しい項目があります）',
   'game.tool.mouse': 'ねずみ',
   'game.tool.mouse.a11y': 'ねずみ：ねこのいないマス{count}つにバツをつけます',

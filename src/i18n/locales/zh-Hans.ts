@@ -375,6 +375,7 @@ export const catalog: LocaleCatalog = {
   'howto.levelPoints': '每找到一只猫都能得到积分，连续找到且没有失误时，每只猫都比前一只得分更多。失误不会扣分，但下一只猫会重新开始计数。提示或猫咪放下的猫也算在内。',
   // ── Phase 2d: the Score column, the mouse, the start toast, the gear's dot (AI draft 2026-10-10, unreviewed) ──
   'game.score': '得分',
+  'game.combo': '连击 x{count}',
   'common.settings.new': '设置，有新内容',
   'game.tool.mouse': '小老鼠',
   'game.tool.mouse.a11y': '小老鼠：划掉{count}个没有猫的格子',

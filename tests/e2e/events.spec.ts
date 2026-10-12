@@ -15,7 +15,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { E2EHooks } from '../../src/app/boot';
 import { defaults } from '../../src/game/save';
-import { periodKeyAt, pointsRuleFor, runTotal } from '../../src/game/scoring';
+import { comboRuleFor, comboRunMax, periodKeyAt, pointsRuleFor } from '../../src/game/scoring';
 import type { SaveData } from '../../src/game/types';
 import { watchStrings } from './helpers/strings';
 
@@ -94,7 +94,8 @@ test('Lantern Walk: card → event screen → puzzle 1 → win → victory 1 / 2
   expect(r.level.left).toBeGreaterThanOrEqual(r.back.right - 0.5);
   expect(r.score.right).toBeLessThanOrEqual(r.gear.left + 0.5);
   const n = (await page.evaluate(() => (window as TestWindow).__mewdoku?.state()?.puzzle.n)) ?? 0;
-  const total = runTotal(n, pointsRuleFor('event'));
+  const lives = (await page.evaluate(() => (window as TestWindow).__mewdoku?.state()?.hearts)) ?? 0;
+  const total = comboRunMax(n, pointsRuleFor('event'), comboRuleFor('event'), lives); // the hook's solve chains the combo
 
   await page.evaluate(() => (window as TestWindow).__mewdoku?.solve());
   await expect(pts).toHaveAttribute('aria-label', `Level points: ${total.toLocaleString('en-US')}`);

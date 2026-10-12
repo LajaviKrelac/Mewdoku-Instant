@@ -5,13 +5,20 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cfg, mergeConfig } from '../../../src/app/config';
 import * as layout from '../../../src/ui/board/layout';
-import { cellsAlongSegment, computeLayout, evenInsets, gapFor, hitTest, readViewport, type GameLayout } from '../../../src/ui/board/layout';
+import { cellsAlongSegment, computeLayout as computeGameLayout, evenInsets, gapFor, hitTest, readViewport, type GameLayout, type LayoutInput } from '../../../src/ui/board/layout';
 
 const G = cfg.layout.game;
+/**
+ * The stack measured on the user's recording (look-spec §1.1): every table below is that stack, so it
+ * runs without the combo bar's row (layout.game.combo, user 2026-10-12) and with the three gaps it
+ * takes its height from at their measured values; the row has its own tests at the end.
+ */
+const MEASURED = mergeConfig({ layout: { game: { combo: 0, barToPills: 10.3, rulesToBoard: 25.7, boardToTools: 53 } } });
+const computeLayout = (input: LayoutInput, c = MEASURED): GameLayout => computeGameLayout(input, c);
 
 /** Row tops in viewport px, from the layout (look-spec §1.1 table columns). */
 function rows(g: GameLayout): { pills: number; board: number; discs: number; banner: number } {
-  const pills = g.top + g.bar + g.gaps.barToPills;
+  const pills = g.top + g.bar + g.combo + g.gaps.barToPills;
   const board = pills + g.pills + g.gaps.pillsToRules + g.rules + g.gaps.rulesToBoard;
   const discs = board + g.board + g.gaps.boardToTools;
   return { pills, board, discs, banner: discs + g.tools + g.gaps.toolsToBanner };
@@ -86,7 +93,7 @@ describe('computeLayout (look-spec §1.1)', () => {
     expect(g.bar).toBeCloseTo(G.bar * g.s, 6);
     expect(g.pills).toBeCloseTo(G.pills * g.s, 6);
     expect(g.tools).toBeCloseTo(G.tools * g.s, 6);
-    expect(g.gaps.boardToTools).toBeCloseTo(G.boardToTools * g.s, 6);
+    expect(g.gaps.boardToTools).toBeCloseTo(MEASURED.layout.game.boardToTools * g.s, 6);
     expect(g.radius).toBeCloseTo(G.cardRadius * g.s, 6);
     // the padding: at least round(cardPad × s), plus half of what the whole slots leave of the card (audit B11)
     expect(g.pad).toBeGreaterThanOrEqual(Math.max(3, Math.round(G.cardPad * g.s)));
@@ -336,5 +343,25 @@ describe('the dev safe-area override (look-spec §1.1)', () => {
     const src = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../../../src/ui/board/layout.ts'), 'utf8');
     expect(src).toContain('max(env(safe-area-inset-top,0px),var(--dev-safe-top,0px))');
     expect(src).toContain('max(env(safe-area-inset-bottom,0px),var(--dev-safe-bottom,0px))');
+  });
+});
+
+describe('the combo bar\'s row (user, 2026-10-12)', () => {
+  it('is reserved under the bar at every size and costs the board nothing: the same s, slot and card as the measured stack', () => {
+    for (const [vw, vh, banner, n] of [[402, 874, true, 10], [390, 844, false, 10], [320, 568, true, 12], [320, 568, false, 12], [1280, 800, false, 10]] as const) {
+      const input = { vw, vh, safeTop: 0, safeBottom: 0, n, banner };
+      const g = computeGameLayout(input);
+      const m = computeLayout(input);
+      expect(g.combo).toBeCloseTo(G.combo * g.s, 9);
+      expect(G.combo).toBeGreaterThan(0);
+      // Pills sit under the bar and the combo row; nothing overflows the viewport.
+      const r = rows(g);
+      expect(r.pills).toBeCloseTo(g.top + g.bar + g.combo + g.gaps.barToPills, 9);
+      expect(r.discs + g.tools + g.gaps.toolsToBanner + g.band + g.gaps.bottom).toBeLessThanOrEqual(vh + 0.5);
+      expect(g.s).toBeCloseTo(m.s, 9);
+      expect(g.slot).toBe(m.slot);
+      expect(g.board).toBeCloseTo(m.board, 9);
+      expect(g.top).toBeCloseTo(m.top, 9);
+    }
   });
 });
