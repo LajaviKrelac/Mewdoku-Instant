@@ -4,8 +4,10 @@
 // 2026-10-12, D-2e-24: a heart on a computer player's row (slot ≥ 9000) is an ordinary hearts row under the
 // same rules (one per row, the same cap); its shown count is the rival's built-in hearts plus the real ones.
 // Computer players never give hearts, so "hearts from other players" stays real.
+// 2026-10-12, r2: in an open r2 bracket the live rivals come from a replay of the real joins (core/table.ts
+// liveRivals), so a heart on a rival reads the bracket's member rows in place of the one member read.
 import { validateHeartRequest, type HeartResponse } from '../contract';
-import { isRivalSlot } from '../core/rivals';
+import { isRivalSlot, parseRivalsTag } from '../core/rivals';
 import { rivalHeartTarget } from '../core/table';
 import { authenticate } from '../http/auth';
 import type { Ctx } from '../http/context';
@@ -21,13 +23,16 @@ export async function postHeart(ctx: Ctx): Promise<Response> {
   if (!s.cfg.hearts.enabled) return fail('not_found', 'hearts are off');
   const b = await s.store.getBracket(bracketId);
   if (!b || b.ends_at + s.cfg.bracket.endedViewMs <= now) return fail('not_found', 'no such bracket');
-  const me = await s.store.getMember(bracketId, player.key);
+  // 2026-10-12, r2: the same statement count (members replaces getMember); the members are the replay's input.
+  const replay = isRivalSlot(slot) && b.finalized_at === null && parseRivalsTag(b.rivals)?.preset === 'r2';
+  const members = replay ? await s.store.members(bracketId) : null;
+  const me = members ? (members.find((m) => m.player_key === player.key) ?? null) : await s.store.getMember(bracketId, player.key);
   if (!me) return fail('not_member', 'not a member of this bracket');
   if (slot === me.slot && !s.cfg.hearts.allowSelf) return fail('not_found', 'own row');
   const cap = s.cfg.hearts.maxGivenPerBracket;
   if (isRivalSlot(slot)) {
-    // No extra read: K and the rival's script come from the bracket row read above.
-    const target = rivalHeartTarget(b, slot, now, s.cfg.rivals.hide);
+    // No extra read: K and the rival's script come from the bracket row read above (r2: and the member rows).
+    const target = rivalHeartTarget(b, slot, now, s.cfg.rivals.hide, members ?? []);
     if (!target) return fail('not_found', 'no such row');
     const rh = await s.store.giveRivalHeart(bracketId, me.slot, player.key, slot, target.maxNextSlot, now, cap);
     if (!rh.added) {

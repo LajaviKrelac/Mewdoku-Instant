@@ -7,6 +7,7 @@ import { dirname, join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { NICK_WORDS_V1, RETIRED_V1 } from '../../src/contract/words';
 import { rivalAt, rivalNames, rivalRoster } from '../../src/core/rivals';
+import { liveRivals } from '../../src/core/table';
 import worker from '../../src/worker';
 import type { Env } from '../../src/env';
 import { NodeSqliteDb } from '../../src/store/drivers/node-sqlite';
@@ -54,11 +55,11 @@ describe('worker entry', () => {
 });
 
 describe('computer rivals in the Worker (2026-10-12, D-2e-24)', () => {
-  it('migration 0003 is applied: brackets.rivals, final_rivals, final_real', () => {
+  it('migrations 0003 and 0004 are applied: brackets.rivals, final_rivals, final_real, deleted_joins (2026-10-12, r2)', () => {
     const db = new NodeSqliteDb(':memory:');
     db.migrate(MIGRATIONS);
     const cols = (db.raw.prepare('PRAGMA table_info(brackets)').all() as { name: string; type: string }[]).map((c) => `${c.name}:${c.type}`);
-    expect(cols).toEqual(expect.arrayContaining(['rivals:TEXT', 'final_rivals:TEXT', 'final_real:INTEGER']));
+    expect(cols).toEqual(expect.arrayContaining(['rivals:TEXT', 'final_rivals:TEXT', 'final_real:INTEGER', 'deleted_joins:TEXT']));
   });
 
   it('the r1 golden fixture (design §3.8) computes the same here: run inside workerd, this proves workerd and Node agree', () => {
@@ -75,6 +76,23 @@ describe('computer rivals in the Worker (2026-10-12, D-2e-24)', () => {
       { nickname: 'Calm Pumpkin 6', avatar: 6 },
       { nickname: 'Brave Noodle 85', avatar: 4 },
     ]);
+  });
+
+  // 2026-10-12, r2: the r2 golden (test/unit/rivals.spec.ts section 12) here too, with its replay of the real joins.
+  it('the r2 golden fixture computes the same here, its replay of the real joins included', () => {
+    const O = Date.parse('2026-10-12T08:00:00Z');
+    const b = { opened_at: O, join_until: O + 2 * 3_600_000, ends_at: O + 86_400_000, max_members: 50, next_slot: 5, deleted_joins: null };
+    const r = rivalRoster('r2:k3j9x0a1b20a:100:64:64', b);
+    expect(r && [r.preset, r.size, r.rivals.length, r.sigma, r.quiet, r.cohort]).toEqual(['r2', 50, 49, 105, false, 10]);
+    const x = r!.rivals[0]!;
+    expect([x.base, x.pace, x.winsPerDay, x.wins.map((w) => [w.t - O, w.f])]).toEqual([3, 0, 4, [[1352208, 3], [1438563, 3], [24549372, 2]]]);
+    expect(rivalAt(x, b.join_until, O + 3_600_000)).toEqual({ points: 9, scoredAt: O + 1438563, hearts: 0 });
+    expect(r!.rivals[48]!.arrivalAt - O).toBe(6888901);
+    const joined = [0, 30, 60, 100, 119].map((m, slot) => ({ slot, joined_at: O + m * 60_000 }));
+    expect(liveRivals(r!, b, joined).retired.map((q) => [q.script.slot, q.at === null ? null : (q.at - O) / 60_000])).toEqual([[9026, 119], [9046, 100], [9047, 60], [9048, 30]]);
+    // 2026-10-12, r2 (review fix): slot 4 deleted, its join time kept in deleted_joins: the same replay
+    const kept = { ...b, deleted_joins: `4:${O + 119 * 60_000}` };
+    expect(liveRivals(r!, kept, joined.slice(0, 4)).retired.map((q) => [q.script.slot, q.at === null ? null : (q.at - O) / 60_000])).toEqual([[9026, 119], [9046, 100], [9047, 60], [9048, 30]]);
   });
 
   it('RIVALS=on through the Worker entry: a session carries the disclosure line', async () => {

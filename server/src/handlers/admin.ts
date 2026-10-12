@@ -9,7 +9,7 @@ import { generateNick, renderNick } from '../core/nickname';
 import { sha256 } from '../core/crypto';
 import { newRowId } from '../core/ids';
 import { decodeFinalRivals, isRivalSlot, RIVAL_SLOT_BASE, rivalAt, rivalRoster } from '../core/rivals';
-import { finalPlan, finalTable, liveRivalCountOf, liveTable } from '../core/table';
+import { finalPlan, finalTable, liveRivals, liveTable } from '../core/table';
 import { authAdmin } from '../http/auth';
 import type { Ctx } from '../http/context';
 import { fail, json, noContent } from '../http/errors';
@@ -49,6 +49,10 @@ async function playerByCode(ctx: Ctx, code: string): Promise<PlayerRow> {
  * a past `at` is not a rebuild of the table they saw then. Admin always shows and labels the computer players
  * (H-9), under the emergency `rivals.hide` too: a final bracket's snapshot is what refinalize re-ranks with
  * whatever `hide` says (finalPlan), and `bracket.rivals.hidden` says that players currently see none of them.
+ * 2026-10-12, r2: `rivals.preset` names the tag's preset; in an r2 bracket the live/retired split is the replay of
+ * the real joins (core/table.ts liveRivals), each retired rival carries `retiredAt` (the join that retired it; absent
+ * when that join's time is not in the reads: a deletion between the bracket read and the members read, never a guess
+ * shown as a join time), and rival rows carry `winsPerDay` (their `paceTenthsPerHour` is 0: r2 has no steady trickle).
  */
 async function adminBracketView(ctx: Ctx, id: string): Promise<Response> {
   const s = ctx.s;
@@ -68,7 +72,9 @@ async function adminBracketView(ctx: Ctx, id: string): Promise<Response> {
   // hide = false: admin lists the computer players under `hide` too (H-9; `rivals.hidden` reports the switch).
   const table = final && !live ? finalTable(b, members, false) : liveTable(b, members, at, false);
   const roster = rivalRoster(b.rivals, b);
-  const k = roster ? liveRivalCountOf(roster, b, members) : 0; // the same K as the table (a join between the reads)
+  // The same live set as the table (a join between the reads; 2026-10-12, r2: the same replay of the joins).
+  const lr = roster ? liveRivals(roster, b, members) : null;
+  const k = lr ? lr.live.length : 0;
   const bySlot = new Map(members.map((m) => [m.slot, m]));
   const rows = table.map((r) => {
     const common = { rank: r.rank, kind: r.kind, slot: r.slot, nickname: r.nickname, avatarId: r.avatar, points: r.points, scoredAt: r.scoredAt };
@@ -83,7 +89,7 @@ async function adminBracketView(ctx: Ctx, id: string): Promise<Response> {
       ...common,
       hearts: r.hearts + real,
       index,
-      ...(script ? { arrivalAt: script.arrivalAt, paceTenthsPerHour: script.pace } : {}),
+      ...(script ? { arrivalAt: script.arrivalAt, paceTenthsPerHour: script.pace, ...(script.winsPerDay !== undefined ? { winsPerDay: script.winsPerDay } : {}) } : {}),
       builtInHearts: r.hearts,
       realHearts: real,
     };
@@ -92,7 +98,7 @@ async function adminBracketView(ctx: Ctx, id: string): Promise<Response> {
   const snap = final ? decodeFinalRivals(b.final_rivals, b) : null;
   let topFinal: number | null = null;
   if (snap !== null && snap.length > 0) topFinal = Math.max(...snap.map((x) => x.points));
-  else if (roster && k > 0) topFinal = Math.max(...roster.rivals.slice(0, k).map((x) => rivalAt(x, b.join_until, b.ends_at)?.points ?? 0));
+  else if (lr && k > 0) topFinal = Math.max(...lr.live.map((x) => rivalAt(x, b.join_until, b.ends_at)?.points ?? 0));
   return json({
     bracket: {
       id: b.id,
@@ -109,7 +115,7 @@ async function adminBracketView(ctx: Ctx, id: string): Promise<Response> {
       finalReal: b.final_real,
       rivals: roster
         ? {
-            preset: 'r1',
+            preset: roster.preset,
             strength: roster.strength,
             sigma: roster.sigma,
             quiet: roster.quiet,
@@ -123,7 +129,7 @@ async function adminBracketView(ctx: Ctx, id: string): Promise<Response> {
     },
     at,
     rows,
-    retiredRivals: roster ? roster.rivals.slice(k).map((x) => ({ slot: x.slot, index: x.index, arrivalAt: x.arrivalAt })) : [],
+    retiredRivals: lr ? lr.retired.map((x) => ({ slot: x.script.slot, index: x.script.index, arrivalAt: x.script.arrivalAt, ...(x.at !== null ? { retiredAt: x.at } : {}) })) : [],
     hiddenPlayers: members.filter((m) => m.hidden !== 0).map((m) => ({ slot: m.slot, code: m.code, hidden: m.hidden })),
     serverTime: now,
   });

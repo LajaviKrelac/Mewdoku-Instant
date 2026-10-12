@@ -351,7 +351,8 @@ export function loadConfig(vars: ConfigVars, base: ServerConfig = DEFAULT_CONFIG
  * `rivals` after the variables (2026-10-12, D-2e-24): RIVALS=on|off sets `enabled`; a production deploy runs
  * rivals only when RIVALS says "on" itself (like WEB_MODE=anon: a deliberate switch, never a CONFIG_OVERRIDES
  * value); `pools` keeps 'fb' and 'web'; `strength` is an integer 50…200 (else 100); and preset r1 assumes one
- * point per fish and at most 3 fish a win, so any other scoring turns rivals off.
+ * point per fish and at most 3 fish a win, so any other scoring turns rivals off. 2026-10-12, r2: preset r2 (new
+ * brackets) assumes the same (its wins are 1–3 fish too); the problem text still names r1, as it always has.
  */
 function rivalsConfig(cfg: ServerConfig, vars: ConfigVars, deployEnv: DeployEnv, problems: string[]): ServerConfig['rivals'] {
   let enabled = cfg.rivals.enabled;

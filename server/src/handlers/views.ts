@@ -12,7 +12,7 @@ import type { ServerConfig } from '../core/config';
 import { rewardId, wirePool } from '../core/ids';
 import { nextNickChange } from '../core/nickname';
 import { decodeFinalRivals, isRivalSlot, parseRivalsTag } from '../core/rivals';
-import { finalPlan, finalTable, liveTable, withRealHearts, type TableRow } from '../core/table';
+import { finalPlan, finalTable, joinTimesKnown, liveTable, withRealHearts, type TableRow } from '../core/table';
 import type { Services } from '../services';
 import type { BracketRow, PlayerRow, RewardRow } from '../store/sql-store';
 
@@ -70,13 +70,21 @@ export function playerView(p: PlayerRow, cfg: ServerConfig, now: number): Player
  * 2026-10-12, D-2e-24: the plan (ranks, rewards, totals) comes from core/table.ts finalPlan, shared with admin
  * refinalize: the table at ends_at (so lazy, cron and concurrent finalisers freeze the same standings), every
  * row counted toward minMembers, a place held by a computer player never paid and never passed down.
+ * 2026-10-12, r2: a deletion that commits between the bracket read and the members read leaves the bracket row
+ * without that join's time (core/table.ts joinTimesKnown); the bracket row is then read once more (no join can
+ * commit after ends_at, so that read agrees with the members), so the frozen rivals never come from a guess.
  */
 export async function finalizeIfDue(s: Services, bracketId: string, now: number): Promise<boolean> {
-  const b = await s.store.getBracket(bracketId);
+  let b = await s.store.getBracket(bracketId);
   if (!b) return false;
   if (b.finalized_at !== null) return true;
   if (b.ends_at + s.cfg.bracket.finalizeGraceMs > now) return false;
   const members = await s.store.members(bracketId);
+  if (!joinTimesKnown(b, members)) {
+    b = await s.store.getBracket(bracketId);
+    if (!b) return false;
+    if (b.finalized_at !== null) return true;
+  }
   const plan = finalPlan(b, members, s.cfg, now, true);
   const done = await s.store.finalize(bracketId, plan.ranks, plan.rewards, now, plan.totals);
   if (done) {

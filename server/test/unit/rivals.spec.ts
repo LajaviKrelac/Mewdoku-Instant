@@ -2,6 +2,8 @@
 // the purity grep, the golden fixture (FROZEN: add r2, never edit r1), the order guarantee inside the join
 // window, monotonicity, the K rule, names, the calibration bands, the snapshot codec, the combined tables,
 // the finalisation plan, rival heart targets, and the switches (config + who gets rivals).
+// 2026-10-12, r2: section 12 tests preset r2 (new brackets) the same way, plus its replay of the real joins and its
+// calibration bands; sections 1–11 keep testing r1 (brackets() keeps their r1 tags).
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -25,10 +27,23 @@ import {
   rivalAt,
   rivalNames,
   rivalRoster,
+  rivalSleep,
   type FinalRival,
   type Roster,
 } from '../../src/core/rivals';
-import { finalPlan, finalTable, freezeTable, liveRivalCountOf, liveTable, pointsForRank, rivalHeartTarget, withRealHearts, type RankedRow } from '../../src/core/table';
+import {
+  finalPlan,
+  finalTable,
+  freezeTable,
+  joinTimesKnown,
+  liveRivalCountOf,
+  liveRivals,
+  liveTable,
+  pointsForRank,
+  rivalHeartTarget,
+  withRealHearts,
+  type RankedRow,
+} from '../../src/core/table';
 import { makeServices, rivalsForPool, rivalsNoteFor, type DevState } from '../../src/services';
 import type { BracketRow, MemberRow } from '../../src/store/rows';
 import { DAY, HOUR, SERVER_DIR } from '../helpers/harness';
@@ -58,6 +73,7 @@ function bracket(over: Partial<BracketRow> = {}): BracketRow {
     rivals: GOLD_TAG,
     final_rivals: null,
     final_real: null,
+    deleted_joins: null,
     ...over,
   };
 }
@@ -89,12 +105,16 @@ function int(rng: Rng, lo: number, hi: number): number {
   return lo + (u % (hi - lo + 1));
 }
 
-/** n tagged brackets: rolling ones opened at varied times of day (so sleep windows vary) and, every 10th, a utc_day one. */
-function brackets(n: number, seed: number, utcDay = true): BracketRow[] {
+/**
+ * n tagged brackets: rolling ones opened at varied times of day (so sleep windows vary) and, every 10th, a utc_day one.
+ * 2026-10-12, r2: newRivalsTag writes r2 now; the r1 sections keep their exact r1 tags (the same seed draws, the
+ * prefix set back to r1), the r2 sections pass preset 'r2'.
+ */
+function brackets(n: number, seed: number, utcDay = true, preset: 'r1' | 'r2' = 'r1'): BracketRow[] {
   const rng = seededRng(seed);
   const out: BracketRow[] = [];
   for (let g = 0; g < n; g++) {
-    const tag = newRivalsTag(100, rng, NICK_WORDS_V1);
+    const tag = `${preset}${newRivalsTag(100, rng, NICK_WORDS_V1).slice(2)}`;
     if (utcDay && g % 10 === 9) {
       const day = Date.parse('2026-10-12T00:00:00Z');
       const opened = day + int(rng, 0, 21 * 60) * MIN + int(rng, 0, MIN - 1);
@@ -557,9 +577,10 @@ describe('the tag and the final snapshot (design §3.1, §5.2)', () => {
   it('the tag: written with the strength and list lengths, parsed strictly', () => {
     const tag = newRivalsTag(120, seededRng(5), NICK_WORDS_V1);
     expect(tag).toMatch(RIVAL_TAG_RE);
-    expect(tag).toMatch(/^r1:[0-9a-z]{12}:120:64:64$/);
+    expect(tag).toMatch(/^r2:[0-9a-z]{12}:120:64:64$/); // 2026-10-12, r2: new brackets are tagged r2
     expect(newRivalsTag(120, seededRng(6), NICK_WORDS_V1)).not.toBe(tag);
-    expect(parseRivalsTag(GOLD_TAG)).toEqual({ seed: 'k3j9x0a1b20a', strength: 100, adjN: 64, nounN: 64 });
+    expect(parseRivalsTag(GOLD_TAG)).toEqual({ preset: 'r1', seed: 'k3j9x0a1b20a', strength: 100, adjN: 64, nounN: 64 });
+    expect(parseRivalsTag('r2:k3j9x0a1b20a:100:64:64')).toEqual({ preset: 'r2', seed: 'k3j9x0a1b20a', strength: 100, adjN: 64, nounN: 64 });
     for (const bad of [
       null,
       undefined,
@@ -567,7 +588,9 @@ describe('the tag and the final snapshot (design §3.1, §5.2)', () => {
       'r1:K3J9X0A1B20A:100:64:64',
       'r1:k3j9x0a1b20:100:64:64',
       'r1:k3j9x0a1b20aa:100:64:64',
-      'r2:k3j9x0a1b20a:100:64:64',
+      'r3:k3j9x0a1b20a:100:64:64', // 2026-10-12, r2: r2 parses now; an unknown preset does not
+      'R2:k3j9x0a1b20a:100:64:64',
+      'r2:k3j9x0a1b20a:100:0:64',
       'r1:k3j9x0a1b20a:9:64:64',
       'r1:k3j9x0a1b20a:1000:64:64',
       'r1:k3j9x0a1b20a:100:64',
@@ -959,5 +982,483 @@ describe('CPU (design §3.7: about 0.12 ms in Node)', () => {
       times.push(performance.now() - t0);
     }
     expect(median(times)).toBeLessThan(2);
+  });
+});
+
+// ── 12. preset r2 (2026-10-12, r2) ────────────────────────────────────────────────────────────────────────
+// New brackets are tagged r2: every point is a win from the arrival on, in short sessions with sleep windows, and a
+// replay of the real joins decides which rivals are live (core/table.ts liveRivals). The r1 sections above keep
+// testing r1 (their brackets() tags are r1); these test r2 the same way: golden, purity, monotone, the replay, the
+// shared live set on every path, calibration bands and CPU.
+
+/**
+ * The r2 golden fixture, derived from the r2 code on 2026-10-12 (the r1 golden's seed and bracket, preset r2): the
+ * bracket draws are r1's (T 50, σ 105, not quiet, c0 10) and so are the names; the scripts are r2's. Like r1's it
+ * is FROZEN once shipped: a change to the algorithm is a new preset (r3), never an edit of r2.
+ */
+const GOLD_R2 = 'r2:k3j9x0a1b20a:100:64:64';
+const FROZEN_R2 = 'presets are frozen: add r3, never edit r2';
+const r2Bracket = (over: Partial<BracketRow> = {}): BracketRow => bracket({ rivals: GOLD_R2, ...over });
+/** Joins of slots 1…n at the given minutes after opened_at (slot 0 at opened_at), for the replay. */
+const joinsAt = (minutes: readonly number[]): MemberRow[] => [
+  member(0, { joined_at: O }),
+  ...minutes.map((m, i) => member(i + 1, { joined_at: O + m * MIN, scored_at: O + m * MIN, points: 1 })),
+];
+const retiredOf = (r: Roster, b: BracketRow, ms: readonly MemberRow[]): (number | null)[][] =>
+  liveRivals(r, b, ms).retired.map((x) => [x.script.slot, x.at === null ? null : (x.at - O) / MIN]);
+
+describe('r2 golden fixture (2026-10-12, r2)', () => {
+  const b = r2Bracket();
+  const r = roster(b);
+  it('bracket parameters: r1 draws for T, σ, quiet and c0; slots 9000…9048', () => {
+    expect([r.preset, r.size, r.rivals.length, r.sigma, r.quiet, r.cohort], FROZEN_R2).toEqual(['r2', 50, 49, 105, false, 10]);
+    expect(r.rivals.map((x) => x.slot)).toEqual(Array.from({ length: 49 }, (_, i) => 9000 + i));
+    expect(roster(bracket()).preset).toBe('r1');
+  });
+  it('rival 9000 (a casual: 4 wins a day, its arrival included) and 9001 (a regular: 9)', () => {
+    const x = r.rivals[0] as Roster['rivals'][number];
+    expect([x.arrivalAt - O, x.base, x.pace, x.winsPerDay, x.wins.length, x.hearts.length], FROZEN_R2).toEqual([0, 3, 0, 4, 3, 8]);
+    expect(x.wins.map((w) => [w.t - O, w.f]), FROZEN_R2).toEqual([
+      [1352208, 3],
+      [1438563, 3],
+      [24549372, 2],
+    ]);
+    const at = (h: number) => rivalAt(x, b.join_until, O + h * HOUR);
+    expect(at(0.25), FROZEN_R2).toEqual({ points: 3, scoredAt: O, hearts: 0 }); // the arrival win at opened_at
+    expect(at(1), FROZEN_R2).toEqual({ points: 9, scoredAt: O + 1438563, hearts: 0 }); // a session at +22 min, inside the join window
+    expect(at(6), FROZEN_R2).toEqual({ points: 9, scoredAt: O + 1438563, hearts: 2 });
+    expect(at(23), FROZEN_R2).toEqual({ points: 11, scoredAt: O + 24549372, hearts: 8 });
+    const y = r.rivals[1] as Roster['rivals'][number];
+    expect([y.base, y.winsPerDay], FROZEN_R2).toEqual([2, 9]);
+    expect(y.wins.map((w) => [Math.floor((w.t - O) / MIN), w.f]), FROZEN_R2).toEqual([
+      [43, 3], [44, 3], [46, 3], [49, 3],
+      [242, 1], [246, 2],
+      [433, 3], [436, 2],
+    ]);
+    expect(rivalAt(y, b.join_until, O + HOUR)?.points, FROZEN_R2).toBe(14);
+  });
+  it('arrivals: the opening group at opened_at, the others over the join window with ms; the present counts', () => {
+    const z = r.rivals[10] as Roster['rivals'][number];
+    expect([z.arrivalAt - O, z.base, z.winsPerDay, z.wins.length], FROZEN_R2).toEqual([357678, 3, 5, 4]);
+    const last = r.rivals[48] as Roster['rivals'][number];
+    expect([last.arrivalAt - O, last.base, last.winsPerDay, last.wins.length], FROZEN_R2).toEqual([6888901, 3, 6, 5]);
+    const present = (t: number) => r.rivals.filter((q) => rivalAt(q, b.join_until, t) !== null).length;
+    expect([present(O), present(O + 15 * MIN), present(O + HOUR), present(O + 2 * HOUR)], FROZEN_R2).toEqual([10, 16, 30, 49]);
+  });
+  it('names and avatars: the same as r1 for the same seed (they come from the key and the index)', () => {
+    const names = rivalNames(r, new Set(['velvet pounce 27']), NICK_WORDS_V1, RETIRED_V1);
+    expect([9000, 9001, 9002, 9003, 9048].map((s) => names.get(s)), FROZEN_R2).toEqual([
+      { nickname: 'Calm Pumpkin 6', avatar: 6 },
+      { nickname: 'Bouncy Comet 62', avatar: 2 },
+      { nickname: 'Sweet Fern 70', avatar: 8 },
+      { nickname: 'Cloudy Cupcake 74', avatar: 3 },
+      { nickname: 'Brave Noodle 85', avatar: 4 },
+    ]);
+  });
+  it('the whole bracket with the golden real player (15 wins, 39 fish): rivals move from the first minutes and overtake each other', () => {
+    const view = (h: number) => {
+      const t = O + h * HOUR;
+      const rows = liveTable(b, [goldPlayerAt(t)], t, false);
+      return { rows: rows.length, top: top5(rows), me: rows.find((x) => x.kind === 'player')?.rank };
+    };
+    expect(view(0.25), FROZEN_R2).toEqual({ rows: 17, top: ['ME:11', '9008:8', '9011:8', '9009:7', '9005:6'], me: 1 });
+    // No order guarantee: 9010 arrived after the opening group and leads it at 1 h.
+    expect(view(1), FROZEN_R2).toEqual({ rows: 31, top: ['9010:14', '9001:14', '9007:12', 'ME:11', '9008:11'], me: 4 });
+    expect(view(2), FROZEN_R2).toEqual({ rows: 50, top: ['9017:32', '9010:14', '9001:14', '9029:14', '9033:13'], me: 9 });
+    expect(view(6), FROZEN_R2).toEqual({ rows: 50, top: ['9017:45', '9045:29', '9002:24', 'ME:23', '9005:17'], me: 4 });
+    expect(view(12), FROZEN_R2).toEqual({ rows: 50, top: ['9017:60', '9003:59', '9002:40', '9045:29', '9005:27'], me: 7 });
+    expect(view(23), FROZEN_R2).toEqual({ rows: 50, top: ['9017:79', '9003:70', '9002:67', '9045:59', '9012:50'], me: 8 });
+    const plan = finalPlan(b, [goldPlayerAt(O + DAY)], DEFAULT_CONFIG, O + DAY + HOUR, true);
+    expect([plan.ranks, plan.rewards, plan.totals.finalMembers, plan.totals.finalReal, plan.rivalPlaces], FROZEN_R2).toEqual([[{ slot: 0, rank: 8 }], [], 50, 1, 3]);
+  });
+  it('the replay: joins of slots 1…4 at +30, +60, +100 and +119 min (slot 1 is the first that forces a removal: N = 49)', () => {
+    const b5 = r2Bracket({ next_slot: 5, members: 5 });
+    // +30, +60, +100: a rival that has not arrived yet, the latest arrival first; +119: all arrived, the lowest then.
+    expect(retiredOf(r, b5, joinsAt([30, 60, 100, 119])), FROZEN_R2).toEqual([
+      [9026, 119],
+      [9046, 100],
+      [9047, 60],
+      [9048, 30],
+    ]);
+    // Three joins at +119 min: the three lowest computer rows at that moment (1 point each; the latest scoredAt first).
+    const lowest = liveTable(r2Bracket(), [member(0)], O + 119 * MIN, false).filter((x) => x.kind === 'rival').slice(-3);
+    expect(lowest.map((x) => [x.slot, x.points]), FROZEN_R2).toEqual([[9002, 1], [9018, 1], [9026, 1]]);
+    expect(retiredOf(r, r2Bracket({ next_slot: 4, members: 4 }), joinsAt([119, 119, 119]))).toEqual(lowest.map((x) => [x.slot, 119]));
+  });
+});
+
+describe('r2 purity, determinism and monotonicity (2026-10-12, r2)', () => {
+  it('the same tag and bracket always give the same roster and the same live set; r1 and r2 of one seed share only the bracket draws', () => {
+    const b = r2Bracket({ next_slot: 5, members: 5 });
+    expect(JSON.stringify(rivalRoster(GOLD_R2, b))).toBe(JSON.stringify(rivalRoster(GOLD_R2, { ...b })));
+    const ms = joinsAt([30, 60, 100, 119]);
+    expect(liveRivals(roster(b), b, ms)).toEqual(liveRivals(roster(b), { ...b }, [...ms].reverse()));
+    const r1 = roster(bracket()),
+      r2 = roster(b);
+    expect([r1.size, r1.sigma, r1.quiet, r1.cohort]).toEqual([r2.size, r2.sigma, r2.quiet, r2.cohort]);
+    expect(r2.rivals.map((x) => x.wins.length)).not.toEqual(r1.rivals.map((x) => x.wins.length));
+    expect((rivalRoster('r2:k3j9x0a1b20b:100:64:64', b) as Roster).rivals.map((x) => x.arrivalAt)).not.toEqual(r2.rivals.map((x) => x.arrivalAt));
+  });
+
+  it('500 tags, every 5 min over [opened_at, ends_at + 1 h]: nothing falls, the present set only grows, every point a win', () => {
+    for (const b of brackets(500, 1201, true, 'r2')) {
+      const r = roster(b);
+      expect(r.preset).toBe('r2');
+      expect(r.rivals.filter((x) => x.arrivalAt === b.opened_at).length).toBeGreaterThanOrEqual(r.cohort);
+      for (const x of r.rivals) {
+        expect(x.arrivalAt).toBeGreaterThanOrEqual(b.opened_at);
+        expect(x.arrivalAt).toBeLessThan(b.join_until);
+        expect(x.pace).toBe(0);
+        expect([1, 2, 3]).toContain(x.base);
+        const lam = x.winsPerDay as number;
+        expect(lam >= 1 && lam <= Math.max(1, Math.floor((40 * r.sigma) / 100))).toBe(true);
+        // n = round(λ · (ends_at − arrival) / 24 h) − 1 more wins: never more (the ones at the end are dropped and re-placed)
+        const n = Math.max(0, Math.round((lam * (b.ends_at - x.arrivalAt)) / DAY) - 1);
+        expect(x.wins.length).toBeLessThanOrEqual(n);
+        let prevT = x.arrivalAt;
+        for (const w of x.wins) {
+          if (!(w.t > x.arrivalAt && w.t < b.ends_at - MIN && w.t >= prevT)) expect.fail(`${b.rivals}: win at ${w.t} outside (arrival, ends_at − 1 min) or out of order`);
+          if (![1, 2, 3].includes(w.f)) expect.fail(`fish ${w.f}`);
+          prevT = w.t;
+        }
+        for (const h of x.hearts) if (!(h >= x.arrivalAt && h < b.ends_at)) expect.fail(`heart at ${h}`);
+        let prev: { points: number; scoredAt: number; hearts: number } | null = null;
+        for (let at = b.opened_at; at <= b.ends_at + HOUR; at += 5 * MIN) {
+          const t = Math.min(at, b.ends_at);
+          const v = rivalAt(x, b.join_until, t);
+          if (v === null) {
+            if (prev !== null) expect.fail('a present rival vanished');
+            continue;
+          }
+          if (v.scoredAt > t || v.scoredAt < x.arrivalAt) expect.fail(`scoredAt ${v.scoredAt} outside [arrival, t=${t}]`);
+          if (prev && (v.points < prev.points || v.scoredAt < prev.scoredAt || v.hearts < prev.hearts)) expect.fail(`${b.rivals}: rival ${x.index} fell at ${t}`);
+          prev = v;
+        }
+        const end = rivalAt(x, b.join_until, b.ends_at);
+        expect(end).toEqual({ points: x.base + x.wins.reduce((s, w) => s + w.f, 0), scoredAt: x.wins.length > 0 ? (x.wins[x.wins.length - 1] as { t: number }).t : x.arrivalAt, hearts: x.hearts.length });
+      }
+    }
+  });
+
+  it('the wins a day are placed: over 500 tags at least 97 % of round(λ · span / day) − 1, sessions mostly while awake', () => {
+    let placed = 0,
+      wanted = 0,
+      later = 0,
+      asleep = 0;
+    for (const b of brackets(500, 1202, false, 'r2')) {
+      const r = roster(b);
+      for (const x of r.rivals) {
+        placed += x.wins.length;
+        wanted += Math.max(0, Math.round(((x.winsPerDay as number) * (b.ends_at - x.arrivalAt)) / DAY) - 1);
+        // 2026-10-12, r2 (review fix): the sleep window [start, start + minutes) of the UTC day, 7–9 h. Wins more than
+        // 30 min after the arrival (the quick first session skips the check) fall in it about 1 % of the time (a
+        // session that runs into it, or the 8th draw kept); the share is about 34 % if no draw avoided it, 94 % if
+        // the check were inverted.
+        const { start, minutes } = rivalSleep(r, x.index);
+        expect(start >= 0 && start < 1440 && minutes >= 420 && minutes <= 540, `sleep ${start}+${minutes}`).toBe(true);
+        for (const w of x.wins) {
+          if (w.t <= x.arrivalAt + 30 * MIN) continue;
+          later++;
+          if (((Math.floor(w.t / MIN) % 1440) - start + 1440) % 1440 < minutes) asleep++; // minute of the UTC day, from the sleep's start
+        }
+      }
+    }
+    expect(placed / wanted).toBeGreaterThanOrEqual(0.97);
+    expect(placed).toBeLessThanOrEqual(wanted);
+    expect(later).toBeGreaterThan(100_000);
+    expect(asleep / later, 'wins later than 30 min after the arrival that fall in the sleep window').toBeLessThan(0.03);
+  });
+
+  it('edges: max_members < 2 and a bracket shorter than a minute have no rivals; T ≤ max_members; utc_day spreads arrivals over its long window', () => {
+    expect(roster(r2Bracket({ max_members: 1 })).rivals).toEqual([]);
+    const short = roster(r2Bracket({ join_until: O + 30_000, ends_at: O + 59_999 }));
+    expect([short.size, short.rivals.length]).toEqual([0, 0]);
+    const small = r2Bracket({ max_members: 20 });
+    expect(roster(small).rivals.length).toBe(19);
+    expect(liveTable(small, [member(0)], small.join_until, false).length).toBe(20);
+    const day = Date.parse('2026-10-12T00:00:00Z');
+    const ud = r2Bracket({ mode: 'utc_day', opened_at: day + HOUR, join_until: day + 22 * HOUR, ends_at: day + DAY });
+    const ur = roster(ud);
+    expect(Math.max(...ur.rivals.map((x) => x.arrivalAt))).toBeGreaterThan(day + 12 * HOUR);
+    expect(liveTable(ud, [member(0)], ud.join_until, false).length).toBe(ur.size);
+  });
+});
+
+describe('r2 live set: the replay of the real joins (2026-10-12, r2)', () => {
+  it('random joins (no deletes): a forcing join retires exactly one rival, one not arrived yet (the latest arrival) when there is one, else the lowest row at that time; nothing returns; rows ≤ max_members', () => {
+    const rng = seededRng(1211);
+    let invisible = 0,
+      lowest = 0;
+    for (const b0 of brackets(120, 1212, true, 'r2')) {
+      const b = { ...b0 } as { -readonly [K in keyof BracketRow]: BracketRow[K] };
+      const r = roster(b);
+      let members: MemberRow[] = [member(0, { joined_at: b.opened_at, scored_at: b.opened_at, points: int(rng, 1, 3) })];
+      const times = Array.from({ length: int(rng, 0, 60) }, () => int(rng, b.opened_at, b.join_until - 1)).sort((x, y) => x - y);
+      const gone = new Set<number>();
+      for (const t of times) {
+        if (members.length >= b.max_members) break;
+        const before = liveRivals(r, b, members).live;
+        const tableBefore = liveTable(b, members, t, false).filter((x) => x.kind === 'rival');
+        const slot = b.next_slot;
+        members = [...members, member(slot, { joined_at: t, scored_at: t, points: int(rng, 1, 3) })];
+        b.next_slot += 1;
+        b.members = members.length;
+        const after = liveRivals(r, b, members).live;
+        const removed = before.filter((x) => !after.includes(x));
+        expect(after.filter((x) => !before.includes(x)), 'no rival comes back').toEqual([]);
+        expect(after.length).toBe(liveRivalCount(r, b));
+        if (slot < b.max_members - r.rivals.length) {
+          expect(removed, 'a join into a spare place retires no rival').toEqual([]);
+          continue;
+        }
+        expect(removed).toHaveLength(1);
+        const x = removed[0] as Roster['rivals'][number];
+        const notYet = before.filter((y) => y.arrivalAt > t);
+        if (notYet.length > 0) {
+          invisible++;
+          const latest = Math.max(...notYet.map((y) => y.arrivalAt));
+          expect(x.arrivalAt).toBe(latest);
+          expect(x.index).toBe(Math.max(...notYet.filter((y) => y.arrivalAt === latest).map((y) => y.index)));
+          expect(tableBefore.some((row) => row.slot === x.slot), 'a rival not arrived yet was not on the table').toBe(false);
+        } else {
+          lowest++;
+          expect(x.slot, 'the lowest computer row at the join time').toBe((tableBefore[tableBefore.length - 1] as RankedRow).slot);
+        }
+        expect(liveRivals(r, b, members).retired.find((q) => q.script === x)?.at).toBe(t);
+        gone.add(x.slot);
+        const rows = liveTable(b, members, t, false);
+        expect(rows.length).toBeLessThanOrEqual(b.max_members);
+        for (const row of rows) expect(gone.has(row.slot)).toBe(false);
+      }
+      for (let t = b.opened_at; t <= b.ends_at; t += 2 * HOUR) {
+        const rows = liveTable(b, members, t, false);
+        expect(rows.length).toBeLessThanOrEqual(b.max_members);
+        for (const row of rows) expect(gone.has(row.slot), 'a retired rival never returns').toBe(false);
+      }
+    }
+    expect(invisible).toBeGreaterThan(100);
+    expect(lowest).toBeGreaterThan(100);
+  });
+
+  it('hides and deletes never move the live set: a deleted joiner keeps its join time (deleted_joins), so a retired rival never returns (the review case: slot 4 deleted at +6 h)', () => {
+    const r = roster(r2Bracket());
+    const b5 = r2Bracket({ next_slot: 5, members: 5 });
+    const ms = joinsAt([30, 60, 100, 119]).map((m) => (m.slot === 0 ? { ...m, points: 58 } : m));
+    const hidden = ms.map((m) => (m.slot === 2 || m.slot === 4 ? { ...m, hidden: 2 } : m));
+    expect(liveRivals(r, b5, hidden)).toEqual(liveRivals(r, b5, ms));
+    // 2026-10-12, r2 (review fix): slot 4 (+119 min, the join that retired 9026) deletes its data; deletePlayer keeps
+    // "4:<joined_at>", so the replay is unchanged: 9045 (arrived at +113 min, 2nd at 6 h with 29) stays, 9026 stays gone.
+    const del = { ...b5, members: 4, deleted_joins: `4:${O + 119 * MIN}` };
+    const kept = ms.filter((m) => m.slot !== 4);
+    expect(joinTimesKnown(del, kept)).toBe(true);
+    expect(liveRivals(r, del, kept)).toEqual(liveRivals(r, b5, ms));
+    expect(retiredOf(r, del, kept)).toEqual([[9026, 119], [9046, 100], [9047, 60], [9048, 30]]);
+    const shownRows = (rows: readonly RankedRow[]) => rows.filter((x) => x.slot !== 4).map((x) => `${x.slot}:${x.points}`);
+    for (const h of [3, 6, 12, 23]) expect(shownRows(liveTable(del, kept, O + h * HOUR, false)), `${h} h`).toEqual(shownRows(liveTable(b5, ms, O + h * HOUR, false)));
+    expect(top5(liveTable(del, kept, O + 6 * HOUR, false))).toEqual(['ME:58', '9017:45', '9045:29', '9002:24', '9005:17']);
+    const rank0 = (b: BracketRow, m: readonly MemberRow[]) => finalPlan(b, [...m], DEFAULT_CONFIG, O + DAY + HOUR, true).ranks.find((x) => x.slot === 0);
+    expect(rank0(del, kept)).toEqual({ slot: 0, rank: 5 }); // 4th when the replay guessed that join's time (9045 gone)
+    expect(rank0(b5, ms)).toEqual({ slot: 0, rank: 5 });
+    // Reads that straddle the deletion (the bracket row before it, the members after) lack that time: joinTimesKnown is
+    // false, the replay guesses the nearest lower known slot's time (+100) and leaves that retirement's time unknown.
+    expect(joinTimesKnown(b5, kept)).toBe(false);
+    expect(retiredOf(r, b5, kept)).toEqual([[9045, null], [9046, 100], [9047, 60], [9048, 30]]);
+    // slots 1 and 2 unknown: both at slot 0's time; with no member row, at opened_at; recorded, they replay exactly
+    const no12 = ms.filter((m) => m.slot !== 1 && m.slot !== 2);
+    expect(retiredOf(r, b5, no12)).toEqual([[9026, 119], [9046, 100], [9047, null], [9048, null]]);
+    expect(retiredOf(r, b5, [])).toEqual([[9045, null], [9046, null], [9047, null], [9048, null]]);
+    expect(liveRivals(r, { ...b5, deleted_joins: `2:${O + 60 * MIN},1:${O + 30 * MIN}` }, no12)).toEqual(liveRivals(r, b5, ms));
+    // a malformed entry is skipped (that join stays unknown); a member row beyond a stale next_slot is known; r1 and
+    // untagged brackets need no join times
+    const bad = { ...b5, deleted_joins: `1:${O + 30 * MIN},2:${O + 60 * MIN}:9,x:1,,2:` };
+    expect(joinTimesKnown(bad, no12)).toBe(false);
+    expect(retiredOf(r, bad, no12)).toEqual([[9026, 119], [9046, 100], [9047, null], [9048, 30]]);
+    expect(joinTimesKnown(r2Bracket({ next_slot: 4 }), ms)).toBe(true);
+    expect(joinTimesKnown(bracket({ next_slot: 5 }), [])).toBe(true);
+    expect(joinTimesKnown(r2Bracket({ rivals: null, next_slot: 5 }), [])).toBe(true);
+  });
+
+  it('random deletes (recorded as deletePlayer does): the live set, the retirement times, every table and the frozen rivals never move; a guess keeps K', () => {
+    const rng = seededRng(1221);
+    let forcing = 0,
+      guessMoved = 0;
+    for (const b0 of brackets(120, 1222, true, 'r2')) {
+      const n = int(rng, 1, 49);
+      const rr = roster(b0);
+      const times = Array.from({ length: n }, () => int(rng, b0.opened_at, b0.join_until - 1)).sort((x, y) => x - y);
+      const all = times.map((t, i) => member(i, { joined_at: t, scored_at: t, points: int(rng, 1, 9) })); // slots in join order
+      const b = { ...b0, next_slot: n, members: n };
+      const kept = all.filter(() => int(rng, 0, 3) > 0);
+      const gone = all.filter((m) => !kept.includes(m));
+      if (int(rng, 0, 1) === 1) gone.reverse(); // the deletion order does not matter
+      const bd = { ...b, members: kept.length, deleted_joins: gone.length > 0 ? gone.map((m) => `${m.slot}:${m.joined_at}`).join(',') : null };
+      forcing += gone.filter((m) => m.slot >= b.max_members - rr.rivals.length).length;
+      expect(joinTimesKnown(bd, kept)).toBe(true);
+      expect(joinTimesKnown(b, kept)).toBe(gone.length === 0);
+      const exact = liveRivals(rr, b, all);
+      expect(liveRivals(rr, bd, kept)).toEqual(exact);
+      const goneSlots = new Set(gone.map((m) => m.slot));
+      const rows = (x: readonly RankedRow[]) => x.filter((row) => !goneSlots.has(row.slot)).map((row) => [row.slot, row.points, row.scoredAt]);
+      for (const t of [b.opened_at, b.join_until, b.join_until + 4 * HOUR, b.ends_at]) {
+        const tb = liveTable(bd, kept, t, false);
+        expect(rows(tb)).toEqual(rows(liveTable(b, all, t, false)));
+        expect(tb.length).toBeLessThanOrEqual(b.max_members);
+      }
+      const frozen = (p: ReturnType<typeof finalPlan>) =>
+        (decodeFinalRivals(p.totals.finalRivals, { ...b, final_members: p.totals.finalMembers }) ?? []).map((x) => `${x.slot}:${x.points}:${x.scoredAt}:${x.hearts}`).sort();
+      expect(frozen(finalPlan(bd, kept, DEFAULT_CONFIG, b.ends_at + HOUR, true))).toEqual(frozen(finalPlan(b, all, DEFAULT_CONFIG, b.ends_at + HOUR, true)));
+      // without the record (straddled reads): the guess keeps K and equals the explicit fallback (the nearest lower known slot's time)
+      const guess = liveRivals(rr, b, kept);
+      expect(guess.live.length).toBe(liveRivalCount(rr, b));
+      expect(guess.live.length + guess.retired.length).toBe(rr.rivals.length);
+      const explicit = all.map((m) => {
+        if (kept.includes(m)) return m;
+        const lower = kept.filter((q) => q.slot < m.slot);
+        return { ...m, joined_at: lower.length > 0 ? (lower[lower.length - 1] as MemberRow).joined_at : b.opened_at };
+      });
+      expect(guess.live.map((x) => x.slot)).toEqual(liveRivals(rr, b, explicit).live.map((x) => x.slot));
+      if (guess.live.map((x) => x.slot).join() !== exact.live.map((x) => x.slot).join()) guessMoved++;
+    }
+    expect(forcing).toBeGreaterThan(500);
+    expect(guessMoved, 'the deletions this test makes would move the live set without deleted_joins').toBeGreaterThan(5); // 11 of 120
+  });
+
+  it('a stale bracket row (next_slot n) beside n + 1 members gives the consistent table (the replay counts that join too)', () => {
+    const rng = seededRng(1231);
+    for (const b0 of brackets(60, 1232, true, 'r2')) {
+      const b = { ...b0 } as { -readonly [K in keyof BracketRow]: BracketRow[K] };
+      let members: MemberRow[] = [member(0, { joined_at: b.opened_at, scored_at: b.opened_at, points: int(rng, 1, 3) })];
+      const times = Array.from({ length: int(rng, 0, 55) }, () => int(rng, b.opened_at, b.join_until - 1)).sort((x, y) => x - y);
+      for (const t of times) {
+        if (members.length >= b.max_members) break;
+        const before = { ...b };
+        members = [...members, member(b.next_slot, { joined_at: t, scored_at: t, points: int(rng, 1, 3) })];
+        b.next_slot += 1;
+        b.members = members.length;
+        const consistent = liveTable(b, members, t, false);
+        expect(liveTable(before, members, t, false)).toEqual(consistent);
+        expect(consistent.length).toBeLessThanOrEqual(b.max_members);
+        const r = roster(b);
+        expect(liveRivals(r, before, members)).toEqual(liveRivals(r, b, members));
+      }
+    }
+  });
+
+  it('every path uses the same live set: the live table, freezeTable / finalPlan, rivalHeartTarget (a retired rival cannot be hearted)', () => {
+    const b5 = r2Bracket({ next_slot: 5, members: 5 });
+    const ms = joinsAt([30, 60, 100, 119]);
+    const r = roster(b5);
+    const live = new Set(liveRivals(r, b5, ms).live.map((x) => x.slot));
+    expect(live.size).toBe(45);
+    for (const t of [O + HOUR, O + 6 * HOUR]) for (const row of liveTable(b5, ms, t, false)) if (row.kind === 'rival') expect(live.has(row.slot)).toBe(true);
+    const frozen = freezeTable(b5, ms, false).filter((x) => x.kind === 'rival');
+    expect(frozen.map((x) => x.slot).sort()).toEqual([...live].sort());
+    const plan = finalPlan(b5, ms, DEFAULT_CONFIG, O + DAY + HOUR, true);
+    expect((decodeFinalRivals(plan.totals.finalRivals, { ...b5, final_members: plan.totals.finalMembers }) as FinalRival[]).map((x) => x.slot).sort()).toEqual([...live].sort());
+    // hearts: a live, present rival; never a retired one (9026 was on the table until the +119 join), nor one not arrived yet
+    expect(rivalHeartTarget(b5, 9000, O + 6 * HOUR, false, ms)).toEqual({ builtIn: 2, maxNextSlot: 5 });
+    for (const sl of [9026, 9046, 9047, 9048]) expect(rivalHeartTarget(b5, sl, O + 6 * HOUR, false, ms), String(sl)).toBeNull();
+    expect(rivalHeartTarget(r2Bracket(), 9048, O + HOUR, false, [member(0)]), 'not arrived (+114.8 min)').toBeNull();
+    expect(rivalHeartTarget(r2Bracket(), 9048, O + 2 * HOUR, false, [member(0)])).not.toBeNull();
+    // maxNextSlot: joins into the spare places pass (T = 50 here leaves none: max(next_slot, 50 − 49) = 1 for a lone player)
+    expect(rivalHeartTarget(r2Bracket(), 9000, O + 6 * HOUR, false, [member(0)])).toEqual({ builtIn: 2, maxNextSlot: 1 });
+    const small = bracket({ rivals: GOLD_R2, max_members: 20 }); // T = 20: N = 19, so the first join already forces one
+    expect(rivalHeartTarget(small, 9000, O + 6 * HOUR, false, [member(0)])?.maxNextSlot).toBe(1);
+    expect(rivalHeartTarget(b5, 9000, O + 6 * HOUR, true, ms), 'hide').toBeNull();
+    // a final r2 bracket: the snapshot rows only, as for r1
+    const fb = { ...b5, finalized_at: O + DAY + HOUR, final_members: plan.totals.finalMembers, final_rivals: plan.totals.finalRivals };
+    expect(rivalHeartTarget(fb, 9000, O + DAY + 2 * HOUR, false)?.builtIn).toBe(8);
+    expect(rivalHeartTarget(fb, 9048, O + DAY + 2 * HOUR, false)).toBeNull();
+  });
+
+  it('a heart after a deletion: the deleted join keeps its time, so the same rivals take hearts; reads that straddle the deletion take none (2026-10-12, r2 review fix)', () => {
+    const b5 = r2Bracket({ next_slot: 5, members: 5 });
+    const ms = joinsAt([30, 60, 100, 119]);
+    const kept = ms.filter((m) => m.slot !== 4);
+    const del = { ...b5, members: 4, deleted_joins: `4:${O + 119 * MIN}` };
+    const at = O + 6 * HOUR;
+    // 9045 is live (the +119 join retired 9026); a guess of that join's time (+100) would retire 9045 and bring 9026 back
+    const target = rivalHeartTarget(b5, 9045, at, false, ms);
+    expect(target).not.toBeNull();
+    expect(rivalHeartTarget(del, 9045, at, false, kept)).toEqual(target);
+    expect(rivalHeartTarget(del, 9026, at, false, kept), 'still retired').toBeNull();
+    // the bracket row read before the deletion, the members after: no heart on any rival (the retry reads again)
+    for (const sl of [9000, 9026, 9045]) expect(rivalHeartTarget(b5, sl, at, false, kept), String(sl)).toBeNull();
+  });
+});
+
+describe('r2 calibration bands (2026-10-12, r2; 1,000 tags, a lone real player)', () => {
+  const N = 1000;
+  const all = brackets(N, 1301, false, 'r2').map((b) => ({ b, r: roster(b) }));
+  const pointsAt = (x: { b: BracketRow; r: Roster }, t: number): number[] =>
+    x.r.rivals
+      .map((q) => rivalAt(q, x.b.join_until, Math.min(t, x.b.ends_at)))
+      .filter((v) => v !== null)
+      .map((v) => (v as { points: number }).points)
+      .sort((a, c) => c - a);
+  const topAt = (dt: number): number[] => all.map((x) => pointsAt(x, x.b.opened_at + dt)[0] as number);
+  it('the top rival: p50 ≥ 5 at 15 min, 9…25 at 1 h, 60…110 at 24 h; the median rival 10…30 at 24 h', () => {
+    const q15 = pct(topAt(15 * MIN), 0.5),
+      q60 = pct(topAt(HOUR), 0.5),
+      q24 = pct(topAt(DAY), 0.5);
+    const med24 = pct(all.map((x) => { const p = pointsAt(x, x.b.ends_at); return p[Math.floor(p.length / 2)] as number; }), 0.5);
+    // measured 2026-10-12 on these 1,000 tags (strength 100): 9 (p10 5) / 14 / 75 (p90 103), median rival 17 (r1, design §3.9: 3 / 4 / 43)
+    expect(q15).toBeGreaterThanOrEqual(5);
+    expect(q60).toBeGreaterThanOrEqual(9);
+    expect(q60).toBeLessThanOrEqual(25);
+    expect(q24).toBeGreaterThanOrEqual(60);
+    expect(q24).toBeLessThanOrEqual(110);
+    expect(med24).toBeGreaterThanOrEqual(10);
+    expect(med24).toBeLessThanOrEqual(30);
+  });
+  it('daytime 15-min windows (+15 min … +16 h): the median number of rivals that scored is ≥ 2', () => {
+    const movers: number[] = [];
+    for (const x of all.slice(0, 500)) {
+      const at = (t: number) => x.r.rivals.map((q) => rivalAt(q, x.b.join_until, t));
+      let prev = at(x.b.opened_at);
+      for (let w = x.b.opened_at + 15 * MIN; w <= x.b.opened_at + 16 * HOUR; w += 15 * MIN) {
+        const cur = at(w);
+        movers.push(cur.filter((v, i) => v !== null && prev[i] != null && v.points > (prev[i] as { points: number }).points).length);
+        prev = cur;
+      }
+    }
+    expect(median(movers)).toBeGreaterThanOrEqual(2); // measured 2026-10-12: median 2 (58 % of windows ≥ 2, mean 2.13)
+  });
+  it('final place of a real player with 15 / 25 / 40 wins a day (2.43 fish each, spread over the day): top 3 ≤ 30 % / 35–85 % / ≥ 85 %', () => {
+    const top3 = (wins: number): number => {
+      let n = 0;
+      for (const x of all) {
+        const me = { slot: 0, points: Math.round(wins * 2.43), scoredAt: x.b.ends_at - Math.floor(DAY / (2 * wins)) };
+        const rows = x.r.rivals.map((q) => ({ slot: q.slot, ...(rivalAt(q, x.b.join_until, x.b.ends_at) as { points: number; scoredAt: number }) }));
+        if ((rankRows([me, ...rows]).find((q) => q.slot === 0) as { rank: number }).rank <= 3) n++;
+      }
+      return n / N;
+    };
+    // measured 2026-10-12 on these 1,000 tags: 10.4 % / 62 % / 99.2 % (r1, design §3.10: 65 % at 15 wins, 100 % from 25)
+    expect(top3(15)).toBeLessThanOrEqual(0.3);
+    const mid = top3(25);
+    expect(mid).toBeGreaterThanOrEqual(0.35);
+    expect(mid).toBeLessThanOrEqual(0.85);
+    expect(top3(40)).toBeGreaterThanOrEqual(0.85);
+    // the shortcut above is the frozen table: the same place through freezeTable for a sample
+    for (const x of all.slice(0, 20)) {
+      const m = member(0, { points: 61, scored_at: x.b.ends_at - Math.floor(DAY / 50), joined_at: x.b.opened_at });
+      const rows = x.r.rivals.map((q) => ({ slot: q.slot, ...(rivalAt(q, x.b.join_until, x.b.ends_at) as { points: number; scoredAt: number }) }));
+      expect((freezeTable(x.b, [m], false).find((q) => q.kind === 'player') as RankedRow).rank).toBe((rankRows([{ slot: 0, points: 61, scoredAt: m.scored_at }, ...rows]).find((q) => q.slot === 0) as { rank: number }).rank);
+    }
+  });
+});
+
+describe('r2 CPU (2026-10-12, r2)', () => {
+  it('roster, the replay, evaluation and names: median table build under 3 ms', () => {
+    const times: number[] = [];
+    for (const b of brackets(40, 1401, true, 'r2')) {
+      const ms = Array.from({ length: 8 }, (_, i) => member(i, { joined_at: b.opened_at + i * 10 * MIN, points: 20 - i }));
+      const nb = { ...b, next_slot: 8, members: 8 };
+      const t0 = performance.now();
+      liveTable(nb, ms, b.opened_at + 6 * HOUR, false);
+      times.push(performance.now() - t0);
+    }
+    expect(median(times)).toBeLessThan(3); // measured 2026-10-12: about 0.5 ms
   });
 });

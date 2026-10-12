@@ -4,6 +4,9 @@
 // snapshot equal to the live table at ends_at, the switches (RIVALS, hide, disclose, pools, strength, the
 // scoring and production guards), test pools (/dev/rivals), the admin bracket route and the cron stats. Every
 // view the server answers here also goes through the shared parser (the client's contract).
+// 2026-10-12, r2: new brackets are tagged r2. The tests of r1's index rule (K, the highest live index retires) pin
+// their bracket back to r1 (pinR1: the same seed); the last section tests r2 brackets (rivals scoring in the first
+// hour, the replay of the real joins, hearts on a retired rival refused).
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -14,7 +17,8 @@ import { NICK_WORDS_V1 } from '../../src/contract/words';
 import { seededRng, type Rng } from '../../src/core/crypto';
 import { decodeFinalRivals, isRivalSlot, liveRivalCount, RIVAL_TAG_RE, rivalRoster, type Roster } from '../../src/core/rivals';
 import type { AppEnv, LogLine, Metrics } from '../../src/services';
-import type { BracketRow } from '../../src/store/rows';
+import { liveRivals } from '../../src/core/table';
+import type { BracketRow, MemberRow } from '../../src/store/rows';
 import { admin, DAY, HOUR, json, makeTestApp, makeWin, playersWithWins, RecordingDb, SERVER_DIR, T0, TEST_ENV, TestPlayer, WIDE_LIMITS, type TestApp } from '../helpers/harness';
 
 const MIN = 60_000;
@@ -75,6 +79,11 @@ const rosterOf = (t: TestApp, id: string): Roster => {
   const b = bracketRow(t, id);
   return rivalRoster(b.rivals, b) as Roster;
 };
+/**
+ * 2026-10-12, r2: pins every r2 bracket back to preset r1 with the same seed (the test's only write outside the API,
+ * like the golden tag below), for the tests of r1's index rule; r1 brackets created before r2 run exactly so.
+ */
+const pinR1 = (t: TestApp): void => void t.db.raw.prepare("UPDATE brackets SET rivals = 'r1' || substr(rivals, 3) WHERE rivals LIKE 'r2:%'").run();
 const rivalRows = (v: BracketView) => v.rows.filter((r) => isRivalSlot(r.slot));
 const realRows = (v: BracketView) => v.rows.filter((r) => !isRivalSlot(r.slot));
 const rowOf = (v: BracketView, slot: number) => v.rows.find((r) => r.slot === slot) as BracketView['rows'][number];
@@ -137,7 +146,7 @@ describe('a bracket with computer rivals (RIVALS=on)', () => {
     const v = w.bracket as BracketView;
     const tag = t.rows<{ rivals: string }>('SELECT rivals FROM brackets')[0]?.rivals as string;
     expect(tag).toMatch(RIVAL_TAG_RE);
-    expect(tag).toMatch(/^r1:[0-9a-z]{12}:100:\d+:\d+$/);
+    expect(tag).toMatch(/^r2:[0-9a-z]{12}:100:\d+:\d+$/); // 2026-10-12, r2: new brackets are tagged r2
     expectValid(v);
     expect(v.members).toBeGreaterThanOrEqual(9);
     expect(v.members).toBeLessThanOrEqual(14);
@@ -156,6 +165,7 @@ describe('a bracket with computer rivals (RIVALS=on)', () => {
   it('49 real players leave one place: rival 0 alone; 50 leave none: exactly the real table', async () => {
     const t = makeTestApp({ env: ON });
     const ps = await playersWithWins(t, 49, 'full');
+    pinR1(t); // r1's index rule (the r2 case is in the r2 section)
     let v = await ps[0]!.bracket();
     expectValid(v);
     // K = max_members − next_slot = 1 (design §4.3 says "49+ real players: K = 0"; by the K rule it is 1 here)
@@ -173,6 +183,7 @@ describe('a bracket with computer rivals (RIVALS=on)', () => {
   it('a join committing between the bracket read and the members read: ≤ 50 rows, the view parses, the retired rival stays gone', async () => {
     const t = makeTestApp({ env: ON });
     const ps = await playersWithWins(t, 11, 'race');
+    pinR1(t); // r1's index rule (the r2 case is in the r2 section)
     t.clock.set(T0 + 119 * MIN); // every rival has arrived (the last arrival minute is Wmin − 2 = 118)
     const consistent = await ps[0]!.bracket();
     expectValid(consistent);
@@ -210,8 +221,9 @@ describe('a bracket with computer rivals (RIVALS=on)', () => {
       const rng = seededRng(1000 + extra);
       const creator = new TestPlayer(t, `day${extra}`);
       await creator.signIn();
-      const first = await creator.win('L2');
-      let prev = first.bracket as BracketView;
+      await creator.win('L2');
+      pinR1(t); // r1's index rule: a join retires the lowest computer row (the r2 day is in the r2 section)
+      let prev = await creator.bracket();
       const id = prev.bracketId as string;
       const roster = rosterOf(t, id);
       const ends = T0 + DAY;
@@ -422,6 +434,7 @@ describe('hearts on computer players (design §6)', () => {
   it('404: a rival retired by joins, 9000 + N, any slot of an untagged bracket, any rival under hide', async () => {
     const t = makeTestApp({ env: ON });
     const [a] = await playersWithWins(t, 1, 'ret');
+    pinR1(t); // r1's index rule (the r2 case is in the r2 section)
     const id = (await a!.bracket()).bracketId as string;
     t.clock.set(T0 + 119 * MIN); // every rival has arrived (arrivals ≤ +118 min), still inside the join window
     const before = await a!.bracket();
@@ -769,7 +782,7 @@ describe('the switches (design §1.3)', () => {
 
     const strong = makeTestApp({ env: ON, overrides: { rivals: { strength: 150 } } });
     await playersWithWins(strong, 1, 'st');
-    expect(strong.rows<{ rivals: string }>('SELECT rivals FROM brackets')[0]?.rivals).toMatch(/^r1:[0-9a-z]{12}:150:\d+:\d+$/);
+    expect(strong.rows<{ rivals: string }>('SELECT rivals FROM brackets')[0]?.rivals).toMatch(/^r2:[0-9a-z]{12}:150:\d+:\d+$/);
   });
 
   it('the guards: another scoring turns rivals off with a problem; production takes them only from RIVALS=on', async () => {
@@ -861,7 +874,7 @@ interface AdminBracket {
   bracket: Record<string, unknown> & { rivals: { preset: string; strength: number; roster: number; live: number; present: number; topFinal: number | null; hidden: boolean } | null };
   at: number;
   rows: AdminRow[];
-  retiredRivals: { slot: number; index: number; arrivalAt: number }[];
+  retiredRivals: { slot: number; index: number; arrivalAt: number; retiredAt?: number }[];
   hiddenPlayers: { slot: number; code: string | null; hidden: number }[];
   serverTime: number;
 }
@@ -884,7 +897,7 @@ describe('admin GET /admin/v1/brackets/{id} (design §7)', () => {
     expect(body.at).toBe(T0 + 30 * MIN);
     expect(body.bracket).toMatchObject({ id, pool: 'fb', openedAt: T0, nextSlot: 2, capacityMembers: 2, finalMembers: null, finalReal: null });
     const roster = rosterOf(t, id);
-    expect(body.bracket.rivals).toMatchObject({ preset: 'r1', strength: 100, roster: roster.rivals.length, live: liveRivalCount(roster, bracketRow(t, id)) });
+    expect(body.bracket.rivals).toMatchObject({ preset: 'r2', strength: 100, roster: roster.rivals.length, live: liveRivalCount(roster, bracketRow(t, id)) });
     expect(body.bracket.rivals!.present).toBe(body.rows.filter((r) => r.kind === 'rival').length);
     expect(body.retiredRivals).toHaveLength(roster.rivals.length - body.bracket.rivals!.live);
     for (const r of body.rows) {
@@ -895,7 +908,7 @@ describe('admin GET /admin/v1/brackets/{id} (design §7)', () => {
       } else {
         expect('code' in r).toBe(false);
         expect(r.slot).toBe(9000 + (r.index as number));
-        expect(r).toMatchObject({ arrivalAt: expect.any(Number), paceTenthsPerHour: expect.any(Number), builtInHearts: r.hearts, realHearts: 0 });
+        expect(r).toMatchObject({ arrivalAt: expect.any(Number), paceTenthsPerHour: 0, winsPerDay: expect.any(Number), builtInHearts: r.hearts, realHearts: 0 }); // r2
       }
     }
     expect(body.hiddenPlayers).toEqual([{ slot: 1, code: b!.code(), hidden: 1 }]);
@@ -968,6 +981,7 @@ describe('admin GET /admin/v1/brackets/{id} (design §7)', () => {
   it('?at= moves only the computer players: the real rows carry their current points, K counts from the current next_slot', async () => {
     const t = makeTestApp({ env: ON });
     const ps = await playersWithWins(t, 5, 'at');
+    pinR1(t); // r1's index rule (the r2 retiredAt is in the r2 section)
     const id = (await ps[0]!.bracket()).bracketId as string;
     t.clock.set(T0 + 60 * MIN);
     await playersWithWins(t, 1, 'atlate', 30); // a 6th join at +60 min: K = min(N, 44) < N, so rival 44 retires now
@@ -1016,5 +1030,394 @@ describe('cron stats with computer rivals (design §7)', () => {
     await off.app.scheduled();
     expect(off.count("SELECT v FROM stats_daily WHERE name = 'brackets_rivals'")).toBe(0);
     expect(off.count("SELECT v FROM stats_daily WHERE name = 'members_p50'")).toBe(3);
+  });
+});
+
+// ── preset r2 (2026-10-12, r2) ────────────────────────────────────────────────────────────────────────────
+
+describe('r2 brackets: rivals that score from the start, and the replay of the real joins (2026-10-12, r2)', () => {
+  const adminOf = async (t: TestApp, id: string): Promise<AdminBracket> => json<AdminBracket>(await admin(t, 'GET', `brackets/${id}`));
+
+  it('a lone player: an r2 tag; rivals score within the first hour (wins, not a trickle); about 46–50 rows after the join window', async () => {
+    const t = makeTestApp({ env: ON });
+    const [a] = await playersWithWins(t, 1, 'r2lone');
+    const v0 = await a!.bracket();
+    expectValid(v0);
+    const id = v0.bracketId as string;
+    expect(bracketRow(t, id).rivals).toMatch(/^r2:[0-9a-z]{12}:100:\d+:\d+$/);
+    const roster = rosterOf(t, id);
+    expect(roster.preset).toBe('r2');
+    expect(rivalRows(v0)).toHaveLength(roster.cohort);
+    expect(v0.me).toMatchObject({ rank: 1 }); // 3 fish at opened_at: the opening group has its arrival win only (≤ 3)
+    const best = new Map<number, number>();
+    const scored = new Set<number>();
+    for (let m = 5; m <= 60; m += 5) {
+      t.clock.set(T0 + m * MIN);
+      const v = await a!.bracket();
+      expectValid(v);
+      for (const r of rivalRows(v)) {
+        const b = best.get(r.slot);
+        if (b !== undefined) {
+          expect(r.points).toBeGreaterThanOrEqual(b);
+          if (r.points > b) scored.add(r.slot);
+        }
+        best.set(r.slot, r.points);
+      }
+      for (const sl of best.keys()) expect(v.rows.some((r) => r.slot === sl), `rival ${sl} vanished`).toBe(true);
+    }
+    expect(scored.size).toBeGreaterThanOrEqual(5); // r1: one point at most per rival in the first hour
+    const top = Math.max(...rivalRows(await a!.bracket()).map((r) => r.points));
+    expect(top).toBeGreaterThanOrEqual(9);
+    t.clock.set(T0 + 2 * HOUR + MIN);
+    const full = await a!.bracket();
+    expectValid(full);
+    expect(full.rows).toHaveLength(roster.size);
+    expect(full.rows.length).toBeGreaterThanOrEqual(46);
+    const ad = await adminOf(t, id);
+    expect(ad.bracket.rivals).toMatchObject({ preset: 'r2', live: roster.rivals.length, present: roster.rivals.length });
+    expect(ad.retiredRivals).toEqual([]);
+  });
+
+  // Every 10 minutes for 25 hours with 4 or 10 other real players joining at random times of the window. Around each
+  // join (the same clock): a join into a spare place retires nothing; a forcing join retires exactly one rival (admin
+  // retiredRivals, retiredAt = that join), one that has not arrived yet (no row vanishes) or else the lowest computer
+  // row at that moment. Nothing vanishes without a join, nothing returns or falls, every member sees the same table,
+  // a retired rival cannot be hearted, and the frozen table is the live one at ends_at.
+  for (const extra of [4, 10]) {
+    it(`a whole day with ${extra} other real players joining in the window`, async () => {
+      const t = makeTestApp({ env: ON });
+      const rng = seededRng(2000 + extra);
+      const creator = new TestPlayer(t, `r2day${extra}`);
+      await creator.signIn();
+      await creator.win('L2');
+      let prev = await creator.bracket();
+      const id = prev.bracketId as string;
+      const roster = rosterOf(t, id);
+      const firstForcing = 50 - roster.rivals.length;
+      const ends = T0 + DAY;
+      const joinAt = Array.from({ length: extra }, () => T0 + int(rng, 1, 118) * MIN + int(rng, 0, MIN - 1)).sort((x, y) => x - y);
+      const others: TestPlayer[] = [];
+      const gone = new Set<number>();
+      const best = new Map<number, { points: number; hearts: number }>();
+      let forcing = 0;
+      let hearted: number | null = null;
+      let atEnd: ReturnType<typeof shown> | null = null;
+      const vanishedFrom = (a: BracketView, b: BracketView): number[] => rivalRows(a).filter((r) => !b.rows.some((x) => x.slot === r.slot)).map((r) => r.slot);
+      const check = (v: BracketView): void => {
+        expectValid(v);
+        expect(v.rows.length).toBeLessThanOrEqual(50);
+        for (const r of rivalRows(v)) {
+          expect(gone.has(r.slot), `rival ${r.slot} came back`).toBe(false);
+          const b = best.get(r.slot);
+          if (b) {
+            expect(r.points).toBeGreaterThanOrEqual(b.points);
+            expect(r.hearts).toBeGreaterThanOrEqual(b.hearts);
+          }
+          best.set(r.slot, { points: r.points, hearts: r.hearts });
+        }
+      };
+      for (let step = 1; step <= 150; step++) {
+        const at = T0 + step * 10 * MIN;
+        while (others.length < joinAt.length && (joinAt[others.length] as number) <= at) {
+          const tj = joinAt[others.length] as number;
+          t.clock.set(tj);
+          const before = await creator.bracket();
+          check(before);
+          expect(vanishedFrom(prev, before), 'no rival vanishes without a join').toEqual([]);
+          const retiredBefore = (await adminOf(t, id)).retiredRivals;
+          const p = new TestPlayer(t, `r2day${extra}-${others.length}`);
+          await p.signIn();
+          await p.win(`L${2 + others.length}`);
+          others.push(p);
+          const slot = (await p.bracket()).me!.slot;
+          const after = await creator.bracket();
+          check(after);
+          const vanished = vanishedFrom(before, after);
+          const newly = (await adminOf(t, id)).retiredRivals.filter((r) => !retiredBefore.some((q) => q.slot === r.slot));
+          if (slot < firstForcing) {
+            expect([vanished, newly]).toEqual([[], []]);
+          } else {
+            forcing++;
+            expect(newly).toHaveLength(1);
+            const x = newly[0] as AdminBracket['retiredRivals'][number];
+            expect(x.retiredAt).toBe(tj);
+            if (vanished.length === 0) expect(x.arrivalAt, 'retired before it arrived').toBeGreaterThan(tj);
+            else expect([vanished, x.slot]).toEqual([[(rivalRows(before).at(-1) as BracketView['rows'][number]).slot], vanished[0]]); // the lowest computer row then
+            expect(await errorOf(await creator.rawHeart(id, x.slot))).toEqual([404, 'not_found']);
+            gone.add(x.slot);
+          }
+          prev = after;
+        }
+        t.clock.set(at);
+        if (step === 140) for (const p of [creator, ...others]) await p.signIn(); // tokens last 24 h
+        if (step % 37 === 0 && at < ends) await creator.win(`L${100 + step}`, { fish: 2, mistakes: 1 });
+        let v = await creator.bracket();
+        check(v);
+        expect(vanishedFrom(prev, v), `step ${step}: no rival vanishes without a join`).toEqual([]);
+        expect(realRows(v)).toHaveLength(1 + others.length);
+        if (at >= T0 + 2 * HOUR) expect(v.rows.length).toBe(Math.min(50, roster.size + others.length));
+        if (step === 30) {
+          const live = rivalRows(v)[5] as BracketView['rows'][number];
+          expect((await creator.heart(id, live.slot)).hearts).toBe(live.hearts + 1);
+          hearted = live.slot;
+          v = await creator.bracket();
+          check(v);
+        }
+        if (others.length > 0) expect(shown(await (others[0] as TestPlayer).bracket())).toEqual(shown(v));
+        if (at === ends) {
+          expect([v.state, v.final]).toEqual(['ended', false]);
+          atEnd = shown(v);
+        }
+        if (at > ends) {
+          expect(v.final).toBe(true);
+          expect(shown(v)).toEqual(atEnd);
+        }
+        prev = v;
+      }
+      expect(forcing).toBe(Math.max(0, 1 + extra - firstForcing));
+      expect(hearted).not.toBeNull();
+      const b = bracketRow(t, id);
+      expect([b.final_members, b.final_real]).toEqual([prev.rows.length, 1 + extra]);
+      expect(decodeFinalRivals(b.final_rivals, b)).toHaveLength(prev.rows.length - 1 - extra);
+      expect(t.count(BIG_SLOT_REWARDS)).toBe(0);
+    });
+  }
+
+  it('late joins (every rival arrived): the lowest computer rows at that moment retire; hearts on them 404; a stale bracket read gives the same table', async () => {
+    const t = makeTestApp({ env: ON });
+    const [a] = await playersWithWins(t, 1, 'r2ret');
+    const id = (await a!.bracket()).bracketId as string;
+    const late = T0 + 119 * MIN; // every rival has arrived (the last arrival minute is Wmin − 2 = 118, plus ms), still in the window
+    t.clock.set(late);
+    const before = await a!.bracket();
+    const n = rosterOf(t, id).rivals.length;
+    expect(rivalRows(before)).toHaveLength(n);
+    await playersWithWins(t, 51 - n, 'r2retj', 100); // slots 1 … 51 − N: the last two (50 − N, 51 − N) force a removal each
+    const after = await a!.bracket();
+    expectValid(after);
+    expect(after.rows).toHaveLength(50);
+    const retired = rivalRows(before)
+      .map((r) => r.slot)
+      .filter((sl) => !after.rows.some((r) => r.slot === sl));
+    expect(retired).toEqual(rivalRows(before).slice(-2).map((r) => r.slot)); // the two lowest computer rows then
+    for (const sl of retired) expect(await errorOf(await a!.rawHeart(id, sl))).toEqual([404, 'not_found']);
+    const ad = await adminOf(t, id);
+    expect(ad.bracket.rivals).toMatchObject({ preset: 'r2', live: n - 2, present: n - 2 });
+    expect(ad.retiredRivals.map((r) => [r.slot, r.retiredAt])).toEqual([...retired].sort((x, y) => x - y).map((sl) => [sl, late]));
+    expect(t.count('SELECT COUNT(*) FROM hearts')).toBe(0);
+    // a live rival takes a heart: built-in + 1, for everyone
+    const live = rivalRows(after)[0] as BracketView['rows'][number];
+    expect((await a!.heart(id, live.slot)).hearts).toBe(live.hearts + 1);
+    const consistent = await a!.bracket();
+    // a stale bracket row (read just before the last join committed) beside the members read: the same table, ≤ 50 rows
+    const store = t.app.services.store;
+    const read = store.getBracket.bind(store);
+    store.getBracket = async (bid: string) => {
+      const b = await read(bid);
+      return b && { ...b, next_slot: b.next_slot - 1, members: b.members - 1 };
+    };
+    const stale = await a!.bracket();
+    expectValid(stale);
+    expect(shown(stale)).toEqual(shown(consistent));
+    store.getBracket = read;
+    // later in the day: the retired rivals never return
+    t.clock.set(T0 + 12 * HOUR);
+    const noon = await a!.bracket();
+    for (const sl of retired) expect(noon.rows.some((r) => r.slot === sl)).toBe(false);
+    expect(noon.rows).toHaveLength(50);
+  });
+
+  it('an early forcing join retires a rival that has not arrived yet: no row vanishes; that rival never shows and cannot be hearted', async () => {
+    const t = makeTestApp({ env: ON });
+    const [a] = await playersWithWins(t, 1, 'r2early');
+    const id = (await a!.bracket()).bracketId as string;
+    const roster = rosterOf(t, id);
+    const n = roster.rivals.length;
+    if (50 - n > 1) await playersWithWins(t, 50 - n - 1, 'r2spare', 100); // the spare places (T < 50): no removal
+    expect((await adminOf(t, id)).retiredRivals).toEqual([]);
+    t.clock.set(T0 + 30 * MIN);
+    const before = await a!.bracket();
+    await playersWithWins(t, 1, 'r2forcing', 200);
+    const after = await a!.bracket();
+    expectValid(after);
+    expect(after.rows).toHaveLength(before.rows.length + 1);
+    expect(rivalRows(after).map((r) => r.slot).sort()).toEqual(rivalRows(before).map((r) => r.slot).sort());
+    const ad = await adminOf(t, id);
+    expect(ad.retiredRivals).toHaveLength(1);
+    const x = ad.retiredRivals[0] as AdminBracket['retiredRivals'][number];
+    expect(x).toMatchObject({ retiredAt: T0 + 30 * MIN, arrivalAt: Math.max(...roster.rivals.map((r) => r.arrivalAt)) }); // the latest arrival
+    t.clock.set(Math.min(x.arrivalAt + MIN, T0 + 2 * HOUR));
+    const v = await a!.bracket();
+    expect(v.rows.some((r) => r.slot === x.slot)).toBe(false);
+    expect(await errorOf(await a!.rawHeart(id, x.slot))).toEqual([404, 'not_found']);
+    t.clock.set(T0 + 2 * HOUR + MIN);
+    const full = await a!.bracket();
+    expectValid(full);
+    expect(full.rows).toHaveLength(50);
+    expect(full.rows.some((r) => r.slot === x.slot)).toBe(false);
+  });
+
+  it('49 real players leave one place: the best of the opening group (the others went in join order); 50 leave none', async () => {
+    const t = makeTestApp({ env: ON });
+    const ps = await playersWithWins(t, 1, 'r2full');
+    const first = await ps[0]!.bracket();
+    ps.push(...(await playersWithWins(t, 48, 'r2fullj', 100))); // all at opened_at: the rivals not arrived yet go first, then the lowest
+    let v = await ps[0]!.bracket();
+    expectValid(v);
+    expect(v.rows).toHaveLength(50);
+    expect(rivalRows(v).map((r) => r.slot)).toEqual([(rivalRows(first)[0] as BracketView['rows'][number]).slot]);
+    await playersWithWins(t, 1, 'r2last', 200);
+    v = await ps[0]!.bracket();
+    expectValid(v);
+    expect(rivalRows(v)).toEqual([]);
+    expect(v.rows).toHaveLength(50);
+  });
+
+  // 2026-10-12, r2 (review fix): a deletion keeps the deleted member's join time (brackets.deleted_joins), so the replay
+  // of the real joins never changes: before it, the replay guessed that time and could swap a visible rival for one
+  // players had watched retire, and change the final places.
+  /**
+   * A creator, the spare places (T < 50), then forcing joins at +30, +60, +90 and +119 min (the +119 joiner deletes in
+   * these tests). The first three retire the three latest arrivals (not arrived yet), the +119 one the lowest row then.
+   */
+  async function forcingJoins(t: TestApp, prefix: string) {
+    const [a] = await playersWithWins(t, 1, prefix);
+    const id = (await a!.bracket()).bracketId as string;
+    const roster = rosterOf(t, id);
+    const n = roster.rivals.length;
+    if (50 - n > 1) await playersWithWins(t, 50 - n - 1, `${prefix}s`, 100);
+    t.clock.set(T0 + 30 * MIN);
+    await playersWithWins(t, 1, `${prefix}a`, 200);
+    t.clock.set(T0 + 60 * MIN);
+    const [mid] = await playersWithWins(t, 1, `${prefix}m`, 250);
+    t.clock.set(T0 + 90 * MIN);
+    await playersWithWins(t, 1, `${prefix}c`, 270);
+    t.clock.set(T0 + 119 * MIN);
+    const [late] = await playersWithWins(t, 1, `${prefix}b`, 300);
+    const slotOf = (p: TestPlayer) => (t.rows<{ slot: number }>('SELECT slot FROM members WHERE bracket_id = ? AND player_key = ?', id, p.key())[0] as { slot: number }).slot;
+    const members = t.rows<MemberRow>('SELECT * FROM members WHERE bracket_id = ?', id);
+    const lateSlot = slotOf(late!);
+    // the case these tests guard: without the kept time, the replay would put the +119 join at +90 and retire another rival
+    // (the latest arrival left, which the real join kept); this setup must show it
+    const exact = liveRivals(roster, bracketRow(t, id), members).live.map((x) => x.slot);
+    const guessed = liveRivals(roster, bracketRow(t, id), members.filter((m) => m.slot !== lateSlot)).live.map((x) => x.slot);
+    const vanishes = exact.filter((sl) => !guessed.includes(sl));
+    expect(vanishes).toHaveLength(1);
+    return { a: a!, id, roster, n, mid: mid!, midKey: mid!.key(), late: late!, lateKey: late!.key(), lateSlot, exact, vanishes: vanishes[0] as number };
+  }
+
+  it('a joiner who forced a removal deletes their data: its join time is kept, so the same rivals show (none vanishes, none returns), retiredAt and K stay', async () => {
+    const t = makeTestApp({ env: ON });
+    const { a, id, n, late, lateSlot, exact, vanishes } = await forcingJoins(t, 'r2del');
+    const retiredBefore = (await adminOf(t, id)).retiredRivals;
+    expect(retiredBefore).toHaveLength(4);
+    expect(retiredBefore.every((r) => typeof r.retiredAt === 'number')).toBe(true);
+    t.clock.set(T0 + 6 * HOUR);
+    const before = await a.bracket();
+    expect(rivalRows(before).some((r) => r.slot === vanishes)).toBe(true);
+    expect((await late.rawMe('DELETE')).status).toBe(204);
+    expect(bracketRow(t, id).deleted_joins).toBe(`${lateSlot}:${T0 + 119 * MIN}`);
+    const after = await a.bracket();
+    expectValid(after);
+    const others = (v: BracketView) => shown(v).filter((r) => r.slot !== lateSlot).map(({ rank: _, ...r }) => r);
+    expect(others(after)).toEqual(others(before)); // the same rows less the deleted player's, in the same order
+    expect(rivalRows(after).map((r) => r.slot).sort()).toEqual([...exact].sort());
+    const ad = await adminOf(t, id);
+    expect(ad.retiredRivals).toEqual(retiredBefore);
+    expect(ad.bracket.rivals).toMatchObject({ live: n - 4 });
+    // the frozen rivals are the ones players saw (every live rival has arrived by ends_at)
+    t.clock.set(T0 + DAY - MIN);
+    await a.signIn();
+    t.clock.set(T0 + DAY + MIN); // past ends_at + the 30 s grace: this view finalises
+    const end = await a.bracket();
+    expect(end.final).toBe(true);
+    const fb = bracketRow(t, id);
+    expect((decodeFinalRivals(fb.final_rivals, fb) ?? []).map((x) => x.slot).sort()).toEqual([...exact].sort());
+  });
+
+  it('finalisation while that joiner deletes their data, between its bracket read and its members read: the bracket row is read again, so the frozen rivals are the ones players saw', async () => {
+    const t = makeTestApp({ env: ON });
+    const { a, id, lateKey, exact } = await forcingJoins(t, 'r2fin');
+    t.clock.set(T0 + DAY - MIN);
+    await a.signIn();
+    t.clock.set(T0 + DAY + MIN); // past ends_at + the 30 s grace: the next view finalises
+    expect(bracketRow(t, id).finalized_at).toBeNull();
+    const store = t.app.services.store;
+    const members = store.members.bind(store);
+    let once = true;
+    store.members = async (bid: string) => {
+      if (once) {
+        once = false;
+        await store.deletePlayer(lateKey, T0 + 30 * DAY); // commits after finalizeIfDue read the bracket row
+      }
+      return members(bid);
+    };
+    const end = await a.bracket();
+    store.members = members;
+    expect(once).toBe(false);
+    expect(end.final).toBe(true);
+    expectValid(end);
+    const fb = bracketRow(t, id);
+    expect((decodeFinalRivals(fb.final_rivals, fb) ?? []).map((x) => x.slot).sort()).toEqual([...exact].sort());
+    expect(rivalRows(end).map((r) => r.slot).sort()).toEqual([...exact].sort());
+  });
+
+  it('a heart on a rival while a forcing joiner deletes their data: after the reads it never retires the rival (200, the row keeps the heart); between the reads the answer is 404 and the retry passes', async () => {
+    const t = makeTestApp({ env: ON });
+    const { a, id, lateKey, midKey, vanishes } = await forcingJoins(t, 'r2hrt');
+    t.clock.set(T0 + 6 * HOUR);
+    const before = await a.bracket();
+    const store = t.app.services.store;
+    // the deletion commits after the handler's reads, before the heart's batch: the rival the old guess retired stays
+    const give = store.giveRivalHeart.bind(store);
+    store.giveRivalHeart = async (...args: Parameters<typeof give>) => {
+      await store.deletePlayer(lateKey, T0 + 30 * DAY);
+      return give(...args);
+    };
+    const h = await a.heart(id, vanishes);
+    store.giveRivalHeart = give;
+    expect(h).toMatchObject({ hearts: rowOf(before, vanishes).hearts + 1, likedByMe: true });
+    const v = await a.bracket();
+    expect(rowOf(v, vanishes)).toMatchObject({ hearts: rowOf(before, vanishes).hearts + 1, likedByMe: true });
+    // the +60 joiner deletes between the handler's bracket read and its members read: that join's time is in neither
+    // read, so no heart is judged from a guess (404); the retry reads again and passes
+    const target = (rivalRows(v).find((r) => r.slot !== vanishes && !r.likedByMe) as BracketView['rows'][number]).slot;
+    const members = store.members.bind(store);
+    let once = true;
+    store.members = async (bid: string) => {
+      if (once) {
+        once = false;
+        await store.deletePlayer(midKey, T0 + 30 * DAY);
+      }
+      return members(bid);
+    };
+    expect(await errorOf(await a.rawHeart(id, target))).toEqual([404, 'not_found']);
+    store.members = members;
+    expect(once).toBe(false);
+    expect(t.count('SELECT COUNT(*) FROM hearts WHERE to_slot = ?', target)).toBe(0);
+    expect((await a.heart(id, target)).likedByMe).toBe(true);
+    const after = await a.bracket();
+    expectValid(after);
+    expect(rivalRows(after).map((r) => r.slot).sort()).toEqual(rivalRows(before).map((r) => r.slot).sort());
+  });
+
+  it('deleted_joins: only r2 brackets keep a deleted join, in deletion order; r1 and untagged brackets stay NULL', async () => {
+    const t = makeTestApp({ env: ON });
+    const ps = await playersWithWins(t, 3, 'djr2');
+    const id = (await ps[0]!.bracket()).bracketId as string;
+    const joinOf = (p: TestPlayer) => t.rows<{ slot: number; joined_at: number }>('SELECT slot, joined_at FROM members WHERE player_key = ?', p.key())[0] as { slot: number; joined_at: number };
+    const [j2, j1] = [joinOf(ps[2]!), joinOf(ps[1]!)];
+    expect((await ps[2]!.rawMe('DELETE')).status).toBe(204);
+    expect((await ps[1]!.rawMe('DELETE')).status).toBe(204);
+    expect(bracketRow(t, id)).toMatchObject({ members: 1, next_slot: 3, deleted_joins: `${j2.slot}:${j2.joined_at},${j1.slot}:${j1.joined_at}` });
+    const r1 = makeTestApp({ env: ON });
+    const qs = await playersWithWins(r1, 2, 'djr1');
+    pinR1(r1);
+    expect((await qs[1]!.rawMe('DELETE')).status).toBe(204);
+    expect(r1.rows('SELECT rivals LIKE ? AS r1, members, deleted_joins FROM brackets', 'r1:%')).toEqual([{ r1: 1, members: 1, deleted_joins: null }]);
+    const off = makeTestApp();
+    const us = await playersWithWins(off, 2, 'djoff');
+    expect((await us[1]!.rawMe('DELETE')).status).toBe(204);
+    expect(off.rows('SELECT rivals, members, deleted_joins FROM brackets')).toEqual([{ rivals: null, members: 1, deleted_joins: null }]);
   });
 });

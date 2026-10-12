@@ -55,6 +55,7 @@ export function loadState(storage: KV | null): SampleState {
           b.rivals ??= null;
           b.final_rivals ??= null;
           b.final_real ??= null;
+          b.deleted_joins ??= null; // 2026-10-12, r2 (migration 0004)
         }
         return v as SampleState;
       }

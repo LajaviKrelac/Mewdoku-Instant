@@ -708,8 +708,10 @@ export class SqlStore {
    * A heart on a computer player's row (2026-10-12, D-2e-24, design §6.2): one hearts row, no members row to
    * bump (the shown count is the rival's built-in hearts plus COUNT of these). One batch of 4 statements (a real
    * heart takes 5); the insert's guards cover the races: the giver deleted meanwhile, a join that retired this
-   * rival meanwhile (`next_slot <= maxNextSlot`; a join that does not retire it does not fail the heart), the
-   * cap. Every read uses the hearts PK or a prefix of it.
+   * rival meanwhile (`next_slot <= maxNextSlot`; r1: a join that does not retire it does not fail the heart;
+   * 2026-10-12, r2: any join that forces a removal fails it, see core/table.ts rivalHeartTarget), the cap. A
+   * deletion meanwhile needs no guard: it never retires a rival (r1: K counts next_slot; r2: deletePlayer keeps the
+   * join's time in deleted_joins). Every read uses the hearts PK or a prefix of it.
    */
   async giveRivalHeart(
     bracketId: string,
@@ -828,6 +830,9 @@ export class SqlStore {
    * brackets decremented (next_slot untouched: no slot is reused), then their members, wins, rewards and
    * flags, a tombstone when suspended (delete-and-return does not lift a suspension), the player row.
    * Finalised brackets keep final_rank and final_members.
+   * 2026-10-12, r2 (migration 0004): the same statement that decrements the count appends the member's
+   * `slot:joined_at` to `deleted_joins` in r2 brackets (open or final; no key, no name), so the replay of the real
+   * joins (core/table.ts liveRivals) keeps that join's time and a deletion never changes which rivals show.
    */
   async deletePlayer(key: string, tombstoneUntil: number): Promise<void> {
     const mine = 'SELECT bracket_id FROM members WHERE player_key = ?';
@@ -848,7 +853,15 @@ export class SqlStore {
       ),
       this.q('DELETE FROM hearts WHERE (bracket_id, from_slot) IN (SELECT bracket_id, slot FROM members WHERE player_key = ?)', key),
       this.q('DELETE FROM hearts WHERE (bracket_id, to_slot) IN (SELECT bracket_id, slot FROM members WHERE player_key = ?)', key),
-      this.q(`UPDATE brackets SET members = members - 1 WHERE id IN (${mine})`, key),
+      this.q(
+        `UPDATE brackets SET members = members - 1,
+                deleted_joins = CASE WHEN rivals LIKE 'r2:%'
+                  THEN COALESCE(deleted_joins || ',', '') || (SELECT m.slot || ':' || m.joined_at FROM members m WHERE m.bracket_id = brackets.id AND m.player_key = ?)
+                  ELSE deleted_joins END
+          WHERE id IN (${mine})`,
+        key,
+        key,
+      ),
       this.q('DELETE FROM members WHERE player_key = ?', key),
       this.q('DELETE FROM wins WHERE player_key = ?', key),
       this.q('DELETE FROM rewards WHERE player_key = ?', key),

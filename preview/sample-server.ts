@@ -332,6 +332,7 @@ export function createSampleServer(deps: SampleServerDeps = {}): SampleServer {
       rivals: rivalsOn ? newRivalsTag(cfg.rivals.strength, rng, words) : null,
       final_rivals: null,
       final_real: null,
+      deleted_joins: null,
     };
     st.brackets[id] = b;
     st.members[id] = [];
@@ -589,7 +590,8 @@ export function createSampleServer(deps: SampleServerDeps = {}): SampleServer {
     if (isRivalSlot(slot)) {
       // D-2e-24 (server/src/handlers/hearts.ts): a heart on a computer player is stored like any heart; the row shows
       // its built-in hearts plus the real ones given to it (the same count for every viewer).
-      const target = rivalHeartTarget(b, slot, now, cfg.rivals.hide);
+      // 2026-10-12, r2: an r2 bracket's live rivals replay the real joins, so the target reads the member rows.
+      const target = rivalHeartTarget(b, slot, now, cfg.rivals.hide, st.members[bracketId] ?? []);
       if (!target) return fail('not_found', 'no such row');
       if (mine.some((h) => h.to_slot === slot)) return fail('heart_exists', 'heart already given');
       if (mine.length >= cap) return fail('heart_limit', `at most ${cap} hearts per bracket`);
@@ -673,6 +675,8 @@ export function createSampleServer(deps: SampleServerDeps = {}): SampleServer {
       st.members[id] = ms.filter((m) => m !== me);
       const b = st.brackets[id];
       if (b) b.members = Math.max(0, b.members - 1);
+      // 2026-10-12, r2 (server/src/store/sql-store.ts deletePlayer): an r2 bracket keeps the deleted join's time.
+      if (b?.rivals?.startsWith('r2:')) b.deleted_joins = `${b.deleted_joins ? `${b.deleted_joins},` : ''}${me.slot}:${me.joined_at}`;
     }
     st.wins = st.wins.filter((w) => w.player_key !== p.key);
     for (const [id, r] of Object.entries(st.rewards)) if (r.player_key === p.key) delete st.rewards[id];

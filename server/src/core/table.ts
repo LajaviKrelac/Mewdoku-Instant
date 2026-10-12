@@ -10,7 +10,7 @@ import type { RankWrite, RewardWrite } from '../store/sql-store';
 import { paidPlaces, rankRows } from './brackets';
 import type { ServerConfig } from './config';
 import { rewardId } from './ids';
-import { decodeFinalRivals, encodeFinalRivals, isRivalSlot, liveRivalCount, RIVAL_SLOT_BASE, rivalAt, rivalNames, rivalRoster, type FinalRival, type Roster } from './rivals';
+import { decodeFinalRivals, encodeFinalRivals, isRivalSlot, liveRivalCount, parseRivalsTag, RIVAL_SLOT_BASE, rivalAt, rivalNames, rivalRoster, type FinalRival, type RivalScript, type Roster } from './rivals';
 
 /** One row of a bracket table: a real member or a computer player (playerKey null). */
 export interface TableRow {
@@ -45,24 +45,135 @@ function realRows(members: readonly MemberRow[]): TableRow[] {
  * next_slot and nothing changes; with a stale bracket row it is the next_slot after that join.
  */
 export function liveRivalCountOf(roster: Roster, b: Pick<BracketRow, 'next_slot' | 'max_members'>, members: readonly Pick<MemberRow, 'slot'>[]): number {
+  return liveRivalCount(roster, { next_slot: nextSlotOf(b, members), max_members: b.max_members });
+}
+
+/** max(next_slot, 1 + the highest member slot): next_slot after every join the member read holds (see liveRivalCountOf). */
+function nextSlotOf(b: Pick<BracketRow, 'next_slot'>, members: readonly Pick<MemberRow, 'slot'>[]): number {
   let next = b.next_slot;
   for (const m of members) if (m.slot + 1 > next) next = m.slot + 1;
-  return liveRivalCount(roster, { next_slot: next, max_members: b.max_members });
+  return next;
+}
+
+/**
+ * A rival retired by real joins, and when (r2: the time of the join that retired it; null: r1, whose rule has no
+ * time, or an r2 join whose time liveRivals had to guess, which admin must not show as a join time).
+ */
+export interface RetiredRival {
+  readonly script: RivalScript;
+  readonly at: number | null;
+}
+
+/** 2026-10-12, r2: `brackets.deleted_joins` ("slot:joined_at,…", sql-store deletePlayer) as slot → joined_at; a malformed entry is skipped. */
+function deletedJoins(s: string | null | undefined): Map<number, number> {
+  const out = new Map<number, number>();
+  for (const e of typeof s === 'string' && s !== '' ? s.split(',') : []) {
+    const m = /^(\d{1,9}):(\d{1,16})$/.exec(e);
+    if (m) out.set(Number(m[1]), Number(m[2]));
+  }
+  return out;
+}
+
+/** 2026-10-12, r2: every real join's time the reads hold, slot → joined_at: the member rows, plus the deleted ones (deleted_joins). */
+function joinTimes(b: Pick<BracketRow, 'deleted_joins'>, members: readonly Pick<MemberRow, 'slot' | 'joined_at'>[]): Map<number, number> {
+  const out = deletedJoins(b.deleted_joins);
+  for (const m of members) out.set(m.slot, m.joined_at);
+  return out;
+}
+
+/**
+ * 2026-10-12, r2: whether the bracket row and the member rows hold the time of every real join an r2 replay may
+ * need: each slot below next_slot is a member row or in deleted_joins (true for r1 and untagged brackets, which
+ * need none). With consistent reads this always holds (every slot below next_slot was filled once, and a deletion
+ * records its join in the same batch). It fails only when the bracket row was read before a deletion committed and
+ * the members after it: then liveRivals has to guess that join's time. The callers whose answer lasts re-read the
+ * bracket row (finalizeIfDue) or refuse (rivalHeartTarget); a view shows that guess once, until its next read.
+ */
+export function joinTimesKnown(b: Pick<BracketRow, 'rivals' | 'next_slot' | 'deleted_joins'>, members: readonly Pick<MemberRow, 'slot' | 'joined_at'>[]): boolean {
+  if (parseRivalsTag(b.rivals)?.preset !== 'r2') return true;
+  const known = joinTimes(b, members);
+  for (let s = 0; s < b.next_slot; s++) if (!known.has(s)) return false;
+  return true;
+}
+
+/**
+ * Which rivals may show: `live` (K of them, liveRivalCountOf) and the `retired` rest, both in index order.
+ * r1: rival i < K (a join retires the highest live index, in the join window the lowest computer row).
+ * 2026-10-12, r2: a replay of the real joins that forced a removal, in slot order. The join of slot s forces one
+ * when s ≥ max_members − N (the T − 1 rivals leave max_members − N places to real players), up to the N − K
+ * removals K needs. Its time t_s is the joined_at of the member row with that slot, or of that slot in
+ * `deleted_joins` (a deleted player: deletePlayer keeps the time). At t_s it retires the live rival that has not
+ * arrived yet (arrivalAt > t_s) with the latest arrival (ties: the highest index), else the present rival ranked
+ * last at t_s (points desc, scoredAt asc, slot asc). A pure function of the roster and the join times (hidden rows
+ * count: they keep their slot and joined_at); live = K, so rows ≤ max_members as for r1. A later join only adds an
+ * event at the end and a deletion keeps its join's time, so the live set only shrinks and a retired rival never
+ * returns. Only when the reads straddle a deletion (joinTimesKnown false) is a time missing: the replay then uses the
+ * nearest lower known slot's time, else opened_at, and that retirement's `at` is null. Every path (the tables,
+ * finalPlan, rivalHeartTarget, admin) uses this.
+ */
+export function liveRivals(
+  roster: Roster,
+  b: Pick<BracketRow, 'next_slot' | 'max_members' | 'opened_at' | 'join_until' | 'ends_at' | 'deleted_joins'>,
+  members: readonly Pick<MemberRow, 'slot' | 'joined_at'>[],
+): { readonly live: readonly RivalScript[]; readonly retired: readonly RetiredRival[] } {
+  const k = liveRivalCountOf(roster, b, members);
+  if (roster.preset === 'r1') return { live: roster.rivals.slice(0, k), retired: roster.rivals.slice(k).map((script) => ({ script, at: null })) };
+  const n = roster.rivals.length;
+  const need = n - k;
+  const retiredAt = new Map<number, number | null>();
+  if (need > 0) {
+    const joined = joinTimes(b, members);
+    const slots = [...joined.keys()].sort((x, y) => x - y);
+    const first = b.max_members - n;
+    for (let s = first; s < first + need; s++) {
+      let at = joined.get(s);
+      const exact = at !== undefined;
+      if (at === undefined) {
+        at = b.opened_at;
+        for (let j = slots.length - 1; j >= 0; j--)
+          if ((slots[j] as number) < s) {
+            at = joined.get(slots[j] as number) as number;
+            break;
+          }
+      }
+      const t = clampTo(b, at);
+      let victim = -1;
+      for (const r of roster.rivals)
+        if (!retiredAt.has(r.index) && r.arrivalAt > t && (victim < 0 || r.arrivalAt >= (roster.rivals[victim] as RivalScript).arrivalAt)) victim = r.index;
+      if (victim < 0) {
+        let last: { points: number; scoredAt: number } | null = null;
+        for (const r of roster.rivals) {
+          if (retiredAt.has(r.index)) continue;
+          const v = rivalAt(r, b.join_until, t) as { points: number; scoredAt: number };
+          if (last === null || v.points < last.points || (v.points === last.points && v.scoredAt >= last.scoredAt)) {
+            last = v;
+            victim = r.index;
+          }
+        }
+      }
+      if (victim < 0) break;
+      retiredAt.set(victim, exact ? t : null);
+    }
+    for (let i = n - 1; i >= 0 && retiredAt.size < need; i--) if (!retiredAt.has(i)) retiredAt.set(i, null);
+  }
+  return {
+    live: roster.rivals.filter((r) => !retiredAt.has(r.index)),
+    retired: roster.rivals.filter((r) => retiredAt.has(r.index)).map((script) => ({ script, at: retiredAt.get(script.index) ?? null })),
+  };
 }
 
 /**
  * The rivals shown at `at` (clamped to [opened_at, ends_at]): none under `hide` or without a valid tag;
  * otherwise rival i < K (liveRivalCountOf) that has arrived. Names avoid every member's nickname, hidden rows included.
+ * 2026-10-12, r2: the live rivals of liveRivals (r1: still i < K) that have arrived.
  */
 function liveRivalRows(b: BracketRow, members: readonly MemberRow[], at: number, hide: boolean): TableRow[] {
   if (hide) return [];
   const roster = rivalRoster(b.rivals, b);
   if (!roster) return [];
-  const k = liveRivalCountOf(roster, b, members);
   const t = clampTo(b, at);
   const present: { slot: number; points: number; scoredAt: number; hearts: number }[] = [];
-  for (let i = 0; i < k; i++) {
-    const r = roster.rivals[i] as (typeof roster.rivals)[number];
+  for (const r of liveRivals(roster, b, members).live) {
     const v = rivalAt(r, b.join_until, t);
     if (v) present.push({ slot: r.slot, ...v });
   }
@@ -85,7 +196,8 @@ export function liveTable(b: BracketRow, members: readonly MemberRow[], at: numb
 
 /**
  * The table at ends_at: what finalisation freezes. It does not depend on when finalisation runs (K is fixed
- * after join_until, rivals are clamped to ends_at).
+ * after join_until, rivals are clamped to ends_at). 2026-10-12, r2: nor does r2's live set (no join after
+ * join_until adds a replay event, and a deletion keeps its join's time in deleted_joins).
  */
 export function freezeTable(b: BracketRow, members: readonly MemberRow[], hide: boolean): RankedRow[] {
   return liveTable(b, members, b.ends_at, hide);
@@ -157,8 +269,19 @@ export function finalPlan(b: BracketRow, members: readonly MemberRow[], cfg: Ser
  * snapshot; a final bracket whose snapshot lacks the slot; an open bracket whose rival i is retired (i ≥ K)
  * or has not arrived. `builtIn` is the rival's own heart count then; `maxNextSlot` the largest next_slot
  * that keeps the rival live (the store's guard against a join retiring it meanwhile).
+ * 2026-10-12, r2: an open r2 bracket needs its `members` (slot, joined_at: the replay of liveRivals; a retired
+ * rival cannot be hearted). Any join that forces a removal could retire this rival, so `maxNextSlot` lets only
+ * the joins that force none through: max(next_slot after the member read, max_members − N). A deletion needs no
+ * guard (it keeps its join's time, so it retires no rival), but reads that straddle one (joinTimesKnown false)
+ * would judge from a guessed replay: then null too (the player's retry reads again).
  */
-export function rivalHeartTarget(b: BracketRow, slot: number, now: number, hide: boolean): { builtIn: number; maxNextSlot: number } | null {
+export function rivalHeartTarget(
+  b: BracketRow,
+  slot: number,
+  now: number,
+  hide: boolean,
+  members: readonly Pick<MemberRow, 'slot' | 'joined_at'>[] = [],
+): { builtIn: number; maxNextSlot: number } | null {
   if (hide || !isRivalSlot(slot)) return null;
   if (b.finalized_at !== null) {
     const x = decodeFinalRivals(b.final_rivals, b)?.find((r) => r.slot === slot);
@@ -166,6 +289,12 @@ export function rivalHeartTarget(b: BracketRow, slot: number, now: number, hide:
   }
   const roster = rivalRoster(b.rivals, b);
   if (!roster) return null;
+  if (roster.preset === 'r2') {
+    if (!joinTimesKnown(b, members)) return null;
+    const script = liveRivals(roster, b, members).live.find((r) => r.slot === slot);
+    const v = script ? rivalAt(script, b.join_until, clampTo(b, now)) : null;
+    return v ? { builtIn: v.hearts, maxNextSlot: Math.max(nextSlotOf(b, members), b.max_members - roster.rivals.length) } : null;
+  }
   const i = slot - RIVAL_SLOT_BASE;
   if (i >= liveRivalCount(roster, b)) return null;
   const v = rivalAt(roster.rivals[i] as (typeof roster.rivals)[number], b.join_until, clampTo(b, now));
