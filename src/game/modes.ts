@@ -4,7 +4,7 @@
 // Phase 2d (G1, docs/phase2d/look-spec.md §1.12): mouseAllowed (the third helper) = kittyAllowed.
 import { cfg, type GameConfig } from '../app/config';
 import type { Puzzle } from '../engine/types';
-import { pointsRuleFor } from './scoring';
+import { comboRuleFor, pointsRuleFor } from './scoring';
 import { TUTORIAL_COLORS } from './tutorial';
 import type { ModeId, RuleFlags } from './types';
 
@@ -38,7 +38,8 @@ export interface GameMode {
 
 /**
  * RuleFlags for a mode from cfg (hearts 3, revive 1/1; tutorial: mistakePenalty false). Phase 2c.1:
- * `points` = pointsRuleFor(id) ({576, 96} in levelPoints.modes, {0, 0} for the tutorial).
+ * `points` = pointsRuleFor(id) ({576, 96} in levelPoints.modes, {0, 0} for the tutorial); `combo` =
+ * comboRuleFor(id) (levelPoints.combo where the cats score, null for the tutorial).
  */
 export function rulesFor(id: ModeId, c: GameConfig = cfg): RuleFlags {
   return Object.freeze({
@@ -49,6 +50,7 @@ export function rulesFor(id: ModeId, c: GameConfig = cfg): RuleFlags {
     maxRevives: c.revive.maxPerAttempt,
     heartsOnRevive: c.revive.heartsRestored,
     points: pointsRuleFor(id, c),
+    combo: comboRuleFor(id, c),
   });
 }
 

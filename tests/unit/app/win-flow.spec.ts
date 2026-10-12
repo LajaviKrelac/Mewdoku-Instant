@@ -15,7 +15,7 @@ import { createFakeClock } from '../../../src/app/clock';
 import { cfg } from '../../../src/app/config';
 import { arrivalAt, createWinFlow, liftAt, panelAt, victoryCrossfadeMs, winTimeline, type WinFlowInput, type WinScreen } from '../../../src/app/win-flow';
 import type { FlyFishOptions, FxHandle } from '../../../src/ui/fx/fish-flight';
-import { createHarness, last, SOL5, startLevel, winGame, WRONG5, type Harness, tapRanking } from './harness';
+import { createBaseRuleHarness as createHarness, last, SOL5, startLevel, winGame, WRONG5, type Harness, tapRanking } from './harness';
 
 const W = cfg.fx.win;
 

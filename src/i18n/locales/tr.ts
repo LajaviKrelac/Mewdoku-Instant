@@ -393,6 +393,7 @@ export const catalog: LocaleCatalog = {
   'howto.levelPoints': 'Bulduğun her kedi puan kazandırır ve hatasız art arda bulduğun her kedi bir öncekinden daha fazla kazandırır. Hata hiçbir zaman puan götürmez ama sayım bir sonraki kediyle baştan başlar. İpucunun ya da pisinin yerleştirdiği kediler de sayılır.',
   // ── Phase 2d: the Score column, the mouse, the start toast, the gear's dot (AI draft 2026-10-10, unreviewed) ──
   'game.score': 'Puan',
+  'game.combo': 'Kombo x{count}',
   'common.settings.new': 'Ayarlar, yeni bir şey var',
   'game.tool.mouse': 'Fare',
   'game.tool.mouse.a11y': 'Fare: kedisi olmayan {count} kareye çarpı koyar',

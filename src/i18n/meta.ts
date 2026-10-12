@@ -173,6 +173,7 @@ const NOTES: Readonly<Partial<Record<I18nKey, Partial<KeyMeta>>>> = {
   'home.daily.sub': { description: 'Daily card second line: size · status', translatable: false },
   // Phase 2d (look-spec Appendix A).
   'game.score': { description: 'The top bar\'s label over the level points of this level (one short word, about 19 px, centred over the number; never "fish")', maxLength: 10 },
+  'game.combo': { description: 'Text on the green combo bar under the game bar: {count} is how many cats were found in quick succession (1, 2, 3 …); "x" reads "times". Short: it sits on a bar about 150 px wide', maxLength: 16 },
   'common.settings.new': { description: 'Screen-reader name of the gear button while its red dot shows (something in Settings is new)', maxLength: 40 },
   'game.tool.mouse': { description: 'Name of the third helper: a little mouse that crosses out a few tiles that cannot hold a cat (an animal, never the computer device)', maxLength: 12 },
   'game.tool.mouse.a11y': { description: 'Screen-reader name of the mouse button; {count} is 3' },
@@ -362,15 +363,15 @@ const NOTES: Readonly<Partial<Record<I18nKey, Partial<KeyMeta>>>> = {
  */
 export const SAME_AS_ENGLISH: Readonly<Partial<Record<LocaleId, readonly I18nKey[]>>> = {
   de: ['about.version', 'common.ok', 'home.play', 'game.title.level', 'victory.next', 'shop.title', 'settings.shop', 'glyph.1', 'glyph.6', 'rank.tab.event'],
-  fr: ['about.version', 'common.ok', 'points.count.one', 'points.count.other', 'a11y.points.one', 'a11y.points.other', 'glyph.2', 'glyph.8', 'ads.placeholder.title'],
-  it: ['common.ok', 'color.3', 'shop.owned'],
+  fr: ['about.version', 'common.ok', 'points.count.one', 'points.count.other', 'a11y.points.one', 'a11y.points.other', 'glyph.2', 'glyph.8', 'ads.placeholder.title', 'game.combo'],
+  it: ['common.ok', 'color.3', 'shop.owned', 'game.combo'],
   // Phase 2d: "Coral" is the Portuguese and Spanish word too.
-  'pt-BR': ['color.0'],
-  es: ['color.0'],
+  'pt-BR': ['color.0', 'game.combo'],
+  es: ['color.0', 'game.combo'],
   id: ['rank.tab.event', 'color.4', 'game.title.level', 'home.play', 'victory.next'],
   tr: [],
   pl: ['common.ok'],
-  vi: [],
+  vi: ['game.combo'],
   ja: ['common.ok'],
 };
 

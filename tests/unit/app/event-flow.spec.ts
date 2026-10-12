@@ -11,7 +11,7 @@ import { eventEnd, eventStart, type EventDef } from '../../../src/game/events';
 import { defaults } from '../../../src/game/save';
 import type { InProgressV2, SaveData } from '../../../src/game/types';
 import { t } from '../../../src/i18n';
-import { createHarness, SOL5, WRONG5, type Harness, tapRanking } from './harness';
+import { createBaseRuleHarness as createHarness, SOL5, WRONG5, type Harness, tapRanking } from './harness';
 
 const DEFS = bundledEventDefs();
 const LANTERN = DEFS[0] as EventDef;

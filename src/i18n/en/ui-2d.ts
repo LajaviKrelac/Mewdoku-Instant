@@ -11,6 +11,8 @@ export const enUi2d = {
   // Phase 2e I-4 (lead): the keys only lazy chunks show moved verbatim to ./lazy.ts (enLazyUi2d); see src/i18n/en-first.ts.
   // ── The game bar (§1.4) ────────────────────────────────────────────────────
   'game.score': 'Score',
+  // The combo bar under the game bar (user, 2026-10-12): {count} is the combo, 1, 2, 3 …
+  'game.combo': 'Combo x{count}',
   // The gear's accessible name while its red dot shows (§1.15).
   'common.settings.new': 'Settings, something new',
   'game.tool.mouse.a11y': 'Mouse: crosses out {count} tiles that have no cat',

@@ -83,11 +83,11 @@ describe('who places the cat (F5.4) and what is not a cat', () => {
     const totals = [s.levelPoints];
     s = reduce(s, { type: 'HINT_OPEN', step: step({ kind: 'single', placeCell: SOL5[1] as number }), charged: true }).state;
     let r = reduce(s, { type: 'HINT_APPLY', t: 1 });
-    expect(pointsOf(r.events)).toEqual([{ type: 'POINTS', cell: SOL5[1], gained: 672, total: 1_248, streak: 2 }]);
+    expect(pointsOf(r.events)).toEqual([{ type: 'POINTS', cell: SOL5[1], gained: 672, total: 1_248, streak: 2, combo: 0 }]);
     s = r.state;
     totals.push(s.levelPoints);
     r = reduce(s, { type: 'KITTY', cell: SOL5[2] as number, t: 2 });
-    expect(pointsOf(r.events)).toEqual([{ type: 'POINTS', cell: SOL5[2], gained: 768, total: 2_016, streak: 3 }]);
+    expect(pointsOf(r.events)).toEqual([{ type: 'POINTS', cell: SOL5[2], gained: 768, total: 2_016, streak: 3, combo: 0 }]);
     s = reduce(r.state, { type: 'KITTY_DONE' }).state;
     totals.push(s.levelPoints);
     s = reduce(s, dbl(SOL5[3] as number)).state;
@@ -153,7 +153,7 @@ describe('the attempt (F5.1): fail, revive, Retry, a new board', () => {
     s = rv.state;
     expect(s).toMatchObject({ status: 'playing', levelPoints: 1_248, catStreak: 0, scoredRows: 0b11 });
     const r = reduce(s, dbl(SOL5[2] as number));
-    expect(pointsOf(r.events)).toEqual([{ type: 'POINTS', cell: SOL5[2], gained: 576, total: 1_824, streak: 1 }]);
+    expect(pointsOf(r.events)).toEqual([{ type: 'POINTS', cell: SOL5[2], gained: 576, total: 1_824, streak: 1, combo: 0 }]);
   });
 
   it('RETRY starts the attempt at 0 / 0 / 0, and so does a new board', () => {

@@ -374,6 +374,7 @@ export const catalog: LocaleCatalog = {
   'howto.levelPoints': 'Setiap kucing yang kamu temukan memberi poin, dan setiap kucing berturut-turut tanpa salah memberi lebih banyak daripada sebelumnya. Kesalahan tidak pernah mengurangi poin, tetapi hitungan dimulai lagi dari kucing berikutnya. Kucing yang ditaruh oleh petunjuk atau Meong juga dihitung.',
   // ── Phase 2d: the Score column, the mouse, the start toast, the gear's dot (AI draft 2026-10-10, unreviewed) ──
   'game.score': 'Skor',
+  'game.combo': 'Kombo x{count}',
   'common.settings.new': 'Pengaturan, ada yang baru',
   'game.tool.mouse': 'Tikus',
   'game.tool.mouse.a11y': 'Tikus: mencoret {count} kotak tanpa kucing',

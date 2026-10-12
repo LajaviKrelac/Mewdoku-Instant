@@ -412,6 +412,15 @@ export interface Harness {
   settle(ms?: number): Promise<void>;
 }
 
+/**
+ * A harness whose combo pays no bonus (levelPoints.combo.bonusPct 0): the tests of the base per-cat
+ * rule place cats with no game time between them, so every cat would chain a combo.
+ */
+export function createBaseRuleHarness(opts: HarnessOptions = {}): Harness {
+  const lp = opts.config?.levelPoints;
+  return createHarness({ ...opts, config: { ...opts.config, levelPoints: { ...lp, combo: { ...lp?.combo, bonusPct: 0 } } } });
+}
+
 export function createHarness(opts: HarnessOptions = {}): Harness {
   const log: Log = [];
   const clock = createFakeClock(NOW);

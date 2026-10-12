@@ -192,7 +192,7 @@ describe('playing POINTS (celebrate.play)', () => {
     const onLand = vi.fn();
     const target = vi.fn(() => rect(240, 85, 25, 21));
     const fx = createCelebrate(layer, ctx({ reduced: () => reduced, scoreRect: target, countTo: onLand }));
-    fx.play({ type: 'POINTS', cell: 8, gained: 576, total: 576, streak: 1 });
+    fx.play({ type: 'POINTS', cell: 8, gained: 576, total: 576, streak: 1, combo: 0 });
     return { layer, fx, onLand, target };
   };
 
@@ -380,7 +380,7 @@ describe('which event plays what (CONTRACTS-2d1 §8)', () => {
     createCelebrate(layer, ctx({ reduced: () => true })).play({ type: 'CAT_PLACED', cell: 8, source: 'player' });
     expect(layer.children.length).toBe(0);
     const fx = createCelebrate(layer, ctx({ cellRect: () => null }));
-    fx.play({ type: 'POINTS', cell: 8, gained: 96, total: 672, streak: 2 });
+    fx.play({ type: 'POINTS', cell: 8, gained: 96, total: 672, streak: 2, combo: 0 });
     fx.play({ type: 'MARKED', cells: [1, 2] });
     fx.play({ type: 'REGION_DONE', region: 1 });
     expect(layer.children.length).toBe(0);

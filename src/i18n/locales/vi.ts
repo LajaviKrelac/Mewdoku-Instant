@@ -374,6 +374,7 @@ export const catalog: LocaleCatalog = {
   'howto.levelPoints': 'Mỗi chú mèo bạn tìm được đều cho điểm, và mỗi chú mèo tìm liên tiếp không sai lần nào cho nhiều điểm hơn chú trước. Sai không bao giờ làm mất điểm, nhưng chú mèo tiếp theo sẽ tính lại từ đầu. Mèo do gợi ý hoặc mèo con đặt cũng được tính.',
   // ── Phase 2d: the Score column, the mouse, the start toast, the gear's dot (AI draft 2026-10-10, unreviewed) ──
   'game.score': 'Điểm',
+  'game.combo': 'Combo x{count}',
   'common.settings.new': 'Cài đặt, có điều mới',
   'game.tool.mouse': 'Chuột',
   'game.tool.mouse.a11y': 'Chuột: gạch {count} ô không có mèo',

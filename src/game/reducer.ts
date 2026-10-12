@@ -10,8 +10,12 @@
 // HINT_APPLY, KITTY, MOUSE) that completes a row, column or colour region emits UNITS_DONE after its
 // MARKED / CAT_PLACED / POINTS / REGION_DONE and before WON; never in an action that ends in LOST. The
 // mouse's MARKED keeps its pick order (the visit order).
+// The combo (user, 2026-10-12; scoring.ts): a scoring cat found while the combo's countdown runs
+// (elapsedMs < comboEndsMs) raises it by one, else starts it at x1; either way the countdown restarts
+// with comboWindowMs(combo). The cat's increment gets the combo's bonus (comboPoints). A MISTAKE ends
+// the combo; so does a TICK that reaches comboEndsMs.
 import { newGame } from './factory';
-import { catIncrement } from './scoring';
+import { catIncrement, comboPoints, comboWindowMs } from './scoring';
 import { changedCells, completedUnits } from './units';
 import {
   CellState,
@@ -154,13 +158,19 @@ function withCat(s: GameState, cell: CellIndex, source: CatSource, t: number, ev
   const catsPlaced = s.catsPlaced + 1;
   events.push({ type: 'CAT_PLACED', cell, source });
   const rowBit = 1 << Math.floor(cell / s.puzzle.n);
-  let { levelPoints, catStreak, scoredRows } = s;
+  let { levelPoints, catStreak, scoredRows, combo, comboEndsMs, comboWindowMs: comboWindow } = s;
   if ((scoredRows & rowBit) === 0) {
     catStreak += 1;
     scoredRows |= rowBit;
-    const gained = catIncrement(catStreak, s.rules.points);
+    const rule = s.rules.combo;
+    if (rule) {
+      combo = combo > 0 && s.elapsedMs < comboEndsMs ? combo + 1 : 1;
+      comboWindow = comboWindowMs(combo, rule);
+      comboEndsMs = s.elapsedMs + comboWindow;
+    }
+    const gained = comboPoints(catIncrement(catStreak, s.rules.points), combo, rule);
     levelPoints += gained;
-    if (gained > 0) events.push({ type: 'POINTS', cell, gained, total: levelPoints, streak: catStreak });
+    if (gained > 0) events.push({ type: 'POINTS', cell, gained, total: levelPoints, streak: catStreak, combo });
   }
   const region = s.puzzle.regions[cell] ?? 0;
   const bit = 1 << region;
@@ -181,6 +191,9 @@ function withCat(s: GameState, cell: CellIndex, source: CatSource, t: number, ev
     levelPoints,
     catStreak,
     scoredRows,
+    combo,
+    comboEndsMs,
+    comboWindowMs: comboWindow,
   };
 }
 
@@ -229,7 +242,7 @@ function removeCat(s: GameState, cell: CellIndex, t: number): ReduceResult {
 /**
  * 02 §8 step 2. With rules.mistakePenalty = false (tutorial) a wrong attempt only pulses. Phase 2c.1
  * §3.2.2 (F5.3): a mistake takes no points away and resets the cat run (catStreak = 0), so the next
- * correct cat adds firstIncrement again.
+ * correct cat adds firstIncrement again. It also ends the combo.
  */
 function wrongAttempt(s: GameState, cell: CellIndex, t: number): ReduceResult {
   if (!s.rules.mistakePenalty) return pulse(s, cell);
@@ -246,6 +259,7 @@ function wrongAttempt(s: GameState, cell: CellIndex, t: number): ReduceResult {
       hearts,
       mistakes: s.mistakes + 1,
       catStreak: 0,
+      ...NO_COMBO,
       status: lost ? 'lost' : s.status,
       moves: [...s.moves, { t, kind: 'wrong', cell }],
     },
@@ -344,7 +358,13 @@ function revive(s: GameState, t: number): ReduceResult {
   };
 }
 
+/** The combo fields with no combo running. */
+const NO_COMBO = { combo: 0, comboEndsMs: 0, comboWindowMs: 0 } as const;
+
+/** Game time passes; a combo whose countdown it reaches ends. */
 function tick(s: GameState, dtMs: number): ReduceResult {
   if (!Number.isFinite(dtMs) || dtMs <= 0) return none(s);
-  return { state: { ...s, elapsedMs: s.elapsedMs + dtMs }, events: [] };
+  const elapsedMs = s.elapsedMs + dtMs;
+  const ended = s.combo > 0 && elapsedMs >= s.comboEndsMs;
+  return { state: ended ? { ...s, elapsedMs, ...NO_COMBO } : { ...s, elapsedMs }, events: [] };
 }

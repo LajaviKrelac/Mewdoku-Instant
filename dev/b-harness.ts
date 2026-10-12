@@ -417,10 +417,10 @@ const VIEWS: Record<string, () => void> = {
         g.update(gameView(b, { reducedMotion: reduced, ...over }));
         if (ev) g.playEvent(ev);
       }, ms);
-    step(900, midGame(37, 0, [0, 3]), { points: 1248 }, { type: 'POINTS', cell: sol(3), gained: 672, total: 1248, streak: 2 });
-    step(2100, midGame(37, 0, [0, 3, 5]), { points: 2016 }, { type: 'POINTS', cell: sol(5), gained: 768, total: 2016, streak: 3 });
+    step(900, midGame(37, 0, [0, 3]), { points: 1248 }, { type: 'POINTS', cell: sol(3), gained: 672, total: 1248, streak: 2, combo: 0 });
+    step(2100, midGame(37, 0, [0, 3, 5]), { points: 2016 }, { type: 'POINTS', cell: sol(5), gained: 768, total: 2016, streak: 3, combo: 0 });
     step(3300, midGame(37, 1, [0, 3, 5]), { points: 2016, hearts: 2 }, { type: 'MISTAKE', cell: 5, heartsLeft: 2 } as never);
-    step(4500, midGame(37, 1, [0, 3, 5, 1]), { points: 2592, hearts: 2 }, { type: 'POINTS', cell: sol(1), gained: 576, total: 2592, streak: 1 });
+    step(4500, midGame(37, 1, [0, 3, 5, 1]), { points: 2592, hearts: 2 }, { type: 'POINTS', cell: sol(1), gained: 576, total: 2592, streak: 1, combo: 0 });
   },
   'fish-loss': () => {
     const b = midGame(37, 1);

@@ -83,7 +83,7 @@ describe('HINT_APPLY (02 §9.1 step 4)', () => {
     expect(r.events).toEqual([
       { type: 'HINT_APPLIED', step: h },
       { type: 'CAT_PLACED', cell: target, source: 'hint' },
-      { type: 'POINTS', cell: target, gained: 576, total: 576, streak: 1 },
+      { type: 'POINTS', cell: target, gained: 576, total: 576, streak: 1, combo: 0 },
       { type: 'REGION_DONE', region: 3 },
     ]);
     expect(r.state.catsPlaced).toBe(1);
@@ -129,7 +129,7 @@ describe('KITTY (02 §9.2)', () => {
     const r = reduce(playing(), { type: 'KITTY', cell: target, t: 3 });
     expect(r.events).toEqual([
       { type: 'CAT_PLACED', cell: target, source: 'kitty' },
-      { type: 'POINTS', cell: target, gained: 576, total: 576, streak: 1 },
+      { type: 'POINTS', cell: target, gained: 576, total: 576, streak: 1, combo: 0 },
       { type: 'REGION_DONE', region: 1 },
     ]);
     expect(r.state).toMatchObject({ status: 'kitty', kittiesUsed: 1, catsPlaced: 1, hearts: 3 });

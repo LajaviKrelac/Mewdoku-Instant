@@ -375,6 +375,7 @@ export const catalog: LocaleCatalog = {
   'howto.levelPoints': '고양이를 찾을 때마다 포인트를 받아요. 실수 없이 연속으로 찾으면 한 마리마다 앞의 고양이보다 더 많이 받아요. 실수해도 포인트가 줄지는 않지만, 다음 고양이부터 다시 세요. 힌트나 냥이가 놓은 고양이도 포함돼요.',
   // ── Phase 2d: the Score column, the mouse, the start toast, the gear's dot (AI draft 2026-10-10, unreviewed) ──
   'game.score': '점수',
+  'game.combo': '콤보 x{count}',
   'common.settings.new': '설정, 새 항목 있음',
   'game.tool.mouse': '생쥐',
   'game.tool.mouse.a11y': '생쥐: 고양이가 없는 칸 {count}개에 X 표시',

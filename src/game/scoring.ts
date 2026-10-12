@@ -1,12 +1,13 @@
 // Owner: C (Phase 2b). Phase 2c (G1): leaderboard points per UTC period and the period board
 // encoding (docs/phase2c/fish-lives-spec.md §3.4–§3.6, §4.3). Phase 2c.1 (G1): level points per
 // correct cat inside one attempt (pointsRuleFor, catIncrement, runTotal; §3.1, the user's rule F5);
+// the combo on top of it (comboRuleFor, comboWindowMs, comboPoints, comboRunMax; user, 2026-10-12);
 // the 2c per-win formula (levelPointsFor) and the perfect streak (streakAfterWin, breakStreak) are gone.
 // Level points, board score encodings and the client-side submit limits (phase2b §5.3). PURE.
 // Every encoded score is an integer, higher is better, and < 2³¹. Decoding is used by the app to
 // format overlay rows and the ranking panel (platform/ never imports this module: CONTRACTS §2).
 import { cfg, type GameConfig, type ScoredMode } from '../app/config';
-import type { BoardKey, ModeId, PointsRule, SaveData } from './types';
+import type { BoardKey, ComboRule, ModeId, PointsRule, SaveData } from './types';
 
 /**
  * points.total += n, capped at points.max (never negative). Phase 2c.1 §3.2.4: the lifetime sum of the
@@ -51,6 +52,42 @@ export function runTotal(k: number, r: PointsRule): number {
   const n = Number.isFinite(k) ? Math.floor(k) : 0;
   if (n <= 0) return 0;
   return n * r.first + (r.step * n * (n - 1)) / 2;
+}
+
+// ─────────────────────────────── the combo (user, 2026-10-12) ───────────────────────────────
+
+/** The combo of `mode` (cfg.levelPoints.combo) where its cats score level points, else null (the tutorial). */
+export function comboRuleFor(mode: ModeId, c: GameConfig = cfg): ComboRule | null {
+  return pointsRuleFor(mode, c).first > 0 ? Object.freeze({ ...c.levelPoints.combo }) : null;
+}
+
+/**
+ * The countdown after the cat that made combo xc (c ≥ 1): max(minWindowMs, windowMs − windowStepMs ×
+ * (c − 1)). Default config: 10 s, 8 s, 6 s, 4 s, then 2 s for every further cat.
+ */
+export function comboWindowMs(c: number, r: ComboRule): number {
+  const n = Number.isFinite(c) ? Math.max(1, Math.floor(c)) : 1;
+  return Math.max(r.minWindowMs, r.windowMs - r.windowStepMs * (n - 1));
+}
+
+/**
+ * A cat's increment at combo xc: round(increment × (100 + bonusPct × (c − 1)) / 100); the increment
+ * itself for c ≤ 1 or with no combo rule. Default config: 672 at x2 → 739, 768 at x3 → 922.
+ */
+export function comboPoints(increment: number, c: number, r: ComboRule | null | undefined): number {
+  if (!r || !Number.isFinite(c) || c <= 1) return increment;
+  return Math.round((increment * (100 + r.bonusPct * (Math.floor(c) - 1))) / 100);
+}
+
+/**
+ * The most an unbroken run of k cats can total with the combo: every cat at the highest combo it can
+ * reach (the s-th cat at xs). Equals runTotal(k, p) with no combo rule. The restore's upper bound.
+ */
+export function comboRunMax(k: number, p: PointsRule, r: ComboRule | null | undefined): number {
+  const n = Number.isFinite(k) ? Math.floor(k) : 0;
+  let sum = 0;
+  for (let s = 1; s <= n; s++) sum += comboPoints(catIncrement(s, p), s, r);
+  return sum;
 }
 
 /**

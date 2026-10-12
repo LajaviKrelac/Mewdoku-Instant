@@ -44,6 +44,7 @@ import { cfg } from '../../app/config';
 import { formatShortDate, onLocaleChanged, t, translate } from '../../i18n';
 import { createBoardView, loadMouseRun, type BoardHighlight, type BoardModel } from '../board/board-view';
 import { computeLayout, readViewport, type GameLayout, type ViewportInfo } from '../board/layout';
+import { createComboBar, type ComboBarProps } from '../hud/combo-bar';
 import { createGameBar, type GameBarProps } from '../hud/game-bar';
 import { createPills, type LifeSlotRect, type PillsProps } from '../hud/pills';
 import { createRuleChips, type RuleChip, type RuleChipsProps } from '../hud/rule-chips';
@@ -94,6 +95,11 @@ export interface GameView {
    * levelPoints.modes). Required since 2c.1 I-3.
    */
   readonly points: number | null;
+  /**
+   * The combo bar under the game bar (user, 2026-10-12): the running combo, its whole countdown and
+   * what is left of it, and whether the game clock runs. Absent or null: no combo (the bar hides).
+   */
+  readonly combo?: { readonly count: number; readonly windowMs: number; readonly leftMs: number; readonly running: boolean } | null;
   /** Phase 2d §1.11: which helper pulses now (fx.helperPulse.target); null = none. */
   readonly pulse: 'paw' | 'bulb' | null;
   /** Phase 2d §1.12: the third helper, shown (cfg.mouse.enabled, not the tutorial, the mode allows the kitty) and enabled. */
@@ -260,6 +266,13 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
     reducedMotion: v.reducedMotion,
     starPoints: starMode(v),
   });
+  const comboProps = (v: GameView): ComboBarProps => ({
+    count: v.combo?.count ?? 0,
+    windowMs: v.combo?.windowMs ?? 0,
+    leftMs: v.combo?.leftMs ?? 0,
+    running: v.combo?.running === true,
+    reducedMotion: v.reducedMotion,
+  });
   const pillsProps = (v: GameView): PillsProps => ({
     catsPlaced: v.catsPlaced,
     n: v.board.n,
@@ -303,6 +316,9 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
       if (!locked()) cb.onSettings();
     },
   });
+  // The combo bar hangs under the game bar's middle (hud.css), out of the measured stack.
+  const comboBar = createComboBar(comboProps(view));
+  topBar.el.appendChild(comboBar.el);
   const pills = createPills(pillsProps(view));
   const chips = createRuleChips(chipsProps(view));
   const board = createBoardView(
@@ -553,6 +569,7 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
     else delete el.dataset.eventTheme;
     if (!prev || prev.event?.def.theme.accessory !== v.event?.def.theme.accessory) board.setAccessory(v.event?.def.theme.accessory ?? null);
     topBar.update(barProps(v));
+    comboBar.update(comboProps(v));
     if (!prev || (prev.chromeLocked === true) !== (v.chromeLocked === true)) renderChromeLock(v.chromeLocked === true);
     pills.update(pillsProps(v));
     chips.update(chipsProps(v));
@@ -702,6 +719,7 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
         for (const k of ['--play-band', '--play-band-bottom', '--toast-bottom']) root.style.removeProperty(k);
         root.removeAttribute('data-play-band');
       }
+      comboBar.destroy();
       topBar.destroy();
       pills.destroy();
       chips.destroy();

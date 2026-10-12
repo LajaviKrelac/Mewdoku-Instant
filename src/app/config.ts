@@ -986,6 +986,20 @@ export interface GameConfig {
     readonly firstIncrement: number;
     /** Each further correct cat in a row adds this much more than the one before (s ≥ 2): 96. User, first-hand, 2026-10-10. */
     readonly step: number;
+    /**
+     * The COMBO (user, 2026-10-12; inspired by Goods Sort): the first scoring cat starts a countdown of
+     * windowMs (game time) and the combo is x1. A scoring cat found before the countdown runs out raises
+     * the combo by one and restarts the countdown, windowStepMs shorter each time, never below
+     * minWindowMs (10 s, 8 s, 6 s, 4 s, 2 s, 2 s …). The countdown running out or a mistake ends it.
+     * A cat at combo xc is worth its increment × (100 + bonusPct × (c − 1)) %, rounded: 576, 672 × 110 %,
+     * 768 × 120 %, … The combo never takes points away.
+     */
+    readonly combo: {
+      readonly windowMs: number;
+      readonly windowStepMs: number;
+      readonly minWindowMs: number;
+      readonly bonusPct: number;
+    };
   };
   /**
    * Phase 2c §4: LEADERBOARD POINTS [DECISION: default, user may change]. A counted win in a mode of
@@ -1523,7 +1537,8 @@ export const cfg: GameConfig = deepFreeze({
   fish: { perWin: 3, hardBonus: 2, dailyBonus: 2, tutorial: 3, groupParticipation: 10, max: 999_999 },
   shop: { hintFish: 15, kittyFish: 30 },
   points: { perSize: 5, hardMultiplier: 2, flawless: 10, unaided: 10, daily: 15, event: 5, max: 2_000_000_000 },
-  levelPoints: { perSize: 10, hardMultiplier: 2, streakStep: 10, streakCap: 10, modes: ['level', 'daily', 'event'], firstIncrement: 576, step: 96 },
+  levelPoints: { perSize: 10, hardMultiplier: 2, streakStep: 10, streakCap: 10, modes: ['level', 'daily', 'event'], firstIncrement: 576, step: 96,
+    combo: { windowMs: 10_000, windowStepMs: 2_000, minWindowMs: 2_000, bonusPct: 10 } },
   period: { kind: 'week', pointsPerFish: 1, modes: ['level', 'daily', 'event'], max: 99_999 },
   events: { teaseHours: 72, cardEndsSoonHours: 48 },
   rank: {

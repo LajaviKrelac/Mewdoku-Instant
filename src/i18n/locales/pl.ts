@@ -426,6 +426,7 @@ export const catalog: LocaleCatalog = {
   'howto.levelPoints': 'Każdy znaleziony kot daje punkty, a każdy kolejny kot znaleziony z rzędu bez błędu daje więcej niż poprzedni. Błąd nigdy nie odbiera punktów, ale od następnego kota liczenie zaczyna się od nowa. Koty postawione przez podpowiedź lub kotka też się liczą.',
   // ── Phase 2d: the Score column, the mouse, the start toast, the gear's dot (AI draft 2026-10-10, unreviewed) ──
   'game.score': 'Punkty',
+  'game.combo': 'Kombo x{count}',
   'common.settings.new': 'Ustawienia, coś nowego',
   'game.tool.mouse': 'Myszka',
   'game.tool.mouse.a11y': 'Myszka: skreśla {count} pola bez kota',

@@ -1,8 +1,9 @@
 // Owner: C (Phase 2b; was game). Hand-made puzzles and helpers for the game rule tests (no generator, no codec).
 import type { HintStep, LevelRecord, Puzzle, PuzzleId } from '../../../src/engine/types';
 import { newGame } from '../../../src/game/factory';
+import { rulesFor } from '../../../src/game/modes';
 import { reduce } from '../../../src/game/reducer';
-import type { Action, GameEvent, GameState, ModeId } from '../../../src/game/types';
+import type { Action, GameEvent, GameState, ModeId, RuleFlags } from '../../../src/game/types';
 
 /** Decodes letters/base-36 like the codec, so these tests never depend on the engine. */
 export function makePuzzle(id: PuzzleId, r: string, s: string, givens: number[] = []): Puzzle {
@@ -43,9 +44,18 @@ export const SOL5 = [cell(0, 0), cell(1, 2), cell(2, 4), cell(3, 1), cell(4, 3)]
 /** A few non-solution cells of P5. */
 export const WRONG5 = [cell(0, 1), cell(0, 2), cell(1, 0), cell(4, 4)];
 
-/** A new game already past READY (START applied). */
+/**
+ * The mode's rules without the combo: these tests place cats with no game time between them, so with
+ * the combo every cat would chain; the base per-cat rule is checked on its own (the combo has
+ * reducer-combo.spec.ts).
+ */
+export function baseRules(mode: ModeId = 'level'): RuleFlags {
+  return Object.freeze({ ...rulesFor(mode), combo: null });
+}
+
+/** A new game already past READY (START applied), on the base rules (no combo). */
 export function playing(puzzle: Puzzle = P5, mode: ModeId = 'level'): GameState {
-  return reduce(newGame(puzzle, mode), { type: 'START' }).state;
+  return reduce(newGame(puzzle, mode, baseRules(mode)), { type: 'START' }).state;
 }
 
 /** Applies actions in order; returns the final state and every event. */

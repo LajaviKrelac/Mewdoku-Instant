@@ -156,7 +156,7 @@ describe('phase2c.1 §3.2.3: level points in the slot (restore exactly, else der
     expect(g).toMatchObject({ levelPoints: 1_824, catStreak: 1, scoredRows: 0b111, mistakes: 1 });
     const next = reduce(reduce(g, { type: 'START' }).state, C(3));
     expect(next.state.levelPoints).toBe(2_496);
-    expect(next.events).toContainEqual({ type: 'POINTS', cell: SOL5[3], gained: 672, total: 2_496, streak: 2 });
+    expect(next.events).toContainEqual({ type: 'POINTS', cell: SOL5[3], gained: 672, total: 2_496, streak: 2, combo: 1 });
   });
 
   it('a removed cat restores exactly too: its row stays scored, so putting it back adds nothing', () => {
@@ -257,6 +257,8 @@ describe('modes (02 §22 GameMode registry)', () => {
         heartsOnRevive: 1,
         // phase2c.1 §3.2.1: what a correct cat is worth ({0, 0}: the tutorial scores nothing).
         points: id === 'tutorial' ? { first: 0, step: 0 } : { first: 576, step: 96 },
+        // The combo (user, 2026-10-12): where the cats score; none in the tutorial.
+        combo: id === 'tutorial' ? null : { windowMs: 10_000, windowStepMs: 2_000, minWindowMs: 2_000, bonusPct: 10 },
       });
       expect(getMode(id).id).toBe(id);
       expect(Object.isFrozen(getMode(id))).toBe(true);

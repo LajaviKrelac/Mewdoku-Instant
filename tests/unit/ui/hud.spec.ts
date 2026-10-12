@@ -85,7 +85,7 @@ describe('top bar (Home, event screen)', () => {
 // ─────────────────────────── the game bar (look-spec §1.4, §1.13) ───────────────────────────
 
 const barProps: GameBarProps = { title: 'Level 96', hard: false, showBack: true, fbSafeZone: false, settingsDot: false, points: 0, final: false, reducedMotion: false, starPoints: false };
-const pts = (gained: number, total: number, streak = 1): GameEvent => ({ type: 'POINTS', cell: 0, gained, total, streak });
+const pts = (gained: number, total: number, streak = 1): GameEvent => ({ type: 'POINTS', cell: 0, gained, total, streak, combo: 0 });
 const nums = (el: HTMLElement): string[] => Array.from(el.querySelectorAll('.points-pill__n')).map((e) => e.textContent ?? '');
 
 describe('the game bar: back · Level / Score · gear (§1.4)', () => {

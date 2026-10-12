@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 import { migrate } from '../../../src/game/save';
 import type { AppState } from '../../../src/app/store';
 import type { SaveData } from '../../../src/game/types';
-import { createHarness, last, loseGame, NOW, SOL5, startLevel, tapRanking, TODAY, winGame, WRONG5, type Harness } from './harness';
+import { createBaseRuleHarness as createHarness, last, loseGame, NOW, SOL5, startLevel, tapRanking, TODAY, winGame, WRONG5, type Harness } from './harness';
 
 const C = (h: Harness, r: number): void => h.session.onCellDoubleTap(SOL5[r] as number);
 

@@ -393,6 +393,7 @@ export const catalog: LocaleCatalog = {
   'howto.levelPoints': 'हर बिल्ली ढूँढने पर पॉइंट मिलते हैं, और बिना गलती लगातार ढूँढी गई हर बिल्ली पिछली से ज़्यादा पॉइंट देती है। गलती से पॉइंट कभी नहीं कटते, लेकिन अगली बिल्ली से गिनती फिर शुरू होती है। संकेत या किटी की रखी बिल्लियाँ भी गिनी जाती हैं।',
   // ── Phase 2d: the Score column, the mouse, the start toast, the gear's dot (AI draft 2026-10-10, unreviewed) ──
   'game.score': 'स्कोर',
+  'game.combo': 'कॉम्बो x{count}',
   'common.settings.new': 'सेटिंग्स, कुछ नया है',
   'game.tool.mouse': 'चूहा',
   'game.tool.mouse.a11y': 'चूहा: बिना बिल्ली वाले {count} खाने काटता है',
