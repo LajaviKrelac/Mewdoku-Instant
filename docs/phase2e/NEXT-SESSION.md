@@ -87,6 +87,10 @@ upload; this note records the result and what is left.
   `260f5e67-664b-4e8a-8f95-7c28b2e5a78b`). `/v1/health` ok, db ok. Only brackets created after the deploy get computer
   rivals; a running bracket finishes as it started. Rollback: `wrangler rollback --env staging` (the old code ignores
   the new columns) or `CONFIG_OVERRIDES {"rivals":{"pools":[]}}`.
+- 2026-10-12 UTC, staging server: migration `0004_deleted_joins.sql` applied (1 column added), then
+  `wrangler deploy --env staging` from `a8cc73c` (rivals preset r2; version `3235283e-b88e-4dd0-8715-e7731b797350`).
+  `/v1/health` ok. New brackets get r2 (rivals play in bursts from the first minutes); brackets created between the
+  two deploys keep r1 until they end. Checked first: server 312/312 + typecheck, client 3,093, e2e ladder + preview 19/19.
 
 ## Left
 
