@@ -46,6 +46,10 @@ import { catIncrement, comboPoints, comboRuleFor, comboRunMax, periodKeyAt, poin
 import type { SaveData } from '../../src/game/types';
 import { NICK_WORDS_V1 } from '../../src/shared/nick-words';
 import type { BracketRow, BracketView, PlayerView, ResultView, RulesView, SessionResponse, WinSubmission } from '../../src/shared/rank-api';
+import { gotItNewRanking } from './helpers/new-ranking';
+
+// Leaderboard update: the "New ranking" card is closed with Got it whenever it shows.
+gotItNewRanking(test);
 
 type TestWindow = Window & { __mewdoku?: E2EHooks };
 

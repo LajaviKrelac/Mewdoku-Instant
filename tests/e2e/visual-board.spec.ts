@@ -29,6 +29,10 @@ import type { SaveData } from '../../src/game/types';
 import { mouseLandMs, mouseRunMs, mouseVisitMs } from '../../src/game/mouse';
 import { PALETTE } from '../../src/ui/art/palette';
 import { gapFor } from '../../src/ui/board/layout';
+import { gotItNewRanking } from './helpers/new-ranking';
+
+// Leaderboard update: the "New ranking" card is closed with Got it whenever it shows.
+gotItNewRanking(test);
 
 type TestWindow = Window & { __mewdoku?: E2EHooks };
 
