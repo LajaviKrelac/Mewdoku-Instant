@@ -103,6 +103,8 @@ interface StartOpts {
   prepare?: (platform: FakePlatform) => void;
   /** Gives the fake audio engine a prewarm() that logs 'audio:prewarm' (PERF-1). */
   prewarm?: boolean;
+  /** The page's query string (flags). */
+  search?: string;
 }
 
 /** boot() without awaiting it, for tests that drive the fake clock while it runs. */
@@ -121,7 +123,7 @@ function begin(local: SaveData | null, opts: StartOpts = {}) {
   const done = boot(platform, root, {
     clock,
     doc: document,
-    search: '',
+    search: opts.search ?? '',
     routerFactories: {
       ...ui.factories,
       ...(opts.loadOverlays ? { loadOverlays: opts.loadOverlays(log) } : {}),
@@ -156,13 +158,18 @@ const returning = (patch: Partial<SaveData> = {}): SaveData => ({
 });
 
 describe('boot', () => {
-  it('UX-3: <html data-fb-safe> is set right after init on FBIG (before any top bar), never on the web', async () => {
+  it('UX-3: <html data-fb-safe> is set right after init on FBIG with flag fbSafeZone (before any top bar), never on the web', async () => {
     document.documentElement.removeAttribute('data-fb-safe');
-    const fb = begin(returning(), { prepare: (p) => void ((p as { id: string }).id = 'fbig') });
+    const fb = begin(returning(), { prepare: (p) => void ((p as { id: string }).id = 'fbig'), search: '?flags=fbSafeZone' });
     await settle(2);
     expect(fb.log).toContain('platform:init');
     expect(document.documentElement.hasAttribute('data-fb-safe')).toBe(true);
     (await fb.done).dispose();
+    // 2026-10-12: off by default on FBIG too (the FB app's bar sits above the game).
+    const fbDefault = begin(returning(), { prepare: (p) => void ((p as { id: string }).id = 'fbig') });
+    await settle(2);
+    expect(document.documentElement.hasAttribute('data-fb-safe')).toBe(false);
+    (await fbDefault.done).dispose();
     const web = await start(returning());
     expect(document.documentElement.hasAttribute('data-fb-safe')).toBe(false);
     web.app.dispose();

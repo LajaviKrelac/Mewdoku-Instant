@@ -187,7 +187,8 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
   attempt(() => mountSprite(doc), undefined);
   // UX-3: FB's top-left 64×64 safe zone, for the overlays' rules (:root[data-fb-safe]) from the first
   // frame, whether or not a top bar has rendered yet (the top bar keeps it in step afterwards).
-  attempt(() => doc.documentElement.toggleAttribute('data-fb-safe', platform.id === 'fbig'), undefined);
+  // 2026-10-12: only with flag fbSafeZone (off by default: the FB app's own bar sits above the game, flags.ts).
+  attempt(() => doc.documentElement.toggleAttribute('data-fb-safe', platform.id === 'fbig' && isFlagOn('fbSafeZone')), undefined);
   // S0 splash: web builds only (__PLATFORM__ is a build-time constant, so FBIG drops the module).
   const splash: Partial<RouterFactories> = __PLATFORM__ === 'web' ? { bootScreen: createBootScreen } : {};
   let storeRef: Store<AppState> | null = null;
