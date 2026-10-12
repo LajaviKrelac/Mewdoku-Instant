@@ -347,7 +347,14 @@ export function createLadderFake(opts: LadderFakeOptions = {}): LadderFake {
       verdicts.set(winId, reason === undefined ? { verdict } : { verdict, reason });
     },
     addOther(o) {
-      state.others.push({ nickname: o.nickname, avatarId: o.avatarId, points: o.points, hearts: o.hearts ?? 0 });
+      state.others.push({
+        nickname: o.nickname,
+        avatarId: o.avatarId,
+        points: o.points,
+        hearts: o.hearts ?? 0,
+        ...(o.seenAt !== undefined ? { seenAt: o.seenAt } : {}),
+        ...(o.playing !== undefined ? { playing: o.playing } : {}),
+      });
     },
     endBracket() {
       const r = rows();

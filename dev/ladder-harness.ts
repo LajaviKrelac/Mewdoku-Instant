@@ -417,6 +417,14 @@ const VIEWS: Record<string, () => void> = {
   'fixture-sheet-ended': () => sheet({ list: fromFixture(fxEnded) }),
   // post-win panel (spec §2.4)
   'panel-bracket': () => panel({ kind: 'bracket', view: bracket() }),
+  // Leaderboard update: the rank-up (my row from #12 with 24 fish to #5 with 28; from #4 to the top).
+  'panel-climb': () => panel({ kind: 'bracket', view: bracket() }, { result: { kind: 'ladder', gained: 3, total: 28 }, climbFrom: { bracketId: 'mgk0b7q1z4a8', rank: 12, points: 24 } }),
+  'panel-climb-top': () =>
+    panel(
+      { kind: 'bracket', view: bracket({ rows: rows(37, 1, (r) => (r.me ? { points: 34 } : {})) }) },
+      { result: { kind: 'ladder', gained: 3, total: 34 }, climbFrom: { bracketId: 'mgk0b7q1z4a8', rank: 4, points: 31 } },
+    ),
+  'panel-climb-new': () => panel({ kind: 'bracket', view: bracket() }, { result: { kind: 'ladder', gained: 3, total: 28 }, climbFrom: { bracketId: null, rank: null, points: 0 } }),
   'panel-alone': () => panel({ kind: 'bracket', view: bracket({ rows: rows(1, 1), members: 1, rewardsLine: 'min' }) }, { result: { kind: 'ladder', gained: 3, total: 3 } }),
   'panel-small': () => panel({ kind: 'bracket', view: bracket({ rows: rows(3, 2), members: 3, rewardsLine: 'min' }) }),
   'panel-stale': () =>

@@ -235,6 +235,11 @@ export interface RankingPanelProps {
    * a 'bracket' state shows the static skeleton until an update brings it (no fake rows meanwhile).
    */
   readonly bracketList?: BracketListFactory;
+  /**
+   * Leaderboard update (the rank-up): my place and fish in my bracket before this win, as the server last said
+   * (`bracketId` null or another bracket: I come in from below with 0 fish). Absent: no climb.
+   */
+  readonly climbFrom?: { readonly bracketId: string | null; readonly rank: number | null; readonly points: number } | null;
 }
 
 // ─────────────────────────────── shared text helpers ───────────────────────────────
@@ -455,6 +460,10 @@ export function createRankingPanel(): OverlayView<RankingPanelProps> {
   let bracket: { readonly factory: BracketListFactory; readonly handle: BracketListHandle } | null = null;
   let centerAfterOpen = false;
   const live = h('p', { class: 'sr-only', role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true' });
+  // Leaderboard update: the bubble after the rank-up ("Nice! You climbed to #5!"); the live region says the rank.
+  const bubble = h('p', { class: 'ranking__bubble', 'aria-hidden': 'true', hidden: true });
+  /** The rank-up plays once per open, on the first fresh (not cached) bracket list. */
+  let climbPending = false;
   const tap = makeButton({ variant: 'ghost', label: t('rank.tap'), autofocus: true, className: 'ranking__tap', onPress: () => tryContinue() });
   // The footer follows the language (A11Y-I18N-1).
   const L = createLocaleText();
@@ -463,7 +472,7 @@ export function createRankingPanel(): OverlayView<RankingPanelProps> {
     info.setAttribute('aria-label', t('ladder.info'));
   });
   const card = h('div', { class: 'ranking__card' }, head, sub, list);
-  shell.panel.append(card, tap, live);
+  shell.panel.append(bubble, card, tap, live);
   shell.el.style.setProperty('--pop-ms', `${cfg.rank.panelPopMs}ms`);
   shell.el.style.setProperty('--out-ms', `${cfg.rank.panelOutMs}ms`);
   shell.el.style.setProperty('--pulse-ms', `${cfg.rank.tapPulseMs}ms`);
@@ -522,7 +531,8 @@ export function createRankingPanel(): OverlayView<RankingPanelProps> {
       list.replaceWith(handle.el);
       centerAfterOpen = true;
     } else bracket.handle.update(view);
-    if (centerAfterOpen && shell.isOpen()) scheduleCenter();
+    // Leaderboard update: a fresh answer after a cached list still plays the rank-up (once per open).
+    if ((centerAfterOpen || (climbPending && !view.stale && p.climbFrom)) && shell.isOpen()) scheduleCenter();
   };
   const dropBracket = (): void => {
     if (!bracket) return;
@@ -538,7 +548,7 @@ export function createRankingPanel(): OverlayView<RankingPanelProps> {
       centerRaf = 0;
       if (bracket && shell.isOpen()) {
         centerAfterOpen = false;
-        bracket.handle.centerMe();
+        if (!maybeClimb()) bracket.handle.centerMe();
       }
     };
     if (!win?.requestAnimationFrame) return run();
@@ -546,6 +556,26 @@ export function createRankingPanel(): OverlayView<RankingPanelProps> {
     centerRaf = win.requestAnimationFrame(() => {
       centerRaf = win.requestAnimationFrame(run);
     });
+  };
+
+  /**
+   * Leaderboard update: the rank-up on the first fresh bracket list of this open (a cached list does not hold this
+   * win yet). From my place before the win in the same bracket, else from below the list with 0 fish.
+   */
+  const maybeClimb = (): boolean => {
+    const p = props;
+    const handle = bracket?.handle;
+    if (!climbPending || !p || !handle?.playClimb || p.list.kind !== 'bracket' || p.list.view.stale || !p.climbFrom) return false;
+    climbPending = false;
+    const view = p.list.view;
+    const same = p.climbFrom.bracketId !== null && p.climbFrom.bracketId === view.bracketId;
+    const from = same ? { rank: p.climbFrom.rank, points: p.climbFrom.points } : { rank: null, points: 0 };
+    void handle.playClimb(from, p.reducedMotion).then((r) => {
+      if (!shell.isOpen() || !r.climbed) return;
+      setText(bubble, r.toRank === 1 ? t('ladder.climb.first') : t('ladder.climb.up', { rank: formatNumber(r.toRank) }));
+      bubble.hidden = false;
+    });
+    return true;
   };
 
   /** 'overlay' mode: report the list area's rect once it is laid out (and again if the mode returns). */
@@ -609,6 +639,8 @@ export function createRankingPanel(): OverlayView<RankingPanelProps> {
       listKind = null;
       rectFor = null;
       centerAfterOpen = true;
+      climbPending = true;
+      bubble.hidden = true;
       shell.el.classList.remove('is-leaving', 'is-ready');
       setGated(tap, true);
       render(p);

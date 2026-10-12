@@ -18,9 +18,12 @@ import { defaults } from '../../src/game/save';
 import { comboRuleFor, comboRunMax, periodKeyAt, pointsRuleFor } from '../../src/game/scoring';
 import type { SaveData } from '../../src/game/types';
 import { watchStrings } from './helpers/strings';
+import { gotItNewRanking } from './helpers/new-ranking';
 
 // Phase 2e I-4: no screen of these tests may ask for an English string that no loaded table has.
 watchStrings(test);
+// Leaderboard update: the "New ranking" card is closed with Got it whenever it shows.
+gotItNewRanking(test);
 
 type TestWindow = Window & { __mewdoku?: E2EHooks };
 

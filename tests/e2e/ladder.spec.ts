@@ -19,9 +19,12 @@ import { defaults } from '../../src/game/save';
 import type { SaveData } from '../../src/game/types';
 import { adminDelete, adminSuspend, devAdvance, devCron, LADDER_URL, ladderUp, newPool, webPlayer, type RankPlayer } from './helpers/rank-players';
 import { watchStrings } from './helpers/strings';
+import { gotItNewRanking, newRankingOk } from './helpers/new-ranking';
 
 // Phase 2e I-4: no screen of these tests may ask for an English string that no loaded table has.
 watchStrings(test);
+// Leaderboard update: the "New ranking" card is closed with Got it whenever it shows.
+gotItNewRanking(test);
 
 type TestWindow = Window & { __mewdoku?: E2EHooks };
 
@@ -123,6 +126,47 @@ test('a win: the panel lists exactly the server bracket (rows, order, ranks, cou
   // requests-G3 R4: the victory's kept-fish row names my bracket's total, not this week's.
   await panel(page).locator('.ranking__tap').click();
   await expect(page.locator('[data-overlay="victory"] .victory__period')).toHaveText('Your total: 3', { timeout: 10_000 });
+});
+
+test('leaderboard update: the sign-in joins with 0 fish, the "New ranking" card shows once, the others see me online then playing, the podium and pills in the panel', async ({ page }) => {
+  await page.removeLocatorHandler(newRankingOk(page));
+  const pool = newPool('ladaj');
+  const [other] = await others(pool, [3]);
+  await openApp(page, pool);
+  const card = page.locator('.overlay[data-overlay="ladder_session"]');
+  await expect(card).toBeVisible({ timeout: 10_000 });
+  await expect(card.locator('.overlay__title')).toHaveText('New ranking');
+  await expect(card.locator('.lb-timer__text')).toHaveText(/^\d\d:\d\d:\d\d$/);
+  await card.locator('.ladder-session__ok').click();
+  await expect(card).toBeHidden();
+  // The server holds my 0-fish row; the other player sees it "online" (a sign-in is activity).
+  const seen = await (other as RankPlayer).bracket();
+  expect(seen.rows.map((r) => [r.rank, r.points, r.me])).toEqual([
+    [1, 3, true],
+    [2, 0, false],
+  ]);
+  expect(seen.rows[1]?.seenAt).not.toBeNull();
+  expect(seen.rows[1]?.playing).toBe(false);
+  // A reload: the same ranking, no card again.
+  await page.reload();
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.ladder?.()?.signedIn === true, undefined, { timeout: 10_000 });
+  await page.waitForTimeout(1_500);
+  await expect(card).toBeHidden();
+  // A level starts: "Playing now" for the others; the win: the podium and the pills in the panel.
+  await winNext(page);
+  await expect.poll(async () => (await (other as RankPlayer).bracket()).rows.find((r) => !r.me)?.points, { timeout: 15_000 }).toBe(3);
+  await expect(bracketList(page)).toBeVisible({ timeout: 15_000 });
+  await expect(bracketList(page).locator('.lb-pod:not([hidden])')).toHaveCount(2);
+  await expect(rows(page).locator('.lb-status:not([hidden])')).toHaveCount(2);
+});
+
+test('leaderboard update: a level in play marks my row "playing" for the others', async ({ page }) => {
+  const pool = newPool('ladpl');
+  const [other] = await others(pool, [3]);
+  await openApp(page, pool);
+  await page.locator('.home__play').click();
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
+  await expect.poll(async () => (await (other as RankPlayer).bracket()).rows.find((r) => !r.me)?.playing, { timeout: 10_000 }).toBe(true);
 });
 
 test('alone in a bracket: one row (mine) and the alone line, no placeholder rows', async ({ page }) => {
@@ -474,6 +518,7 @@ test('the web-prod path (no ranking origin, ?flags=-ladder ≡ ladder.web off): 
 });
 
 test('a deletion on the server (an email request): the old token signs in once more as a fresh player; the old row never comes back', async ({ page }) => {
+  // (Leaderboard update: that fresh player's sign-in joins the open ranking with 0 fish, as any sign-in does.)
   test.setTimeout(90_000);
   const pool = newPool('lad12');
   const [a] = await others(pool, [6]);
@@ -492,7 +537,10 @@ test('a deletion on the server (an email request): the old token signs in once m
   await heart.click();
   await expect.poll(() => page.evaluate(() => (window as TestWindow).__mewdoku?.app().save.ladder.me?.code), { timeout: 10_000 }).not.toBe(oldCode);
   expect(sessions).toHaveLength(1);
-  await expect.poll(async () => (await (a as RankPlayer).bracket()).members, { timeout: 5_000 }).toBe(1);
-  expect((await (a as RankPlayer).bracket()).rows.find((r) => !r.me)).toBeUndefined();
-  expect((await (a as RankPlayer).bracket()).rows[0]?.hearts).toBe(0); // the heart never landed
+  // Leaderboard update: the fresh player's sign-in joins the ranking at once (a new 0-fish row); the old row, with
+  // its fish, never comes back, and the one heart the click sent (again, as the fresh player) counts at most once.
+  const after = await (a as RankPlayer).bracket();
+  expect(after.members).toBeLessThanOrEqual(2);
+  expect(after.rows.filter((r) => !r.me).every((r) => r.points === 0)).toBe(true);
+  expect(after.rows.find((r) => r.me)?.hearts ?? 0).toBeLessThanOrEqual(1);
 });

@@ -899,7 +899,7 @@
   border-radius: 18px;
 }
 
-.lb-pod[data-me='1'] .lb-pod__frame {
+.lb-pod[data-mine='1'] .lb-pod__frame {
   border-color: var(--accent);
 }
 
@@ -1004,6 +1004,12 @@
 
 .lb-pod .lb-status {
   margin-top: 4px;
+  padding: 0 6px;
+  font-size: 11px;
+}
+
+.lb-pod .lb-status[data-status='playing']::before {
+  margin-inline-end: 4px;
 }
 
 /* ── The status pills: "Online now" / "Playing now" green, "4m ago" a mauve wash ── */
@@ -1196,6 +1202,11 @@
   }
 }
 
+/* The bubble after a climb ("Nice! You climbed to #5!"), over the panel's top edge (the panel holds it: the card
+   scrolls and would clip it). */
+.overlay__panel--stage.ranking {
+  position: relative;
+}
 /* The bubble after a climb ("Nice! You climbed to #5!"), over the panel's top edge. */
 .ranking__bubble {
   position: absolute;
@@ -1391,4 +1402,85 @@
   line-height: 1.35;
   text-align: center;
   text-wrap: balance;
+}
+
+/* Short screens (a 320 × 568 phone): a compact podium (smaller pictures and steps, the chests only in the rows), so
+   the list keeps room for its rows under it. */
+@media (max-height: 740px) {
+  .lb-timer {
+    margin-top: 4px;
+    font-size: var(--fs-m);
+    line-height: 22px;
+  }
+
+  .lb-pod__frame {
+    width: 44px;
+    height: 44px;
+    margin-bottom: -10px;
+    border-radius: 13px;
+  }
+
+  .lb-pod[data-place='1'] .lb-pod__frame {
+    width: 52px;
+    height: 52px;
+    border-radius: 15px;
+  }
+
+  .lb-pod__step {
+    min-height: 82px;
+    padding: 10px 3px 6px;
+  }
+
+  .lb-pod[data-place='1'] .lb-pod__step {
+    min-height: 94px;
+  }
+
+  .lb-pod[data-place='3'] .lb-pod__step {
+    min-height: 74px;
+  }
+
+  .lb-pod__medal,
+  .lb-pod__medal-art {
+    width: 24px;
+    height: 24px;
+  }
+
+  .lb-pod__medal {
+    margin-top: -6px;
+  }
+
+  .lb-pod__num {
+    font-size: 10px;
+  }
+
+  .lb-pod__gift {
+    display: none;
+  }
+}
+
+/* Narrow screens: a smaller picture and heart so the name and its pills keep their width. */
+@media (max-width: 360px) {
+  .rank-row__avatar,
+  .rank-row__avatar-art {
+    width: 30px;
+    height: 30px;
+  }
+
+  .rank-row__avatar {
+    margin-inline-start: 2px;
+    margin-inline-end: 6px;
+  }
+
+  .rank-row__heart {
+    min-width: 40px;
+    padding: 0 4px;
+  }
+
+  .rank-row__points {
+    padding: 1px 7px 1px 3px;
+  }
+
+  .rank-row__line .lb-status {
+    font-size: 11px;
+  }
 }

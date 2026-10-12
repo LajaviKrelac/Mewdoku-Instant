@@ -201,10 +201,12 @@ export const BUDGETS: readonly SizeBudget[] = [
   { label: 'Lazy JS (lazy art)', pattern: /^assets\/lazy-art-[^/]*\.js$/, maxBytes: 4.4 * KB },
   // Phase 2e: the lazy ranking chunk (src/app/ladder-chunk.ts; L0's placeholder ceiling re-set at I-4).
   // The 8-character hash keeps chunks named after other ladder-* modules (ladder-flow, ladder-sheet, …) out of it.
-  { label: 'Lazy JS (ladder)', pattern: /^assets\/ladder-[\w-]{8}\.js$/, maxBytes: 30.5 * KB },
+  // Leaderboard update (2026-10-12): 30.0 → 37.9 KB measured (the podium, the status pills, the rank-up and the
+  // "New ranking" card); lazy, never on the first load.
+  { label: 'Lazy JS (ladder)', pattern: /^assets\/ladder-[\w-]{8}\.js$/, maxBytes: 38.5 * KB },
   // Phase 2e I-4: the ladder's sign-in, sync, remote config and response parsers (src/app/ladder-boot.ts), loaded after
   // the first screen when the ranking is on.
-  { label: 'Lazy JS (ladder boot)', pattern: /^assets\/ladder-boot-[\w-]{8}\.js$/, maxBytes: 34.9 * KB },
+  { label: 'Lazy JS (ladder boot)', pattern: /^assets\/ladder-boot-[\w-]{8}\.js$/, maxBytes: 36.6 * KB }, // leaderboard update: 33.9 → 36.2 KB (presence, the card, the parsers' activity)
   // Phase 2e I-4: the overlay chunk (src/app/overlay-chunk.ts: every core overlay, Home's chip and strip), on its own row.
   { label: 'Lazy JS (overlay chunk)', pattern: /^assets\/overlay-chunk-[\w-]{8}\.js$/, maxBytes: 56.2 * KB },
   // Phase 2e I-4: the English strings only lazy chunks show (src/i18n/en-lazy.ts), shared by those chunks.
@@ -215,7 +217,8 @@ export const BUDGETS: readonly SizeBudget[] = [
   { label: 'Lazy CSS (board motion)', pattern: /^assets\/board-mouse-[^/]*\.css$/, maxBytes: 6.4 * KB },
   // Phase 2e: the ladder chunk's own stylesheet (the CSS keeps the barrel's name, as events-chunk-*.css does; L0's
   // placeholder ceiling re-set at I-4).
-  { label: 'Lazy CSS (ladder)', pattern: /^assets\/ladder-chunk-[\w-]{8}\.css$/, maxBytes: 11.05 * KB },
+  // Leaderboard update (2026-10-12): 11.0 → 20.5 KB measured (the podium, the pills, the rank-up's motion, the card).
+  { label: 'Lazy CSS (ladder)', pattern: /^assets\/ladder-chunk-[\w-]{8}\.css$/, maxBytes: 21 * KB },
   // Phase 2e I-4: the overlay chunk's stylesheet (with Home's chip and strip since I-4), on its own row.
   { label: 'Lazy CSS (overlay chunk)', pattern: /^assets\/overlay-chunk-[\w-]{8}\.css$/, maxBytes: 33.5 * KB },
   // The rest: the events chunk's stylesheet (re-set at 2e I-4 when the overlay chunk's row split out).

@@ -369,11 +369,11 @@ function panelProps(over: Partial<RankingPanelProps> = {}): RankingPanelProps {
 describe('ranking panel: the bracket state (spec §2.4, §9.4)', () => {
   beforeEach(() => vi.useFakeTimers());
 
-  it('"Daily ranking", "+2 fish · Your total: 14", and the bracket list in the DOM contract', () => {
+  it('"Leaderboard", "+2 fish · Your total: 14", and the bracket list in the DOM contract', () => {
     const panel = createRankingPanel();
     document.body.appendChild(panel.el);
     panel.open(panelProps());
-    expect(q(panel.el, '.ranking__title').textContent).toBe('Daily ranking');
+    expect(q(panel.el, '.ranking__title').textContent).toBe('Leaderboard');
     expect(q(panel.el, '.ranking__sub').textContent).toBe('+2 fish · Your total: 14');
     // audit B9 / A-H1: unanswered (offline), the server's total and the queued fish apart, as my row shows them
     panel.update(panelProps({ result: { kind: 'ladder', gained: 3, total: 3, waiting: 3 } }));
@@ -391,8 +391,11 @@ describe('ranking panel: the bracket state (spec §2.4, §9.4)', () => {
         .filter((n) => !(n instanceof HTMLElement && (n.matches(skip) || n.hidden)))
         .map((n) => n.textContent)
         .join('');
-    expect(textOf('.sr-only')).toBe('Ends in 7 h 48 min · 37 players'); // what is seen
+    // Leaderboard update: the time is seen on the stopwatch pill ("07:48:00"); the line shows the count.
+    expect(textOf('.sr-only')).toBe('37 players'); // what is seen
     expect(textOf('[aria-hidden="true"]')).toBe('Ends in 7 h 48 min, 37 players'); // what is read
+    expect(q(panel.el, '.lb-timer').getAttribute('aria-hidden')).toBe('true');
+    expect(q(panel.el, '.lb-timer__text').textContent).toMatch(/^07:4[78]:\d\d$/);
     expect(q(panel.el, '.ranking__rewards').textContent).toBe('The top 3 win hints and kitties.');
     expect(q(panel.el, 'button.ranking__info').hidden).toBe(false);
     expect(q(panel.el, 'button.ranking__info').getAttribute('aria-label')).toBe('How it works');
@@ -509,7 +512,7 @@ describe('ranking sheet (overlay `ladder`, spec §2.5)', () => {
     sheet.open(p);
     expect(sheet.el.dataset.overlay).toBe('ladder');
     expect(q(sheet.el, '.ladder-sheet').dataset.view).toBe('list');
-    expect(q(sheet.el, '.overlay__title').textContent).toBe('Daily ranking');
+    expect(q(sheet.el, '.overlay__title').textContent).toBe('Leaderboard');
     expect(qa(sheet.el, 'ol.rank-rows > li')).toHaveLength(37);
     // Full height while the list is there (its rows scroll inside).
     expect(q(sheet.el, '.ladder-sheet').hasAttribute('data-fit')).toBe(false);
@@ -542,20 +545,21 @@ describe('ranking sheet (overlay `ladder`, spec §2.5)', () => {
     const on = texts(RULES);
     expect(on).toEqual([
       'Every puzzle you solve adds the fish you kept, up to 3, to your total.',
-      'A ranking lasts 24 hours from its first win and holds up to 50 players. Your first win after it ends puts you in a new one.',
+      'A ranking lasts 24 hours and holds up to 50 players. When it ends, you join a new one the next time you open the game.',
       'When a ranking ends, the top 3 win hints and kitties if at least 5 players took part.',
       'You can watch a video to double your reward.',
       'Tap a heart to cheer on a player. Hearts are just for fun.',
       'Other players see your ranking name and picture, never your Facebook name or photo.',
+      'Players in your ranking see when you were last active and whether you are playing a puzzle.',
       'You can turn rankings off or delete your ranking data in Settings.',
     ]);
     const off = texts({ ...RULES, periodMode: 'utc_day', maxMembers: 40, paidPlaces: 1, minMembers: 8, doubleByVideo: false, heartsEnabled: false });
     expect(off).toContain('A new ranking starts every day at midnight UTC and holds up to 40 players.');
     expect(off).toContain('When a ranking ends, first place wins hints and kitties if at least 8 players took part.');
     expect(off.join(' ')).not.toMatch(/video|heart/i);
-    expect(texts(null)).toHaveLength(3);
+    expect(texts(null)).toHaveLength(4);
     expect(texts({ ...RULES, durationMs: 12 * H })[1]).toBe(
-      'A ranking lasts 12 hours from its first win and holds up to 50 players. Your first win after it ends puts you in a new one.',
+      'A ranking lasts 12 hours and holds up to 50 players. When it ends, you join a new one the next time you open the game.',
     );
   });
 

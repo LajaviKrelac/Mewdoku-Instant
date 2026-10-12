@@ -127,7 +127,13 @@ export interface LadderFlow {
   /** Fish waiting to be sent (the queue; the "+3 waiting" my row shows), shown after the total; 0 = none. */
   panelWaiting(): number;
   /** The panel's extra props: the bracket list factory, hearts and the info button. */
-  panelExtras(): { bracketList?: BracketListFactory; onHeart(slot: number): void; onInfo(): void };
+  panelExtras(): {
+    bracketList?: BracketListFactory;
+    onHeart(slot: number): void;
+    onInfo(): void;
+    /** Leaderboard update: the rank-up's start (my place and fish before this win). */
+    climbFrom: { readonly bracketId: string | null; readonly rank: number | null; readonly points: number } | null;
+  };
   /** My bracket's points before this win (the period counter's before value), else 0. */
   counterBefore(): number;
   /**
@@ -1207,6 +1213,8 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
         ...(chunk ? { bracketList: chunk.createBracketList } : {}),
         onHeart: (slot: number) => void heart(slot),
         onInfo: () => flow.openSheet('home', 'info'),
+        // A win with no running bracket before it comes in from below the list.
+        climbFrom: win ? (win.before ?? { bracketId: null, rank: null, points: 0 }) : null,
       };
     },
     counterBefore: () => (active() ? counterOf(save().ladder, clock.now()) : 0),

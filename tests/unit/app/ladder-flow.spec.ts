@@ -59,6 +59,8 @@ interface Setup {
   updates: string[];
   watch: { ok: boolean; calls: number };
   remote: { on: boolean };
+  /** The app bus the flow listens to (game:start / game:end, pause / resume). */
+  bus: ReturnType<typeof createEventBus<AppEventMap>>;
   save(): SaveData;
   queue(n: number, kept?: number): string;
   settle(ms?: number): Promise<void>;
@@ -75,10 +77,17 @@ function setup(
     device?: boolean;
     player?: Partial<PlayerView>;
     rewarded?: boolean;
+    /** Leaderboard update: the fake server joins on a `join: true` session (as the real one does). */
+    join?: boolean;
   } = {},
 ): Setup {
   const clock = createFakeClock(NOW);
-  const fake = createLadderFake({ now: () => clock.now(), ...(o.skewMs !== undefined ? { skewMs: o.skewMs } : {}), ...(o.player ? { player: o.player } : {}) });
+  const fake = createLadderFake({
+    now: () => clock.now(),
+    ...(o.skewMs !== undefined ? { skewMs: o.skewMs } : {}),
+    ...(o.player ? { player: o.player } : {}),
+    ...(o.join ? { joinOnSession: true } : {}),
+  });
   const storage = o.storage ?? new MemStorage();
   const base: SaveData = { ...defaults(NOW - 30 * 86_400_000), tutorialDone: true, progress: { level: 58, completed: 57, best: {} }, stock: { hints: 0, kitties: 0 } };
   const store = createStore<AppState>({ ...initialAppState(o.save ? o.save(base) : base), screen: 'home' });
@@ -156,6 +165,7 @@ function setup(
     updates,
     watch,
     remote,
+    bus,
     save: () => store.get().save,
     queue(n, kept = 2) {
       const id = winId(n);
@@ -1059,5 +1069,130 @@ describe('"+N hearts from other players" (spec §2.8, ladder.heartsNotify)', () 
     off.flow.onWin({ winId: winId(1), mode: 'level', kept: 2 });
     await off.settle(0);
     expect(off.flow.listState()).toMatchObject({ kind: 'bracket', view: { heartsNew: 0 } });
+  });
+});
+
+// ─────────────────────────────── leaderboard update ───────────────────────────────
+
+describe('leaderboard update: the sign-in join, presence, the "New ranking" card, the rank-up start', () => {
+  const playingState = { mode: 'level', status: 'playing' } as never;
+
+  it('the sign-in asks to join; a joining server puts me in a bracket with 0 fish (the chip shows my place)', async () => {
+    const s = setup({ join: true });
+    await s.flow.start();
+    expect((s.fake.calls.find((c) => c.path === '/v1/session')?.body as { join?: boolean }).join).toBe(true);
+    expect(s.save().ladder.current).toMatchObject({ points: 0, rank: 1, members: 1 });
+    expect(s.flow.chip()).toMatchObject({ state: 'bracket', rank: 1, points: 0 });
+  });
+
+  it('with ladder.autoJoin off the sign-in does not ask', async () => {
+    const s = setup({ join: true, config: mergeConfig({ ladder: { autoJoin: false } }) });
+    await s.flow.start();
+    expect((s.fake.calls.find((c) => c.path === '/v1/session')?.body as { join?: boolean }).join).toBeUndefined();
+    expect(s.save().ladder.current).toBeNull();
+  });
+
+  it('presence: "playing" at a scored board, "online" when it ends; at most one ping per interval while it stays', async () => {
+    const s = setup({ join: true });
+    await s.flow.start();
+    const pings = (): string[] => s.fake.calls.filter((c) => c.path === '/v1/presence').map((c) => (c.body as { state: string }).state);
+    s.bus.emit('game:start', { state: playingState });
+    await s.settle(0);
+    expect(pings()).toEqual(['playing']);
+    // The tutorial board is not "playing" in the ranking.
+    s.bus.emit('game:start', { state: { mode: 'tutorial', status: 'playing' } as never });
+    await s.settle(0);
+    expect(pings()).toEqual(['playing']);
+    await s.settle(cfg.ladder.presence.pingMs - 1000);
+    expect(pings()).toEqual(['playing']);
+    await s.settle(2000);
+    expect(pings()).toEqual(['playing', 'playing']);
+    s.bus.emit('game:end', { state: playingState, reason: 'home' });
+    await s.settle(0);
+    expect(pings()).toEqual(['playing', 'playing', 'online']);
+    expect(s.fake.state.myPlaying).toBe(false);
+  });
+
+  it('presence: no ping while hidden or paused by FB, one on return; none without a running bracket', async () => {
+    const s = setup({ join: true });
+    await s.flow.start();
+    const n = (): number => s.fake.calls.filter((c) => c.path === '/v1/presence').length;
+    s.bus.emit('pause', { reason: 'hidden' });
+    s.bus.emit('game:start', { state: playingState });
+    await s.settle(3 * cfg.ladder.presence.pingMs);
+    expect(n()).toBe(0);
+    s.bus.emit('resume', { reason: 'hidden' });
+    await s.settle(0);
+    expect(n()).toBe(1);
+
+    const none = setup(); // an older server: no join, so no bracket to mark
+    await none.flow.start();
+    none.bus.emit('game:start', { state: playingState });
+    await none.settle(2 * cfg.ladder.presence.pingMs);
+    expect(none.fake.calls.filter((c) => c.path === '/v1/presence')).toHaveLength(0);
+  });
+
+  it('the rows carry the server activity on the device clock (presence off: no status)', async () => {
+    const s = setup({ join: true, skewMs: 90_000 });
+    s.fake.addOther({ nickname: 'Misty Pebble 9', avatarId: 2, points: 6, seenAt: NOW + 90_000 - 4 * 60_000, playing: true });
+    await s.flow.start();
+    s.flow.openSheet('home');
+    await s.settle(0);
+    const list = (s.router.props.ladder as { list: { rows: { name: string; seenAt: number | null; playing: boolean }[] } }).list;
+    expect(list.rows.find((r) => r.name === 'Misty Pebble 9')).toMatchObject({ seenAt: NOW - 4 * 60_000, playing: true });
+
+    const off = setup({ join: true, config: mergeConfig({ ladder: { presence: { enabled: false } } }) });
+    await off.flow.start();
+    off.flow.openSheet('home');
+    await off.settle(0);
+    const rows = (off.router.props.ladder as { list: { rows: { seenAt: number | null; playing: boolean }[] } }).list.rows;
+    expect(rows.every((r) => r.seenAt === null && !r.playing)).toBe(true);
+  });
+
+  it('the "New ranking" card: once per bracket the sign-in joined, on Home, never after a win in it', async () => {
+    const storage = new MemStorage();
+    const s = setup({ join: true, storage });
+    await s.flow.start();
+    s.flow.homeMounted();
+    await s.settle(0);
+    expect(s.router.open).toEqual(['ladder_session']);
+    const props = s.router.props.ladder_session as { endsAt: number; avatarId: number | null; onClose(): void };
+    expect(props.endsAt).toBe(s.fake.state.endsAt);
+    expect(props.avatarId).toBe(4);
+    props.onClose();
+    s.flow.homeMounted();
+    await s.settle(cfg.ladder.homeRefreshMs);
+    expect(s.router.open).toEqual(['ladder_session']);
+    // Another page load on this device: still once per bracket.
+    const again = setup({ join: true, storage });
+    again.fake.state.bracketId = s.fake.state.bracketId;
+    await again.flow.start();
+    again.flow.homeMounted();
+    await again.settle(0);
+    expect(again.router.open).toEqual([]);
+    // A bracket joined with a win (fish in it) never gets the card.
+    const won = setup();
+    won.queue(1, 3);
+    await won.flow.start();
+    won.flow.homeMounted();
+    await won.settle(0);
+    expect(won.router.open).not.toContain('ladder_session');
+  });
+
+  it('the rank-up starts from my place and fish before the win (null: no running bracket)', async () => {
+    const s = setup({ join: true });
+    s.fake.addOther({ nickname: 'Misty Pebble 9', avatarId: 2, points: 6 });
+    await s.flow.start();
+    expect(s.save().ladder.current).toMatchObject({ rank: 2, points: 0 });
+    const id = s.queue(1, 3);
+    s.flow.onWin({ winId: id, mode: 'level', kept: 3 });
+    expect(s.flow.panelExtras().climbFrom).toEqual({ bracketId: s.fake.state.bracketId, rank: 2, points: 0 });
+    await s.settle(0);
+    expect(s.save().ladder.current).toMatchObject({ rank: 2, points: 3 });
+
+    const fresh = setup();
+    await fresh.flow.start();
+    fresh.flow.onWin({ winId: fresh.queue(1, 2), mode: 'level', kept: 2 });
+    expect(fresh.flow.panelExtras().climbFrom).toEqual({ bracketId: null, rank: null, points: 0 });
   });
 });

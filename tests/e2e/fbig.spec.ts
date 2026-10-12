@@ -52,9 +52,12 @@ import { defaults } from '../../src/game/save';
 import type { SaveData } from '../../src/game/types';
 import { devSwitches, fbPlayer, LADDER_URL, ladderUp, newPool } from './helpers/rank-players';
 import { watchStrings } from './helpers/strings';
+import { gotItNewRanking } from './helpers/new-ranking';
 
 // Phase 2e I-4: no screen of these tests may ask for an English string that no loaded table has.
 watchStrings(test);
+// Leaderboard update: the "New ranking" card is closed with Got it whenever it shows.
+gotItNewRanking(test);
 
 const STUB_PATH = resolve(dirname(fileURLToPath(import.meta.url)), '../fixtures/fbinstant-stub.js');
 const STUB_SRC = readFileSync(STUB_PATH, 'utf8');

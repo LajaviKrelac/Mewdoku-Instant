@@ -35,7 +35,7 @@
 // Classes: .rank-list.rank-list--bracket[data-kind=bracket][data-stale=0|1][data-climbing?]
 //          > .lb-timer(.lb-timer__icon .lb-timer__text)
 //            .ranking__meta(.ranking__countdown.sr-only .ranking__sep[aria-hidden] .ranking__sep-sr.sr-only .ranking__count)
-//            .lb-podium[aria-hidden] > .lb-pod[data-place=1|2|3][data-me=0|1] > (.lb-pod__frame .lb-pod__step(.lb-pod__medal
+//            .lb-podium[aria-hidden] > .lb-pod[data-place=1|2|3][data-mine=0|1] > (.lb-pod__frame .lb-pod__step(.lb-pod__medal
 //              .lb-pod__num) .lb-pod__name .lb-pod__fish(.lb-pod__pts) .lb-pod__gift? .lb-status) .lb-confetti?
 //            .ranking__rewards .ranking__stale .ranking__offline .ranking__alone
 //            ol.rank-rows[role=list] > li.rank-row[data-rank][data-me=0|1][data-slot]
@@ -178,6 +178,8 @@ interface RowParts {
   update(r: BracketRowView, v: BracketListView): void;
   /** The fish shown on the row (the rank-up's count). */
   setPoints(n: number): void;
+  /** The place number shown (the rank-up: a row shows its place before the win until it is passed). */
+  setRank(n: number): void;
 }
 
 /**
@@ -225,10 +227,24 @@ function buildRow(cb: BracketListCallbacks, interactive: boolean): RowParts {
   }
 
   let cur: BracketRowView | null = null;
+  let curView: BracketListView | null = null;
   let sent = false;
   let avatarId = -1;
   let medal = 0;
   let liked: boolean | null = null;
+  /** The place shown: the number, our medal for 1–3 (never colour alone) and the chest of a paid place. */
+  const showPlace = (rank: number): void => {
+    const m = rank >= 1 && rank <= 3 ? rank : 0;
+    if (m !== medal) {
+      medal = m;
+      medalHost.textContent = '';
+      if (m) medalHost.appendChild(icon(`medal-${m as 1 | 2 | 3}`, { class: 'rank-row__medal-art' }));
+    }
+    medalHost.hidden = m === 0;
+    place.toggleAttribute('data-medal', m !== 0);
+    setText(num, formatNumber(rank));
+    gift.hidden = !curView || !paidPlace(rank, curView);
+  };
   if (interactive) {
     heart.addEventListener('click', () => {
       if (!cur || !cur.heartEnabled || sent) return;
@@ -243,9 +259,13 @@ function buildRow(cb: BracketListCallbacks, interactive: boolean): RowParts {
     setPoints(n) {
       setText(pts, formatNumber(n));
     },
+    setRank(n) {
+      showPlace(n);
+    },
     update(r, v) {
       const changedLike = liked !== null && !liked && r.likedByMe;
       cur = r;
+      curView = v;
       sent = false;
       heart.removeAttribute('aria-busy');
       const st = statusOf(r, v.now());
@@ -256,15 +276,7 @@ function buildRow(cb: BracketListCallbacks, interactive: boolean): RowParts {
         el.dataset.slot = String(r.slot);
         el.setAttribute('aria-label', rowLabel(r, v.hearts, r.me ? v.waiting : 0, st?.text ?? null));
       }
-      const m = r.rank >= 1 && r.rank <= 3 ? r.rank : 0;
-      if (m !== medal) {
-        medal = m;
-        medalHost.textContent = '';
-        if (m) medalHost.appendChild(icon(`medal-${m as 1 | 2 | 3}`, { class: 'rank-row__medal-art' }));
-      }
-      medalHost.hidden = m === 0;
-      place.toggleAttribute('data-medal', m !== 0);
-      setText(num, formatNumber(r.rank));
+      showPlace(r.rank);
       if (r.avatarId !== avatarId) {
         avatarId = r.avatarId;
         avatar.textContent = '';
@@ -280,7 +292,6 @@ function buildRow(cb: BracketListCallbacks, interactive: boolean): RowParts {
       if (wait) setText(waiting, t('ladder.waiting', { count: formatNumber(wait) }));
       tags.hidden = you.hidden && waiting.hidden;
       setText(pts, formatNumber(r.points));
-      gift.hidden = !paidPlace(r.rank, v);
       heart.hidden = !v.hearts;
       if (r.likedByMe !== liked) {
         liked = r.likedByMe;
@@ -347,7 +358,8 @@ function buildPod(place: 1 | 2 | 3): PodParts {
     update(r, v) {
       el.hidden = r === null;
       if (!r) return;
-      el.dataset.me = r.me ? '1' : '0';
+      // data-mine, never data-me: `[data-me="1"]` counts the server's rows only.
+      el.dataset.mine = r.me ? '1' : '0';
       if (r.avatarId !== avatarId) {
         avatarId = r.avatarId;
         frame.textContent = '';
@@ -571,13 +583,19 @@ export function createBracketList(view: BracketListView, cb: BracketListCallback
     mineRow.el.classList.add('is-climbing');
     const passed = rowEls.slice(toIdx + 1, fromIdx + 1);
     // Start: my row at its old place, the rows I pass one place higher (where they were), my old fish.
+    const lastRank = shown[shown.length - 1]?.rank ?? toRank;
+    const passedRows = shown.slice(toIdx + 1, fromIdx + 1).map((r) => ({ rank: r.rank, parts: rows.get(r.slot) }));
     const place = (y: number): void => {
       mineRow.el.style.transform = `translateY(${((y - toIdx) * step).toFixed(1)}px) scale(1.04)`;
+      // The numbers follow the places as they are passed (never past the list's last place).
+      mineRow.setRank(Math.min(lastRank, toRank + Math.round(y - toIdx)));
       passed.forEach((e, k) => {
         if (!e) return;
         const i = toIdx + 1 + k;
         const off = Math.max(0, Math.min(1, y - (i - 1)));
         e.style.transform = off > 0 ? `translateY(${(-off * step).toFixed(1)}px)` : '';
+        const pr = passedRows[k];
+        pr?.parts?.setRank(off > 0.5 ? pr.rank - 1 : pr.rank);
       });
       ol.scrollTop = centerOn(myTop + (y - toIdx) * step, myH);
     };

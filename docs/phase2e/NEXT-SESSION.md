@@ -85,3 +85,30 @@ upload; this note records the result and what is left.
 ## Left (the user, when convenient)
 
 1. Later: the Android Facebook app (the probe or the game build), then `signature.requireIssuedAt` can go on.
+
+## Leaderboard update (branch `leaderboard-visuals-update`, 2026-10-12)
+
+The user asked for the ranking to look and behave like the reference game's leaderboard (screenshots and a screen
+recording in the session): auto-join at sign-in, a podium leaderboard with "Online now" / "Playing now" / "2m ago",
+and a rank-up animation after a win.
+
+- **Auto-join (changes H-1).** A row may now exist with 0 fish: `POST /v1/session` with `join: true` (sent when the
+  client's `ladder.autoJoin` is on) puts a listed player who is in no running bracket into one at once
+  (`server/src/handlers/join.ts`, the same guarded batch as a win's join, `writeWins` with `joinEmpty`; the server
+  switch is `bracket.joinOnSession`). A 0-fish member is never paid (`paidPlaces` already needs points > 0). The
+  client shows the "New ranking" card (overlay `ladder_session`) once per bracket it was joined to without a win.
+- **Activity.** Migration `0003_presence.sql` adds `members.active_at` and `members.playing`; `POST /v1/presence
+  {state}` marks my own row (`bracket` rate bucket); sign-ins and counted wins mark it "online". Every row carries
+  `seenAt` / `playing` (additive in v1: older clients ignore them, and the client shows no status without them).
+  Client: `ladder.presence` (ping on a scored board's start and end, every `pingMs` while visible, none while hidden;
+  "now" within `nowMs`). The info view says what others see ("ladder.info.activity").
+- **Deploy order:** `npm --prefix server run db:migrate:staging` (0003) **before** `deploy:staging`; until then the
+  client keeps working against the old server (no statuses, no auto-join, the "Join" chip as before).
+- **UI:** `bracket-list.ts` (stopwatch pill, podium, pills, chests, `playClimb`), `ladder-session.ts`, the panel's
+  bubble (`ranking-panel.ts`), styles at the end of `ladder-chunk.css`. Dev harness views: `session`, `panel-climb`,
+  `panel-climb-top`, `panel-climb-new`.
+- **Copy:** 12 new keys (AI drafts in all 16 locales, for native review like the rest); the titles use the existing
+  `common.leaderboard` ("Leaderboard"), the body copy keeps "ranking" (glossary). "Online now" is allowed only as
+  `ladder.status.online` (scripts/i18n-check.ts honesty rule).
+- **Budgets:** the lazy ladder rows were re-set to the measured sizes (JS 30.0 → 37.9 KB, boot 33.9 → 36.2 KB, CSS
+  11.0 → 20.5 KB). The first-load CSS row (52.4 / 51.7 KB) was already over before this branch.
