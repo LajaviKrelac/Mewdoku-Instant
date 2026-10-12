@@ -94,4 +94,60 @@ describe('statements per invocation (Workers Free: 50; spec §1.2)', () => {
     if (process.env.BUDGET_REPORT) console.log(used);
     for (const [name, n] of Object.entries(used)) expect(n, name).toBeLessThanOrEqual(FREE_QUERIES_PER_INVOCATION);
   }, 120_000);
+
+  it('[D-2e-24] computer rivals add no statements: rival views, a rival heart, lazy finalisations and the hourly cron over six rival brackets', async () => {
+    const t = makeTestApp({ env: { RIVALS: 'on' } });
+    const used: Record<string, number> = {};
+    const measure = async <T>(name: string, f: () => Promise<T>): Promise<T> => {
+      const before = t.rec.prepared;
+      const out = await f();
+      used[name] = Math.max(used[name] ?? 0, t.rec.prepared - before);
+      return out;
+    };
+    // Nine rival brackets, one per join window (2 h 1 min apart), two real players each (≈ 48 rows).
+    const GAP = 2 * HOUR + 60_000;
+    const groups: [TestPlayer, TestPlayer][] = [];
+    for (let g = 0; g < 9; g++) {
+      t.clock.set(T0 + g * GAP);
+      const pair: [TestPlayer, TestPlayer] = [new TestPlayer(t, `rv${g}a`), new TestPlayer(t, `rv${g}b`)];
+      await measure('session (new player)', () => pair[0].signIn());
+      await measure('wins: 1, a new rival bracket', () => pair[0].win('L2'));
+      await pair[1].signIn();
+      await measure('wins: 1, joining a rival bracket', () => pair[1].win('L3'));
+      groups.push(pair);
+    }
+    expect(t.count('SELECT COUNT(*) FROM brackets WHERE rivals IS NOT NULL')).toBe(9);
+    const [a, b] = groups[8] as [TestPlayer, TestPlayer];
+    t.clock.set(T0 + 8 * GAP + 2 * HOUR + 60_000);
+    const view = await measure('bracket (with rivals)', () => a.bracket());
+    expect(view.rows.length).toBeGreaterThanOrEqual(46);
+    const rival = view.rows.find((r) => r.slot >= 9000);
+    await measure('heart (rival)', () => a.heart(view.bracketId as string, rival?.slot ?? 9000));
+    await measure('bracket (with rivals and a rival heart)', () => b.bracket());
+    await measure('admin: bracket', async () => expect((await admin(t, 'GET', `brackets/${view.bracketId as string}`)).status).toBe(200));
+    // Lazy finalisations of rival brackets: a session, a read, ten wins that open a new (tagged) bracket.
+    const due = (g: number): number => T0 + g * GAP + DAY;
+    for (const g of [0, 1, 2]) {
+      t.clock.set(due(g) - 5 * 60_000);
+      for (const p of groups[g] as [TestPlayer, TestPlayer]) await p.signIn(); // not due yet
+    }
+    t.clock.set(due(0) + 60_000);
+    await measure('session (returning, lazy finalise of a rival bracket)', () => (groups[0] as [TestPlayer, TestPlayer])[0].signIn());
+    t.clock.set(due(1) + 60_000);
+    const r = await measure('bracket (lazy finalise of a rival bracket)', () => (groups[1] as [TestPlayer, TestPlayer])[0].bracket());
+    expect(r.final).toBe(true);
+    t.clock.set(due(2) + 60_000);
+    const z = (groups[2] as [TestPlayer, TestPlayer])[0];
+    const w = await measure('wins: 10, lazy finalise of a rival bracket, new rival bracket', () =>
+      z.wins(Array.from({ length: 10 }, (_, i) => makeWin(`L${400 + i}`, { playedAt: t.clock.now() }))),
+    );
+    expect(w.bracket?.rows.length).toBeGreaterThan(1);
+    // The hourly cron once six rival brackets are due together.
+    t.clock.set(due(8) + 60_000);
+    const hourly = await measure('cron: hourly, 6 rival brackets', () => t.app.scheduled());
+    expect(hourly.finalized).toBe(6);
+    expect(t.count('SELECT COUNT(*) FROM brackets WHERE final_rivals IS NOT NULL')).toBe(9);
+    if (process.env.BUDGET_REPORT) console.log(used);
+    for (const [name, n] of Object.entries(used)) expect(n, name).toBeLessThanOrEqual(FREE_QUERIES_PER_INVOCATION);
+  }, 120_000);
 });

@@ -333,6 +333,26 @@ describe('shell: shop, hub, settings rows (§5.5, §6.8, §8.5; phase2c §5.2, �
     expect(mounted).toBe(1);
   });
 
+  it('2026-10-12, D-2e-24 (H-9): How to play gets ladderComputerPlayers only while the ranking is active and its rules disclose computer players', () => {
+    const state = { active: true, computer: true };
+    const flow = { chip: () => ({ state: 'join' }), homeMounted: () => undefined, active: () => state.active, computerPlayers: () => state.computer } as unknown as LadderFlow;
+    const { h, shell } = setup((s) => ({ ...s, tutorialDone: true }), { ladder: () => flow });
+    const props = (): Record<string, unknown> => h.router.props.how_to_play as unknown as Record<string, unknown>;
+    shell.openHowToPlay();
+    expect(props()).toMatchObject({ ladder: true, ladderComputerPlayers: true });
+    h.router.close('how_to_play');
+    state.computer = false;
+    shell.openHowToPlay();
+    expect(props().ladder).toBe(true);
+    expect(props()).not.toHaveProperty('ladderComputerPlayers');
+    h.router.close('how_to_play');
+    state.computer = true;
+    state.active = false;
+    shell.openHowToPlay();
+    expect(props()).not.toHaveProperty('ladder');
+    expect(props()).not.toHaveProperty('ladderComputerPlayers');
+  });
+
   it('the event Top list never labels the event total as "This puzzle" (review RANK-1)', async () => {
     const { h, shell } = setup((s) => ({ ...s, events: { [LANTERN.id]: { solved: 2, ms: 400_000, lastAt: 1 } } }));
     const top = createEventTopFlow({

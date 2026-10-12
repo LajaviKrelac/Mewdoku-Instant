@@ -439,6 +439,7 @@ export const catalog: LocaleCatalog = {
   'ladder.info.rewards.other': 'ランキングが終わると、{min}人以上が参加していれば上位{count}人がヒントとこねこをもらえます。',
   'ladder.info.double': '動画を見ると報酬が2倍になります。',
   'ladder.info.hearts': 'ハートをタップしてプレイヤーを応援しましょう。ハートはただのお楽しみです。',
+  'ladder.info.computerPlayers': 'ランキングにはコンピューターのプレイヤーも含まれます。',
   'ladder.info.names': 'ほかのプレイヤーに見えるのはランキング名と絵だけで、Facebookの名前や写真は表示されません。',
   'ladder.info.privacy': '設定でランキングをオフにしたり、ランキングのデータを削除したりできます。',
   'ladder.records.title': 'あなたの記録',

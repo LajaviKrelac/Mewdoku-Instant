@@ -198,6 +198,30 @@ describe('rank-api: the golden fixtures', () => {
   });
 });
 
+describe('rank-api: RulesView.computerPlayers (2026-10-12, D-2e-24)', () => {
+  const session = (): Record<string, unknown> => JSON.parse(JSON.stringify(fixture('session.fb').response.body)) as Record<string, unknown>;
+  const withFlag = (v: unknown): Record<string, unknown> => {
+    const s = session();
+    (s.rules as Record<string, unknown>).computerPlayers = v;
+    return s;
+  };
+  it('keeps computerPlayers: true; an absent field stays absent', () => {
+    expect(parseSessionResponse(withFlag(true))?.rules.computerPlayers).toBe(true);
+    expect(parseSessionResponse(withFlag(true))).toEqual(withFlag(true));
+    const plain = parseSessionResponse(session());
+    expect(plain).toEqual(session());
+    expect(plain && 'computerPlayers' in plain.rules).toBe(false);
+    expect(parseSessionResponse(fixture('session.rivals').response.body)?.rules.computerPlayers).toBe(true);
+  });
+  it('drops any other value silently: the rules still parse', () => {
+    for (const v of [false, 1, 'true', null, {}]) {
+      const parsed = parseSessionResponse(withFlag(v));
+      expect(parsed, JSON.stringify(v)).not.toBeNull();
+      expect(parsed && 'computerPlayers' in parsed.rules, JSON.stringify(v)).toBe(false);
+    }
+  });
+});
+
 describe('rank-api: requests (server side)', () => {
   it('isWinSubmission accepts the contract example and refuses each broken field', () => {
     expect(isWinSubmission(WIN)).toBe(true);

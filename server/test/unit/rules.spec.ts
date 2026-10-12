@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { bracketTimes, grantOf, heartsNew, paidPlaces, rankRows } from '../../src/core/brackets';
 import { DEFAULT_CONFIG, loadConfig, mergeOverrides, parseOrigins, parseSwitches, solveFloors } from '../../src/core/config';
+import { isRivalSlot } from '../../src/core/rivals';
 import { originAllowed } from '../../src/http/cors';
 import { DAY, HOUR } from '../helpers/harness';
 
@@ -43,6 +44,29 @@ describe('ranking order (P-L11) and rewards (§1.6)', () => {
     expect(grantOf(2, 2, true)).toEqual({ hints: 4, kitties: 4 });
     expect(heartsNew(5, 1, 3)).toBe(1);
     expect(heartsNew(2, 1, 3)).toBe(0);
+  });
+  it('[D-2e-24] a merged table (computer players at slots ≥ 9000): every row counts toward minMembers and the one-below rule; a place a rival holds is dropped, never passed down', () => {
+    // real 0 (9), rival 9000 (8), real 1 (7), rival 9001 (6): four rows only, so nobody is paid (minMembers 5)
+    const four = rankRows([m(0, 9, 1), m(9000, 8, 1), m(1, 7, 1), m(9001, 6, 1)]);
+    expect(paidPlaces(four, DEFAULT_CONFIG)).toEqual([]);
+    // a fifth row (a rival) makes the table eligible: 1st and 3rd are real and paid as they read; 2nd is a rival's
+    const five = rankRows([m(0, 9, 1), m(9000, 8, 1), m(1, 7, 1), m(9001, 6, 1), m(9002, 5, 1)]);
+    const placed = paidPlaces(five, DEFAULT_CONFIG);
+    expect(placed.map((p) => [p.place, p.slot])).toEqual([
+      [1, 0],
+      [2, 9000],
+      [3, 1],
+    ]);
+    const paid = placed.filter((p) => !isRivalSlot(p.slot));
+    expect(paid.map((p) => [p.place, p.slot, p.hints, p.kitties])).toEqual([
+      [1, 0, 2, 2],
+      [3, 1, 1, 0],
+    ]);
+    // a real player last of five beat nobody: never paid even when the places above are rivals'
+    const last = rankRows([m(9000, 9, 1), m(9001, 8, 1), m(9002, 7, 1), m(9003, 6, 1), m(4, 5, 1)]);
+    expect(paidPlaces(last, DEFAULT_CONFIG).filter((p) => !isRivalSlot(p.slot))).toEqual([]);
+    // exact ties go to the lower slot: the real player ranks above a rival with the same points and time
+    expect(rankRows([m(9000, 3, 10), m(0, 3, 10)]).map((x) => x.slot)).toEqual([0, 9000]);
   });
 });
 

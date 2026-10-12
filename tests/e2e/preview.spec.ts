@@ -8,6 +8,10 @@
 // hints through the real ledger, a rewarded video granting a kitty, the end of the ranking day with the result card
 // and Collect ×2, the ranking sheet's hearts and the name sheet, and a new player's tutorial.
 // PREVIEW_SHOTS=<dir> also writes a screenshot of each feature there (for a person to look at, never compared).
+// 2026-10-12 (D-2e-24, design §11, §12.5): the other players are the server's computer players (rivals on in the preview
+// config), so the counts, the fish and the places around the player come from the sample server's answers, never fixed
+// numbers: a full ranking of 46–50 rows, "#5 of N" on Home, "#2 of N" on the result card, and the info view's
+// "Rankings include computer players.".
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
@@ -94,10 +98,16 @@ test.describe('the preview link (dist/preview-e2e)', () => {
     await expect(page.locator('.screen--home .streak-pill')).toHaveAttribute('aria-label', 'Streak: day 6 of 7. Solve a puzzle today for day 7.');
     await expect(page.locator('.screen--home .daily-card')).not.toHaveAttribute('data-state', 'locked');
     await expect(page.locator('.screen--home .daily-card')).toHaveAttribute('data-state', 'not_played');
-    // The ranking chip from the sample server's bracket (22 fish, 5th of 24): 2026-10-12 (01 row 7.1.7) its dark pill
-    // shows the time left (hh:mm:ss, ticking); rank and fish are in its name.
+    // The ranking chip from the sample server's bracket (5th among its computer players): 2026-10-12 (01 row 7.1.7) its
+    // dark pill shows the time left (hh:mm:ss, ticking); rank and fish are in its name.
     const chip = page.locator('.screen--home button.ladder-chip');
-    await expect(chip).toHaveAttribute('aria-label', /^Daily ranking: #5 of \d+, 22 fish\. Ends in /, { timeout: 10_000 });
+    await expect(chip).toHaveAttribute('aria-label', /^Daily ranking: #5 of \d+, \d+ fish\. Ends in /, { timeout: 10_000 });
+    // The server's numbers behind it (save.ladder.current): 5 h in, every computer player has arrived (46–50 rows).
+    const day = (await app(page)).save.ladder.current;
+    expect(day?.rank).toBe(5);
+    expect(day?.members).toBeGreaterThanOrEqual(46);
+    expect(day?.members).toBeLessThanOrEqual(50);
+    await expect(chip).toHaveAttribute('aria-label', new RegExp(`^Daily ranking: #5 of ${day?.members}, ${day?.points} fish\\. `));
     await expect(chip.locator('.ladder-chip__time')).toHaveText(/^\d{2}:\d{2}:\d{2}$/);
     await expect(chip.locator('.ladder-chip__points')).toBeHidden();
     await page.waitForTimeout(600);
@@ -117,10 +127,14 @@ test.describe('the preview link (dist/preview-e2e)', () => {
     const list = panel(page).locator('.rank-list[data-kind="bracket"]');
     await expect(list).toBeVisible({ timeout: 15_000 });
     await expect(list.locator('.mwp-note')).toHaveText('Preview: sample players');
-    await expect(list.locator('ol.rank-rows > li.rank-row')).toHaveCount(24);
+    // Every row the server returned (its members: the player and the computer players), my row with my new total.
+    const members = (await app(page)).save.ladder.current?.members ?? 0;
+    expect(members).toBeGreaterThanOrEqual(46);
+    expect(members).toBeLessThanOrEqual(50);
+    await expect(list.locator('ol.rank-rows > li.rank-row')).toHaveCount(members);
     const mine = list.locator('ol.rank-rows > li.rank-row[data-me="1"] .rank-row__points');
     const kept = (await app(page)).game?.hearts ?? 0;
-    await expect(mine).toContainText(String(22 + kept));
+    await expect(mine).toContainText(String((day?.points ?? 0) + kept));
     await page.waitForTimeout(900);
     await shot(page, '04-ranking-panel-sample-players');
 
@@ -213,7 +227,7 @@ test.describe('the preview link (dist/preview-e2e)', () => {
     await shortcut(page, 'endDay');
     const card = page.locator('.overlay[data-overlay="ladder_result"]');
     await expect(card).toHaveAttribute('data-case', 'paid', { timeout: 15_000 });
-    await expect(card).toContainText('You finished #2 of 24.');
+    await expect(card).toContainText(/You finished #2 of \d+\./);
     await expect(card.locator('.mwp-note')).toHaveText('Preview: sample ranking');
     const double = card.locator('button.ladder-result__double');
     await expect(double).toHaveText(/Collect ×2/);
@@ -240,14 +254,19 @@ test.describe('the preview link (dist/preview-e2e)', () => {
     await hideMenu(page);
     // Once the first bracket answer is in (a sheet opened before it keeps the join line: the ladder flow does not
     // re-render an open sheet when that answer lands).
-    await expect(page.locator('.screen--home button.ladder-chip')).toHaveAttribute('aria-label', /, 22 fish\./, { timeout: 10_000 });
+    await expect(page.locator('.screen--home button.ladder-chip')).toHaveAttribute('aria-label', /, \d+ fish\./, { timeout: 10_000 });
     await page.waitForFunction(() => localStorage.getItem('mewdoku.ladder.rows.v1') !== null, undefined, { timeout: 10_000 });
     await page.locator('.screen--home button.ladder-chip').click();
     const sheet = page.locator('.overlay[data-overlay="ladder"]');
     const list = sheet.locator('.rank-list[data-kind="bracket"]');
     await expect(list).toBeVisible({ timeout: 10_000 });
     await expect(list.locator('.mwp-note')).toHaveText('Preview: sample players');
-    // A heart on a sample row: +1 and pressed.
+    // 2026-10-12 (D-2e-24, H-9): the info view says the ranking includes computer players; Back returns to the list.
+    await sheet.locator('button.ladder-sheet__info').click();
+    await expect(sheet.locator('ul.ladder-info')).toContainText('Rankings include computer players.');
+    await sheet.locator('button.overlay__back').click();
+    await expect(list).toBeVisible();
+    // A heart on a sample row (a computer player): +1 and pressed.
     const other = list.locator('ol.rank-rows > li.rank-row[data-me="0"]').first();
     const heart = other.locator('button.rank-row__heart');
     const n0 = Number((await heart.locator('.rank-row__hearts').textContent())?.replace(/\D+/g, '') || '0');

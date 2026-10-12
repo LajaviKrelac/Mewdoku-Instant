@@ -9,12 +9,14 @@
 import { MAX_WINS_PER_REQUEST, validateWinsRequest, type WinResult, type WinsResponse } from '../contract';
 import { bracketTimes } from '../core/brackets';
 import { newBracketId, newRowId } from '../core/ids';
+import { newRivalsTag } from '../core/rivals';
 import { isBelowMin } from '../core/version';
 import { evaluateWins, type WinDecision } from '../core/wins';
 import { authenticate } from '../http/auth';
 import type { Ctx } from '../http/context';
 import { fail, json } from '../http/errors';
 import { readJson } from '../http/json';
+import { rivalsForPool } from '../services';
 import type { BracketTarget, WinWrite } from '../store/sql-store';
 import { bracketView, finalizeIfDue } from './views';
 
@@ -128,7 +130,18 @@ export async function postWins(ctx: Ctx): Promise<Response> {
           const t = bracketTimes(s.cfg.bracket.periodMode, now, s.cfg);
           target = {
             kind: 'create',
-            bracket: { id: newBracketId(now, s.rng), pool: player.pool, mode: s.cfg.bracket.periodMode, openedAt: t.openedAt, joinUntil: t.joinUntil, endsAt: t.endsAt, maxMembers: s.cfg.bracket.maxMembers },
+            bracket: {
+              id: newBracketId(now, s.rng),
+              pool: player.pool,
+              mode: s.cfg.bracket.periodMode,
+              openedAt: t.openedAt,
+              joinUntil: t.joinUntil,
+              endsAt: t.endsAt,
+              maxMembers: s.cfg.bracket.maxMembers,
+              // 2026-10-12, D-2e-24: computer rivals are decided here, once (the tag freezes the seed, the strength
+              // and the word lists); no other statement of the win, join or create changes.
+              rivals: rivalsForPool(s, player.pool) ? newRivalsTag(s.cfg.rivals.strength, s.rng, s.words) : null,
+            },
           };
         }
       }

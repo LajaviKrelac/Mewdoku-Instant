@@ -1,0 +1,23 @@
+{
+  "name": "hearts.rival",
+  "request": {
+    "method": "POST",
+    "path": "/v1/hearts",
+    "auth": true,
+    "body": {
+      "bracketId": "mwhs8lc0tijs942z",
+      "slot": 9027
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "bracketId": "mwhs8lc0tijs942z",
+      "slot": 9027,
+      "hearts": 1,
+      "likedByMe": true,
+      "givenInBracket": 1,
+      "serverTime": 1794754800000
+    }
+  }
+}

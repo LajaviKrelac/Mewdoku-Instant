@@ -4,7 +4,8 @@
 // chunk) and the ranking sheet (overlay `ladder`). Lazy `ladder` chunk only.
 //
 // Honesty (H-1 … H-3, H-8): the rows are EXACTLY the server's rows, in its order, with its ranks; the count
-// is the server's `members`; a bracket that is not full shows exactly its members, alone shows my row and
+// is the server's `members`; the list shows exactly the server's rows (real players and, in a bracket created with
+// them, computer players: 2026-10-12, D-2e-24, never labelled one by one), alone shows my row and
 // "You're the only player in this ranking." (audit B14: no "so far"); nothing here ever adds, pads, trims or re-ranks a row
 // (ladder.panelRows > 0 shows a contiguous window of the server's rows around mine, never a made-up one).
 // Names are rendered with textContent and dir="auto" (bidi-isolated in RTL rows), the same English words

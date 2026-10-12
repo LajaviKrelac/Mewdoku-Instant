@@ -438,6 +438,7 @@ export const catalog: LocaleCatalog = {
   'ladder.info.rewards.other': 'Saat peringkat berakhir, {count} teratas mendapat petunjuk dan meong jika paling sedikit {min} pemain ikut.',
   'ladder.info.double': 'Kamu bisa menonton video untuk menggandakan hadiahmu.',
   'ladder.info.hearts': 'Ketuk hati untuk menyemangati pemain. Hati hanya untuk seru-seruan.',
+  'ladder.info.computerPlayers': 'Peringkat juga berisi pemain komputer.',
   'ladder.info.names': 'Pemain lain melihat nama peringkat dan gambarmu, tidak pernah nama atau foto Facebook-mu.',
   'ladder.info.privacy': 'Di Pengaturan kamu bisa mematikan peringkat atau menghapus data peringkatmu.',
   'ladder.records.title': 'Rekormu',

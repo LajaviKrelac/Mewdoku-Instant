@@ -34,6 +34,8 @@ export const DEV_DEFAULTS: Required<Pick<AppEnv, 'FB_APP_SECRET' | 'SESSION_SECR
   ALLOWED_ORIGINS: 'http://127.0.0.1:4173,http://127.0.0.1:4174,http://localhost:4173,http://localhost:4174,http://127.0.0.1:5173,http://localhost:5173,https://localhost:8080,https://127.0.0.1:8080',
   MIN_CLIENT_VERSION: '0.0.0',
   RC_SWITCHES: '{}',
+  // D-2e-24: computer rivals stay off here (a test pool turns them on with POST /dev/rivals).
+  RIVALS: 'off',
   // e2e makes many players and anonymous devices from 127.0.0.1: the per-isolate buckets and the anonymous
   // per-IP quota are opened wide here (the code paths are the same; the tests of the real limits run in vitest).
   CONFIG_OVERRIDES: JSON.stringify({
@@ -56,6 +58,7 @@ const ENV_KEYS = [
   'ALLOWED_ORIGINS',
   'MIN_CLIENT_VERSION',
   'RC_SWITCHES',
+  'RIVALS',
   'CONFIG_OVERRIDES',
   'BUILD_SHA',
 ] as const;

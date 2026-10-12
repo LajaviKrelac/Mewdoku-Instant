@@ -466,6 +466,7 @@ export const catalog: LocaleCatalog = {
   'ladder.info.rewards.other': 'Wenn eine Rangliste endet, gewinnen die besten {count} Tipps und Kätzchen, falls mindestens {min} Spieler dabei waren.',
   'ladder.info.double': 'Mit einem Video kannst du deine Belohnung verdoppeln.',
   'ladder.info.hearts': 'Tippe auf ein Herz, um jemanden anzufeuern. Herzen sind nur zum Spaß.',
+  'ladder.info.computerPlayers': 'Ranglisten enthalten Computerspieler.',
   'ladder.info.names': 'Andere sehen deinen Ranglistennamen und dein Bild, nie deinen Facebook-Namen oder dein Foto.',
   'ladder.info.privacy': 'In den Einstellungen kannst du Ranglisten ausschalten oder deine Ranglistendaten löschen.',
   'ladder.records.title': 'Deine Rekorde',

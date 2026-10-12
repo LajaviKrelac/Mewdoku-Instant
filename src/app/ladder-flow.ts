@@ -10,6 +10,8 @@
 // Honesty (spec §0.4, H-1…H-5): the list shows exactly the rows the server returned, in its order, with its
 // ranks and its count; a failure never becomes rows — it becomes the cached bracket of a real answer
 // ("Last updated hh:mm"), or the player's own records. Queued fish are shown as waiting, never promised.
+// 2026-10-12, D-2e-24 (H-9): the server's computer players are rows like any other (rendered as returned, never
+// labelled one by one); rules.computerPlayers adds the disclosure line to the info view and How to play.
 // A rejected win is dropped quietly. The token lives in the client's memory only; the cached ROWS (other
 // players' names) live in memory and localStorage['mewdoku.ladder.rows.v1'] only, dropped once endsAt
 // passed (an ended bracket's view, its final standings, in memory only: 2026-10-12); the save keeps my
@@ -135,6 +137,8 @@ export interface LadderFlow {
   streakClockOk(): boolean;
   /** Prefetches the lazy `ladder` chunk (Home idle, a scored board's mount). */
   prefetchChunk(): void;
+  /** 2026-10-12, D-2e-24: the server's rules (or the cached ones) disclose computer players (How to play's line). */
+  computerPlayers(): boolean;
   /** e2e hook (window.__mewdoku.ladder()). */
   debug(): { active: boolean; signedIn: boolean; pending: number; current: LadderRecord['current'] };
   dispose(): void;
@@ -641,6 +645,8 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
       paidPlaces: r.places.length,
       // The info view's "lasts N hours" line comes from the server's rule (requests-G3 R10).
       durationMs: r.durationMs,
+      // 2026-10-12, D-2e-24: the disclosure line, only for a literal true (the cached rules are not re-parsed).
+      ...(r.computerPlayers === true ? { computerPlayers: true } : {}),
     };
   }
 
@@ -1266,6 +1272,7 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
       return Math.abs(client.offsetMs()) <= c.dayStreak.maxSkewMs;
     },
     prefetchChunk: () => void loadChunk(),
+    computerPlayers: () => rulesView()?.computerPlayers === true,
     debug: () => ({ active: active(), signedIn: client.signedIn(), pending: save().ladder.pending.length, current: save().ladder.current }),
     dispose() {
       disposed = true;

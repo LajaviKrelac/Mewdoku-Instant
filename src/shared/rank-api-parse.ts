@@ -150,6 +150,8 @@ function parseRules(x: unknown): RulesView | null {
     claimTtlMs: x.claimTtlMs,
     hearts: { enabled: h.enabled, allowSelf: h.allowSelf, maxGivenPerBracket: h.maxGivenPerBracket },
     nickname: { freeText: n.freeText, changeCooldownMs: n.changeCooldownMs },
+    // D-2e-24: kept only as `true`; any other value is dropped silently (the rules are never rejected over it).
+    ...(x.computerPlayers === true ? { computerPlayers: true } : {}),
   };
 }
 

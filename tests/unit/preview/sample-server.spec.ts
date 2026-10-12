@@ -3,9 +3,15 @@
 // can: only the player's real wins and kept fish count (the win pipeline over the solution table), rows sorted by the
 // server's one ordering, hearts once per row and capped, the paid places at finalisation, Collect ×2 once, names from
 // our word lists with the cooldown. The returning player's seed and "end the day" (2nd place, a paid reward).
+// 2026-10-12 (D-2e-24, design §11, §12.5): the other players are the server's computer players (production code, rivals
+// on in previewConfig): a fresh bracket shows its opening group, the returning player is 5th of 46–50, "end the day" is
+// 2nd behind a computer player and paid, hearts on computer rows work, no reward ever goes to one, an old saved state
+// with sample members still loads (no computer players), and the rules carry the disclosure.
 import { describe, expect, it } from 'vitest';
 import { SOLUTIONS } from '../../../server/src/content/generated/solutions';
 import { DEFAULT_CONFIG } from '../../../server/src/core/config';
+import { seededRng } from '../../../server/src/core/crypto';
+import { decodeFinalRivals, isRivalSlot, RIVAL_TAG_RE } from '../../../server/src/core/rivals';
 import { rulesView } from '../../../server/src/handlers/views';
 import {
   parseBracketView,
@@ -19,8 +25,8 @@ import {
 } from '../../../src/shared/rank-api-parse';
 import type { BracketView, SessionResponse, WinSubmission } from '../../../src/shared/rank-api';
 import { NICK_WORDS_V1 } from '../../../src/shared/nick-words';
-import { createSampleServer, RETURNING_DAY, SAMPLE_KEY_PREFIX, type SampleServer } from '../../../preview/sample-server';
-import { loadState, queueOperation, SAMPLE_STATE_KEY } from '../../../preview/sample-state';
+import { createSampleServer, previewConfig, RETURNING_DAY, type SampleServer } from '../../../preview/sample-server';
+import { loadState, queueOperation, saveState, SAMPLE_STATE_KEY, type SampleState } from '../../../preview/sample-state';
 import { MemoryStorage } from '../platform/helpers';
 
 const T0 = Date.UTC(2026, 9, 11, 12, 0, 0);
@@ -56,12 +62,13 @@ function win(level: number, over: Partial<WinSubmission> = {}): WinSubmission {
   };
 }
 
-function setup(opts: { returning?: boolean; endDay?: boolean; storage?: MemoryStorage } = {}) {
+function setup(opts: { returning?: boolean; endDay?: boolean; storage?: MemoryStorage; seed?: number } = {}) {
   let now = T0;
   const storage = opts.storage ?? new MemoryStorage();
   if (opts.returning) queueOperation(storage, 'returning');
   if (opts.endDay) queueOperation(storage, 'endDay');
-  const server: SampleServer = createSampleServer({ now: () => now, storage });
+  // A seeded randomness: the rivals tag (and so the computer players) is the same on every run.
+  const server: SampleServer = createSampleServer({ now: () => now, storage, rng: seededRng(opts.seed ?? 7) });
   let token = '';
   const call = async (method: string, path: string, body?: unknown) => server.handle(method, path, body, token ? `Bearer ${token}` : null);
   const signIn = async (): Promise<SessionResponse> => {
@@ -85,13 +92,29 @@ function setup(opts: { returning?: boolean; endDay?: boolean; storage?: MemorySt
 const sorted = (v: BracketView): boolean =>
   v.rows.every((r, i) => r.rank === i + 1 && (i === 0 || (v.rows[i - 1] as { points: number }).points >= r.points));
 
+/** Every row is a real row (mine) or a computer player (slot ≥ 9000): the preview stores no other players. */
+const onlyMeAndRivals = (v: BracketView): boolean => v.rows.every((r) => r.me || isRivalSlot(r.slot)) && v.rows.filter((r) => r.me).length === 1;
+
+/** Names from our word lists ("<adj> <noun> <1–99>"), all different. */
+function namesFromOurLists(v: BracketView): void {
+  for (const r of v.rows) {
+    const [adj, noun, num] = r.nickname.split(' ');
+    expect(NICK_WORDS_V1.adj).toContain(adj);
+    expect(NICK_WORDS_V1.noun).toContain(noun);
+    expect(Number(num)).toBeGreaterThanOrEqual(1);
+  }
+  expect(new Set(v.rows.map((r) => r.nickname.toLowerCase())).size).toBe(v.rows.length);
+}
+
 describe('the sample server answers the real contract', () => {
-  it('config, session (the deployed rules), me: every answer passes the client parsers', async () => {
+  it('config, session (the deployed rules plus the computer players disclosure), me: every answer passes the client parsers', async () => {
     const s = setup();
     const cfgA = await s.call('GET', '/v1/config');
     expect(parseConfigResponse(cfgA.body)).not.toBeNull();
     const session = await s.signIn();
-    expect(session.rules).toEqual(rulesView(DEFAULT_CONFIG));
+    expect(session.rules).toEqual({ ...rulesView(DEFAULT_CONFIG), computerPlayers: true });
+    expect(session.rules).toEqual(rulesView(previewConfig()));
+    expect(previewConfig().rivals).toEqual({ ...DEFAULT_CONFIG.rivals, enabled: true });
     expect(session.player.pool).toBe('web');
     expect(session.player.nickname).toMatch(/^\S+ \S+ \d{1,2}$/);
     expect(session.bracket).toBeNull(); // no win yet: no bracket
@@ -129,19 +152,28 @@ describe('the sample server answers the real contract', () => {
 });
 
 describe('wins: only the player’s own real wins and kept fish count (G4’s pipeline)', () => {
-  it('a new player’s first win opens a bracket with sample players; the kept fish are the points; rows in the server’s order', async () => {
-    const s = setup();
-    await s.signIn();
-    const a = await s.call('POST', '/v1/wins', { wins: [win(2, { fish: 2, mistakes: 1 })] });
-    const r = parseWinsResponse(a.body);
-    expect(r?.results).toEqual([expect.objectContaining({ verdict: 'accepted', points: 2 })]);
-    expect(r?.windowPoints).toBe(2);
-    const v = await s.bracket();
-    expect(v.state).toBe('open');
-    expect(v.members).toBe(v.rows.length);
-    expect(v.rows.length).toBe(12); // 11 sample players + me
-    expect(v.me?.points).toBe(2);
-    expect(sorted(v)).toBe(true);
+  it('a new player’s first win opens a tagged bracket with its computer players; the kept fish are the points; rows in the server’s order', async () => {
+    for (const seed of [7, 8, 9, 10, 11]) {
+      const s = setup({ seed });
+      await s.signIn();
+      const a = await s.call('POST', '/v1/wins', { wins: [win(2, { fish: 2, mistakes: 1 })] });
+      const r = parseWinsResponse(a.body);
+      expect(r?.results).toEqual([expect.objectContaining({ verdict: 'accepted', points: 2 })]);
+      expect(r?.windowPoints).toBe(2);
+      const v = await s.bracket();
+      expect(v.state).toBe('open');
+      expect(v.members).toBe(v.rows.length);
+      // Opened 10–80 min before the win: the opening group (8–12) plus the arrivals so far, never above 50.
+      expect(v.rows.length, `seed ${seed}`).toBeGreaterThanOrEqual(9);
+      expect(v.rows.length, `seed ${seed}`).toBeLessThanOrEqual(50);
+      expect(onlyMeAndRivals(v)).toBe(true);
+      expect(v.me?.points).toBe(2);
+      expect(sorted(v)).toBe(true);
+      namesFromOurLists(v);
+      const b = s.server.state().brackets[v.bracketId as string];
+      expect(b?.rivals).toMatch(RIVAL_TAG_RE);
+      expect(s.server.state().members[v.bracketId as string]).toHaveLength(1); // no stored sample member
+    }
   });
 
   it('a wrong board, a replayed id and a level already counted add nothing; the same winId answers duplicate', async () => {
@@ -165,26 +197,30 @@ describe('wins: only the player’s own real wins and kept fish count (G4’s pi
 });
 
 describe('the returning player (the preview’s first visit)', () => {
-  it('22 fish in a bracket opened 5 h ago with 23 sample players: 5th of 24, rows sorted, sample names from our word lists', async () => {
-    const s = setup({ returning: true });
-    const session = await s.signIn();
-    expect(session.bracket).toMatchObject({ state: 'open', rank: 5, members: 24, points: RETURNING_DAY.fish });
-    const v = await s.bracket();
-    expect(v.rows).toHaveLength(24);
-    expect(sorted(v)).toBe(true);
-    expect(v.me).toMatchObject({ rank: 5, points: 22, hearts: 2 });
-    for (const r of v.rows) {
-      const [adj, noun, num] = r.nickname.split(' ');
-      expect(NICK_WORDS_V1.adj).toContain(adj);
-      expect(NICK_WORDS_V1.noun).toContain(noun);
-      expect(Number(num)).toBeGreaterThanOrEqual(1);
+  it('5th of 46–50 in a bracket opened 5 h ago, among the computer players: rows sorted, names from our word lists, no hearts', async () => {
+    for (const seed of [7, 21, 33]) {
+      const s = setup({ returning: true, seed });
+      const session = await s.signIn();
+      expect(session.bracket).toMatchObject({ state: 'open', rank: RETURNING_DAY.rank });
+      const points = session.bracket?.points ?? 0;
+      expect(points).toBeGreaterThanOrEqual(1);
+      const v = await s.bracket();
+      // Past the 2 h join window every computer player has arrived: T = 46…50 rows (the K rule, me included).
+      expect(v.members).toBe(v.rows.length);
+      expect(v.rows.length, `seed ${seed}`).toBeGreaterThanOrEqual(46);
+      expect(v.rows.length, `seed ${seed}`).toBeLessThanOrEqual(50);
+      expect(session.bracket?.members).toBe(v.members);
+      expect(onlyMeAndRivals(v)).toBe(true);
+      expect(sorted(v)).toBe(true);
+      expect(v.me).toMatchObject({ rank: 5, points, hearts: 0 }); // computer players never give hearts
+      expect(v.heartsNew).toBe(0);
+      namesFromOurLists(v);
+      expect((v.endsAt ?? 0) - s.now()).toBe(24 * HOUR - RETURNING_DAY.openedAgoMs);
+      // Level 37 counts (36 done), so the next win adds its fish to my row.
+      const r = parseWinsResponse((await s.call('POST', '/v1/wins', { wins: [win(37)] })).body);
+      expect(r?.results[0]?.verdict).toBe('accepted');
+      expect(r?.bracket?.me?.points).toBe(points + 3);
     }
-    expect(new Set(v.rows.map((r) => r.nickname)).size).toBe(24);
-    expect((v.endsAt ?? 0) - s.now()).toBe(24 * HOUR - RETURNING_DAY.openedAgoMs);
-    // Level 37 counts (36 done), so the next win adds its fish to my row.
-    const r = parseWinsResponse((await s.call('POST', '/v1/wins', { wins: [win(37)] })).body);
-    expect(r?.results[0]?.verdict).toBe('accepted');
-    expect(r?.bracket?.me?.points).toBe(25);
   });
 
   it('the seed applies to the next new player only once (a reload signs the same device in again)', async () => {
@@ -192,19 +228,21 @@ describe('the returning player (the preview’s first visit)', () => {
     const s = setup({ returning: true, storage });
     await s.signIn();
     expect(loadState(storage).pending.returning).toBe(false);
+    const points = Object.values(loadState(storage).members).flat()[0]?.points;
     const again = createSampleServer({ now: () => T0 + MIN, storage });
     const a = await again.handle('POST', '/v1/session', { platform: 'web', device: DEVICE, clientVersion: '0.1.0', contentVersion: CONTENT }, null);
-    expect(parseSessionResponse(a.body)?.bracket?.points).toBe(22);
+    expect(parseSessionResponse(a.body)?.bracket?.points).toBe(points);
     expect(Object.keys(loadState(storage).players)).toHaveLength(1);
   });
 });
 
 describe('without storage (a blocked localStorage)', () => {
   it('the page hands the server its queued state: the returning seed, then the end of the day, in memory', async () => {
-    const server = createSampleServer({ now: () => T0, storage: null, initial: { ...queueOperation(null, 'returning'), pending: { returning: true, endDay: true } } });
+    const server = createSampleServer({ now: () => T0, storage: null, rng: seededRng(7), initial: { ...queueOperation(null, 'returning'), pending: { returning: true, endDay: true } } });
     const a = await server.handle('POST', '/v1/session', { platform: 'web', device: DEVICE, clientVersion: '0.1.0', contentVersion: CONTENT }, null);
     const session = parseSessionResponse(a.body) as SessionResponse;
-    expect(session.results[0]).toMatchObject({ place: 2, members: 24, points: 22 });
+    expect(session.results[0]).toMatchObject({ place: 2, reward: { grant: { hints: 1, kitties: 1 } } });
+    expect(session.results[0]?.members).toBeGreaterThanOrEqual(46);
     expect(server.state().pending).toEqual({ returning: false, endDay: false });
   });
 });
@@ -215,10 +253,13 @@ describe('hearts (spec §1.7): one per row, my own once, at most 20 given', () =
     await s.signIn();
     const v = await s.bracket();
     const other = v.rows.find((r) => !r.me) as { slot: number; hearts: number };
+    expect(isRivalSlot(other.slot)).toBe(true); // a computer player: its built-in hearts plus the real ones
     const h = parseHeartResponse((await s.call('POST', '/v1/hearts', { bracketId: v.bracketId, slot: other.slot })).body);
     expect(h).toMatchObject({ hearts: other.hearts + 1, likedByMe: true, givenInBracket: 1 });
     expect((await s.call('POST', '/v1/hearts', { bracketId: v.bracketId, slot: other.slot })).body).toMatchObject({ error: { code: 'heart_exists' } });
-    expect((await s.bracket()).rows.find((r) => r.slot === other.slot)?.likedByMe).toBe(true);
+    expect((await s.bracket()).rows.find((r) => r.slot === other.slot)).toMatchObject({ likedByMe: true, hearts: other.hearts + 1 });
+    // A computer player that is not in the table is no row.
+    expect((await s.call('POST', '/v1/hearts', { bracketId: v.bracketId, slot: 9999 })).body).toMatchObject({ error: { code: 'not_found' } });
     const rest = v.rows.filter((r) => r.slot !== other.slot);
     for (const r of rest.slice(0, 19)) expect((await s.call('POST', '/v1/hearts', { bracketId: v.bracketId, slot: r.slot })).status).toBe(200);
     const last = rest[19] as { slot: number };
@@ -227,43 +268,59 @@ describe('hearts (spec §1.7): one per row, my own once, at most 20 given', () =
 });
 
 describe('end of the ranking day: the real finalisation and rewards', () => {
-  it('the next session ends the day with me 2nd of 24: a paid result (1 hint + 1 kitty), Collect ×2 once', async () => {
+  it('the next session ends the day with me 2nd behind a computer player: a paid result (1 hint + 1 kitty), Collect ×2 once', async () => {
     const storage = new MemoryStorage();
     const s = setup({ returning: true, storage });
     await s.signIn();
     queueOperation(storage, 'endDay');
     s.advance(MIN);
-    const again = createSampleServer({ now: () => T0 + MIN, storage });
+    const again = createSampleServer({ now: () => T0 + MIN, storage, rng: seededRng(8) });
     const a = await again.handle('POST', '/v1/session', { platform: 'web', device: DEVICE, clientVersion: '0.1.0', contentVersion: CONTENT }, null);
     const session = parseSessionResponse(a.body) as SessionResponse;
     expect(session.results).toHaveLength(1);
     const result = session.results[0];
-    expect(result).toMatchObject({ place: 2, members: 24, points: 22 });
+    expect(result).toMatchObject({ place: 2 });
+    expect(result?.members).toBeGreaterThanOrEqual(46);
+    expect(result?.members).toBeLessThanOrEqual(50);
     expect(result?.reward).toMatchObject({ place: 2, grant: { hints: 1, kitties: 1 }, canDouble: true, claim: null });
-    // The ended bracket: final ranks, me 2nd, exactly one sample player ahead.
+    // The ended bracket: final ranks, me 2nd, exactly one computer player ahead; the frozen snapshot holds the rest.
     const auth = `Bearer ${session.token}`;
     const v = parseBracketView((await again.handle('GET', '/v1/bracket', undefined, auth)).body) as BracketView;
     expect(v).toMatchObject({ state: 'ended', final: true });
     expect(v.me?.rank).toBe(2);
+    expect(v.me?.points).toBe(result?.points);
+    expect(isRivalSlot(v.rows[0]?.slot ?? 0)).toBe(true);
+    expect(v.members).toBe(result?.members);
+    expect(v.rows).toHaveLength(v.members);
+    expect(onlyMeAndRivals(v)).toBe(true);
     expect(sorted(v)).toBe(true);
+    const b = loadState(storage).brackets[v.bracketId as string];
+    expect(b).toMatchObject({ final_members: v.members, final_real: 1 });
+    expect(decodeFinalRivals(b?.final_rivals, b as NonNullable<typeof b>)).toHaveLength(v.members - 1);
+    // No reward ever goes to a computer player: every reward is a real player's, on a real slot.
+    const st = loadState(storage);
+    for (const r of Object.values(st.rewards)) {
+      expect(st.players[r.player_key]).toBeDefined();
+      expect(Number(r.id.split(':')[1])).toBeLessThan(1000);
+    }
     // Collect ×2: doubled once; a retry answers alreadyClaimed with the stored doubling.
     const rewardId = result?.reward?.rewardId as string;
     const c1 = parseClaimResponse((await again.handle('POST', '/v1/rewards/claim', { rewardId, double: true }, auth)).body);
     expect(c1).toMatchObject({ grant: { hints: 2, kitties: 2 }, doubled: true, alreadyClaimed: false, place: 2 });
     const c2 = parseClaimResponse((await again.handle('POST', '/v1/rewards/claim', { rewardId, double: false }, auth)).body);
     expect(c2).toMatchObject({ grant: { hints: 2, kitties: 2 }, doubled: true, alreadyClaimed: true });
-    // Sample members are never real players (their rewards are never shown to anyone).
-    expect(Object.values(loadState(storage).players).every((p) => !p.key.startsWith(SAMPLE_KEY_PREFIX))).toBe(true);
     // The next win opens a new bracket.
     const w = parseWinsResponse((await again.handle('POST', '/v1/wins', { wins: [win(37)] }, auth)).body);
     expect(w?.bracket?.bracketId).not.toBe(v.bracketId);
     expect(w?.bracket?.state).toBe('open');
   });
 
-  it('a player with no fish today is entered with 12 fish first, then finishes 2nd', async () => {
+  it('a player with no bracket today gets one for the day, then finishes 2nd (paid)', async () => {
     const s = setup({ endDay: true });
     const session = await s.signIn();
-    expect(session.results[0]).toMatchObject({ place: 2, points: 12, reward: { grant: { hints: 1, kitties: 1 } } });
+    expect(session.results[0]).toMatchObject({ place: 2, reward: { grant: { hints: 1, kitties: 1 } } });
+    expect(session.results[0]?.points).toBeGreaterThanOrEqual(1);
+    expect(session.results[0]?.members).toBeGreaterThanOrEqual(46);
   });
 });
 
@@ -286,10 +343,13 @@ describe('the name sheet and Settings (spec §1.8, §2.7)', () => {
   it('"Show me in rankings" off hides my row in the open bracket; Delete removes my data (204) and the token', async () => {
     const s = setup({ returning: true });
     await s.signIn();
+    const before = await s.bracket();
     await s.call('PUT', '/v1/me/profile', { listed: false });
     const v = await s.bracket();
     expect(v.rows.some((r) => r.me)).toBe(false);
-    expect(v.members).toBe(23);
+    // My row goes; no computer player takes its place (next_slot is unchanged, D-2e-24 §4.3).
+    expect(v.members).toBe(before.members - 1);
+    expect(v.rows.map((r) => r.slot)).toEqual(before.rows.filter((r) => !r.me).map((r) => r.slot));
     expect((await s.call('DELETE', '/v1/me')).status).toBe(204);
     expect((await s.call('GET', '/v1/me')).body).toMatchObject({ error: { code: 'token_invalid' } });
   });
@@ -304,5 +364,39 @@ describe('the stored state', () => {
     expect(loadState(storage).pending).toEqual({ returning: false, endDay: false });
     storage.setItem(SAMPLE_STATE_KEY, '{nope');
     expect(loadState(storage).players).toEqual({});
+  });
+
+  it('an old saved state (before computer rivals: sample members, no rival fields) loads and shows no computer players', async () => {
+    const storage = new MemoryStorage();
+    const s = setup({ storage });
+    await s.signIn();
+    await s.call('POST', '/v1/wins', { wins: [win(2)] });
+    // Rewrite the stored state the way the pre-0003 preview saved it.
+    const old = JSON.parse(storage.getItem(SAMPLE_STATE_KEY) as string) as SampleState;
+    const id = Object.keys(old.brackets)[0] as string;
+    const b = old.brackets[id] as unknown as Record<string, unknown>;
+    delete b.rivals;
+    delete b.final_rivals;
+    delete b.final_real;
+    const me = (old.members[id] as SampleState['members'][string])[0] as SampleState['members'][string][number];
+    for (const [i, points] of [9, 1].entries()) {
+      (old.members[id] as SampleState['members'][string]).push({ ...me, slot: i + 1, player_key: `sample:${id}:${i}`, nickname: `Sleepy Whisker ${i + 1}`, points, wins: 1 });
+    }
+    b.next_slot = 3;
+    b.members = 3;
+    saveState(storage, old);
+    expect(loadState(storage).brackets[id]).toMatchObject({ rivals: null, final_rivals: null, final_real: null });
+    const again = createSampleServer({ now: () => T0 + MIN, storage, rng: seededRng(9) });
+    const a = await again.handle('POST', '/v1/session', { platform: 'web', device: DEVICE, clientVersion: '0.1.0', contentVersion: CONTENT }, null);
+    const session = parseSessionResponse(a.body) as SessionResponse;
+    const v = parseBracketView((await again.handle('GET', '/v1/bracket', undefined, `Bearer ${session.token}`)).body) as BracketView;
+    expect(v.rows.map((r) => r.points)).toEqual([9, 3, 1]);
+    expect(v.members).toBe(3);
+    expect(v.rows.some((r) => isRivalSlot(r.slot))).toBe(false);
+    // "End the day" still works on it: 2nd among the sample members (too few rows for a reward).
+    queueOperation(storage, 'endDay');
+    const end = createSampleServer({ now: () => T0 + 2 * MIN, storage, rng: seededRng(10) });
+    const e = parseSessionResponse((await end.handle('POST', '/v1/session', { platform: 'web', device: DEVICE, clientVersion: '0.1.0', contentVersion: CONTENT }, null)).body) as SessionResponse;
+    expect(e.results[0]).toMatchObject({ place: 2, members: 3, reward: null });
   });
 });

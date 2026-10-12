@@ -1,6 +1,6 @@
 // Owner: lead (preview link, 2026-10-11). The sample ranking server's stored state (localStorage
 // ['mewdoku.preview.rank.v1']): the rows of server/src/store/rows.ts as plain JSON, and the two queued preview
-// operations. Small on purpose: preview/platform.ts queues operations with it at startup, while the server itself
+// operations. The other players are computed, never stored (the server's computer players, D-2e-24). Small on purpose: preview/platform.ts queues operations with it at startup, while the server itself
 // (preview/sample-server.ts, with the solution table) loads lazily on the ranking's first request.
 import type { BracketRow, MemberRow, PlayerRow, RewardRow } from '../server/src/store/rows';
 
@@ -48,7 +48,16 @@ export function loadState(storage: KV | null): SampleState {
     const raw = storage?.getItem(SAMPLE_STATE_KEY) ?? null;
     if (raw) {
       const v = JSON.parse(raw) as Partial<SampleState> | null;
-      if (v && v.v === 1 && v.players && v.brackets && v.members && Array.isArray(v.hearts) && v.rewards && Array.isArray(v.wins) && v.pending) return v as SampleState;
+      if (v && v.v === 1 && v.players && v.brackets && v.members && Array.isArray(v.hearts) && v.rewards && Array.isArray(v.wins) && v.pending) {
+        // Migration 0003 (2026-10-12, D-2e-24): a state saved before computer rivals lacks the new bracket fields; its
+        // brackets (with their old sample members) keep loading and show no computer players.
+        for (const b of Object.values(v.brackets)) {
+          b.rivals ??= null;
+          b.final_rivals ??= null;
+          b.final_real ??= null;
+        }
+        return v as SampleState;
+      }
     }
   } catch {
     // a broken copy starts afresh

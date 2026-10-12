@@ -602,6 +602,22 @@ describe('ranking sheet (overlay `ladder`, spec §2.5)', () => {
     expect(q(sheet.el, '.ladder-sheet__records-box .rank-list__note').textContent).toBe("You've turned rankings off in Settings. Here are your own records.");
   });
 
+  it('2026-10-12, D-2e-24 (H-9): "Rankings include computer players." right after the window line, only while the rules disclose them', () => {
+    const lines = infoLines({ ...RULES, computerPlayers: true });
+    expect(lines[2]).toEqual({ icon: 'icon-users', text: 'Rankings include computer players.' });
+    expect(lines[1]?.text).toMatch(/^A ranking lasts 24 hours/);
+    expect(lines.map((l) => l.text)).toEqual([...infoLines(RULES).map((l) => l.text).slice(0, 2), 'Rankings include computer players.', ...infoLines(RULES).map((l) => l.text).slice(2)]);
+    expect(infoLines({ ...RULES, periodMode: 'utc_day', computerPlayers: true })[2]?.text).toBe('Rankings include computer players.');
+    for (const r of [RULES, { ...RULES, computerPlayers: false }, null]) expect(infoLines(r).map((l) => l.text)).not.toContain('Rankings include computer players.');
+    // The first-time notice (ladder.noticeFirst) renders the same lines.
+    const sheet = createLadderSheet();
+    document.body.appendChild(sheet.el);
+    sheet.open(sheetProps({ view: 'info', infoOnly: true, rules: { ...RULES, computerPlayers: true } }));
+    expect(qa(sheet.el, 'ul.ladder-info > li').map((li) => li.textContent)).toContain('Rankings include computer players.');
+    sheet.update(sheetProps({ view: 'info', infoOnly: true }));
+    expect(qa(sheet.el, 'ul.ladder-info > li').map((li) => li.textContent)).not.toContain('Rankings include computer players.');
+  });
+
   it('notice mode (ladder.noticeFirst): the info view as a dialog with OK only', () => {
     const p = sheetProps({ view: 'info', infoOnly: true });
     const sheet = createLadderSheet();

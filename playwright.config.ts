@@ -85,6 +85,8 @@ export default defineConfig({
         FB_APP_SECRET: E2E_FB_APP_SECRET,
         DEV_ROUTES: 'true',
         WEB_MODE: 'anon',
+        // D-2e-24: never computer rivals from a developer's shell or .dev.vars under e2e (a test pool opts in via /dev/rivals).
+        RIVALS: 'off',
         ALLOWED_ORIGINS: `http://127.0.0.1:${WEB_PORT},http://127.0.0.1:${FBIG_PORT}`,
       },
     },

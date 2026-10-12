@@ -9,12 +9,15 @@
 //     implements the store methods those views call with the SQL store's row shapes (server/src/store/rows.ts);
 //   - names and pictures from our word lists (core/nickname.ts generateNick / checkPick, the blocklist), ids
 //     (core/ids.ts), the default server config (core/config.ts).
-// What is NOT real, and is said so on screen (preview/labels.ts): the other players. Every bracket gets SAMPLE
-// players (generated names from the same word lists, made-up fish and hearts); they never act. The handlers are a
-// thin re-statement of server/src/handlers/* without HMAC tokens (a random token in memory: the preview may run where
-// crypto.subtle is missing) and without rate limits. Two preview operations: the next new player starts as the
-// "returning player" (22 fish in a bracket opened 5 h ago), and "end the day" (the next session ends the player's
-// bracket at once with the sample fish arranged so they finish 2nd; finalisation and the reward are the real code).
+// What is NOT real, and is said so on screen (preview/labels.ts, "Preview: sample players"): the other players.
+// 2026-10-12 (D-2e-24, design §11): the other players are the server's computer players (core/rivals.ts, core/table.ts):
+// every new bracket gets a rivals tag (previewConfig turns rivals on), so the views emit the production rival rows,
+// rival hearts and the disclosure (rules.computerPlayers); the preview stores no sample member rows any more. The
+// handlers are a thin re-statement of server/src/handlers/* without HMAC tokens (a random token in memory: the preview
+// may run where crypto.subtle is missing) and without rate limits. Two preview operations: the next new player starts
+// as the "returning player" (5th, in a bracket opened 5 h ago: their fish are set to the place among the rivals), and
+// "end the day" (the next session ends the player's bracket at once with their fish set so they finish 2nd;
+// finalisation and the reward are the real code).
 import {
   ERROR_STATUS,
   MAX_WINS_PER_REQUEST,
@@ -43,11 +46,13 @@ import { DEFAULT_CONFIG, type ServerConfig } from '../server/src/core/config';
 import { cryptoRng, randomBase36, seededRng, type Rng } from '../server/src/core/crypto';
 import { newBracketId, newPlayerCode } from '../server/src/core/ids';
 import { checkPick, generateNick, renderNick } from '../server/src/core/nickname';
+import { isRivalSlot, newRivalsTag } from '../server/src/core/rivals';
+import { freezeTable, liveTable, pointsForRank, rivalHeartTarget, type TableRow } from '../server/src/core/table';
 import { evaluateWins } from '../server/src/core/wins';
 import { bracketView, finalizeIfDue, noneView, playerView, resultsFor, rulesView, summaryOf } from '../server/src/handlers/views';
 import type { Services } from '../server/src/services';
 import type { BracketRow, MemberRow, ResultRow, RewardRow } from '../server/src/store/rows';
-import type { RankWrite, RewardWrite, Store } from '../server/src/store/sql-store';
+import type { FinalTotals, RankWrite, RewardWrite, Store } from '../server/src/store/sql-store';
 import { loadState, readRaw, saveState, type KV, type MBracket, type MMember, type MPlayer, type SampleState } from './sample-state';
 
 export { SAMPLE_STATE_KEY, emptyState, loadState, queueOperation, type SampleState } from './sample-state';
@@ -59,21 +64,21 @@ const DAY = 86_400_000;
 /** Kept wins per player (the real server keeps 30 days). */
 const WINS_KEPT = 300;
 
-/** The returning player's day so far: 22 fish from 8 wins, in a bracket opened 5 h ago with 23 sample players (5th). */
-export const RETURNING_DAY = { fish: 22, wins: 8, openedAgoMs: 5 * HOUR, maxLevel: 36 } as const;
-const RETURNING_OTHERS = [41, 33, 28, 25, 21, 19, 17, 16, 14, 13, 12, 11, 10, 9, 8, 8, 7, 6, 5, 4, 3, 3, 2];
-/** A bracket opened around a new player's first counted win: 11 sample players who joined in the hour before. */
-const FRESH_OTHERS = [9, 7, 6, 6, 5, 4, 3, 3, 2, 1, 1];
-/** "End ranking day" for a player with no fish today: their day is entered as 12 fish from 4 wins first. */
-const END_DAY_FALLBACK = { fish: 12, wins: 4 } as const;
-/** Sample members' keys: never a real player's (a reward finalisation creates for one is never shown). */
-export const SAMPLE_KEY_PREFIX = 'sample:';
+/**
+ * The returning player's day so far: 5th in a bracket opened 5 h ago (2026-10-12, D-2e-24: among the computer players,
+ * 46–50 rows by then; their fish are whatever that place takes, pointsForRank, last scored 50 min ago).
+ */
+export const RETURNING_DAY = { rank: 5, openedAgoMs: 5 * HOUR, maxLevel: 36 } as const;
+/** "End ranking day": the place the player finishes in (a paid one: 1 hint + 1 kitty, ×2 by video). */
+const END_DAY_RANK = 2;
+/** Tags tried after the first when no fish total gives the place (exact ties around it; design §11). */
+const PLACE_RETRIES = 8;
 
 /**
  * The store methods server/src/handlers/views.ts calls (bracketView, finalizeIfDue, resultsFor), over the state, with
  * the SQL store's signatures and row shapes (type-checked against SqlStore through Pick<Store, …>).
  */
-type ViewStore = Pick<Store, 'getBracket' | 'members' | 'likedSlots' | 'setHeartsSeen' | 'getReward' | 'finalize' | 'results'>;
+type ViewStore = Pick<Store, 'getBracket' | 'members' | 'likedSlots' | 'bracketHearts' | 'setHeartsSeen' | 'getReward' | 'finalize' | 'results'>;
 
 export class MemStore implements ViewStore {
   constructor(private readonly st: () => SampleState) {}
@@ -91,6 +96,11 @@ export class MemStore implements ViewStore {
     return Promise.resolve(this.st().hearts.filter((h) => h.bracket_id === bracketId && h.from_slot === fromSlot).map((h) => h.to_slot));
   }
 
+  /** D-2e-24: every heart pair of the bracket (bracketView reads this instead of likedSlots when rivals are shown). */
+  bracketHearts(bracketId: string): Promise<{ from_slot: number; to_slot: number }[]> {
+    return Promise.resolve(this.st().hearts.filter((h) => h.bracket_id === bracketId).map((h) => ({ from_slot: h.from_slot, to_slot: h.to_slot })));
+  }
+
   setHeartsSeen(bracketId: string, slot: number, seen: number): Promise<void> {
     const m = (this.st().members[bracketId] ?? []).find((x) => x.slot === slot);
     if (m) m.hearts_seen = seen;
@@ -102,7 +112,13 @@ export class MemStore implements ViewStore {
     return Promise.resolve(r ? { ...r } : null);
   }
 
-  finalize(bracketId: string, ranks: readonly RankWrite[], rewards: readonly RewardWrite[], now: number): Promise<boolean> {
+  finalize(
+    bracketId: string,
+    ranks: readonly RankWrite[],
+    rewards: readonly RewardWrite[],
+    now: number,
+    totals: FinalTotals = { finalMembers: ranks.length, finalReal: ranks.length, finalRivals: null },
+  ): Promise<boolean> {
     const st = this.st();
     const b = st.brackets[bracketId];
     if (!b || b.finalized_at !== null) return Promise.resolve(false);
@@ -127,7 +143,10 @@ export class MemStore implements ViewStore {
       };
     }
     b.finalized_at = now;
-    b.final_members = ranks.length;
+    // D-2e-24: every ranked row (computer players included), the real rows, and the frozen computer players.
+    b.final_members = totals.finalMembers;
+    b.final_real = totals.finalReal;
+    b.final_rivals = totals.finalRivals;
     return Promise.resolve(true);
   }
 
@@ -188,9 +207,12 @@ export interface SampleServer {
   state(): SampleState;
 }
 
-/** The server config of the preview: the deployed defaults, the anonymous web pool on (it is a web page). */
+/**
+ * The server config of the preview: the deployed defaults, the anonymous web pool on (it is a web page), and computer
+ * rivals on (2026-10-12, D-2e-24, design §11: the preview link shows a full ranking; the rules carry the disclosure).
+ */
 export function previewConfig(): ServerConfig {
-  return { ...DEFAULT_CONFIG, web: { ...DEFAULT_CONFIG.web, mode: 'anon' } };
+  return { ...DEFAULT_CONFIG, web: { ...DEFAULT_CONFIG.web, mode: 'anon' }, rivals: { ...DEFAULT_CONFIG.rivals, enabled: true } };
 }
 
 function defaultRng(): Rng {
@@ -220,6 +242,9 @@ export function createSampleServer(deps: SampleServerDeps = {}): SampleServer {
   const services = { cfg, store, metrics: { count: () => undefined } } as unknown as Services;
   const words = NICK_WORDS_V1;
   const retired = RETIRED_V1;
+  // D-2e-24: new brackets get computer rivals as services.ts rivalsForPool decides for a real pool (inlined: the
+  // preview does not bundle services.ts).
+  const rivalsOn = cfg.rivals.enabled && !cfg.rivals.hide && cfg.rivals.pools.includes(POOL);
   const persist = (): void => {
     lastRaw = saveState(storage, st);
   };
@@ -241,7 +266,7 @@ export function createSampleServer(deps: SampleServerDeps = {}): SampleServer {
     return lo + ((((b[0] as number) << 8) | (b[1] as number)) % (hi - lo + 1));
   };
 
-  // ── players, brackets, sample members ──
+  // ── players, brackets, places among the computer players ──
 
   function newName(seedBytes: Uint8Array, taken: ReadonlySet<string>): { nickname: string; nick: { adj: number; noun: number; num: number }; avatar: number } {
     for (let i = 0; i < 8; i++) {
@@ -285,8 +310,11 @@ export function createSampleServer(deps: SampleServerDeps = {}): SampleServer {
     return p;
   }
 
-  /** A bracket opened at `openedAt` holding `others` sample players (fish, hearts, when they last scored). */
-  function createBracket(openedAt: number, others: readonly number[], now: number): MBracket {
+  /**
+   * A bracket opened at `openedAt`, with no member yet. 2026-10-12 (D-2e-24): tagged with computer rivals while the
+   * config gives the web pool rivals (services.ts rivalsForPool for a real pool), like the real create.
+   */
+  function createBracket(openedAt: number): MBracket {
     const t = bracketTimes(cfg.bracket.periodMode, openedAt, cfg);
     const id = newBracketId(openedAt, rng);
     const b: MBracket = {
@@ -301,27 +329,37 @@ export function createSampleServer(deps: SampleServerDeps = {}): SampleServer {
       max_members: cfg.bracket.maxMembers,
       finalized_at: null,
       final_members: null,
+      rivals: rivalsOn ? newRivalsTag(cfg.rivals.strength, rng, words) : null,
+      final_rivals: null,
+      final_real: null,
     };
     st.brackets[id] = b;
     st.members[id] = [];
-    const taken = new Set<string>();
-    const span = Math.max(MIN, now - openedAt);
-    others.forEach((points, i) => {
-      const name = newName(rng.bytes(7), taken);
-      taken.add(name.nickname);
-      const scored = openedAt + Math.floor((span * int(10, 95)) / 100);
-      addMember(b, {
-        key: `${SAMPLE_KEY_PREFIX}${id}:${i}`,
-        nickname: name.nickname,
-        avatar: name.avatar,
-        points,
-        wins: Math.max(1, Math.ceil(points / 3)),
-        hearts: points >= 20 ? int(1, 6) : int(0, 2),
-        scoredAt: Math.min(now - MIN, scored),
-        joinedAt: openedAt + Math.floor((Math.min(span, cfg.bracket.joinWindowMs) * i) / Math.max(1, others.length)),
-      });
-    });
     return b;
+  }
+
+  /**
+   * Sets my fish (and when I last scored, never after `at`) so I hold `rank` in `table()` (the bracket's table without
+   * my row), with the fewest fish that do it (core/table.ts pointsForRank). When exact ties around the place make it
+   * unreachable, a tagged bracket draws a new tag (up to PLACE_RETRIES; a demo operation, like the old sample fish);
+   * after that (or untagged: an old saved state's sample members) I get the fish of the row at that place.
+   */
+  function place(b: MBracket, me: MMember, rank: number, table: () => readonly TableRow[], at: number): void {
+    for (let i = 0; ; i++) {
+      const others = table().filter((r) => r.slot !== me.slot);
+      const r = pointsForRank(others, rank, at, me.slot);
+      if (r) {
+        me.points = r.points;
+        me.scored_at = r.scoredAt;
+        return;
+      }
+      if (b.rivals === null || i >= PLACE_RETRIES) {
+        me.points = Math.max(1, [...others].sort((x, y) => y.points - x.points)[rank - 1]?.points ?? 1);
+        me.scored_at = at;
+        return;
+      }
+      b.rivals = newRivalsTag(cfg.rivals.strength, rng, words);
+    }
   }
 
   function addMember(b: MBracket, m: { key: string; nickname: string; avatar: number; points: number; wins: number; hearts: number; scoredAt: number; joinedAt: number }): MMember {
@@ -361,45 +399,43 @@ export function createSampleServer(deps: SampleServerDeps = {}): SampleServer {
     return b && b.ends_at > now && memberOf(b.id, p.key) ? b : null;
   };
 
-  /** The returning player's record: level 36 done, today's bracket with 22 fish (5th of 24), 2 hearts from others. */
+  /**
+   * The returning player's record: level 36 done, today's bracket opened 5 h ago, joined 20 min after it opened, 5th
+   * among the computer players now (last scored 50 min ago). No hearts: computer players never give any (H-9).
+   */
   function seedReturning(p: MPlayer, now: number): void {
     p.max_level = RETURNING_DAY.maxLevel;
     p.created_at = now - 20 * DAY;
-    const b = createBracket(now - RETURNING_DAY.openedAgoMs, RETURNING_OTHERS, now);
-    const me = join(p, b, RETURNING_DAY.fish, RETURNING_DAY.wins, now - 50 * MIN);
+    const b = createBracket(now - RETURNING_DAY.openedAgoMs);
+    const at = now - 50 * MIN;
+    const me = join(p, b, 0, 0, at);
     me.joined_at = b.opened_at + 20 * MIN;
-    // Two sample players gave my row a heart (the server's heart rows, so a real heart back works as usual).
-    for (const from of [0, 3]) {
-      st.hearts.push({ bracket_id: b.id, from_slot: from, to_slot: me.slot });
-      me.hearts++;
-    }
+    place(b, me, RETURNING_DAY.rank, () => liveTable(b, st.members[b.id] ?? [], now, cfg.rivals.hide), at);
+    me.wins = Math.max(1, Math.ceil(me.points / 3));
   }
 
   /**
-   * "End ranking day": the player's running bracket (or a new one with their day entered as 12 fish) ends now; the
-   * sample fish are arranged so exactly one sample player is ahead (the player finishes 2nd); then the real
-   * finalisation ranks it and pays the places (server/src/handlers/views.ts finalizeIfDue).
+   * "End ranking day": the player's running bracket (or a new one) ends now. 2026-10-12 (D-2e-24, design §11): it is
+   * stretched to a full day so far (opened at least 6 h ago, the join window from there) and the player's fish are set
+   * so they finish 2nd among the computer players at the end (moving the times reshapes the table at that moment, as
+   * the old code rearranged its sample fish: a demo operation); then the real finalisation ranks it, freezes the
+   * computer players and pays the places (server/src/handlers/views.ts finalizeIfDue).
    */
   async function endDay(p: MPlayer, now: number): Promise<void> {
     let b = running(p, now);
     if (!b) {
-      b = createBracket(now - 6 * HOUR, RETURNING_OTHERS, now);
-      join(p, b, END_DAY_FALLBACK.fish, END_DAY_FALLBACK.wins, now - 30 * MIN);
+      b = createBracket(now - 6 * HOUR);
+      join(p, b, 0, 0, now - 30 * MIN);
     }
     // An unlisted player's row is hidden, so the real finalisation ranks them nowhere (no card): the real rule.
     const me = memberOf(b.id, p.key) as MMember;
-    const others = (st.members[b.id] ?? []).filter((m) => m.player_key.startsWith(SAMPLE_KEY_PREFIX)).sort((x, y) => y.points - x.points);
-    others.forEach((m, i) => {
-      if (i === 0) {
-        m.points = Math.max(m.points, me.points + 2 + int(0, 5));
-        m.scored_at = Math.min(m.scored_at, now - 2 * MIN);
-      } else if (m.points >= me.points) {
-        m.points = Math.max(1, me.points - 1 - (i % 3));
-        if (m.points >= me.points) m.scored_at = Math.max(m.scored_at, me.scored_at + MIN); // a tie ranks the first to reach it first
-      }
-    });
+    const bracket = b;
+    b.opened_at = Math.min(b.opened_at, now - 6 * HOUR);
     b.ends_at = now - cfg.bracket.finalizeGraceMs - 1000;
-    b.join_until = Math.min(b.join_until, b.ends_at);
+    b.join_until = Math.min(b.opened_at + cfg.bracket.joinWindowMs, b.ends_at);
+    me.joined_at = Math.max(Math.min(me.joined_at, b.join_until - MIN), b.opened_at); // a join happens inside the window
+    place(b, me, END_DAY_RANK, () => freezeTable(bracket, st.members[bracket.id] ?? [], cfg.rivals.hide), b.ends_at - MIN);
+    me.wins = Math.max(me.wins, Math.ceil(me.points / 3));
     p.cur_ends_at = b.ends_at;
     await finalizeIfDue(services, b.id, now);
   }
@@ -484,8 +520,9 @@ export function createSampleServer(deps: SampleServerDeps = {}): SampleServer {
     p.budget_at = ev.player.budgetAt;
     const toWrite = ev.decisions.filter((d) => d.write);
     if (toWrite.length > 0) {
-      // My running bracket, else a new one (in the preview the pool's open brackets are this page's sample ones).
-      current ??= createBracket(now - int(10, 80) * MIN, FRESH_OTHERS, now);
+      // My running bracket, else a new one (in the preview the pool's open brackets are this page's own), opened a
+      // little before, so its computer players have started (D-2e-24: the opening group and the first arrivals).
+      current ??= createBracket(now - int(10, 80) * MIN);
       const m = memberOf(current.id, p.key) ?? join(p, current, 0, 0, now);
       for (const d of toWrite) {
         m.points += d.points;
@@ -549,6 +586,18 @@ export function createSampleServer(deps: SampleServerDeps = {}): SampleServer {
     if (slot === me.slot && !cfg.hearts.allowSelf) return fail('not_found', 'own row');
     const cap = cfg.hearts.maxGivenPerBracket;
     const mine = st.hearts.filter((h) => h.bracket_id === bracketId && h.from_slot === me.slot);
+    if (isRivalSlot(slot)) {
+      // D-2e-24 (server/src/handlers/hearts.ts): a heart on a computer player is stored like any heart; the row shows
+      // its built-in hearts plus the real ones given to it (the same count for every viewer).
+      const target = rivalHeartTarget(b, slot, now, cfg.rivals.hide);
+      if (!target) return fail('not_found', 'no such row');
+      if (mine.some((h) => h.to_slot === slot)) return fail('heart_exists', 'heart already given');
+      if (mine.length >= cap) return fail('heart_limit', `at most ${cap} hearts per bracket`);
+      st.hearts.push({ bracket_id: bracketId, from_slot: me.slot, to_slot: slot });
+      const real = st.hearts.filter((h) => h.bracket_id === bracketId && h.to_slot === slot).length;
+      const res: HeartResponse = { bracketId, slot, hearts: target.builtIn + real, likedByMe: true, givenInBracket: mine.length + 1, serverTime: now };
+      return ok(res);
+    }
     if (mine.some((h) => h.to_slot === slot)) return fail('heart_exists', 'heart already given');
     const target = (st.members[bracketId] ?? []).find((m) => m.slot === slot && m.hidden === 0);
     if (!target) return fail('not_found', 'no such row');

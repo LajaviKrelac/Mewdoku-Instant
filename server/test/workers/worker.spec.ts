@@ -5,6 +5,8 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { NICK_WORDS_V1, RETIRED_V1 } from '../../src/contract/words';
+import { rivalAt, rivalNames, rivalRoster } from '../../src/core/rivals';
 import worker from '../../src/worker';
 import type { Env } from '../../src/env';
 import { NodeSqliteDb } from '../../src/store/drivers/node-sqlite';
@@ -48,6 +50,47 @@ describe('worker entry', () => {
     const daily = await run('47 3 * * *', '2026-11-16T03:47:00Z');
     expect(daily.swept).not.toBeNull();
     expect(daily.stats).toBe(false);
+  });
+});
+
+describe('computer rivals in the Worker (2026-10-12, D-2e-24)', () => {
+  it('migration 0003 is applied: brackets.rivals, final_rivals, final_real', () => {
+    const db = new NodeSqliteDb(':memory:');
+    db.migrate(MIGRATIONS);
+    const cols = (db.raw.prepare('PRAGMA table_info(brackets)').all() as { name: string; type: string }[]).map((c) => `${c.name}:${c.type}`);
+    expect(cols).toEqual(expect.arrayContaining(['rivals:TEXT', 'final_rivals:TEXT', 'final_real:INTEGER']));
+  });
+
+  it('the r1 golden fixture (design §3.8) computes the same here: run inside workerd, this proves workerd and Node agree', () => {
+    const O = Date.parse('2026-10-12T08:00:00Z');
+    const b = { opened_at: O, join_until: O + 2 * 3_600_000, ends_at: O + 86_400_000, max_members: 50 };
+    const r = rivalRoster('r1:k3j9x0a1b20a:100:64:64', b);
+    expect(r && [r.size, r.rivals.length, r.sigma, r.quiet, r.cohort]).toEqual([50, 49, 105, false, 10]);
+    const x = r!.rivals[0]!;
+    expect([x.base, x.pace, x.wins.length, x.hearts.length]).toEqual([3, 16, 14, 8]);
+    expect(rivalAt(x, b.join_until, O + 23 * 3_600_000)).toMatchObject({ points: 42, hearts: 8 });
+    expect(rivalAt(x, b.join_until, O + 3_600_000)).toEqual({ points: 4, scoredAt: O + 37.5 * 60_000, hearts: 0 });
+    const names = rivalNames(r!, new Set(['velvet pounce 27']), NICK_WORDS_V1, RETIRED_V1);
+    expect([names.get(9000), names.get(9048)]).toEqual([
+      { nickname: 'Calm Pumpkin 6', avatar: 6 },
+      { nickname: 'Brave Noodle 85', avatar: 4 },
+    ]);
+  });
+
+  it('RIVALS=on through the Worker entry: a session carries the disclosure line', async () => {
+    const e = env({ RIVALS: 'on' });
+    const nonce = await worker.fetch(new Request('https://rank.example.com/v1/session/nonce', { method: 'POST' }), e, ctx);
+    expect(nonce.status).toBe(200);
+    const web = await worker.fetch(
+      new Request('https://rank.example.com/v1/session', {
+        method: 'POST',
+        body: JSON.stringify({ platform: 'web', device: { id: 'A'.repeat(22), secret: 'B'.repeat(43) }, clientVersion: '0.2.0', contentVersion: 'content-bb8a756dfaf9' }),
+      }),
+      e,
+      ctx,
+    );
+    expect(web.status).toBe(200);
+    expect(((await web.json()) as { rules: { computerPlayers?: boolean } }).rules.computerPlayers).toBe(true);
   });
 });
 

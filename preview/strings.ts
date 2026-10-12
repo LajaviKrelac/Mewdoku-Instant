@@ -26,7 +26,7 @@ export const S = {
   },
   help: {
     new: 'A fresh save: the tutorial, then level 2.',
-    returning: 'Level 37, streak on day 6 of 7, daily open, 3 hints, 2 kitties, 22 fish in today’s ranking.',
+    returning: 'Level 37, streak on day 6 of 7, daily open, 3 hints, 2 kitties, 5th in today’s ranking.',
     outOfHelpers: '0 hints and 0 kitties: tap a helper in a level to see the video and the Buy rows.',
     endDay: 'Ends today’s sample ranking now (you finish 2nd), so the result card with Collect ×2 shows.',
     reset: 'Clears everything this preview stored and starts again as a returning player.',

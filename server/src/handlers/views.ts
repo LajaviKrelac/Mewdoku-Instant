@@ -1,17 +1,27 @@
 // Owner: G4 (Phase 2e). The views the handlers answer with (CONTRACTS §2): the player, the rules, my
 // bracket (open, or ended less than 24 h ago), my results, and lazy finalisation (spec §1.5).
-// Honesty (H-2, H-3): rows are exactly the visible members in the server's order with the server's ranks;
-// `members` is the real count of visible rows (for a finalised bracket, final_members: the count that was
-// ranked, so a later deletion leaves an honest gap instead of a re-numbered list).
+// Honesty (H-1, H-2, H-3, H-9; 2026-10-12, D-2e-24): every real row is a visible member exactly as stored, in
+// the server's order with the server's ranks. A bracket created with computer players (brackets.rivals) also
+// shows them, computed by core/table.ts in the places no real player took (never more rows than max_members);
+// they are never members, players or rewards rows, and the rules carry the disclosure (`computerPlayers`).
+// `members` counts every row shown (for a finalised bracket, final_members: every row that was ranked, so a
+// later deletion leaves an honest gap instead of a re-numbered list).
 import type { BracketRow as WireRow, BracketSummary, BracketView, PlayerView, ResultView, RewardView, RulesView } from '../contract';
-import { grantOf, heartsNew, paidPlaces, rankRows } from '../core/brackets';
+import { grantOf, heartsNew } from '../core/brackets';
 import type { ServerConfig } from '../core/config';
 import { rewardId, wirePool } from '../core/ids';
 import { nextNickChange } from '../core/nickname';
+import { decodeFinalRivals, isRivalSlot, parseRivalsTag } from '../core/rivals';
+import { finalPlan, finalTable, liveTable, withRealHearts, type TableRow } from '../core/table';
 import type { Services } from '../services';
-import type { MemberRow, PlayerRow, RewardRow } from '../store/sql-store';
+import type { BracketRow, PlayerRow, RewardRow } from '../store/sql-store';
 
-export function rulesView(cfg: ServerConfig): RulesView {
+/**
+ * The rules the client shows. `computerPlayers` (D-2e-24, H-9): the disclosure line "Rankings include computer
+ * players.", sent only as `true` (session.ts passes rivalsNoteFor for the player's pool); with it off the rules
+ * are byte-identical to before.
+ */
+export function rulesView(cfg: ServerConfig, computerPlayers: boolean = cfg.rivals.enabled && cfg.rivals.disclose && !cfg.rivals.hide): RulesView {
   return {
     periodMode: cfg.bracket.periodMode,
     durationMs: cfg.bracket.durationMs,
@@ -23,7 +33,20 @@ export function rulesView(cfg: ServerConfig): RulesView {
     claimTtlMs: cfg.rewards.claimTtlMs,
     hearts: { enabled: cfg.hearts.enabled, allowSelf: cfg.hearts.allowSelf, maxGivenPerBracket: cfg.hearts.maxGivenPerBracket },
     nickname: { freeText: cfg.nickname.freeText, changeCooldownMs: cfg.nickname.changeCooldownMs },
+    ...(computerPlayers ? { computerPlayers: true } : {}),
   };
+}
+
+/**
+ * Counts a stored computer-rivals value that is ignored (D-2e-24; both metrics must stay 0): a tag that does
+ * not parse (the bracket then has no rivals) or a final snapshot that does not decode (real rows only).
+ */
+function countRivalsProblem(s: Pick<Services, 'metrics'>, b: BracketRow, final: boolean): void {
+  if (final) {
+    if (b.final_rivals !== null && decodeFinalRivals(b.final_rivals, b) === null) s.metrics.count('rivals', 'decode_error');
+  } else if (b.rivals !== null && parseRivalsTag(b.rivals) === null) {
+    s.metrics.count('rivals', 'tag_invalid');
+  }
 }
 
 export function playerView(p: PlayerRow, cfg: ServerConfig, now: number): PlayerView {
@@ -44,6 +67,9 @@ export function playerView(p: PlayerRow, cfg: ServerConfig, now: number): Player
 /**
  * Finalises a bracket whose end (plus the grace that lets an in-flight win commit) has passed and that is
  * not final yet (idempotent; spec §1.5 "Finalise"). True when it is final afterwards.
+ * 2026-10-12, D-2e-24: the plan (ranks, rewards, totals) comes from core/table.ts finalPlan, shared with admin
+ * refinalize: the table at ends_at (so lazy, cron and concurrent finalisers freeze the same standings), every
+ * row counted toward minMembers, a place held by a computer player never paid and never passed down.
  */
 export async function finalizeIfDue(s: Services, bracketId: string, now: number): Promise<boolean> {
   const b = await s.store.getBracket(bracketId);
@@ -51,25 +77,15 @@ export async function finalizeIfDue(s: Services, bracketId: string, now: number)
   if (b.finalized_at !== null) return true;
   if (b.ends_at + s.cfg.bracket.finalizeGraceMs > now) return false;
   const members = await s.store.members(bracketId);
-  const ranked = rankRows(members.filter((m) => m.hidden === 0).map((m) => ({ slot: m.slot, points: m.points, scoredAt: m.scored_at, key: m.player_key })));
-  const paid = paidPlaces(ranked, s.cfg);
-  const rewards = paid.map((p) => ({
-    id: rewardId(bracketId, p.slot),
-    playerKey: (ranked.find((r) => r.slot === p.slot) as { key: string }).key,
-    place: p.place,
-    hints: p.hints,
-    kitties: p.kitties,
-    expiresAt: now + s.cfg.rewards.claimTtlMs,
-  }));
-  const done = await s.store.finalize(
-    bracketId,
-    ranked.map((r) => ({ slot: r.slot, rank: r.rank })),
-    rewards,
-    now,
-  );
+  const plan = finalPlan(b, members, s.cfg, now, true);
+  const done = await s.store.finalize(bracketId, plan.ranks, plan.rewards, now, plan.totals);
   if (done) {
-    s.metrics.count('bracket_final', 'members', ranked.length);
-    if (rewards.length > 0) s.metrics.count('reward', 'created', rewards.length);
+    countRivalsProblem(s, b, false);
+    s.metrics.count('bracket_final', 'members', plan.totals.finalReal);
+    const rivals = plan.totals.finalMembers - plan.totals.finalReal;
+    if (rivals > 0) s.metrics.count('bracket_final', 'rivals', rivals);
+    if (plan.rewards.length > 0) s.metrics.count('reward', 'created', plan.rewards.length);
+    if (plan.rivalPlaces > 0) s.metrics.count('reward', 'rival_place', plan.rivalPlaces);
   }
   return true;
 }
@@ -133,15 +149,16 @@ export function noneView(pool: string, cfg: ServerConfig, now: number): BracketV
   };
 }
 
-const toWire = (m: MemberRow, rank: number, myKey: string, liked: ReadonlySet<number>): WireRow => ({
+/** A table row (a real member or a computer player, core/table.ts) on the wire. */
+const toWire = (row: TableRow, rank: number, myKey: string, liked: ReadonlySet<number>): WireRow => ({
   rank,
-  slot: m.slot,
-  nickname: m.nickname,
-  avatarId: m.avatar,
-  points: m.points,
-  hearts: m.hearts,
-  me: m.player_key === myKey,
-  likedByMe: liked.has(m.slot),
+  slot: row.slot,
+  nickname: row.nickname,
+  avatarId: row.avatar,
+  points: row.points,
+  hearts: row.hearts,
+  me: row.playerKey === myKey,
+  likedByMe: liked.has(row.slot),
 });
 
 /**
@@ -157,21 +174,26 @@ export async function bracketView(s: Services, player: Pick<PlayerRow, 'key' | '
   const members = await s.store.members(id);
   const mine = members.find((m) => m.player_key === player.key);
   if (!mine) return noneView(player.pool, s.cfg, now);
-  const liked = new Set(await s.store.likedSlots(id, mine.slot));
   const final = b.finalized_at !== null;
-  let rows: WireRow[];
-  let count: number;
-  if (final) {
-    rows = members
-      .filter((m) => m.hidden === 0 && m.final_rank !== null)
-      .sort((x, y) => (x.final_rank as number) - (y.final_rank as number))
-      .map((m) => toWire(m, m.final_rank as number, player.key, liked));
-    count = b.final_members ?? rows.length;
+  // D-2e-24: the one combining module (core/table.ts). Without a tag (or under `hide`) the table is exactly the
+  // visible members; a final table is the real final ranks plus the frozen snapshot of computer players.
+  countRivalsProblem(s, b, final);
+  const table = final ? finalTable(b, members, s.cfg.rivals.hide) : liveTable(b, members, now, s.cfg.rivals.hide);
+  // The hearts read: with computer players shown, ONE read of the bracket's heart pairs replaces likedSlots (mine
+  // from it, plus the real hearts on rival rows, the same for every viewer); the statement count is unchanged.
+  let liked: Set<number>;
+  const realTo = new Map<number, number>();
+  if (table.some((r) => r.kind === 'rival')) {
+    liked = new Set();
+    for (const h of await s.store.bracketHearts(id)) {
+      if (h.from_slot === mine.slot) liked.add(h.to_slot);
+      if (isRivalSlot(h.to_slot)) realTo.set(h.to_slot, (realTo.get(h.to_slot) ?? 0) + 1);
+    }
   } else {
-    const visible = members.filter((m) => m.hidden === 0);
-    rows = rankRows(visible.map((m) => ({ ...m, scoredAt: m.scored_at }))).map((m) => toWire(m, m.rank, player.key, liked));
-    count = rows.length;
+    liked = new Set(await s.store.likedSlots(id, mine.slot));
   }
+  const rows: WireRow[] = withRealHearts(table, realTo).map((r) => toWire(r, r.rank, player.key, liked));
+  const count = final ? (b.final_members ?? rows.length) : rows.length;
   const fresh = heartsNew(mine.hearts, mine.hearts_self, mine.hearts_seen);
   if (fresh > 0) await s.store.setHeartsSeen(id, mine.slot, mine.hearts - mine.hearts_self);
   const me = rows.find((r) => r.me) ?? null;

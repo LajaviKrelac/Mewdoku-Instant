@@ -760,4 +760,22 @@ describe('How to play: the ranking note and the streak note (Appendix A howto.la
     expect(v.el.querySelector('.howto__streak')).toBeNull();
     expect(q(v.el, '.howto__points').textContent).not.toMatch(/daily ranking/);
   });
+
+  it('2026-10-12, D-2e-24 (H-9): "Rankings include computer players." after the points note only with ladder && ladderComputerPlayers', () => {
+    const v = createHowToPlay();
+    document.body.appendChild(v.el);
+    v.open(howto({ ladder: true, ladderComputerPlayers: true, streakDays: 7 }));
+    const note = q(v.el, '.howto__computer');
+    expect(note.textContent).toBe('Rankings include computer players.');
+    expect(note.previousElementSibling?.classList.contains('howto__points')).toBe(true);
+    expect(note.querySelector('use')?.getAttribute('href')).toBe('#icon-users');
+    // Without the ranking (or without the rules' flag) there is no such line.
+    for (const p of [howto({ ladderComputerPlayers: true }), howto({ ladder: true }), howto({ ladder: true, ladderComputerPlayers: false }), howto()]) {
+      v.update(p);
+      expect(v.el.querySelector('.howto__computer')).toBeNull();
+      expect(v.el.textContent).not.toMatch(/computer players/);
+    }
+    v.update(howto({ ladder: true, ladderComputerPlayers: true }));
+    expect(v.el.querySelectorAll('.howto__computer')).toHaveLength(1);
+  });
 });

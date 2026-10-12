@@ -15,7 +15,7 @@ import { queueWin } from '../../../src/app/ladder-origin';
 import { createStore, initialAppState, type AppState, type OverlayId, type Store } from '../../../src/app/store';
 import { defaults } from '../../../src/game/save';
 import type { SaveData } from '../../../src/game/types';
-import type { PlayerView } from '../../../src/shared/rank-api';
+import type { PlayerView, RulesView } from '../../../src/shared/rank-api';
 import { createLadderFake, type LadderFake } from '../../fixtures/ladder-fake';
 import { NOW } from './harness';
 
@@ -74,6 +74,8 @@ function setup(
     config?: GameConfig;
     device?: boolean;
     player?: Partial<PlayerView>;
+    /** The fake server's rules over session.fb.json's (e.g. computerPlayers, D-2e-24). */
+    rules?: Partial<RulesView>;
     rewarded?: boolean;
     /** Wraps the fake's fetch (an answer the fake does not make, e.g. an ended bracket's view). */
     fetch?: (inner: typeof fetch) => typeof fetch;
@@ -82,7 +84,12 @@ function setup(
   } = {},
 ): Setup {
   const clock = createFakeClock(NOW);
-  const fake = createLadderFake({ now: () => clock.now(), ...(o.skewMs !== undefined ? { skewMs: o.skewMs } : {}), ...(o.player ? { player: o.player } : {}) });
+  const fake = createLadderFake({
+    now: () => clock.now(),
+    ...(o.skewMs !== undefined ? { skewMs: o.skewMs } : {}),
+    ...(o.player ? { player: o.player } : {}),
+    ...(o.rules ? { rules: o.rules } : {}),
+  });
   const storage = o.storage ?? new MemStorage();
   const base: SaveData = { ...defaults(NOW - 30 * 86_400_000), tutorialDone: true, progress: { level: 58, completed: 57, best: {} }, stock: { hints: 0, kitties: 0 } };
   const store = createStore<AppState>({ ...initialAppState(o.save ? o.save(base) : base), screen: 'home' });
@@ -714,6 +721,51 @@ describe('the sheet: a fresh answer is current, never "Last updated" (requests-G
     const st = again.router.props.ladder as { list: { stale: unknown } | null } | undefined;
     if (st?.list) expect(st.list.stale).not.toBeNull();
     again.flow.dispose();
+  });
+});
+
+describe('the computer players disclosure (2026-10-12, D-2e-24, H-9)', () => {
+  type SheetRules = { rules: { computerPlayers?: boolean } | null };
+  it('rulesView carries rules.computerPlayers to the sheet; computerPlayers() follows the server, then the cached rules', async () => {
+    const storage = new MemStorage();
+    const s = setup({ storage, rules: { computerPlayers: true } });
+    expect(s.flow.computerPlayers()).toBe(false); // no rules yet (no session, no cache): no line
+    await s.flow.start();
+    expect(s.flow.computerPlayers()).toBe(true);
+    s.flow.openSheet('home', 'info');
+    await s.settle(0);
+    expect((s.router.props.ladder as SheetRules).rules?.computerPlayers).toBe(true);
+    // A bracket answer stores the rules with the cached rows: a later page load offline still knows.
+    s.queue(1, 3);
+    s.flow.onWin({ winId: winId(1), mode: 'level', kept: 3 });
+    await s.settle(0);
+    s.flow.dispose();
+    const again = setup({ storage, rules: { computerPlayers: true } });
+    again.fake.offline = true;
+    expect(again.flow.computerPlayers()).toBe(true);
+    again.flow.dispose();
+    // A cached value that is not literally true (the stored rules are not re-parsed) shows no line.
+    const raw = JSON.parse(storage.getItem(ROWS_KEY) as string) as { rules: Record<string, unknown> };
+    raw.rules.computerPlayers = 'true';
+    storage.setItem(ROWS_KEY, JSON.stringify(raw));
+    const odd = setup({ storage });
+    odd.fake.offline = true;
+    expect(odd.flow.computerPlayers()).toBe(false);
+    odd.flow.openSheet('home', 'info');
+    await odd.settle(0);
+    expect((odd.router.props.ladder as SheetRules).rules).not.toHaveProperty('computerPlayers');
+    odd.flow.dispose();
+  });
+
+  it('rules without the flag (rivals off, or rivals.disclose false): no line anywhere', async () => {
+    const s = setup();
+    await s.flow.start();
+    expect(s.flow.computerPlayers()).toBe(false);
+    s.flow.openSheet('home', 'info');
+    await s.settle(0);
+    const rules = (s.router.props.ladder as SheetRules).rules;
+    expect(rules).not.toBeNull();
+    expect(rules).not.toHaveProperty('computerPlayers');
   });
 });
 

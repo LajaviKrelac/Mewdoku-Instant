@@ -1,4 +1,4 @@
-// Owner: G4 (Phase 2e). Row shapes of migrations/0001_init.sql (+ 0002_wins_token.sql) as SqlStore reads them.
+// Owner: G4 (Phase 2e). Row shapes of migrations/0001_init.sql (+ 0002_wins_token.sql, 0003_rivals.sql) as SqlStore reads them.
 import type { Trust } from '../contract';
 
 export interface PlayerRow {
@@ -39,7 +39,14 @@ export interface BracketRow {
   readonly next_slot: number;
   readonly max_members: number;
   readonly finalized_at: number | null;
+  /** Every row ranked at finalisation, computer players included (since 0003; before: the real visible members). */
   readonly final_members: number | null;
+  /** The computer rivals' tag (migration 0003, D-2e-24): `r1:<seed>:<strength>:<adjN>:<nounN>`, frozen at creation; null = none. Secret: never on the wire. */
+  readonly rivals: string | null;
+  /** The computer-player rows of the frozen final standings (JSON, core/rivals.ts decodeFinalRivals); null = none. */
+  readonly final_rivals: string | null;
+  /** The real visible members ranked at finalisation (0003; null for brackets finalised before it). */
+  readonly final_real: number | null;
 }
 
 export interface MemberRow {

@@ -467,6 +467,7 @@ export const catalog: LocaleCatalog = {
   'ladder.info.rewards.other': 'Quando um ranking termina, os {count} primeiros ganham dicas e gatinhos se pelo menos {min} jogadores participaram.',
   'ladder.info.double': 'Você pode ver um vídeo para dobrar seu prêmio.',
   'ladder.info.hearts': 'Toque em um coração para torcer por alguém. Corações são só por diversão.',
+  'ladder.info.computerPlayers': 'Os rankings incluem jogadores controlados pelo computador.',
   'ladder.info.names': 'Os outros veem seu nome no ranking e sua imagem, nunca seu nome ou sua foto do Facebook.',
   'ladder.info.privacy': 'Nos Ajustes, você pode desativar os rankings ou apagar seus dados de ranking.',
   'ladder.records.title': 'Seus recordes',

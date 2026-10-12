@@ -41,6 +41,16 @@ describe('wrangler.toml', () => {
     expect(table('env.production').workers_dev).toBe('false');
   });
 
+  it('[D-2e-24] every environment declares RIVALS: off locally and in production (until rollout step 4), on in staging', () => {
+    expect(table('vars').RIVALS).toBe('off');
+    expect(table('env.staging.vars').RIVALS).toBe('on');
+    expect(table('env.production.vars').RIVALS).toBe('off');
+    expect(loadConfig(table('env.production.vars')).cfg.rivals.enabled).toBe(false);
+    expect(loadConfig(table('env.production.vars')).problems).toEqual([]);
+    expect(loadConfig(table('env.staging.vars')).cfg.rivals.enabled).toBe(true);
+    expect(loadConfig({ ...table('env.production.vars'), RIVALS: 'on' }).cfg.rivals.enabled).toBe(true); // the rollout flip
+  });
+
   it('staging and dev: DEV_ROUTES stays off on every deployed Worker', () => {
     expect(table('env.staging.vars').DEV_ROUTES).toBe('false');
     expect(table('env.staging.vars').DEPLOY_ENV).toBe('staging');

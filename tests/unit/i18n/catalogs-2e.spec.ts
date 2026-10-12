@@ -97,6 +97,26 @@ describe.each([...Object.entries(CATALOGS)].sort((a, b) => a[0].localeCompare(b[
   });
 });
 
+describe('the computer players disclosure (2026-10-12, D-2e-24, H-9)', () => {
+  it('one plain English sentence, in the ranking info group, drafted in all 16 catalogues: no count, no digits, never "bots" or "AI"', async () => {
+    const { honestyProblems } = await import('../../../scripts/i18n-check');
+    expect(E2['ladder.info.computerPlayers']).toBe('Rankings include computer players.');
+    expect(honestyProblems({ 'ladder.info.computerPlayers': E2['ladder.info.computerPlayers'] })).toEqual([]);
+    expect(META['ladder.info.computerPlayers']?.description).toMatch(/never say which rows or how many; never 'bots' or 'AI'/i);
+    expect(META['ladder.info.computerPlayers']?.placeholders).toBeUndefined();
+    const ids = Object.keys(CATALOGS).sort();
+    expect(ids).toHaveLength(16);
+    for (const id of ids) {
+      const v = (CATALOGS as Record<string, Readonly<Record<string, string | undefined>>>)[id]?.['ladder.info.computerPlayers'];
+      expect(v, id).toBeTruthy();
+      expect(v, id).not.toBe(E2['ladder.info.computerPlayers']);
+      expect(v, id).not.toMatch(/\p{Nd}/u);
+      // "AI" in Latin letters (KI, IA), Cyrillic (ИИ), "artificial" in Han and Hangul, and "bot(s)".
+      expect(v, id).not.toMatch(/\bbots?\b|\bA\.?I\b|\bI\.?A\b|\bKI\b|ИИ|бот|人工|인공|एआई|بوت/iu);
+    }
+  });
+});
+
 describe('ranking-name word lists (spec §1.8, CONTRACTS §2.3)', () => {
   const STARTER_ADJ = ['Sleepy', 'Fluffy', 'Velvet', 'Misty', 'Brave', 'Cozy', 'Curious', 'Gentle', 'Lucky', 'Sunny', 'Quiet', 'Nimble', 'Dreamy', 'Cheerful', 'Clever', 'Merry', 'Snowy', 'Golden', 'Silver', 'Breezy', 'Mellow', 'Plucky', 'Toasty', 'Dapper', 'Jolly', 'Bouncy', 'Starry', 'Maple'];
   const STARTER_NOUN = ['Whisker', 'Paws', 'Mittens', 'Tabby', 'Biscuit', 'Pounce', 'Purr', 'Muffin', 'Pebble', 'Socks', 'Noodle', 'Button', 'Marble', 'Pudding', 'Clover', 'Ginger', 'Shadow', 'Pepper', 'Bean', 'Toffee', 'Waffle', 'Comet', 'Nugget', 'Tuft'];

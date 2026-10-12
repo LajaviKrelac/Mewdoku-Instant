@@ -1,0 +1,91 @@
+{
+  "name": "session.rivals",
+  "request": {
+    "method": "POST",
+    "path": "/v1/session",
+    "body": {
+      "platform": "fb",
+      "playerId": "7392816450",
+      "signature": "Xk2b9QfLm4R8sTvWy1Za3Cd5Ef7Gh9Ij0Kl2Mn4Op6_A.eyJhbGdvcml0aG0iOiJITUFDLVNIQTI1NiIsImlzc3VlZF9hdCI6MTc5MTc5OTc5NSwicGxheWVyX2lkIjoiNzM5MjgxNjQ1MCIsInJlcXVlc3RfcGF5bG9hZCI6Im4xLm1na3dxM2tpLlprM2hROWZBMkxtWDhyVHEuOWZBa2Q4M0xtUXAyWGNWYiJ9",
+      "nonce": "n1.mgkwq3ki.Zk3hQ9fA2LmX8rTq.9fAkd83LmQp2XcVb",
+      "clientVersion": "0.2.0",
+      "contentVersion": "content-bb8a756dfaf9"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "token": "v1.eyJrIjoiNXlvOU55aHBCa0RTU0w3YjZhcVlMZCIsImMiOiJGMUNETjVTMSIsInAiOiJmYiIsInQiOiJzaWduZWQiLCJ2IjoiMC4yLjAiLCJpYXQiOjE3OTQ3NTQ4MDAwMDAsImV4cCI6MTc5NDg0MTIwMDAwMH0.wFQQWAYn1USd7FSicGS-OzGarDywVGyX",
+      "expiresAt": 1794841200000,
+      "player": {
+        "code": "F1CDN5S1",
+        "nickname": "Spry Pretzel 62",
+        "nick": {
+          "adj": 44,
+          "noun": 52,
+          "num": 62
+        },
+        "avatarId": 5,
+        "status": "ok",
+        "pool": "fb",
+        "trust": "signed",
+        "listed": true,
+        "nicknameChangeAt": null
+      },
+      "rules": {
+        "periodMode": "rolling",
+        "durationMs": 86400000,
+        "maxMembers": 50,
+        "scoringModes": [
+          "level",
+          "daily",
+          "event"
+        ],
+        "places": [
+          {
+            "place": 1,
+            "hints": 2,
+            "kitties": 2
+          },
+          {
+            "place": 2,
+            "hints": 1,
+            "kitties": 1
+          },
+          {
+            "place": 3,
+            "hints": 1,
+            "kitties": 0
+          }
+        ],
+        "minMembers": 5,
+        "doubleByVideo": true,
+        "claimTtlMs": 604800000,
+        "hearts": {
+          "enabled": true,
+          "allowSelf": true,
+          "maxGivenPerBracket": 20
+        },
+        "nickname": {
+          "freeText": false,
+          "changeCooldownMs": 86400000
+        },
+        "computerPlayers": true
+      },
+      "results": [],
+      "bracket": {
+        "state": "open",
+        "bracketId": "mwhs8lc0tijs942z",
+        "rank": 3,
+        "members": 50,
+        "points": 6,
+        "endsAt": 1794830400000
+      },
+      "limits": {
+        "maxWinsPerRequest": 10,
+        "queueMax": 20
+      },
+      "serverTime": 1794754800000
+    }
+  }
+}

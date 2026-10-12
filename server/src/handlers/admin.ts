@@ -1,12 +1,15 @@
 // Owner: G4 (Phase 2e). /admin/v1/* (spec §1.4, §1.9.7, §11.7): `Authorization: Bearer <ADMIN_KEY>` (and
 // Cloudflare Access in front, G-SRV-4); never CORS. Every path id is checked against its pattern before any
 // SQL (critic C-21). Every action is logged to admin_log (1 year). Nothing here creates a ranking row (H-1).
+// 2026-10-12, D-2e-24: admin always labels computer players (`kind: 'rival'`, H-9) and never shows a rival
+// tag's seed; refinalize goes through core/table.ts finalPlan, like finalizeIfDue.
 import { BRACKET_ID_RE, PLAYER_CODE_RE } from '../contract';
-import { paidPlaces, rankRows } from '../core/brackets';
 import { DAY, utcDateKey } from '../core/clock';
 import { generateNick, renderNick } from '../core/nickname';
 import { sha256 } from '../core/crypto';
-import { newRowId, rewardId } from '../core/ids';
+import { newRowId } from '../core/ids';
+import { decodeFinalRivals, isRivalSlot, liveRivalCount, RIVAL_SLOT_BASE, rivalAt, rivalRoster } from '../core/rivals';
+import { finalPlan, finalTable, liveTable } from '../core/table';
 import { authAdmin } from '../http/auth';
 import type { Ctx } from '../http/context';
 import { fail, json, noContent } from '../http/errors';
@@ -33,6 +36,90 @@ async function playerByCode(ctx: Ctx, code: string): Promise<PlayerRow> {
   const p = await ctx.s.store.getPlayerByCode(code);
   if (!p) return fail('not_found', 'no such player');
   return p;
+}
+
+/**
+ * GET /admin/v1/brackets/{id}[?at=<ms>][&live=1] (D-2e-24, design §7): the bracket's table as players see it at
+ * `at` (clamped to [opened_at, min(now, ends_at)]; default now), every row labelled `player` or `rival`, plus the
+ * retired rivals (index ≥ K) and the hidden players. A final bracket answers its frozen table; `live=1`
+ * recomputes it at ends_at (the audit "frozen equals live"). Read-only (not logged); the seed never appears.
+ */
+async function adminBracketView(ctx: Ctx, id: string): Promise<Response> {
+  const s = ctx.s;
+  if (!BRACKET_ID_RE.test(id)) return fail('bad_request', 'id');
+  const b = await s.store.getBracket(id);
+  if (!b) return fail('not_found', 'no such bracket');
+  const now = s.nowFor(b.pool); // a test pool's moved clock (dev routes only); the real clock otherwise
+  const atParam = ctx.url.searchParams.get('at');
+  const asked = atParam === null || atParam.trim() === '' ? now : Number(atParam);
+  if (!Number.isFinite(asked)) return fail('bad_request', 'at');
+  const final = b.finalized_at !== null;
+  const live = ctx.url.searchParams.get('live') === '1';
+  const at = final ? b.ends_at : Math.min(Math.max(asked, b.opened_at), Math.max(b.opened_at, Math.min(now, b.ends_at)));
+  const hide = s.cfg.rivals.hide;
+  const [members, hearts] = await Promise.all([s.store.adminBracket(id), s.store.bracketHearts(id)]);
+  const realTo = new Map<number, number>();
+  for (const h of hearts) if (isRivalSlot(h.to_slot)) realTo.set(h.to_slot, (realTo.get(h.to_slot) ?? 0) + 1);
+  const table = final && !live ? finalTable(b, members, hide) : liveTable(b, members, at, hide);
+  const roster = rivalRoster(b.rivals, b);
+  const k = roster ? liveRivalCount(roster, b) : 0;
+  const bySlot = new Map(members.map((m) => [m.slot, m]));
+  const rows = table.map((r) => {
+    const common = { rank: r.rank, kind: r.kind, slot: r.slot, nickname: r.nickname, avatarId: r.avatar, points: r.points, scoredAt: r.scoredAt };
+    if (r.kind === 'player') {
+      const m = bySlot.get(r.slot);
+      return { ...common, hearts: r.hearts, code: m?.code ?? null, hidden: m?.hidden ?? 0, finalRank: m?.final_rank ?? null };
+    }
+    const index = r.slot - RIVAL_SLOT_BASE;
+    const script = roster?.rivals[index];
+    const real = realTo.get(r.slot) ?? 0;
+    return {
+      ...common,
+      hearts: r.hearts + real,
+      index,
+      ...(script ? { arrivalAt: script.arrivalAt, paceTenthsPerHour: script.pace } : {}),
+      builtInHearts: r.hearts,
+      realHearts: real,
+    };
+  });
+  // The top rival's final total ("beat bound"): the frozen snapshot's best, else the live rivals' best at ends_at.
+  const snap = final ? decodeFinalRivals(b.final_rivals, b) : null;
+  let topFinal: number | null = null;
+  if (snap !== null && snap.length > 0) topFinal = Math.max(...snap.map((x) => x.points));
+  else if (roster && k > 0) topFinal = Math.max(...roster.rivals.slice(0, k).map((x) => rivalAt(x, b.join_until, b.ends_at)?.points ?? 0));
+  return json({
+    bracket: {
+      id: b.id,
+      pool: b.pool,
+      mode: b.mode,
+      openedAt: b.opened_at,
+      joinUntil: b.join_until,
+      endsAt: b.ends_at,
+      finalizedAt: b.finalized_at,
+      maxMembers: b.max_members,
+      nextSlot: b.next_slot,
+      capacityMembers: b.members,
+      finalMembers: b.final_members,
+      finalReal: b.final_real,
+      rivals: roster
+        ? {
+            preset: 'r1',
+            strength: roster.strength,
+            sigma: roster.sigma,
+            quiet: roster.quiet,
+            roster: roster.rivals.length,
+            live: k,
+            present: rows.filter((r) => r.kind === 'rival').length,
+            topFinal,
+          }
+        : null,
+    },
+    at,
+    rows,
+    retiredRivals: roster ? roster.rivals.slice(k).map((x) => ({ slot: x.slot, index: x.index, arrivalAt: x.arrivalAt })) : [],
+    hiddenPlayers: members.filter((m) => m.hidden !== 0).map((m) => ({ slot: m.slot, code: m.code, hidden: m.hidden })),
+    serverTime: now,
+  });
 }
 
 /** Routes under /admin/v1/; null when the path is not one of them. */
@@ -91,6 +178,11 @@ export async function adminRoute(ctx: Ctx, method: string, rest: string): Promis
     const fresh = await s.store.getPlayer(p.key);
     return json({ player: fresh ? adminPlayerView(fresh, ctx, now) : null, serverTime: now });
   }
+  if (method === 'GET' && (m = /^brackets\/([^/]+)$/.exec(rest))) {
+    route('brackets/{id}');
+    authAdmin(ctx);
+    return adminBracketView(ctx, m[1] as string);
+  }
   if (method === 'POST' && (m = /^brackets\/([^/]+)\/refinalize$/.exec(rest))) {
     route('brackets/{id}/refinalize');
     authAdmin(ctx);
@@ -100,26 +192,14 @@ export async function adminRoute(ctx: Ctx, method: string, rest: string): Promis
     if (!b) return fail('not_found', 'no such bracket');
     if (b.ends_at > now) return fail('bad_request', 'the bracket is still running');
     const members = await s.store.members(id);
-    const ranked = rankRows(members.filter((x) => x.hidden === 0).map((x) => ({ slot: x.slot, points: x.points, scoredAt: x.scored_at, key: x.player_key })));
     const inWindow = now < b.ends_at + s.cfg.rewards.claimTtlMs;
-    const rewards = inWindow
-      ? paidPlaces(ranked, s.cfg).map((p) => ({
-          id: rewardId(id, p.slot),
-          playerKey: (ranked.find((r) => r.slot === p.slot) as { key: string }).key,
-          place: p.place,
-          hints: p.hints,
-          kitties: p.kitties,
-          expiresAt: now + s.cfg.rewards.claimTtlMs,
-        }))
-      : [];
-    await s.store.refinalize(
-      id,
-      ranked.map((r) => ({ slot: r.slot, rank: r.rank })),
-      rewards,
-      now,
-    );
-    await s.store.adminLog(newRowId(now, s.rng), now, 'refinalize', id, `${ranked.length} ranked`);
-    return json({ bracket: { id, finalMembers: ranked.length, rewards: rewards.length }, serverTime: now });
+    // D-2e-24: the same plan as finalizeIfDue (core/table.ts): a finalised bracket is re-ranked with its frozen
+    // computer players, which keep their points; a place one holds stays unpaid. Rewards only inside the window.
+    const plan = finalPlan(b, members, s.cfg, now, inWindow);
+    await s.store.refinalize(id, plan.ranks, plan.rewards, now, plan.totals);
+    const rivalRows = plan.totals.finalMembers - plan.totals.finalReal;
+    await s.store.adminLog(newRowId(now, s.rng), now, 'refinalize', id, `${plan.totals.finalMembers} ranked (${rivalRows} computer)`);
+    return json({ bracket: { id, finalMembers: plan.totals.finalMembers, finalReal: plan.totals.finalReal, rivalRows, rewards: plan.rewards.length }, serverTime: now });
   }
   if (method === 'GET' && rest === 'stats') {
     route('stats');

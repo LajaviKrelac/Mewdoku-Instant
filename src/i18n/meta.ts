@@ -323,6 +323,10 @@ const NOTES: Readonly<Partial<Record<I18nKey, Partial<KeyMeta>>>> = {
   'ladder.info.window.rolling': { description: 'How it works: a ranking lasts {hours} hours (24) from its first win; {count} = the most players (50)' },
   'ladder.info.window.utcDay': { description: 'How it works: a ranking per UTC day; {count} = the most players (50)' },
   'ladder.info.names': { description: 'How it works: other players never see the Facebook name or photo' },
+  // 2026-10-12, D-2e-24 (H-9).
+  'ladder.info.computerPlayers': {
+    description: "Ranking info and How to play: a short, neutral note that rankings include computer players. Never say which rows or how many; never 'bots' or 'AI'. One sentence.",
+  },
   'ladder.records.title': { description: 'Title of the ranking sheet when only the player\'s own records can be shown', maxLength: 22 },
   'ladder.result.title': { maxLength: 24 },
   'ladder.result.place': { description: 'The final place in the ranking that ended, e.g. "You finished #2 of 37."', maxLength: 30 },

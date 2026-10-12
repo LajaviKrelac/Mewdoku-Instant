@@ -581,6 +581,7 @@ export const catalog: LocaleCatalog = {
   'ladder.info.rewards.other': 'عند انتهاء الترتيب، تفوز أول {count} مركز بتلميحات وقُطيطات إذا لم يقل عدد المشاركين عن {min}.',
   'ladder.info.double': 'يمكنك مشاهدة فيديو لمضاعفة جائزتك.',
   'ladder.info.hearts': 'انقر على قلب لتشجيع لاعب. القلوب للمتعة فقط.',
+  'ladder.info.computerPlayers': 'تضم الترتيبات لاعبين يتحكم بهم الكمبيوتر.',
   'ladder.info.names': 'يرى اللاعبون الآخرون اسمك في الترتيب وصورتك، ولا يرون أبدًا اسمك أو صورتك على Facebook.',
   'ladder.info.privacy': 'يمكنك من الإعدادات إيقاف الترتيب أو حذف بيانات ترتيبك.',
   'ladder.records.title': 'أرقامك القياسية',

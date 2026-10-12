@@ -419,6 +419,8 @@ export function createShell(deps: ShellDeps): Shell {
         // Phase 2e (requests-G3 R6): the points note names the daily ranking while it is active; the
         // streak note with dayStreak.cycleDays while the streak is on (Appendix A howto.ladder / howto.streak).
         ...(ladderNow()?.active() ? { ladder: true } : {}),
+        // 2026-10-12, D-2e-24 (H-9): "Rankings include computer players." while the server's rules disclose them.
+        ...(ladderNow()?.active() && ladderNow()?.computerPlayers() ? { ladderComputerPlayers: true } : {}),
         ...(c.dayStreak.enabled && isFlagOn('dayStreak') ? { streakDays: c.dayStreak.cycleDays } : {}),
         onSkip: () => {
           router.closeAll();
