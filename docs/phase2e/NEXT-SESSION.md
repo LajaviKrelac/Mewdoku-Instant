@@ -62,6 +62,9 @@ upload; this note records the result and what is left.
 - 2026-10-11 22:2x UTC: `mewdoku-instant-fbig-preview-0.1.0-9a4d0f0.zip` (504,481 bytes; the new Home layout),
   comment "Game test build 0.1.0 9a4d0f0 - new home layout, staging ranking, no ads/IAP ids yet". Checked first: tsc,
   3,038 unit tests, size budget (89 files), Home rendered as a returning player with no page errors.
+- 2026-10-12 UTC: `mewdoku-instant-fbig-preview-0.1.0-b8bb947.zip` (505,775 bytes; the combo points and the combo
+  bar's row), comment "Game test build 0.1.0 b8bb947 - combo points + combo bar row, staging ranking, no ads/IAP ids
+  yet". Checked first: tsc, 3,054 unit tests, 317 e2e tests; the size check flags CSS 52.6 / 51.7 KB (the combo bar).
 
 ## Left
 
