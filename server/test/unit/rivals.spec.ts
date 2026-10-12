@@ -28,7 +28,7 @@ import {
   type FinalRival,
   type Roster,
 } from '../../src/core/rivals';
-import { finalPlan, finalTable, freezeTable, liveTable, pointsForRank, rivalHeartTarget, withRealHearts, type RankedRow } from '../../src/core/table';
+import { finalPlan, finalTable, freezeTable, liveRivalCountOf, liveTable, pointsForRank, rivalHeartTarget, withRealHearts, type RankedRow } from '../../src/core/table';
 import { makeServices, rivalsForPool, rivalsNoteFor, type DevState } from '../../src/services';
 import type { BracketRow, MemberRow } from '../../src/store/rows';
 import { DAY, HOUR, SERVER_DIR } from '../helpers/harness';
@@ -378,6 +378,44 @@ describe('the K rule (design §3.5, §4.3)', () => {
         const rows = liveTable(b, members, t, false);
         expect(rows.length).toBeLessThanOrEqual(b.max_members);
         for (const s of rivalSlots(rows)) expect(retired.has(s), 'a retired rival never returns').toBe(false);
+      }
+    }
+  });
+
+  // 2026-10-12, D-2e-24 (review fix): bracketView and the admin route read the bracket row and the members as two
+  // statements; a join committing between them leaves a stale next_slot beside the new member.
+  it('a stale bracket row (next_slot n) beside n + 1 members: still ≤ max_members rows, and the rival that join retired stays gone', () => {
+    const at = O + 119 * MIN; // every rival of the golden bracket has arrived (the last at +114 min)
+    const reals = Array.from({ length: 11 }, (_, i) => member(i, { points: 1 + (i % 3), scored_at: O + i * MIN, joined_at: O + i * MIN }));
+    const stale = bracket({ next_slot: 10, members: 10 }); // read before the 11th member's join committed
+    const fresh = bracket({ next_slot: 11, members: 11 });
+    const r = roster(stale);
+    expect(liveRivalCount(r, stale)).toBe(40); // K from the stale row alone: 11 + 40 = 51 rows
+    expect(liveRivalCountOf(r, stale, reals)).toBe(39);
+    expect(liveRivalCountOf(r, fresh, reals)).toBe(39);
+    const rows = liveTable(stale, reals, at, false);
+    expect(rows.length).toBe(50);
+    expect(rows.map((x) => x.slot)).not.toContain(RIVAL_SLOT_BASE + 39);
+    expect(rows).toEqual(liveTable(fresh, reals, at, false));
+    expect(freezeTable(stale, reals, false)).toEqual(freezeTable(fresh, reals, false));
+    // consistent reads are unchanged: hidden and deleted members never move K (next_slot keeps the deleted slots)
+    expect(liveRivalCountOf(r, bracket({ next_slot: 5 }), [member(0), member(2, { hidden: 2 })])).toBe(liveRivalCount(r, bracket({ next_slot: 5 })));
+    expect(liveRivalCountOf(r, bracket({ next_slot: 0 }), [])).toBe(49);
+    // a sweep: after every random join, the table from the bracket row read BEFORE it equals the consistent one
+    const rng = seededRng(53);
+    for (const b0 of brackets(60, 54)) {
+      const b = { ...b0 } as { -readonly [K in keyof BracketRow]: BracketRow[K] };
+      let members: MemberRow[] = [member(0, { joined_at: b.opened_at, scored_at: b.opened_at, points: int(rng, 1, 3) })];
+      const times = Array.from({ length: int(rng, 0, 55) }, () => int(rng, b.opened_at, b.join_until - 1)).sort((x, y) => x - y);
+      for (const t of times) {
+        if (members.length >= b.max_members) break;
+        const before = { ...b };
+        members = [...members, member(b.next_slot, { joined_at: t, scored_at: t, points: int(rng, 1, 3) })];
+        b.next_slot += 1;
+        b.members = members.length;
+        const consistent = liveTable(b, members, t, false);
+        expect(liveTable(before, members, t, false)).toEqual(consistent);
+        expect(consistent.length).toBeLessThanOrEqual(b.max_members);
       }
     }
   });

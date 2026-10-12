@@ -168,6 +168,38 @@ describe('a bracket with computer rivals (RIVALS=on)', () => {
     expect(v.rows).toHaveLength(50);
   });
 
+  // 2026-10-12, D-2e-24 (review fix): bracketView (and the admin route) read the bracket row and then the members as
+  // two statements; a join committing between them used to give max_members + 1 rows (a view the parser rejects).
+  it('a join committing between the bracket read and the members read: ≤ 50 rows, the view parses, the retired rival stays gone', async () => {
+    const t = makeTestApp({ env: ON });
+    const ps = await playersWithWins(t, 11, 'race');
+    t.clock.set(T0 + 119 * MIN); // every rival has arrived (the last arrival minute is Wmin − 2 = 118)
+    const consistent = await ps[0]!.bracket();
+    expectValid(consistent);
+    expect(consistent.rows).toHaveLength(50); // 11 real + K = 39 (T ≥ 46, so N ≥ 45 > 39)
+    const id = consistent.bracketId as string;
+    const k = liveRivalCount(rosterOf(t, id), bracketRow(t, id));
+    expect(k).toBe(39);
+    // From now on every bracket read answers the row as it was just before the 11th join committed, while the
+    // members read already holds that member: K from the stale row alone would be 40 (51 rows).
+    const store = t.app.services.store;
+    const read = store.getBracket.bind(store);
+    store.getBracket = async (bid: string) => {
+      const b = await read(bid);
+      return b && { ...b, next_slot: b.next_slot - 1, members: b.members - 1 };
+    };
+    const v = await ps[0]!.bracket();
+    expectValid(v);
+    expect(v.rows).toHaveLength(50);
+    expect(v.rows.map((r) => r.slot)).not.toContain(9000 + k);
+    expect(shown(v)).toEqual(shown(consistent));
+    expect((await ps[1]!.signIn()).bracket).toMatchObject({ members: 50 }); // the Home chip's "#k of 50", not 51
+    const ad = await json<AdminBracket>(await admin(t, 'GET', `brackets/${id}`));
+    expect(ad.bracket.rivals).toMatchObject({ live: k, present: 39 });
+    expect(ad.rows).toHaveLength(50);
+    expect(ad.retiredRivals.map((r) => r.index)).toContain(k);
+  });
+
   // FakeClock every 10 minutes for 25 hours, a lone player and 1, 4 or 10 others joining at random times in the
   // join window: rows ≤ 50; rows vanish only at a real join and only the lowest computer rows; a vanished one
   // never returns; rival points and hearts never fall; two members see the same table; the frozen final table is
@@ -826,7 +858,7 @@ interface AdminRow {
   realHearts?: number;
 }
 interface AdminBracket {
-  bracket: Record<string, unknown> & { rivals: { preset: string; strength: number; roster: number; live: number; present: number; topFinal: number | null } | null };
+  bracket: Record<string, unknown> & { rivals: { preset: string; strength: number; roster: number; live: number; present: number; topFinal: number | null; hidden: boolean } | null };
   at: number;
   rows: AdminRow[];
   retiredRivals: { slot: number; index: number; arrivalAt: number }[];
@@ -894,6 +926,67 @@ describe('admin GET /admin/v1/brackets/{id} (design §7)', () => {
     expect(live.rows).toEqual(fin.rows);
     expect(fin.rows.map((r) => [r.rank, r.slot, r.nickname, r.points, r.hearts])).toEqual((await a!.bracket()).rows.map((r) => [r.rank, r.slot, r.nickname, r.points, r.hearts]));
     expect(fin.bracket.rivals!.topFinal).toBe(Math.max(...fin.rows.filter((r) => r.kind === 'rival').map((r) => r.points)));
+  });
+
+  // 2026-10-12, D-2e-24 (review fixes): admin under the emergency hide (H-9: admin always labels computer players),
+  // and what `at` moves.
+  it('under hide admin still lists the computer players (rivals.hidden: true); a final snapshot shows the rows refinalize ranks with', async () => {
+    const t = makeTestApp({ env: ON });
+    const [a, b] = await playersWithWins(t, 2, 'ah');
+    const id = (await a!.bracket()).bracketId as string;
+    t.clock.set(T0 + 3 * HOUR);
+    const hide = sibling(t, { env: ON, overrides: { rivals: { hide: true } } });
+    // open: players see the real rows only; admin lists the same rows as without hide, and says hide is on
+    const plain = await json<AdminBracket>(await admin(t, 'GET', `brackets/${id}`));
+    const hidden = await json<AdminBracket>(await admin(hide, 'GET', `brackets/${id}`));
+    expect(plain.bracket.rivals!.hidden).toBe(false);
+    expect(hidden.bracket.rivals!.hidden).toBe(true);
+    expect(hidden.rows).toEqual(plain.rows);
+    expect(hidden.rows.filter((r) => r.kind === 'rival').length).toBeGreaterThan(0);
+    const ah = new TestPlayer(hide, 'ah0');
+    ah.device.id = a!.device.id;
+    ah.device.secret = a!.device.secret;
+    await ah.signIn();
+    expect(rivalRows(await ah.bracket())).toEqual([]);
+    // finalised by the deploy without hide (a snapshot), then viewed under hide: the frozen rows, labelled
+    t.clock.set(T0 + DAY + HOUR);
+    await a!.signIn();
+    const fin = await a!.bracket();
+    expect(fin.final).toBe(true);
+    const frozen = rivalRows(fin);
+    expect(frozen.length).toBeGreaterThan(0);
+    const view = await json<AdminBracket>(await admin(hide, 'GET', `brackets/${id}`));
+    expect(view.rows.map((r) => [r.rank, r.kind === 'rival', r.slot, r.points])).toEqual(fin.rows.map((r) => [r.rank, isRivalSlot(r.slot), r.slot, r.points]));
+    expect(view.bracket.rivals).toMatchObject({ present: frozen.length, topFinal: Math.max(...frozen.map((r) => r.points)), hidden: true });
+    expect(view.bracket).toMatchObject({ finalMembers: view.rows.length, finalReal: 2 });
+    expect((await json<AdminBracket>(await admin(hide, 'GET', `brackets/${id}?live=1`))).rows).toEqual(view.rows); // frozen equals live, under hide too
+    const r = await json<{ bracket: { finalMembers: number; finalReal: number; rivalRows: number } }>(await admin(hide, 'POST', `brackets/${id}/refinalize`));
+    expect(r.bracket).toMatchObject({ finalMembers: view.rows.length, finalReal: 2, rivalRows: view.rows.filter((x) => x.kind === 'rival').length });
+    expect(b).toBeDefined();
+  });
+
+  it('?at= moves only the computer players: the real rows carry their current points, K counts from the current next_slot', async () => {
+    const t = makeTestApp({ env: ON });
+    const ps = await playersWithWins(t, 5, 'at');
+    const id = (await ps[0]!.bracket()).bracketId as string;
+    t.clock.set(T0 + 60 * MIN);
+    await playersWithWins(t, 1, 'atlate', 30); // a 6th join at +60 min: K = min(N, 44) < N, so rival 44 retires now
+    await ps[0]!.wins([winOf(40, 3, t.clock.now()), winOf(41, 3, t.clock.now())]);
+    t.clock.set(T0 + 90 * MIN);
+    const current = await ps[0]!.bracket();
+    const past = await json<AdminBracket>(await admin(t, 'GET', `brackets/${id}?at=${T0 + 30 * MIN}`));
+    expect(past.at).toBe(T0 + 30 * MIN);
+    const k = liveRivalCount(rosterOf(t, id), bracketRow(t, id));
+    expect(k).toBe(44);
+    // the real rows: today's totals (6 of them, the +60 min join included), not the totals at `at`
+    expect(past.rows.filter((r) => r.kind === 'player').map((r) => [r.slot, r.points]).sort((x, y) => x[0]! - y[0]!)).toEqual(
+      realRows(current).map((r) => [r.slot, r.points]).sort((x, y) => x[0]! - y[0]!),
+    );
+    // the computer players: evaluated at `at`, among the rivals live NOW (index < K); the retired ones are listed apart
+    const roster = rosterOf(t, id);
+    const rivals = past.rows.filter((r) => r.kind === 'rival');
+    expect(rivals.map((r) => r.index).sort((x, y) => x! - y!)).toEqual(roster.rivals.slice(0, k).filter((x) => x.arrivalAt <= T0 + 30 * MIN).map((x) => x.index));
+    expect(past.retiredRivals.map((r) => r.index)).toEqual(roster.rivals.slice(k).map((x) => x.index));
   });
 
   it('player detail marks brackets with computer players and their real size', async () => {

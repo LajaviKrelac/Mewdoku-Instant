@@ -121,6 +121,10 @@
 // the drift and the wordmark's sticker look: CSS 49.3 → 51.7 (50.2 measured in web and FBIG, + about 3 %). Main JS,
 // the first-load total and gzip stay within.
 //
+// Combo bar (lead decision, 2026-10-12): the combo bar's row in the game screen (src/styles/hud.css, tokens.css, merged
+// from the default branch) is first-load CSS: 51.7 → 54.0 (52.4 measured in web and FBIG, + about 3 %). A scan found
+// no dead first-load selector worth cutting (one 25-byte rule). Main JS, the first-load total and gzip stay within.
+//
 // Post-win and ranking fixes (lead decision, 2026-10-12): the ladder boot chunk 34.9 → 36.4 KB (35.35 measured in web,
 // 35.30 in FBIG; + about 3 %): the flow now keeps the server's ended view, re-reads the final standings once after the
 // server's finalising grace, keeps the hearts and first-time lines per display, tells "offline" from a slow answer and
@@ -190,7 +194,7 @@ export const BUDGETS: readonly SizeBudget[] = [
   { label: 'Main JS', pattern: /^assets\/index-[^/]*\.js$/, maxBytes: 360 * KB, fromHtml: 'js', firstLoad: true },
   // Only the stylesheets index.html links (the first-load sheet and, since 2d.1 I-4, the coach chunk's); the lazy
   // chunks' stylesheets are the lazy CSS rows.
-  { label: 'CSS', pattern: /^$/, maxBytes: 51.7 * KB, fromHtml: 'css', firstLoad: true },
+  { label: 'CSS', pattern: /^$/, maxBytes: 54.0 * KB, fromHtml: 'css', firstLoad: true },
   // The latin-ext face (tr, pl) is fetched only when such glyphs appear (unicode-range, phase2b §6.6).
   { label: 'Font (lazy)', pattern: /-ext-[^/]*\.woff2$/, maxBytes: LISTED },
   { label: 'Font', pattern: /\.woff2$/, maxBytes: 17 * KB, firstLoad: true },
