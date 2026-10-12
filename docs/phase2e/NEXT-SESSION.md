@@ -62,6 +62,9 @@ upload; this note records the result and what is left.
 - 2026-10-11 22:2x UTC: `mewdoku-instant-fbig-preview-0.1.0-9a4d0f0.zip` (504,481 bytes; the new Home layout),
   comment "Game test build 0.1.0 9a4d0f0 - new home layout, staging ranking, no ads/IAP ids yet". Checked first: tsc,
   3,038 unit tests, size budget (89 files), Home rendered as a returning player with no page errors.
+- 2026-10-12: `mewdoku-instant-fbig-preview-0.1.0-3778d6b.zip` (504.5 KB, 89 files; the Home cleanup and no FB
+  safe-zone shift by default), comment "Game test build 0.1.0 3778d6b - home cleanup, no FB safe-zone shift, staging
+  ranking, no ads/IAP ids yet". Checked first: tsc, 2,942 unit tests, the FBIG e2e (59), size budget.
 
 ## Left
 
