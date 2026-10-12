@@ -1301,7 +1301,7 @@ test.describe('Phase 2e (G3): the ranking views in the real app (route fake; spe
         await expectFits(p, '.overlay[data-overlay="ranking"]');
         const count = (await panel.locator('.ranking__count').textContent()) ?? '';
         if (!v.lang) {
-          await expect(panel.locator('.ranking__title')).toHaveText('Daily ranking');
+          await expect(panel.locator('.ranking__title')).toHaveText('Leaderboard'); // leaderboard update: the ribbon title
           await expect(panel.locator('.ranking__sub')).toHaveText('+3 fish · Your total: 28');
           expect(count).toBe('37 players');
           await expect(panel.locator('.ranking__rewards')).toHaveText('The top 3 win hints and kitties.');
@@ -1376,7 +1376,7 @@ test.describe('Phase 2e (G3): the ranking views in the real app (route fake; spe
         await expect(sheet.locator('.ladder-info')).toBeVisible();
         const infoText = (await sheet.locator('.ladder-info').textContent()) ?? '';
         if (!v.lang) {
-          expect(infoText).toContain('A ranking lasts 24 hours from its first win and holds up to 50 players.');
+          expect(infoText).toContain('A ranking lasts 24 hours and holds up to 50 players.'); // leaderboard update: the sign-in join's wording
           expect(infoText).toContain('the top 3 win hints and kitties if at least 5 players took part');
           expect(infoText).toContain('never your Facebook name or photo');
         }
