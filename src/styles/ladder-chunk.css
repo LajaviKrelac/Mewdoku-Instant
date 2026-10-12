@@ -1467,9 +1467,15 @@
     margin-inline-end: 6px;
   }
 
+  /* The heart keeps its 44 × 44 tap (spec §7.7); only its side padding shrinks. */
   .rank-row__heart {
-    min-width: 40px;
-    padding: 0 4px;
+    min-width: 46px;
+    padding: 0 3px;
+  }
+
+  /* The chest leaves the rows (the medal still marks a paid place; the sheet's podium shows the chests). */
+  .rank-row__gift {
+    display: none;
   }
 
   .rank-row__points {
@@ -1486,5 +1492,22 @@
 @media (max-height: 640px) {
   .overlay[data-overlay='ranking'] .lb-podium {
     display: none;
+  }
+
+  .rank-row {
+    min-height: 48px;
+  }
+
+  .rank-row + .rank-row {
+    margin-top: 4px;
+  }
+
+  /* The panel takes a little more of the height and its footer sits closer (still on screen). */
+  .ranking[data-list='bracket'] .ranking__card {
+    max-height: 84vh;
+  }
+
+  .overlay[data-overlay='ranking'] .ranking[data-list='bracket'] .ranking__tap.btn {
+    margin-top: 10px;
   }
 }

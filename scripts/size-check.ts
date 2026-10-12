@@ -217,8 +217,9 @@ export const BUDGETS: readonly SizeBudget[] = [
   { label: 'Lazy CSS (board motion)', pattern: /^assets\/board-mouse-[^/]*\.css$/, maxBytes: 6.4 * KB },
   // Phase 2e: the ladder chunk's own stylesheet (the CSS keeps the barrel's name, as events-chunk-*.css does; L0's
   // placeholder ceiling re-set at I-4).
-  // Leaderboard update (2026-10-12): 11.0 → 20.5 KB measured (the podium, the pills, the rank-up's motion, the card).
-  { label: 'Lazy CSS (ladder)', pattern: /^assets\/ladder-chunk-[\w-]{8}\.css$/, maxBytes: 21 * KB },
+  // Leaderboard update (2026-10-12): 11.0 → 21.6 KB measured (the podium, the pills, the rank-up's motion, the card,
+  // the short and narrow screens).
+  { label: 'Lazy CSS (ladder)', pattern: /^assets\/ladder-chunk-[\w-]{8}\.css$/, maxBytes: 22.2 * KB },
   // Phase 2e I-4: the overlay chunk's stylesheet (with Home's chip and strip since I-4), on its own row.
   { label: 'Lazy CSS (overlay chunk)', pattern: /^assets\/overlay-chunk-[\w-]{8}\.css$/, maxBytes: 33.5 * KB },
   // The rest: the events chunk's stylesheet (re-set at 2e I-4 when the overlay chunk's row split out).

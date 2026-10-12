@@ -122,7 +122,7 @@ describe('size-check', () => {
     // Phase 2e: the ladder chunk (L0's placeholders, the spec's 26 / 4 KB estimates, re-set at I-4 to measured + about 3 %)
     // and the I-4 rows: the ladder boot chunk, the overlay chunk (JS, CSS) and the lazy English strings.
     // Leaderboard update (2026-10-12): the podium leaderboard re-set the ladder rows to measured + about 2 %.
-    expect([max('Lazy JS (ladder)'), max('Lazy CSS (ladder)')]).toEqual([38_500, 21_000]);
+    expect([max('Lazy JS (ladder)'), max('Lazy CSS (ladder)')]).toEqual([38_500, 22_200]);
     expect([max('Lazy JS (ladder boot)'), max('Lazy JS (overlay chunk)'), max('Lazy JS (English)'), max('Lazy CSS (overlay chunk)')]).toEqual([
       36_600, 56_200, 13_600, 33_500, // the overlay chunk's CSS 32 → 33.5 at the audit fix round
     ]);
@@ -275,7 +275,7 @@ describe('size-check', () => {
     fakeBuild(d);
     writeTree(d, {
       'assets/ladder-Ab3_x-9Z.js': 38_500, // at the ceiling (re-set by the leaderboard update)
-      'assets/ladder-chunk-Qw7-e2Rt.css': 21_000,
+      'assets/ladder-chunk-Qw7-e2Rt.css': 22_200,
       // Chunks named after other ladder-* modules are not the ladder chunk: they stay in the core lazy rows.
       'assets/ladder-flow-Zx81_aBc.js': 2_000,
       'assets/ladder-sheet-Pp0-q1Wr.css': 500,
@@ -284,13 +284,13 @@ describe('size-check', () => {
     const r = checkSizes(d, { fb: false });
     const row = (label: string) => r.rows.find((x) => x.label === label);
     expect(row('Lazy JS (ladder)')).toMatchObject({ bytes: 38_500, ok: true });
-    expect(row('Lazy CSS (ladder)')).toMatchObject({ bytes: 21_000, ok: true });
+    expect(row('Lazy CSS (ladder)')).toMatchObject({ bytes: 22_200, ok: true });
     expect(row('Lazy JS (core)')?.bytes).toBe(18_000 + 2_000);
     expect(row('Lazy CSS')?.bytes).toBe(6_000 + 500);
     expect(r.ok).toBe(true);
     for (const [file, bytes, label] of [
       ['assets/ladder-Ab3_x-9Z.js', 38_501, 'Lazy JS (ladder)'],
-      ['assets/ladder-chunk-Qw7-e2Rt.css', 21_001, 'Lazy CSS (ladder)'],
+      ['assets/ladder-chunk-Qw7-e2Rt.css', 22_201, 'Lazy CSS (ladder)'],
     ] as const) {
       const o = tempDir('web');
       fakeBuild(o);
