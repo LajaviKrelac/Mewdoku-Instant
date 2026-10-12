@@ -31,7 +31,7 @@
 // tool button is disabled, the coach's "Got it" goes away) it is moved back to the board.
 //
 // Classes: .screen.screen--game[data-mode][data-status][data-compact][data-banner] > header.top-bar--game
-//          + main.game__col (.game__hud .game__stage .game__tools) + .game__scrim + .game-fx[data-celebrate]; vars of §4.7
+//          + main.game__col (.game__hud (.game__combo > .combo-bar, .pills, rules) .game__stage .game__tools) + .game__scrim + .game-fx[data-celebrate]; vars of §4.7
 import type { CellIndex } from '../../engine/types';
 import type { EventDef } from '../../game/events';
 import type { FxHandle } from '../fx/fish-flight';
@@ -316,9 +316,8 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
       if (!locked()) cb.onSettings();
     },
   });
-  // The combo bar hangs under the game bar's middle (hud.css), out of the measured stack.
+  // The combo bar has its own row in the stack, between the game bar and the pills (--combo-row).
   const comboBar = createComboBar(comboProps(view));
-  topBar.el.appendChild(comboBar.el);
   const pills = createPills(pillsProps(view));
   const chips = createRuleChips(chipsProps(view));
   const board = createBoardView(
@@ -345,7 +344,7 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
     { class: 'screen screen--game' },
     topBar.el,
     // The play area is the page's main landmark (Home uses <main> too).
-    h('main', { class: 'game__col' }, h('div', { class: 'game__hud' }, pills.el, chips.el), stage, h('div', { class: 'game__tools' }, tools.el)),
+    h('main', { class: 'game__col' }, h('div', { class: 'game__hud' }, h('div', { class: 'game__combo' }, comboBar.el), pills.el, chips.el), stage, h('div', { class: 'game__tools' }, tools.el)),
     scrim,
     gameFx,
   );
@@ -470,6 +469,7 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
       '--col-w': px(next.colW),
       '--y-top': px(next.top),
       '--bar': px(next.bar),
+      '--combo-row': px(next.combo),
       '--pills': px(next.pills),
       '--rules': px(next.rules),
       '--chips': px(next.rules),
@@ -495,7 +495,7 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
     for (const [k, v] of Object.entries(vars)) el.style.setProperty(k, v);
     el.dataset.compact = String(next.compact);
     el.toggleAttribute('data-banner', next.band > 0);
-    const toolsTop = next.top + next.bar + g.barToPills + next.pills + g.pillsToRules + next.rules + g.rulesToBoard + next.board + g.boardToTools;
+    const toolsTop = next.top + next.bar + next.combo + g.barToPills + next.pills + g.pillsToRules + next.rules + g.rulesToBoard + next.board + g.boardToTools;
     publishBand(
       next.band > 0 ? g.toolsToBanner + next.band : 0,
       g.bottom + vp.safeBottom,

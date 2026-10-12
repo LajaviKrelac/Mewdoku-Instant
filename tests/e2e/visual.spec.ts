@@ -362,7 +362,9 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
     const g = await expectStack(page);
     const near = (got: number, want: number, what: string): void => expect(Math.abs(got - want), `${what}: ${got.toFixed(1)} vs ${want}`).toBeLessThanOrEqual(2);
     const b = (x: Box | null): Box => x as Box;
-    // look-spec §1.1, §1.4–§1.11 (the original's measured positions at 402 × 874).
+    // look-spec §1.1, §1.4–§1.11 (the original's measured positions at 402 × 874), with the combo bar's row
+    // (user, 2026-10-12): 22 under the bar, paid by barToPills −6, rulesToBoard −8, boardToTools −8, so the pills
+    // and the rules sit 16 lower, the board 8 lower, and the helpers and the banner where they were.
     near((b(g.back).left + b(g.back).right) / 2, 31.5, 'back centre x');
     near((b(g.back).top + b(g.back).bottom) / 2, 88.0, 'back centre y');
     near((b(g.gear).left + b(g.gear).right) / 2, 370.0, 'gear centre x');
@@ -372,11 +374,11 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
     near((b(g.score).left + b(g.score).right) / 2, 252.0, 'Score column centre');
     near(b(g.heads).left, 12.0, 'heads pill left');
     near(b(g.heads).right, 282.0, 'heads pill right');
-    near(b(g.heads).top, 124.3, 'pills top');
+    near(b(g.heads).top, 140.3, 'pills top');
     near(b(g.lives).left, 293.3, 'fish pill left');
-    near(b(g.rules).top, 164.0, 'rules top');
+    near(b(g.rules).top, 180.0, 'rules top');
     near(b(g.rules).left, 13.3, 'rules left');
-    near(b(g.board).top, 250.0, 'board top');
+    near(b(g.board).top, 258.0, 'board top');
     near(b(g.board).left, 5.67, 'board left');
     near(b(g.tools).top, 694.0, 'helpers top');
     near((b(g.tools).left + b(g.tools).right) / 2, 98.8, 'kitty centre x');

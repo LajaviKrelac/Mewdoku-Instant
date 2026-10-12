@@ -789,6 +789,13 @@ export interface GameConfig {
       readonly topSpareMax: number;
       /** Top bar band (back and gear discs centred at bar / 2). */
       readonly bar: number;
+      /**
+       * The combo bar's row, right under the bar (user, 2026-10-12): always reserved, so nothing moves
+       * when a combo starts or ends. Its 22 come out of three measured gaps (barToPills 10.3 → 4.3,
+       * rulesToBoard 25.7 → 17.7, boardToTools 53 → 45), so the stack's height, the scale s and the
+       * board are the same as without it at every size (the 22 px tile minimum at 320 × 568 holds).
+       */
+      readonly combo: number;
       readonly barToPills: number;
       /** Heads pill and fish pill height. */
       readonly pills: number;
@@ -1498,13 +1505,14 @@ export const cfg: GameConfig = deepFreeze({
       compactScale: 0.85,
       topSpareMax: 62,
       bar: 52,
-      barToPills: 10.3,
+      combo: 22,
+      barToPills: 4.3,
       pills: 31.3,
       pillsToRules: 8.3,
       rules: 60.3,
       rulesGrowMax: 2,
-      rulesToBoard: 25.7,
-      boardToTools: 53,
+      rulesToBoard: 17.7,
+      boardToTools: 45,
       tools: 60.3,
       toolsToBanner: 23.4,
       bottom: 12.3,

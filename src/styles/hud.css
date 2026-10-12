@@ -114,23 +114,28 @@
   padding: 0;
 }
 
-/* The combo bar (user, 2026-10-12; combo-bar.ts): hangs under the bar's middle, over the gap to the
-   pills row, out of the measured stack. The fill empties from the inline end (scaleX, linear). */
+/* The combo bar (user, 2026-10-12; combo-bar.ts): its own row of the stack right under the bar
+   (layout.game.combo, --combo-row; always reserved, so nothing moves when it shows or hides), centred.
+   The fill empties from the inline end (scaleX, linear). */
+.game__combo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--combo-row);
+}
+
 .combo-bar {
-  position: absolute;
-  top: calc(100% - var(--s) * 2px);
-  left: 50%;
-  z-index: 2;
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  box-sizing: border-box;
   width: calc(var(--s) * 150px);
-  height: calc(var(--s) * 19px);
+  height: calc(var(--s) * 20px);
   border: calc(var(--s) * 2px) solid var(--combo-deep);
   border-radius: 999px;
   background: var(--combo-track);
-  transform: translateX(-50%);
   pointer-events: none;
 }
 
