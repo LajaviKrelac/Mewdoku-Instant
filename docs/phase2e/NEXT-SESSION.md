@@ -76,6 +76,12 @@ upload; this note records the result and what is left.
   base + base × 10 % × (combo − 1) × fish), comment "Game test build 0.1.0 80fdfe8 - combo bonus x fish left, staging
   ranking, no ads/IAP ids yet". Checked first: npm run verify (3,057 unit tests, 191 server tests); the e2e suite was
   not run on this commit (stopped on request); the size check still flags CSS 52.4 / 51.7 KB.
+- 2026-10-12 UTC: `mewdoku-instant-fbig-preview-0.1.0-7b876f2.zip` (507,689 bytes, 89 files; the post-win and ranking
+  fixes, the Home ranking countdown, the default branch with the combo merged in, the client side of the computer
+  rivals), comment "Game test build 0.1.0 7b876f2 - post-win/ranking fixes, Home countdown, combo merged, staging
+  ranking (rivals need the server deploy)". Checked first: tsc, 3,093 unit tests, 277 server tests, i18n. The
+  first-load CSS measured 52.4 KB against its 51.7 KB ceiling (the combo bar's styles on top of the Home changes; not
+  a platform limit). The computer rivals show only after the staging server is deployed with migration 0003.
 
 ## Left
 
