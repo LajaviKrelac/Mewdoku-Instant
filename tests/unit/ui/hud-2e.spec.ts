@@ -218,7 +218,8 @@ describe('Home: the floating ranking button, the profile and streak pill in the 
   it('the daily pill shows the title without the date (kept in its name) and the status in its tab', () => {
     const home = createHomeScreen(homeView({ daily: { state: 'solved', dateKey: '2026-10-06', n: 8, solvedMs: 58_000, unlockLevel: 21 } }), homeCb());
     expect(q(home.el, '.daily-card__title').textContent).toBe('Daily puzzle');
-    expect(q(home.el, '.daily-card__tab .daily-card__sub').textContent).toBe('8×8 · Solved 0:58');
+    expect(q(home.el, '.daily-card__tab .daily-card__sub').textContent).toBe('0:58');
+    expect(q(home.el, '.daily-card__tab .daily-card__check').hidden).toBe(false);
     expect(q(home.el, '.daily-card').getAttribute('aria-label')).toContain('Daily puzzle');
     home.destroy();
   });

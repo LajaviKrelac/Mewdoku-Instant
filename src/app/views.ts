@@ -118,6 +118,7 @@ export function selectHomeView(state: AppState, ctx: ViewContext, c: GameConfig 
       n: dailySlotFor(today).n,
       solvedMs: solved ? solved[0] : null,
       unlockLevel: c.daily.unlockAfterLevel,
+      endsAt: nextDayStartAfter(today, c),
     },
     hints: save.stock.hints,
     kitties: save.stock.kitties,

@@ -103,7 +103,6 @@
 .home__actions > .event-card, .home__cards { align-self: stretch; }
 .home__play, .daily-card { width: min(100%, max(272px, 70vw)); max-width: 360px; }
 .home__play { position: relative; min-height: 60px; }
-.home__play .btn__chev { position: absolute; right: 22px; top: 50%; margin-top: -0.55em; }
 .home-card { display: flex; width: 100%; min-height: 72px; padding: 12px 16px; border: 0; border-radius: var(--radius-l);
   background: var(--card); color: var(--ink); font: inherit; text-align: start; cursor: pointer; box-shadow: 0 3px 0 var(--line-2), var(--shadow-1); }
 .home-card:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--line-2), var(--shadow-1); }
@@ -119,16 +118,15 @@
 .daily-card__title, .home-card__title { font-family: var(--font-display); font-weight: var(--display-weight); font-size: var(--fs-l); text-wrap: balance; overflow-wrap: break-word; }
 .daily-card__title { min-width: 0; font-size: var(--fs-btn); line-height: 1.15; }
 .home-card__sub { margin-top: 2px; color: var(--ink-2); font-size: var(--fs-s); }
-.daily-card__tab { position: absolute; top: 100%; left: 50%; max-width: 86%; padding: 6px 14px 3px; border-radius: 0 0 12px 12px;
+.daily-card__tab { position: absolute; top: 100%; left: 50%; display: flex; align-items: center; max-width: 86%; padding: 6px 14px 3px; border-radius: 0 0 12px 12px;
   background: var(--daily-deep); transform: translateX(-50%); white-space: nowrap; }
 .daily-card__sub { display: block; overflow: hidden; font-family: var(--font-display); font-weight: var(--display-weight); font-size: var(--fs-s); text-overflow: ellipsis; }
 .daily-card[data-state='locked'] { background: var(--page-2); color: var(--ink-2); box-shadow: 0 4px 0 var(--line-2); }
 .daily-card[data-state='locked'] .daily-card__icon { background: var(--line); color: var(--ink-icon); }
 .daily-card[data-state='locked'] .daily-card__tab { background: var(--card); box-shadow: var(--shadow-1); }
-.home__stock { display: flex; justify-content: center; margin-top: 18px; }
-.stock__item { display: inline-flex; align-items: center; margin: 0 6px; padding: 6px 16px 6px 10px; border-radius: var(--radius-pill);
-  background: var(--card); box-shadow: var(--shadow-1); font-family: var(--font-display); font-weight: var(--display-weight); font-size: var(--fs-l); }
-.stock__icon { width: 28px; height: 28px; margin-inline-end: 6px; }
+/* The solved day's check (2026-10-12): a green disc with a white tick drawn by its borders. */
+.daily-card__check { position: relative; flex: none; width: 16px; height: 16px; margin-inline-end: 5px; border-radius: 50%; background: var(--badge-video); }
+.daily-card__check::after { content: ''; position: absolute; top: 3px; left: 5px; width: 4px; height: 7px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
 
 @keyframes mw-fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes mw-pop-in { from { opacity: 0; transform: translateY(10px) scale(0.97); } to { opacity: 1; transform: none; } }
@@ -138,15 +136,10 @@
    text; phase2b §1.4). A long "Continue · Level 1000" wraps inside the 64 px button instead
    (review A11Y-CONTRAST-1). */
 @media (max-width: 359px) {
-  .home__play .btn__chev { display: none; }
   .daily-card__title { font-size: var(--fs-xl); }
 }
 @media (max-width: 374px) {
   .toast { padding: 8px 14px; font-size: var(--fs-s); }
-}
-/* "Continue · Level 1000" plus the HARD badge leaves no room for the chevron below 420 px (UX-09). */
-@media (max-width: 419px) {
-  .home__play[data-hard='true'] .btn__chev { display: none; }
 }
 @media (max-height: 639px) {
   .home__wordmark { font-size: min(2.5rem, 13vw); }

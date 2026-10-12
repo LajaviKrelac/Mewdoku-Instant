@@ -85,7 +85,7 @@ vi.mock('../../../src/ui/board/board-view', () => ({
 
 import { createBootScreen } from '../../../src/ui/screens/boot-screen';
 import { createGameScreen, gameTitle, loadCelebrate, sameHighlight, type GameScreenCallbacks, type GameView } from '../../../src/ui/screens/game-screen';
-import { createHomeScreen, type HomeCallbacks, type HomeView } from '../../../src/ui/screens/home-screen';
+import { createHomeScreen, formatCountdown, type HomeCallbacks, type HomeView } from '../../../src/ui/screens/home-screen';
 import type { HintStep } from '../../../src/engine/types';
 import { mouseLandMs } from '../../../src/game/mouse';
 
@@ -150,7 +150,7 @@ describe('S1 home', () => {
     onLadder: vi.fn(),
   });
 
-  it('level button: plain, hard badge, continue', () => {
+  it('level button: plain, hard badge, and plain "Level N" with a board in progress (Home cleanup 2026-10-12)', () => {
     const home = createHomeScreen(view(), callbacks());
     const play = q(home.el, '.home__play');
     expect(q(play, '.btn__label').textContent).toBe('Level 37');
@@ -159,7 +159,8 @@ describe('S1 home', () => {
     expect(q(play, '.btn__label').textContent).toBe('Level 40');
     expect(q(play, '.badge--hard').hidden).toBe(false);
     home.update(view({ level: 41, continueLevel: true }));
-    expect(q(play, '.btn__label').textContent).toBe('Continue · Level 41');
+    expect(q(play, '.btn__label').textContent).toBe('Level 41');
+    expect(play.querySelector('.btn__chev')).toBeNull();
   });
 
   it('the daily pill shows the title without the date; the date stays in its name (Home layout 2026-10-11)', () => {
@@ -169,7 +170,9 @@ describe('S1 home', () => {
     home.destroy();
   });
 
-  it('daily card states: locked, not played, in progress, solved', () => {
+  it('daily card states: locked, not played and in progress (the time left today), solved (a check and the time)', () => {
+    vi.useFakeTimers({ now: Date.UTC(2026, 9, 6, 16, 11, 48) });
+    const endsAt = Date.UTC(2026, 9, 7, 0, 0, 0);
     const home = createHomeScreen(view({ daily: { state: 'locked', dateKey: '2026-10-06', n: 8, solvedMs: null, unlockLevel: 20 } }), callbacks());
     const card = q(home.el, '.daily-card');
     const sub = (): string | null => q(card, '.daily-card__sub').textContent;
@@ -177,17 +180,31 @@ describe('S1 home', () => {
     expect(q(card, '.daily-card__title').textContent).toBe('Daily puzzle');
     expect(sub()).toBe('Unlocks after level 20');
     expect(card.querySelector('.icon-lock')).not.toBeNull();
-    home.update(view());
-    expect(sub()).toBe('8×8 · Not played yet');
+    expect(q(card, '.daily-card__check').hidden).toBe(true);
+    home.update(view({ daily: { state: 'not_played', dateKey: '2026-10-06', n: 8, solvedMs: null, unlockLevel: 20, endsAt } }));
+    expect(sub()).toBe('07:48:12');
+    vi.advanceTimersByTime(1000);
+    expect(sub()).toBe('07:48:11');
     expect(card.querySelector('.icon-calendar')).not.toBeNull();
     expect(card.getAttribute('aria-label')).toBe('Daily puzzle, Tue 6 Oct, 8×8, Not played yet');
-    home.update(view({ daily: { state: 'in_progress', dateKey: '2026-10-07', n: 9, solvedMs: null, unlockLevel: 20 } }));
-    expect(sub()).toBe('9×9 · In progress');
-    home.update(view({ daily: { state: 'solved', dateKey: '2026-10-07', n: 9, solvedMs: 252_000, unlockLevel: 20 } }));
-    expect(sub()).toBe('9×9 · Solved 4:12');
+    home.update(view({ daily: { state: 'in_progress', dateKey: '2026-10-06', n: 9, solvedMs: null, unlockLevel: 20, endsAt } }));
+    expect(sub()).toBe('07:48:11');
+    home.update(view({ daily: { state: 'solved', dateKey: '2026-10-06', n: 9, solvedMs: 252_000, unlockLevel: 20, endsAt } }));
+    expect(sub()).toBe('4:12');
+    expect(q(card, '.daily-card__check').hidden).toBe(false);
+    vi.advanceTimersByTime(5000);
+    expect(sub()).toBe('4:12'); // the countdown stopped
+    home.destroy();
+    vi.useRealTimers();
   });
 
-  it('routes taps to the callbacks and shows the stock readout', () => {
+  it('formatCountdown pads hours, minutes and seconds and clamps at 0', () => {
+    expect(formatCountdown(7 * 3_600_000 + 48 * 60_000 + 12_000)).toBe('07:48:12');
+    expect(formatCountdown(23 * 3_600_000 + 59 * 60_000 + 53_999)).toBe('23:59:53');
+    expect(formatCountdown(-5)).toBe('00:00:00');
+  });
+
+  it('routes taps to the callbacks; no stock readout on Home (Home cleanup 2026-10-12)', () => {
     const cb = callbacks();
     const home = createHomeScreen(view({ extraCards: [{ id: 'events', title: 'Events', subtitle: 'Soon' }] }), cb);
     q(home.el, '.home__play').click();
@@ -198,8 +215,7 @@ describe('S1 home', () => {
     expect(cb.onDaily).toHaveBeenCalledTimes(1);
     expect(cb.onCard).toHaveBeenCalledWith('events');
     expect(cb.onSettings).toHaveBeenCalledTimes(1);
-    expect(q(home.el, '.stock__item--hints').getAttribute('aria-label')).toBe('Hints: 5');
-    expect(q(home.el, '.stock__item--kitties').textContent).toBe('3');
+    expect(home.el.querySelector('.home__stock, .stock__item')).toBeNull();
     expect(callsOf('topbar', 'create')[0]).toMatchObject({ title: null, showHome: false, showSettings: true });
     expect(callsOf('topbar', 'create')[0]).not.toHaveProperty('showTrophy'); // Phase 2e I-3: no Home trophy
     // Phase 2c §2.8: the period pill (this week's fish), not the fish pill with a shop "+".
