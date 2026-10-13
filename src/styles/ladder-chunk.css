@@ -1517,6 +1517,16 @@
     margin-top: 4px;
   }
 
+  /* The one-time "This is you in the ranking" line in the small size. */
+  .ranking__first {
+    font-size: var(--fs-xs);
+  }
+
+  /* My own row's pill always reads "Online now": it gives its line back to the list here. */
+  .rank-rows .rank-row[data-me='1'] .lb-status {
+    display: none;
+  }
+
   /* The panel takes a little more of the height and its footer sits closer (still on screen). */
   .ranking[data-list='bracket'] .ranking__card {
     max-height: 84vh;
