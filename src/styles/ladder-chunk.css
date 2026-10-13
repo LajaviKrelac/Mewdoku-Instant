@@ -256,6 +256,21 @@
   cursor: pointer;
 }
 
+/* Leaderboard update: the tap reaches 2 px past the 44 px pill above and below, so a row at a fractional position
+   (sub-pixel snapping of the rounded edge) never loses the bottom of its 44 × 44 tap. */
+.rank-row__heart {
+  position: relative;
+}
+
+.rank-row__heart::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+}
+
 .rank-row__heart-icon {
   display: inline-flex;
 }
@@ -356,20 +371,31 @@
   min-height: 0;
 }
 
-.overlay[data-overlay='ranking'] .ranking__meta {
+.overlay[data-overlay='ranking'] .ranking__hearts-new {
+  color: var(--accent-text);
+}
+
+/* Leaderboard update: in the bracket state the panel is the light leaderboard (a warm card on the dark scrim, the
+   orange ribbon title, the stopwatch pill, the podium, the rows), as in the sheet. */
+.ranking[data-list='bracket'] .ranking__card {
+  position: relative;
+  padding-top: 14px;
+  background: linear-gradient(var(--gold-soft), var(--page) 180px);
+  box-shadow: var(--shadow-3);
+}
+
+.overlay[data-overlay='ranking'] .ranking[data-list='bracket'] .ranking__title {
   color: #fff;
 }
 
-.overlay[data-overlay='ranking'] .ranking__rewards,
-.overlay[data-overlay='ranking'] .ranking__stale,
-.overlay[data-overlay='ranking'] .ranking__offline,
-.overlay[data-overlay='ranking'] .ranking__alone,
-.overlay[data-overlay='ranking'] .ranking__first {
-  color: rgba(255, 255, 255, 0.8);
+.ranking[data-list='bracket'] .ranking__sub {
+  color: var(--ink);
 }
 
-.overlay[data-overlay='ranking'] .ranking__hearts-new {
-  color: var(--tap-text);
+.ranking[data-list='bracket'] .ranking__info.btn {
+  background: var(--card);
+  box-shadow: var(--shadow-btn);
+  color: var(--ink-icon);
 }
 
 /* ── The ranking sheet (overlay `ladder`): a full-height light sheet ── */
@@ -765,5 +791,748 @@
   .nickname__label,
   .nickname__fields {
     margin-top: 8px;
+  }
+}
+
+/* ═══════════════ Leaderboard update: the podium leaderboard (bracket-list.ts, ladder-session.ts) ═══════════════ */
+
+/* The orange ribbon title (the panel's bracket state and the sheet's list view); white on --accent at 24 px. */
+.ranking[data-list='bracket'] .ranking__head,
+.ladder-sheet[data-view='list'] .overlay__head {
+  justify-content: center;
+}
+
+.overlay[data-overlay='ranking'] .ranking[data-list='bracket'] .ranking__title,
+.ladder-sheet[data-view='list'] .overlay__title {
+  position: relative;
+  flex: none;
+  margin: 0 auto;
+  padding: 2px 22px 4px;
+  border-radius: 12px;
+  background: var(--accent);
+  box-shadow: 0 4px 0 var(--accent-deep);
+  color: #fff;
+  font-size: var(--fs-btn);
+  line-height: 1.3;
+  text-shadow: 0 2px 0 rgba(var(--accent-shadow-rgb), 0.35);
+  white-space: nowrap;
+}
+
+.ladder-sheet[data-view='list'] {
+  background: linear-gradient(var(--gold-soft), var(--page) 220px);
+}
+
+/* The stopwatch pill: "23:48:55" under the title (the worded countdown is for screen readers). */
+.lb-timer {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  align-self: center;
+  margin: 8px auto 0;
+  padding: 2px 12px 2px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  box-shadow: var(--shadow-pill);
+  color: var(--ink);
+  font-family: var(--font-num);
+  font-weight: var(--display-weight);
+  font-size: var(--fs-l);
+  line-height: 26px;
+}
+
+.lb-timer[hidden] {
+  display: none;
+}
+
+.lb-timer__icon {
+  width: 22px;
+  height: 22px;
+  margin-inline-end: 6px;
+}
+
+.rank-list--bracket .ranking__meta {
+  margin-top: 4px;
+  font-size: var(--fs-s);
+}
+
+/* ── The podium: 2nd, 1st, 3rd from the inline start; only the places the server has ── */
+.lb-podium {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: flex-end;
+  justify-content: center;
+  margin-top: 6px;
+  padding: 0 2px;
+}
+
+.lb-podium[hidden],
+.lb-pod[hidden],
+.lb-status[hidden],
+.lb-pod__gift[hidden],
+.rank-row__gift[hidden] {
+  display: none;
+}
+
+.lb-pod {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  max-width: 132px;
+  margin: 0 3px;
+  --pod: var(--gold);
+}
+
+.lb-pod[data-place='2'] {
+  --pod: var(--daily);
+}
+
+.lb-pod[data-place='3'] {
+  --pod: var(--accent);
+}
+
+.lb-pod__frame {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 54px;
+  height: 54px;
+  margin-bottom: -12px;
+  overflow: hidden;
+  border: 3px solid var(--r7);
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: var(--shadow-2);
+}
+
+.lb-pod[data-place='1'] .lb-pod__frame {
+  width: 66px;
+  height: 66px;
+  border-radius: 18px;
+}
+
+.lb-pod[data-mine='1'] .lb-pod__frame {
+  border-color: var(--accent);
+}
+
+.lb-pod__avatar {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* A step: a pale wash of its colour (white over the colour) under a thick rim of the colour itself. */
+.lb-pod__step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  min-height: 112px;
+  padding: 12px 4px 8px;
+  border-top: 9px solid var(--pod);
+  border-radius: 18px 18px 8px 8px;
+  background: linear-gradient(rgba(255, 255, 255, 0.66), rgba(255, 255, 255, 0.9)), var(--pod);
+  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.06), var(--shadow-1);
+}
+
+.lb-pod[data-place='1'] .lb-pod__step {
+  min-height: 132px;
+}
+
+.lb-pod[data-place='3'] .lb-pod__step {
+  min-height: 102px;
+}
+
+.lb-pod__medal {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  margin-top: -8px;
+}
+
+.lb-pod__medal-art {
+  display: block;
+  width: 30px;
+  height: 30px;
+}
+
+.lb-pod__num {
+  position: absolute;
+  top: 53%;
+  left: 0;
+  width: 100%;
+  margin-top: -0.6em;
+  color: var(--ink-deep);
+  font-family: var(--font-num);
+  font-weight: var(--display-weight);
+  font-size: 12px;
+  line-height: 1.2em;
+  text-align: center;
+}
+
+.lb-pod__name {
+  max-width: 100%;
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  font-size: var(--fs-s);
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lb-pod__fish {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 3px;
+  padding: 0 8px 0 4px;
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--ink);
+  font-family: var(--font-num);
+  font-weight: var(--display-weight);
+  font-size: var(--fs-s);
+  line-height: 22px;
+}
+
+.lb-pod__fish-art {
+  width: 18px;
+  height: 18px;
+  margin-inline-end: 3px;
+}
+
+.lb-pod__gift {
+  display: block;
+  margin-top: 2px;
+}
+
+.lb-pod__gift-art {
+  display: block;
+  width: 30px;
+  height: 30px;
+}
+
+.lb-pod .lb-status {
+  margin-top: 4px;
+  padding: 0 6px;
+  font-size: 11px;
+}
+
+.lb-pod .lb-status[data-status='playing']::before {
+  margin-inline-end: 4px;
+}
+
+/* ── The status pills: "Online now" / "Playing now" green, "4m ago" a mauve wash ── */
+.lb-status {
+  display: inline-block;
+  max-width: 100%;
+  padding: 0 8px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: rgba(var(--ink-rgb), 0.1);
+  color: var(--ink);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lb-status[data-status='online'],
+.lb-status[data-status='playing'] {
+  background: var(--combo-track);
+  color: var(--combo-ink);
+}
+
+.lb-status[data-status='playing']::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-inline-end: 5px;
+  border-radius: 50%;
+  background: var(--combo);
+  vertical-align: 1px;
+  animation: lb-live 1.4s ease-in-out infinite;
+}
+
+@keyframes lb-live {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* ── The rows: each its own rounded card; the fish as a pill at the end; the top three tinted ── */
+.rank-row {
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto auto;
+  grid-template-areas:
+    'place avatar name pts gift heart'
+    'place avatar line pts gift heart';
+  min-height: 54px;
+  background: var(--card);
+  box-shadow: var(--shadow-1);
+}
+
+.rank-row + .rank-row {
+  margin-top: 6px;
+}
+
+.rank-row[data-rank='1'] {
+  background: linear-gradient(rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.8)), var(--gold);
+}
+
+.rank-row[data-rank='2'] {
+  background: linear-gradient(rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.86)), var(--daily);
+}
+
+.rank-row[data-rank='3'] {
+  background: linear-gradient(rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.82)), var(--accent);
+}
+
+.rank-rows .rank-row[data-me='1'],
+.rank-row--pinned {
+  background: var(--accent-soft);
+}
+
+.rank-row__points {
+  align-self: center;
+  justify-self: end;
+  margin-top: 0;
+  padding: 1px 9px 1px 4px;
+  border-radius: var(--radius-pill);
+  background: var(--page-2);
+}
+
+.rank-row__line .lb-status {
+  margin-inline-end: 6px;
+}
+
+.rank-row__tags:not([hidden]) {
+  margin-inline-end: 6px;
+}
+
+.rank-row__tags[hidden] {
+  display: none;
+}
+
+.rank-row__gift {
+  display: block;
+  grid-area: gift;
+  margin-inline-start: 4px;
+}
+
+.rank-row__gift-art {
+  display: block;
+  width: 28px;
+  height: 28px;
+}
+
+.ladder-sheet .rank-rows {
+  background: transparent;
+}
+
+/* ── The rank-up (playClimb): my row rides above the others; the list follows it (scrolled each frame) ── */
+.rank-row.is-climbing {
+  position: relative;
+  z-index: 2;
+  box-shadow: inset 0 0 0 2px rgba(var(--accent-rgb), 0.55), var(--shadow-2);
+}
+
+.rank-row.is-pulsing {
+  animation: lb-pulse 700ms var(--ease-out);
+}
+
+@keyframes lb-pulse {
+  40% {
+    transform: scale(1.04);
+  }
+}
+
+.lb-pod.is-waiting {
+  opacity: 0;
+  transform: scale(0.6);
+}
+
+.lb-pod.is-popping {
+  animation: lb-pop 700ms var(--ease-drop);
+}
+
+@keyframes lb-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.6);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(-6px) scale(1.08);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+.lb-confetti {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.lb-confetti__bit {
+  position: absolute;
+  top: -8px;
+  left: var(--x);
+  width: 7px;
+  height: 11px;
+  border-radius: 2px;
+  background: var(--c);
+  opacity: 0;
+  animation: lb-fall 1.6s var(--d) ease-in forwards;
+}
+
+@keyframes lb-fall {
+  0% {
+    opacity: 1;
+    transform: translateY(-24px) rotate(var(--r));
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(170px) rotate(calc(var(--r) + 540deg));
+  }
+}
+
+/* The bubble after a climb ("Nice! You climbed to #5!"), over the panel's top edge (the panel holds it: the card
+   scrolls and would clip it). */
+.overlay__panel--stage.ranking {
+  position: relative;
+}
+/* The bubble after a climb ("Nice! You climbed to #5!"), over the panel's top edge. */
+.ranking__bubble {
+  position: absolute;
+  top: -16px;
+  left: 12px;
+  z-index: 4;
+  max-width: 70%;
+  padding: 6px 12px;
+  border: 2px solid var(--toast-line);
+  border-radius: 14px;
+  background: var(--toast-fill);
+  box-shadow: var(--shadow-2);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  font-size: var(--fs-s);
+  line-height: 1.3;
+  text-align: start;
+  animation: lb-bubble 420ms var(--ease-drop) both;
+}
+
+[dir='rtl'] .ranking__bubble {
+  right: 12px;
+  left: auto;
+}
+
+.ranking__bubble[hidden] {
+  display: none;
+}
+
+.ranking__bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 26px;
+  width: 12px;
+  height: 12px;
+  border-right: 2px solid var(--toast-line);
+  border-bottom: 2px solid var(--toast-line);
+  background: var(--toast-fill);
+  transform: rotate(45deg);
+}
+
+[dir='rtl'] .ranking__bubble::after {
+  right: 26px;
+  left: auto;
+}
+
+@keyframes lb-bubble {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Reduced motion: the final places at once, no confetti, no live dot, no pop. */
+[data-motion='reduced'] .lb-status[data-status='playing']::before,
+[data-reduced] .lb-status[data-status='playing']::before,
+[data-motion='reduced'] .lb-confetti,
+[data-reduced] .lb-confetti {
+  display: none;
+}
+
+[data-motion='reduced'] .lb-pod.is-popping,
+[data-reduced] .lb-pod.is-popping,
+[data-motion='reduced'] .rank-row.is-pulsing,
+[data-reduced] .rank-row.is-pulsing,
+[data-motion='reduced'] .ranking__bubble,
+[data-reduced] .ranking__bubble {
+  animation: none;
+}
+
+/* ── The "New ranking" card (overlay `ladder_session`) ── */
+.ladder-session .overlay__head {
+  justify-content: center;
+}
+
+.ladder-session .overlay__title {
+  flex: 1 1 auto;
+  text-align: center;
+}
+
+.ladder-session__stage {
+  position: relative;
+  height: 176px;
+  margin: 6px 0 14px;
+  overflow: hidden;
+  border-radius: var(--radius-l);
+  background:
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.1) 0 9px, rgba(255, 255, 255, 0.05) 9px 20px),
+    radial-gradient(120% 95% at 50% 25%, var(--danger), var(--wrong));
+}
+
+.ladder-session .lb-timer {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  margin: 0;
+  background: rgba(0, 0, 0, 0.42);
+  box-shadow: none;
+  color: #fff;
+  transform: translateX(-50%);
+}
+
+.ladder-session__podium {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  display: flex;
+  align-items: flex-end;
+  width: 240px;
+  transform: translateX(-50%);
+}
+
+.ladder-session__step {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: center;
+  --pod: var(--gold);
+}
+
+.ladder-session__step[data-place='2'] {
+  --pod: var(--daily);
+}
+
+.ladder-session__step[data-place='3'] {
+  --pod: var(--accent);
+}
+
+.ladder-session__block {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  width: 100%;
+  height: 34px;
+  padding-top: 4px;
+  border-top: 7px solid var(--pod);
+  border-radius: 12px 12px 0 0;
+  background: linear-gradient(rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.75)), var(--pod);
+}
+
+.ladder-session__step[data-place='1'] .ladder-session__block {
+  height: 50px;
+}
+
+.ladder-session__step[data-place='3'] .ladder-session__block {
+  height: 26px;
+}
+
+.ladder-session__num {
+  color: var(--ink-deep);
+  font-family: var(--font-num);
+  font-weight: var(--display-weight);
+  font-size: var(--fs-l);
+  line-height: 1;
+}
+
+.ladder-session__me {
+  display: block;
+  width: 72px;
+  height: 72px;
+  margin-bottom: -4px;
+  overflow: hidden;
+  border: 3px solid var(--card);
+  border-radius: 20px;
+  background: var(--card);
+  box-shadow: var(--shadow-2);
+  animation: lb-pop 700ms 200ms var(--ease-drop) both;
+}
+
+.ladder-session[data-reduced] .ladder-session__me,
+[data-motion='reduced'] .ladder-session__me {
+  animation: none;
+}
+
+.ladder-session__avatar {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.ladder-session__body {
+  margin: 0 4px 14px;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  font-size: var(--fs-l);
+  line-height: 1.35;
+  text-align: center;
+  text-wrap: balance;
+}
+
+/* Short screens (a 320 × 568 phone): a compact podium (smaller pictures and steps, the chests only in the rows), so
+   the list keeps room for its rows under it. */
+@media (max-height: 740px) {
+  .lb-timer {
+    margin-top: 4px;
+    font-size: var(--fs-m);
+    line-height: 22px;
+  }
+
+  .lb-pod__frame {
+    width: 44px;
+    height: 44px;
+    margin-bottom: -10px;
+    border-radius: 13px;
+  }
+
+  .lb-pod[data-place='1'] .lb-pod__frame {
+    width: 52px;
+    height: 52px;
+    border-radius: 15px;
+  }
+
+  .lb-pod__step {
+    min-height: 82px;
+    padding: 10px 3px 6px;
+  }
+
+  .lb-pod[data-place='1'] .lb-pod__step {
+    min-height: 94px;
+  }
+
+  .lb-pod[data-place='3'] .lb-pod__step {
+    min-height: 74px;
+  }
+
+  .lb-pod__medal,
+  .lb-pod__medal-art {
+    width: 24px;
+    height: 24px;
+  }
+
+  .lb-pod__medal {
+    margin-top: -6px;
+  }
+
+  .lb-pod__num {
+    font-size: 10px;
+  }
+
+  .lb-pod__gift {
+    display: none;
+  }
+}
+
+/* Narrow screens: a smaller picture and heart so the name and its pills keep their width. */
+@media (max-width: 360px) {
+  .rank-row__avatar,
+  .rank-row__avatar-art {
+    width: 30px;
+    height: 30px;
+  }
+
+  .rank-row__avatar {
+    margin-inline-start: 2px;
+    margin-inline-end: 6px;
+  }
+
+  /* The heart keeps its 44 × 44 tap (spec §7.7); only its side padding shrinks. */
+  .rank-row__heart {
+    min-width: 46px;
+    padding: 0 3px;
+  }
+
+  /* The chest leaves the rows (the medal still marks a paid place; the sheet's podium shows the chests). */
+  .rank-row__gift {
+    display: none;
+  }
+
+  .rank-row__points {
+    padding: 1px 7px 1px 3px;
+  }
+
+  .rank-row__line .lb-status {
+    font-size: 11px;
+  }
+}
+
+/* Very short screens (≤ 640 px tall): the post-win panel drops the podium (rows 1–3 keep their medals and chests),
+   so my row and its neighbours have room in the list; the sheet keeps its compact podium. */
+@media (max-height: 640px) {
+  .overlay[data-overlay='ranking'] .lb-podium {
+    display: none;
+  }
+
+  .rank-row {
+    min-height: 48px;
+  }
+
+  .rank-row + .rank-row {
+    margin-top: 4px;
+  }
+
+  /* The one-time "This is you in the ranking" line in the small size. */
+  .ranking__first {
+    font-size: var(--fs-xs);
+  }
+
+  /* My own row's pill always reads "Online now": it gives its line back to the list here. */
+  .rank-rows .rank-row[data-me='1'] .lb-status {
+    display: none;
+  }
+
+  /* The panel takes a little more of the height and its footer sits closer (still on screen). */
+  .ranking[data-list='bracket'] .ranking__card {
+    max-height: 84vh;
+  }
+
+  .overlay[data-overlay='ranking'] .ranking[data-list='bracket'] .ranking__tap.btn {
+    margin-top: 10px;
   }
 }

@@ -127,7 +127,8 @@ export interface E2EHooks {
    */
   solve(): boolean;
   /** Phase 2e (CONTRACTS §10): the ranking client's state (null fields before it loaded). */
-  ladder?(): { active: boolean; signedIn: boolean; pending: number; current: LadderCurrent | null };
+  /** homeSettled (leaderboard update): a Home visit's ranking steps ran (sign-in, refresh, flush, cards). */
+  ladder?(): { active: boolean; signedIn: boolean; pending: number; current: LadderCurrent | null; homeSettled?: boolean };
   /** Phase 2e: the remote switches in force. */
   remote?(): Switches;
   /** Phase 2e: streakView(save.dayStreak, today). */

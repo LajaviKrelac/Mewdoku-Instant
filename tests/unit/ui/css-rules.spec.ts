@@ -149,6 +149,8 @@ describe('the primary-button rule (phase2b §1.4)', () => {
     const PRIMARY = [
       'btn--primary', 'btn--lg', 'home__play', 'victory__primary', 'event__play', 'daily-result__done', 'hint-card__apply', 'coach__gotit', 'rewarded__accept', 'rewarded__ok', 'fail__continue', 'group-result__take',
       'ladder-result__double', 'ladder-result__ok', 'ladder-sheet__ok', 'nickname__save', 'settings__confirm-delete', 'settings__confirm-cancel',
+      // Leaderboard update: the "New ranking" card's Got it.
+      'ladder-session__ok',
     ];
     const ui = walk(join(ROOT, 'src/ui'), ['.ts']).map((f) => read(f));
     for (const src of ui) {

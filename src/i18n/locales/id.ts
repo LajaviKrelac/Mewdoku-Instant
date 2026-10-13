@@ -497,5 +497,18 @@ export const catalog: LocaleCatalog = {
   'victory.streakReward': 'Hadiah rangkaian: {reward}',
   'howto.streak': 'Selesaikan paling sedikit satu teka-teki sehari untuk membangun rangkaian. Setiap {days} hari berturut-turut kamu mendapat hadiah petunjuk dan meong. Jika terlewat sehari, rangkaian mulai lagi dari hari 1.',
   'victory.dailyReward': 'Hadiah harian: {reward}',
+  // ── Leaderboard update ──
+  'ladder.status.online': 'Sedang online',
+  'ladder.status.playing': 'Sedang bermain',
+  'ladder.status.minutes': '{count} mnt lalu',
+  'ladder.status.hours': '{count} jam lalu',
+  'ladder.status.days': '{count} hari lalu',
+  'ladder.session.title': 'Peringkat baru',
+  'ladder.session.body': 'Selesaikan teka-teki untuk mengumpulkan ikan dan naik di peringkat. Lihat seberapa tinggi kamu bisa naik sebelum peringkat ini berakhir!',
+  'ladder.session.ok': 'Mengerti',
+  'ladder.climb.first': 'Luar biasa! Kamu di posisi pertama!',
+  'ladder.climb.up': 'Bagus! Kamu naik ke posisi {rank}!',
+  'ladder.info.window.rollingJoin': 'Satu peringkat berlangsung {hours} jam dan memuat sampai {count} pemain. Setelah peringkat berakhir, kamu masuk ke peringkat baru saat berikutnya kamu membuka game.',
+  'ladder.info.activity': 'Pemain di peringkatmu bisa melihat kapan terakhir kali kamu aktif dan apakah kamu sedang memainkan teka-teki.',
   ...LOCALE_NAMES,
 };

@@ -28,9 +28,12 @@ import { defaults } from '../../src/game/save';
 import { catIncrement, comboPoints, comboRuleFor, comboRunMax, periodKeyAt, pointsRuleFor } from '../../src/game/scoring';
 import type { SaveData } from '../../src/game/types';
 import { watchStrings } from './helpers/strings';
+import { gotItNewRanking } from './helpers/new-ranking';
 
 // Phase 2e I-4: no screen of these tests may ask for an English string that no loaded table has.
 watchStrings(test);
+// Leaderboard update: the "New ranking" card is closed with Got it whenever it shows.
+gotItNewRanking(test);
 
 type TestWindow = Window & { __mewdoku?: E2EHooks };
 
@@ -523,7 +526,7 @@ test('the ranking: the panel at the same time with the bracket list; the next wi
     expect(dt).toBeLessThanOrEqual(4800);
     const list = page.locator('[data-overlay="ranking"] .rank-list[data-kind="bracket"]');
     await expect(list).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('[data-overlay="ranking"]')).toContainText('Daily ranking');
+    await expect(page.locator('[data-overlay="ranking"]')).toContainText('Leaderboard'); // leaderboard update: the ribbon title
     const values = await page.evaluate(() => (window as TestWindow & { __counter?: string[] }).__counter ?? []);
     expect(values[0], `win ${k}`).toBe(String(before));
     expect(values.at(-1), `win ${k}`).toBe(String(before + 3));

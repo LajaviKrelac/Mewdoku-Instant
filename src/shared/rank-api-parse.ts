@@ -49,6 +49,7 @@ import {
   type MeResponse,
   type NonceResponse,
   type PlayerView,
+  type PresenceResponse,
   type ProfileResponse,
   type RemoteSwitch,
   type ResultView,
@@ -204,6 +205,10 @@ function parseRow(x: unknown): BracketRow | null {
     hearts: x.hearts,
     me: x.me,
     likedByMe: x.likedByMe,
+    // Leaderboard update (additive): a server without the fields, or with a bad one, gives "no status" (never a
+    // made-up one); the row itself stays.
+    seenAt: isMs(x.seenAt) ? x.seenAt : null,
+    playing: isMs(x.seenAt) && x.playing === true,
   };
 }
 
@@ -324,6 +329,12 @@ export function parseHeartResponse(x: unknown): HeartResponse | null {
   if (!isInt(x.hearts, 0, Number.MAX_SAFE_INTEGER) || x.likedByMe !== true || !isInt(x.givenInBracket, 0, 10_000)) return null;
   if (!isMs(x.serverTime)) return null;
   return { bracketId: x.bracketId, slot: x.slot, hearts: x.hearts, likedByMe: true, givenInBracket: x.givenInBracket, serverTime: x.serverTime };
+}
+
+/** POST /v1/presence (leaderboard update). */
+export function parsePresenceResponse(x: unknown): PresenceResponse | null {
+  if (!isObj(x) || !isBool(x.updated) || !isMs(x.serverTime)) return null;
+  return { updated: x.updated, serverTime: x.serverTime };
 }
 
 export function parseProfileResponse(x: unknown): ProfileResponse | null {

@@ -498,5 +498,18 @@ export const catalog: LocaleCatalog = {
   'victory.streakReward': '연속 기록 보상: {reward}',
   'howto.streak': '하루에 퍼즐을 하나 이상 풀면 연속 기록이 쌓여요. {days}일 연속으로 풀 때마다 힌트와 냥이 보상을 받아요. 하루를 놓치면 연속 기록은 1일째부터 다시 시작해요.',
   'victory.dailyReward': '일일 보상: {reward}',
+  // ── Leaderboard update ──
+  'ladder.status.online': '접속 중',
+  'ladder.status.playing': '플레이 중',
+  'ladder.status.minutes': '{count}분 전',
+  'ladder.status.hours': '{count}시간 전',
+  'ladder.status.days': '{count}일 전',
+  'ladder.session.title': '새 랭킹',
+  'ladder.session.body': '퍼즐을 풀어 물고기를 모으고 랭킹에서 순위를 올려 봐요. 이번 랭킹이 끝나기 전에 얼마나 높이 올라갈 수 있는지 도전해 봐요!',
+  'ladder.session.ok': '알겠어요',
+  'ladder.climb.first': '멋져요! 1위가 됐어요!',
+  'ladder.climb.up': '좋아요! {rank}위로 올라갔어요!',
+  'ladder.info.window.rollingJoin': '랭킹은 {hours}시간 동안 이어지고 최대 {count}명이 함께해요. 랭킹이 끝나면 다음에 게임을 열 때 새 랭킹에 들어가요.',
+  'ladder.info.activity': '내 랭킹의 플레이어는 내가 마지막으로 접속한 때와 지금 퍼즐을 플레이 중인지 볼 수 있어요.',
   ...LOCALE_NAMES,
 };

@@ -266,6 +266,23 @@ function rosterR1(parsed: RivalsTag, b: RosterTimes): Roster {
 const PER = 16,
   FIRST = 17;
 
+// 2026-10-13 (merge with the leaderboard update): the activity's own draw purpose (openingSeenBefore). A new purpose
+// draws from its own stream, so no r1 or r2 draw moves and both goldens stay as they are.
+const SEEN = 18;
+
+/**
+ * 2026-10-13 (merge with the leaderboard update): how long before opened_at a rival of the opening group (arrival at
+ * opened_at) was last seen, in ms. core/table.ts rivalActivity shows it until the rival's first scoring moment after
+ * the opening, so the 8…12 rivals present when a bracket opens do not all share one status and one "seen" time
+ * (the arrival at opened_at, the same ms for all of them, is not a moment anyone saw them). Whole minutes 1…9 at
+ * 20 %, 10…59 at 30 %, 60…299 at 30 % and 300…1199 at 20 %, plus 0…59 999 ms: under 20 h, so never "1d ago".
+ */
+export function openingSeenBefore(key: readonly number[], index: number): number {
+  const x = below(key, SEEN, index, 0, 100);
+  const [lo, n]: readonly [number, number] = x < 20 ? [1, 9] : x < 50 ? [10, 50] : x < 80 ? [60, 240] : [300, 900];
+  return (lo + below(key, SEEN, index, 1, n)) * MIN + below(key, SEEN, index, 2, 60_000);
+}
+
 /** r2 personas (cumulative share in percent; wins a day lo…hi, inclusive): casual 45, regular 37, keen 14, grinder 4. */
 const R2_PERSONAS: readonly (readonly [number, number, number])[] = [
   [45, 3, 7],

@@ -113,7 +113,7 @@ describe('size-check', () => {
     // Phase 2e I-4: the core lazy rows hold only what the chunk rows leave (hint card, RPC, sounds, generator, grader;
     // the events chunk's stylesheet), the locale chunk carries the 2e copy.
     expect([max('Worker JS (lazy)'), max('Lazy JS (core)'), max('Lazy JS (optional)'), max('Lazy CSS'), max('Locale chunk (each)')]).toEqual([
-      18_500, 23_300, 29_300, 7_200, 41_900,
+      18_500, 23_300, 29_300, 7_200, 43_300, // the locale chunk 41.9 → 43.3 at the merge of the rivals and the leaderboard update (2026-10-13)
     ]);
     // Phase 2d.1 I-4: the new lazy chunks' rows (the fx chunk's JS and CSS and the lazy art re-set at the final audit fixes).
     expect([max('Lazy JS (fx chunk)'), max('Lazy JS (board motion)'), max('Lazy JS (lazy art)'), max('Lazy CSS (fx chunk)'), max('Lazy CSS (board motion)')]).toEqual([
@@ -121,9 +121,10 @@ describe('size-check', () => {
     ]);
     // Phase 2e: the ladder chunk (L0's placeholders, the spec's 26 / 4 KB estimates, re-set at I-4 to measured + about 3 %)
     // and the I-4 rows: the ladder boot chunk, the overlay chunk (JS, CSS) and the lazy English strings.
-    expect([max('Lazy JS (ladder)'), max('Lazy CSS (ladder)')]).toEqual([30_500, 11_050]);
+    // Leaderboard update (2026-10-12): the podium leaderboard re-set the ladder rows to measured + about 2 %.
+    expect([max('Lazy JS (ladder)'), max('Lazy CSS (ladder)')]).toEqual([38_500, 22_200]);
     expect([max('Lazy JS (ladder boot)'), max('Lazy JS (overlay chunk)'), max('Lazy JS (English)'), max('Lazy CSS (overlay chunk)')]).toEqual([
-      36_400, 56_200, 13_600, 33_500, // the overlay chunk's CSS 32 → 33.5 at the audit fix round; ladder boot 34.9 → 36.4 (2026-10-12)
+      38_900, 56_200, 14_100, 33_500, // the overlay chunk's CSS 32 → 33.5 at the audit fix round; ladder boot 34.9 → 36.4 (post-win fixes, 2026-10-12), 36.6 (leaderboard update, 2026-10-12), 38.9 and the English strings 13.6 → 14.1 (both together, measured at the merge, 2026-10-13)
     ]);
     expect(FB_MAX_FILES).toBe(100);
   });
@@ -215,9 +216,9 @@ describe('size-check', () => {
     expect(row('Event packs')).toMatchObject({ bytes: 3_500, files: 1 });
     expect(r.ok).toBe(true);
 
-    writeTree(d, { 'assets/locale-ar-gg.js': 41_901 });
+    writeTree(d, { 'assets/locale-ar-gg.js': 43_301 });
     const over = checkSizes(d, { fb: false });
-    expect(over.rows.find((x) => x.label === 'Locale chunk (each)')).toMatchObject({ bytes: 41_901, ok: false, files: 3 });
+    expect(over.rows.find((x) => x.label === 'Locale chunk (each)')).toMatchObject({ bytes: 43_301, ok: false, files: 3 });
     expect(over.ok).toBe(false);
   });
 
@@ -273,8 +274,8 @@ describe('size-check', () => {
     const d = tempDir('web');
     fakeBuild(d);
     writeTree(d, {
-      'assets/ladder-Ab3_x-9Z.js': 30_500, // at the ceiling (re-set at I-4)
-      'assets/ladder-chunk-Qw7-e2Rt.css': 11_050,
+      'assets/ladder-Ab3_x-9Z.js': 38_500, // at the ceiling (re-set by the leaderboard update)
+      'assets/ladder-chunk-Qw7-e2Rt.css': 22_200,
       // Chunks named after other ladder-* modules are not the ladder chunk: they stay in the core lazy rows.
       'assets/ladder-flow-Zx81_aBc.js': 2_000,
       'assets/ladder-sheet-Pp0-q1Wr.css': 500,
@@ -282,14 +283,14 @@ describe('size-check', () => {
     });
     const r = checkSizes(d, { fb: false });
     const row = (label: string) => r.rows.find((x) => x.label === label);
-    expect(row('Lazy JS (ladder)')).toMatchObject({ bytes: 30_500, ok: true });
-    expect(row('Lazy CSS (ladder)')).toMatchObject({ bytes: 11_050, ok: true });
+    expect(row('Lazy JS (ladder)')).toMatchObject({ bytes: 38_500, ok: true });
+    expect(row('Lazy CSS (ladder)')).toMatchObject({ bytes: 22_200, ok: true });
     expect(row('Lazy JS (core)')?.bytes).toBe(18_000 + 2_000);
     expect(row('Lazy CSS')?.bytes).toBe(6_000 + 500);
     expect(r.ok).toBe(true);
     for (const [file, bytes, label] of [
-      ['assets/ladder-Ab3_x-9Z.js', 30_501, 'Lazy JS (ladder)'],
-      ['assets/ladder-chunk-Qw7-e2Rt.css', 11_051, 'Lazy CSS (ladder)'],
+      ['assets/ladder-Ab3_x-9Z.js', 38_501, 'Lazy JS (ladder)'],
+      ['assets/ladder-chunk-Qw7-e2Rt.css', 22_201, 'Lazy CSS (ladder)'],
     ] as const) {
       const o = tempDir('web');
       fakeBuild(o);
@@ -304,17 +305,17 @@ describe('size-check', () => {
     const d = tempDir('web');
     fakeBuild(d);
     writeTree(d, {
-      'assets/ladder-boot-Ab3_x-9Z.js': 36_400, // each at its ceiling
+      'assets/ladder-boot-Ab3_x-9Z.js': 38_900, // each at its ceiling
       'assets/overlay-chunk-Qw7-e2Rt.js': 56_200,
-      'assets/en-lazy-hpVVNp3-.js': 13_600,
+      'assets/en-lazy-hpVVNp3-.js': 14_100,
       'assets/overlay-chunk-CbqOliHw.css': 33_500,
       'assets/events-chunk-B7w1u0ro.css': 7_000,
     });
     const r = checkSizes(d, { fb: false });
     const row = (label: string) => r.rows.find((x) => x.label === label);
-    expect(row('Lazy JS (ladder boot)')).toMatchObject({ bytes: 36_400, ok: true });
+    expect(row('Lazy JS (ladder boot)')).toMatchObject({ bytes: 38_900, ok: true });
     expect(row('Lazy JS (overlay chunk)')).toMatchObject({ bytes: 56_200, ok: true });
-    expect(row('Lazy JS (English)')).toMatchObject({ bytes: 13_600, ok: true });
+    expect(row('Lazy JS (English)')).toMatchObject({ bytes: 14_100, ok: true });
     expect(row('Lazy CSS (overlay chunk)')).toMatchObject({ bytes: 33_500, ok: true });
     // not counted twice: the core rows hold only the rest (the fake's 2-character overlay-chunk-77.js, the events sheet)
     expect(row('Lazy JS (core)')?.bytes).toBe(18_000);
@@ -323,9 +324,9 @@ describe('size-check', () => {
     expect(row('Lazy JS (ladder)')?.bytes).toBe(0);
     expect(r.ok).toBe(true);
     for (const [file, bytes, label] of [
-      ['assets/ladder-boot-Ab3_x-9Z.js', 36_401, 'Lazy JS (ladder boot)'],
+      ['assets/ladder-boot-Ab3_x-9Z.js', 38_901, 'Lazy JS (ladder boot)'],
       ['assets/overlay-chunk-Qw7-e2Rt.js', 56_201, 'Lazy JS (overlay chunk)'],
-      ['assets/en-lazy-hpVVNp3-.js', 13_601, 'Lazy JS (English)'],
+      ['assets/en-lazy-hpVVNp3-.js', 14_101, 'Lazy JS (English)'],
       ['assets/overlay-chunk-CbqOliHw.css', 33_501, 'Lazy CSS (overlay chunk)'],
       ['assets/events-chunk-B7w1u0ro.css', 7_201, 'Lazy CSS'],
     ] as const) {

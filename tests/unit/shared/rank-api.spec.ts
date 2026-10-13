@@ -25,6 +25,7 @@ import {
   REWARD_ID_RE,
   validateClaimRequest,
   validateHeartRequest,
+  validatePresenceRequest,
   validateProfileRequest,
   validateSessionRequest,
   validateWinsRequest,
@@ -39,6 +40,7 @@ import {
   parseHeartResponse,
   parseMeResponse,
   parseNonceResponse,
+  parsePresenceResponse,
   parseProfileResponse,
   parseSessionResponse,
   parseWinsResponse,
@@ -388,5 +390,34 @@ describe('rank-api: responses (client side; never invent, repair, trim or re-ran
     expect(parseClaimResponse({ ...c, rewardId: 'nope' })).toBeNull();
     const h = clone(fixture('hearts.ok').response.body) as Json;
     expect(parseHeartResponse({ ...h, likedByMe: false })).toBeNull();
+  });
+});
+
+describe('rank-api: leaderboard update (join, presence, row activity)', () => {
+  it('a session may ask to join (a boolean only); presence takes online or playing', () => {
+    const web = { platform: 'web', device: { id: 'q2Vx8LmN4pRt6WyZ0aBc1D', secret: 'k9Jf3Hs7Ld2Qw5Er8Ty1Ui4Op6As0Df3Gh5Jk7Lz9Xa' }, clientVersion: '0.2.0', contentVersion: 'c1' };
+    expect(validateSessionRequest({ ...web, join: true }, { devPools: false })).toEqual({ ok: true, value: { ...web, join: true } });
+    expect(validateSessionRequest({ ...web, join: false }, { devPools: false })).toEqual({ ok: true, value: web });
+    expect(validateSessionRequest({ ...web, join: 'yes' }, { devPools: false })).toEqual({ ok: false, path: 'join' });
+    expect(validatePresenceRequest({ state: 'playing' })).toEqual({ ok: true, value: { state: 'playing' } });
+    expect(validatePresenceRequest({ state: 'away' })).toEqual({ ok: false, path: 'state' });
+    expect(parsePresenceResponse({ updated: true, serverTime: 1791799800000 })).toEqual({ updated: true, serverTime: 1791799800000 });
+    expect(parsePresenceResponse({ updated: 'yes', serverTime: 1 })).toBeNull();
+  });
+
+  it('a row keeps the server seenAt / playing; an older server (or a bad value) gives "no status", never a dropped row', () => {
+    const body = clone(fixture('bracket.open').response.body) as Json & { rows: Json[] };
+    const parsed = parseBracketView(body);
+    expect(parsed?.rows.map((r) => r.seenAt)).toEqual(body.rows.map((r) => r.seenAt));
+    for (const r of body.rows) {
+      delete r.seenAt;
+      delete r.playing;
+    }
+    (body.rows[0] as Json).playing = true; // playing without seenAt is no status
+    (body.me as Json).seenAt = -5;
+    const old = parseBracketView(body);
+    expect(old?.rows).toHaveLength(body.rows.length);
+    expect(old?.rows.every((r) => r.seenAt === null && r.playing === false)).toBe(true);
+    expect(old?.me).toMatchObject({ seenAt: null, playing: false });
   });
 });

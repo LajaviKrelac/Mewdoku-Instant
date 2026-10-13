@@ -498,5 +498,18 @@ export const catalog: LocaleCatalog = {
   'victory.streakReward': 'รางวัลสตรีค: {reward}',
   'howto.streak': 'ไขปริศนาอย่างน้อยวันละหนึ่งข้อเพื่อสร้างสตรีค ทุก {days} วันติดกันจะได้รางวัลเป็นคำใบ้และเหมียว ถ้าพลาดไปหนึ่งวัน สตรีคจะเริ่มใหม่ที่วันที่ 1',
   'victory.dailyReward': 'รางวัลประจำวัน: {reward}',
+  // ── Leaderboard update ──
+  'ladder.status.online': 'ออนไลน์อยู่',
+  'ladder.status.playing': 'กำลังเล่น',
+  'ladder.status.minutes': '{count} นาทีที่แล้ว',
+  'ladder.status.hours': '{count} ชม. ที่แล้ว',
+  'ladder.status.days': '{count} วันที่แล้ว',
+  'ladder.session.title': 'อันดับใหม่',
+  'ladder.session.body': 'ไขปริศนาเพื่อสะสมปลาและไต่อันดับ มาดูกันว่าคุณจะไต่ไปได้สูงแค่ไหนก่อนอันดับนี้จะจบ!',
+  'ladder.session.ok': 'เข้าใจแล้ว',
+  'ladder.climb.first': 'ยอดเยี่ยม! คุณได้อันดับ 1 แล้ว!',
+  'ladder.climb.up': 'เยี่ยมเลย! คุณขึ้นมาอันดับ {rank} แล้ว!',
+  'ladder.info.window.rollingJoin': 'อันดับหนึ่งชุดอยู่ได้ {hours} ชั่วโมง และรับผู้เล่นได้สูงสุด {count} คน เมื่อจบแล้ว คุณจะเข้าร่วมอันดับใหม่ในครั้งถัดไปที่เปิดเกม',
+  'ladder.info.activity': 'ผู้เล่นในอันดับของคุณจะเห็นว่าคุณใช้งานครั้งล่าสุดเมื่อไร และกำลังเล่นปริศนาอยู่หรือไม่',
   ...LOCALE_NAMES,
 };

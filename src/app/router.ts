@@ -35,6 +35,7 @@ import type { DailyResultProps } from '../ui/overlays/daily-result';
 import type { FailOverlayProps } from '../ui/overlays/fail-overlay';
 import type { GroupResultProps } from '../ui/overlays/group-result';
 import type { LadderResultProps } from '../ui/overlays/ladder-result';
+import type { LadderSessionProps } from '../ui/overlays/ladder-session';
 import type { LadderSheetProps } from '../ui/overlays/ladder-sheet';
 import type { NicknameSheetProps } from '../ui/overlays/nickname-sheet';
 import type { RankingPanelProps } from '../ui/overlays/ranking-panel';
@@ -74,6 +75,7 @@ export interface OverlayPropsMap {
   ladder: LadderSheetProps;
   ladder_result: LadderResultProps;
   nickname: NicknameSheetProps;
+  ladder_session: LadderSessionProps;
 }
 
 export interface Router {
@@ -241,7 +243,7 @@ export async function loadOverlayChunk(): Promise<Partial<OverlayFactories>> {
 }
 
 /** Phase 2e: the overlays that come with the lazy `ladder` chunk, not the overlay chunk. */
-export const LADDER_OVERLAYS: readonly OverlayId[] = ['ladder', 'ladder_result', 'nickname'];
+export const LADDER_OVERLAYS: readonly OverlayId[] = ['ladder', 'ladder_result', 'nickname', 'ladder_session'];
 
 /**
  * Phase 2e (spec §2.12, §7.9): the lazy `ladder` chunk's overlays (app/ladder-chunk.ts; its stylesheet
@@ -249,7 +251,7 @@ export const LADDER_OVERLAYS: readonly OverlayId[] = ['ladder', 'ladder_result',
  */
 export async function loadLadderChunk(): Promise<Partial<OverlayFactories>> {
   const m = await loadChunk(() => import('./ladder-chunk'), { css: /ladder-chunk-[\w-]+\.css/ });
-  return { ladder: m.createLadderSheet, ladder_result: m.createLadderResult, nickname: m.createNicknameSheet };
+  return { ladder: m.createLadderSheet, ladder_result: m.createLadderResult, nickname: m.createNicknameSheet, ladder_session: m.createLadderSession };
 }
 
 /** Stand-in when no splash factory was given (FBIG builds): an empty screen. */

@@ -591,5 +591,18 @@ export const catalog: LocaleCatalog = {
   'victory.streakReward': 'Nagroda za serię: {reward}',
   'howto.streak': 'Rozwiązuj co najmniej jedną zagadkę dziennie, aby budować serię. Za każde {days} dni z rzędu dostajesz nagrodę: podpowiedzi i kotki. Jeśli opuścisz dzień, seria zaczyna się od dnia 1.',
   'victory.dailyReward': 'Nagroda dnia: {reward}',
+  // ── Leaderboard update ──
+  'ladder.status.online': 'Teraz online',
+  'ladder.status.playing': 'Gra teraz',
+  'ladder.status.minutes': '{count} min temu',
+  'ladder.status.hours': '{count} godz. temu',
+  'ladder.status.days': '{count} d. temu',
+  'ladder.session.title': 'Nowy ranking',
+  'ladder.session.body': 'Rozwiązuj zagadki, zbieraj rybki i wspinaj się w rankingu. Zobacz, jak wysoko zajdziesz, zanim ten ranking się skończy!',
+  'ladder.session.ok': 'Jasne',
+  'ladder.climb.first': 'Wspaniale! Jesteś na pierwszym miejscu!',
+  'ladder.climb.up': 'Super! Awans na miejsce {rank}!',
+  'ladder.info.window.rollingJoin': 'Ranking trwa {hours} godz. Maksymalna liczba graczy: {count}. Gdy się skończy, dołączysz do nowego przy następnym otwarciu gry.',
+  'ladder.info.activity': 'Gracze w twoim rankingu widzą twoją ostatnią aktywność i to, czy właśnie rozwiązujesz zagadkę.',
   ...LOCALE_NAMES,
 };

@@ -54,7 +54,9 @@
             "points": 31,
             "hearts": 4,
             "me": false,
-            "likedByMe": false
+            "likedByMe": false,
+            "seenAt": 1791799801000,
+            "playing": true
           },
           {
             "rank": 2,
@@ -64,7 +66,9 @@
             "points": 16,
             "hearts": 2,
             "me": true,
-            "likedByMe": false
+            "likedByMe": false,
+            "seenAt": 1791799801000,
+            "playing": false
           },
           {
             "rank": 3,
@@ -74,7 +78,9 @@
             "points": 9,
             "hearts": 0,
             "me": false,
-            "likedByMe": true
+            "likedByMe": true,
+            "seenAt": 1791799681000,
+            "playing": false
           }
         ],
         "me": {
@@ -85,7 +91,9 @@
           "points": 16,
           "hearts": 2,
           "me": true,
-          "likedByMe": false
+          "likedByMe": false,
+          "seenAt": 1791799801000,
+          "playing": false
         },
         "final": false,
         "heartsNew": 1,

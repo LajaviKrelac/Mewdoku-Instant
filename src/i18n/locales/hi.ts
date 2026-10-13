@@ -530,5 +530,18 @@ export const catalog: LocaleCatalog = {
   'victory.streakReward': 'सिलसिले का इनाम: {reward}',
   'howto.streak': 'सिलसिला बनाने के लिए रोज़ कम से कम एक पहेली हल करें। लगातार हर {days} दिन पर संकेत और किटी का इनाम मिलता है। एक दिन छूट जाए तो सिलसिला फिर दिन 1 से शुरू होता है।',
   'victory.dailyReward': 'आज का इनाम: {reward}',
+  // ── Leaderboard update ──
+  'ladder.status.online': 'अभी ऑनलाइन',
+  'ladder.status.playing': 'अभी खेल रहे हैं',
+  'ladder.status.minutes': '{count} मि॰ पहले',
+  'ladder.status.hours': '{count} घं॰ पहले',
+  'ladder.status.days': '{count} दिन पहले',
+  'ladder.session.title': 'नई रैंकिंग',
+  'ladder.session.body': 'पहेलियाँ हल करके मछलियाँ इकट्ठा करें और रैंकिंग में ऊपर चढ़ें। देखिए, यह रैंकिंग खत्म होने से पहले आप कितना ऊपर पहुँच सकते हैं!',
+  'ladder.session.ok': 'समझ गए',
+  'ladder.climb.first': 'वाह! आप पहले स्थान पर हैं!',
+  'ladder.climb.up': 'बढ़िया! आप स्थान {rank} पर पहुँच गए!',
+  'ladder.info.window.rollingJoin': 'एक रैंकिंग {hours} घंटे चलती है और उसमें ज़्यादा से ज़्यादा {count} खिलाड़ी होते हैं। उसके खत्म होने पर, अगली बार गेम खोलने पर आप एक नई रैंकिंग में जुड़ जाते हैं।',
+  'ladder.info.activity': 'आपकी रैंकिंग के खिलाड़ी देख सकते हैं कि आप पिछली बार कब सक्रिय थे और क्या आप अभी कोई पहेली खेल रहे हैं।',
   ...LOCALE_NAMES,
 };

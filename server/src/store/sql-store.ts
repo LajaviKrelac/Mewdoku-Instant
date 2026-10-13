@@ -5,10 +5,12 @@
 //   - no interactive transactions: every read-modify-write is guarded statements inside ONE batch, so two
 //     concurrent requests can never double-count (critic C-9, C-10, C-20);
 //   - every hot-path, sweep and stats statement reads by key or index range (EXPLAIN QUERY PLAN test).
-// The ONE statement that inserts a `members` row is in writeWins (H-1: a row exists only after an accepted
-// win; spec §10.6 #2 greps for it). Computer players are never rows (2026-10-12, D-2e-24): no members, players
-// or rewards row exists for one; a bracket created with them carries its tag (brackets.rivals), its frozen
-// final standings keep them in brackets.final_rivals, and a heart on one is an ordinary hearts row.
+// The ONE statement that inserts a `members` row is in writeWins (spec §10.6 #2 greps for it). H-1 as of the
+// leaderboard update: a row exists only for a real, signed-in player, after an accepted win or, when the session
+// asked for it (`join`), at sign-in with 0 fish (writeWins with no wins and `joinEmpty`). Computer players are
+// never rows (2026-10-12, D-2e-24): no members, players or rewards row exists for one; a bracket created with them
+// carries its tag (brackets.rivals), its frozen final standings keep them in brackets.final_rivals, and a heart on
+// one is an ordinary hearts row.
 import type { SqlDb, SqlStatement, SqlValue } from './sql-db';
 import type { BracketRow, FlagRow, MemberRow, PlayerRow, ResultRow, RewardRow } from './rows';
 
@@ -80,6 +82,11 @@ export interface WriteWinsInput {
    * writes nothing (its cap and budget checks were made against a stale state) and the handler evaluates again.
    */
   readonly cas: { readonly expect: string; readonly next: string };
+  /**
+   * Leaderboard update (auto-join at sign-in): with no wins, the join or create still happens (a 0-fish row).
+   * Every other guard holds: a listed, existing player with no running bracket, the token, capacity, the window.
+   */
+  readonly joinEmpty?: boolean;
 }
 
 export interface WriteWinsResult {
@@ -301,17 +308,21 @@ export class SqlStore {
     const cas = 'EXISTS (SELECT 1 FROM players WHERE key = ? AND wtok = ?)';
     const casArgs: SqlValue[] = [key, input.cas.expect];
     // A join (or a new bracket) happens only while the player has no running bracket and at least one of
-    // these wins is not stored yet: a request that lost a race to another request of the same player never
-    // opens a second bracket or leaves a 0-point row (H-1: a row exists only with a counted win).
+    // these wins is not stored yet (or, with `joinEmpty`, the session asked to join): a request that lost a race
+    // to another request of the same player never opens a second bracket or leaves a 0-point row it did not ask for.
     // Audit A: the player row must still exist (EXISTS, not NOT EXISTS), so a join or create racing "Delete my
     // ranking data" never leaves a member row (with the nickname) or win rows of a deleted player behind.
     const freeGuard = 'EXISTS (SELECT 1 FROM players WHERE key = ? AND (cur_ends_at IS NULL OR cur_ends_at <= ?))';
     const newGuard =
       input.wins.length === 0
-        ? '1 = 0'
+        ? input.joinEmpty === true
+          ? // A sign-in join: only a listed player in good standing (a concurrent "Show me in rankings" off wins).
+            "EXISTS (SELECT 1 FROM players WHERE key = ? AND listed = 1 AND status = 'ok')"
+          : '1 = 0'
         : `(${input.wins.map(() => '(NOT EXISTS (SELECT 1 FROM wins WHERE player_key = ? AND puzzle_id = ?) AND NOT EXISTS (SELECT 1 FROM wins WHERE player_key = ? AND win_id = ?))').join(' OR ')})`;
     const guardArgs: SqlValue[] = [key, now];
     for (const w of input.wins) guardArgs.push(key, w.puzzleId, key, w.winId);
+    if (input.wins.length === 0 && input.joinEmpty === true) guardArgs.push(key);
     if (target?.kind === 'create') {
       const b = target.bracket;
       // Integration I-6 (lead): a new bracket opens only while the pool has no joinable one. Without this guard,
@@ -343,8 +354,8 @@ export class SqlStore {
       joinIndex = stmts.length;
       stmts.push(
         this.q(
-          `INSERT INTO members (bracket_id, slot, player_key, nickname, avatar, points, wins, hearts, hearts_seen, hearts_self, scored_at, joined_at, hidden)
-           SELECT b.id, b.next_slot, ?, ?, ?, 0, 0, 0, 0, 0, ?, ?, 0 FROM brackets b
+          `INSERT INTO members (bracket_id, slot, player_key, nickname, avatar, points, wins, hearts, hearts_seen, hearts_self, scored_at, joined_at, hidden, active_at, playing)
+           SELECT b.id, b.next_slot, ?, ?, ?, 0, 0, 0, 0, 0, ?, ?, 0, ?, 0 FROM brackets b
             WHERE b.id = ? AND b.finalized_at IS NULL AND b.join_until > ? AND b.ends_at > ?
               AND (SELECT COUNT(*) FROM members m WHERE m.bracket_id = b.id) < b.max_members
               AND NOT EXISTS (SELECT 1 FROM members m WHERE m.bracket_id = b.id AND m.player_key = ?)
@@ -353,6 +364,7 @@ export class SqlStore {
           key,
           input.nickname,
           input.avatar,
+          now,
           now,
           now,
           bracketId,
@@ -387,12 +399,13 @@ export class SqlStore {
       for (const w of input.wins) {
         stmts.push(
           this.q(
-            `UPDATE members SET points = points + ?, wins = wins + 1, scored_at = ?
+            `UPDATE members SET points = points + ?, wins = wins + 1, scored_at = ?, active_at = ?, playing = 0
               WHERE bracket_id = ? AND player_key = ?
                 AND NOT EXISTS (SELECT 1 FROM wins WHERE player_key = ? AND puzzle_id = ?)
                 AND NOT EXISTS (SELECT 1 FROM wins WHERE player_key = ? AND win_id = ?)
                 AND ${RUNNING} AND ${cas}`,
             w.points,
+            now,
             now,
             bracketId,
             key,
@@ -498,6 +511,23 @@ export class SqlStore {
    */
   async bracketHearts(bracketId: string): Promise<{ from_slot: number; to_slot: number }[]> {
     return (await this.q('SELECT from_slot, to_slot FROM hearts WHERE bracket_id = ?', bracketId).all<{ from_slot: number; to_slot: number }>()).results;
+  }
+
+  /**
+   * Leaderboard update: my own row's activity ("Online now", "Playing now", "2m ago"), in my running bracket only
+   * and only while it is visible (a hidden row is never touched). True when a row changed.
+   */
+  async setPresence(key: string, bracketId: string, now: number, playing: boolean): Promise<boolean> {
+    const r = await this.q(
+      `UPDATE members SET active_at = ?, playing = ? WHERE player_key = ? AND bracket_id = ? AND hidden = 0 AND ${RUNNING}`,
+      now,
+      playing ? 1 : 0,
+      key,
+      bracketId,
+      bracketId,
+      now,
+    ).run();
+    return r.meta.changes > 0;
   }
 
   async setHeartsSeen(bracketId: string, slot: number, seen: number): Promise<void> {

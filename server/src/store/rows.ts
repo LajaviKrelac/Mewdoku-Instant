@@ -69,6 +69,10 @@ export interface MemberRow {
   readonly joined_at: number;
   readonly hidden: number;
   readonly final_rank: number | null;
+  /** Leaderboard update (migration 0003): the last activity, 0 before it. */
+  readonly active_at: number;
+  /** 1: the last presence ping said "in a puzzle". */
+  readonly playing: number;
 }
 
 export interface RewardRow {

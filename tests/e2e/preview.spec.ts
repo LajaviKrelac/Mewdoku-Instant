@@ -20,8 +20,11 @@ import { cfg } from '../../src/app/config';
 import type { AppState } from '../../src/app/store';
 import type { PreviewOp } from '../../preview/ribbon';
 import { watchStrings } from './helpers/strings';
+import { gotItNewRanking } from './helpers/new-ranking';
 
 watchStrings(test);
+// Leaderboard update: the "New ranking" card is closed with Got it whenever it shows.
+gotItNewRanking(test);
 
 type TestWindow = Window & { __mewdoku?: E2EHooks };
 

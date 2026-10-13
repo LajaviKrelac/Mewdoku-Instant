@@ -97,6 +97,13 @@ export interface BracketRowView {
   readonly likedByMe: boolean;
   /** The heart button is enabled (hearts on, not yet given, under the cap, not offline). */
   readonly heartEnabled: boolean;
+  /**
+   * Leaderboard update: the server's last activity of this player on the DEVICE clock (the app applied the offset);
+   * null: no status ("Online now", "Playing now", "2m ago") is shown.
+   */
+  readonly seenAt: number | null;
+  /** The server's "in a puzzle" for this player ("Playing now" while seenAt is recent). */
+  readonly playing: boolean;
 }
 
 /** My bracket for the panel and the sheet (CONTRACTS §8). Never carries an invented row or count. */
@@ -156,7 +163,21 @@ export interface BracketListHandle {
   update(view: BracketListView): void;
   /** Scrolls my row to the middle of the list (after the list is shown and laid out). */
   centerMe(): void;
+  /**
+   * Leaderboard update (the post-win rank-up): my fish count up from `from.points`, then my row rides up from
+   * `from.rank` (null: from below the list) to its place in the current view, the rows it passes stepping down; a
+   * new podium place pops in with confetti. Resolves once it has played (at once with reduced motion or without
+   * my row). Never changes a row, a rank or a number: it animates between the server's last two answers.
+   */
+  playClimb?(from: { readonly rank: number | null; readonly points: number }, reducedMotion: boolean): Promise<ClimbResult>;
   destroy(): void;
+}
+
+/** What the rank-up showed: my place before and now (the panel's bubble). */
+export interface ClimbResult {
+  readonly fromRank: number | null;
+  readonly toRank: number;
+  readonly climbed: boolean;
 }
 
 /**
@@ -219,6 +240,11 @@ export interface RankingPanelProps {
    * a 'bracket' state shows the static skeleton until an update brings it (no fake rows meanwhile).
    */
   readonly bracketList?: BracketListFactory;
+  /**
+   * Leaderboard update (the rank-up): my place and fish in my bracket before this win, as the server last said
+   * (`bracketId` null or another bracket: I come in from below with 0 fish). Absent: no climb.
+   */
+  readonly climbFrom?: { readonly bracketId: string | null; readonly rank: number | null; readonly points: number } | null;
 }
 
 // ─────────────────────────────── shared text helpers ───────────────────────────────
@@ -439,6 +465,10 @@ export function createRankingPanel(): OverlayView<RankingPanelProps> {
   let bracket: { readonly factory: BracketListFactory; readonly handle: BracketListHandle } | null = null;
   let centerAfterOpen = false;
   const live = h('p', { class: 'sr-only', role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true' });
+  // Leaderboard update: the bubble after the rank-up ("Nice! You climbed to #5!"); the live region says the rank.
+  const bubble = h('p', { class: 'ranking__bubble', 'aria-hidden': 'true', hidden: true });
+  /** The rank-up plays once per open, on the first fresh (not cached) bracket list. */
+  let climbPending = false;
   const tap = makeButton({ variant: 'ghost', label: t('rank.tap'), autofocus: true, className: 'ranking__tap', onPress: () => tryContinue() });
   // The footer follows the language (A11Y-I18N-1).
   const L = createLocaleText();
@@ -447,7 +477,7 @@ export function createRankingPanel(): OverlayView<RankingPanelProps> {
     info.setAttribute('aria-label', t('ladder.info'));
   });
   const card = h('div', { class: 'ranking__card' }, head, sub, list);
-  shell.panel.append(card, tap, live);
+  shell.panel.append(bubble, card, tap, live);
   shell.el.style.setProperty('--pop-ms', `${cfg.rank.panelPopMs}ms`);
   shell.el.style.setProperty('--out-ms', `${cfg.rank.panelOutMs}ms`);
   shell.el.style.setProperty('--pulse-ms', `${cfg.rank.tapPulseMs}ms`);
@@ -506,7 +536,8 @@ export function createRankingPanel(): OverlayView<RankingPanelProps> {
       list.replaceWith(handle.el);
       centerAfterOpen = true;
     } else bracket.handle.update(view);
-    if (centerAfterOpen && shell.isOpen()) scheduleCenter();
+    // Leaderboard update: a fresh answer after a cached list still plays the rank-up (once per open).
+    if ((centerAfterOpen || (climbPending && !view.stale && p.climbFrom)) && shell.isOpen()) scheduleCenter();
   };
   const dropBracket = (): void => {
     if (!bracket) return;
@@ -522,7 +553,7 @@ export function createRankingPanel(): OverlayView<RankingPanelProps> {
       centerRaf = 0;
       if (bracket && shell.isOpen()) {
         centerAfterOpen = false;
-        bracket.handle.centerMe();
+        if (!maybeClimb()) bracket.handle.centerMe();
       }
     };
     if (!win?.requestAnimationFrame) return run();
@@ -530,6 +561,26 @@ export function createRankingPanel(): OverlayView<RankingPanelProps> {
     centerRaf = win.requestAnimationFrame(() => {
       centerRaf = win.requestAnimationFrame(run);
     });
+  };
+
+  /**
+   * Leaderboard update: the rank-up on the first fresh bracket list of this open (a cached list does not hold this
+   * win yet). From my place before the win in the same bracket, else from below the list with 0 fish.
+   */
+  const maybeClimb = (): boolean => {
+    const p = props;
+    const handle = bracket?.handle;
+    if (!climbPending || !p || !handle?.playClimb || p.list.kind !== 'bracket' || p.list.view.stale || !p.climbFrom) return false;
+    climbPending = false;
+    const view = p.list.view;
+    const same = p.climbFrom.bracketId !== null && p.climbFrom.bracketId === view.bracketId;
+    const from = same ? { rank: p.climbFrom.rank, points: p.climbFrom.points } : { rank: null, points: 0 };
+    void handle.playClimb(from, p.reducedMotion).then((r) => {
+      if (!shell.isOpen() || !r.climbed) return;
+      setText(bubble, r.toRank === 1 ? t('ladder.climb.first') : t('ladder.climb.up', { rank: formatNumber(r.toRank) }));
+      bubble.hidden = false;
+    });
+    return true;
   };
 
   /** 'overlay' mode: report the list area's rect once it is laid out (and again if the mode returns). */
@@ -561,8 +612,10 @@ export function createRankingPanel(): OverlayView<RankingPanelProps> {
       title,
       records
         ? t('ladder.records.title')
-        : ladder
-          ? t('rank.title.period.day')
+        : p.list.kind === 'bracket'
+          ? t('common.leaderboard') // leaderboard update: the ribbon title over the podium leaderboard
+          : ladder
+            ? t('rank.title.period.day')
           : rankTitle(p.board, p.eventNameKey, p.periodKind ?? (p.result.kind === 'period' ? p.result.periodKind : cfg.period.kind)),
     );
     // Its glyph and the sheet it opens come with the lazy `ladder` chunk: no factory yet, no (i) (never a blank disc).
@@ -591,6 +644,8 @@ export function createRankingPanel(): OverlayView<RankingPanelProps> {
       listKind = null;
       rectFor = null;
       centerAfterOpen = true;
+      climbPending = true;
+      bubble.hidden = true;
       shell.el.classList.remove('is-leaving', 'is-ready');
       setGated(tap, true);
       render(p);

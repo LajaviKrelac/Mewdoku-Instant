@@ -130,6 +130,12 @@
 // server's finalising grace, keeps the hearts and first-time lines per display, tells "offline" from a slow answer and
 // counts queued fish in the HUD counter. A lazy chunk: the first load is unchanged by it.
 //
+// Merge of the computer rivals and the leaderboard update (2026-10-13): each side fit its own ceilings, the two together
+// do not. Only the three lazy rows over budget moved, each to the largest build's measured value + about 3 %: the ladder
+// boot chunk 36.6 → 38.9 KB (37.80 web, 37.75 FBIG: both sides' flow, parsers and presence), the lazy English strings
+// 13.6 → 14.1 (13.70: both sides' new lazy keys), each locale chunk 41.9 → 43.3 (42.05, hi: both sides' copy). Lazy
+// chunks: the first load and its totals are unchanged and within (the + 1 locale total, 470, still binds).
+//
 // Phase 2e I-4: every dir measured is also run through scripts/release-check.ts (test data in any bundle; the release
 // rules in dist/release-*), and a problem fails the check like a budget does.
 //
@@ -200,7 +206,8 @@ export const BUDGETS: readonly SizeBudget[] = [
   { label: 'Font', pattern: /\.woff2$/, maxBytes: 17 * KB, firstLoad: true },
   { label: 'index.html', pattern: /^index\.html$/, maxBytes: 1.14 * KB, firstLoad: true },
   { label: 'Worker JS (lazy)', pattern: /^assets\/[^/]*worker[^/]*\.js$/, maxBytes: 18.5 * KB },
-  { label: 'Locale chunk (each)', pattern: LOCALE_CHUNK, maxBytes: 41.9 * KB, perFile: true },
+  // Merge (2026-10-13, the header note): 41.9 → 43.3.
+  { label: 'Locale chunk (each)', pattern: LOCALE_CHUNK, maxBytes: 43.3 * KB, perFile: true },
   { label: 'Lazy JS (optional)', pattern: /^assets\/(?:events|fb-social|social-flows)-[^/]*\.js$/, maxBytes: 29.3 * KB },
   // Phase 2d.1 (I-4): the fx chunk (src/ui/fx/celebrate.ts), prefetched at idle after the first game screen mounts.
   { label: 'Lazy JS (fx chunk)', pattern: /^assets\/celebrate-[^/]*\.js$/, maxBytes: 15.3 * KB },
@@ -210,21 +217,29 @@ export const BUDGETS: readonly SizeBudget[] = [
   { label: 'Lazy JS (lazy art)', pattern: /^assets\/lazy-art-[^/]*\.js$/, maxBytes: 4.4 * KB },
   // Phase 2e: the lazy ranking chunk (src/app/ladder-chunk.ts; L0's placeholder ceiling re-set at I-4).
   // The 8-character hash keeps chunks named after other ladder-* modules (ladder-flow, ladder-sheet, …) out of it.
-  { label: 'Lazy JS (ladder)', pattern: /^assets\/ladder-[\w-]{8}\.js$/, maxBytes: 30.5 * KB },
+  // Leaderboard update (2026-10-12): 30.0 → 37.9 KB measured (the podium, the status pills, the rank-up and the
+  // "New ranking" card); lazy, never on the first load.
+  { label: 'Lazy JS (ladder)', pattern: /^assets\/ladder-[\w-]{8}\.js$/, maxBytes: 38.5 * KB },
   // Phase 2e I-4: the ladder's sign-in, sync, remote config and response parsers (src/app/ladder-boot.ts), loaded after
   // the first screen when the ranking is on.
-  { label: 'Lazy JS (ladder boot)', pattern: /^assets\/ladder-boot-[\w-]{8}\.js$/, maxBytes: 36.4 * KB },
+  // Post-win and ranking fixes (2026-10-12, the header note): 34.9 → 36.4. Leaderboard update (2026-10-12): 33.9 → 36.2 KB
+  // measured (presence, the card, the parsers' activity) → 36.6. Merged (2026-10-13): both sides together measured
+  // 37.80 KB → 38.9 (the header note).
+  { label: 'Lazy JS (ladder boot)', pattern: /^assets\/ladder-boot-[\w-]{8}\.js$/, maxBytes: 38.9 * KB },
   // Phase 2e I-4: the overlay chunk (src/app/overlay-chunk.ts: every core overlay, Home's chip and strip), on its own row.
   { label: 'Lazy JS (overlay chunk)', pattern: /^assets\/overlay-chunk-[\w-]{8}\.js$/, maxBytes: 56.2 * KB },
   // Phase 2e I-4: the English strings only lazy chunks show (src/i18n/en-lazy.ts), shared by those chunks.
-  { label: 'Lazy JS (English)', pattern: /^assets\/en-lazy-[\w-]{8}\.js$/, maxBytes: 13.6 * KB },
+  // Merge (2026-10-13, the header note): 13.6 → 14.1.
+  { label: 'Lazy JS (English)', pattern: /^assets\/en-lazy-[\w-]{8}\.js$/, maxBytes: 14.1 * KB },
   // The rest: the hint card, RPC, sounds, the generator and the grader (re-set at 2e I-4 when the rows above split out).
   { label: 'Lazy JS (core)', pattern: /^assets\/[^/]*\.js$/, maxBytes: 23.3 * KB },
   { label: 'Lazy CSS (fx chunk)', pattern: /^assets\/celebrate-[^/]*\.css$/, maxBytes: 3.26 * KB },
   { label: 'Lazy CSS (board motion)', pattern: /^assets\/board-mouse-[^/]*\.css$/, maxBytes: 6.4 * KB },
   // Phase 2e: the ladder chunk's own stylesheet (the CSS keeps the barrel's name, as events-chunk-*.css does; L0's
   // placeholder ceiling re-set at I-4).
-  { label: 'Lazy CSS (ladder)', pattern: /^assets\/ladder-chunk-[\w-]{8}\.css$/, maxBytes: 11.05 * KB },
+  // Leaderboard update (2026-10-12): 11.0 → 21.6 KB measured (the podium, the pills, the rank-up's motion, the card,
+  // the short and narrow screens).
+  { label: 'Lazy CSS (ladder)', pattern: /^assets\/ladder-chunk-[\w-]{8}\.css$/, maxBytes: 22.2 * KB },
   // Phase 2e I-4: the overlay chunk's stylesheet (with Home's chip and strip since I-4), on its own row.
   { label: 'Lazy CSS (overlay chunk)', pattern: /^assets\/overlay-chunk-[\w-]{8}\.css$/, maxBytes: 33.5 * KB },
   // The rest: the events chunk's stylesheet (re-set at 2e I-4 when the overlay chunk's row split out).

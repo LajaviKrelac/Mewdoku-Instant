@@ -1238,6 +1238,19 @@ export interface GameConfig {
      * among them. Never more rows than the server returned, never a placeholder row.
      */
     readonly panelRows: number;
+    /**
+     * Leaderboard update (user: "when user logs in it auto joins event by default"): the sign-in asks the server
+     * to join a bracket at once (0 fish), so the leaderboard and its countdown are there before the first win.
+     */
+    readonly autoJoin: boolean;
+    /** Leaderboard update: the "New Session" card on Home once per bracket I was joined to without a win yet. */
+    readonly newSessionCard: boolean;
+    /**
+     * Leaderboard update: the rows' "Online now" / "Playing now" / "2m ago" (the server's seenAt and playing).
+     * My own state is pinged (POST /v1/presence) when it changes and at most every `pingMs` while it stays;
+     * a row seen within `nowMs` reads "… now", older ones "N m ago". Off: no ping and no status.
+     */
+    readonly presence: { readonly enabled: boolean; readonly pingMs: number; readonly nowMs: number };
   };
   /**
    * Phase 2e (spec §5; user: "Daily Streak - same as in meowdoku"). OUR provisional design: the only
@@ -1639,6 +1652,9 @@ export const cfg: GameConfig = deepFreeze({
     heartsNotify: true,
     countdownTickMs: 60_000,
     panelRows: 0,
+    autoJoin: true,
+    newSessionCard: true,
+    presence: { enabled: true, pingMs: 90_000, nowMs: 180_000 },
   },
   dayStreak: {
     enabled: true,

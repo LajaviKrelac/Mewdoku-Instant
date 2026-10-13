@@ -591,5 +591,18 @@ export const catalog: LocaleCatalog = {
   'victory.streakReward': 'Награда за серию: {reward}',
   'howto.streak': 'Решайте хотя бы один пазл в день, чтобы собрать серию. За каждую серию длиной {days} дн. подряд вы получаете подсказки и котиков. Если пропустить день, серия начнётся снова с дня 1.',
   'victory.dailyReward': 'Награда дня: {reward}',
+  // ── Leaderboard update ──
+  'ladder.status.online': 'Сейчас в сети',
+  'ladder.status.playing': 'Сейчас играет',
+  'ladder.status.minutes': '{count} мин назад',
+  'ladder.status.hours': '{count} ч назад',
+  'ladder.status.days': '{count} дн. назад',
+  'ladder.session.title': 'Новый рейтинг',
+  'ladder.session.body': 'Решайте пазлы, собирайте рыбок и поднимайтесь в рейтинге. Посмотрите, как высоко вы подниметесь до конца этого рейтинга!',
+  'ladder.session.ok': 'Понятно',
+  'ladder.climb.first': 'Чудесно! Вы на первом месте!',
+  'ladder.climb.up': 'Отлично! Вы поднялись на место {rank}!',
+  'ladder.info.window.rollingJoin': 'Рейтинг длится {hours} ч, игроков в нём не больше {count}. Когда он закончится, вы попадёте в новый при следующем запуске игры.',
+  'ladder.info.activity': 'Игроки в вашем рейтинге видят, когда вы последний раз были активны и решаете ли вы сейчас пазл.',
   ...LOCALE_NAMES,
 };

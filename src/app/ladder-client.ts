@@ -17,6 +17,7 @@ import {
   parseHeartResponse,
   parseMeResponse,
   parseNonceResponse,
+  parsePresenceResponse,
   parseProfileResponse,
   parseSessionResponse,
   parseWinsResponse,
@@ -28,6 +29,8 @@ import {
   type ErrorCode,
   type HeartResponse,
   type MeResponse,
+  type PresenceResponse,
+  type PresenceState,
   type ProfileRequest,
   type ProfileResponse,
   type SessionRequest,
@@ -49,6 +52,8 @@ export interface LadderClient {
   signIn(): Promise<LadderResult<SessionResponse>>;
   submitWins(wins: readonly WinSubmission[], timeoutMs?: number): Promise<LadderResult<WinsResponse>>;
   bracket(): Promise<LadderResult<BracketView>>;
+  /** Leaderboard update: my row's activity ("Online now" / "Playing now" for the other members). */
+  presence(state: PresenceState): Promise<LadderResult<PresenceResponse>>;
   claim(rewardId: string, double: boolean): Promise<LadderResult<ClaimResponse>>;
   heart(bracketId: string, slot: number): Promise<LadderResult<HeartResponse>>;
   setProfile(p: ProfileRequest): Promise<LadderResult<ProfileResponse>>;
@@ -246,6 +251,8 @@ export function createLadderClient(deps: LadderClientDeps): LadderClient {
       clientVersion: deps.clientVersion,
       contentVersion: deps.contentVersion,
       ...(deps.devPool ? { devPool: deps.devPool } : {}),
+      // Leaderboard update: join a bracket at sign-in (the server joins only a listed player in none).
+      ...(c.ladder.autoJoin ? { join: true } : {}),
     };
     let req: SessionRequest;
     if (deps.platformId === 'fbig') {
@@ -291,6 +298,7 @@ export function createLadderClient(deps: LadderClientDeps): LadderClient {
     },
     submitWins: (wins, timeoutMs) => authed('POST', '/v1/wins', { wins }, parseWinsResponse, timeoutMs),
     bracket: () => authed('GET', '/v1/bracket', undefined, parseBracketView),
+    presence: (state) => authed('POST', '/v1/presence', { state }, parsePresenceResponse),
     claim: (rewardId, double) => authed('POST', '/v1/rewards/claim', { rewardId, double }, parseClaimResponse),
     heart: (bracketId, slot) => authed('POST', '/v1/hearts', { bracketId, slot }, parseHeartResponse),
     setProfile: (p) => authed('PUT', '/v1/me/profile', p, parseProfileResponse),

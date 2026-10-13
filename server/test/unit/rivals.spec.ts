@@ -4,6 +4,9 @@
 // the finalisation plan, rival heart targets, and the switches (config + who gets rivals).
 // 2026-10-12, r2: section 12 tests preset r2 (new brackets) the same way, plus its replay of the real joins and its
 // calibration bands; sections 1–11 keep testing r1 (brackets() keeps their r1 tags).
+// 2026-10-13 (merge with the leaderboard update): section 13 tests the computer players' activity (core/table.ts
+// rivalActivity, on the live and the final tables; the review fix: the opening group's first sighting before the
+// opening, core/rivals.ts openingSeenBefore) and the K rule / r2 replay with auto-joined 0-fish members.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -21,6 +24,7 @@ import {
   isRivalSlot,
   liveRivalCount,
   newRivalsTag,
+  openingSeenBefore,
   parseRivalsTag,
   RIVAL_SLOT_BASE,
   RIVAL_TAG_RE,
@@ -40,9 +44,14 @@ import {
   liveRivals,
   liveTable,
   pointsForRank,
+  RIVAL_PING_MS,
+  RIVAL_SESSION_GAP_MS,
+  RIVAL_TAIL_MS,
+  rivalActivity,
   rivalHeartTarget,
   withRealHearts,
   type RankedRow,
+  type RivalActivity,
 } from '../../src/core/table';
 import { makeServices, rivalsForPool, rivalsNoteFor, type DevState } from '../../src/services';
 import type { BracketRow, MemberRow } from '../../src/store/rows';
@@ -94,6 +103,9 @@ function member(slot: number, over: Partial<MemberRow> = {}): MemberRow {
     joined_at: O,
     hidden: 0,
     final_rank: null,
+    // Leaderboard update (migration 0003_presence.sql): no presence ping yet.
+    active_at: 0,
+    playing: 0,
     ...over,
   };
 }
@@ -1460,5 +1472,283 @@ describe('r2 CPU (2026-10-12, r2)', () => {
       times.push(performance.now() - t0);
     }
     expect(median(times)).toBeLessThan(3); // measured 2026-10-12: about 0.5 ms
+  });
+});
+
+// ── 13. activity and auto-joined members (2026-10-13, merge with the leaderboard update) ───────────────────
+// The leaderboard update gives every row seenAt / playing ("Playing now", "Online now", "2m ago") and joins a player
+// at sign-in with 0 fish. A computer player's activity comes from its script (rivalActivity): playing from a
+// session's first win to RIVAL_TAIL_MS after its last, seenAt its last scoring moment plus whole ping ticks; an
+// auto-joined member takes a slot and a joined_at like any member, so K and the r2 replay treat it the same.
+// 2026-10-13 (review): the opening group's arrival at opened_at (the same ms for all 8…12) is not a moment anyone saw
+// them: until such a rival's first scoring moment after the opening it was last seen openingSeenBefore before it.
+
+/**
+ * The moment rival `x` was last seen at or before its first scoring moment, independently of the code: its arrival,
+ * or for the opening group (arrival at opened_at) opened_at − openingSeenBefore (never below 0).
+ */
+const firstSeen = (key: readonly number[], x: Roster['rivals'][number], b: BracketRow): number =>
+  x.arrivalAt === b.opened_at ? Math.max(0, b.opened_at - openingSeenBefore(key, x.index)) : x.arrivalAt;
+
+/** A rival's sessions, grouped independently of the code: its first sighting (firstSeen) and wins, split where a gap exceeds RIVAL_SESSION_GAP_MS. */
+function sessionsOf(key: readonly number[], x: Roster['rivals'][number], b: BracketRow): { first: number; last: number }[] {
+  const out: { first: number; last: number }[] = [];
+  for (const e of [firstSeen(key, x, b), ...x.wins.map((w) => w.t)]) {
+    const cur = out[out.length - 1];
+    if (cur && e - cur.last <= RIVAL_SESSION_GAP_MS) cur.last = e;
+    else out.push({ first: e, last: e });
+  }
+  return out;
+}
+
+/** The times worth checking for one rival: around each scoring moment, inside gaps, after the tails, plus random ones. */
+function probeTimes(key: readonly number[], x: Roster['rivals'][number], b: BracketRow, rng: Rng): number[] {
+  const events = [firstSeen(key, x, b), ...x.wins.map((w) => w.t)];
+  const out = [x.arrivalAt - 1, x.arrivalAt, x.arrivalAt + 1];
+  events.forEach((e, i) => {
+    out.push(e, e + 1, e + RIVAL_PING_MS - 1, e + RIVAL_PING_MS, e + RIVAL_TAIL_MS, e + RIVAL_TAIL_MS + 1, e + RIVAL_TAIL_MS + RIVAL_PING_MS);
+    const next = events[i + 1];
+    if (next !== undefined) out.push(Math.floor((e + next) / 2), next - 1);
+  });
+  for (let k = 0; k < 12; k++) out.push(int(rng, b.opened_at, b.ends_at));
+  return out.filter((t) => t >= b.opened_at && t <= b.ends_at).sort((p, q) => p - q);
+}
+
+describe('computer players\' activity (2026-10-13, merge: rivalActivity)', () => {
+  it('r2, 120 tags: playing exactly inside a session (first sighting or win … last win + tail); seenAt an integer, ≤ t, ≥ the last sighting, at most a ping old while playing; it only grows', () => {
+    const rng = seededRng(1301);
+    let playingSeen = 0,
+      awaySeen = 0,
+      beforeOpen = 0;
+    for (const b of brackets(120, 1302, true, 'r2')) {
+      const rs = roster(b);
+      for (const x of rs.rivals) {
+        const sessions = sessionsOf(rs.key, x, b);
+        let prev: RivalActivity | null = null;
+        for (const t of probeTimes(rs.key, x, b, rng)) {
+          const a = rivalActivity(rs.key, x, b, t);
+          if (t < x.arrivalAt) {
+            expect(a, 'nothing before the arrival').toBeNull();
+            continue;
+          }
+          const v = rivalAt(x, b.join_until, t) as { scoredAt: number };
+          // The last sighting: the opening group's first one is before the opening, every other is a scoring moment.
+          const last = v.scoredAt === x.arrivalAt ? firstSeen(rs.key, x, b) : v.scoredAt;
+          const act = a as RivalActivity;
+          const playing = sessions.some((q) => q.first <= t && t <= q.last + RIVAL_TAIL_MS);
+          if (act.playing !== playing) expect.fail(`${b.rivals} rival ${x.index} at +${t - b.opened_at} ms: playing ${act.playing}, sessions say ${playing}`);
+          if (!(Number.isInteger(act.seenAt) && act.seenAt <= t && act.seenAt >= last)) expect.fail(`seenAt ${act.seenAt} outside [last ${last}, t ${t}]`);
+          if (act.seenAt < x.arrivalAt) {
+            beforeOpen++;
+            expect(x.arrivalAt, 'only the opening group is seen before its arrival').toBe(b.opened_at);
+            expect(v.scoredAt, 'and only until its first scoring moment after the opening').toBe(x.arrivalAt);
+          }
+          if (act.playing) {
+            playingSeen++;
+            expect(t - act.seenAt).toBeLessThan(RIVAL_PING_MS);
+          } else {
+            awaySeen++;
+            expect(act.seenAt).toBeLessThanOrEqual(last + RIVAL_TAIL_MS);
+          }
+          if (prev && act.seenAt < prev.seenAt) expect.fail(`seenAt fell at +${t - b.opened_at} ms`);
+          prev = act;
+        }
+        const seen = x.arrivalAt === b.opened_at ? x.wins.map((w) => w.t) : [x.arrivalAt, ...x.wins.map((w) => w.t)];
+        for (const e of seen) expect(rivalActivity(rs.key, x, b, e)).toEqual({ seenAt: e, playing: true });
+      }
+    }
+    expect(playingSeen).toBeGreaterThan(1000);
+    expect(awaySeen).toBeGreaterThan(1000);
+    expect(beforeOpen).toBeGreaterThan(100);
+  });
+
+  it('r1, 60 tags: nothing before the arrival; seenAt ≤ t and ≥ the last sighting, growing; a post-window win is "playing now"', () => {
+    const rng = seededRng(1303);
+    for (const b of brackets(60, 1304)) {
+      const rs = roster(b);
+      for (const x of rs.rivals) {
+        let prev = -Infinity;
+        for (const t of probeTimes(rs.key, x, b, rng)) {
+          const a = rivalActivity(rs.key, x, b, t);
+          if (t < x.arrivalAt) {
+            expect(a).toBeNull();
+            continue;
+          }
+          const act = a as RivalActivity;
+          const v = rivalAt(x, b.join_until, t) as { scoredAt: number };
+          const last = v.scoredAt === x.arrivalAt ? firstSeen(rs.key, x, b) : v.scoredAt;
+          expect(act.seenAt >= last && act.seenAt <= t && Number.isInteger(act.seenAt)).toBe(true);
+          if (act.playing) expect(t - act.seenAt).toBeLessThan(RIVAL_PING_MS);
+          expect(act.seenAt).toBeGreaterThanOrEqual(prev);
+          prev = act.seenAt;
+        }
+        for (const w of x.wins) expect(rivalActivity(rs.key, x, b, w.t)).toEqual({ seenAt: w.t, playing: true });
+      }
+    }
+  });
+
+  it('a session by hand: wins 3 and 5 min apart play through; the tail ends 2 min after the last win; seenAt ticks every 90 s', () => {
+    const a0 = O + HOUR;
+    const key = [1, 2, 3, 4];
+    const times = { opened_at: O, join_until: O + 2 * HOUR };
+    const x = { index: 0, slot: 9000, arrivalAt: a0, base: 2, pace: 0, wins: [{ t: a0 + 3 * MIN, f: 3 }, { t: a0 + 8 * MIN, f: 2 }, { t: a0 + 40 * MIN, f: 1 }], hearts: [] };
+    const at = (m: number, ms = 0): RivalActivity | null => rivalActivity(key, x, times, a0 + m * MIN + ms);
+    expect(rivalActivity(key, x, times, a0 - 1)).toBeNull();
+    expect(at(0)).toEqual({ seenAt: a0, playing: true });
+    expect(at(2)).toEqual({ seenAt: a0 + 90_000, playing: true });
+    expect(at(7)).toEqual({ seenAt: a0 + 3 * MIN + 2 * 90_000, playing: true }); // 3 → 8 min: still the same session
+    expect(at(10)).toEqual({ seenAt: a0 + 8 * MIN + 90_000, playing: true }); // the tail
+    expect(at(10, 1)).toEqual({ seenAt: a0 + 8 * MIN + 90_000, playing: false }); // after it: last seen at the last tick
+    expect(at(39)).toEqual({ seenAt: a0 + 8 * MIN + 90_000, playing: false }); // the next win is 32 min later: no session
+    expect(at(40)).toEqual({ seenAt: a0 + 40 * MIN, playing: true });
+  });
+
+  it('the opening group by hand (review): last seen openingSeenBefore before the opening until its first win, whatever the arrival win says', () => {
+    const key = [11, 22, 33, 44];
+    const times = { opened_at: O, join_until: O + 2 * HOUR };
+    const ix = Array.from({ length: 400 }, (_, i) => i);
+    const long = ix.find((i) => openingSeenBefore(key, i) >= 10 * MIN) as number;
+    const short = ix.find((i) => openingSeenBefore(key, i) < RIVAL_TAIL_MS) as number;
+    expect(long).toBeDefined();
+    expect(short).toBeDefined();
+    // Long ago: away at the opening ("Nm ago"), the same until the first win 30 min in, then playing.
+    const d = openingSeenBefore(key, long);
+    const x = { index: long, slot: 9000 + long, arrivalAt: O, base: 3, pace: 0, wins: [{ t: O + 30 * MIN, f: 2 }], hearts: [] };
+    expect(rivalActivity(key, x, times, O)).toEqual({ seenAt: O - d + RIVAL_PING_MS, playing: false });
+    expect(rivalActivity(key, x, times, O + 29 * MIN)).toEqual({ seenAt: O - d + RIVAL_PING_MS, playing: false });
+    expect(rivalActivity(key, x, times, O + 30 * MIN)).toEqual({ seenAt: O + 30 * MIN, playing: true });
+    // A minute or so ago: still in its tail at the opening ("Playing now"), then away until its first win.
+    const e = openingSeenBefore(key, short);
+    const y = { ...x, index: short, slot: 9000 + short };
+    expect(rivalActivity(key, y, times, O)).toEqual({ seenAt: O - e + Math.floor(e / RIVAL_PING_MS) * RIVAL_PING_MS, playing: true });
+    expect(rivalActivity(key, y, times, O - e + RIVAL_TAIL_MS + 1)).toEqual({ seenAt: O - e + RIVAL_PING_MS, playing: false });
+    // A first win within the session gap of that sighting: playing from the opening through the win.
+    const z = { ...y, wins: [{ t: O - e + RIVAL_SESSION_GAP_MS, f: 1 }] };
+    expect(rivalActivity(key, z, times, O + RIVAL_TAIL_MS)?.playing).toBe(true);
+    // A rival arriving after the opening is seen at its arrival (its arrival win), as a real joiner is.
+    const w = { ...x, arrivalAt: O + 1 };
+    expect(rivalActivity(key, w, times, O + 1)).toEqual({ seenAt: O + 1, playing: true });
+    // Never below 0 (a synthetic bracket opened near the epoch).
+    expect(rivalActivity(key, { ...x, arrivalAt: 0, wins: [] }, { opened_at: 0, join_until: 2 * HOUR }, 0)).toEqual({ seenAt: 0, playing: true });
+  });
+
+  it('openingSeenBefore: 1 min … 20 h before the opening, in the documented shares; a pure function of the key and the index', () => {
+    const counts = [0, 0, 0, 0];
+    let n = 0;
+    for (const b of brackets(200, 1306, true, 'r2')) {
+      const rs = roster(b);
+      for (const x of rs.rivals) {
+        const d = openingSeenBefore(rs.key, x.index);
+        expect(d).toBe(openingSeenBefore([...rs.key], x.index));
+        expect(Number.isInteger(d) && d >= MIN && d < 20 * HOUR).toBe(true);
+        const band = d < 10 * MIN ? 0 : d < HOUR ? 1 : d < 5 * HOUR ? 2 : 3;
+        counts[band] = (counts[band] as number) + 1;
+        n++;
+      }
+    }
+    const share = counts.map((c) => Math.round((100 * c) / n));
+    expect(share[0]).toBeGreaterThanOrEqual(17);
+    expect(share[0]).toBeLessThanOrEqual(23);
+    expect(share[1]).toBeGreaterThanOrEqual(27);
+    expect(share[1]).toBeLessThanOrEqual(33);
+    expect(share[2]).toBeGreaterThanOrEqual(27);
+    expect(share[2]).toBeLessThanOrEqual(33);
+    expect(share[3]).toBeGreaterThanOrEqual(17);
+    expect(share[3]).toBeLessThanOrEqual(23);
+  });
+
+  it('the opening group does not share one status (review): r2, 200 tags, at the opening and in its first hour', () => {
+    let groups = 0,
+      clashes = 0,
+      allPlaying = 0;
+    for (const b of brackets(200, 1307, true, 'r2')) {
+      const rs = roster(b);
+      const opening = rs.rivals.filter((x) => x.arrivalAt === b.opened_at);
+      expect(opening.length).toBeGreaterThanOrEqual(8);
+      for (const dt of [0, MIN, 150_000, 5 * MIN, 20 * MIN, HOUR]) {
+        const acts = opening.map((x) => rivalActivity(rs.key, x, b, b.opened_at + dt) as RivalActivity);
+        const bySeen = new Map<number, number>();
+        for (const a of acts) bySeen.set(a.seenAt, (bySeen.get(a.seenAt) ?? 0) + 1);
+        groups++;
+        if (Math.max(...bySeen.values()) > 1) clashes++;
+        if (acts.every((a) => a.playing)) allPlaying++;
+        // Nobody still "seen" at the opening itself or a ping after it: those were the arrival's shared moments.
+        expect(acts.filter((a) => a.seenAt === b.opened_at || a.seenAt === b.opened_at + RIVAL_PING_MS)).toEqual([]);
+      }
+    }
+    expect(clashes).toBe(0);
+    expect(allPlaying).toBe(0);
+    expect(groups).toBe(1200);
+  });
+
+  it('the live table carries each rival\'s activity at the clamped time (none on real rows); the final table freezes it at ends_at', () => {
+    for (const b0 of brackets(30, 1305, true, 'r2')) {
+      const b = { ...b0, next_slot: 2, members: 2 };
+      const members = [member(0, { points: 7, scored_at: b.opened_at + HOUR, joined_at: b.opened_at }), member(1, { points: 0, scored_at: b.opened_at + 30 * MIN, joined_at: b.opened_at + 30 * MIN })];
+      const rs = roster(b);
+      const scripts = new Map(rs.rivals.map((x) => [x.slot, x]));
+      for (const at of [b.opened_at - MIN, b.opened_at + 3 * HOUR, b.opened_at + 13 * HOUR + 7 * MIN, b.ends_at, b.ends_at + HOUR]) {
+        const t = Math.min(Math.max(at, b.opened_at), b.ends_at);
+        for (const row of liveTable(b, members, at, false)) {
+          if (row.kind === 'player') expect(row.activity).toBeUndefined();
+          else expect(row.activity).toEqual(rivalActivity(rs.key, scripts.get(row.slot) as Roster['rivals'][number], b, t));
+        }
+      }
+      const atEnd = new Map(freezeTable(b, members, false).filter((r) => r.kind === 'rival').map((r) => [r.slot, r.activity]));
+      const plan = finalPlan(b, members, DEFAULT_CONFIG, b.ends_at + HOUR, true);
+      const fb = { ...b, finalized_at: b.ends_at + HOUR, final_members: plan.totals.finalMembers, final_real: plan.totals.finalReal, final_rivals: plan.totals.finalRivals };
+      const rankOf = new Map(plan.ranks.map((r) => [r.slot, r.rank]));
+      const finals = finalTable(fb, members.map((m) => ({ ...m, final_rank: rankOf.get(m.slot) ?? null })), false);
+      expect(finals.filter((r) => r.kind === 'rival').map((r) => [r.slot, r.activity])).toEqual([...atEnd.entries()].filter(([slot]) => finals.some((r) => r.slot === slot)));
+      expect(finals.filter((r) => r.kind === 'rival').length).toBe(atEnd.size);
+      // A tag that no longer parses: the snapshot rows stay, last seen at their last win, not playing.
+      const broken = finalTable({ ...fb, rivals: 'garbage' }, members, false).filter((r) => r.kind === 'rival');
+      expect(broken.every((r) => r.activity?.seenAt === r.scoredAt && r.activity.playing === false)).toBe(true);
+    }
+  });
+});
+
+describe('auto-joined 0-fish members with computer players (2026-10-13, merge)', () => {
+  it('a 0-fish join takes a slot and a joined_at like a scored one: the same K, the same r2 replay, ≤ max_members rows, ranked below every rival', () => {
+    const rng = seededRng(1311);
+    for (const preset of ['r1', 'r2'] as const) {
+      for (const b0 of brackets(60, 1312, true, preset)) {
+        const n = int(rng, 1, 30);
+        const times = Array.from({ length: n }, () => int(rng, b0.opened_at, b0.join_until - 1)).sort((p, q) => p - q);
+        const b = { ...b0, next_slot: n, members: n };
+        const empty = times.map((t, i) => member(i, { points: 0, scored_at: t, joined_at: t }));
+        const scored = times.map((t, i) => member(i, { points: int(rng, 1, 30), scored_at: t, joined_at: t }));
+        const r = roster(b);
+        const lr = (ms: readonly MemberRow[]): unknown => {
+          const x = liveRivals(r, b, ms);
+          return [x.live.map((q) => q.slot), x.retired.map((q) => [q.script.slot, q.at])];
+        };
+        expect(lr(empty), `${b.rivals}: the replay ignores points`).toEqual(lr(scored));
+        expect(liveRivalCountOf(r, b, empty)).toBe(liveRivalCountOf(r, b, scored));
+        for (const at of [b.join_until, b.opened_at + 8 * HOUR, b.ends_at]) {
+          const rows = liveTable(b, empty, at, false);
+          expect(rows.length).toBeLessThanOrEqual(b.max_members);
+          const firstReal = rows.findIndex((x) => x.kind === 'player');
+          expect(rows.slice(firstReal).every((x) => x.kind === 'player'), 'every 0-fish row ranks below every computer player').toBe(true);
+          expect(rows.filter((x) => x.kind === 'player').length).toBe(n);
+        }
+      }
+    }
+  });
+
+  it('a 0-fish member is ranked and never paid; a scored one beside it is paid as before', () => {
+    const at = O + DAY + HOUR;
+    for (const b0 of brackets(40, 1313, true, 'r2')) {
+      const b = { ...b0, next_slot: 3, members: 3 };
+      const t = b.opened_at + 20 * MIN;
+      const zeros = [0, 1, 2].map((i) => member(i, { points: 0, scored_at: t + i, joined_at: t + i }));
+      const plan = finalPlan(b, zeros, DEFAULT_CONFIG, at, true);
+      expect(plan.rewards).toEqual([]);
+      expect(plan.ranks.map((x) => x.slot)).toEqual([0, 1, 2]);
+      expect(plan.ranks.map((x) => x.rank)).toEqual([plan.totals.finalMembers - 2, plan.totals.finalMembers - 1, plan.totals.finalMembers]);
+      const strong = [member(0, { points: 400, scored_at: t, joined_at: t }), ...zeros.slice(1)];
+      const paid = finalPlan(b, strong, DEFAULT_CONFIG, at, true);
+      expect(paid.rewards.map((w) => [w.playerKey, w.place])).toEqual([['key-0', 1]]);
+    }
   });
 });

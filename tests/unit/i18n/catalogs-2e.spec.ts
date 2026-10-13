@@ -44,12 +44,13 @@ describe('Phase 2e English (Appendix A, ours)', () => {
 
   it('honesty: no invented statistic, no promise that queued fish count, no urgency (H-2, H-4, §5.1)', () => {
     const all = KEYS.map((k) => `${k}: ${E2[k]}`).join('\n');
-    expect(all).not.toMatch(/online now|players online|% of|most players|everyone is|join thousands/i);
+    // Leaderboard update: "Online now" only as one row's status (the server's seenAt for that one player).
+    expect(KEYS.filter((k) => k !== 'ladder.status.online').map((k) => `${k}: ${E2[k]}`).join('\n')).not.toMatch(/online now|players online|% of|most players|everyone is|join thousands/i);
     expect(all).not.toMatch(/will be (sent|counted)|will count|guaranteed/i);
     expect(all).not.toMatch(/hurry|don't lose|lose your streak|last chance|before it'?s too late/i);
     // Player counts appear only where the server's number or rule goes in.
     const counted = KEYS.filter((k) => /\{count\} players?\b/.test(E2[k] as string));
-    expect(counted.sort()).toEqual(['ladder.info.window.rolling', 'ladder.info.window.utcDay', 'ladder.players.other', 'ladder.players.one', 'ladder.rewards.min'].sort());
+    expect(counted.sort()).toEqual(['ladder.info.window.rolling', 'ladder.info.window.rollingJoin', 'ladder.info.window.utcDay', 'ladder.players.other', 'ladder.players.one', 'ladder.rewards.min'].sort());
   });
 
   it('"ranking" never "leaderboard"; a heart is a cheer, never a life (glossary)', () => {

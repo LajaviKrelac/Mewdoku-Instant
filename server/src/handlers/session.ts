@@ -19,6 +19,7 @@ import { limitByIp } from '../http/auth';
 import { readJson } from '../http/json';
 import { rivalsNoteFor } from '../services';
 import type { PlayerRow } from '../store/sql-store';
+import { joinOnSession } from './join';
 import { bracketView, finalizeIfDue, playerView, resultsFor, rulesView, summaryOf } from './views';
 
 export async function postNonce(ctx: Ctx): Promise<Response> {
@@ -163,6 +164,13 @@ export async function postSession(ctx: Ctx): Promise<Response> {
   }
   ctx.fields.code = player.code;
   if (player.cur_bracket !== null && (player.cur_ends_at ?? 0) <= now) await finalizeIfDue(s, player.cur_bracket, now);
+  // Leaderboard update: the auto-join (`join`), else "Online now" on my row of my running bracket.
+  let joined = false;
+  if (body.join === true) ({ player, joined } = await joinOnSession(s, player, now));
+  if (!joined && s.cfg.presence.enabled && player.listed === 1 && player.cur_bracket !== null && (player.cur_ends_at ?? 0) > now) {
+    await s.store.setPresence(key, player.cur_bracket, now, false);
+  }
+  if (joined) ctx.fields.joined = 1;
   const [results, view] = await Promise.all([resultsFor(s, key, now), bracketView(s, player, now)]);
   const expiresAt = now + s.cfg.session.ttlMs;
   const token = await makeToken(sessionKey, { k: key, c: player.code, p: pool, t: trust, v: body.clientVersion, iat: now, exp: expiresAt });

@@ -18,7 +18,18 @@
 // numbers only (save.ladder.current).
 // Lazy: boot loads this module (with the client and the remote switches) only where the ranking origin is
 // in use; web-prod never does (no request at all).
-import { formatPlayerCode, type BracketView, type ClaimResponse, type ResultView, type RulesView, type SessionResponse, AVATAR_COUNT, NICK_NUM_MAX, NICK_NUM_MIN } from '../shared/rank-api';
+import {
+  formatPlayerCode,
+  type BracketView,
+  type ClaimResponse,
+  type PresenceState,
+  type ResultView,
+  type RulesView,
+  type SessionResponse,
+  AVATAR_COUNT,
+  NICK_NUM_MAX,
+  NICK_NUM_MIN,
+} from '../shared/rank-api';
 import { parseBracketView } from '../shared/rank-api-parse';
 import { wireWin } from '../game/ladder';
 import {
@@ -42,6 +53,7 @@ import type { LadderRecord, ModeId, SaveData } from '../game/types';
 import { t } from '../i18n';
 import type { LadderChipView } from '../ui/hud/ladder-chip';
 import type { LadderResultProps } from '../ui/overlays/ladder-result';
+import type { LadderSessionProps } from '../ui/overlays/ladder-session';
 import type { LadderRulesView, LadderSheetProps } from '../ui/overlays/ladder-sheet';
 import type { NicknamePick, NicknameSheetProps } from '../ui/overlays/nickname-sheet';
 import type { BracketListFactory, BracketListView, BracketRowView, PersonalRecordsView, RankingListState, RecordsReason } from '../ui/overlays/ranking-panel';
@@ -55,6 +67,8 @@ import type { SaveScheduler } from './saves';
 import type { AppState, Store } from './store';
 
 export const ROWS_KEY = 'mewdoku.ladder.rows.v1';
+/** Leaderboard update: the bracket whose "New ranking" card was shown last (this device only; never in the save). */
+export const SESSION_CARD_KEY = 'mewdoku.ladder.sessionCard.v1';
 
 /** What the lazy `ladder` chunk gives the flow (app/ladder-chunk.ts). */
 export interface LadderChunk {
@@ -123,9 +137,20 @@ export interface LadderFlow {
    */
   winCounted(): boolean | null;
   /** The panel's extra props: the bracket list factory, hearts and the info button. */
-  panelExtras(): { bracketList?: BracketListFactory; onHeart(slot: number): void; onInfo(): void };
+  panelExtras(): {
+    bracketList?: BracketListFactory;
+    onHeart(slot: number): void;
+    onInfo(): void;
+    /** Leaderboard update: the rank-up's start (my place and fish before this win). */
+    climbFrom: { readonly bracketId: string | null; readonly rank: number | null; readonly points: number } | null;
+  };
   /** My bracket's points before this win (the period counter's before value), else 0. */
   counterBefore(): number;
+  /**
+   * Leaderboard update (the rank-up animation): my place and fish in my running bracket when this win was made, as
+   * the server last said; null when there was no running bracket (the row then rises from below the list).
+   */
+  panelBefore(): { readonly bracketId: string; readonly rank: number | null; readonly points: number } | null;
   chip(): LadderChipView;
   /** Home mounted: a throttled refresh, a queue flush and the next result card. */
   homeMounted(): void;
@@ -140,13 +165,15 @@ export interface LadderFlow {
   /** 2026-10-12, D-2e-24: the server's rules (or the cached ones) disclose computer players (How to play's line). */
   computerPlayers(): boolean;
   /** e2e hook (window.__mewdoku.ladder()). */
-  debug(): { active: boolean; signedIn: boolean; pending: number; current: LadderRecord['current'] };
+  debug(): { active: boolean; signedIn: boolean; pending: number; current: LadderRecord['current']; homeSettled: boolean };
   dispose(): void;
 }
 
 interface WinState {
   readonly ref: LadderWinRef;
   readonly at: number;
+  /** My running bracket's place and fish at the win (the rank-up animation's start). */
+  readonly before: { readonly bracketId: string; readonly rank: number | null; readonly points: number } | null;
   state: 'sending' | 'answered' | 'failed';
   view: BracketView | null;
   /** The points the server's answer gave this win (winCounted), even when it came after the panel gave up; null = none yet. */
@@ -441,6 +468,9 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
           }
           backoffStep = 0;
           netDown = false;
+          // A counted win marks my row "online" on the server (presence).
+          presenceSent = 'online';
+          presenceSentAt = clock.now();
           const answered = r.value;
           updateLadder((l) => applyVerdicts(l, answered.results));
           for (const res of answered.results) {
@@ -593,6 +623,10 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
     repairClaims();
     deps.saves.touch();
     emit('session');
+    // The sign-in marked my row "online" on the server; the next ping is due one interval from now.
+    presenceSent = 'online';
+    presenceSentAt = clock.now();
+    schedulePresence();
   }
   const offSignIn = client.onSignIn((sr) => adopt(sr));
 
@@ -657,6 +691,10 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
     const allowSelf = r?.hearts.allowSelf ?? true;
     const on = online() && !stale;
     const capped = heartLimitIn === view.bracketId; // a shown view always has a bracket id
+    // 2026-10-13 (review, merge): statuses only on a table that is still open. The server's activity stops at the end
+    // (a row last pinged "playing" stays so, my own row always reads "Online now"), so the ended view and the final
+    // standings ("Final results") show no "Playing now" / "Online now" / "2m ago" at all.
+    const statuses = c.ladder.presence.enabled && view.state === 'open';
     const rows: BracketRowView[] = view.rows.map((row) => ({
       rank: row.rank,
       slot: row.slot,
@@ -667,6 +705,9 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
       me: row.me,
       likedByMe: row.likedByMe,
       heartEnabled: heartsOn && on && !capped && !row.likedByMe && (allowSelf || !row.me),
+      // Leaderboard update: the server's activity on the device clock (null: no status shown).
+      seenAt: statuses && row.seenAt !== null ? row.seenAt - offsetMs : null,
+      playing: statuses && row.playing,
     }));
     const paidPlaces = r?.places.length ?? 0;
     const minMembers = r?.minMembers ?? 0;
@@ -1118,6 +1159,123 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
     );
   }
 
+  // ── presence (leaderboard update: "Online now" / "Playing now" on my row for the other members) ──
+
+  /** What I am doing: 'playing' while a scored board is up, else 'online'. */
+  let presenceState: PresenceState = 'online';
+  /** The state the server last got from me (a ping, a sign-in or a wins answer) and when. */
+  let presenceSent: PresenceState | null = null;
+  let presenceSentAt = -Infinity;
+  let presenceTimer: TimerId | null = null;
+  let presenceBusy = false;
+  /** The page is hidden or FB paused it: no pings (the row then ages into "2m ago"). */
+  let presencePaused = false;
+
+  /** Pings make sense: presence on, the ranking usable and signed in, and a running bracket of mine to mark. */
+  function presenceOn(): boolean {
+    return c.ladder.presence.enabled && !disposed && !presencePaused && active() && usable() && auth === 'ok' && isRunning(save().ladder.current, clock.now());
+  }
+
+  function schedulePresence(): void {
+    clock.clearTimeout(presenceTimer);
+    presenceTimer = null;
+    if (!presenceOn()) return;
+    const wait = Math.max(1000, presenceSentAt + c.ladder.presence.pingMs - clock.now());
+    presenceTimer = clock.setTimeout(() => {
+      presenceTimer = null;
+      pingPresence();
+    }, wait);
+  }
+
+  /** Sends my state when it changed or the last one is ping-old; never retries in a loop (the next tick does). */
+  function pingPresence(): void {
+    if (!presenceOn()) return;
+    const now = clock.now();
+    const due = presenceSent !== presenceState || now - presenceSentAt >= c.ladder.presence.pingMs;
+    if (due && !presenceBusy) {
+      const st = presenceState;
+      presenceBusy = true;
+      presenceSent = st;
+      presenceSentAt = now;
+      void client
+        .presence(st)
+        .then((r) => {
+          // 2026-10-12 (verify C9, merged with presence): an answer proves the network, so a stale list stops saying
+          // "You're offline" (as any other answer does).
+          if (r.ok) netDown = false;
+          // A failure is silent (the row just ages); the session-level codes still reach the flow's state.
+          if (!r.ok && failureToAuth(r.code)) noteFailure(r.code);
+        })
+        .finally(() => {
+          presenceBusy = false;
+        });
+    }
+    schedulePresence();
+  }
+
+  function setPresence(st: PresenceState): void {
+    presenceState = st;
+    pingPresence();
+  }
+
+  const SCORED_MODES: readonly ModeId[] = ['level', 'daily', 'event'];
+  const offGameStart = bus.on('game:start', ({ state }) => {
+    if (SCORED_MODES.includes(state.mode) && (state.status === 'ready' || state.status === 'playing')) setPresence('playing');
+  });
+  const offGameEnd = bus.on('game:end', () => setPresence('online'));
+  const offPause = bus.on('pause', ({ reason }) => {
+    if (reason !== 'hidden' && reason !== 'fb_pause') return;
+    presencePaused = true;
+    clock.clearTimeout(presenceTimer);
+    presenceTimer = null;
+  });
+  const offResume = bus.on('resume', ({ reason }) => {
+    if (reason !== 'hidden' && reason !== 'fb_pause') return;
+    presencePaused = false;
+    pingPresence();
+  });
+
+  // ── the "New ranking" card (leaderboard update: the sign-in joined me to a new bracket) ──
+
+  function readSessionCard(): string | null {
+    try {
+      return deps.storage?.getItem(SESSION_CARD_KEY) ?? null;
+    } catch {
+      return null;
+    }
+  }
+  let sessionCardShown: string | null = readSessionCard();
+  /** e2e (debug): a Home visit's steps ran to the end (the cards had their chance to open). */
+  let homeSettled = false;
+
+  /**
+   * Once per bracket, on Home with nothing else open (result cards first): a running bracket with no fish of mine
+   * yet, i.e. the sign-in joined it. Never for a bracket I joined with a win (I know it already).
+   */
+  function maybeSessionCard(): boolean {
+    if (disposed || !c.ladder.newSessionCard || !c.ladder.autoJoin || !active() || cardBusy || !deps.canOpenCard()) return false;
+    const cur = save().ladder.current;
+    if (!isRunning(cur, clock.now()) || cur.points > 0 || cur.bracketId === sessionCardShown) return false;
+    sessionCardShown = cur.bracketId;
+    try {
+      deps.storage?.setItem(SESSION_CARD_KEY, cur.bracketId);
+    } catch {
+      // memory only: at most once per page load
+    }
+    void loadChunk().then((m) => {
+      if (!m || !deps.canOpenCard()) return;
+      const props: LadderSessionProps = {
+        endsAt: cur.endsAt - cur.serverOffsetMs,
+        now: () => clock.now(),
+        avatarId: save().ladder.me?.avatarId ?? null,
+        reducedMotion: store.get().ui.reducedMotion,
+        onClose: () => deps.router.close('ladder_session'),
+      };
+      deps.router.open('ladder_session', props);
+    });
+    return true;
+  }
+
   // ── the bus: flush when the device is online again ──
   const onOnline = (): void => {
     netDown = false; // 2026-10-12: back online (a stale list keeps "Last updated" until an answer)
@@ -1145,11 +1303,15 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
       if (!active()) {
         // Not listed, paused, refused or switched off: the panel shows my records with the matching note
         // (spec §2.9) at once; nothing is sent (a queued win waits for the next usable session).
-        win = { ref, at: clock.now(), state: 'failed', view: null, gained: null };
+        win = { ref, at: clock.now(), state: 'failed', view: null, gained: null, before: null };
         panelLogged = null;
         return;
       }
-      win = { ref, at: clock.now(), state: 'sending', view: null, gained: null };
+      const cur = save().ladder.current;
+      const before = isRunning(cur, clock.now()) ? { bracketId: cur.bracketId, rank: cur.rank, points: cur.points } : null;
+      win = { ref, at: clock.now(), state: 'sending', view: null, gained: null, before };
+      // The wins answer marks my row "online" on the server (the puzzle is over).
+      presenceState = 'online';
       void loadChunk();
       void flush('win').then(() => {
         if (win && win.ref === ref && win.state === 'sending') {
@@ -1204,10 +1366,13 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
         ...(chunk ? { bracketList: chunk.createBracketList } : {}),
         onHeart: (slot: number) => void heart(slot),
         onInfo: () => flow.openSheet('home', 'info'),
+        // A win with no running bracket before it comes in from below the list.
+        climbFrom: win ? (win.before ?? { bracketId: null, rank: null, points: 0 }) : null,
       };
     },
     // 2026-10-12 (verify C7): with my earlier queued fish (this win's own left out), as the panel's "+N waiting".
     counterBefore: () => (active() ? counterBeforeWin(save().ladder, clock.now(), win?.ref.winId ?? null, c) : 0),
+    panelBefore: () => win?.before ?? null,
     chip() {
       if (!listed() || auth === 'suspended') return { state: 'off' };
       // No server (refused, or the sign-in failed) and no cached bracket still running: today's period pill (§2.5).
@@ -1230,6 +1395,9 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
         await refreshBracket();
         await flush('home');
         await nextCard();
+        maybeSessionCard();
+        setPresence('online');
+        homeSettled = true;
       })();
     },
     openSheet(from, view = 'list') {
@@ -1273,12 +1441,17 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
     },
     prefetchChunk: () => void loadChunk(),
     computerPlayers: () => rulesView()?.computerPlayers === true,
-    debug: () => ({ active: active(), signedIn: client.signedIn(), pending: save().ladder.pending.length, current: save().ladder.current }),
+    debug: () => ({ active: active(), signedIn: client.signedIn(), pending: save().ladder.pending.length, current: save().ladder.current, homeSettled }),
     dispose() {
       disposed = true;
       offSignIn();
       clock.clearTimeout(retryTimer);
       clock.clearTimeout(finalTimer);
+      clock.clearTimeout(presenceTimer);
+      offGameStart();
+      offGameEnd();
+      offPause();
+      offResume();
       try {
         globalThis.removeEventListener?.('online', onOnline);
         globalThis.removeEventListener?.('offline', onOffline);

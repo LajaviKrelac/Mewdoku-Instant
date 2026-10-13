@@ -4,13 +4,16 @@
 // on rival rows. PURE (a test greps this file like core/rivals.ts): time comes from the caller.
 // Honesty: a real row is shown exactly as stored; a rival row only in the places no real player took
 // (rows ≤ max_members), and a place held by a rival is never paid and never passed down (H-4, design §5.3).
+// 2026-10-13 (merge with the leaderboard update): a rival row also carries its activity (rivalActivity: "Playing
+// now" while one of its scripted sessions runs, else the time it was last seen), a function of its script, the tag's
+// key and the evaluation time only, like its points; a real row's activity stays its member row's (views.ts seenAtOf).
 import { NICK_WORDS_V1, RETIRED_V1 } from '../contract/words';
 import type { BracketRow, MemberRow } from '../store/rows';
 import type { RankWrite, RewardWrite } from '../store/sql-store';
 import { paidPlaces, rankRows } from './brackets';
 import type { ServerConfig } from './config';
 import { rewardId } from './ids';
-import { decodeFinalRivals, encodeFinalRivals, isRivalSlot, liveRivalCount, parseRivalsTag, RIVAL_SLOT_BASE, rivalAt, rivalNames, rivalRoster, type FinalRival, type RivalScript, type Roster } from './rivals';
+import { decodeFinalRivals, encodeFinalRivals, isRivalSlot, liveRivalCount, openingSeenBefore, parseRivalsTag, RIVAL_SLOT_BASE, rivalAt, rivalNames, rivalRoster, type FinalRival, type RivalScript, type Roster } from './rivals';
 
 /** One row of a bracket table: a real member or a computer player (playerKey null). */
 export interface TableRow {
@@ -23,10 +26,64 @@ export interface TableRow {
   /** Real rows: members.hearts. Rival rows: built-in hearts (withRealHearts adds the real ones). */
   readonly hearts: number;
   readonly playerKey: string | null;
+  /** 2026-10-13: rival rows only, their activity at the table's time (rivalActivity); real rows read their member row. */
+  readonly activity?: RivalActivity;
 }
 export type RankedRow = TableRow & { readonly rank: number };
 
 const clampTo = (b: Pick<BracketRow, 'opened_at' | 'ends_at'>, at: number): number => Math.min(Math.max(at, b.opened_at), b.ends_at);
+
+// ── A computer player's activity (2026-10-13, merge of the computer rivals and the leaderboard update) ────────
+
+/** The client's ladder.presence.pingMs: while a rival plays it is "seen" this often, as a real player's pings are. */
+export const RIVAL_PING_MS = 90_000;
+/** A rival still shows "playing" this long after the last win of a session. */
+export const RIVAL_TAIL_MS = 120_000;
+/**
+ * Two consecutive scoring moments at most this far apart belong to one session (in-session gaps: r1 just under 6 min,
+ * 1…5 min plus the jitter; r2 just under 5 min, 1…4 min plus the jitter). Sessions that touch read as one.
+ */
+export const RIVAL_SESSION_GAP_MS = 6 * 60_000;
+
+/** A rival row's activity: what a real row's member row says (seenAt, playing), from the rival's script. */
+export interface RivalActivity {
+  /**
+   * The last time it was seen (≤ the evaluation time): its last scoring moment or a later ping tick, never before its
+   * arrival, except a rival of the opening group before its first scoring moment after the opening (rivalActivity).
+   */
+  readonly seenAt: number;
+  /** A scripted session is in progress (from its first win to RIVAL_TAIL_MS after its last). */
+  readonly playing: boolean;
+}
+
+/**
+ * Rival `r`'s activity at `t` (the caller clamps t to [opened_at, ends_at]), or null before it arrives. With
+ * `last` its last scoring moment ≤ t (rivalAt's scoredAt: its arrival, r1's join-window points, a win) and `next`
+ * its first win after t: it is playing while t ≤ last + RIVAL_TAIL_MS, or while next comes at most
+ * RIVAL_SESSION_GAP_MS after last (t is inside a session); seenAt is last plus whole RIVAL_PING_MS ticks up to t
+ * (while playing; afterwards up to last + RIVAL_TAIL_MS), so a playing rival is never seen more than a ping ago, as
+ * a real player's ping keeps a real row (the client shows "Playing now" within ladder.presence.nowMs). Never a
+ * status from the future: seenAt ≤ t; it only grows with t. Integer and pure.
+ * 2026-10-13 (review): the opening group's arrival (arrivalAt = opened_at, the same ms for all 8…12 of them) is not a
+ * moment anyone saw them: until such a rival's first scoring moment after it, `last` is the time it was last seen
+ * before the bracket opened (opened_at − core/rivals.ts openingSeenBefore, seeded per rival from `key`, the roster's),
+ * so the rivals present when a bracket opens (a sign-in's auto-join shows them at once) do not share one status.
+ * Every other arrival (a rival that joins later, with its arrival win) is seen when it happens, as a real joiner is.
+ */
+export function rivalActivity(key: readonly number[], r: RivalScript, b: Pick<BracketRow, 'opened_at' | 'join_until'>, t: number): RivalActivity | null {
+  const v = rivalAt(r, b.join_until, t);
+  if (!v) return null;
+  const last = r.arrivalAt === b.opened_at && v.scoredAt === r.arrivalAt ? Math.max(0, b.opened_at - openingSeenBefore(key, r.index)) : v.scoredAt;
+  let inSession = false;
+  for (const w of r.wins)
+    if (w.t > t) {
+      inSession = w.t - last <= RIVAL_SESSION_GAP_MS;
+      break;
+    }
+  const playing = inSession || t - last <= RIVAL_TAIL_MS;
+  const upTo = playing ? t : last + RIVAL_TAIL_MS;
+  return { seenAt: last + Math.floor((upTo - last) / RIVAL_PING_MS) * RIVAL_PING_MS, playing };
+}
 
 /** The visible real members (hidden === 0) as table rows. */
 function realRows(members: readonly MemberRow[]): TableRow[] {
@@ -172,16 +229,16 @@ function liveRivalRows(b: BracketRow, members: readonly MemberRow[], at: number,
   const roster = rivalRoster(b.rivals, b);
   if (!roster) return [];
   const t = clampTo(b, at);
-  const present: { slot: number; points: number; scoredAt: number; hearts: number }[] = [];
+  const present: { slot: number; points: number; scoredAt: number; hearts: number; activity: RivalActivity }[] = [];
   for (const r of liveRivals(roster, b, members).live) {
     const v = rivalAt(r, b.join_until, t);
-    if (v) present.push({ slot: r.slot, ...v });
+    if (v) present.push({ slot: r.slot, ...v, activity: rivalActivity(roster.key, r, b, t) as RivalActivity });
   }
   if (present.length === 0) return [];
   const names = rivalNames(roster, new Set(members.map((m) => m.nickname.toLowerCase())), NICK_WORDS_V1, RETIRED_V1);
   return present.map((p) => {
     const n = names.get(p.slot) as { nickname: string; avatar: number };
-    return { kind: 'rival', slot: p.slot, points: p.points, scoredAt: p.scoredAt, nickname: n.nickname, avatar: n.avatar, hearts: p.hearts, playerKey: null };
+    return { kind: 'rival', slot: p.slot, points: p.points, scoredAt: p.scoredAt, nickname: n.nickname, avatar: n.avatar, hearts: p.hearts, playerKey: null, activity: p.activity };
   });
 }
 
@@ -216,7 +273,19 @@ export function finalTable(b: BracketRow, members: readonly MemberRow[], hide: b
     .filter((m) => m.hidden === 0 && m.final_rank !== null)
     .map((m) => ({ kind: 'player', slot: m.slot, points: m.points, scoredAt: m.scored_at, nickname: m.nickname, avatar: m.avatar, hearts: m.hearts, playerKey: m.player_key, rank: m.final_rank as number }));
   const snap = hide ? null : decodeFinalRivals(b.final_rivals, b);
-  return [...reals, ...(snap ?? []).map((r) => ({ ...snapshotRow(r), rank: r.rank }))].sort((x, y) => x.rank - y.rank);
+  const roster = snap && snap.length > 0 ? rivalRoster(b.rivals, b) : null;
+  return [...reals, ...(snap ?? []).map((r) => ({ ...snapshotRow(r), activity: finalActivity(roster, b, r), rank: r.rank }))].sort((x, y) => x.rank - y.rank);
+}
+
+/**
+ * 2026-10-13: a snapshot rival's activity, frozen at ends_at as a real row's is (its member row is written only while
+ * the bracket runs): its script's activity at ends_at, the same the live table showed at the end; without the script
+ * (a tag that no longer parses), its last win (the snapshot's scoredAt) and not playing.
+ */
+function finalActivity(roster: Roster | null, b: Pick<BracketRow, 'opened_at' | 'join_until' | 'ends_at'>, r: FinalRival): RivalActivity {
+  const script = roster?.rivals[r.slot - RIVAL_SLOT_BASE];
+  const a = roster && script && script.slot === r.slot ? rivalActivity(roster.key, script, b, b.ends_at) : null;
+  return a ?? { seenAt: r.scoredAt, playing: false };
 }
 
 export interface FinalPlan {

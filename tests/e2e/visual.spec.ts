@@ -46,6 +46,10 @@ import { catIncrement, comboPoints, comboRuleFor, comboRunMax, periodKeyAt, poin
 import type { SaveData } from '../../src/game/types';
 import { NICK_WORDS_V1 } from '../../src/shared/nick-words';
 import type { BracketRow, BracketView, PlayerView, ResultView, RulesView, SessionResponse, WinSubmission } from '../../src/shared/rank-api';
+import { gotItNewRanking, gotItOn } from './helpers/new-ranking';
+
+// Leaderboard update: the "New ranking" card is closed with Got it whenever it shows.
+gotItNewRanking(test);
 
 type TestWindow = Window & { __mewdoku?: E2EHooks };
 
@@ -345,7 +349,7 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
   test('402 × 874 with the recording\'s safe areas and the banner: the rows at the measured positions (±2 px)', async ({ browser }, info) => {
     test.skip(info.project.name !== 'web-390', 'one phone size: the recording\'s');
     const ctx = await browser.newContext({ viewport: { width: 402, height: 874 }, deviceScaleFactor: 3, hasTouch: true, isMobile: true });
-    const page = await ctx.newPage();
+    const page = await gotItOn(await ctx.newPage());
     await page.goto('/?ads=ok');
     await ready(page);
     await page.evaluate((json) => (window as TestWindow).__mewdoku?.seedSave(json), JSON.stringify(recordingSave()));
@@ -746,7 +750,7 @@ test.describe('Phase 2d.1 helpers (helpers-spec §7.7): tickers, "+N", star, cou
     test.skip(info.project.name !== 'web-390', 'the recordings\' phone');
     test.setTimeout(120_000);
     const ctx = await browser.newContext({ viewport: { width: 402, height: 874 }, deviceScaleFactor: 3, hasTouch: true, isMobile: true });
-    const page = await ctx.newPage();
+    const page = await gotItOn(await ctx.newPage());
     await helperGame(page, undefined, true);
     await tickersMid(page, 'tickers-en');
     await kittyMoments(page, 'en', true);
@@ -1022,7 +1026,20 @@ async function fakeLadder(page: Page, o: FakeOpts = {}): Promise<FakeLadder> {
     }
     const all = [...others.map((r) => ({ ...r, me: false })), { slot: 0, nickname: me.nickname, avatarId: me.avatarId, points: myPoints, hearts: others.length > 0 ? 2 : 0, likedByMe: false, me: true }];
     all.sort((a, b) => b.points - a.points || Number(a.me) - Number(b.me));
-    const rows: BracketRow[] = all.map((r, k) => ({ rank: k + 1, slot: r.slot, nickname: r.nickname, avatarId: r.avatarId, points: r.points, hearts: r.hearts, me: r.me, likedByMe: r.likedByMe }));
+    // Leaderboard update: fixed activity per place ("Playing now", "Online now", "Nm ago"; mine is now).
+    const ago = [0, 30_000, 4 * 60_000, 11 * 60_000, 47 * 60_000, 3 * HOUR];
+    const rows: BracketRow[] = all.map((r, k) => ({
+      rank: k + 1,
+      slot: r.slot,
+      nickname: r.nickname,
+      avatarId: r.avatarId,
+      points: r.points,
+      hearts: r.hearts,
+      me: r.me,
+      likedByMe: r.likedByMe,
+      seenAt: r.me ? now : now - (ago[k % ago.length] as number),
+      playing: !r.me && k % ago.length === 0,
+    }));
     return {
       state: 'open',
       bracketId: FAKE_BRACKET,
@@ -1153,7 +1170,7 @@ async function onVariant(browser: Browser, page: Page, info: TestInfo, v: Varian
   if (!v.ctx) return fn(page, String(page.viewportSize()?.width ?? 0));
   const ctx = await browser.newContext(v.ctx);
   try {
-    await fn(await ctx.newPage(), v.id);
+    await fn(await gotItOn(await ctx.newPage()), v.id);
   } finally {
     await ctx.close();
   }
@@ -1284,7 +1301,7 @@ test.describe('Phase 2e (G3): the ranking views in the real app (route fake; spe
         await expectFits(p, '.overlay[data-overlay="ranking"]');
         const count = (await panel.locator('.ranking__count').textContent()) ?? '';
         if (!v.lang) {
-          await expect(panel.locator('.ranking__title')).toHaveText('Daily ranking');
+          await expect(panel.locator('.ranking__title')).toHaveText('Leaderboard'); // leaderboard update: the ribbon title
           await expect(panel.locator('.ranking__sub')).toHaveText('+3 fish · Your total: 28');
           expect(count).toBe('37 players');
           await expect(panel.locator('.ranking__rewards')).toHaveText('The top 3 win hints and kitties.');
@@ -1368,7 +1385,7 @@ test.describe('Phase 2e (G3): the ranking views in the real app (route fake; spe
         await expect(sheet.locator('.ladder-info')).toBeVisible();
         const infoText = (await sheet.locator('.ladder-info').textContent()) ?? '';
         if (!v.lang) {
-          expect(infoText).toContain('A ranking lasts 24 hours from its first win and holds up to 50 players.');
+          expect(infoText).toContain('A ranking lasts 24 hours and holds up to 50 players.'); // leaderboard update: the sign-in join's wording
           expect(infoText).toContain('the top 3 win hints and kitties if at least 5 players took part');
           expect(infoText).toContain('never your Facebook name or photo');
         }

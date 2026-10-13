@@ -17,6 +17,7 @@ import { putProfile } from './handlers/profile';
 import { deleteMe, getMe } from './handlers/me';
 import { postClaim } from './handlers/rewards';
 import { postHeart } from './handlers/hearts';
+import { postPresence } from './handlers/presence';
 import { postNonce, postSession } from './handlers/session';
 import { postWins } from './handlers/wins';
 import { devAllowed, type Ctx } from './http/context';
@@ -56,6 +57,7 @@ const V1: Record<string, { readonly handler: Handler; readonly killable: boolean
   'POST /v1/session': { handler: postSession, killable: true },
   'POST /v1/wins': { handler: postWins, killable: true },
   'GET /v1/bracket': { handler: getBracket, killable: true },
+  'POST /v1/presence': { handler: postPresence, killable: true },
   'POST /v1/rewards/claim': { handler: postClaim, killable: true },
   'POST /v1/hearts': { handler: postHeart, killable: true },
   'PUT /v1/me/profile': { handler: putProfile, killable: true },

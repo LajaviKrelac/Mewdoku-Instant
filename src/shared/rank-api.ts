@@ -109,6 +109,11 @@ export interface SessionRequestFb {
   readonly clientVersion: string;
   readonly contentVersion: string;
   readonly devPool?: string; // DEV_POOL_RE; accepted only by a server with DEV_ROUTES=true
+  /**
+   * Leaderboard update (auto-join): a listed player who is in no running bracket joins one now with 0 fish (the
+   * server's `bracket.joinOnSession` can refuse it). Absent or false: the first counted win joins, as before.
+   */
+  readonly join?: boolean;
 }
 export interface SessionRequestWeb {
   readonly platform: 'web';
@@ -116,6 +121,7 @@ export interface SessionRequestWeb {
   readonly clientVersion: string;
   readonly contentVersion: string;
   readonly devPool?: string;
+  readonly join?: boolean;
 }
 export type SessionRequest = SessionRequestFb | SessionRequestWeb;
 export interface SessionResponse {
@@ -208,6 +214,14 @@ export interface BracketRow {
   readonly hearts: number;
   readonly me: boolean;
   readonly likedByMe: boolean;
+  /**
+   * Leaderboard update: the member's last activity in this bracket (server clock: joined, a counted win, or a
+   * presence ping). null from a server without it (the client then shows no status). 2026-10-13: a computer
+   * player's comes from its script (its last win or a later ping tick; never after serverTime).
+   */
+  readonly seenAt: Ms | null;
+  /** The last presence ping said "in a puzzle" (the client shows "Playing now" while seenAt is recent); a computer player: one of its sessions runs. */
+  readonly playing: boolean;
 }
 export interface BracketView {
   readonly state: 'open' | 'ended' | 'none';
@@ -266,6 +280,18 @@ export interface ClaimRequest {
 export interface ClaimResponse extends ClaimView {
   readonly place: number;
   readonly alreadyClaimed: boolean;
+  readonly serverTime: Ms;
+}
+
+// ── presence (leaderboard update: "Online now", "Playing now", "2m ago")
+export type PresenceState = 'online' | 'playing';
+export const PRESENCE_STATES: readonly PresenceState[] = ['online', 'playing'];
+export interface PresenceRequest {
+  readonly state: PresenceState;
+}
+export interface PresenceResponse {
+  /** My row was updated (false: not in a running bracket, not listed, or presence off). */
+  readonly updated: boolean;
   readonly serverTime: Ms;
 }
 
@@ -482,7 +508,8 @@ export function validateSessionRequest(x: unknown, opts: { readonly devPools: bo
     if (!matches(x.devPool, DEV_POOL_RE)) return fail('devPool');
     devPool = x.devPool;
   }
-  const base = { clientVersion: x.clientVersion, contentVersion: x.contentVersion };
+  if (x.join !== undefined && !isBool(x.join)) return fail('join');
+  const base = { clientVersion: x.clientVersion, contentVersion: x.contentVersion, ...(x.join === true ? { join: true } : {}) };
   if (x.platform === 'fb') {
     if (!matches(x.playerId, PLAYER_ID_RE)) return fail('playerId');
     if (!isStr(x.signature, 3, MAX_SIGNATURE_LENGTH)) return fail('signature');
@@ -520,6 +547,12 @@ export function validateClaimRequest(x: unknown): Checked<ClaimRequest> {
   if (!matches(x.rewardId, REWARD_ID_RE)) return fail('rewardId');
   if (!isBool(x.double)) return fail('double');
   return ok({ rewardId: x.rewardId, double: x.double });
+}
+
+export function validatePresenceRequest(x: unknown): Checked<PresenceRequest> {
+  if (!isObj(x)) return fail('body');
+  if (!oneOf(x.state, PRESENCE_STATES)) return fail('state');
+  return ok({ state: x.state });
 }
 
 export function validateHeartRequest(x: unknown): Checked<HeartRequest> {

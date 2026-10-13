@@ -6,14 +6,14 @@
     "auth": true,
     "body": {
       "bracketId": "mwhs8lc0tijs942z",
-      "slot": 9027
+      "slot": 9003
     }
   },
   "response": {
     "status": 200,
     "body": {
       "bracketId": "mwhs8lc0tijs942z",
-      "slot": 9027,
+      "slot": 9003,
       "hearts": 1,
       "likedByMe": true,
       "givenInBracket": 1,

@@ -25,7 +25,9 @@
           "points": 3,
           "hearts": 0,
           "me": true,
-          "likedByMe": false
+          "likedByMe": false,
+          "seenAt": 1791799800000,
+          "playing": false
         }
       ],
       "me": {
@@ -36,7 +38,9 @@
         "points": 3,
         "hearts": 0,
         "me": true,
-        "likedByMe": false
+        "likedByMe": false,
+        "seenAt": 1791799800000,
+        "playing": false
       },
       "final": false,
       "heartsNew": 0,

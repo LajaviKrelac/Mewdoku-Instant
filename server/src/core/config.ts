@@ -35,7 +35,15 @@ export interface ServerConfig {
     readonly finalizeGraceMs: number;
     /** GET /v1/bracket keeps showing an ended bracket for this long (spec §1.4). */
     readonly endedViewMs: number;
+    /**
+     * Leaderboard update (user: "when user logs in it auto joins event by default"): a session that asks for it
+     * (`join: true`) puts a listed player who is in no running bracket into one at once, with 0 fish. false: the
+     * first counted win joins (the Phase 2e rule).
+     */
+    readonly joinOnSession: boolean;
   };
+  /** Leaderboard update: POST /v1/presence and the rows' seenAt / playing ("Online now", "Playing now", "2m ago"). */
+  readonly presence: { readonly enabled: boolean };
   readonly scoring: {
     readonly modes: readonly ScoredModeWire[]; // P-L4, mirrors the client's period.modes (contract test)
     readonly pointsPerFish: number;
@@ -140,7 +148,9 @@ export const DEFAULT_CONFIG: ServerConfig = {
     tieBreak: 'first_reached',
     finalizeGraceMs: 30_000,
     endedViewMs: DAY,
+    joinOnSession: true,
   },
+  presence: { enabled: true },
   scoring: { modes: ['level', 'daily', 'event'], pointsPerFish: 1, fishMax: 3, fishOnRevive: 1, maxRevives: 1 },
   rewards: {
     places: [

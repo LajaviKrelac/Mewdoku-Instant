@@ -6,6 +6,10 @@
 // they are never members, players or rewards rows, and the rules carry the disclosure (`computerPlayers`).
 // `members` counts every row shown (for a finalised bracket, final_members: every row that was ranked, so a
 // later deletion leaves an honest gap instead of a re-numbered list).
+// Leaderboard update: a real row also carries its member's activity (seenAt, playing; presence.enabled). 2026-10-13
+// (merge): a computer player's row carries its scripted activity (core/table.ts rivalActivity: "playing" while one
+// of its sessions runs, seenAt its last win or a later ping tick, never after the table's time), computed like its
+// points; a final table's rivals are frozen at ends_at, as a real row's activity stops at the end.
 import type { BracketRow as WireRow, BracketSummary, BracketView, PlayerView, ResultView, RewardView, RulesView } from '../contract';
 import { grantOf, heartsNew } from '../core/brackets';
 import type { ServerConfig } from '../core/config';
@@ -14,7 +18,7 @@ import { nextNickChange } from '../core/nickname';
 import { decodeFinalRivals, isRivalSlot, parseRivalsTag } from '../core/rivals';
 import { finalPlan, finalTable, joinTimesKnown, liveTable, withRealHearts, type TableRow } from '../core/table';
 import type { Services } from '../services';
-import type { BracketRow, PlayerRow, RewardRow } from '../store/sql-store';
+import type { BracketRow, MemberRow, PlayerRow, RewardRow } from '../store/sql-store';
 
 /**
  * The rules the client shows. `computerPlayers` (D-2e-24, H-9): the disclosure line "Rankings include computer
@@ -157,8 +161,28 @@ export function noneView(pool: string, cfg: ServerConfig, now: number): BracketV
   };
 }
 
-/** A table row (a real member or a computer player, core/table.ts) on the wire. */
-const toWire = (row: TableRow, rank: number, myKey: string, liked: ReadonlySet<number>): WireRow => ({
+/**
+ * Leaderboard update: a row's last activity — the latest of its presence ping, its last counted win and its join
+ * (rows from before migration 0003 have active_at 0) — or null while presence is off.
+ */
+export function seenAtOf(m: Pick<MemberRow, 'active_at' | 'scored_at' | 'joined_at'>, presence: boolean): number | null {
+  if (!presence) return null;
+  const a = m.active_at ?? 0;
+  return Math.max(a, m.scored_at, m.joined_at);
+}
+
+/**
+ * A row's activity on the wire (Leaderboard update; none while presence is off): a real row's from its member row
+ * (seenAtOf, members.playing); 2026-10-13, a computer player's from its script (TableRow.activity, core/table.ts).
+ */
+function activityOf(row: TableRow, member: MemberRow | undefined, presence: boolean): { seenAt: number | null; playing: boolean } {
+  if (!presence) return { seenAt: null, playing: false };
+  if (row.kind === 'rival') return row.activity ? { seenAt: row.activity.seenAt, playing: row.activity.playing } : { seenAt: null, playing: false };
+  return member ? { seenAt: seenAtOf(member, true), playing: member.playing === 1 } : { seenAt: null, playing: false };
+}
+
+/** A table row (a real member or a computer player, core/table.ts) on the wire, with its activity (activityOf). */
+const toWire = (row: TableRow, rank: number, myKey: string, liked: ReadonlySet<number>, member: MemberRow | undefined, presence: boolean): WireRow => ({
   rank,
   slot: row.slot,
   nickname: row.nickname,
@@ -167,6 +191,7 @@ const toWire = (row: TableRow, rank: number, myKey: string, liked: ReadonlySet<n
   hearts: row.hearts,
   me: row.playerKey === myKey,
   likedByMe: liked.has(row.slot),
+  ...activityOf(row, member, presence),
 });
 
 /**
@@ -200,7 +225,11 @@ export async function bracketView(s: Services, player: Pick<PlayerRow, 'key' | '
   } else {
     liked = new Set(await s.store.likedSlots(id, mine.slot));
   }
-  const rows: WireRow[] = withRealHearts(table, realTo).map((r) => toWire(r, r.rank, player.key, liked));
+  // Leaderboard update: a real row's activity comes from its member row (rival slots are ≥ 9000, never a member's);
+  // a computer player's from its script (2026-10-13).
+  const bySlot = new Map(members.map((m) => [m.slot, m] as const));
+  const presence = s.cfg.presence.enabled;
+  const rows: WireRow[] = withRealHearts(table, realTo).map((r) => toWire(r, r.rank, player.key, liked, r.kind === 'player' ? bySlot.get(r.slot) : undefined, presence));
   const count = final ? (b.final_members ?? rows.length) : rows.length;
   const fresh = heartsNew(mine.hearts, mine.hearts_self, mine.hearts_seen);
   if (fresh > 0) await s.store.setHeartsSeen(id, mine.slot, mine.hearts - mine.hearts_self);

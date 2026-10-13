@@ -34,9 +34,12 @@ import { comboRuleFor, comboRunMax, periodKeyAt, pointsRuleFor } from '../../src
 import type { InProgressV2, SaveData } from '../../src/game/types';
 import { kittyReference } from '../fixtures/kitty-reference';
 import { watchStrings } from './helpers/strings';
+import { gotItNewRanking } from './helpers/new-ranking';
 
 // Phase 2e I-4: no screen of these tests may ask for an English string that no loaded table has.
 watchStrings(test);
+// Leaderboard update: the "New ranking" card is closed with Got it whenever it shows.
+gotItNewRanking(test);
 
 type TestWindow = Window & { __mewdoku?: E2EHooks };
 

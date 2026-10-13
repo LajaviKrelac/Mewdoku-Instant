@@ -498,5 +498,18 @@ export const catalog: LocaleCatalog = {
   'victory.streakReward': '連続記録の報酬：{reward}',
   'howto.streak': '1日に1つ以上パズルを解くと連続記録になります。{days}日続けるごとにヒントとこねこがもらえます。1日空くと、連続記録は1日目からやり直しです。',
   'victory.dailyReward': 'デイリー報酬：{reward}',
+  // ── Leaderboard update ──
+  'ladder.status.online': 'オンライン中',
+  'ladder.status.playing': 'プレイ中',
+  'ladder.status.minutes': '{count}分前',
+  'ladder.status.hours': '{count}時間前',
+  'ladder.status.days': '{count}日前',
+  'ladder.session.title': '新しいランキング',
+  'ladder.session.body': 'パズルを解いてさかなを集め、ランキングの順位を上げましょう。このランキングが終わるまでに、どこまで上がれるか楽しみですね！',
+  'ladder.session.ok': 'わかった',
+  'ladder.climb.first': 'すばらしい！1位になりました！',
+  'ladder.climb.up': 'いいね！{rank}位に上がりました！',
+  'ladder.info.window.rollingJoin': 'ランキングは{hours}時間続き、最大{count}人が参加できます。終了後は、次にゲームを開いたときに新しいランキングに入ります。',
+  'ladder.info.activity': '同じランキングのプレイヤーには、あなたが最後にオンラインだった時間と、いまパズルをプレイ中かどうかが表示されます。',
   ...LOCALE_NAMES,
 };

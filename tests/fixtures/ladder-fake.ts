@@ -46,6 +46,9 @@ export interface FakeOther {
   readonly avatarId: number;
   points: number;
   hearts: number;
+  /** Leaderboard update: the row's last activity (server clock; default: the fake's start) and "in a puzzle". */
+  seenAt?: number;
+  playing?: boolean;
 }
 
 export interface LadderFakeOptions {
@@ -55,6 +58,8 @@ export interface LadderFakeOptions {
   readonly skewMs?: number;
   readonly rules?: Partial<RulesView>;
   readonly player?: Partial<PlayerView>;
+  /** Leaderboard update: a session with `join: true` makes me a member with 0 fish (the real server's default). Off by default (an older server). */
+  readonly joinOnSession?: boolean;
 }
 
 export interface LadderFake {
@@ -96,6 +101,9 @@ export interface LadderFake {
     claims: Map<string, ClaimView>;
     seenWins: Set<string>;
     sessions: number;
+    /** Leaderboard update: my row's activity (presence pings, sign-ins, wins). */
+    mySeenAt: number;
+    myPlaying: boolean;
   };
 }
 
@@ -134,17 +142,19 @@ export function createLadderFake(opts: LadderFakeOptions = {}): LadderFake {
     claims: new Map(),
     seenWins: new Set(),
     sessions: 0,
+    mySeenAt: start,
+    myPlaying: false,
   };
 
   function rows(): BracketRow[] {
     const all: { row: Omit<BracketRow, 'rank'>; tie: number }[] = state.others.map((o, slot) => ({
-      row: { slot, nickname: o.nickname, avatarId: o.avatarId, points: o.points, hearts: o.hearts, me: false, likedByMe: state.liked.has(slot) },
+      row: { slot, nickname: o.nickname, avatarId: o.avatarId, points: o.points, hearts: o.hearts, me: false, likedByMe: state.liked.has(slot), seenAt: o.seenAt ?? start, playing: o.playing === true },
       tie: slot,
     }));
     if (state.points !== null) {
       const slot = state.others.length;
       all.push({
-        row: { slot, nickname: state.player.nickname, avatarId: state.player.avatarId, points: state.points, hearts: state.myHearts, me: true, likedByMe: state.liked.has(slot) },
+        row: { slot, nickname: state.player.nickname, avatarId: state.player.avatarId, points: state.points, hearts: state.myHearts, me: true, likedByMe: state.liked.has(slot), seenAt: state.mySeenAt, playing: state.myPlaying },
         tie: -1,
       });
     }
@@ -207,6 +217,9 @@ export function createLadderFake(opts: LadderFakeOptions = {}): LadderFake {
       if (body.platform === 'fb' && (typeof body.signature !== 'string' || typeof body.nonce !== 'string' || typeof body.playerId !== 'string')) return error('bad_request');
       if (body.platform === 'web' && (!body.device || typeof body.device !== 'object')) return error('bad_request');
       state.sessions++;
+      if (opts.joinOnSession && body.join === true && state.player.listed && state.points === null) state.points = 0;
+      state.mySeenAt = now();
+      state.myPlaying = false;
       const token = `v1.faketoken${++tokenN}`;
       tokens.add(token);
       return json(200, {
@@ -234,12 +247,25 @@ export function createLadderFake(opts: LadderFakeOptions = {}): LadderFake {
         state.seenWins.add(w.winId);
         const verdict = forced?.verdict ?? 'accepted';
         const points = verdict === 'accepted' || verdict === 'accepted_flagged' ? w.fish : 0;
-        if (points > 0 || verdict === 'accepted' || verdict === 'accepted_flagged') state.points = (state.points ?? 0) + points;
+        if (points > 0 || verdict === 'accepted' || verdict === 'accepted_flagged') {
+          state.points = (state.points ?? 0) + points;
+          state.mySeenAt = now();
+          state.myPlaying = false;
+        }
         results.push({ winId: w.winId, verdict, points, ...(forced?.reason ? { reason: forced.reason } : {}) });
       }
       return json(200, { results, windowPoints: state.points ?? 0, bracket: state.points === null ? null : view(), serverTime: now() });
     }
     if (bare === '/v1/bracket' && method === 'GET') return json(200, view());
+    if (bare === '/v1/presence' && method === 'POST') {
+      if (body?.state !== 'online' && body?.state !== 'playing') return error('bad_request');
+      const updated = state.points !== null && state.player.listed;
+      if (updated) {
+        state.mySeenAt = now();
+        state.myPlaying = body.state === 'playing';
+      }
+      return json(200, { updated, serverTime: now() });
+    }
     if (bare === '/v1/rewards/claim' && method === 'POST') {
       const rewardId = String(body?.rewardId ?? '');
       const res = state.results.find((r) => r.reward?.rewardId === rewardId);
@@ -321,7 +347,14 @@ export function createLadderFake(opts: LadderFakeOptions = {}): LadderFake {
       verdicts.set(winId, reason === undefined ? { verdict } : { verdict, reason });
     },
     addOther(o) {
-      state.others.push({ nickname: o.nickname, avatarId: o.avatarId, points: o.points, hearts: o.hearts ?? 0 });
+      state.others.push({
+        nickname: o.nickname,
+        avatarId: o.avatarId,
+        points: o.points,
+        hearts: o.hearts ?? 0,
+        ...(o.seenAt !== undefined ? { seenAt: o.seenAt } : {}),
+        ...(o.playing !== undefined ? { playing: o.playing } : {}),
+      });
     },
     endBracket() {
       const r = rows();
