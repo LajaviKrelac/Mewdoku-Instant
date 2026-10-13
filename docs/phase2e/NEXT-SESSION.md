@@ -117,5 +117,9 @@ and a rank-up animation after a win.
   leaderboard update (podium, rank-up animation, New ranking card, small-phone layout), staging ranking, no ads/IAP ids
   yet"), both in Web Hosting as Standby; the claude.ai preview link was republished from the same commits (version 21
   = faf80f9; it plays against the in-page sample server). Checked first on faf80f9: unit tests, 200 server tests,
-  i18n, the full e2e suite (the one failure fixed and re-run). Until 0003 is migrated and the worker deployed on
-  staging, the FB build shows the new layout and the rank-up but no auto-join, card or activity pills.
+  i18n, the full e2e suite (the one failure fixed and re-run). Then `…-8964a69.zip` (515,994 bytes, the same game
+  code; 2026-10-13) on request, also in Standby.
+- **Staging server updated (2026-10-13):** `db:migrate:staging` applied 0003, then `deploy:staging` (version
+  `9ec83928-1f80-444c-b418-1552170aaffa`; the first try hit Cloudflare's rate limit, code 971, and passed after the
+  wait). Smoke: `/v1/health` ok, `/v1/config` ok, `POST /v1/presence` without a token 401 (the route is live). The FB
+  test builds now get auto-join, the card and the activity pills. Production is not migrated or deployed.
