@@ -256,6 +256,21 @@
   cursor: pointer;
 }
 
+/* Leaderboard update: the tap reaches 2 px past the 44 px pill above and below, so a row at a fractional position
+   (sub-pixel snapping of the rounded edge) never loses the bottom of its 44 × 44 tap. */
+.rank-row__heart {
+  position: relative;
+}
+
+.rank-row__heart::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+}
+
 .rank-row__heart-icon {
   display: inline-flex;
 }
