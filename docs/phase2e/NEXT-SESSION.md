@@ -111,4 +111,11 @@ and a rank-up animation after a win.
   `common.leaderboard` ("Leaderboard"), the body copy keeps "ranking" (glossary). "Online now" is allowed only as
   `ladder.status.online` (scripts/i18n-check.ts honesty rule).
 - **Budgets:** the lazy ladder rows were re-set to the measured sizes (JS 30.0 → 37.9 KB, boot 33.9 → 36.2 KB, CSS
-  11.0 → 20.5 KB). The first-load CSS row (52.4 / 51.7 KB) was already over before this branch.
+  11.0 → 21.8 KB). The first-load CSS row (52.4 / 51.7 KB) was already over before this branch.
+- **Test builds (staging ranking, no ads/IAP ids):** FB `mewdoku-instant-fbig-preview-0.1.0-4e35ce8.zip` (515,891
+  bytes, 2026-10-12) and `…-faf80f9.zip` (515,994 bytes, 2026-10-13; comment "Game test build 0.1.0 faf80f9 -
+  leaderboard update (podium, rank-up animation, New ranking card, small-phone layout), staging ranking, no ads/IAP ids
+  yet"), both in Web Hosting as Standby; the claude.ai preview link was republished from the same commits (version 21
+  = faf80f9; it plays against the in-page sample server). Checked first on faf80f9: unit tests, 200 server tests,
+  i18n, the full e2e suite (the one failure fixed and re-run). Until 0003 is migrated and the worker deployed on
+  staging, the FB build shows the new layout and the rank-up but no auto-join, card or activity pills.
