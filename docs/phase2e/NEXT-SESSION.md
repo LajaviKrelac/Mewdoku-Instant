@@ -91,6 +91,15 @@ upload; this note records the result and what is left.
   `wrangler deploy --env staging` from `a8cc73c` (rivals preset r2; version `3235283e-b88e-4dd0-8715-e7731b797350`).
   `/v1/health` ok. New brackets get r2 (rivals play in bursts from the first minutes); brackets created between the
   two deploys keep r1 until they end. Checked first: server 312/312 + typecheck, client 3,093, e2e ladder + preview 19/19.
+- 2026-10-13 UTC, staging server (user approval): the merge of the leaderboard update and the computer rivals
+  (`34dd086`) deployed with `wrangler deploy --env staging` (version `b4eaebb3-a97f-4397-9518-b6646c51728d`,
+  `RIVALS="on"`); no migration needed (0003_presence, 0003_rivals and 0004 were all applied). `/v1/health` ok. This
+  replaces the leaderboard-only server the other session deployed: rivals are back for new brackets (also brackets
+  opened by auto-join at sign-in), with scripted statuses on rival rows.
+- 2026-10-13 UTC: `mewdoku-instant-fbig-preview-0.1.0-34dd086.zip` (517.9 KB, 89 files; the leaderboard update, the
+  computer rivals' disclosure line, the post-win fixes, the Home countdown), comment "Game test build 0.1.0 34dd086 -
+  leaderboard update + computer rivals (r2) + post-win fixes, staging ranking". Checked first: server 334 + typecheck,
+  client 3,117, e2e 320 passed / 0 failed, size within budget.
 
 ## Left
 
