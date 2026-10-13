@@ -45,6 +45,7 @@ How to read it (§13, added by the critic pass, lists what changed after the fir
 - **H-6** Players see nicknames and avatars only; Facebook names and photos are never requested, stored or shown.
 - **H-7** The anonymous web mode never shares a bracket with signed-in Facebook players (D-2e-5).
 - **H-8** The existing 2b/2c rule stays: "never fabricate a player, rank, score or row" (`rank.*` doc comment).
+- **H-2a (UI batch, 2026-10-13, the user's decision)** Encouragement lines may state an approximate statistic about other players, because their purpose is to set expectations and encourage ("the whole point is for the user to feel good and to set expectations … I'm fine with approximating the numbers"). Limits: only in `ticker.*` lines under `ticker.odds.*` (estimated from the level's own difficulty: grade, effort, size, Hard) and victory lines under `victory.stat.*` (the daily percentile from the server's real solve times once it has its minimum sample, otherwise an estimate); numbers are rounded and worded as approximate ("about"); never a live count, never presence, never a rank or a row (H-1, H-3 and H-8 are unchanged); `scripts/i18n-check.ts` `ESTIMATE_KEY_PREFIXES` enforces the key limit. Auto-join's 0-fish rows (`NEXT-SESSION.md`, Leaderboard update) also amend H-1.
 
 ### 0.5 Clean room (D-2e-0)
 

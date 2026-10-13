@@ -154,6 +154,25 @@ describe('i18n-check honestyProblems (spec §10.6 #4)', () => {
     for (const k of Object.keys(bad)) expect(problems.some((p) => p.includes(` ${k} `)), k).toBe(true);
   });
 
+  it('[UI batch, H-2a] approximate statistics only under ticker.odds.* and victory.stat.*; urgency still fails there', async () => {
+    const { honestyProblems, ESTIMATE_KEY_PREFIXES } = await import('../../../scripts/i18n-check');
+    expect(ESTIMATE_KEY_PREFIXES).toEqual(['ticker.odds.', 'victory.stat.']);
+    const ok: Record<string, string> = {
+      'ticker.odds.retry': 'About {pct}% of players pass this after a retry',
+      'ticker.odds.tries': 'Most players need about {tries} tries here',
+      'victory.stat.faster': 'Faster than {pct}% of players today',
+    };
+    expect(honestyProblems(ok)).toEqual([]);
+    const bad: Record<string, string> = {
+      'ticker.tip.odds': 'About {pct}% of players pass this after a retry', // not an estimate key
+      'victory.praise.most': 'Most players need a retry here',
+      'ticker.odds.now': '{count} players online now', // never presence or a live count
+      'victory.stat.hurry': "Hurry, don't miss today's challenge", // urgency still fails
+    };
+    const problems = honestyProblems(bad);
+    for (const k of Object.keys(bad)) expect(problems.some((p) => p.includes(` ${k} `)), k).toBe(true);
+  });
+
   it('[audit A-H2] urgency and promises in any key (the rewarded video, the shop), and urgency words in the locale drafts', async () => {
     const { honestyProblems, localeHonestyProblems, URGENCY_WORDS } = await import('../../../scripts/i18n-check');
     const bad: Record<string, string> = {

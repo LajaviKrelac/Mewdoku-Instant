@@ -302,6 +302,15 @@ export const PLAYER_COUNT_KEYS: readonly string[] = [
 ];
 
 /**
+ * UI batch (2026-10-13, the user's decision, spec §0.4 H-2a): encouragement lines that state an approximate statistic
+ * about other players. They live only under these key prefixes, so a statistic anywhere else is still an error:
+ * `ticker.odds.*` (level-start lines estimated from the level's own difficulty) and `victory.stat.*` (victory lines:
+ * the daily percentile from the server's real solve times, or an estimate below its minimum sample). The urgency,
+ * promise and hard-coded-rule checks still apply to them.
+ */
+export const ESTIMATE_KEY_PREFIXES: readonly string[] = ['ticker.odds.', 'victory.stat.'];
+
+/**
  * Phase 2e honesty (spec §10.6 #4, H-2, H-4, §5.1), on the English (the source of every catalogue): an error per
  * value that claims a statistic the server does not provide, names a player count outside PLAYER_COUNT_KEYS (or a
  * literal number of players anywhere), hard-codes "top 3" or "7 days" in the ranking and streak copy, presses with
@@ -314,12 +323,13 @@ export function honestyProblems(source: Strings = en): string[] {
   const allowed = new Set(PLAYER_COUNT_KEYS);
   for (const [k, v] of Object.entries(source)) {
     if (typeof v !== 'string') continue;
+    const estimate = ESTIMATE_KEY_PREFIXES.some((p) => k.startsWith(p));
     // Leaderboard update: "Online now" is allowed only as one row's status (the server's seenAt for that player).
-    if (/online now|players online|% of (?:all )?players|most players|everyone is|join thousands|millions of/i.test(v) && !(k === 'ladder.status.online' && v === 'Online now')) {
+    if (/online now|players online|% of (?:all )?players|most players|everyone is|join thousands|millions of/i.test(v) && !(k === 'ladder.status.online' && v === 'Online now') && !(estimate && !/online now|players online|join thousands|millions of/i.test(v))) {
       out.push(`honesty: ${k} claims a statistic ("${v}")`);
     }
     if (/\b\d[\d,.]*\s+(?:other\s+)?players?\b/i.test(v)) out.push(`honesty: ${k} names a literal player count ("${v}")`);
-    if (/\{\w+\}\s+(?:other\s+)?players?\b/i.test(v) && !allowed.has(k)) out.push(`honesty: ${k} shows a player count outside the server-fed keys ("${v}")`);
+    if (/\{\w+\}\s+(?:other\s+)?players?\b/i.test(v) && !allowed.has(k) && !estimate) out.push(`honesty: ${k} shows a player count outside the server-fed keys ("${v}")`);
     if (/^(?:ladder|rank|streak|howto\.streak|victory\.streak|victory\.daily)/.test(k)) {
       if (/\btop\s+(?:3|three)\b|\b(?:7|seven)\s+days?\b/i.test(v)) out.push(`honesty: ${k} hard-codes a rule ("${v}"): use the rules' placeholder`);
     }
