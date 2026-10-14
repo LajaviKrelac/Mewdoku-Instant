@@ -441,7 +441,6 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
       recordsReason: 'local',
       streakBest: store.get().save.dayStreak.best,
       onHeart: () => undefined,
-      onEditName: () => undefined,
       onClose: () => router.close('ladder'),
     });
   };

@@ -17,7 +17,7 @@
 // Lazy only: the `ladder` chunk mounts them (mountLadderArt adds these symbols to the sprite once). Nothing in
 // the main bundle may import this module (spec §7.9); the lazy-art chunk, which the board's motion and the
 // win's fx load, stays as it was (its 4.4 KB row).
-import { CAT_COLORS, CHEST_COLORS, TOKENS } from './palette';
+import { CAT_COLORS, CHEST_COLORS, PALETTE, TOKENS } from './palette';
 import { AVATAR_COATS, avatarDisc, MEDAL_COLORS, TAG_COLORS, type AvatarCoat } from './palette-2e';
 import { sym } from './helper-art';
 import { HEAD_FLAT, PAW, SPRITE_ID, type AvatarIndex, type AvatarSymbol } from './sprite';
@@ -144,29 +144,55 @@ function chestArt(): string[] {
   const { gold } = TOKENS;
   const deep = TOKENS['gold-deep'];
   const W = CHEST_COLORS;
-  const body =
+  const body = (trim: string = gold): string =>
     `<ellipse cx="24" cy="42.6" rx="18.6" ry="2.4" fill="${TOKENS.ink}" opacity=".16"/>` +
     `<rect x="6" y="21" width="36" height="20.6" rx="3.4" fill="${W.wood}"/>` +
     `<path d="M6 31.4h36M10 26.4h5m14 0h3m-20 9.8h4m14 0h6" stroke="${W.grain}" stroke-width="1.1" stroke-linecap="round"/>` +
-    `<path d="M11 21h4v20.6h-4Zm22 0h4v20.6h-4Z" fill="${gold}"/>`;
-  const lock = (y: number): string =>
-    `<path d="m27.6 ${y} 4.4-3.4v6.8Z" fill="${deep}"/><ellipse cx="23.2" cy="${y}" rx="5.6" ry="4.4" fill="${gold}" stroke="${deep}" stroke-width="1.1"/>` +
+    `<path d="M11 21h4v20.6h-4Zm22 0h4v20.6h-4Z" fill="${trim}"/>`;
+  const lock = (y: number, face: string = gold, edge: string = deep): string =>
+    `<path d="m27.6 ${y} 4.4-3.4v6.8Z" fill="${edge}"/><ellipse cx="23.2" cy="${y}" rx="5.6" ry="4.4" fill="${face}" stroke="${edge}" stroke-width="1.1"/>` +
     `<circle cx="20.8" cy="${y - 0.6}" r="1.2" fill="${W.inside}"/><path d="M20.8 ${y}v2" stroke="${W.inside}" stroke-width="1.1" stroke-linecap="round"/>`;
-  const rivets = (y: number): string => `<path d="M13 ${y}h0m22 0h0" stroke="${deep}" stroke-width="1.6" stroke-linecap="round"/>`;
-  const sparkle = (x: number, y: number, r: number): string =>
-    `<path d="M0-1q.25.75 1 1-.75.25-1 1-.25-.75-1-1 .75-.25 1-1Z" transform="matrix(${r} 0 0 ${r} ${x} ${y})" fill="#fff"/>`;
-  return [
-    sym(
-      'reward-chest',
+  const rivets = (y: number, edge: string = deep): string => `<path d="M13 ${y}h0m22 0h0" stroke="${edge}" stroke-width="1.6" stroke-linecap="round"/>`;
+  const sparkle = (x: number, y: number, r: number, fill = '#fff'): string =>
+    `<path d="M0-1q.25.75 1 1-.75.25-1 1-.25-.75-1-1 .75-.25 1-1Z" transform="matrix(${r} 0 0 ${r} ${x} ${y})" fill="${fill}"/>`;
+  const lid = (trim: string): string =>
+    `<path d="M6 22.6V16.4c0-5 4-8.8 9-8.8h18c5 0 9 3.8 9 8.8v6.2Z" fill="${W.lid}"/>` +
+    `<path d="M11 10.4q1.6-1.8 4-2.4v14.6h-4Zm26 0q-1.6-1.8-4-2.4v14.6h4Z" fill="${trim}"/>` +
+    `<path d="M10.8 13.6c1.4-2.2 3.4-3 6-3h14" stroke="#fff" stroke-width="1.6" stroke-linecap="round" fill="none" opacity=".4"/>`;
+  /**
+   * UI batch (2026-10-13, leaderboard; user: "Make 3 chests different (the better place, the better rewards visually")
+   * reward-chest-1 … -3, the paid places' chests (ours, from these words): the same wooden chest in three sizes
+   * (full, 86 %, 72 % of the box, standing on one ground line) and three trims. 1st: gold straps, gold corner caps,
+   * a gold crown band across the lid set with a ruby, a sapphire and a jade, the fish lock, three gold sparkles. 2nd:
+   * silver straps, rivets and corner caps, a silver fish lock. 3rd: plain wood with bronze straps and a round
+   * bronze lock plate, no caps. So the places differ by size and ornaments, never by colour alone.
+   */
+  const tier = (place: 1 | 2 | 3): string => {
+    const m = MEDAL_COLORS[place - 1] as (typeof MEDAL_COLORS)[number];
+    const [trim, edge] = place === 1 ? [gold, deep] : [m.face, m.rim];
+    const s = [1, 0.86, 0.72][place - 1] as number;
+    const caps = place < 3 ? paint('M6 34.4v3.8c0 1.9 1.5 3.4 3.4 3.4h3.8ZM6 17.6v5h5Z', trim) : '';
+    const crown =
+      place === 1
+        ? `<path d="M15.6 18.6v-3l2.8-4.2 2.8 2.6 2.8-4.2 2.8 4.2 2.8-2.6 2.8 4.2v3Z" fill="${gold}" stroke="${deep}" stroke-width="1"/>` +
+          `<circle cx="24" cy="16.4" r="1.7" fill="${TOKENS.danger}"/><circle cx="19.4" cy="16.6" r="1.2" fill="${PALETTE[6]}"/>` +
+          `<circle cx="28.6" cy="16.6" r="1.2" fill="${PALETTE[5]}"/><circle cx="23.4" cy="15.8" r=".5" fill="#fff"/>`
+        : '';
+    const lockPlate =
+      place === 3
+        ? `<circle cx="24" cy="23.6" r="3.8" fill="${trim}" stroke="${edge}" stroke-width="1.1"/><path d="M24 22.6v2.4" stroke="${W.inside}" stroke-width="1.5" stroke-linecap="round"/>`
+        : lock(23.4, trim, edge);
+    const g = `matrix(${s} 0 0 ${s} ${+(24 * (1 - s)).toFixed(2)} ${+(43 * (1 - s)).toFixed(2)})`;
+    return sym(
+      `reward-chest-${place}`,
       '0 0 48 48',
-      body +
-        `<path d="M6 22.6V16.4c0-5 4-8.8 9-8.8h18c5 0 9 3.8 9 8.8v6.2Z" fill="${W.lid}"/>` +
-        `<path d="M11 10.4q1.6-1.8 4-2.4v14.6h-4Zm26 0q-1.6-1.8-4-2.4v14.6h4Z" fill="${gold}"/>` +
-        `<path d="M10.8 13.6c1.4-2.2 3.4-3 6-3h14" stroke="#fff" stroke-width="1.6" stroke-linecap="round" fill="none" opacity=".4"/>` +
-        `<path d="M6 21h36v2.6H6Z" fill="${W.grain}"/>` +
-        rivets(17) + rivets(37.4) +
-        lock(23.4),
-    ),
+      `<g transform="${g}">${body(trim)}${lid(trim)}<g>${caps}<g transform="matrix(-1 0 0 1 48 0)">${caps}</g></g>` +
+        `<path d="M6 21h36v2.6H6Z" fill="${place === 1 ? gold : W.grain}"/>${rivets(17, edge)}${rivets(37.4, edge)}${crown}${lockPlate}</g>` +
+        (place === 1 ? sparkle(5.6, 9.4, 3, deep) + sparkle(42.2, 5.4, 2.6, deep) + sparkle(35.4, 2.4, 1.6, deep) : ''),
+    );
+  };
+  return [
+    sym('reward-chest', '0 0 48 48', body() + lid(gold) + `<path d="M6 21h36v2.6H6Z" fill="${W.grain}"/>` + rivets(17) + rivets(37.4) + lock(23.4)),
     sym(
       'reward-chest-open',
       '0 0 48 48',
@@ -178,11 +204,14 @@ function chestArt(): string[] {
         `<path d="M14 21 9.6 3.6h7.6L20 21Zm8 0 .4-19h5.4L26 21Zm6 0 5.8-16.2 5.8 2.4L32 21Z" fill="${TOKENS['fish-hi']}" opacity=".5"/>` +
         `<path d="M6 19.2h36v4.4H6Z" fill="${W.inside}"/><path d="M8.6 21.6c3-4.6 9-6.8 15.4-6.8s12.4 2.2 15.4 6.8Z" fill="${gold}"/>` +
         `<path d="M14.6 19.4c2.4-1.8 5.8-2.8 9.4-2.8" fill="none" stroke="${TOKENS['fish-hi']}" stroke-width="1.8" stroke-linecap="round"/>` +
-        body +
+        body() +
         rivets(37.4) +
         lock(27) +
         sparkle(9.4, 10, 2.6) + sparkle(39.4, 7.4, 2.2) + sparkle(30.6, 3.6, 1.6),
     ),
+    tier(1),
+    tier(2),
+    tier(3),
   ];
 }
 

@@ -130,10 +130,12 @@ export const DEFAULT_CONFIG: ServerConfig = {
   presence: { enabled: true },
   scoring: { modes: ['level', 'daily', 'event'], pointsPerFish: 1, fishMax: 3, fishOnRevive: 1, maxRevives: 1 },
   rewards: {
+    // UI batch (2026-10-13, the user: "the better place, the better rewards … content-wise"; D-2e-17 / P-L5 revised):
+    // 1st 3 + 3, 2nd 2 + 2, 3rd 1 + 1 (was 2 + 2, 1 + 1, 1 + 0). Frozen per reward row when a ranking ends.
     places: [
-      { place: 1, hints: 2, kitties: 2 },
-      { place: 2, hints: 1, kitties: 1 },
-      { place: 3, hints: 1, kitties: 0 },
+      { place: 1, hints: 3, kitties: 3 },
+      { place: 2, hints: 2, kitties: 2 },
+      { place: 3, hints: 1, kitties: 1 },
     ],
     minMembers: 5,
     needOneBelow: true,

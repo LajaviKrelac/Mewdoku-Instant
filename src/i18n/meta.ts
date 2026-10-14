@@ -306,10 +306,6 @@ const NOTES: Readonly<Partial<Record<I18nKey, Partial<KeyMeta>>>> = {
   'ladder.endsIn': { description: 'Ranking countdown line; {time} is a duration ("7 h 48 min"). Never read aloud as a live update', maxLength: 26 },
   'ladder.endsSoon': { maxLength: 30 },
   'ladder.ended': { description: 'Shown instead of the countdown once the ranking has ended', maxLength: 22 },
-  'ladder.players.one': { description: "The SERVER'S real number of players in this ranking (never an estimate)", maxLength: 16 },
-  'ladder.players.other': { description: "The SERVER'S real number of players in this ranking (never an estimate)", maxLength: 16 },
-  'ladder.rewards.line.one': { description: 'Under the countdown: only first place wins (the count comes from the server; this form is used when 1 place pays)' },
-  'ladder.rewards.line.other': { description: 'Under the countdown: how many top places win hints and kitties ({count} from the server, 2 or 3)' },
   'ladder.alone': { description: 'When I am the only player in my ranking. Never promise that others will join' },
   'ladder.waiting': { description: 'A small chip on my row: fish not sent yet (offline). Never promise they will count', maxLength: 14 },
   'ladder.offline': { description: 'Offline line under a cached ranking. Must not promise that the fish will count' },
@@ -327,6 +323,11 @@ const NOTES: Readonly<Partial<Record<I18nKey, Partial<KeyMeta>>>> = {
   'ladder.session.ok': { description: 'Button that closes the new-ranking card', maxLength: 18 },
   'ladder.climb.first': { description: 'Speech bubble after a win put me in first place of my ranking', maxLength: 40 },
   'ladder.climb.up': { description: 'Speech bubble after a win moved me up; {rank} is my new place (a number)', maxLength: 40 },
+  // UI batch (leaderboard): the chests of the paid places.
+  'ladder.chest.a11y': {
+    description: 'Screen-reader name of the reward chest on a top place of the ranking: {rank} is the place (a number), {reward} the reward ("3 hints and 3 kitties"). Describes the place, never "your reward"',
+  },
+  'ladder.chest.count': { description: 'In the chest\'s tooltip: how many hints or kitties, next to the picture ("×3")', maxLength: 6, translatable: false },
   'ladder.info.window.rollingJoin': { description: 'How it works: how long a ranking lasts ({hours}) and its size ({count}); a new one is joined when the game is next opened' },
   'ladder.info.activity': { description: 'How it works: what other players see about my activity (last active, playing now)' },
   'ladder.row.a11y': { description: 'Screen-reader name of one ranking row: rank, ranking name, fish, hearts' },

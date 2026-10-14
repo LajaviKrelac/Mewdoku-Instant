@@ -947,10 +947,11 @@ const FAKE_RULES: RulesView = {
   durationMs: 24 * HOUR,
   maxMembers: 50,
   scoringModes: ['level', 'daily', 'event'],
+  // UI batch: the server's default rules.places (1st 3 + 3, 2nd 2 + 2, 3rd 1 + 1).
   places: [
-    { place: 1, hints: 2, kitties: 2 },
-    { place: 2, hints: 1, kitties: 1 },
-    { place: 3, hints: 1, kitties: 0 },
+    { place: 1, hints: 3, kitties: 3 },
+    { place: 2, hints: 2, kitties: 2 },
+    { place: 3, hints: 1, kitties: 1 },
   ],
   minMembers: 5,
   doubleByVideo: true,
@@ -994,7 +995,7 @@ const paidResult = (now: number): ResultView => ({
   place: 2,
   members: 37,
   points: 31,
-  reward: { rewardId: `${FAKE_ENDED}:7`, place: 2, grant: { hints: 1, kitties: 1 }, canDouble: true, expiresAt: now + 5 * 24 * HOUR, claim: null },
+  reward: { rewardId: `${FAKE_ENDED}:7`, place: 2, grant: { hints: 2, kitties: 2 }, canDouble: true, expiresAt: now + 5 * 24 * HOUR, claim: null },
 });
 
 /** Answers the ranking API inside the page (the e2e build's VITE_LADDER_URL, whatever its host). */
@@ -1293,27 +1294,44 @@ test.describe('Phase 2e (G3): the ranking views in the real app (route fake; spe
         await expect(mine.locator('.rank-row__name')).toHaveAttribute('dir', 'auto');
         await expect(panel.locator('.ranking__tap')).toBeEnabled({ timeout: 8_000 });
         await p.waitForTimeout(500);
-        // On open the list scrolls so my row is in view; the pinned copy shows only while it is scrolled away.
+        // On open the list scrolls so my row is in view (UI batch: the real row, sticky in the list; no copy).
         expect(await inScrollView(p, '.overlay[data-overlay="ranking"] ol.rank-rows', '.overlay[data-overlay="ranking"] li.rank-row[data-me="1"]')).toBe(true);
-        await expect(list.locator('.rank-row--pinned')).toBeHidden();
+        await expect(list.locator('.rank-row--pinned')).toHaveCount(0);
         // The 37 rows scroll inside the card; the footer stays on screen (spec §10.3 layout).
         expect(await inViewport(p, '.overlay[data-overlay="ranking"] .ranking__tap')).toBe(true);
         await expectFits(p, '.overlay[data-overlay="ranking"]');
-        const count = (await panel.locator('.ranking__count').textContent()) ?? '';
+        // UI batch: no player count, no "top 3" line; the subtitle is hidden, so the stopwatch sits right under the title.
+        await expect(panel.locator('.ranking__count')).toHaveCount(0);
+        await expect(panel.locator('.ranking__sub')).toBeHidden();
+        await expect(panel.locator('.ranking__rewards')).toBeHidden();
+        const ribbon = (await panel.locator('.ranking__title').boundingBox())!;
+        const timer = (await list.locator('.lb-timer').boundingBox())!;
+        expect(timer.y - (ribbon.y + ribbon.height)).toBeLessThan(16);
+        // Each paid place its own chest (1st gold, 2nd silver, 3rd bronze).
+        for (const r of [1, 2, 3]) await expect(list.locator(`li.rank-row[data-rank="${r}"] .rank-row__gift use`)).toHaveAttribute('href', `#reward-chest-${r}`);
         if (!v.lang) {
           await expect(panel.locator('.ranking__title')).toHaveText('Leaderboard'); // leaderboard update: the ribbon title
-          await expect(panel.locator('.ranking__sub')).toHaveText('+3 fish · Your total: 28');
-          expect(count).toBe('37 players');
-          await expect(panel.locator('.ranking__rewards')).toHaveText('The top 3 win hints and kitties.');
+          await expect(panel.locator('.ranking__sub')).toHaveText('+3 fish · Your total: 28'); // the dialog's description
         }
-        await expectLang(p, v, count + ((await panel.locator('.ranking__sub').textContent()) ?? ''), /\bplayers\b|Your total/);
+        await expectLang(p, v, (await panel.locator('.ranking__sub').textContent()) ?? '', /Your total/);
         await shot2e(p, `panel-${suffix}`);
-        // A drag inside the list scrolls it and never continues (spec §2.4 Taps); my pinned copy then shows.
+        // A drag inside the list scrolls it and never continues (spec §2.4 Taps); my row then waits at the list's top.
         await p.locator('.overlay[data-overlay="ranking"] ol.rank-rows').evaluate((el) => el.scrollTo({ top: el.scrollHeight }));
         await p.waitForTimeout(200);
-        await expect(list.locator('.rank-row--pinned')).toBeVisible();
+        expect(await inScrollView(p, '.overlay[data-overlay="ranking"] ol.rank-rows', '.overlay[data-overlay="ranking"] li.rank-row[data-me="1"]')).toBe(true);
         await expect(panel).toBeVisible();
         await shot2e(p, `panel-scrolled-${suffix}`);
+        // A chest's tooltip (UI batch) where the rows have room for chests (wider than 340 px); Esc closes it first.
+        if ((p.viewportSize()?.width ?? 0) > 340) {
+          await p.locator('.overlay[data-overlay="ranking"] ol.rank-rows').evaluate((el) => el.scrollTo({ top: 0 }));
+          await list.locator('li.rank-row[data-rank="1"] .rank-row__gift').click();
+          await expect(list.locator('.lb-tip')).toBeVisible();
+          await expect(panel).toBeVisible();
+          await shot2e(p, `panel-chest-${suffix}`);
+          await p.keyboard.press('Escape');
+          await expect(list.locator('.lb-tip')).toBeHidden();
+          await expect(panel).toBeVisible();
+        }
       });
     });
 
@@ -1337,7 +1355,6 @@ test.describe('Phase 2e (G3): the ranking views in the real app (route fake; spe
         await expect(list.locator('.ranking__alone')).toBeVisible();
         if (!v.lang) {
           await expect(list.locator('.ranking__alone')).toHaveText("You're the only player in this ranking.");
-          await expect(list.locator('.ranking__count')).toHaveText('1 player');
           await expect(list.locator('.ranking__rewards')).toHaveText('Rewards need at least 5 players in this ranking.');
         }
         await expect(panel.locator('.ranking__tap')).toBeEnabled({ timeout: 8_000 });
@@ -1347,7 +1364,7 @@ test.describe('Phase 2e (G3): the ranking views in the real app (route fake; spe
       });
     });
 
-    test(`[${v.id}] Home chip → the ranking sheet (list, info), the name sheet from my row's pencil, the Settings rows`, async ({ browser, page }, info) => {
+    test(`[${v.id}] Home chip → the ranking sheet (list, info), the name sheet from the Home picture, the Settings rows`, async ({ browser, page }, info) => {
       await onVariant(browser, page, info, v, async (p, suffix) => {
         const fake = await openRanked(p, returning({ dayStreak: { dates: [dailyDateKey(NOW - DAY_MS)], run: 3, best: 9, paid: [] } }), { myPoints: 28 });
         const chip = p.locator('.screen--home .ladder-chip');
@@ -1362,7 +1379,12 @@ test.describe('Phase 2e (G3): the ranking views in the real app (route fake; spe
         const sheet = p.locator('.overlay[data-overlay="ladder"]');
         await expect(sheet.locator('.rank-list[data-kind="bracket"]')).toBeVisible({ timeout: 8_000 });
         await expect(sheet.locator('ol.rank-rows > li.rank-row')).toHaveCount(37);
-        await expect(sheet.locator('li.rank-row[data-me="1"] .rank-row__edit')).toBeVisible();
+        // UI batch: no pencil; (i) at the start and × at the end with the title centred between them.
+        await expect(sheet.locator('.rank-row__edit')).toHaveCount(0);
+        const [infoBox, titleBox, closeBox] = await Promise.all(['.ladder-sheet__info', '.overlay__title', '.overlay__close'].map(async (s) => (await sheet.locator(s).boundingBox())!));
+        const centre = (b: { x: number; width: number }): number => b.x + b.width / 2;
+        expect(centre(infoBox!) < centre(closeBox!)).toBe(v.lang !== 'ar'); // the inline start (the right in Arabic)
+        expect(Math.abs(centre(titleBox!) - (centre(infoBox!) + centre(closeBox!)) / 2)).toBeLessThan(2);
         // Spec §2.4 / §2.9: "Last updated" and the offline line only for a cached bracket with NO answer; here the
         // server just answered GET /v1/bracket, so the list is fresh and its hearts can be given (requests-G3 R16, G1).
         expect.soft(fake.calls).toContain('GET /v1/bracket');
@@ -1386,7 +1408,10 @@ test.describe('Phase 2e (G3): the ranking views in the real app (route fake; spe
         await p.keyboard.press('Escape');
         await expect(sheet.locator('.rank-list[data-kind="bracket"]')).toBeVisible();
 
-        await sheet.locator('li.rank-row[data-me="1"] .rank-row__edit').click();
+        // UI batch: the name sheet opens from the Home picture (the sheet has no pencil any more).
+        await p.keyboard.press('Escape');
+        await expect(sheet).toBeHidden();
+        await p.locator('.screen--home .home__profile').click();
         const nick = p.locator('.overlay[data-overlay="nickname"]');
         await expect(nick).toBeVisible({ timeout: 8_000 });
         await expect(nick.locator('.nickname__preview .nickname__name')).toHaveText('Velvet Pounce 27');
@@ -1401,7 +1426,6 @@ test.describe('Phase 2e (G3): the ranking views in the real app (route fake; spe
         expect(await inViewport(p, '.overlay[data-overlay="nickname"] button.nickname__save')).toBe(true);
         await p.keyboard.press('Escape');
         await expect(nick).toBeHidden();
-        await p.keyboard.press('Escape');
         await expect(sheet).toBeHidden();
 
         await p.locator('.screen--home .top-bar__btn--settings').click();
@@ -1432,7 +1456,7 @@ test.describe('Phase 2e (G3): the ranking views in the real app (route fake; spe
         await expect(card.locator('button.ladder-result__ok')).toBeHidden();
         if (!v.lang) {
           await expect(card.locator('.ladder-result__place')).toHaveText('You finished #2 of 37.');
-          await expect(card.locator('.ladder-result__line')).toHaveText('Your reward: +1 hint and +1 kitty');
+          await expect(card.locator('.ladder-result__line')).toHaveText('Your reward: +2 hints and +2 kitties');
           // audit B12, B13: named by its visible label, described by the visible video line under it
           await expect(card.getByRole('button', { name: 'Collect ×2', exact: true })).toBeVisible();
           await expect(card.locator('.ladder-result__double-note')).toHaveText('You can watch a video to double your reward.');
@@ -1448,7 +1472,7 @@ test.describe('Phase 2e (G3): the ranking views in the real app (route fake; spe
         await expect(card).toBeHidden({ timeout: 8_000 });
         await expect
           .poll(async () => p.evaluate(() => (window as TestWindow).__mewdoku?.app().save.stock))
-          .toEqual({ hints: (before?.hints ?? 0) + 1, kitties: (before?.kitties ?? 0) + 1 });
+          .toEqual({ hints: (before?.hints ?? 0) + 2, kitties: (before?.kitties ?? 0) + 2 });
       });
     });
 

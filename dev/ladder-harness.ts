@@ -174,6 +174,13 @@ function rows(n: number, me = 5, over: (r: BracketRowView) => Partial<BracketRow
   });
 }
 
+/** UI batch (leaderboard): the server's default rules.places (server/src/core/config.ts), the chests' rewards. */
+const PLACE_REWARDS: BracketListView['rewards'] = [
+  { place: 1, hints: 3, kitties: 3 },
+  { place: 2, hints: 2, kitties: 2 },
+  { place: 3, hints: 1, kitties: 1 },
+];
+
 function bracket(over: Partial<BracketListView> = {}): BracketListView {
   const rs = over.rows ?? rows(37);
   return {
@@ -185,6 +192,7 @@ function bracket(over: Partial<BracketListView> = {}): BracketListView {
     rewardsLine: 'places',
     paidPlaces: 3,
     minMembers: 5,
+    rewards: PLACE_REWARDS,
     heartsNew: 0,
     waiting: 0,
     stale: null,
@@ -273,7 +281,6 @@ function sheetProps(over: Partial<LadderSheetProps> = {}): LadderSheetProps {
     infoOnly: false,
     reducedMotion: reduced,
     onHeart: log('onHeart'),
-    onEditName: log('onEditName'),
     onClose: log('onClose'),
     streakBest: 9,
     ...over,
@@ -441,6 +448,15 @@ const VIEWS: Record<string, () => void> = {
       }),
     }),
   'panel-loading': () => panel({ kind: 'bracket', view: bracket() }, { bracketList: undefined }),
+  // UI batch (leaderboard): a chest's reward tooltip (row 3's chest; the podium's 1st in the sheet). Only a chest
+  // that is drawn (≤ 340 px wide the rows have none).
+  'panel-tip': () => {
+    panel({ kind: 'bracket', view: bracket() });
+    setTimeout(() => {
+      const chest = document.querySelector<HTMLElement>('li.rank-row[data-rank="3"] .rank-row__gift');
+      if (chest && chest.getClientRects().length > 0) chest.click();
+    }, 700);
+  },
   // the ranking sheet (spec §2.5)
   'sheet-list': () => sheet(),
   'sheet-hearts': () => sheet({ list: bracket({ heartsNew: 3, firstLineName: 'Velvet Pounce 27' }) }),
@@ -448,6 +464,12 @@ const VIEWS: Record<string, () => void> = {
   'sheet-info': () => sheet({ view: 'info' }),
   'sheet-info-only': () => sheet({ view: 'info', infoOnly: true, list: null }),
   'sheet-records': () => sheet({ view: 'records', list: null, recordsReason: 'opted_out' }),
+  // My row far down (#30): scroll up and it waits at the list's bottom edge, down and it waits at the top.
+  'sheet-me-30': () => sheet({ list: bracket({ rows: rows(37, 30) }) }),
+  'sheet-tip': () => {
+    sheet();
+    setTimeout(() => document.querySelector<HTMLElement>('.lb-pod[data-place="1"] .lb-pod__gift')?.click(), 700);
+  },
   // the result card (spec §2.6)
   session: () => session(),
   'result-paid': () => result(),

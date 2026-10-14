@@ -294,8 +294,6 @@ export const PLAYER_COUNT_KEYS: readonly string[] = [
   'ladder.info.window.utcDay',
   'ladder.info.rewards.one',
   'ladder.info.rewards.other',
-  'ladder.players.one',
-  'ladder.players.other',
   'ladder.rewards.min',
   'rank.entries.one',
   'rank.entries.other',

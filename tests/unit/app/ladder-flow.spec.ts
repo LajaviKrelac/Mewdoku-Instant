@@ -655,6 +655,8 @@ describe('rows rendered = rows returned (spec §10.6 #1, H-2, H-3)', () => {
     expect(view?.members).toBe(n);
     expect(view?.rows.filter((r) => r.me)).toHaveLength(1);
     expect(view?.rewardsLine).toBe(n < s.fake.state.rules.minMembers ? 'min' : 'places');
+    // UI batch (leaderboard): the chests' amounts are the server's rules.places, never ours (C-5).
+    expect(view?.rewards).toEqual(s.fake.state.rules.places.map((p) => ({ place: p.place, hints: p.hints, kitties: p.kitties })));
   });
 
   it('0 rows (no bracket yet): no list is invented; the chip says Join', async () => {

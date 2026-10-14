@@ -227,7 +227,7 @@ describe('hearts (spec §1.7): one per row, my own once, at most 20 given', () =
 });
 
 describe('end of the ranking day: the real finalisation and rewards', () => {
-  it('the next session ends the day with me 2nd of 24: a paid result (1 hint + 1 kitty), Collect ×2 once', async () => {
+  it('the next session ends the day with me 2nd of 24: a paid result (2 hints + 2 kitties), Collect ×2 once', async () => {
     const storage = new MemoryStorage();
     const s = setup({ returning: true, storage });
     await s.signIn();
@@ -239,7 +239,7 @@ describe('end of the ranking day: the real finalisation and rewards', () => {
     expect(session.results).toHaveLength(1);
     const result = session.results[0];
     expect(result).toMatchObject({ place: 2, members: 24, points: 22 });
-    expect(result?.reward).toMatchObject({ place: 2, grant: { hints: 1, kitties: 1 }, canDouble: true, claim: null });
+    expect(result?.reward).toMatchObject({ place: 2, grant: { hints: 2, kitties: 2 }, canDouble: true, claim: null });
     // The ended bracket: final ranks, me 2nd, exactly one sample player ahead.
     const auth = `Bearer ${session.token}`;
     const v = parseBracketView((await again.handle('GET', '/v1/bracket', undefined, auth)).body) as BracketView;
@@ -249,9 +249,9 @@ describe('end of the ranking day: the real finalisation and rewards', () => {
     // Collect ×2: doubled once; a retry answers alreadyClaimed with the stored doubling.
     const rewardId = result?.reward?.rewardId as string;
     const c1 = parseClaimResponse((await again.handle('POST', '/v1/rewards/claim', { rewardId, double: true }, auth)).body);
-    expect(c1).toMatchObject({ grant: { hints: 2, kitties: 2 }, doubled: true, alreadyClaimed: false, place: 2 });
+    expect(c1).toMatchObject({ grant: { hints: 4, kitties: 4 }, doubled: true, alreadyClaimed: false, place: 2 });
     const c2 = parseClaimResponse((await again.handle('POST', '/v1/rewards/claim', { rewardId, double: false }, auth)).body);
-    expect(c2).toMatchObject({ grant: { hints: 2, kitties: 2 }, doubled: true, alreadyClaimed: true });
+    expect(c2).toMatchObject({ grant: { hints: 4, kitties: 4 }, doubled: true, alreadyClaimed: true });
     // Sample members are never real players (their rewards are never shown to anyone).
     expect(Object.values(loadState(storage).players).every((p) => !p.key.startsWith(SAMPLE_KEY_PREFIX))).toBe(true);
     // The next win opens a new bracket.
@@ -263,7 +263,7 @@ describe('end of the ranking day: the real finalisation and rewards', () => {
   it('a player with no fish today is entered with 12 fish first, then finishes 2nd', async () => {
     const s = setup({ endDay: true });
     const session = await s.signIn();
-    expect(session.results[0]).toMatchObject({ place: 2, points: 12, reward: { grant: { hints: 1, kitties: 1 } } });
+    expect(session.results[0]).toMatchObject({ place: 2, points: 12, reward: { grant: { hints: 2, kitties: 2 } } });
   });
 });
 

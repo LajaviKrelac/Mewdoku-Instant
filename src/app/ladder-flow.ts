@@ -637,6 +637,8 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
       rewardsLine: paidPlaces === 0 ? 'none' : view.members < minMembers ? 'min' : 'places',
       paidPlaces,
       minMembers,
+      // UI batch (leaderboard): the chests' rewards, the server's own amounts (C-5).
+      rewards: r ? r.places.map((p) => ({ place: p.place, hints: p.hints, kitties: p.kitties })) : [],
       heartsNew,
       waiting: waitingFish(save().ladder),
       stale,
@@ -863,7 +865,6 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
       recordsReason: live ? recordsReason() : listed() ? (auth === 'suspended' ? 'paused' : 'unavailable') : 'opted_out',
       streakBest: save().dayStreak.best,
       onHeart: (slot) => void heart(slot),
-      onEditName: () => openNameSheet(),
       onClose: () => deps.router.close('ladder'),
     };
   }

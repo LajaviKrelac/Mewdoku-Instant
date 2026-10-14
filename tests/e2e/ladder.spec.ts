@@ -60,7 +60,7 @@ async function winNext(page: Page): Promise<void> {
 
 const panel = (page: Page) => page.locator('.overlay[data-overlay="ranking"]');
 const bracketList = (page: Page) => panel(page).locator('.rank-list[data-kind="bracket"]');
-/** The server's rows only (the pinned copy of my row is aria-hidden and not counted). */
+/** The server's rows (UI batch: my row is one of them, sticky in CSS; there is no copy of it). */
 const rows = (page: Page) => bracketList(page).locator('ol.rank-rows > li.rank-row');
 
 /** The rows as shown; a name's no-break space before its number (audit B7, display only) reads as the server's space. */
@@ -117,7 +117,9 @@ test('a win: the panel lists exactly the server bracket (rows, order, ranks, cou
   expect(ui.map((r) => [r.rank, r.name, r.points])).toEqual(server.rows.map((r) => [String(r.rank), r.nickname, String(r.points)]));
   expect(ui.filter((r) => r.me === '1')).toHaveLength(1);
   expect(ui.find((r) => r.me === '1')?.points).toBe('3');
-  await expect(panel(page).locator('.ranking__count')).toContainText('4');
+  // UI batch: no visible player count; the server's count is read out in the announcement only.
+  await expect(panel(page).locator('.ranking__count')).toHaveCount(0);
+  await expect(panel(page).locator('[role="status"]')).toContainText('of 4');
   // My numbers (no rows) are saved; the rows live in the rows cache only.
   const save = await page.evaluate(() => (window as TestWindow).__mewdoku?.app().save);
   expect(save?.ladder.pending).toEqual([]);
@@ -322,7 +324,7 @@ async function endBracket(pool: string): Promise<void> {
   await devCron(pool);
 }
 
-test('a ranking ends: the result card (#1 of 5) → Collect ×2 plays the video → +4 hints, +4 kitties once; the next Home visit shows no card', async ({ page }) => {
+test('a ranking ends: the result card (#1 of 5) → Collect ×2 plays the video → +6 hints, +6 kitties once; the next Home visit shows no card', async ({ page }) => {
   test.setTimeout(120_000);
   const pool = newPool('lad5');
   await others(pool, [1, 1, 1, 1]);
@@ -337,7 +339,8 @@ test('a ranking ends: the result card (#1 of 5) → Collect ×2 plays the video 
   await expect(card).toHaveAttribute('data-case', 'paid', { timeout: 15_000 });
   await expect(card).toContainText('You finished #1 of 5.');
   await card.locator('button.ladder-result__double').click();
-  await expect.poll(() => stock(page), { timeout: 20_000 }).toEqual({ hints: (before?.hints ?? 0) + 4, kitties: (before?.kitties ?? 0) + 4 });
+  // UI batch: 1st place pays 3 + 3 (the server's rules.places), doubled.
+  await expect.poll(() => stock(page), { timeout: 20_000 }).toEqual({ hints: (before?.hints ?? 0) + 6, kitties: (before?.kitties ?? 0) + 6 });
   await expect.poll(() => overlays(page)).not.toContain('ladder_result');
   const s = await page.evaluate(() => (window as TestWindow).__mewdoku?.app().save.ladder);
   expect(s?.claimed).toHaveLength(1);
@@ -346,7 +349,7 @@ test('a ranking ends: the result card (#1 of 5) → Collect ×2 plays the video 
   await page.waitForFunction(() => (window as TestWindow).__mewdoku?.ladder?.()?.signedIn === true, undefined, { timeout: 10_000 });
   await page.waitForTimeout(1_500);
   expect(await overlays(page)).not.toContain('ladder_result');
-  expect(await stock(page)).toEqual({ hints: (before?.hints ?? 0) + 4, kitties: (before?.kitties ?? 0) + 4 });
+  expect(await stock(page)).toEqual({ hints: (before?.hints ?? 0) + 6, kitties: (before?.kitties ?? 0) + 6 });
 });
 
 test('a 2-player ranking ends with me first: "Not enough players took part for rewards this time." and no reward', async ({ page }) => {

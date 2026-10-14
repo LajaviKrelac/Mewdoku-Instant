@@ -31,10 +31,11 @@ describe('ranking order (P-L11) and rewards (§1.6)', () => {
   });
   it('pays only with ≥ 5 visible members and someone below each paid place', () => {
     const five = rankRows([m(0, 9, 1), m(1, 8, 1), m(2, 7, 1), m(3, 6, 1), m(4, 5, 1)]);
+    // UI batch (2026-10-13; D-2e-17 / P-L5 revised): 1st 3 + 3, 2nd 2 + 2, 3rd 1 + 1.
     expect(paidPlaces(five, DEFAULT_CONFIG).map((p) => [p.place, p.slot, p.hints, p.kitties])).toEqual([
-      [1, 0, 2, 2],
-      [2, 1, 1, 1],
-      [3, 2, 1, 0],
+      [1, 0, 3, 3],
+      [2, 1, 2, 2],
+      [3, 2, 1, 1],
     ]);
     expect(paidPlaces(five.slice(0, 4), DEFAULT_CONFIG)).toEqual([]);
     const small = { ...DEFAULT_CONFIG, rewards: { ...DEFAULT_CONFIG.rewards, minMembers: 2 } };

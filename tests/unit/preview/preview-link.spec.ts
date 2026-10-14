@@ -298,6 +298,15 @@ describe('the "sample players" lines (preview/labels.ts)', () => {
     const list = document.querySelector('.rank-list--bracket') as HTMLElement;
     expect(list.firstElementChild?.textContent).toBe('Preview: sample players');
     expect(list.querySelectorAll('[data-preview-note]')).toHaveLength(1);
+    // UI batch (leaderboard): the stopwatch stays right under the title; the line goes after it.
+    const timed = document.createElement('div');
+    timed.className = 'rank-list rank-list--bracket';
+    timed.innerHTML = '<div class="lb-timer"></div><p class="ranking__meta">x</p>';
+    document.body.append(timed);
+    labelSamples(document.body, document);
+    labelSamples(document.body, document);
+    expect(Array.from(timed.children).map((c) => c.className)).toEqual(['lb-timer', 'mwp-note', 'ranking__meta']);
+    timed.remove();
     expect(document.querySelector('.ladder-result__desc [data-preview-note]')?.textContent).toBe('Preview: sample ranking');
     // A list the router mounts later gets its line too.
     const stop = watchSampleLabels(document);

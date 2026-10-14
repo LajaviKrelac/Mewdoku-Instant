@@ -326,3 +326,8 @@
   line-height: 1.5;
   text-align: center;
 }
+
+/* UI batch (leaderboard): in a bracket list the line sits under the stopwatch, which is right under the title. */
+.rank-list--bracket > .mwp-note {
+  margin: 4px auto 0;
+}

@@ -3,13 +3,13 @@
 // code; always "ranking" in copy, never "leaderboard"), its end-of-ranking card, the ranking name and
 // picture, the Settings rows, the out-of-helpers card's Buy rows, the daily streak and the daily reward
 // line. Our own copy (06 §3; D-2e-0): nothing here comes from the original or a look-alike app.
-// Honesty (spec §0.4): no line claims a player count or a statistic except ladder.players.*, which only
-// ever carries the server's real count; no line promises that queued fish will count (H-4) or that more
+// Honesty (spec §0.4): no line claims a player count or a statistic (the server's real count goes only into
+// the rules lines and the announcement); no line promises that queued fish will count (H-4) or that more
 // players will join (C-4); no urgency ("you'll lose your streak!") anywhere (§5.1).
 // Counts come from the server's rules (rules.places, rules.minMembers) and from dayStreak.cycleDays, never
 // from a literal "3" or "7" in the copy (C-5): plural pairs pick "First place …" / "The top {count} …".
 // Ranking names are our English words in every locale and are never translated (glossary).
-// Keys beyond Appendix A (G3, for the UI the appendix describes): common.cancel, nick.edit.a11y,
+// Keys beyond Appendix A (G3, for the UI the appendix describes): common.cancel,
 // ladder.chip.rank, ladder.total, ladder.pill.*, ladder.records.title, streak.best, streak.days.*; nick.cooldown reads "again in {time}"
 // ({time} = formatDuration, "5 h 12 min") so translators get the whole phrase.
 // Wired into ../en.ts. Same conventions as en.ts: {name} placeholders, `.one` / `.other` plural pairs.
