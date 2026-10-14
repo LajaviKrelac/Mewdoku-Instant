@@ -9,10 +9,17 @@ import { newGame } from '../../../src/game/factory';
 import { dailySlotFor } from '../../../src/game/ramp';
 import { defaults } from '../../../src/game/save';
 import { medianSolveMs } from '../../../src/game/solve-time-model';
-import type { GameState, SaveData } from '../../../src/game/types';
+import type { GameState, LevelBest, SaveData } from '../../../src/game/types';
 import { dailyPuzzle, levelPuzzle, NOW } from './harness';
 
 const save = (patch: Partial<SaveData> = {}): SaveData => ({ ...defaults(NOW - 86_400_000), tutorialDone: true, ...patch });
+
+/** Best records for levels from … to (a won level's record). */
+const wins = (from: number, to: number, ms = 300_000): Record<number, LevelBest> => {
+  const out: Record<number, LevelBest> = {};
+  for (let l = from; l <= to; l++) out[l] = [ms, 1];
+  return out;
+};
 
 /** A won 5×5 level board with these attempt facts. */
 const won = (patch: Partial<GameState> = {}, puzzle = levelPuzzle(12)): GameState => ({
@@ -23,9 +30,13 @@ const won = (patch: Partial<GameState> = {}, puzzle = levelPuzzle(12)): GameStat
   ...patch,
 });
 
+/** A won board of size n (level or daily by the puzzle's id) in `ms`. */
+const wonSize = (n: number, ms: number, puzzle = levelPuzzle(12)): GameState => won({ puzzle: { ...puzzle, n }, elapsedMs: ms });
+
+// The default win: Level 12 after the tutorial and Levels 2 … 11 (the records before it are left out: no best to beat).
 const input = (patch: Partial<FactsInput> = {}): FactsInput => ({
   before: save({ progress: { level: 12, completed: 11, best: {} } }),
-  after: save({ progress: { level: 13, completed: 12, best: { 12: [95_000, 0] } } }),
+  after: save({ progress: { level: 13, completed: 12, best: { ...wins(2, 11), 12: [95_000, 0] } } }),
   state: won(),
   mode: 'level',
   hard: false,
@@ -55,7 +66,7 @@ describe('victory facts (the player\'s own game and save)', () => {
       retries: 2,
       run: 3,
       bestBeforeMs: null,
-      levelsSolved: 12,
+      levelsSolved: 11, // Levels 2 … 12: the tutorial is not a solved level
       dailiesSolved: 0,
     });
   });
@@ -64,7 +75,9 @@ describe('victory facts (the player\'s own game and save)', () => {
     const before = save({ progress: { level: 12, completed: 11, best: { 3: [40_000, 0], 4: [30_000, 0], 9: [200_000, 1] } } });
     const size = (l: number): number | null => (l === 4 ? 6 : l === 9 ? 5 : l === 3 ? 5 : null);
     expect(victoryFacts(input({ before, levelSize: size })).bestBeforeMs).toBe(40_000);
-    expect(victoryFacts(input({ before })).bestBeforeMs).toBeNull(); // sizes unknown: no claim
+    // Sizes unknown: every record may be of this size (the 6×6 one too), so the line can say less, never too much.
+    expect(victoryFacts(input({ before })).bestBeforeMs).toBe(30_000);
+    expect(victoryFacts(input({ before, levelSize: () => null })).bestBeforeMs).toBe(30_000);
     // Dailies: only earlier dailies of the same size count.
     const dates = ['2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09', '2026-10-10', '2026-10-11'];
     const n = dailySlotFor('2026-10-12').n;
@@ -80,6 +93,68 @@ describe('victory facts (the player\'s own game and save)', () => {
     expect(f.n).toBe(n);
     expect(f.bestBeforeMs).toBe(80_000);
     expect(f.dailiesSolved).toBe(dates.length + 1);
+  });
+
+  it('a level whose pack is not in memory may be of this size: no "new best" over a faster record of unknown size', () => {
+    // Fresh start at L350: packs 0 and 3 are in memory, pack 1 (L101-200) is not. The fastest 9×9 is L150 (2:40).
+    const best = { 50: [200_000, 0], 150: [160_000, 0], 320: [210_000, 1], 330: [90_000, 0] } satisfies Record<number, LevelBest>;
+    const size = (l: number): number | null => (l >= 101 && l <= 200 ? null : l === 330 ? 8 : 9);
+    const at350 = (b: Record<number, LevelBest>): VictoryFacts =>
+      victoryFacts(input({ before: save({ progress: { level: 350, completed: 349, best: b } }), state: wonSize(9, 185_000, levelPuzzle(350)), levelSize: size }));
+    expect(at350(best).bestBeforeMs).toBe(160_000);
+    expect(praiseLines(at350(best)).map((l) => l.id)).not.toContain('best');
+    // Without that record, 3:05 beats every 9×9 (the faster 8×8 is another size): the line is true.
+    const { 150: _l150, ...known } = best;
+    expect(at350(known).bestBeforeMs).toBe(200_000);
+    expect(praiseLines(at350(known)).find((l) => l.id === 'best')).toEqual({ id: 'best', ms: 185_000, n: 9 });
+    // The shipped packs' case: L121 (pack 1, not loaded) 1:20, L202 2:30, both 9×9; L205 (9×9) won in 2:00.
+    const f = victoryFacts(
+      input({
+        before: save({ progress: { level: 205, completed: 204, best: { 121: [80_000, 0], 202: [150_000, 1] } } }),
+        state: wonSize(9, 120_000, levelPuzzle(205)),
+        levelSize: (l) => (l === 121 ? null : 9),
+      }),
+    );
+    expect(f.bestBeforeMs).toBe(80_000);
+    expect(praiseLines(f).map((l) => l.id)).not.toContain('best');
+  });
+
+  it('"a {size} board" means every board of that size: a level counts the same-size dailies, a daily the same-size levels', () => {
+    const wed = '2026-10-07';
+    const n = dailySlotFor(wed).n;
+    const sameSize = ['2026-09-30', '2026-10-01'].filter((d) => dailySlotFor(d).n === n);
+    const otherSize = '2026-09-28';
+    expect(sameSize).toHaveLength(2);
+    expect(dailySlotFor(otherSize).n).not.toBe(n);
+    const daily: SaveData['daily'] = { [otherSize]: [60_000, 0, 0, 0] }; // faster, but another size
+    for (const d of sameSize) daily[d] = [210_000, 0, 0, 0];
+    // The daily: L150 (this size) in 2:10, the same-size dailies in 3:30; today's daily in 3:00 is no new best.
+    const before = save({ progress: { level: 160, completed: 159, best: { 150: [130_000, 0] } }, daily });
+    const sizes = (l: number): number | null => (l === 150 ? n : null);
+    const today = victoryFacts(input({ mode: 'daily', before, after: before, state: wonSize(n, 180_000, dailyPuzzle(wed)), levelSize: sizes }));
+    expect(today.bestBeforeMs).toBe(130_000);
+    expect(praiseLines(today).map((l) => l.id)).not.toContain('best');
+    // The level: a same-size daily in 2:00 is the best to beat for L160 (this size) won in 2:30.
+    const lvl = victoryFacts(
+      input({
+        before: { ...before, daily: { ...daily, [sameSize[0] as string]: [120_000, 0, 0, 0] } },
+        state: wonSize(n, 150_000, levelPuzzle(160)),
+        levelSize: (l) => (l === 150 ? n + 1 : n),
+      }),
+    );
+    expect(lvl.bestBeforeMs).toBe(120_000);
+    expect(praiseLines(lvl).map((l) => l.id)).not.toContain('best');
+    // An event never claims a best.
+    expect(victoryFacts(input({ mode: 'event', before, state: wonSize(n, 1_000), levelSize: () => n })).bestBeforeMs).toBeNull();
+  });
+
+  it('the levels solved are real wins: a skipped tutorial ("I know how to play") is not a solved level', () => {
+    // Skipped tutorial (completed 1, no record), then Level 2 won: completed 2, one record.
+    const before = save({ progress: { level: 2, completed: 1, best: {} } });
+    const after = save({ progress: { level: 3, completed: 2, best: { 2: [95_000, 0] } } });
+    const f = victoryFacts(input({ before, after, state: won({}, levelPuzzle(2)) }));
+    expect(f.levelsSolved).toBe(1);
+    expect(praiseLines(f).map((l) => l.id)).not.toContain('levels');
   });
 
   it('a restored board claims neither the mouse nor a best time; an unknown mouse count stays unknown', () => {
@@ -107,6 +182,14 @@ describe('praise lines (true facts of this board, best first)', () => {
     expect(praiseLines(facts({ bestBeforeMs: null })).map((l) => l.id)).not.toContain('best');
     const ids = praiseLines(facts({ hard: true, mistakes: 3, revives: 1, retries: 1, run: 2 })).map((l) => l.id);
     expect(ids).toEqual(['hard', 'revive', 'retry', 'noHelp', 'levels']);
+  });
+
+  it('after a Retry, never "not a single wrong cat on this board" (the lost attempt had wrong cats on it)', () => {
+    // Retry, no wrong cat in this attempt, one hint, no best, not Hard, slow (no statistic).
+    const f = facts({ retries: 1, hints: 1, ms: medianSolveMs({ n: 5, grade: 2, hard: false }) * 3 });
+    expect(praiseLines(f).map((l) => l.id)).toEqual(['retry', 'levels']);
+    expect(pickVictoryLines(f, null).map((l) => l.id)).toEqual(['retry', 'levels']);
+    expect(praiseLines(facts({ retries: 0, hints: 1 })).map((l) => l.id)).toContain('noSlips');
   });
 
   it('after a slip: no hint or kitty (the mouse is never claimed), the closing run from victory.runMin', () => {

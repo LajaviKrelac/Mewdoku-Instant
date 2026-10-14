@@ -126,7 +126,8 @@ export interface LadderFlow {
   panelWaiting(): number;
   /**
    * UI batch (victory): this win's daily standing from the server's answer (spec §0.4 H-2a): the standing, null when
-   * the answer carried none (or never came), 'pending' while it is on its way. null without a current win.
+   * the answer carried none (or never came), 'pending' while it is on its way. null without a current win. Fixed once
+   * it is not 'pending': an answer after the win stopped waiting leaves it null (the victory keeps its estimate).
    */
   dailyStanding(): DailyStanding | null | 'pending';
   /** The panel's extra props: the bracket list factory, hearts and the info button. */
@@ -168,7 +169,7 @@ interface WinState {
   state: 'sending' | 'answered' | 'failed';
   view: BracketView | null;
   gained: number | null;
-  /** UI batch (victory): the answer's daily standing for this win (WinResult.daily), else null. */
+  /** UI batch (victory): the answer's daily standing for this win (WinResult.daily) while it was 'sending', else null. */
   daily: DailyStanding | null;
 }
 
@@ -425,7 +426,9 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
             log({ name: 'ladder_submit', params: { mode: w ? modeOf(w.puzzleId) : 'level', result, reason: res.reason ?? '', ms } });
             if (win && win.ref.winId === res.winId) {
               win.gained = res.points;
-              win.daily = res.daily ?? null;
+              // UI batch (victory): the standing only while the win waits for it. A late answer (after panelWaitMs or a
+              // retry flush) never replaces the estimate an open victory may already show (it never flips on screen).
+              if (win.state === 'sending') win.daily = res.daily ?? null;
             }
           }
           applyView(answered.bracket);

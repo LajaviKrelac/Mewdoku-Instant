@@ -41,14 +41,14 @@ standing)` returns ids and numbers, never keys (session/views are first-load; th
 | id | When (all facts of THIS board) | English (ours, `en/lazy.ts` `enLazyUi2b` victory block) |
 |---|---|---|
 | `flawless` | no wrong cat, no hint, kitty, mouse or revive (the mouse count must be known: not after a resume) | No slips, no help: pure paw-work! |
-| `best` | faster than every earlier win on boards of this size (levels via the pack's sizes; dailies via `dailySlotFor`), never the first one, never a tie | New best for a {size} board: {time} |
+| `best` | faster than every earlier win that may be on a board of this size, levels AND dailies in either mode (levels via the pack's sizes, a level whose pack is not in memory counting as a possible same size; dailies via `dailySlotFor`), never the first one, never a tie | New best for a {size} board: {time} |
 | `hard` | the level's Hard badge (`SessionMeta.hard`) | You tamed a Hard level! |
 | `revive` | `revivesUsed > 0` | Back from zero fish to the finish! |
 | `retry` | solved after a Retry of this board (`attempt > 0`) | Another go, and you cracked it! |
-| `noSlips` | no wrong cat (help used, or the mouse count unknown) | Not a single wrong cat on this board |
+| `noSlips` | no wrong cat (help used, or the mouse count unknown), never after a Retry (the lost attempt had wrong cats) | Not a single wrong cat on this board |
 | `noHelp` | after a slip, no hint and no kitty (the mouse is never claimed) | Solved without a hint or a kitty |
 | `run` | after a slip, the closing run of correct cats ≥ `victory.runMin` (5; `catStreak`, a lower bound after a resume) | {count} cats in a row to finish |
-| `levels` | level mode: the player's `progress.completed` ≥ `victory.milestoneMin` (2) | {count} levels solved so far! |
+| `levels` | level mode: the player's won levels (records in `progress.best`, never a skipped tutorial) ≥ `victory.milestoneMin` (2) | {count} levels solved so far! |
 | `dailies` | daily mode: the player's number of solved dailies | {count} daily puzzles solved so far! |
 
 Statistics (spec §0.4 **H-2a**, keys `victory.stat.*` only, numbers floored to 5 and clamped 5…95, worded "about"):
@@ -116,7 +116,8 @@ the next praise line; an event shows praise only; the tutorial nothing.
 4. **Daily statistic only when encouraging** (`statMinPct` 25; a level's from 50): a true but discouraging number is
    simply not shown; the same keys serve the server's number and the estimate (both "about").
 5. **Pending answer:** no statistic until the ladder answered or gave up, so the number never flips from the estimate
-   to the server's in front of the player.
+   to the server's in front of the player. The standing is fixed per win once it stops waiting: an answer that comes
+   after `panelWaitMs` or in a later retry flush leaves it null (the estimate stays; review F21).
 6. **Flagged wins:** a soft-flagged daily win (`accepted_flagged`) never joins the rollup, but its answer still gets
    the standing (the others' times are real).
 7. **"No help" is claimed only when the mouse count is known** (it is not saved in the slot); `noHelp` after a slip
@@ -131,6 +132,13 @@ the next praise line; an event shows praise only; the tutorial nothing.
 11. **Not done (lead's call):** the first-load cost of the picker (`victory-lines.ts` + `solve-time-model.ts`, ≈ 2.8 KB
     minified of main JS). Moving them to a `game/` module the overlay chunk imports (props would then carry the facts
     and the standing instead of `lines`) would put that cost on the overlay chunk instead.
+12. **Review fixes (F7, F8, F16, F17, F18, F21):** `best` compares against levels and dailies of the size in either
+    mode (the copy says "a {size} board"), and a level whose pack is not in memory counts as a possible same-size
+    record, so after a restart the line says less than it could, never too much; `noSlips` is skipped after a Retry;
+    `levels` counts won levels (records), so a skipped tutorial is not a solved level; the daily standing is taken
+    only while the win waits for it. Still open: a level played on a substitute board keeps its record under the
+    level number while `levelSize` reports the pack's size (rare; saving n in the record would close it), and a
+    Home after a loss leaves no trace, so `noSlips` can still follow a lost attempt that was left by Home.
 
 ## 3. Sizes (FBIG build of this branch, `scripts/size-check.ts`; bytes; base from map/rules.md §1.6)
 
