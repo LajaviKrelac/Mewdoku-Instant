@@ -956,7 +956,7 @@ const FAKE_RULES: RulesView = {
   doubleByVideo: true,
   claimTtlMs: 7 * 24 * HOUR,
   hearts: { enabled: true, allowSelf: true, maxGivenPerBracket: 20 },
-  nickname: { freeText: false, changeCooldownMs: 24 * HOUR },
+  nickname: { freeText: true, changeCooldownMs: 24 * HOUR },
 };
 
 interface FakeOpts {
@@ -975,12 +975,15 @@ interface FakeLadder {
 }
 
 /** The other players of the fixture bracket: our own words, fixed points falling with the place. */
-function fakeOthers(n: number): { slot: number; nickname: string; avatarId: number; points: number; hearts: number; likedByMe: boolean }[] {
+function fakeOthers(n: number): { slot: number; nickname: string; avatarId: number; frameId: number; backgroundId: number; points: number; hearts: number; likedByMe: boolean }[] {
   const top = [31, 31, 30, 29, 27, 27, 26, 25, 24];
   return Array.from({ length: n }, (_, i) => ({
     slot: i + 1,
     nickname: `${NICK_WORDS_V1.adj[(i * 17 + 9) % NICK_WORDS_V1.adj.length]} ${NICK_WORDS_V1.noun[(i * 23 + 4) % NICK_WORDS_V1.noun.length]} ${((i * 37) % 99) + 1}`,
     avatarId: (i * 5 + 1) % 12,
+    // UI batch (profile): some players wear a frame or a background (fixed by place)
+    frameId: i % 3 === 0 ? 1 + (i % 7) : 0,
+    backgroundId: i % 4 === 1 ? 1 + ((i * 3) % 7) : 0,
     points: top[i] ?? Math.max(1, 24 - Math.floor((i - 8) * 0.8)),
     hearts: i % 4,
     likedByMe: i === 1,
@@ -1013,6 +1016,8 @@ async function fakeLadder(page: Page, o: FakeOpts = {}): Promise<FakeLadder> {
     trust: pool === 'fb' ? 'signed' : 'anon',
     listed: true,
     nicknameChangeAt: null,
+    frameId: 0,
+    backgroundId: 0,
   };
   const members0 = o.members ?? 37;
   let inBracket = members0 > 0;
@@ -1024,7 +1029,7 @@ async function fakeLadder(page: Page, o: FakeOpts = {}): Promise<FakeLadder> {
     if (!inBracket) {
       return { state: 'none', bracketId: null, pool, mode: 'rolling', openedAt: null, endsAt: null, members: 0, maxMembers: 50, rows: [], me: null, final: false, heartsNew: 0, result: null, serverTime: now };
     }
-    const all = [...others.map((r) => ({ ...r, me: false })), { slot: 0, nickname: me.nickname, avatarId: me.avatarId, points: myPoints, hearts: others.length > 0 ? 2 : 0, likedByMe: false, me: true }];
+    const all = [...others.map((r) => ({ ...r, me: false })), { slot: 0, nickname: me.nickname, avatarId: me.avatarId, frameId: me.frameId ?? 0, backgroundId: me.backgroundId ?? 0, points: myPoints, hearts: others.length > 0 ? 2 : 0, likedByMe: false, me: true }];
     all.sort((a, b) => b.points - a.points || Number(a.me) - Number(b.me));
     // Leaderboard update: fixed activity per place ("Playing now", "Online now", "Nm ago"; mine is now).
     const ago = [0, 30_000, 4 * 60_000, 11 * 60_000, 47 * 60_000, 3 * HOUR];
@@ -1033,6 +1038,8 @@ async function fakeLadder(page: Page, o: FakeOpts = {}): Promise<FakeLadder> {
       slot: r.slot,
       nickname: r.nickname,
       avatarId: r.avatarId,
+      frameId: r.frameId,
+      backgroundId: r.backgroundId,
       points: r.points,
       hearts: r.hearts,
       me: r.me,
@@ -1124,12 +1131,16 @@ async function fakeLadder(page: Page, o: FakeOpts = {}): Promise<FakeLadder> {
         return reply(200, { rewardId: r.reward.rewardId, grant: { hints: r.reward.grant.hints * k, kitties: r.reward.grant.kitties * k }, doubled: k === 2, claimedAt: now, place: r.place, alreadyClaimed: false, serverTime: now });
       }
       case 'PUT /v1/me/profile': {
-        const n = body.nickname as { adj?: number; noun?: number; num?: number } | undefined;
+        const n = body.nickname as { adj?: number; noun?: number; num?: number; text?: string } | undefined;
         if (n && typeof n.adj === 'number' && typeof n.noun === 'number') {
           const num = typeof n.num === 'number' ? n.num : 1;
           me = { ...me, nick: { adj: n.adj, noun: n.noun, num }, nickname: `${NICK_WORDS_V1.adj[n.adj]} ${NICK_WORDS_V1.noun[n.noun]} ${num}`, nicknameChangeAt: now + 24 * HOUR };
         }
+        // UI batch (profile): a typed name and the frame and background
+        if (n && typeof n.text === 'string') me = { ...me, nick: null, nickname: n.text.trim(), nicknameChangeAt: now + 24 * HOUR };
         if (typeof body.avatarId === 'number') me = { ...me, avatarId: body.avatarId };
+        if (typeof body.frameId === 'number') me = { ...me, frameId: body.frameId };
+        if (typeof body.backgroundId === 'number') me = { ...me, backgroundId: body.backgroundId };
         if (typeof body.listed === 'boolean') me = { ...me, listed: body.listed };
         return reply(200, { player: me, serverTime: now });
       }
@@ -1389,11 +1400,11 @@ test.describe('Phase 2e (G3): the ranking views in the real app (route fake; spe
         await sheet.locator('li.rank-row[data-me="1"] .rank-row__edit').click();
         const nick = p.locator('.overlay[data-overlay="nickname"]');
         await expect(nick).toBeVisible({ timeout: 8_000 });
-        await expect(nick.locator('.nickname__preview .nickname__name')).toHaveText('Velvet Pounce 27');
+        // UI batch (profile): the typed name, then Picture · Frame · Background (one grid at a time)
+        await expect(nick.locator('input.nickname__input')).toHaveValue('Velvet Pounce 27');
         await expect(nick.locator('[role="radiogroup"].nickname__avatars [role="radio"]')).toHaveCount(12);
-        await expect(nick.locator('select.nickname__adj')).toHaveValue('2');
-        await expect(nick.locator('select.nickname__noun')).toHaveValue('5');
-        await expect(nick.locator('input.nickname__num')).toHaveValue('27');
+        await expect(nick.locator('[role="tab"]')).toHaveCount(3);
+        await expect(nick.locator('[role="radiogroup"].nickname__frames')).toBeHidden();
         await expectFits(p, '.overlay[data-overlay="nickname"]');
         await shot2e(p, `nick-${suffix}`);
         // Save fits or scrolls inside the dialog (spec §10.3 layout).

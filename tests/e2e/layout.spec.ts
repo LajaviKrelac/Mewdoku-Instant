@@ -1070,7 +1070,7 @@ test('Phase 2e: the post-win panel with 50 real rows scrolls inside its card (no
   expect(misses).toEqual([]);
 });
 
-test('Phase 2e: the name sheet (12 avatars, both pickers, the number, Save) fits or scrolls inside its dialog at 320 × 568 (en, de)', async ({ page }, info) => {
+test('Phase 2e: the profile sheet (the name, Picture · Frame · Background, Save) fits or scrolls inside its dialog at 320 × 568 (en, de)', async ({ page }, info) => {
   test.skip(info.project.name !== 'web-320', 'the small phone');
   test.skip(!(await ladderUp()), `no ranking server at ${LADDER_URL}`);
   test.setTimeout(90_000);
@@ -1085,12 +1085,16 @@ test('Phase 2e: the name sheet (12 avatars, both pickers, the number, Save) fits
     await page.locator('[data-overlay="settings"] button.settings__ladder-name').click();
     const sheet = page.locator('.overlay[data-overlay="nickname"]');
     await expect(sheet).toBeVisible({ timeout: 10_000 });
-    await expect(sheet.locator('[role="radio"]')).toHaveCount(12);
+    await expect(sheet.locator('.nickname__avatars [role="radio"]')).toHaveCount(12);
     await page.waitForTimeout(300);
-    const r = await dialogFits(page, '.overlay[data-overlay="nickname"]');
-    expect(r.problems, locale).toEqual([]);
-    await sheet.locator('button.nickname__save').scrollIntoViewIfNeeded();
-    await expect(sheet.locator('button.nickname__save')).toBeInViewport();
+    // UI batch (profile): every tab's grid (one at a time) fits the same way
+    for (const tab of ['avatar', 'frame', 'bg'] as const) {
+      await sheet.locator(`[role="tab"][data-tab="${tab}"]`).click();
+      const r = await dialogFits(page, '.overlay[data-overlay="nickname"]');
+      expect(r.problems, `${locale} ${tab}`).toEqual([]);
+      await sheet.locator('button.nickname__save').scrollIntoViewIfNeeded();
+      await expect(sheet.locator('button.nickname__save')).toBeInViewport();
+    }
   }
 });
 

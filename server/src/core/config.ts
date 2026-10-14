@@ -55,7 +55,11 @@ export interface ServerConfig {
     readonly claimTtlMs: number; // P-L8
   };
   readonly hearts: { readonly enabled: boolean; readonly allowSelf: boolean; readonly maxGivenPerBracket: number }; // P-L10
-  readonly nickname: { readonly freeText: boolean; readonly changeCooldownMs: number }; // P-L12
+  /**
+   * P-L12. UI batch (profile, 2026-10-13): typed names are on, the user asked for them ("Let me edit my name");
+   * `freeText` stays as the kill switch (false: names keep coming from our word lists, a typed one is a 422).
+   */
+  readonly nickname: { readonly freeText: boolean; readonly changeCooldownMs: number };
   readonly antiCheat: {
     /** Per board size n: [hard (reject), soft (flag)] ms (spec §1.9.4, P-L17). Sizes below 4 use 4's. */
     readonly minSolveMs: Readonly<Record<string, readonly [number, number]>>;
@@ -141,7 +145,7 @@ export const DEFAULT_CONFIG: ServerConfig = {
     claimTtlMs: 7 * DAY,
   },
   hearts: { enabled: true, allowSelf: true, maxGivenPerBracket: 20 },
-  nickname: { freeText: false, changeCooldownMs: DAY },
+  nickname: { freeText: true, changeCooldownMs: DAY },
   antiCheat: {
     minSolveMs: {
       '4': [1500, 4000],

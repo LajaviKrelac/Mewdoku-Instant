@@ -7,7 +7,8 @@
 //   - the bracket maths and views (server/src/core/brackets.ts, server/src/handlers/views.ts: rankRows, paidPlaces,
 //     finalisation, the result and reward views, hearts seen, the rules the client shows) running on MemStore, which
 //     implements the store methods those views call with the SQL store's row shapes (server/src/store/rows.ts);
-//   - names and pictures from our word lists (core/nickname.ts generateNick / checkPick, the blocklist), ids
+//   - names and pictures from our word lists (core/nickname.ts generateNick / checkPick, the blocklist; since the UI
+//     batch a typed name through checkFreeText while nickname.freeText is on, and the frame and background), ids
 //     (core/ids.ts), the default server config (core/config.ts).
 // What is NOT real, and is said so on screen (preview/labels.ts): the other players. Every bracket gets SAMPLE
 // players (generated names from the same word lists, made-up fish and hearts); they never act. The handlers are a
@@ -19,6 +20,8 @@ import {
   ERROR_STATUS,
   MAX_WINS_PER_REQUEST,
   AVATAR_COUNT,
+  BACKGROUND_COUNT,
+  FRAME_COUNT,
   validateClaimRequest,
   validateHeartRequest,
   validatePresenceRequest,
@@ -44,7 +47,7 @@ import { bracketTimes, grantOf } from '../server/src/core/brackets';
 import { DEFAULT_CONFIG, type ServerConfig } from '../server/src/core/config';
 import { cryptoRng, randomBase36, seededRng, type Rng } from '../server/src/core/crypto';
 import { newBracketId, newPlayerCode } from '../server/src/core/ids';
-import { checkPick, generateNick, renderNick } from '../server/src/core/nickname';
+import { checkFreeText, checkPick, generateNick, renderNick } from '../server/src/core/nickname';
 import { evaluateWins } from '../server/src/core/wins';
 import { bracketView, finalizeIfDue, noneView, playerView, resultsFor, rulesView, summaryOf } from '../server/src/handlers/views';
 import type { Services } from '../server/src/services';
@@ -282,6 +285,8 @@ export function createSampleServer(deps: SampleServerDeps = {}): SampleServer {
       flag_count: 0,
       client_version: clientVersion,
       wtok: randomBase36(rng, 10),
+      frame: 0,
+      bg: 0,
     };
     st.players[key] = p;
     return p;
@@ -323,6 +328,9 @@ export function createSampleServer(deps: SampleServerDeps = {}): SampleServer {
         joinedAt: openedAt + Math.floor((Math.min(span, cfg.bracket.joinWindowMs) * i) / Math.max(1, others.length)),
         // Leaderboard update: sample activity (they never act; a few look online or in a puzzle right now).
         ...(i % 5 === 0 ? { activeAt: now - int(0, 50) * 1000, playing: true } : i % 5 === 2 ? { activeAt: now - int(5, 60) * 1000 } : {}),
+        // UI batch (profile): some sample players wear a frame or a background (from their place, no randomness).
+        frame: i % 3 === 1 ? 1 + (i % (FRAME_COUNT - 1)) : 0,
+        bg: i % 4 === 2 ? 1 + ((i * 3) % (BACKGROUND_COUNT - 1)) : 0,
       });
     });
     return b;
@@ -330,7 +338,7 @@ export function createSampleServer(deps: SampleServerDeps = {}): SampleServer {
 
   function addMember(
     b: MBracket,
-    m: { key: string; nickname: string; avatar: number; points: number; wins: number; hearts: number; scoredAt: number; joinedAt: number; activeAt?: number; playing?: boolean },
+    m: { key: string; nickname: string; avatar: number; points: number; wins: number; hearts: number; scoredAt: number; joinedAt: number; activeAt?: number; playing?: boolean; frame?: number; bg?: number },
   ): MMember {
     const row: MMember = {
       bracket_id: b.id,
@@ -338,6 +346,8 @@ export function createSampleServer(deps: SampleServerDeps = {}): SampleServer {
       player_key: m.key,
       nickname: m.nickname,
       avatar: m.avatar,
+      frame: m.frame ?? 0,
+      bg: m.bg ?? 0,
       points: m.points,
       wins: m.wins,
       hearts: m.hearts,
@@ -357,7 +367,7 @@ export function createSampleServer(deps: SampleServerDeps = {}): SampleServer {
   }
 
   function join(p: MPlayer, b: MBracket, points: number, wins: number, now: number): MMember {
-    const m = addMember(b, { key: p.key, nickname: p.nickname, avatar: p.avatar, points, wins, hearts: 0, scoredAt: now, joinedAt: now });
+    const m = addMember(b, { key: p.key, nickname: p.nickname, avatar: p.avatar, frame: p.frame ?? 0, bg: p.bg ?? 0, points, wins, hearts: 0, scoredAt: now, joinedAt: now });
     if (p.listed === 0) m.hidden = 2;
     p.cur_bracket = b.id;
     p.cur_ends_at = b.ends_at;
@@ -599,18 +609,29 @@ export function createSampleServer(deps: SampleServerDeps = {}): SampleServer {
     const open = (m: MMember): boolean => st.brackets[m.bracket_id]?.finalized_at === null;
     const myRows = (): MMember[] => Object.values(st.members).flatMap((ms) => ms.filter((m) => m.player_key === p.key && open(m)));
     if (req.nickname !== undefined) {
-      if ('text' in req.nickname) return fail('nickname_invalid', 'names are picked from the word lists');
-      const c = checkPick(req.nickname, p.nick_num ?? 1, words, retired);
-      if (!c.ok) return fail(c.code, c.code === 'nickname_blocked' ? 'nickname blocked' : 'nickname');
-      const text = renderNick(words, c.nick);
-      const same = text === p.nickname && c.nick.adj === p.nick_adj && c.nick.noun === p.nick_noun && c.nick.num === p.nick_num;
+      let text: string;
+      let nick: { adj: number; noun: number; num: number } | null;
+      if ('text' in req.nickname) {
+        // UI batch: a typed name, as the real handler takes it (the shape rule and the blocklist; no flag here)
+        if (!cfg.nickname.freeText) return fail('nickname_invalid', 'names are picked from the word lists');
+        const c = checkFreeText(req.nickname.text);
+        if (!c.ok) return fail(c.code, c.code === 'nickname_blocked' ? 'nickname blocked' : 'nickname');
+        text = c.text;
+        nick = null;
+      } else {
+        const c = checkPick(req.nickname, p.nick_num ?? 1, words, retired);
+        if (!c.ok) return fail(c.code, c.code === 'nickname_blocked' ? 'nickname blocked' : 'nickname');
+        text = renderNick(words, c.nick);
+        nick = c.nick;
+      }
+      const same = text === p.nickname && (nick === null ? p.nick_adj === null : nick.adj === p.nick_adj && nick.noun === p.nick_noun && nick.num === p.nick_num);
       if (!same) {
         const cooldown = cfg.nickname.changeCooldownMs;
         if (p.nick_changed_at !== null && p.nick_changed_at + cooldown > now) return fail('nickname_cooldown', 'nickname changed recently', p.nick_changed_at + cooldown - now);
         p.nickname = text;
-        p.nick_adj = c.nick.adj;
-        p.nick_noun = c.nick.noun;
-        p.nick_num = c.nick.num;
+        p.nick_adj = nick?.adj ?? null;
+        p.nick_noun = nick?.noun ?? null;
+        p.nick_num = nick?.num ?? null;
         p.nick_changed_at = now;
         for (const m of myRows()) m.nickname = text;
       }
@@ -619,6 +640,17 @@ export function createSampleServer(deps: SampleServerDeps = {}): SampleServer {
       if (req.avatarId < 0 || req.avatarId >= AVATAR_COUNT) return fail('avatar_invalid', 'avatarId');
       p.avatar = req.avatarId;
       for (const m of myRows()) m.avatar = req.avatarId;
+    }
+    // UI batch (profile): the frame and background, no cooldown, out of range is the avatar's 422
+    if (req.frameId !== undefined) {
+      if (req.frameId >= FRAME_COUNT) return fail('avatar_invalid', 'frameId');
+      p.frame = req.frameId;
+      for (const m of myRows()) m.frame = req.frameId;
+    }
+    if (req.backgroundId !== undefined) {
+      if (req.backgroundId >= BACKGROUND_COUNT) return fail('avatar_invalid', 'backgroundId');
+      p.bg = req.backgroundId;
+      for (const m of myRows()) m.bg = req.backgroundId;
     }
     if (req.listed !== undefined) {
       p.listed = req.listed ? 1 : 0;

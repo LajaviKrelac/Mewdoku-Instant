@@ -11,8 +11,11 @@
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { nameProblem, normalizeName } from '../../src/shared/nick-text';
 import {
+  BACKGROUND_COUNT,
   ERROR_STATUS,
+  FRAME_COUNT,
   type BracketRow,
   type BracketView,
   type ClaimView,
@@ -49,6 +52,9 @@ export interface FakeOther {
   /** Leaderboard update: the row's last activity (server clock; default: the fake's start) and "in a puzzle". */
   seenAt?: number;
   playing?: boolean;
+  /** UI batch (profile): the row's frame and background (default 0, the plain look). */
+  frameId?: number;
+  backgroundId?: number;
 }
 
 export interface LadderFakeOptions {
@@ -148,13 +154,37 @@ export function createLadderFake(opts: LadderFakeOptions = {}): LadderFake {
 
   function rows(): BracketRow[] {
     const all: { row: Omit<BracketRow, 'rank'>; tie: number }[] = state.others.map((o, slot) => ({
-      row: { slot, nickname: o.nickname, avatarId: o.avatarId, points: o.points, hearts: o.hearts, me: false, likedByMe: state.liked.has(slot), seenAt: o.seenAt ?? start, playing: o.playing === true },
+      row: {
+        slot,
+        nickname: o.nickname,
+        avatarId: o.avatarId,
+        points: o.points,
+        hearts: o.hearts,
+        me: false,
+        likedByMe: state.liked.has(slot),
+        seenAt: o.seenAt ?? start,
+        playing: o.playing === true,
+        frameId: o.frameId ?? 0,
+        backgroundId: o.backgroundId ?? 0,
+      },
       tie: slot,
     }));
     if (state.points !== null) {
       const slot = state.others.length;
       all.push({
-        row: { slot, nickname: state.player.nickname, avatarId: state.player.avatarId, points: state.points, hearts: state.myHearts, me: true, likedByMe: state.liked.has(slot), seenAt: state.mySeenAt, playing: state.myPlaying },
+        row: {
+          slot,
+          nickname: state.player.nickname,
+          avatarId: state.player.avatarId,
+          points: state.points,
+          hearts: state.myHearts,
+          me: true,
+          likedByMe: state.liked.has(slot),
+          seenAt: state.mySeenAt,
+          playing: state.myPlaying,
+          frameId: state.player.frameId ?? 0,
+          backgroundId: state.player.backgroundId ?? 0,
+        },
         tie: -1,
       });
     }
@@ -299,16 +329,39 @@ export function createLadderFake(opts: LadderFakeOptions = {}): LadderFake {
         if (!Number.isInteger(p.avatarId) || p.avatarId < 0 || p.avatarId >= 12) return error('avatar_invalid');
         player = { ...player, avatarId: p.avatarId };
       }
-      const nick = p.nickname as { adj: number; noun: number; num?: number } | undefined;
+      // UI batch (profile): the frame and background (no cooldown; out of range is the avatar's 422)
+      for (const [field, count] of [['frameId', FRAME_COUNT], ['backgroundId', BACKGROUND_COUNT]] as const) {
+        const v = p[field];
+        if (v === undefined) continue;
+        if (typeof v !== 'number' || !Number.isInteger(v) || v < 0 || v >= count) return error('avatar_invalid');
+        player = { ...player, [field]: v };
+      }
+      const nick = p.nickname as { adj: number; noun: number; num?: number } | { text: string } | undefined;
       if (nick) {
-        if (player.nicknameChangeAt !== null && player.nicknameChangeAt > now()) return error('nickname_cooldown');
-        const num = nick.num ?? 1;
-        player = {
-          ...player,
-          nick: { adj: nick.adj, noun: nick.noun, num },
-          nickname: `${NICK_ADJ[nick.adj % NICK_ADJ.length]} ${NICK_NOUN[nick.noun % NICK_NOUN.length]} ${num}`,
-          nicknameChangeAt: now() + rules.nickname.changeCooldownMs,
-        };
+        const cooldown = (): Response | null =>
+          player.nicknameChangeAt !== null && player.nicknameChangeAt > now() ? error('nickname_cooldown', player.nicknameChangeAt - now()) : null;
+        if ('text' in nick) {
+          // a typed name, per the rules' switch: the shared shape rule, and a tiny stand-in for the server's blocklist
+          if (!rules.nickname.freeText) return error('nickname_invalid');
+          const text = normalizeName(nick.text);
+          if (nameProblem(text) !== null) return error('nickname_invalid');
+          if (/sh[i1]t/i.test(text)) return error('nickname_blocked');
+          if (text !== player.nickname) {
+            const wait = cooldown();
+            if (wait) return wait;
+            player = { ...player, nick: null, nickname: text, nicknameChangeAt: now() + rules.nickname.changeCooldownMs };
+          }
+        } else {
+          const wait = cooldown();
+          if (wait) return wait;
+          const num = nick.num ?? 1;
+          player = {
+            ...player,
+            nick: { adj: nick.adj, noun: nick.noun, num },
+            nickname: `${NICK_ADJ[nick.adj % NICK_ADJ.length]} ${NICK_NOUN[nick.noun % NICK_NOUN.length]} ${num}`,
+            nicknameChangeAt: now() + rules.nickname.changeCooldownMs,
+          };
+        }
       }
       state.player = player;
       return json(200, { player, serverTime: now() });

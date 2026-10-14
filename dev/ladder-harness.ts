@@ -21,7 +21,7 @@ import '../src/styles/board-mouse.css';
 import '../src/styles/ladder-chunk.css';
 import { cfg } from '../src/app/config';
 import { setLocale } from '../src/i18n/index';
-import { NICK_WORDS_V1 } from '../src/shared/nick-words';
+import { NAME_MAX_CHARS, NAME_MAX_DIGITS, NAME_MIN_WIDTH, nameProblem, normalizeName } from '../src/shared/nick-text';
 import { setInert, trapFocus } from '../src/ui/a11y/focus-trap';
 import { mountLadderArt } from '../src/ui/art/ladder-art';
 import { mountLazyArt } from '../src/ui/art/lazy-art';
@@ -217,6 +217,9 @@ function fromFixture(fx: { response: { body: unknown } }, over: Partial<BracketL
       heartEnabled: !r.likedByMe,
       seenAt: r.seenAt === null ? null : Date.now() - (v.serverTime - r.seenAt),
       playing: r.playing,
+      // UI batch (profile): the fixtures' frames and backgrounds
+      frameId: r.frameId,
+      backgroundId: r.backgroundId,
     })),
     members: v.members,
     // Shown against the harness's clock: the same distance to the end as in the fixture.
@@ -308,22 +311,29 @@ function result(over: Partial<LadderResultProps> = {}): void {
   });
 }
 
+/** UI batch (profile): a newer player's locks (ids 0–2 free, the rest by level, streak or a ranking reward; game/looks.ts). */
+const LOCKS: NicknameSheetProps['frames'] = [null, null, null, { kind: 'level', level: 25 }, { kind: 'streak', days: 7 }, { kind: 'level', level: 100 }, { kind: 'prize' }, { kind: 'level', level: 300 }];
+
 function nick(over: Partial<NicknameSheetProps> = {}): void {
   home();
   openOverlay(createNicknameSheet(), {
-    words: NICK_WORDS_V1,
-    current: { adj: 2, noun: 5, num: 27, avatarId: 4 },
+    current: { name: 'Velvet Pounce 27', avatarId: 4, frameId: 0, backgroundId: 0 },
     avatarCount: 12,
-    numMin: 1,
-    numMax: 99,
+    frames: LOCKS,
+    backgrounds: LOCKS,
+    nameEditable: true,
+    nameRules: { maxChars: NAME_MAX_CHARS, minWidth: NAME_MIN_WIDTH, maxDigits: NAME_MAX_DIGITS },
+    checkName: (raw) => nameProblem(normalizeName(raw)),
     state: 'idle',
     cooldownUntil: null,
     now: () => Date.now(),
-    shuffle: () => ({ adj: Math.floor(Math.random() * 64), noun: Math.floor(Math.random() * 64), num: 1 + Math.floor(Math.random() * 99), avatarId: Math.floor(Math.random() * 12) }),
     onSave: log('onSave'),
     onClose: log('onClose'),
     ...over,
   });
+  // ?tab=frame|bg opens that tab (screenshots)
+  const tab = q.get('tab');
+  if (tab) (document.querySelector(`.nickname__tab[data-tab="${tab}"]`) as HTMLElement | null)?.click();
 }
 
 // ─────────────────────────────── Home / O2 / Settings / victory ───────────────────────────────
@@ -459,6 +469,14 @@ const VIEWS: Record<string, () => void> = {
   nick: () => nick(),
   'nick-cooldown': () => nick({ state: 'cooldown', cooldownUntil: NOW + 5 * H + 12 * 60_000 }),
   'nick-offline': () => nick({ state: 'offline' }),
+  // UI batch (profile): a worn frame and background, a name refused by the server, typed names switched off,
+  // a server without frames and backgrounds
+  'nick-looks': () => nick({ current: { name: 'Captain Purr', avatarId: 7, frameId: 5, backgroundId: 6 }, frames: LOCKS.map(() => null), backgrounds: LOCKS.map(() => null) }),
+  'nick-rejected': () => nick({ state: 'rejected' }),
+  'nick-invalid': () => nick({ state: 'invalid' }),
+  'nick-fixed': () => nick({ nameEditable: false }),
+  'nick-old-server': () => nick({ frames: [], backgrounds: [] }),
+  'home-looks': () => home({ avatarId: 7, frameId: 5, backgroundId: 6 }),
   // Home (spec §2.5, §5.3, §6.1)
   home: () => home(),
   'home-join': () => home({ ladder: { state: 'join' } as LadderChipView, streak: { state: 'new', day: 0, total: 7, rewardDay: false } }),

@@ -16,8 +16,6 @@ const drain = async (): Promise<void> => {
 
 const CHUNK: LadderChunk = {
   createBracketList: (() => ({})) as unknown as LadderChunk['createBracketList'],
-  NICK_WORDS_V1: { adj: ['A'], noun: ['B'] },
-  RETIRED_V1: { adj: [], noun: [] },
 };
 
 function setup(o: { inUse?: boolean } = {}) {

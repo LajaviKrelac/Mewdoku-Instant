@@ -3,7 +3,7 @@
 // once, the cap of 20 (also under a 21-heart race), hidden rows, non-members, heartsNew; names, cooldown,
 // avatars, "Show me in rankings".
 import { describe, expect, it } from 'vitest';
-import { parseHeartResponse, parseProfileResponse } from '../../src/contract';
+import { BACKGROUND_COUNT, FRAME_COUNT, parseHeartResponse, parseProfileResponse } from '../../src/contract';
 import { NICK_WORDS_V1 } from '../../src/contract/words';
 import { admin, DAY, HOUR, json, makeTestApp, playersWithWins, TestPlayer } from '../helpers/harness';
 
@@ -171,7 +171,7 @@ describe('profile (§1.8, §2.7)', () => {
     expect((await a!.rawProfile({ nickname: { adj: 1, noun: 1 } })).status).toBe(200);
   });
 
-  it('422s: unknown words, numbers out of range, avatars past AVATAR_COUNT, free text while off', async () => {
+  it('422s: unknown words, numbers out of range, pictures past their counts, free text while switched off', async () => {
     const t = makeTestApp();
     const a = new TestPlayer(t, 'bad');
     await a.signIn();
@@ -179,20 +179,55 @@ describe('profile (§1.8, §2.7)', () => {
     expect(await code({ nickname: { adj: 9999, noun: 1 } })).toMatchObject({ code: 'nickname_invalid' });
     expect(await code({ nickname: { adj: 1, noun: 1, num: 100 } })).toMatchObject({ code: 'nickname_invalid' });
     expect(await code({ avatarId: 12 })).toMatchObject({ code: 'avatar_invalid' });
-    expect(await code({ nickname: { text: 'Kitty' } })).toMatchObject({ code: 'nickname_invalid' });
+    // UI batch: a frame or background we do not draw is the avatar's 422; a wrong type is a 400
+    expect(await code({ frameId: FRAME_COUNT })).toMatchObject({ code: 'avatar_invalid' });
+    expect(await code({ backgroundId: BACKGROUND_COUNT })).toMatchObject({ code: 'avatar_invalid' });
+    expect(await code({ frameId: '2' })).toMatchObject({ code: 'bad_request' });
+    expect(await code({ nickname: { text: 'Ko' } })).toMatchObject({ code: 'nickname_invalid' });
     expect(await code({})).toMatchObject({ code: 'bad_request' });
+    // the kill switch: typed names off again (the word lists only)
+    const off = makeTestApp({ overrides: { nickname: { freeText: false } } });
+    const b = new TestPlayer(off, 'off');
+    await b.signIn();
+    expect((await json(await b.rawProfile({ nickname: { text: 'Kitty' } }))).error).toMatchObject({ code: 'nickname_invalid' });
+    expect((await b.profile({ nickname: { adj: 1, noun: 2, num: 3 } })).player.nick).toEqual({ adj: 1, noun: 2, num: 3 });
   });
 
-  it('free text when switched on: moderated, a blocked name flagged', async () => {
-    const t = makeTestApp({ overrides: { nickname: { freeText: true } } });
+  it('free text (on by default since the UI batch): moderated, a blocked name flagged, the text never stored in the flag', async () => {
+    const t = makeTestApp();
     const a = new TestPlayer(t, 'ft');
     await a.signIn();
-    expect((await a.profile({ nickname: { text: 'Gato Feliz' } })).player).toMatchObject({ nickname: 'Gato Feliz', nick: null });
+    expect((await a.profile({ nickname: { text: '  Gato   Feliz ' } })).player).toMatchObject({ nickname: 'Gato Feliz', nick: null });
     t.clock.advance(DAY);
     await a.signIn();
     const r = await a.rawProfile({ nickname: { text: 'Sh1t Cat' } });
     expect((await json(r)).error).toMatchObject({ code: 'nickname_blocked' });
-    expect(t.rows<{ kind: string }>('SELECT kind FROM flags')).toEqual([{ kind: 'nickname_blocked' }]);
+    expect(t.rows<{ kind: string; detail: string }>('SELECT kind, detail FROM flags')).toEqual([{ kind: 'nickname_blocked', detail: 'free text' }]);
+    // a 2-character CJK name and a name with combining marks
+    expect((await a.profile({ nickname: { text: '李明' } })).player.nickname).toBe('李明');
+    t.clock.advance(DAY);
+    await a.signIn();
+    expect((await a.profile({ nickname: { text: 'राहुल' } })).player.nickname).toBe('राहुल');
+  });
+
+  it('frame and background (UI batch): no cooldown, copied to my open rows and to a bracket I join later', async () => {
+    const t = makeTestApp();
+    const [a, b] = await playersWithWins(t, 2, 'lk');
+    expect((await a!.me()).player).toMatchObject({ frameId: 0, backgroundId: 0 });
+    const p = await a!.profile({ frameId: 3, backgroundId: 5 });
+    expect(parseProfileResponse(p)).toEqual(p);
+    expect(p.player).toMatchObject({ frameId: 3, backgroundId: 5, nicknameChangeAt: null });
+    const row = (await b!.bracket()).rows.find((r) => !r.me)!;
+    expect([row.frameId, row.backgroundId]).toEqual([3, 5]);
+    // again at once (no cooldown), the frame alone
+    expect((await a!.profile({ frameId: 1 })).player).toMatchObject({ frameId: 1, backgroundId: 5 });
+    expect((await a!.bracket()).me).toMatchObject({ frameId: 1, backgroundId: 5 });
+    // the next bracket's row is copied from the player at the join (the one members INSERT)
+    t.clock.advance(DAY + HOUR);
+    await a!.signIn();
+    await a!.win('L60');
+    const next = await a!.bracket();
+    expect(next.me).toMatchObject({ frameId: 1, backgroundId: 5 });
   });
 
   it('listed off hides my open rows and refuses wins; on again shows them', async () => {

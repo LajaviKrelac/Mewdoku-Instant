@@ -212,6 +212,9 @@ describe('Home: the floating ranking button, the profile and streak pill in the 
     expect(cb.onProfile).toHaveBeenCalledTimes(1);
     home.update(homeView({ avatarId: null }));
     expect(profile.querySelector('.home__avatar use')).toBeNull();
+    // UI batch (profile): with its frame and background (sprite.ts avatarBadge; no ranking module in the first load)
+    home.update(homeView({ avatarId: 4, frameId: 2, backgroundId: 6 }));
+    expect(Array.from(profile.querySelectorAll('.home__avatar use')).map((u) => u.getAttribute('href'))).toEqual(['#bg-6', '#avatar-4', '#frame-2']);
     home.destroy();
   });
 

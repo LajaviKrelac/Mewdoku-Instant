@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { NICK_WORDS_V1, RETIRED_V1 } from '../../src/contract/words';
 import { AVATAR_COUNT, NICK_NUM_MAX, NICK_NUM_MIN } from '../../src/contract';
+import { nameWidth } from '../../src/contract';
 import { blockedTerm, isBlocked, skeleton } from '../../src/core/moderation';
 import { checkFreeText, checkPick, generateNick, nextNickChange, renderNick } from '../../src/core/nickname';
 import { BLOCKLIST } from '../../src/moderation/blocklist';
@@ -27,10 +28,13 @@ describe('nick: the blocklist build test', () => {
     for (const w of [...NICK_WORDS_V1.adj, ...NICK_WORDS_V1.noun]) expect(isBlocked(w), w).toBe(false);
   });
 
-  it('the blocklist is non-trivial and its entries are distinct skeletons', () => {
+  it('the blocklist is non-trivial; a strong entry is at least 3 wide (a wide character counts 2)', () => {
     expect(BLOCKLIST.strong.length).toBeGreaterThan(30);
     expect(BLOCKLIST.ambiguous.length).toBeGreaterThan(30);
-    for (const t of BLOCKLIST.strong) expect(skeleton(t).length, t).toBeGreaterThanOrEqual(3);
+    for (const t of BLOCKLIST.strong) expect(nameWidth(t), t).toBeGreaterThanOrEqual(3);
+    for (const t of [...BLOCKLIST.strong, ...BLOCKLIST.ambiguous, ...BLOCKLIST.innocent]) expect(skeleton(t).length, t).toBeGreaterThan(0);
+    // an innocent word really does contain a strong term (else it does nothing)
+    for (const w of BLOCKLIST.innocent) expect(blockedTerm(w, { strong: BLOCKLIST.strong, ambiguous: [] }), w).not.toBeNull();
   });
 });
 
@@ -50,6 +54,52 @@ describe('nick: skeletons and the check', () => {
     expect(isBlocked('Classy Tabby 3')).toBe(false);
     expect(isBlocked('Button Mouser')).toBe(false); // "butt" only as a word
     expect(isBlocked('Cocky')).toBe(false);
+  });
+
+  // UI batch (profile): typed names are on, so these were measured against real names and real attacks.
+  it('accents fold on Latin, Greek and Cyrillic letters; other scripts keep their vowel signs', () => {
+    expect(skeleton('Fück')).toBe('fuck');
+    expect(skeleton('Zoë François')).toBe('zoefrancois');
+    expect(skeleton('राहुल')).toBe('राहुल');
+    expect(skeleton('ณัฐพล')).toBe('ณัฐพล');
+    expect(skeleton('がっこう')).toBe('がっこう');
+    expect(skeleton('شَرْموطة')).toBe(skeleton('شرموطة')); // optional Arabic vowel signs and ta marbuta
+    expect(skeleton('شـرموطة')).toBe(skeleton('شرموطة')); // a stretching tatweel
+  });
+
+  it('look-alike Cyrillic and Greek letters read as Latin; native terms still match', () => {
+    expect(skeleton('fuсk', true)).toBe('fuck'); // a Cyrillic с
+    expect(isBlocked('fuсk cat')).toBe(true);
+    expect(isBlocked('ѕһіт')).toBe(true); // all Cyrillic look-alikes
+    expect(isBlocked('ΚΙΚΕ')).toBe(true); // Greek capitals (read before lowercasing: Ν is an N, its ν a v)
+    expect(isBlocked('ΝΑΖΙ')).toBe(true);
+    expect(isBlocked('блять кот')).toBe(true);
+    expect(isBlocked('Сука')).toBe(true);
+    expect(isBlocked('хуй')).toBe(true);
+  });
+
+  it('the worst terms in our locales\' own scripts are caught', () => {
+    for (const bad of ['ไอ้ควย', 'まんこ猫', '씨발고양이', '傻逼猫', 'चूतिया', 'शेर रंडी', 'قحبة', 'كس امك', 'địt mẹ', 'Hurensohn', 'hijo de puta'])
+      expect(isBlocked(bad), bad).toBe(true);
+  });
+
+  it('measured false positives pass: names that contain a short term', () => {
+    for (const name of ['Pornchai', 'Nazia', 'Nazir', 'Huy Tran', 'Ho Minh', 'Hoshita', 'Yoshitaka', 'Scunthorpe', 'Nigar', 'Atwater', 'Cassandra', 'Hancock', 'Titus', 'Cumhur', 'Dickens', 'Analía'])
+      expect(isBlocked(name), name).toBe(false);
+  });
+
+  it('common names in our 17 languages pass', () => {
+    const names = [
+      'Алексей', 'Мария Кот', 'Сукачёв', 'Νίκος', 'Σοφία', 'Mehmet', 'Ayşe', 'François', 'José', 'Ngọc Anh', 'Nguyễn Huy',
+      'Siti Nurhaliza', 'Priya', 'राहुल', 'चैतन्य', 'ณัฐพล', 'สมชาย', '李明', '王小红', 'ゆい', 'さくら', '민준', '서연', 'محمد', 'فاطمة',
+      'Łukasz', 'Dvořák', 'Giulia', 'Lukas Müller',
+    ];
+    for (const name of names) expect(isBlocked(name), name).toBe(false);
+  });
+
+  it('a removed innocent word never joins its two sides into a term', () => {
+    expect(isBlocked('fuscunthorpeck')).toBe(false);
+    expect(isBlocked('Scunthorpe Fuck')).toBe(true);
   });
 });
 
@@ -75,7 +125,7 @@ describe('nick: generation, picks, free text, cooldown', () => {
     expect(checkPick({ adj: 2, noun: 5, num: 1 }, 1, NICK_WORDS_V1, { adj: [2], noun: [] })).toMatchObject({ ok: false, code: 'nickname_invalid' });
   });
 
-  it('free text: NFKC, 3–16 characters, ≤ 4 digits, no URL or handle, not blocked', () => {
+  it('free text: NFKC, 3–16 wide, ≤ 4 digits, no URL or handle, not blocked', () => {
     expect(checkFreeText('  Kitty   Cat ')).toEqual({ ok: true, text: 'Kitty Cat' });
     expect(checkFreeText('Ko')).toMatchObject({ ok: false, code: 'nickname_invalid' });
     expect(checkFreeText('A'.repeat(17))).toMatchObject({ ok: false, code: 'nickname_invalid' });
@@ -86,6 +136,19 @@ describe('nick: generation, picks, free text, cooldown', () => {
     expect(checkFreeText('<b>cat</b>')).toMatchObject({ ok: false, code: 'nickname_invalid' });
     expect(checkFreeText('Sh1t Cat')).toMatchObject({ ok: false, code: 'nickname_blocked' });
     expect(checkFreeText('Gato Feliz')).toEqual({ ok: true, text: 'Gato Feliz' });
+  });
+
+  it('free text (UI batch): combining marks on letters, 2-character CJK names, no mark noise', () => {
+    for (const name of ['राहुल', 'ณัฐพล', '李明', 'ゆい', '민준', 'محمد', 'Nguyễn', 'Pornchai', 'Nazia', 'Hoshita'])
+      expect(checkFreeText(name), name).toEqual({ ok: true, text: name });
+    expect(checkFreeText('李')).toMatchObject({ ok: false, code: 'nickname_invalid' }); // 2 wide: too short
+    expect(checkFreeText('Ca\u0336\u0336\u0336\u0336t')).toMatchObject({ ok: false, code: 'nickname_invalid' }); // 4 stacked marks
+    expect(checkFreeText('Ca\u0336\u0336\u0336t')).toMatchObject({ ok: true }); // 3 are fine
+    expect(checkFreeText('\u0301Cat')).toMatchObject({ ok: false, code: 'nickname_invalid' }); // a mark without a letter
+    expect(checkFreeText('1234')).toMatchObject({ ok: false, code: 'nickname_invalid' }); // no letter
+    expect(checkFreeText('Cat\u200dCat')).toMatchObject({ ok: false, code: 'nickname_invalid' }); // a joiner
+    expect(checkFreeText('блять кот')).toMatchObject({ ok: false, code: 'nickname_blocked' });
+    expect(checkFreeText('fuсk cat')).toMatchObject({ ok: false, code: 'nickname_blocked' });
   });
 
   it('the first change is free, then once per cooldown', () => {

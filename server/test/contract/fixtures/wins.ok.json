@@ -56,7 +56,9 @@
             "me": false,
             "likedByMe": false,
             "seenAt": 1791799801000,
-            "playing": true
+            "playing": true,
+            "frameId": 0,
+            "backgroundId": 0
           },
           {
             "rank": 2,
@@ -68,7 +70,9 @@
             "me": true,
             "likedByMe": false,
             "seenAt": 1791799801000,
-            "playing": false
+            "playing": false,
+            "frameId": 0,
+            "backgroundId": 0
           },
           {
             "rank": 3,
@@ -80,7 +84,9 @@
             "me": false,
             "likedByMe": true,
             "seenAt": 1791799681000,
-            "playing": false
+            "playing": false,
+            "frameId": 0,
+            "backgroundId": 0
           }
         ],
         "me": {
@@ -93,7 +99,9 @@
           "me": true,
           "likedByMe": false,
           "seenAt": 1791799801000,
-          "playing": false
+          "playing": false,
+          "frameId": 0,
+          "backgroundId": 0
         },
         "final": false,
         "heartsNew": 1,

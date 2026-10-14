@@ -1,7 +1,7 @@
 // Owner: G4 (Phase 2e). Nicknames and avatars (spec §1.8, D-2e-16): `adj + " " + noun + " " + num` from our
 // append-only word lists (src/shared/nick-words.ts), picked from a hash of the player key at the first
-// session; re-pickable; free text only if `nickname.freeText` is switched on. PURE.
-import { AVATAR_COUNT, NICK_NUM_MAX, NICK_NUM_MIN, NICKNAME_MAX_LENGTH } from '../contract';
+// session; re-pickable; free text only if `nickname.freeText` is switched on (on since the UI batch). PURE.
+import { AVATAR_COUNT, nameProblem, NICK_NUM_MAX, NICK_NUM_MIN, NICKNAME_MAX_LENGTH, normalizeName } from '../contract';
 import { isBlocked } from './moderation';
 
 export interface Words {
@@ -55,16 +55,13 @@ export function checkPick(pick: { readonly adj: number; readonly noun: number; r
 export type TextCheck = { readonly ok: true; readonly text: string } | { readonly ok: false; readonly code: 'nickname_invalid' | 'nickname_blocked' };
 
 /**
- * Free text (only with `nickname.freeText`, spec §1.8): NFKC, 3–16 characters of letters, digits, space,
- * `.`, `_`, `-`; at most 4 digits; no URL or handle pattern; the skeleton not blocked.
+ * Free text (with `nickname.freeText`, spec §1.8): the shared shape rule (src/shared/nick-text.ts — NFKC; a display
+ * width of 3 … 16 code points, a wide character counting 2; letters with their combining marks, digits, space, `.`,
+ * `_`, `-`; at most 4 digits; no URL or handle pattern), then the skeleton not blocked.
  */
 export function checkFreeText(raw: string): TextCheck {
-  const text = raw.normalize('NFKC').trim().replace(/\s+/g, ' ');
-  const chars = [...text];
-  if (chars.length < 3 || chars.length > 16 || text.length > NICKNAME_MAX_LENGTH) return { ok: false, code: 'nickname_invalid' };
-  if (!/^[\p{L}\p{N} ._-]+$/u.test(text)) return { ok: false, code: 'nickname_invalid' };
-  if ((text.match(/\p{N}/gu) ?? []).length > 4) return { ok: false, code: 'nickname_invalid' };
-  if (/www|\.com|\.net|\.org|http|@|\.\w{2,3}$/i.test(text)) return { ok: false, code: 'nickname_invalid' };
+  const text = normalizeName(raw);
+  if (nameProblem(text) !== null || text.length > NICKNAME_MAX_LENGTH) return { ok: false, code: 'nickname_invalid' };
   if (isBlocked(text)) return { ok: false, code: 'nickname_blocked' };
   return { ok: true, text };
 }

@@ -35,6 +35,8 @@ export async function joinOnSession(s: Services, player: PlayerRow, now: number)
       playerKey: p.key,
       nickname: p.nickname,
       avatar: p.avatar,
+      frame: p.frame,
+      bg: p.bg,
       now,
       target,
       wins: [],

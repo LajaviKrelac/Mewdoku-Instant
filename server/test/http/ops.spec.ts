@@ -97,6 +97,10 @@ describe('admin (§1.4, §1.9.7)', () => {
     const reset = await json<{ player: { nickname: string } }>(await admin(t, 'POST', `players/${a!.code()}/reset-nickname`));
     expect(reset.player.nickname).not.toBe(before);
     expect((await a!.bracket()).me?.nickname).toBe(reset.player.nickname);
+    // UI batch: the reset starts the name cooldown, so the player cannot type a new name at once
+    expect((await a!.me()).player.nicknameChangeAt).toBe(t.clock.now() + DAY);
+    expect((await json(await a!.rawProfile({ nickname: { text: 'Fresh Start' } }))).error).toMatchObject({ code: 'nickname_cooldown' });
+    expect((await a!.rawProfile({ avatarId: 3, frameId: 2 })).status).toBe(200);
     expect(t.count("SELECT COUNT(*) FROM admin_log WHERE action IN ('resolve_flag', 'reset_nickname')")).toBe(2);
     t.clock.advance(60_000); // the rollup window is [last run, now)
     await t.app.scheduled();

@@ -6,13 +6,16 @@
 //   (never colour alone), centred on the face: MEDAL_FACE (50 % across, 53 % down);
 // - avatar-0 … avatar-11: our pointed-ear cat head (cat-head-flat, the heads pill's silhouette family) in 12 coats
 //   (palette-2e.ts AVATAR_COATS) on a round tinted disc, front view, the same eyes for all; drawn so each reads
-//   at 28 px: big eyes, few markings, a different disc colour each;
+//   at 28 px: big eyes, few markings, a different disc colour each; the disc's fill is `var(--avatar-bg, <tint>)`
+//   so a chosen background (UI batch, art/looks-art.ts and sprite.ts avatarBadge) can show under the head;
 // - icon-heart-line, icon-heart-fill: a plump rounded heart, as a 2-unit line (the icon set's stroke) and filled
 //   in --cheer with a soft highlight (a cheer: never the lives' look, lives are fish); both the same size;
 // - nick-tag: a collar (Coral, dashed stitching) with a round gold tag on a ring (a paw engraved) and a little
 //   bell beside it; no bone;
-// - icon-pencil, icon-shuffle, icon-info: edit, shuffle and info glyphs in the icon set's 2-unit round line
-//   with the soft --icon-fill wash; icon-stopwatch (leaderboard update): a gold stopwatch for the countdown pill;
+// - icon-pencil, icon-info: edit and info glyphs in the icon set's 2-unit round line with the soft --icon-fill
+//   wash (the shuffle glyph went with the name sheet's word pickers, UI batch); icon-stopwatch (leaderboard
+//   update): a gold stopwatch for the countdown pill;
+// - frame-1 …, bg-1 … (UI batch, profile): the avatar frames and backgrounds (art/looks-art.ts);
 // - reward-chest, reward-chest-open: the wooden chest with the fish-shaped lock (chestArt below).
 // Lazy only: the `ladder` chunk mounts them (mountLadderArt adds these symbols to the sprite once). Nothing in
 // the main bundle may import this module (spec §7.9); the lazy-art chunk, which the board's motion and the
@@ -20,14 +23,16 @@
 import { CAT_COLORS, CHEST_COLORS, TOKENS } from './palette';
 import { AVATAR_COATS, avatarDisc, MEDAL_COLORS, TAG_COLORS, type AvatarCoat } from './palette-2e';
 import { sym } from './helper-art';
-import { HEAD_FLAT, PAW, SPRITE_ID, type AvatarIndex, type AvatarSymbol } from './sprite';
+import { looksArtSymbols } from './looks-art';
+import { ART_LOOKS, HEAD_FLAT, PAW, SPRITE_ID, type AvatarIndex, type AvatarSymbol } from './sprite';
 
 /** How many avatars we draw: AVATAR_COUNT of src/shared/rank-api.ts (ui/ imports shared/ for types only; a test keeps them equal). */
-export const ART_AVATAR_COUNT = 12;
+export const ART_AVATAR_COUNT = ART_LOOKS.avatars;
 
 /**
  * The symbol of an avatar id. The client's validators drop a row with an id outside 0 … AVATAR_COUNT − 1
  * (spec §2.12), so an unknown id never reaches a view; this still never returns an id we did not draw.
+ * UI batch (profile): the ranking's pictures draw through sprite.ts avatarBadge (with the frame and background).
  */
 export function avatarSymbol(avatarId: number): AvatarSymbol {
   const i = Number.isInteger(avatarId) && avatarId >= 0 && avatarId < ART_AVATAR_COUNT ? avatarId : 0;
@@ -102,7 +107,7 @@ function avatar(c: AvatarCoat): string {
     `<ellipse cx="${x}" cy="60" rx="9" ry="9.6" fill="${C.iris}" stroke="${C.outline}" stroke-width="1.6"/>` +
     `<ellipse cx="${px}" cy="60.8" rx="4.2" ry="6.8" fill="${C.pupil}"/><circle cx="${cx}" cy="56.4" r="2.6" fill="#fff"/>`;
   return (
-    `<circle cx="50" cy="52" r="47" fill="${avatarDisc(c)}"/><g transform="matrix(.84 0 0 .84 8 11.4)">` +
+    `<circle cx="50" cy="52" r="47" style="fill:var(--avatar-bg,${avatarDisc(c)})"/><g transform="matrix(.84 0 0 .84 8 11.4)">` +
     paint(HEAD_FLAT, c.coat) +
     markings(c) +
     (c.muzzle ? both(`<ellipse cx="41.6" cy="79.4" rx="9.8" ry="7.4" fill="${c.muzzle}"/>`) : '') +
@@ -186,7 +191,7 @@ function chestArt(): string[] {
   ];
 }
 
-/** The ranking symbols' markup (and the reward chests). */
+/** The ranking symbols' markup (and the reward chests, and the avatar frames and backgrounds). */
 export function ladderArtSymbols(): string {
   const { gold } = TOKENS;
   const deep = TOKENS['gold-deep'];
@@ -223,11 +228,6 @@ export function ladderArtSymbols(): string {
       '0 0 24 24',
       `<path d="M15.4 4.6a2 2 0 0 1 2.8 0l1.2 1.2a2 2 0 0 1 0 2.8L9.2 18.8 4.6 19.4l.6-4.6Z" ${LINE} ${SOFT_FILL}/><path d="m13.6 6.4 4 4M5.2 14.8l4 4" ${LINE}/>`,
     ),
-    sym(
-      'icon-shuffle',
-      '0 0 24 24',
-      `<path d="M3.6 7.4h2.8c4.6 0 6.6 9.2 11.2 9.2h2.6M3.6 16.6h2.8c1.6 0 2.8-1.1 3.8-2.6m3.6-4c1-1.5 2.2-2.6 3.8-2.6h2.6M17.6 4.6l2.8 2.8-2.8 2.8M17.6 13.8l2.8 2.8-2.8 2.8" ${LINE}/>`,
-    ),
     // Leaderboard update: a round stopwatch (a crown button, a side button, one hand) for the countdown pill.
     sym(
       'icon-stopwatch',
@@ -241,6 +241,7 @@ export function ladderArtSymbols(): string {
       '0 0 24 24',
       `<circle cx="12" cy="12" r="8.6" ${LINE} ${SOFT_FILL}/><path d="M12 11v5.4" ${LINE} stroke-width="2.4"/><circle cx="12" cy="7.8" r="1.5" fill="currentColor"/>`,
     ),
+    looksArtSymbols(),
   ].join('');
 }
 

@@ -46,8 +46,8 @@
 //          .lb-status[data-status=online|playing|away]
 import { cfg } from '../../app/config';
 import { formatDuration, formatNumber, getLocale, onLocaleChanged, t, tn } from '../../i18n';
-import { avatarSymbol, HEART_POP, HEART_POP_MS, mountLadderArt } from '../art/ladder-art';
-import { icon } from '../art/sprite';
+import { HEART_POP, HEART_POP_MS, mountLadderArt } from '../art/ladder-art';
+import { avatarBadge, icon } from '../art/sprite';
 import { h, setText } from '../dom';
 import '../../styles/ladder-chunk.css';
 import type { BracketListCallbacks, BracketListHandle, BracketListView, BracketRowView, ClimbResult } from './ranking-panel';
@@ -229,7 +229,7 @@ function buildRow(cb: BracketListCallbacks, interactive: boolean): RowParts {
   let cur: BracketRowView | null = null;
   let curView: BracketListView | null = null;
   let sent = false;
-  let avatarId = -1;
+  let look = '';
   let medal = 0;
   let liked: boolean | null = null;
   /** The place shown: the number, our medal for 1–3 (never colour alone) and the chest of a paid place. */
@@ -277,10 +277,11 @@ function buildRow(cb: BracketListCallbacks, interactive: boolean): RowParts {
         el.setAttribute('aria-label', rowLabel(r, v.hearts, r.me ? v.waiting : 0, st?.text ?? null));
       }
       showPlace(r.rank);
-      if (r.avatarId !== avatarId) {
-        avatarId = r.avatarId;
+      // UI batch (profile): the picture with its frame and background.
+      if (lookKey(r) !== look) {
+        look = lookKey(r);
         avatar.textContent = '';
-        avatar.appendChild(icon(avatarSymbol(r.avatarId), { class: 'rank-row__avatar-art' }));
+        avatar.appendChild(avatarBadge(r.avatarId, r.frameId ?? 0, r.backgroundId ?? 0, { class: 'rank-row__avatar-art' }));
       }
       // textContent only (XSS; spec §1.8, §10.5 #7).
       const shownName = displayName(r.name);
@@ -337,6 +338,9 @@ interface PodParts {
   setPoints(n: number): void;
 }
 
+/** UI batch (profile): a row's picture, frame and background as one key (the badge is redrawn when it changes). */
+const lookKey = (r: BracketRowView): string => `${r.avatarId}/${r.frameId ?? 0}/${r.backgroundId ?? 0}`;
+
 /** One podium place (decorative: the list reads the same row). Hidden while the server has no row at that place. */
 function buildPod(place: 1 | 2 | 3): PodParts {
   const frame = h('span', { class: 'lb-pod__frame' });
@@ -349,7 +353,7 @@ function buildPod(place: 1 | 2 | 3): PodParts {
   const status = statusPill();
   const step = h('span', { class: 'lb-pod__step' }, medal, name, fish, gift, status.el);
   const el = h('div', { class: 'lb-pod', dataset: { place: String(place) } }, frame, step);
-  let avatarId = -1;
+  let look = '';
   return {
     el,
     setPoints(n) {
@@ -360,10 +364,10 @@ function buildPod(place: 1 | 2 | 3): PodParts {
       if (!r) return;
       // data-mine, never data-me: `[data-me="1"]` counts the server's rows only.
       el.dataset.mine = r.me ? '1' : '0';
-      if (r.avatarId !== avatarId) {
-        avatarId = r.avatarId;
+      if (lookKey(r) !== look) {
+        look = lookKey(r);
         frame.textContent = '';
-        frame.appendChild(icon(avatarSymbol(r.avatarId), { class: 'lb-pod__avatar' }));
+        frame.appendChild(avatarBadge(r.avatarId, r.frameId ?? 0, r.backgroundId ?? 0, { class: 'lb-pod__avatar' }));
       }
       const shown = displayName(r.name);
       if (name.textContent !== shown) name.textContent = shown;

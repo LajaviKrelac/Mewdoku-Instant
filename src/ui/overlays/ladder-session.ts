@@ -7,8 +7,8 @@
 //          > .overlay__head(h2.overlay__title button.overlay__close) .ladder-session__stage(.lb-timer .ladder-session__podium)
 //            p.ladder-session__body .overlay__actions(button.ladder-session__ok)
 import { t } from '../../i18n';
-import { avatarSymbol, mountLadderArt } from '../art/ladder-art';
-import { icon } from '../art/sprite';
+import { mountLadderArt } from '../art/ladder-art';
+import { avatarBadge, icon } from '../art/sprite';
 import { h, setText, type OverlayView } from '../dom';
 import { createLocaleText } from '../locale-text';
 import { clockText } from './bracket-list';
@@ -21,6 +21,9 @@ export interface LadderSessionProps {
   now(): number;
   /** My picture (save.ladder.me); null: the default cat. */
   readonly avatarId: number | null;
+  /** UI batch (profile): my frame and background (save.ladder.me); absent: the plain look. */
+  readonly frameId?: number;
+  readonly backgroundId?: number;
   readonly reducedMotion: boolean;
   /** Got it, ×, Esc or a tap on the scrim. */
   onClose(): void;
@@ -41,7 +44,7 @@ export function createLadderSession(): OverlayView<LadderSessionProps> {
   const timerText = h('span', { class: 'lb-timer__text num' });
   const timer = h('div', { class: 'lb-timer', 'aria-hidden': 'true' }, icon('icon-stopwatch', { class: 'lb-timer__icon' }), timerText);
   const me = h('span', { class: 'ladder-session__me' });
-  let meFor = -2;
+  let meFor = '';
   const step = (place: 1 | 2 | 3, top: HTMLElement | null): HTMLElement =>
     h(
       'span',
@@ -74,11 +77,11 @@ export function createLadderSession(): OverlayView<LadderSessionProps> {
     props = p;
     L.apply();
     shell.el.toggleAttribute('data-reduced', p.reducedMotion);
-    const id = p.avatarId ?? -1;
+    const id = `${p.avatarId ?? -1}/${p.frameId ?? 0}/${p.backgroundId ?? 0}`;
     if (id !== meFor) {
       meFor = id;
       me.textContent = '';
-      me.appendChild(icon(avatarSymbol(p.avatarId ?? 0), { class: 'ladder-session__avatar' }));
+      me.appendChild(avatarBadge(p.avatarId ?? 0, p.frameId ?? 0, p.backgroundId ?? 0, { class: 'ladder-session__avatar' }));
     }
     renderTimer();
   };

@@ -390,8 +390,11 @@ export interface LadderRecord {
    * OR like nickLineSeen; a v4 copy without it reads false (not reported as corrupt).
    */
   noticeSeen: boolean;
-  /** My ranking name, picture and player code as the server last said (the offline display), or null. */
-  me: { name: string; avatarId: number; code: string } | null;
+  /**
+   * My ranking name, picture and player code as the server last said (the offline display), or null. UI batch
+   * (profile): the frame and background too (0 = the plain look; a copy without them reads 0, not corrupt).
+   */
+  me: { name: string; avatarId: number; frameId: number; backgroundId: number; code: string } | null;
 }
 
 /** Phase 2e (spec §7.1, D-2e-6): v3 plus the ranking client's record, the daily streak and the purchase intent ledger. */

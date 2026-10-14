@@ -129,7 +129,8 @@ export interface AnalyticsParamsMap {
   ladder_result: { rank: number; size: number; rewarded: 0 | 1 };
   ladder_claim: { result: 'ok' | 'error' | 'video_failed'; doubled: 0 | 1 };
   heart_give: { result: 'ok' | 'exists' | 'limit' | 'error'; self: 0 | 1 };
-  nick_set: { result: 'ok' | 'rejected' | 'cooldown' | 'error'; avatar: 0 | 1 };
+  // UI batch (profile): frame, bg = the frame or background changed (0/1; never the name or the ids)
+  nick_set: { result: 'ok' | 'rejected' | 'cooldown' | 'error'; avatar: 0 | 1; frame: 0 | 1; bg: 0 | 1 };
   ladder_listed: { on: 0 | 1 };
   ladder_delete: { result: 'ok' | 'error' };
   streak_day: { day: number; run: number };
@@ -178,7 +179,7 @@ export const ANALYTICS_PARAM_KEYS: { readonly [K in AnalyticsName]: readonly (ke
   ladder_result: ['rank', 'size', 'rewarded'],
   ladder_claim: ['result', 'doubled'],
   heart_give: ['result', 'self'],
-  nick_set: ['result', 'avatar'],
+  nick_set: ['result', 'avatar', 'frame', 'bg'],
   ladder_listed: ['on'],
   ladder_delete: ['result'],
   streak_day: ['day', 'run'],

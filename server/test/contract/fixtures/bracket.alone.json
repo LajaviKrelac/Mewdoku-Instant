@@ -27,7 +27,9 @@
           "me": true,
           "likedByMe": false,
           "seenAt": 1791799800000,
-          "playing": false
+          "playing": false,
+          "frameId": 0,
+          "backgroundId": 0
         }
       ],
       "me": {
@@ -40,7 +42,9 @@
         "me": true,
         "likedByMe": false,
         "seenAt": 1791799800000,
-        "playing": false
+        "playing": false,
+        "frameId": 0,
+        "backgroundId": 0
       },
       "final": false,
       "heartsNew": 0,

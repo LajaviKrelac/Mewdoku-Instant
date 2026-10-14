@@ -74,6 +74,9 @@ function parseNick(x: unknown): PlayerView['nick'] | undefined {
   return { adj: x.adj, noun: x.noun, num: x.num };
 }
 
+/** A frame or background id (UI batch, additive fields): a bad or missing one is the plain look, 0. */
+const lookId = (x: unknown): number => (isInt(x, 0, 9999) ? x : 0);
+
 function parsePlayer(x: unknown): PlayerView | null {
   if (!isObj(x)) return null;
   const nick = parseNick(x.nick);
@@ -100,6 +103,10 @@ function parsePlayer(x: unknown): PlayerView | null {
     trust: x.trust,
     listed: x.listed,
     nicknameChangeAt: x.nicknameChangeAt,
+    // UI batch (profile, additive): absent (or null) = a server without frames and backgrounds (the client hides those
+    // pickers); a bad value is the plain look (0), never a reason to drop the player.
+    frameId: x.frameId === undefined || x.frameId === null ? null : lookId(x.frameId),
+    backgroundId: x.backgroundId === undefined || x.backgroundId === null ? null : lookId(x.backgroundId),
   };
 }
 
@@ -207,6 +214,9 @@ function parseRow(x: unknown): BracketRow | null {
     // made-up one); the row itself stays.
     seenAt: isMs(x.seenAt) ? x.seenAt : null,
     playing: isMs(x.seenAt) && x.playing === true,
+    // UI batch (profile, additive): the plain look (0) from a server without them or for a bad value; the row stays.
+    frameId: lookId(x.frameId),
+    backgroundId: lookId(x.backgroundId),
   };
 }
 

@@ -134,6 +134,8 @@ export function selectHomeView(state: AppState, ctx: ViewContext, c: GameConfig 
     ladder: ctx.ladderChip && ctx.ladderChip.state !== 'records' ? ctx.ladderChip : { state: 'records', period: { kind: c.period.kind, total: periodTotal(save, ctx.now, c) } },
     streak: selectStreakStrip(state, today, c),
     avatarId: save.ladder.me?.avatarId ?? null,
+    frameId: save.ladder.me?.frameId ?? 0,
+    backgroundId: save.ladder.me?.backgroundId ?? 0,
   };
 }
 

@@ -21,7 +21,9 @@
         "pool": "fb",
         "trust": "signed",
         "listed": true,
-        "nicknameChangeAt": null
+        "nicknameChangeAt": null,
+        "frameId": 0,
+        "backgroundId": 0
       },
       "data": {
         "brackets": 4,

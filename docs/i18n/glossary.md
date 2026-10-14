@@ -143,10 +143,12 @@ Event names and product names are ours. Translate their meaning and keep them sh
 | Real players only | Copy never invents a count or a statistic: "37 players" is the server's real number, and nothing says "online now", "N % of players" or that more players will join. Waiting fish are never promised to count ("we'll try to send them"). |
 | Heart = a cheer | A heart in the ranking is a small cheer from another player: no reward, never a life (the lives are fish), never "like" in the social-network sense if your language has a warmer word. |
 | Streak = days in a row | Days in a row with at least one solved puzzle (de *Serie*, es *racha*, fr *série*, it *serie*, pt-BR *sequência*, id *rangkaian*, tr *seri*, pl *seria*, ru *серия*, vi *chuỗi*, th *สตรีค*, ja *連続記録*, ko *연속 기록*, zh-Hans *连续打卡*, hi *सिलसिला*, ar *سلسلة*). Not the retired 2c "perfect streak". Calm: never "you'll lose it", never a countdown. |
-| Ranking name | The player's name in the ranking: two of our English words and a number ("Brave Noodle 12"). The words are **never translated** (every player sees the same text). Translate only the term "ranking name" itself. |
+| Ranking name | The player's name in the ranking. A new player starts with two of our English words and a number ("Brave Noodle 12"); since the UI batch (2026-10-13) players can type their own. Either way the name is **never translated** (every player sees the same text): translate only the term "ranking name" itself. |
 | Player code | An 8-character code shown as "7KQ2-M9XD" for support and deletion requests; never translated. |
 | "Buy" first | Every purchase button starts with your word for "Buy" (money is spent) and keeps `{price}` exactly as the store formats it. Width ≤ 28 with a long price ("1,99 US$"). |
 | Picture | The ranking picture is one of our 12 cat avatars: a "picture" or "image", not a "photo" (photos are what we never show). |
+| Profile | The sheet where the player sets their ranking name, picture, frame and background (UI batch): the same word as Home's "Profile" button. |
+| Frame, background | A frame is a decorative ring drawn around the ranking picture; a background is the colour or pattern behind the cat. Some are free, the others unlock by playing (a level, a streak, a ranking reward): "unlock", never "buy" (they cost nothing). |
 
 | English | de | es | fr | it | pt-BR | id | tr | pl |
 |---|---|---|---|---|---|---|---|---|
@@ -155,6 +157,8 @@ Event names and product names are ours. Translate their meaning and keep them sh
 | streak | Serie | racha | série | serie | sequência | rangkaian | seri | seria |
 | ranking name | Ranglistenname | nombre de ranking | nom de classement | nome in classifica | nome no ranking | nama peringkat | sıralama adı | nazwa w rankingu |
 | player code | Spielercode | código de jugador | code joueur | codice giocatore | código de jogador | kode pemain | oyuncu kodu | kod gracza |
+| frame (picture) | Rahmen | marco | cadre | cornice | moldura | bingkai | çerçeve | ramka |
+| background (picture) | Hintergrund | fondo | fond | sfondo | fundo | latar | arka plan | tło |
 | Buy | Kaufen | Comprar | Acheter | Compra | Comprar | Beli | Satın al | Kup |
 
 | English | ru | vi | th | ja | ko | zh-Hans | hi | ar |
@@ -164,4 +168,6 @@ Event names and product names are ours. Translate their meaning and keep them sh
 | streak | серия | chuỗi | สตรีค | 連続記録 | 연속 기록 | 连续打卡 | सिलसिला | سلسلة |
 | ranking name | имя в рейтинге | tên xếp hạng | ชื่อในอันดับ | ランキング名 | 랭킹 이름 | 排行昵称 | रैंकिंग नाम | الاسم في الترتيب |
 | player code | код игрока | mã người chơi | รหัสผู้เล่น | プレイヤーコード | 플레이어 코드 | 玩家代码 | प्लेयर कोड | رمز اللاعب |
+| frame (picture) | рамка | khung | กรอบ | フレーム | 테두리 | 头像框 | फ़्रेम | الإطار |
+| background (picture) | фон | nền | พื้นหลัง | 背景 | 배경 | 背景 | बैकग्राउंड | الخلفية |
 | Buy | Купить | Mua | ซื้อ | 購入 | 구매 | 购买 | खरीदें | اشترِ |

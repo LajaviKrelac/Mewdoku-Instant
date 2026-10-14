@@ -15,7 +15,8 @@ import { queueWin } from '../../../src/app/ladder-origin';
 import { createStore, initialAppState, type AppState, type OverlayId, type Store } from '../../../src/app/store';
 import { defaults } from '../../../src/game/save';
 import type { SaveData } from '../../../src/game/types';
-import type { PlayerView } from '../../../src/shared/rank-api';
+import { AVATAR_COUNT, BACKGROUND_COUNT, FRAME_COUNT, type PlayerView, type RulesView } from '../../../src/shared/rank-api';
+import type { NicknameSheetProps } from '../../../src/ui/overlays/nickname-sheet';
 import { createLadderFake, type LadderFake } from '../../fixtures/ladder-fake';
 import { NOW } from './harness';
 
@@ -40,8 +41,6 @@ interface FakeRouter {
 
 const CHUNK: LadderChunk = {
   createBracketList: (() => ({})) as unknown as LadderChunk['createBracketList'],
-  NICK_WORDS_V1: { adj: ['Velvet', 'Misty', 'Sleepy', 'Cozy'], noun: ['Pounce', 'Pebble', 'Whisker', 'Biscuit'] },
-  RETIRED_V1: { adj: [], noun: [] },
 };
 
 interface Setup {
@@ -79,6 +78,8 @@ function setup(
     rewarded?: boolean;
     /** Leaderboard update: the fake server joins on a `join: true` session (as the real one does). */
     join?: boolean;
+    /** UI batch (profile): the server's rules (e.g. nickname.freeText off). */
+    rules?: Partial<RulesView>;
   } = {},
 ): Setup {
   const clock = createFakeClock(NOW);
@@ -87,6 +88,7 @@ function setup(
     ...(o.skewMs !== undefined ? { skewMs: o.skewMs } : {}),
     ...(o.player ? { player: o.player } : {}),
     ...(o.join ? { joinOnSession: true } : {}),
+    ...(o.rules ? { rules: o.rules } : {}),
   });
   const storage = o.storage ?? new MemStorage();
   const base: SaveData = { ...defaults(NOW - 30 * 86_400_000), tutorialDone: true, progress: { level: 58, completed: 57, best: {} }, stock: { hints: 0, kitties: 0 } };
@@ -149,7 +151,6 @@ function setup(
     online: o.online ?? (() => true),
     records: () => ({ rows: [] }) as never,
     canOpenCard: () => order.length === 0,
-    random: () => 0.5,
   });
   const s: Setup = {
     clock,
@@ -208,7 +209,7 @@ describe('sign-in (spec §2.2)', () => {
   it('signs in, takes my name, picture, code and "Show me in rankings" from the server; ladder_auth ok', async () => {
     const s = setup();
     await s.flow.start();
-    expect(s.save().ladder.me).toEqual({ name: 'Velvet Pounce 27', avatarId: 4, code: '7KQ2M9XD' });
+    expect(s.save().ladder.me).toEqual({ name: 'Velvet Pounce 27', avatarId: 4, frameId: 0, backgroundId: 0, code: '7KQ2M9XD' });
     expect(s.save().ladder.listed).toBe(true);
     expect(s.named('ladder_auth')).toEqual([{ platform: 'web', result: 'ok' }]);
     expect(s.flow.active()).toBe(true);
@@ -513,27 +514,121 @@ describe('result cards, claim and ×2 (spec §2.6, §1.6)', () => {
 });
 
 describe('name, Show me in rankings, Delete (spec §2.7)', () => {
-  it('the name sheet saves a pick; the server name is shown everywhere', async () => {
+  // UI batch (profile): the profile sheet — a typed name, the picture, a frame and a background.
+  type Sheet = NicknameSheetProps;
+  const sheetOf = (s: Setup): Sheet => s.router.props.nickname as Sheet;
+  const pick = (sheet: Sheet, over: Partial<Sheet['current']>): Sheet['current'] => ({ ...sheet.current, ...over });
+
+  it('the profile sheet opens on my server name and look; a typed name saves (trimmed), the server name is shown everywhere', async () => {
     const s = setup();
     await s.flow.start();
     s.flow.settingsRows()?.onName();
     await s.settle(0);
-    const sheet = s.router.props.nickname as { onSave(p: { adj: number; noun: number; num: number; avatarId: number }): void };
-    sheet.onSave({ adj: 1, noun: 2, num: 9, avatarId: 3 });
+    const sheet = sheetOf(s);
+    expect(sheet).toMatchObject({ current: { name: 'Velvet Pounce 27', avatarId: 4, frameId: 0, backgroundId: 0 }, state: 'idle', nameEditable: true, avatarCount: AVATAR_COUNT });
+    expect(sheet.frames).toHaveLength(FRAME_COUNT);
+    expect(sheet.backgrounds).toHaveLength(BACKGROUND_COUNT);
+    // the shape check is the shared one
+    expect(sheet.checkName('Ko')).toBe('short');
+    expect(sheet.checkName('  李明 ')).toBeNull();
+    sheet.onSave(pick(sheet, { name: '  Captain   Purr ', avatarId: 3 }));
     await s.settle(0);
-    expect(s.save().ladder.me).toMatchObject({ name: 'Misty Whisker 9', avatarId: 3 });
-    expect(s.named('nick_set')).toEqual([{ result: 'ok', avatar: 1 }]);
+    expect(s.fake.calls.find((c) => c.path === '/v1/me/profile')?.body).toEqual({ nickname: { text: 'Captain Purr' }, avatarId: 3 });
+    expect(s.save().ladder.me).toMatchObject({ name: 'Captain Purr', avatarId: 3, frameId: 0, backgroundId: 0 });
+    expect(s.named('nick_set')).toEqual([{ result: 'ok', avatar: 1, frame: 0, bg: 0 }]);
+    expect(s.router.toasts).toContain('Profile saved.');
+    // the analytics never carry the name
+    expect(JSON.stringify(s.named('nick_set'))).not.toContain('Purr');
   });
 
-  it('a second change inside the cooldown: the sheet says when (cooldown state)', async () => {
+  it('a frame and a background save on their own (no name, no avatar in the request) and reach my row', async () => {
     const s = setup();
     await s.flow.start();
-    s.fake.failNext('/v1/me/profile', 'nickname_cooldown');
     s.flow.settingsRows()?.onName();
     await s.settle(0);
-    (s.router.props.nickname as { onSave(p: object): void }).onSave({ adj: 1, noun: 1, num: 1, avatarId: 4 });
+    const sheet = sheetOf(s);
+    sheet.onSave(pick(sheet, { frameId: 2, backgroundId: 1 }));
     await s.settle(0);
-    expect(s.router.props.nickname).toMatchObject({ state: 'cooldown' });
+    expect(s.fake.calls.find((c) => c.path === '/v1/me/profile')?.body).toEqual({ frameId: 2, backgroundId: 1 });
+    expect(s.save().ladder.me).toMatchObject({ frameId: 2, backgroundId: 1 });
+    expect(s.named('nick_set')).toEqual([{ result: 'ok', avatar: 0, frame: 1, bg: 1 }]);
+    // my row in the bracket carries them (the server's rows)
+    s.queue(1);
+    s.flow.onWin({ winId: winId(1), mode: 'level', kept: 2 });
+    await s.settle(0);
+    const st = s.flow.listState();
+    const mine = st?.kind === 'bracket' ? st.view.rows.find((r) => r.me) : undefined;
+    expect(mine).toMatchObject({ frameId: 2, backgroundId: 1 });
+  });
+
+  it('locks come from this save: ids 0–2 free, the rest by level, best streak or a ranking reward; what I wear is never locked', async () => {
+    const s = setup({
+      save: (b) => ({ ...b, progress: { ...b.progress, level: 30 }, dayStreak: { ...b.dayStreak, best: 3 } }),
+      player: { frameId: 7, backgroundId: 0 },
+    });
+    await s.flow.start();
+    s.flow.settingsRows()?.onName();
+    await s.settle(0);
+    const sheet = sheetOf(s);
+    // frames: free, free, free, level 25 (reached), streak 7, level 100, a reward, level 300 (worn: open)
+    expect(sheet.frames).toEqual([null, null, null, null, { kind: 'streak', days: 7 }, { kind: 'level', level: 100 }, { kind: 'prize' }, null]);
+    expect(sheet.backgrounds.slice(3)).toEqual([{ kind: 'level', level: 50 }, { kind: 'streak', days: 14 }, { kind: 'level', level: 200 }, { kind: 'prize' }, { kind: 'level', level: 500 }]);
+  });
+
+  it('a server without frames and backgrounds (PlayerView without them): no such pickers, and the request never has them', async () => {
+    const s = setup({ player: { frameId: null, backgroundId: null } });
+    await s.flow.start();
+    s.flow.settingsRows()?.onName();
+    await s.settle(0);
+    const sheet = sheetOf(s);
+    expect([sheet.frames, sheet.backgrounds]).toEqual([[], []]);
+    sheet.onSave(pick(sheet, { frameId: 3, avatarId: 5 }));
+    await s.settle(0);
+    expect(s.fake.calls.find((c) => c.path === '/v1/me/profile')?.body).toEqual({ avatarId: 5 });
+    expect(s.save().ladder.me).toMatchObject({ avatarId: 5, frameId: 0, backgroundId: 0 });
+  });
+
+  it('typed names switched off on the server (rules.nickname.freeText): the name is read-only, the looks still save', async () => {
+    const s = setup({ rules: { nickname: { freeText: false, changeCooldownMs: 86_400_000 } } });
+    await s.flow.start();
+    s.flow.settingsRows()?.onName();
+    await s.settle(0);
+    expect(sheetOf(s).nameEditable).toBe(false);
+  });
+
+  it('opens in the cooldown state when the server said my next change is later; a 409 takes the server\'s own wait', async () => {
+    const s = setup({ player: { nicknameChangeAt: NOW + 5 * 3_600_000 } });
+    await s.flow.start();
+    s.flow.settingsRows()?.onName();
+    await s.settle(0);
+    expect(sheetOf(s)).toMatchObject({ state: 'cooldown' });
+    expect(sheetOf(s).cooldownUntil).toBeGreaterThan(s.clock.now());
+    // another device changed the name since this sign-in: the server's retryAfterMs decides
+    const t = setup();
+    await t.flow.start();
+    t.fake.failNext('/v1/me/profile', 'nickname_cooldown', 2 * 3_600_000);
+    t.flow.settingsRows()?.onName();
+    await t.settle(0);
+    expect(sheetOf(t).state).toBe('idle');
+    sheetOf(t).onSave(pick(sheetOf(t), { name: 'Captain Purr' }));
+    await t.settle(0);
+    expect(sheetOf(t)).toMatchObject({ state: 'cooldown', cooldownUntil: t.clock.now() + 2 * 3_600_000 });
+    expect(t.named('nick_set')).toEqual([{ result: 'cooldown', avatar: 0, frame: 0, bg: 0 }]);
+  });
+
+  it('the server\'s verdicts: a refused shape is "invalid", a blocked name "rejected" (two different lines)', async () => {
+    const s = setup();
+    await s.flow.start();
+    s.flow.settingsRows()?.onName();
+    await s.settle(0);
+    s.fake.failNext('/v1/me/profile', 'nickname_invalid');
+    sheetOf(s).onSave(pick(sheetOf(s), { name: 'Captain Purr' }));
+    await s.settle(0);
+    expect(sheetOf(s).state).toBe('invalid');
+    sheetOf(s).onSave(pick(sheetOf(s), { name: 'Sh1t Cat' }));
+    await s.settle(0);
+    expect(sheetOf(s).state).toBe('rejected');
+    expect(s.save().ladder.me?.name).toBe('Velvet Pounce 27');
   });
 
   it('Show me in rankings off: the server stores it; the panel shows my records (opted_out)', async () => {
@@ -997,7 +1092,7 @@ describe('a deletion on the server (an email request, spec §1.11; e2e #12)', ()
     s.flow.panelExtras().onHeart(0);
     await s.settle(0);
     expect(s.fake.paths().filter((p) => p === 'POST /v1/session')).toHaveLength(2);
-    expect(s.save().ladder.me).toEqual({ name: 'Brave Comet 5', avatarId: 4, code: 'Z9Z9Z9Z9' });
+    expect(s.save().ladder.me).toEqual({ name: 'Brave Comet 5', avatarId: 4, frameId: 0, backgroundId: 0, code: 'Z9Z9Z9Z9' });
     expect(s.storage.getItem(ROWS_KEY)).toBeNull();
     expect(s.flow.listState()).toBeNull(); // the old win's panel is gone with the old player
     expect(s.flow.settingsRows()?.code).toBe('Z9Z9-Z9Z9');
@@ -1027,7 +1122,7 @@ describe('not listed: nothing leaves the device (spec §2.7, §2.9, §1.11)', ()
   });
 
   it('switched off (a player on the server): the boot does not sign in; the rows keep my name and code', async () => {
-    const me = { name: 'Velvet Pounce 27', avatarId: 4, code: '7KQ2M9XD' };
+    const me = { name: 'Velvet Pounce 27', avatarId: 4, frameId: 0, backgroundId: 0, code: '7KQ2M9XD' };
     const s = setup({ save: (b) => ({ ...b, ladder: { ...b.ladder, listed: false, me } }) });
     await s.flow.start();
     s.flow.homeMounted();

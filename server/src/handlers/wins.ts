@@ -105,6 +105,8 @@ export async function postWins(ctx: Ctx): Promise<Response> {
       playerKey: player.key,
       nickname: player.nickname,
       avatar: player.avatar,
+      frame: player.frame,
+      bg: player.bg,
       now,
       player: ev.player,
       flags,

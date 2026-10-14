@@ -80,3 +80,37 @@ export function avatarDisc(coat: AvatarCoat): string {
 
 /** The name tag's collar (Appendix C: a collar with a round tag and a bell): the band and its stitching. */
 export const TAG_COLORS = Object.freeze({ collar: PALETTE[0] as string, collarDeep: '#B2575A', stitch: '#F6D8D3' });
+
+const tint = (i: number, t: number): string => mixHex(PALETTE[i] as string, '#FFFFFF', t);
+
+/**
+ * UI batch (profile): the avatar frames' and backgrounds' colours (art/looks-art.ts), ours: palette colours, their
+ * tints toward white, the gold tokens, and a few deeper shades for the rings' edges, the laurel and the night sky.
+ * Decorative only (nothing reads by colour alone: every look also differs in shape or pattern).
+ */
+export const LOOK_COLORS = Object.freeze({
+  denim: PALETTE[4] as string,
+  denimDeep: '#3F5891',
+  lagoon: PALETTE[5] as string,
+  orchid: PALETTE[8] as string,
+  orchidDeep: '#C25C93',
+  apricot: PALETTE[1] as string,
+  apricotDeep: '#E0803F',
+  gold: TOKENS.gold,
+  goldDeep: TOKENS['gold-deep'],
+  sky: PALETTE[6] as string,
+  coral: PALETTE[0] as string,
+  lime: PALETTE[3] as string,
+  violet: PALETTE[7] as string,
+  violetDeep: '#6A4FB0',
+  leaf: '#6E9F57',
+  sunny: tint(2, 0.55),
+  mint: tint(3, 0.45),
+  mintLight: tint(3, 0.75),
+  rose: tint(11, 0.25),
+  skyTint: tint(6, 0.45),
+  skyLight: tint(6, 0.78),
+  night: '#2F3A66',
+  rays: tint(1, 0.5),
+  mustard: PALETTE[2] as string,
+});

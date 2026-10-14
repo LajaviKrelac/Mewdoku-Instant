@@ -2,11 +2,10 @@
 // The worldwide daily ranking's views (spec §2.4–§2.8, §7.7, §9.4, §10.1, §10.6 #1): the bracket list (exactly
 // the server's rows, my row, the pinned copy, medals WITH numbers, names as text, a11y names, the counts and
 // lines from the server's rules), the post-win panel's 'bracket' state and its tap rule with an interactive
-// list, the ranking sheet (list, info, records, notice), the result card's three cases and the name sheet.
+// list, the ranking sheet (list, info, records, notice), the result card's three cases and the profile sheet (UI batch).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cfg } from '../../../src/app/config';
 import { formatNumber, setLocale, t, tn } from '../../../src/i18n';
-import { NICK_WORDS_V1 } from '../../../src/shared/nick-words';
 import {
   countdownText,
   createBracketList,
@@ -19,7 +18,9 @@ import {
 } from '../../../src/ui/overlays/bracket-list';
 import { createLadderResult, grantText, resultLine, type LadderResultProps } from '../../../src/ui/overlays/ladder-result';
 import { createLadderSheet, infoLines, sheetRecordRows, type LadderRulesView, type LadderSheetProps } from '../../../src/ui/overlays/ladder-sheet';
-import { clampNum, createNicknameSheet, pickName, type NicknamePick, type NicknameSheetProps } from '../../../src/ui/overlays/nickname-sheet';
+import { createNicknameSheet, type NicknameSheetProps, type ProfilePick } from '../../../src/ui/overlays/nickname-sheet';
+import { clipName, tidyName } from '../../../src/ui/overlays/profile-text';
+import { NAME_MAX_CHARS, NAME_MAX_DIGITS, NAME_MIN_WIDTH, nameProblem, normalizeName } from '../../../src/shared/nick-text';
 import {
   announcement,
   createRankingPanel,
@@ -158,15 +159,26 @@ describe('bracket list: exactly the server rows (H-3, §10.6 #1)', () => {
     }
   });
 
-  it('names are text (textContent) with dir="auto"; the picture is our avatar symbol', () => {
+  it('names are text (textContent) with dir="auto"; the picture is our avatar symbol with its frame and background', () => {
     const evil = '<img src=x onerror=alert(1)>';
-    const list = createBracketList(view({ rows: rows(2, 1, (r) => (r.rank === 2 ? { name: evil, avatarId: 11 } : {})) }), { onHeart: vi.fn() });
+    const list = createBracketList(view({ rows: rows(2, 1, (r) => (r.rank === 2 ? { name: evil, avatarId: 11, frameId: 3, backgroundId: 2 } : {})) }), { onHeart: vi.fn() });
     const name = qa(list.el, '.rank-row__name')[1] as HTMLElement;
     expect(name.textContent).toBe(evil);
     expect(name.querySelector('img')).toBeNull();
     expect(list.el.querySelector('img')).toBeNull();
     expect(name.getAttribute('dir')).toBe('auto');
-    expect(qa(list.el, 'ol .rank-row__avatar use')[1]?.getAttribute('href')).toBe('#avatar-11');
+    const art = qa(list.el, 'ol .rank-row__avatar');
+    expect(qa(art[1] as HTMLElement, 'use').map((u) => u.getAttribute('href'))).toEqual(['#bg-2', '#avatar-11', '#frame-3']);
+    // UI batch (profile): a row without them is the plain avatar
+    expect(qa(art[0] as HTMLElement, 'use').map((u) => u.getAttribute('href'))).toHaveLength(1);
+  });
+
+  it('UI batch (profile): the podium draws the frame and background too; my place keeps a mark that is not only a colour', () => {
+    const list = createBracketList(view({ rows: rows(6, 2, (r) => (r.rank === 2 ? { frameId: 5, backgroundId: 3 } : {})) }), { onHeart: vi.fn() });
+    const second = q(list.el, '.lb-pod[data-place="2"]');
+    expect(second.dataset.mine).toBe('1');
+    expect(qa(q(second, '.lb-pod__frame'), 'use').map((u) => u.getAttribute('href'))).toEqual(['#bg-3', `#avatar-${rows(6, 2)[1]?.avatarId}`, '#frame-5']);
+    expect(q(list.el, '.lb-pod[data-place="1"]').dataset.mine).toBe('0');
   });
 
   it('my row: highlighted, the "You" tag, the waiting chip, and its listitem name', () => {
@@ -698,125 +710,187 @@ describe('result card (overlay `ladder_result`, spec §2.6)', () => {
   });
 });
 
-// ─────────────────────────────── the name sheet ───────────────────────────────
+// ─────────────────────────────── the profile sheet (UI batch: a typed name, the picture, a frame, a background) ───────────────────────────────
 
-const CURRENT: NicknamePick = { adj: 2, noun: 5, num: 27, avatarId: 4 };
+const CURRENT: ProfilePick = { name: 'Velvet Pounce 27', avatarId: 4, frameId: 0, backgroundId: 0 };
+const LOCKS: NicknameSheetProps['frames'] = [null, null, null, { kind: 'level', level: 25 }, { kind: 'streak', days: 7 }, { kind: 'level', level: 100 }, { kind: 'prize' }, { kind: 'level', level: 300 }];
 
 function nickProps(over: Partial<NicknameSheetProps> = {}): NicknameSheetProps {
   return {
-    words: NICK_WORDS_V1,
     current: CURRENT,
     avatarCount: 12,
-    numMin: 1,
-    numMax: 99,
+    frames: LOCKS,
+    backgrounds: LOCKS,
+    nameEditable: true,
+    nameRules: { maxChars: NAME_MAX_CHARS, minWidth: NAME_MIN_WIDTH, maxDigits: NAME_MAX_DIGITS },
+    checkName: (raw) => nameProblem(normalizeName(raw)),
     state: 'idle',
     cooldownUntil: null,
     now: () => NOW,
-    shuffle: vi.fn(() => ({ adj: 0, noun: 0, num: 150, avatarId: 11 })),
     onSave: vi.fn(),
     onClose: vi.fn(),
     ...over,
   };
 }
 
-describe('name sheet (overlay `nickname`, spec §2.7)', () => {
-  it('the preview, the 12 pictures as a radio group, the word pickers and the number', () => {
-    const sheet = createNicknameSheet();
-    document.body.appendChild(sheet.el);
-    sheet.open(nickProps());
-    expect(q(sheet.el, '.nickname__preview .nickname__name').textContent).toBe('Velvet Pounce 27');
-    expect(q(sheet.el, '.nickname__name').getAttribute('dir')).toBe('auto');
-    const group = q(sheet.el, '[role=radiogroup].nickname__avatars');
-    const pics = qa(group, '[role=radio]');
+function openNick(over: Partial<NicknameSheetProps> = {}): { sheet: ReturnType<typeof createNicknameSheet>; p: NicknameSheetProps } {
+  const p = nickProps(over);
+  const sheet = createNicknameSheet();
+  document.body.appendChild(sheet.el);
+  sheet.open(p);
+  return { sheet, p };
+}
+
+const type = (el: HTMLElement, value: string): void => {
+  const input = q<HTMLInputElement>(el, 'input.nickname__input');
+  input.value = value;
+  input.dispatchEvent(new Event('input'));
+};
+const hrefs = (el: Element): (string | null)[] => qa(el, 'use').map((u) => u.getAttribute('href'));
+
+describe('profile sheet (overlay `nickname`, spec §2.7; UI batch)', () => {
+  it('my picture and my name in a labelled text field (16 px, dir=auto, never the first focus); Picture · Frame · Background tabs', () => {
+    const { sheet } = openNick();
+    const input = q<HTMLInputElement>(sheet.el, 'input.nickname__input');
+    expect(input.value).toBe('Velvet Pounce 27');
+    expect(input.getAttribute('dir')).toBe('auto');
+    expect(input.getAttribute('autocomplete')).toBe('off');
+    expect(input.getAttribute('enterkeyhint')).toBe('done');
+    expect(q(sheet.el, `label[for="${input.id}"]`).textContent).toBe('Name');
+    expect(q(sheet.el, 'h2.overlay__title').textContent).toBe('Your profile');
+    expect(hrefs(q(sheet.el, '.nickname__avatar'))).toEqual(['#avatar-4']);
+    const tabs = qa(sheet.el, '[role=tablist] [role=tab]');
+    expect(tabs.map((b) => b.textContent)).toEqual(['Picture', 'Frame', 'Background']);
+    expect(tabs.map((b) => b.getAttribute('aria-selected'))).toEqual(['true', 'false', 'false']);
+    expect(tabs.map((b) => b.tabIndex)).toEqual([0, -1, -1]);
+    const pics = qa(sheet.el, '[role=radiogroup].nickname__avatars [role=radio]');
     expect(pics).toHaveLength(12);
     expect(pics.map((b) => b.getAttribute('aria-checked'))).toEqual(pics.map((_, i) => String(i === 4)));
     expect(pics[0]?.getAttribute('aria-label')).toBe('Picture 1 of 12');
-    expect(pics[4]?.tabIndex).toBe(0);
-    expect(pics[3]?.tabIndex).toBe(-1);
-    // It opens on the chosen picture (Save starts gated).
+    expect(q(sheet.el, '.nickname__avatars').getAttribute('aria-labelledby')).toBe(tabs[0]?.id);
+    expect(q(sheet.el, '.nickname__frames').hidden).toBe(true);
+    // It opens on the chosen picture, never on the text field (a keyboard would cover the dialog).
     expect(qa(sheet.el, '[data-autofocus]')).toEqual([pics[4]]);
-    const adj = q<HTMLSelectElement>(sheet.el, 'select.nickname__adj');
-    expect(adj.options).toHaveLength(NICK_WORDS_V1.adj.length);
-    expect(adj.value).toBe('2');
-    expect(q<HTMLSelectElement>(sheet.el, 'select.nickname__noun').value).toBe('5');
-    const num = q<HTMLInputElement>(sheet.el, 'input.nickname__num');
-    expect([num.value, num.min, num.max]).toEqual(['27', '1', '99']);
-    expect(q(sheet.el, `label[for="${adj.id}"]`).textContent).toBe('First word');
     // Nothing changed yet: Save waits.
     expect(q(sheet.el, 'button.nickname__save').getAttribute('aria-disabled')).toBe('true');
   });
 
-  it('picking words, a number and a picture updates the preview; Save sends the pick', () => {
-    const p = nickProps();
-    const sheet = createNicknameSheet();
-    document.body.appendChild(sheet.el);
-    sheet.open(p);
-    const adj = q<HTMLSelectElement>(sheet.el, 'select.nickname__adj');
-    adj.value = '0';
-    adj.dispatchEvent(new Event('change'));
-    const num = q<HTMLInputElement>(sheet.el, 'input.nickname__num');
-    num.value = '250';
-    num.dispatchEvent(new Event('change'));
-    expect(num.value).toBe('99');
-    qa(sheet.el, '[role=radio]')[7]?.click();
-    expect(q(sheet.el, '.nickname__name').textContent).toBe('Sleepy Pounce 99');
-    expect(q(sheet.el, '.nickname__avatar use').getAttribute('href')).toBe('#avatar-7');
+  it('typing a name: clipped at 16 code points, a hint for a bad shape (and Save waits), Enter saves a good one', () => {
+    const { sheet, p } = openNick();
+    const input = q<HTMLInputElement>(sheet.el, 'input.nickname__input');
+    type(sheet.el, 'Ko');
+    expect(q(sheet.el, '.nickname__hint').textContent).toBe('Use 3 to 16 letters or numbers.');
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(q(sheet.el, 'button.nickname__save').getAttribute('aria-disabled')).toBe('true');
+    type(sheet.el, 'cat@home');
+    expect(q(sheet.el, '.nickname__hint').textContent).toBe('No web addresses or @ names, please.');
+    type(sheet.el, 'Cat!');
+    expect(q(sheet.el, '.nickname__hint').textContent).toBe('Use letters, numbers, spaces and . _ - only.');
+    type(sheet.el, 'Cat12345');
+    expect(q(sheet.el, '.nickname__hint').textContent).toBe('Use 4 digits at most.');
+    type(sheet.el, '');
+    type(sheet.el, '😺'.repeat(20));
+    expect([...input.value]).toHaveLength(16); // code points, a pair never split
+    type(sheet.el, '  Captain   Purr ');
+    expect(q(sheet.el, '.nickname__hint').hidden).toBe(true);
+    expect(input.hasAttribute('aria-invalid')).toBe(false);
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(p.onSave).toHaveBeenCalledWith({ ...CURRENT, name: 'Captain Purr' });
+  });
+
+  it('frames and backgrounds: each shown on my picture; a locked one shows a lock and says what unlocks it, never picked', () => {
+    const { sheet, p } = openNick();
+    q(sheet.el, '[role=tab][data-tab="frame"]').click();
+    expect(q(sheet.el, '.nickname__frames').hidden).toBe(false);
+    expect(q(sheet.el, '.nickname__avatars').hidden).toBe(true);
+    const frames = qa(sheet.el, '.nickname__frames [role=radio]');
+    expect(frames).toHaveLength(8);
+    expect(hrefs(frames[2] as HTMLElement)).toEqual(['#avatar-4', '#frame-2']);
+    expect(frames[0]?.getAttribute('aria-label')).toBe('Frame 1 of 8');
+    expect(frames[3]?.getAttribute('aria-disabled')).toBe('true');
+    expect(frames[3]?.hasAttribute('data-locked')).toBe(true);
+    expect(frames[3]?.querySelector('.nickname__lock')).not.toBeNull();
+    expect(frames[3]?.getAttribute('aria-label')).toBe('Frame 4 of 8, locked. Reach level 25 to unlock.');
+    frames[3]?.click();
+    expect(frames[3]?.getAttribute('aria-checked')).toBe('false');
+    expect(q(sheet.el, '.nickname__unlock').textContent).toBe('Reach level 25 to unlock.');
+    frames[4]?.click();
+    expect(q(sheet.el, '.nickname__unlock').textContent).toBe('Play 7 days in a row to unlock.');
+    frames[6]?.click();
+    expect(q(sheet.el, '.nickname__unlock').textContent).toBe('Win a ranking reward to unlock.');
+    frames[2]?.click();
+    expect(q(sheet.el, '.nickname__unlock').hidden).toBe(true);
+    expect(hrefs(q(sheet.el, '.nickname__avatar'))).toEqual(['#avatar-4', '#frame-2']);
+    q(sheet.el, '[role=tab][data-tab="bg"]').click();
+    const bgs = qa(sheet.el, '.nickname__bgs [role=radio]');
+    expect(hrefs(bgs[1] as HTMLElement)).toEqual(['#bg-1', '#avatar-4', '#frame-2']); // with the frame just picked
+    bgs[1]?.click();
+    // the pictures redraw with the new frame and background
+    q(sheet.el, '[role=tab][data-tab="avatar"]').click();
+    expect(hrefs(qa(sheet.el, '.nickname__avatars [role=radio]')[7] as HTMLElement)).toEqual(['#bg-1', '#avatar-7', '#frame-2']);
     q(sheet.el, 'button.nickname__save').click();
-    expect(p.onSave).toHaveBeenCalledWith({ adj: 0, noun: 5, num: 99, avatarId: 7 });
+    expect(p.onSave).toHaveBeenCalledWith({ ...CURRENT, frameId: 2, backgroundId: 1 });
   });
 
-  it('Shuffle asks the app (the UI has no randomness) and clamps the number; arrows move the picture', () => {
-    const p = nickProps();
-    const sheet = createNicknameSheet();
-    document.body.appendChild(sheet.el);
-    sheet.open(p);
-    q(sheet.el, 'button.nickname__shuffle').click();
-    expect(p.shuffle).toHaveBeenCalledTimes(1);
-    expect(q(sheet.el, '.nickname__name').textContent).toBe('Sleepy Whisker 99');
-    const group = q(sheet.el, '.nickname__avatars');
-    group.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
-    expect(qa(sheet.el, '[role=radio]')[0]?.getAttribute('aria-checked')).toBe('true');
-    group.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
-    expect(qa(sheet.el, '[role=radio]')[11]?.getAttribute('aria-checked')).toBe('true');
+  it('arrows: the tabs move and select (RTL-aware via arrowStep); in a grid they move to a locked look without picking it', () => {
+    const { sheet } = openNick();
+    const tabs = q(sheet.el, '[role=tablist]');
+    tabs.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    expect(q(sheet.el, '[role=tab][data-tab="frame"]').getAttribute('aria-selected')).toBe('true');
+    const grid = q(sheet.el, '.nickname__frames');
+    const frames = qa(grid, '[role=radio]');
+    (frames[2] as HTMLElement).focus();
+    frames[2]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    expect(document.activeElement).toBe(frames[3]);
+    expect(frames[3]?.getAttribute('aria-checked')).toBe('false');
+    expect(q(sheet.el, '.nickname__unlock').textContent).toBe('Reach level 25 to unlock.');
+    frames[3]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+    expect(frames[2]?.getAttribute('aria-checked')).toBe('true');
+    tabs.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+    tabs.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+    expect(q(sheet.el, '[role=tab][data-tab="bg"]').getAttribute('aria-selected')).toBe('true');
   });
 
-  it('offline: Save and the pickers disabled, "Connect to the internet to change your name."', () => {
-    const sheet = createNicknameSheet();
-    document.body.appendChild(sheet.el);
-    sheet.open(nickProps({ state: 'offline' }));
+  it('a server without frames and backgrounds: only the Picture tab; typed names off: the name is read-only, the picture saves', () => {
+    const { sheet } = openNick({ frames: [], backgrounds: [], nameEditable: false });
+    const tabs = qa(sheet.el, '[role=tab]');
+    expect(tabs.map((b) => b.hidden)).toEqual([false, true, true]);
+    const input = q<HTMLInputElement>(sheet.el, 'input.nickname__input');
+    expect(input.readOnly).toBe(true);
+    expect(q(sheet.el, '.nickname__hint').textContent).toBe("Names can't be changed right now. Your picture still saves.");
+    qa(sheet.el, '.nickname__avatars [role=radio]')[2]?.click();
+    expect(q(sheet.el, 'button.nickname__save').hasAttribute('aria-disabled')).toBe(false);
+  });
+
+  it('offline: Save and the controls disabled, "Connect to the internet to change your name."', () => {
+    const { sheet } = openNick({ state: 'offline' });
     expect(q(sheet.el, '.nickname__status').textContent).toBe('Connect to the internet to change your name.');
     expect(q(sheet.el, 'button.nickname__save').getAttribute('aria-disabled')).toBe('true');
-    expect(q<HTMLSelectElement>(sheet.el, 'select.nickname__adj').disabled).toBe(true);
-    expect(q(sheet.el, 'button.nickname__shuffle').getAttribute('aria-disabled')).toBe('true');
+    expect(q<HTMLInputElement>(sheet.el, 'input.nickname__input').disabled).toBe(true);
+    expect(q<HTMLButtonElement>(sheet.el, '.nickname__avatars [role=radio]').disabled).toBe(true);
   });
 
-  it('rejected stays open with its line; a cooldown blocks a name change but not a picture change', () => {
-    const sheet = createNicknameSheet();
-    document.body.appendChild(sheet.el);
-    const p = nickProps({ state: 'rejected' });
-    sheet.open(p);
+  it('the server\'s verdicts: a blocked name and a refused shape say different things; the sheet stays', () => {
+    const { sheet } = openNick({ state: 'rejected' });
     expect(q(sheet.el, '.nickname__status').textContent).toBe("That name can't be used. Please pick another.");
-    const cool = nickProps({ state: 'cooldown', cooldownUntil: NOW + 5 * H + 12 * 60_000 });
-    sheet.update(cool);
-    // The cooldown is said up front; a picture change still saves.
+    sheet.update(nickProps({ state: 'invalid' }));
+    expect(q(sheet.el, '.nickname__status').textContent).toBe("That name doesn't fit the rules. Try another one.");
+  });
+
+  it('a cooldown is said up front and blocks a name change but not a picture, frame or background', () => {
+    const { sheet, p } = openNick({ state: 'cooldown', cooldownUntil: NOW + 5 * H + 12 * 60_000 });
     expect(q(sheet.el, '.nickname__status').hidden).toBe(false);
     expect(q(sheet.el, '.nickname__status').textContent).toBe('You can change your name again in 5 h 12 min.');
-    qa(sheet.el, '[role=radio]')[9]?.click();
+    qa(sheet.el, '.nickname__avatars [role=radio]')[9]?.click();
     expect(q(sheet.el, 'button.nickname__save').hasAttribute('aria-disabled')).toBe(false);
     q(sheet.el, 'button.nickname__save').click();
-    expect(cool.onSave).toHaveBeenCalledWith({ ...CURRENT, avatarId: 9 });
-    const noun = q<HTMLSelectElement>(sheet.el, 'select.nickname__noun');
-    noun.value = '1';
-    noun.dispatchEvent(new Event('change'));
-    expect(q(sheet.el, '.nickname__status').textContent).toBe('You can change your name again in 5 h 12 min.');
+    expect(p.onSave).toHaveBeenCalledWith({ ...CURRENT, avatarId: 9 });
+    type(sheet.el, 'Captain Purr');
     expect(q(sheet.el, 'button.nickname__save').getAttribute('aria-disabled')).toBe('true');
   });
 
   it('saving: Save busy, Cancel and Esc wait', () => {
-    const p = nickProps({ state: 'saving' });
-    const sheet = createNicknameSheet();
-    document.body.appendChild(sheet.el);
-    sheet.open(p);
+    const { sheet, p } = openNick({ state: 'saving' });
     expect(q(sheet.el, 'button.nickname__save').getAttribute('aria-busy')).toBe('true');
     expect(sheet.dismiss()).toBe(true);
     q(sheet.el, 'button.nickname__cancel').click();
@@ -826,11 +900,25 @@ describe('name sheet (overlay `nickname`, spec §2.7)', () => {
     expect(p.onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('pure helpers: the rendered name and the number clamp', () => {
-    expect(pickName(NICK_WORDS_V1, CURRENT)).toBe('Velvet Pounce 27');
-    expect(pickName(NICK_WORDS_V1, { ...CURRENT, adj: 999 })).toBe('Cat 27');
-    expect(clampNum('0', 1, 99, 5)).toBe(1);
-    expect(clampNum('x', 1, 99, 5)).toBe(5);
-    expect(clampNum('42', 1, 99, 5)).toBe(42);
+  it('a generated name longer than the limit is never chopped: it may only shrink, and saves once it fits', () => {
+    const long = 'Mischievous Whisker 99'; // 22 characters, from the word lists
+    const { sheet, p } = openNick({ current: { ...CURRENT, name: long } });
+    const input = q<HTMLInputElement>(sheet.el, 'input.nickname__input');
+    expect(input.value).toBe(long);
+    type(sheet.el, `${long}!`);
+    expect(input.value).toBe(long); // it cannot grow
+    type(sheet.el, 'Mischievous Whisker');
+    expect(q(sheet.el, '.nickname__hint').textContent).toBe('Use 3 to 16 letters or numbers.');
+    expect(q(sheet.el, 'button.nickname__save').getAttribute('aria-disabled')).toBe('true');
+    type(sheet.el, 'Whisker 99');
+    q(sheet.el, 'button.nickname__save').click();
+    expect(p.onSave).toHaveBeenCalledWith({ ...CURRENT, name: 'Whisker 99' });
+  });
+
+  it('pure helpers: the tidy name and the code-point clip', () => {
+    expect(tidyName('  Captain \n Purr ')).toBe('Captain Purr');
+    expect(clipName('abcdef', 4)).toBe('abcd');
+    expect(clipName('😺😺😺', 2)).toBe('😺😺');
+    expect(clipName('abc', 16)).toBe('abc');
   });
 });

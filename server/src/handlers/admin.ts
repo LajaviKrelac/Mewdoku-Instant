@@ -83,9 +83,11 @@ export async function adminRoute(ctx: Ctx, method: string, rest: string): Promis
     if (action === 'suspend') await s.store.suspend(p.key, newRowId(now, s.rng), now, p.code);
     else if (action === 'reinstate') await s.store.reinstate(p.key, newRowId(now, s.rng), now, p.code);
     else {
-      // A fresh generated name (a different seed than the first one), copied to open-bracket rows.
+      // A fresh generated name (a different seed than the first one), copied to open-bracket rows. UI batch: the
+      // reset starts the name cooldown (changedAt: now), so a player whose typed name was reset cannot type another
+      // one at once; the reset itself is never refused by a running cooldown (no guard).
       const { nick } = generateNick(await sha256(`reset:${p.key}:${now}`), s.words, s.retired);
-      await s.store.updateProfile(p.key, { nickname: { text: renderNick(s.words, nick), nick, changedAt: null, cooldownBefore: null } });
+      await s.store.updateProfile(p.key, { nickname: { text: renderNick(s.words, nick), nick, changedAt: now, cooldownBefore: null } });
       await s.store.adminLog(newRowId(now, s.rng), now, 'reset_nickname', p.code, null);
     }
     const fresh = await s.store.getPlayer(p.key);

@@ -8,12 +8,12 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { AVATAR_COUNT } from '../../../src/shared/rank-api';
+import { AVATAR_COUNT, BACKGROUND_COUNT, FRAME_COUNT } from '../../../src/shared/rank-api';
 import { CAT_COLORS, CHEST_COLORS, PALETTE, TOKENS } from '../../../src/ui/art/palette';
-import { AVATAR_COATS, AVATAR_DISC_MIX, avatarDisc, MEDAL_COLORS, MEDAL_NUMBER_INK, TAG_COLORS } from '../../../src/ui/art/palette-2e';
+import { AVATAR_COATS, AVATAR_DISC_MIX, avatarDisc, LOOK_COLORS, MEDAL_COLORS, MEDAL_NUMBER_INK, TAG_COLORS } from '../../../src/ui/art/palette-2e';
 import { lazyArtSymbols } from '../../../src/ui/art/lazy-art';
 import { ART_AVATAR_COUNT, avatarSymbol, HEART_POP, HEART_POP_MS, ladderArtSymbols, MEDAL_FACE, mountLadderArt } from '../../../src/ui/art/ladder-art';
-import { icon, mountSprite, spriteMarkup, SPRITE_ID, type IconSymbol } from '../../../src/ui/art/sprite';
+import { ART_LOOKS, avatarBadge, icon, mountSprite, spriteMarkup, SPRITE_ID, type IconSymbol } from '../../../src/ui/art/sprite';
 import { mountStreakArt, streakArtSymbols } from '../../../src/ui/art/streak-art';
 import { deltaE2000, hexToLab } from '../../../scripts/palette-check';
 
@@ -22,7 +22,12 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 /** The streak art (Phase 2e I-4: lazy, art/streak-art.ts; the name is kept from when it was first-load art). */
 const FIRST_LOAD: readonly IconSymbol[] = ['icon-streak-flame', 'streak-step-empty', 'streak-step-done', 'streak-step-today', 'streak-step-chest'];
 const AVATARS = Array.from({ length: 12 }, (_, i) => `avatar-${i}`) as IconSymbol[];
-const LADDER: readonly IconSymbol[] = ['medal-1', 'medal-2', 'medal-3', ...AVATARS, 'icon-heart-line', 'icon-heart-fill', 'reward-chest', 'reward-chest-open', 'nick-tag', 'icon-pencil', 'icon-shuffle', 'icon-info'];
+/** UI batch (profile): the avatar frames and backgrounds (looks-art.ts; id 0 of each is the plain look, no symbol). */
+const LOOKS = [
+  ...Array.from({ length: FRAME_COUNT - 1 }, (_, i) => `frame-${i + 1}`),
+  ...Array.from({ length: BACKGROUND_COUNT - 1 }, (_, i) => `bg-${i + 1}`),
+] as IconSymbol[];
+const LADDER: readonly IconSymbol[] = ['medal-1', 'medal-2', 'medal-3', ...AVATARS, 'icon-heart-line', 'icon-heart-fill', 'reward-chest', 'reward-chest-open', 'nick-tag', 'icon-pencil', 'icon-info', ...LOOKS];
 const ALL = [...FIRST_LOAD, ...LADDER];
 
 /** The markup of one <symbol> in a markup string. */
@@ -114,7 +119,7 @@ describe('Phase 2e art: where each symbol lives (CONTRACTS §9, spec §7.9)', ()
     expect(seen.size).toBeGreaterThan(30);
     expect(seen.has(resolve(ROOT, 'src/ui/art/sprite.ts'))).toBe(true);
     // Phase 2e I-4: the streak art, the chip and the strip are lazy too (the overlay chunk, spec §7.9's rule).
-    for (const lazy of ['src/ui/art/ladder-art.ts', 'src/ui/art/palette-2e.ts', 'src/ui/art/lazy-art.ts', 'src/ui/art/streak-art.ts', 'src/ui/hud/streak-strip.ts', 'src/ui/hud/ladder-chip.ts']) {
+    for (const lazy of ['src/ui/art/ladder-art.ts', 'src/ui/art/looks-art.ts', 'src/ui/art/palette-2e.ts', 'src/ui/art/lazy-art.ts', 'src/ui/art/streak-art.ts', 'src/ui/hud/streak-strip.ts', 'src/ui/hud/ladder-chip.ts']) {
       expect(seen.has(resolve(ROOT, lazy)), lazy).toBe(false);
     }
   });
@@ -132,6 +137,7 @@ describe('Phase 2e art: colours come from the registered palettes (palette-check
       ...MEDAL_COLORS.flatMap((m) => Object.values(m)),
       ...AVATAR_COATS.flatMap((c) => [c.coat, c.edge, c.mark, c.muzzle, c.mark2, c.line, avatarDisc(c)]),
       ...Object.values(TAG_COLORS),
+      ...Object.values(LOOK_COLORS),
     ]
       .filter((v) => v.startsWith('#'))
       .map((v) => v.toLowerCase()),
@@ -187,7 +193,8 @@ describe('Phase 2e art: the drawings (spec Appendix C)', () => {
     for (let i = 0; i < AVATAR_COUNT; i++) {
       const s = symbolOf(m, `avatar-${i}`);
       expect(s, `avatar-${i}`).toContain(`fill="${AVATAR_COATS[i]?.coat}"`);
-      expect(s).toContain(`<circle cx="50" cy="52" r="47" fill="${avatarDisc(AVATAR_COATS[i] as (typeof AVATAR_COATS)[number])}"/>`);
+      // UI batch (profile): the disc is overridable, so a chosen background shows under the head
+      expect(s).toContain(`<circle cx="50" cy="52" r="47" style="fill:var(--avatar-bg,${avatarDisc(AVATAR_COATS[i] as (typeof AVATAR_COATS)[number])})"/>`);
       eyes.add((s.match(/<ellipse cx="(33|67)"[^>]*>/g) ?? []).join(''));
     }
     expect(eyes.size).toBe(1); // "the same eyes"
@@ -273,9 +280,10 @@ describe('Phase 2e art: the drawings (spec Appendix C)', () => {
     expect(s).toContain(`<g fill="${TOKENS['gold-deep']}"`); // the engraved paw
   });
 
-  it('pencil, shuffle and info are line icons in the icon set\'s 2-unit stroke', () => {
+  it('pencil and info are line icons in the icon set\'s 2-unit stroke (the shuffle glyph went with the word pickers)', () => {
     const m = ladderArtSymbols();
-    for (const id of ['icon-pencil', 'icon-shuffle', 'icon-info']) {
+    expect(m).not.toContain('id="icon-shuffle"');
+    for (const id of ['icon-pencil', 'icon-info']) {
       const s = symbolOf(m, id);
       expect(s, id).toContain('stroke="currentColor" stroke-width="2"');
       expect(s, id).toContain('stroke-linecap="round"');

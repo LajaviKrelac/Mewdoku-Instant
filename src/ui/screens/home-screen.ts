@@ -38,7 +38,7 @@ import type { DailyCardState } from '../../game/progression';
 import { formatClock, formatDuration, formatShortDate, onLocaleChanged, t, translate } from '../../i18n';
 import { homeBoardUrl } from '../art/home-board';
 import { mascotIllustration } from '../art/mascot';
-import { icon, type AvatarSymbol } from '../art/sprite';
+import { avatarBadge, icon } from '../art/sprite';
 import { clear, h, setText, type View } from '../dom';
 import type { LadderChipView, createLadderChip } from '../hud/ladder-chip';
 import { createPeriodPill } from '../hud/pills';
@@ -137,6 +137,9 @@ export interface HomeView {
   readonly streak: StreakStripView | null;
   /** The profile picture (save.ladder.me's avatar); absent or null: our default cat head. */
   readonly avatarId?: number | null;
+  /** UI batch (profile): its frame and background (save.ladder.me); absent: the plain look. */
+  readonly frameId?: number;
+  readonly backgroundId?: number;
 }
 
 export interface HomeCallbacks {
@@ -228,7 +231,7 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
   const lead = h('div', { class: 'home__rank' }, periodPill.el);
   // The profile picture: our cat head under the avatar, which draws once the ranking art is mounted.
   const avatarUse = h('span', { class: 'home__avatar', 'aria-hidden': 'true' });
-  let avatarShown: number | null = null;
+  let avatarShown = '';
   const profile = L.attr(
     h(
       'button',
@@ -409,11 +412,13 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
     strip.el.hidden = false;
   };
 
-  const renderAvatar = (id: number | null): void => {
-    if (id === avatarShown) return;
-    avatarShown = id;
+  const renderAvatar = (id: number | null, frameId: number, backgroundId: number): void => {
+    const key = id === null ? '' : `${id}/${frameId}/${backgroundId}`;
+    if (key === avatarShown) return;
+    avatarShown = key;
     clear(avatarUse);
-    if (id !== null) avatarUse.appendChild(icon(`avatar-${id}` as AvatarSymbol));
+    // UI batch (profile): the picture with its frame and background (sprite.ts; the symbols are the lazy ranking art).
+    if (id !== null) avatarUse.appendChild(avatarBadge(id, frameId, backgroundId));
   };
   let iconState: 'lock' | 'cal' | null = null;
 
@@ -486,7 +491,7 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
     periodPill.update(periodOf(v));
     renderLead(v.ladder);
     renderStreak(v.streak);
-    renderAvatar(v.avatarId ?? null);
+    renderAvatar(v.avatarId ?? null, v.frameId ?? 0, v.backgroundId ?? 0);
     renderEvent(v.event);
     el.toggleAttribute('data-banner', v.bannerReserved);
     el.style.setProperty('--banner-reserve', `${cfg.ads.banner.reservePx}px`);
