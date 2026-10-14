@@ -154,10 +154,12 @@ describe('Phase 2d English (look-spec Appendix A; G3)', () => {
     expect(EN_PARTS.enUi2d['game.score']).toBe('Score');
   });
 
-  it('the toast.start.* lines (2d\'s toast; since 2d.1 ticker line 1) are honest: no number, no percentage, ≤ 32 characters', () => {
+  // UI batch (2026-10-13), messages: the ticker soft limit is 60 (a line is never cut); these stay short anyway.
+  it('the toast.start.* lines (2d\'s toast; since 2d.1 ticker line 1) are honest: no number, no percentage, ≤ 60 characters', () => {
     for (const k of ['toast.start.level', 'toast.start.hard', 'toast.start.retry'] as const) {
       expect(en[k], k).not.toMatch(/\d|%|players?/i);
-      expect(en[k].length, k).toBeLessThanOrEqual(32);
+      expect(en[k].length, k).toBeLessThanOrEqual(60);
+      expect(META[k]?.maxLength, k).toBe(60);
     }
   });
 
@@ -194,7 +196,8 @@ describe('Phase 2d.1 English (helpers-spec Appendix A; G3)', () => {
 
   it('every catalogue has the Appendix A keys and its own colour 4; "Done!" fits 8 characters everywhere; meta notes the limits', () => {
     expect(META['fx.done']?.maxLength).toBe(8);
-    for (const k of Object.keys(EN_PARTS.enUi2d1).filter((k) => k.startsWith('ticker.'))) expect(META[k as keyof typeof META]?.maxLength, k).toBe(40);
+    // UI batch (2026-10-13), messages: 40 → 60 for every ticker line (the 2d.1 ones and en/ui-tickers.ts).
+    for (const k of Object.keys({ ...EN_PARTS.enUi2d1, ...EN_PARTS.enUiTickers }).filter((k) => k.startsWith('ticker.'))) expect(META[k as keyof typeof META]?.maxLength, k).toBe(60);
     for (const [file, mod] of Object.entries(LOCALE_MODULES)) {
       const cat = mod.catalog ?? {};
       expect(cat['fx.done'], file).toBeTruthy();

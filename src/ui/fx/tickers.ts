@@ -11,6 +11,11 @@
 // none): a pair asked for before the chunk loaded joins its crossing where it would be by then
 // (play's `sinceMs`, a negative WAAPI delay). The line types are type-only for G1's pickTickerLines.
 // Classes: .tickers > .ticker[data-line=1|2][data-key] > svg.ticker__paw + span.ticker__text + svg.ticker__icon
+// UI batch (2026-10-13), messages: a line is never cut ("…"): each pill is as wide as its text (celebrate.css) and the
+// column clips it only while it crosses; a pair whose longer line would cross faster than fx.tickers.maxPxPerSec takes
+// longer than crossMs (both lines). Reduced motion marks .tickers[data-reduced]: the lines stack and wrap in place. The
+// richer lines (ticker.odds.* with {pct} or a {count} of tries in halves, the Retry's {placed}/{n} and try number, the
+// milestone's {level}, the player's records) are G1's pickTickerLines'.
 import { cfg, type PeriodKind } from '../../app/config';
 import { formatClock, formatNumber, t, tn, translate, type I18nKey } from '../../i18n';
 import { icon } from '../art/sprite';
@@ -27,23 +32,77 @@ export type TickerKey =
   | 'ticker.daily'
   | 'ticker.unique'
   | 'ticker.tip.cat'
-  | 'ticker.tip.drag';
+  | 'ticker.tip.drag'
+  // UI batch, messages
+  | 'ticker.odds.firstTry'
+  | 'ticker.odds.retry'
+  | 'ticker.odds.tries'
+  | 'ticker.retry.found'
+  | 'ticker.retry.close'
+  | 'ticker.retry.again'
+  | 'ticker.hard.first'
+  | 'ticker.hard.beaten'
+  | 'ticker.flawless'
+  | 'ticker.streak'
+  | 'ticker.dailies'
+  | 'ticker.milestone';
 
 export interface TickerLine {
   readonly key: TickerKey;
-  /** Plural keys (ticker.cats, ticker.solved, ticker.points, period.pill.*): rendered with tn(key, count, { count: formatNumber(count) }). */
+  /**
+   * Plural keys (ticker.cats, ticker.solved, ticker.points, period.pill.*, and the UI batch's ticker.odds.tries,
+   * ticker.retry.close, ticker.hard.beaten, ticker.flawless, ticker.streak, ticker.dailies): rendered with
+   * tn(key, count, { count: formatNumber(count) }); ticker.odds.tries keeps a half ("2.5"). ticker.retry.again: the
+   * try number, with t().
+   */
   readonly count?: number;
   /** ticker.best (level mode only): the stored best time in ms (LevelBest[0]), rendered with formatClock ("4:12"). */
   readonly ms?: number;
+  /** UI batch: ticker.odds.firstTry / .retry: the model's rounded percentage (game/level-odds.ts). */
+  readonly pct?: number;
+  /** UI batch: ticker.retry.found: the lost attempt's cats placed and the board size. */
+  readonly placed?: number;
+  readonly n?: number;
+  /** UI batch: ticker.milestone: the level number. */
+  readonly level?: number;
 }
 
-const PLURAL = new Set<string>(['ticker.cats', 'ticker.solved', 'ticker.points', 'period.pill.day', 'period.pill.week', 'period.pill.month']);
+const PLURAL = new Set<string>([
+  'ticker.cats',
+  'ticker.solved',
+  'ticker.points',
+  'period.pill.day',
+  'period.pill.week',
+  'period.pill.month',
+  'ticker.odds.tries',
+  'ticker.retry.close',
+  'ticker.hard.beaten',
+  'ticker.flawless',
+  'ticker.streak',
+  'ticker.dailies',
+]);
+
+const whole = (x: number | undefined): number => Math.max(0, Math.floor(x ?? 0));
 
 /** A line's text in the current language. */
 export function tickerText(line: TickerLine): string {
-  if (line.key === 'ticker.best') return t('ticker.best', { time: formatClock(line.ms ?? 0) });
+  switch (line.key) {
+    case 'ticker.best':
+      return t('ticker.best', { time: formatClock(line.ms ?? 0) });
+    case 'ticker.odds.firstTry':
+    case 'ticker.odds.retry':
+      return t(line.key, { pct: formatNumber(whole(line.pct)) });
+    case 'ticker.retry.found':
+      return t('ticker.retry.found', { placed: formatNumber(whole(line.placed)), n: formatNumber(whole(line.n)) });
+    case 'ticker.retry.again':
+      return t('ticker.retry.again', { count: formatNumber(whole(line.count)) });
+    case 'ticker.milestone':
+      return t('ticker.milestone', { level: whole(line.level) });
+    default:
+      break;
+  }
   if (PLURAL.has(line.key)) {
-    const n = Math.max(0, Math.floor(line.count ?? 0));
+    const n = line.key === 'ticker.odds.tries' ? Math.max(0, Math.round((line.count ?? 0) * 2) / 2) : whole(line.count);
     return tn(line.key as Parameters<typeof tn>[0], n, { count: formatNumber(n) });
   }
   return translate(line.key as I18nKey);
@@ -52,12 +111,16 @@ export function tickerText(line: TickerLine): string {
 /**
  * When each line starts and how far it moves (ms from the call; px): both cross in T, line 2 first
  * (delayMs), line 1 lead × T later; each travels the column's width `vw` plus its own width.
+ * UI batch: T = crossMs, or longer when the longer line would pass maxPxPerSec × s (s = the screen's --s).
  */
-export function tickerPlan(widths: readonly [number, number], vw: number): readonly { readonly delay: number; readonly dur: number; readonly from: number; readonly to: number }[] {
+export function tickerPlan(widths: readonly [number, number], vw: number, s = 1): readonly { readonly delay: number; readonly dur: number; readonly from: number; readonly to: number }[] {
   const T = cfg.fx.tickers;
+  const speed = T.maxPxPerSec * (s > 0 ? s : 1);
+  const path = vw + Math.max(widths[0], widths[1]);
+  const dur = speed > 0 ? Math.max(T.crossMs, Math.ceil((1000 * path) / speed)) : T.crossMs;
   return widths.map((w, i) => ({
-    delay: i === 1 ? T.delayMs : T.delayMs + Math.round(T.lead * T.crossMs),
-    dur: T.crossMs,
+    delay: i === 1 ? T.delayMs : T.delayMs + Math.round(T.lead * dur),
+    dur,
     from: vw,
     to: -w,
   }));
@@ -122,6 +185,9 @@ export function createTickers(opts: TickersOptions): Tickers {
       const root = doc.createElement('div');
       root.className = 'tickers';
       root.setAttribute('aria-hidden', 'true');
+      const reduced = opts.reduced();
+      // UI batch: reduced motion stacks the lines in place and lets a long one wrap (celebrate.css) instead of clipping.
+      if (reduced) root.dataset.reduced = '1';
       const els = [build(doc, lines[0], 1), build(doc, lines[1], 2)] as const;
       root.append(...els);
       host.appendChild(root);
@@ -129,6 +195,7 @@ export function createTickers(opts: TickersOptions): Tickers {
       const win = doc.defaultView;
       const rtl = win?.getComputedStyle(root).direction === 'rtl';
       const sign = rtl ? -1 : 1;
+      const s = parseFloat(win?.getComputedStyle(host).getPropertyValue('--s') ?? '') || 1;
       // Audit B14: they cross the game column (.tickers is the column, celebrate.css), not the viewport.
       const vw = root.getBoundingClientRect().width || doc.documentElement.clientWidth || win?.innerWidth || 0;
       const widths = [els[0].getBoundingClientRect().width, els[1].getBoundingClientRect().width] as const;
@@ -139,10 +206,8 @@ export function createTickers(opts: TickersOptions): Tickers {
         left -= 1;
         if (left <= 0 && box === root) stop();
       };
-      if (opts.reduced()) {
+      if (reduced) {
         // In place at the column's inline start (12 s), fading in and out.
-        const st = win?.getComputedStyle(host);
-        const s = parseFloat(st?.getPropertyValue('--s') ?? '') || 1;
         const x = 12 * s;
         const f = cfg.fx.reducedMotionFadeMs;
         const total = f + T.reducedHoldMs + f;
@@ -166,7 +231,7 @@ export function createTickers(opts: TickersOptions): Tickers {
         if (anims.length === 0) timer = setTimeout(() => stop(), Math.max(0, T.delayMs + total - late));
         return;
       }
-      const plan = tickerPlan(widths, vw);
+      const plan = tickerPlan(widths, vw, s);
       els.forEach((el, i) => {
         const p = plan[i];
         if (!p) return;

@@ -23,7 +23,8 @@
 /* ── The level-start tickers (Phase 2d.1 §5.2; tickers.ts moves them on WAAPI) ──
    Two cream pills, 29.3 s tall, at y0 + 89.2 s and y0 + 130 s; our paw cap at the inline start (it
    draws the scalloped end and its border), the text 20 s from its outer edge, the end icon, a semicircle
-   at the inline end. Content width, at most the column − 24 s (the text ellipsizes).
+   at the inline end. Content width: UI batch (2026-10-13), messages: as wide as the whole line, never cut ("…" is
+   gone); the column clips a pill only while it crosses it (tickers.ts slows a long pair to fx.tickers.maxPxPerSec).
    Audit B14: they cross the game column (.tickers is the column, clipped), not the whole viewport, so on a
    wide desktop window they stay over the HUD and move as fast as on a phone.
    Audit B8: the pill's body (::before: fill, border, round end) starts under the paw (8 s in, where the paw's
@@ -46,7 +47,7 @@
   display: flex;
   align-items: center;
   box-sizing: border-box;
-  max-width: calc(var(--col-w) - var(--s) * 24px);
+  width: max-content;
   height: calc(var(--s) * 29.3px);
   padding-inline-start: calc(var(--s) * 20px);
   padding-inline-end: calc(var(--s) * 1.2px);
@@ -87,9 +88,7 @@
 
 .ticker__text {
   position: relative;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex: none;
   font-family: var(--font-display);
   font-weight: var(--display-weight);
   font-size: max(10px, calc(var(--s) * 16.5px));
@@ -115,6 +114,50 @@
   height: calc(var(--s) * 25px);
   margin-inline-start: calc(var(--s) * 2.3px);
   margin-inline-end: calc(var(--s) * -1.2px);
+}
+
+/* UI batch (2026-10-13), messages: reduced motion (tickers.ts sets .tickers[data-reduced]). Nothing crosses, so a
+   line wider than the column would be clipped where it stands: the pair stacks from line 1's slot, 11.5 s apart, each
+   pill at most the column − 24 s (12 s from each edge with tickers.ts' 12 s offset); a longer line wraps, balanced,
+   and its pill grows: the paw stays centred on the start, the body closes its own start edge above and below it. */
+.tickers[data-reduced] {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding-top: calc(var(--y-top) + var(--s) * 89.2px);
+}
+
+.tickers[data-reduced] .ticker,
+.tickers[data-reduced] .ticker[data-line='2'] {
+  position: relative;
+  top: auto;
+  width: auto;
+  max-width: calc(var(--col-w) - var(--s) * 24px);
+  height: auto;
+  min-height: calc(var(--s) * 29.3px);
+  padding-block: calc(var(--s) * 4.75px);
+  white-space: normal;
+}
+
+.tickers[data-reduced] .ticker[data-line='2'] {
+  margin-top: calc(var(--s) * 11.5px);
+}
+
+/* Physical shorthands on purpose: the same on every side (no RTL variant), and no :lang() expansion in the build. */
+.tickers[data-reduced] .ticker::before {
+  border: calc(var(--s) * 1.2px) solid var(--toast-line);
+  border-radius: calc(var(--s) * 14.65px);
+}
+
+.tickers[data-reduced] .ticker__text {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow-wrap: break-word;
+  text-wrap: balance;
+}
+
+.tickers[data-reduced] .ticker__paw {
+  top: calc(50% - var(--s) * 16.75px);
 }
 
 /* RTL (§5.3): the tickers mirror: anchored at the right edge (they enter at the

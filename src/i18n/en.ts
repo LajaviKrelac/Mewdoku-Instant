@@ -10,6 +10,7 @@
 // Phase 2d (look-spec Appendix A): G3 owns every file here; the 2d keys are in en/ui-2d.ts.
 // Phase 2d.1 (helpers-spec Appendix A): G3; the 2d.1 keys are in en/ui-2d1.ts.
 // Phase 2e (phase2e spec Appendix A): G3; the 2e keys (ranking, name, Buy rows, streak) are in en/ui-2e.ts.
+// UI batch (2026-10-13), messages: the level-start tickers' richer lines are in en/ui-tickers.ts (first load).
 // The lives are fish: the 2b "heart" values changed (same keys, A.1), the fish-currency keys went (A.3).
 // A key must exist in exactly one file (tests/unit/sanity.spec.ts checks it).
 import { enArt } from './en/art';
@@ -22,6 +23,7 @@ import { enUi2c } from './en/ui-2c';
 import { enUi2d } from './en/ui-2d';
 import { enUi2d1 } from './en/ui-2d1';
 import { enUi2e } from './en/ui-2e';
+import { enUiTickers } from './en/ui-tickers';
 import { enFirst } from './en-first';
 import {
   enLazyCore,
@@ -46,7 +48,7 @@ export const en = { ...enFirst, ...enLazyTable } as const;
 
 /** The per-owner parts of `en`, for the disjointness check (sanity.spec.ts): every key is in exactly one of them. */
 export const EN_PARTS = {
-  enCore, enArt, enUi2b, enUi2c, enUi2d, enUi2d1, enUi2e, enEvents, enPlatform, enI18n,
+  enCore, enArt, enUi2b, enUi2c, enUi2d, enUi2d1, enUi2e, enEvents, enPlatform, enI18n, enUiTickers,
   enLazyCore, enLazyUi2b, enLazyUi2c, enLazyUi2d, enLazyUi2d1, enLazyUi2e, enLazyEvents, enLazyPlatform, enLazyI18n,
 } as const;
 

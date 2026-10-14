@@ -730,7 +730,8 @@ test('23 · the two level-start tickers on a fresh level and on Retry (line 1 = 
   await page.locator('.home__play').click();
   const tickers = page.locator('.tickers > .ticker');
   await expect(tickers).toHaveCount(2, { timeout: 3000 });
-  await expect(page.locator('.ticker[data-line="1"]')).toHaveAttribute('data-key', /^(ticker\.cats|toast\.start\.level)$/);
+  // UI batch (messages): a tough board's line 1 sets expectations (ticker.odds.*); level 5 is an easy one.
+  await expect(page.locator('.ticker[data-line="1"]')).toHaveAttribute('data-key', /^(ticker\.cats|toast\.start\.level|ticker\.odds\.(firstTry|tries))$/);
   await expect(page.locator('.ticker[data-line="2"]')).toHaveAttribute('data-key', /^(ticker\.|period\.pill\.)/);
   await expect(page.locator('.tickers')).toHaveAttribute('aria-hidden', 'true');
   await expect(page.locator('.start-toast')).toHaveCount(0);
@@ -750,7 +751,11 @@ test('23 · the two level-start tickers on a fresh level and on Retry (line 1 = 
   }
   await expect(page.getByRole('button', { name: 'Retry level' })).toBeEnabled();
   await page.getByRole('button', { name: 'Retry level' }).click();
-  await expect(page.locator('.ticker[data-line="1"]')).toHaveAttribute('data-key', 'toast.start.retry', { timeout: 3000 });
+  // UI batch (messages): the Retry line is one of the cheer, the odds after a retry, the lost attempt's cats or closeness.
+  await expect(page.locator('.ticker[data-line="1"]')).toHaveAttribute('data-key', /^(toast\.start\.retry|ticker\.odds\.retry|ticker\.retry\.(found|close|again))$/, { timeout: 3000 });
+  // Never cut: the line's text is as wide as the pill holds it (no ellipsis, no hidden overflow).
+  const cut = await page.locator('.ticker__text').evaluateAll((els) => els.filter((e) => e.scrollWidth > e.clientWidth + 1 || getComputedStyle(e).textOverflow === 'ellipsis').length);
+  expect(cut).toBe(0);
 });
 
 // ── Phase 2d.1 (helpers-spec §7.7): the kitty, the hint ──

@@ -76,8 +76,13 @@ describe('tickers (§5.4, §5.5): the session picks the lines from the save and 
         mode: 'level',
         level: 5,
         n: 5,
+        // UI batch (messages): the board's grade and effort feed the odds; a fresh board has no lost attempt.
+        grade: h.game().puzzle.grade,
+        effort: h.game().puzzle.effort,
         hard: false,
         retry: false,
+        attempt: 0,
+        lastTry: null,
         dailyOpen: false, // 4 levels: the daily is still locked
         todayKey: '2026-10-07',
         seed: 'L5:0',
@@ -92,20 +97,56 @@ describe('tickers (§5.4, §5.5): the session picks the lines from the save and 
     await retry(h);
     const got = h.router.game?.tickers ?? [];
     expect(got).toHaveLength(2);
-    expect(got[1]?.[0]).toEqual({ key: 'toast.start.retry' });
     const expected = pickTickerLines({
       save: h.save(),
       mode: 'level',
       level: 5,
       n: 5,
+      grade: h.game().puzzle.grade,
+      effort: h.game().puzzle.effort,
       hard: false,
       retry: true,
+      attempt: 1,
+      lastTry: { placed: 0, n: 5 },
       dailyOpen: false,
       todayKey: '2026-10-07',
       seed: 'L5:1',
       now: h.clock.now() - h.config.fx.boardEntryMs,
     });
-    expect(got[1]?.[1]).toEqual(expected[1]);
+    expect(got[1]).toEqual(expected);
+    expect(['ticker.odds.retry', 'toast.start.retry']).toContain(got[1]?.[0].key);
+  });
+
+  it('[UI batch, messages] a Retry passes the lost attempt (its cats placed, session memory) and the attempt number', async () => {
+    const h = createHarness({ save: veteran });
+    await startLevel(h, 5);
+    h.session.onCellDoubleTap(SOL5[0] as number); // one right cat before the loss
+    await h.settle(h.config.input.cellLockAfterCatMs);
+    expect(h.game().catsPlaced).toBe(1);
+    await retry(h);
+    const got = h.router.game?.tickers ?? [];
+    expect(got).toHaveLength(2);
+    const base = {
+      save: h.save(),
+      mode: 'level' as const,
+      level: 5,
+      n: 5,
+      grade: h.game().puzzle.grade,
+      effort: h.game().puzzle.effort,
+      hard: false,
+      retry: true,
+      attempt: 1,
+      lastTry: { placed: 1, n: 5 },
+      dailyOpen: false,
+      todayKey: '2026-10-07',
+      seed: 'L5:1',
+      now: h.clock.now() - h.config.fx.boardEntryMs,
+    };
+    expect(got[1]).toEqual(pickTickerLines(base));
+    // A second Retry: attempt 2, and the attempt it ended (nothing placed this time).
+    h.router.game?.tickers.splice(0);
+    await retry(h);
+    expect(h.router.game?.tickers[0]).toEqual(pickTickerLines({ ...base, save: h.save(), attempt: 2, lastTry: { placed: 0, n: 5 }, seed: 'L5:2', now: h.clock.now() - h.config.fx.boardEntryMs }));
   });
 
   it('the daily line when the daily is open (never on the daily itself)', async () => {
