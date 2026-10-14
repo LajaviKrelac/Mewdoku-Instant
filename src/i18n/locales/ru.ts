@@ -476,7 +476,7 @@ export const catalog: LocaleCatalog = {
   'ticker.retry.close.few': 'В прошлый раз не хватило всего {count} кошек. Так близко!',
   'ticker.retry.close.many': 'В прошлый раз не хватило всего {count} кошек. Так близко!',
   'ticker.retry.close.other': 'В прошлый раз не хватило всего {count} кошки. Так близко!',
-  'ticker.retry.again': 'Попытка {count}: вы знаете этот пазл всё лучше',
+  'ticker.retry.again': 'С каждой попыткой вы знаете этот пазл лучше',
   'ticker.hard.first': 'Ваш первый сложный уровень! Не торопитесь, подумайте',
   'ticker.hard.beaten.one': 'Пройдено сложных уровней: {count}. Впечатляет!',
   'ticker.hard.beaten.few': 'Пройдено сложных уровней: {count}. Впечатляет!',

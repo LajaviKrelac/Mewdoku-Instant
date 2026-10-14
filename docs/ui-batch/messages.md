@@ -27,8 +27,8 @@ no number of theirs is in our copy.
      difficulty (grade, effort, size, Hard): percentages rounded to 5 within 5…95, tries rounded to a half, worded
      "about", the same board always the same numbers.
    - **Encouragement on a Retry** from the lost attempt (session memory, never saved): "Just {count} cats short last
-     time. So close!", "Last try: {placed} of {n} cats placed. Let's top that!", "Try {count}: you know this board
-     better every time".
+     time. So close!", "Last try: {placed} of {n} cats placed. Let's top that!", "You know this board better with
+     every try" (review F19: no try number, since the session only counts the Retries since the board was mounted).
    - **Feeling special**, the player's own records: their first Hard level, Hard levels beaten, levels solved without a
      single mistake, a live streak, dailies solved, and every 50th level a milestone line.
    - Every 2d.1 line stays (cats hiding, best time, solved, points, period fish, daily, unique, tips).
@@ -37,7 +37,8 @@ no number of theirs is in our copy.
 ## Selection (pickTickerLines)
 
 - **Line 1, a Retry:** the lost attempt was `retryCloseCats` (2) or fewer cats short → "so close"; otherwise by the
-  seed among the odds after a retry, its cats placed (if any), the try number (from the third try) and the 2d cheer.
+  seed among the odds after a retry, its cats placed (if any), the "again" line (from the second Retry in a row) and
+  the 2d cheer.
 - **Line 1, a Hard level:** the player's first Hard level always says so (`ticker.hard.first`); later ones pick by the
   seed among the Hard levels beaten, the 2d cheer, the first-try odds and (when ≥ `oddsMinTries`) the tries estimate.
 - **Line 1, the best time here** (level won before): unchanged.

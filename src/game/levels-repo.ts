@@ -77,6 +77,12 @@ export interface LevelsRepo {
   prefetch(level: number): void;
   /** Synchronous cache lookup (null when not loaded yet). */
   peekLevel(level: number): Puzzle | null;
+  /**
+   * Review F20: the board getLevel would serve when it is in memory: peekLevel, else the substitute board generated for
+   * `level` this session (memory only; Play starts it again while the pack stays out). For the Home button's tier only:
+   * records (levelSize) and restore keep peekLevel, which never returns a substitute. Null before either exists.
+   */
+  peekBoard(level: number): Puzzle | null;
 }
 
 /** `where` values passed to onFallback (02 §20 pack_fallback). */
@@ -102,6 +108,7 @@ export function createLevelsRepo(deps: LevelsRepoDeps): LevelsRepo {
   const puzzles = new Map<number, Puzzle>(); // decoded pack levels and generated endless levels
   const endless = new Map<number, Promise<Puzzle>>();
   const substitutes = new Map<number, Promise<Puzzle>>(); // memory only, never in `puzzles`
+  const substitutesDone = new Map<number, Puzzle>(); // the resolved ones, for peekBoard only (review F20)
   const months = new Map<string, Promise<DailyPack | null>>();
   const dailies = new Map<string, LoadedPuzzle>();
   const eventPacks = new Map<string, Promise<EventPack | null>>();
@@ -200,9 +207,11 @@ export function createLevelsRepo(deps: LevelsRepoDeps): LevelsRepo {
   }
 
   function substitutePuzzle(level: number): Promise<Puzzle> {
-    return memo(substitutes, level, () => {
+    return memo(substitutes, level, async () => {
       const extra = { i: level, h: isHard(level, c) ? (1 as const) : (0 as const) };
-      return generatePuzzle(substituteSpec(level, c), levelPuzzleId(level), extra);
+      const puzzle = await generatePuzzle(substituteSpec(level, c), levelPuzzleId(level), extra);
+      substitutesDone.set(level, puzzle);
+      return puzzle;
     });
   }
 
@@ -331,6 +340,15 @@ export function createLevelsRepo(deps: LevelsRepoDeps): LevelsRepo {
     return loaded;
   }
 
+  function peekLevel(level: number): Puzzle | null {
+    if (level === 1) return tutorialPuzzle();
+    const cached = puzzles.get(level);
+    if (cached) return cached;
+    const k = packIndexFor(level, c);
+    const pack = k === null ? undefined : packs.get(k);
+    return pack ? decodeLevel(pack, level) : null;
+  }
+
   return {
     getTutorial: tutorialPuzzle,
     getLevel,
@@ -350,13 +368,9 @@ export function createLevelsRepo(deps: LevelsRepoDeps): LevelsRepo {
       const next = level + 1;
       if (Number.isInteger(next) && isEndless(next, c)) void endlessPuzzle(next).catch(() => undefined);
     },
-    peekLevel(level: number): Puzzle | null {
-      if (level === 1) return tutorialPuzzle();
-      const cached = puzzles.get(level);
-      if (cached) return cached;
-      const k = packIndexFor(level, c);
-      const pack = k === null ? undefined : packs.get(k);
-      return pack ? decodeLevel(pack, level) : null;
+    peekLevel,
+    peekBoard(level: number): Puzzle | null {
+      return peekLevel(level) ?? substitutesDone.get(level) ?? null;
     },
   };
 }

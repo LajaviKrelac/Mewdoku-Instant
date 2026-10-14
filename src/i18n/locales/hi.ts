@@ -431,7 +431,7 @@ export const catalog: LocaleCatalog = {
   'ticker.retry.found': 'पिछली बार: {n} में से {placed} बिल्लियाँ रखीं। अब और बेहतर!',
   'ticker.retry.close.one': 'पिछली बार बस {count} बिल्ली कम रह गई। बहुत क़रीब!',
   'ticker.retry.close.other': 'पिछली बार बस {count} बिल्लियाँ कम रह गईं। बहुत क़रीब!',
-  'ticker.retry.again': 'कोशिश {count}: आप इस पहेली को हर बार बेहतर जानते हैं',
+  'ticker.retry.again': 'हर कोशिश के साथ आप इस पहेली को बेहतर जानते हैं',
   'ticker.hard.first': 'आपका पहला कठिन लेवल! आराम से, सोच-समझकर खेलें',
   'ticker.hard.beaten.one': 'आपने अब तक {count} कठिन लेवल पार किया। शानदार!',
   'ticker.hard.beaten.other': 'आपने अब तक {count} कठिन लेवल पार किए। शानदार!',

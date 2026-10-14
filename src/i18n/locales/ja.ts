@@ -407,7 +407,7 @@ export const catalog: LocaleCatalog = {
   'ticker.odds.retry': '約{pct}%が次の挑戦でクリア。あなたの番です！',
   'ticker.retry.found': '前回：{n}匹中{placed}匹を配置。もっといけます！',
   'ticker.retry.close.other': '前回はあと{count}匹でした。惜しい！',
-  'ticker.retry.again': '{count}回目：このパズルがどんどん分かってきます',
+  'ticker.retry.again': '挑戦するたびに、このパズルが分かってきます',
   'ticker.hard.first': '初めての難しいレベル！じっくり考えましょう',
   'ticker.hard.beaten.other': '難しいレベルを{count}個クリア済み。すごい！',
   'ticker.flawless.other': 'ノーミスでクリアしたレベル：{count}。お見事！',

@@ -60,9 +60,10 @@ export function isExtraHardBoard(board: BoardDifficulty, c: GameConfig = cfg): b
 
 /**
  * normal | hard | extra. Only a Hard level can be extra, and only when its own board is: the board when the caller
- * knows it (a loaded pack record, a cached substitute, a generated endless board), else the generated list of the
- * shipped levels (level-tiers.ts, made from the packs with cfg's threshold), else plain Hard (an endless board not
- * generated yet: never a label the board might not earn).
+ * knows it (a loaded pack record, a generated endless board, a substitute board already generated), else the
+ * generated list of the shipped levels (level-tiers.ts, made from the packs with cfg's threshold: the shipped board's
+ * tier, which a substitute not generated yet may not share), else plain Hard (an endless board not generated yet:
+ * never a label the board might not earn).
  */
 export function levelTier(level: number, c: GameConfig = cfg, board?: BoardDifficulty | null): LevelTier {
   if (!isHardLevel(level, c)) return 'normal';

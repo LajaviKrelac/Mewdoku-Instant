@@ -224,7 +224,7 @@ const NOTES: Readonly<Partial<Record<I18nKey, Partial<KeyMeta>>>> = {
   'ticker.retry.found': { description: 'Level-start ticker after Retry: how many cats the player had placed when they lost the last attempt ({placed} of {n}), then a friendly nudge to do better', maxLength: 60 },
   'ticker.retry.close.one': { description: 'Level-start ticker after Retry: the last attempt was lost only {count} cat(s) (1 or 2) before the end; warm, "so close"', maxLength: 60 },
   'ticker.retry.close.other': { description: 'Level-start ticker after Retry: the last attempt was lost only {count} cat(s) (1 or 2) before the end; warm, "so close"', maxLength: 60 },
-  'ticker.retry.again': { description: 'Level-start ticker after the second Retry or later: {count} is the number of this attempt (3, 4 …); each attempt teaches the board', maxLength: 60 },
+  'ticker.retry.again': { description: 'Level-start ticker after the second Retry in a row or later: each attempt teaches the board. No number on purpose: the game only knows the retries since the board was opened, not every try', maxLength: 60 },
   'ticker.hard.first': { description: "Level-start ticker on the player's first Hard level (\"Hard\" as in common.hard): calm, take your time", maxLength: 60 },
   'ticker.hard.beaten.one': { description: 'Level-start ticker: how many Hard levels (as in common.hard) THIS player has beaten so far; praise', maxLength: 60 },
   'ticker.hard.beaten.other': { description: 'Level-start ticker: how many Hard levels (as in common.hard) THIS player has beaten so far; praise', maxLength: 60 },

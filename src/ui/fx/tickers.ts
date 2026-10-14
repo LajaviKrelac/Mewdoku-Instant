@@ -14,8 +14,8 @@
 // UI batch (2026-10-13), messages: a line is never cut ("…"): each pill is as wide as its text (celebrate.css) and the
 // column clips it only while it crosses; a pair whose longer line would cross faster than fx.tickers.maxPxPerSec takes
 // longer than crossMs (both lines). Reduced motion marks .tickers[data-reduced]: the lines stack and wrap in place. The
-// richer lines (ticker.odds.* with {pct} or a {count} of tries in halves, the Retry's {placed}/{n} and try number, the
-// milestone's {level}, the player's records) are G1's pickTickerLines'.
+// richer lines (ticker.odds.* with {pct} or a {count} of tries in halves, the Retry's {placed}/{n}, the milestone's
+// {level}, the player's records) are G1's pickTickerLines'.
 import { cfg, type PeriodKind } from '../../app/config';
 import { formatClock, formatNumber, t, tn, translate, type I18nKey } from '../../i18n';
 import { icon } from '../art/sprite';
@@ -52,8 +52,7 @@ export interface TickerLine {
   /**
    * Plural keys (ticker.cats, ticker.solved, ticker.points, period.pill.*, and the UI batch's ticker.odds.tries,
    * ticker.retry.close, ticker.hard.beaten, ticker.flawless, ticker.streak, ticker.dailies): rendered with
-   * tn(key, count, { count: formatNumber(count) }); ticker.odds.tries keeps a half ("2.5"). ticker.retry.again: the
-   * try number, with t().
+   * tn(key, count, { count: formatNumber(count) }); ticker.odds.tries keeps a half ("2.5").
    */
   readonly count?: number;
   /** ticker.best (level mode only): the stored best time in ms (LevelBest[0]), rendered with formatClock ("4:12"). */
@@ -94,8 +93,6 @@ export function tickerText(line: TickerLine): string {
       return t(line.key, { pct: formatNumber(whole(line.pct)) });
     case 'ticker.retry.found':
       return t('ticker.retry.found', { placed: formatNumber(whole(line.placed)), n: formatNumber(whole(line.n)) });
-    case 'ticker.retry.again':
-      return t('ticker.retry.again', { count: formatNumber(whole(line.count)) });
     case 'ticker.milestone':
       return t('ticker.milestone', { level: whole(line.level) });
     default:

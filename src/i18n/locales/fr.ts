@@ -429,7 +429,7 @@ export const catalog: LocaleCatalog = {
   'ticker.retry.found': 'Dernier essai : {placed} chats placés sur {n}. On fait mieux ?',
   'ticker.retry.close.one': 'Il ne manquait que {count} chat la dernière fois. Presque !',
   'ticker.retry.close.other': 'Il ne manquait que {count} chats la dernière fois. Presque !',
-  'ticker.retry.again': 'Essai n° {count} : tu connais cette grille de mieux en mieux',
+  'ticker.retry.again': 'Tu connais cette grille un peu mieux à chaque essai',
   'ticker.hard.first': 'Premier niveau difficile ! Prends ton temps et réfléchis',
   'ticker.hard.beaten.one': 'Tu as battu {count} niveau difficile. Impressionnant !',
   'ticker.hard.beaten.other': 'Tu as battu {count} niveaux difficiles. Impressionnant !',

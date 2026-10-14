@@ -524,7 +524,7 @@ export const catalog: LocaleCatalog = {
   'ticker.retry.close.few': 'القطط الناقصة في المرة السابقة: {count}. اقتربت كثيرًا!',
   'ticker.retry.close.many': 'القطط الناقصة في المرة السابقة: {count}. اقتربت كثيرًا!',
   'ticker.retry.close.other': 'القطط الناقصة في المرة السابقة: {count}. اقتربت كثيرًا!',
-  'ticker.retry.again': 'المحاولة رقم {count}: تعرف هذا اللغز أكثر في كل مرة',
+  'ticker.retry.again': 'مع كل محاولة تعرف هذا اللغز أكثر',
   'ticker.hard.first': 'أول مستوى صعب لك! خذ وقتك وفكّر جيدًا',
   'ticker.hard.beaten.zero': 'المستويات الصعبة التي تجاوزتها: {count}. رائع!',
   'ticker.hard.beaten.one': 'المستويات الصعبة التي تجاوزتها: {count}. رائع!',

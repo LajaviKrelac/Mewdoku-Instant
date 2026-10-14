@@ -313,7 +313,7 @@ export function createFakeRouter(bus: AppBus, log: Log): FakeRouter {
 // ─────────────────────────────── levels, engine, audio ───────────────────────────────
 
 export function createFakeLevels(overrides: Partial<LevelsRepo> = {}): LevelsRepo {
-  return {
+  const repo: LevelsRepo = {
     getTutorial: tutorialPuzzle,
     getLevel: async (level): Promise<LoadedPuzzle> =>
       level === 1 ? { puzzle: tutorialPuzzle(), source: 'tutorial' } : { puzzle: levelPuzzle(level), source: 'pack' },
@@ -322,8 +322,11 @@ export function createFakeLevels(overrides: Partial<LevelsRepo> = {}): LevelsRep
     ensurePackFor: async () => undefined,
     prefetch: () => undefined,
     peekLevel: (level) => (level === 1 ? tutorialPuzzle() : levelPuzzle(level)),
+    // As the real repo: peekLevel (an override's too), no substitute in memory.
+    peekBoard: (level) => repo.peekLevel(level),
     ...overrides,
   };
+  return repo;
 }
 
 /** Real engine on the main thread (no Worker in Node), with calls written to the log. */

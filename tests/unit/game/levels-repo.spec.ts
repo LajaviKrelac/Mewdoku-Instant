@@ -131,6 +131,30 @@ describe('levels from packs', () => {
     expect(h.loads).toEqual([1, 1, 1, 1]);
   });
 
+  it('review F20: peekBoard = peekLevel, else the substitute this session generated (Home\'s tier); peekLevel unchanged', async () => {
+    const h = harness({ packs: { 1: [NET, NET, NET, levelPack(1)] } });
+    expect(h.repo.peekBoard(5)).toBeNull(); // nothing generated or loaded yet
+    const sub = await h.repo.getLevel(5);
+    expect(sub.source).toBe('substitute');
+    expect(h.repo.peekLevel(5)).toBeNull(); // records (levelSize) never see a substitute
+    expect(h.repo.peekBoard(5)).toBe(sub.puzzle); // the board Play starts again while the pack is out
+    expect(h.repo.peekBoard(6)).toBeNull();
+    const again = await h.repo.getLevel(5); // the pack loads: its record wins over the old substitute
+    expect(again.source).toBe('pack');
+    expect(h.repo.peekBoard(5)).toBe(again.puzzle);
+    expect(h.repo.peekBoard(1)).toEqual(h.repo.peekLevel(1));
+  });
+
+  it('review F20: a corrupt record\'s substitute is the board peekBoard returns', async () => {
+    const broken = { ...rec5(5), s: '00000' };
+    const h = harness({ packs: { 1: [levelPack(1, [rec5(4), broken, rec5(6)])] } });
+    const sub = await h.repo.getLevel(5);
+    expect(sub.source).toBe('substitute');
+    expect(h.repo.peekLevel(5)).toBeNull();
+    expect(h.repo.peekBoard(5)).toBe(sub.puzzle);
+    expect(h.repo.peekBoard(6)).toBe(h.repo.peekLevel(6));
+  });
+
   it('a missing pack file (null) falls back at once, without retries', async () => {
     const h = harness({ packs: { 2: [null] } });
     expect((await h.repo.getLevel(8)).source).toBe('substitute');
