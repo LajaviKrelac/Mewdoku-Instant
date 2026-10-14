@@ -114,6 +114,8 @@ describe('daily percentile: the rollup and the answer (H-2a)', () => {
       playerKey: key,
       nickname: row.nickname,
       avatar: row.avatar,
+      frame: 0,
+      bg: 0,
       now,
       target: { kind: 'current', bracketId: row.cur_bracket },
       wins: [{ puzzleId: DAILY, winId: '00000000-0000-4000-8000-000000000001', points: 3, fish: 3, solveMs: 90_000, n: 8, verdict: 'accepted', playedAt: now, clientVersion: '0.2.0', dailyBucket: 9 }],

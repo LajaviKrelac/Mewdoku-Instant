@@ -164,7 +164,7 @@ describe('the session: the day\'s first counted win shows the screen between the
     expect(h.router.props.streak?.week[6]).toMatchObject({ today: true, gift: true, paid: true });
   });
 
-  it('the daily: the screen, then Continue runs the daily_done gate and goes Home', async () => {
+  it('the daily: the screen, then Continue runs the daily_done gate and starts the next level (UI batch: no Home)', async () => {
     const h = createHarness({ save: veteran });
     await h.session.start({ mode: 'daily', dateKey: TODAY });
     await h.settle(h.config.fx.boardEntryMs);
@@ -176,7 +176,9 @@ describe('the session: the day\'s first counted win shows the screen between the
     expect(h.router.isOpen('streak')).toBe(true);
     h.router.props.streak?.onDone();
     await h.settle(0);
-    expect(slice(h.log, /^(ad:interstitial|goHome)/)).toEqual(['ad:interstitial:daily_done', 'goHome']);
+    expect(slice(h.log, /^(ad:interstitial|goHome)/)).toEqual(['ad:interstitial:daily_done']);
+    await h.settle(h.config.fx.boardEntryMs);
+    expect(h.log).toContain('screen:game:L15'); // the victory workstream: the daily's primary starts progress.level (15)
   });
 
   it('switch off or flag off: the primary goes straight on', async () => {
