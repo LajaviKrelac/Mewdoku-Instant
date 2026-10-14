@@ -211,3 +211,17 @@ workstreams, merged and reviewed by the lead; per-area notes, decisions and size
   the same commit (version 23; its in-page sample server now shows computer players instead of sample players). Checked
   first on c414f3e: `npm run verify` (3,285 unit tests, 359 server tests), one full e2e run (331 passed, 0 failed), size
   check within budget. The default branch `claude/mewdoku-instant` was fast-forwarded to this work.
+- **Staging data fix (2026-10-14 ~18:50 UTC): one running bracket given computer players after the fact.** The user's
+  FB player (created 18:35, after the rivals deploy) was auto-joined into fb bracket `mv8efi83m6r1x1oz`, opened at 17:43
+  by the rival-less deploy (`rivals` NULL) and still inside its 2 h join window, so it showed no computer players until
+  its end (2026-10-15 17:43 UTC) although the session rules already carried the disclosure line. Fixed with one guarded
+  UPDATE: a fresh tag from the server's own `newRivalsTag(100, cryptoRng, NICK_WORDS_V1)` (r2, T = 48; the seed was never
+  printed) **and** `deleted_joins = '0:<opened_at>,1:<opened_at>'` for the two players deleted before the tag existed
+  (without them `joinTimesKnown` stays false and every heart on a computer row answers 404 for the rest of the day),
+  guarded by `rivals IS NULL AND deleted_joins IS NULL AND finalized_at IS NULL` and "every slot ≥ 2 below next_slot is a
+  member". Checked first by a harness simulation of this exact row (roster sizes 46–50: views, wins, hearts, joins,
+  deletions, lazy and cron finalisation, rewards identical to a bracket tagged at creation), an adversarial code review
+  and a preview with the real code. Admin-only side effect: a retirement forced by slot 1 would show `retiredAt` =
+  opened_at (not with T = 48). No other running bracket was untagged. **Open design point (production rollout):** after
+  `RIVALS` turns on, new players still join an untagged bracket for up to its 2 h join window; consider making the join
+  skip untagged brackets while rivals are on for the pool.
