@@ -26,9 +26,9 @@ deploy order, the sizes measured, and the doc lines that are now stale (the lead
   - a strong (substring) entry needs a display width ≥ 3 (a 2-character Chinese term counts);
   - a new `innocent` list (Scunthorpe, Atwater) is cut out of the name before the substring test (replaced by a space,
     so the two sides never join into a term);
-  - the measured false positives pass: "porn", "nazi", "shit" and "nigga" became whole-word (ambiguous) entries with
-    their compounds kept strong (porno, pornstar, pornhub, neonazi, shithead, shithole, bullshit, dipshit, …), so
-    Pornchai, Nazia/Nazir, Hoshita/Yoshitaka and Nigar pass; "ho" and "huy" were removed (Ho Minh, Huy Tran);
+  - the measured false positives pass: Pornchai, Nazia/Nazir, Hoshita/Yoshitaka and Nigar are innocent words (the
+    batch first made "porn", "nazi", "shit" and "nigga" whole-word entries; the review put them back as strong
+    substrings, see "Review fixes"); "ho" and "huy" were removed (Ho Minh, Huy Tran);
   - native-script entries for the worst terms of our locales: ru (Cyrillic), th, ja, ko, zh-Hans, hi (Devanagari), ar,
     vi, plus a few more romanised ones (de, es, it, pt-BR, pl, id); tests cover each script and a list of common
     names in all 17 languages (`server/test/unit/nick.spec.ts`).
@@ -63,12 +63,13 @@ deploy order, the sizes measured, and the doc lines that are now stale (the lead
 **The profile sheet (`src/ui/overlays/nickname-sheet.ts`, rewritten; `look-grid.ts`, `profile-text.ts` new).**
 - Title "Your profile" (`nick.title`'s English changed, all 16 drafts updated). My picture as others see it next to a
   labelled name field (`input.nickname__input`: 16 px, `dir=auto`, `autocomplete=off`, `autocapitalize=words`,
-  `spellcheck=false`, `enterkeyhint=done`, Enter saves, never the first focus, at most 16 code points — a longer
-  generated name is never chopped, it can only shrink), a hint line for a bad shape (`aria-invalid`, described by the
-  field), then a segmented tab bar Picture · Frame · Background (`role=tablist`, arrows move and select, RTL-aware)
-  showing one radio grid at a time (`look-grid.ts`: roving tabindex, arrows move through every button; a locked look
-  keeps focus without being picked, `aria-disabled`, a lock badge, and the line under the grid says what unlocks it:
-  "Reach level 25 to unlock." etc.), the status line, Save, Cancel.
+  `spellcheck=false`, `enterkeyhint=done`, Enter saves (never the Enter that confirms an IME conversion), never the
+  first focus, at most 16 code points — a longer generated name is never chopped, it can only shrink), a hint line
+  for a bad shape (`aria-invalid`, described by the field), then a segmented tab bar Picture · Frame · Background
+  (`role=tablist`, arrows move and select, RTL-aware) showing one radio grid at a time (`look-grid.ts`: roving
+  tabindex, arrows move through every button; a locked look keeps focus without being picked, `aria-disabled`, a lock
+  badge, and the line under the grid says what unlocks it: "Reach level 25 to unlock." etc.), the status line, Save,
+  Cancel.
 - States: idle, saving, offline, **rejected** (a blocked name: "That name can't be used…"), **invalid** (new: the
   server refused the form: "That name doesn't fit the rules. Try another one."), cooldown (now also up front when the
   server's `nicknameChangeAt` is in the future, and from the 409's own `retryAfterMs`; the time is kept on one line).
@@ -115,10 +116,40 @@ session.fb/web, and two new fixtures `profile.looks`, `profile.text` with real a
 10. **`nick.saved` → "Profile saved."** (English changed with all 16 drafts), since a look-only save is not a name.
 11. **Tabs size by their labels** (`flex: 1 1 auto`): "Background"/"Hintergrund" never break inside the word at 320 px.
 12. **The visual spec's route fake** now answers `freeText: true` and gives some fake players a look (fixed by place).
-13. **Blocklist trade-off** (recorded for review): moving "shit"/"porn"/"nazi"/"nigga" to whole-word matching lets a
-    run-together compound such as "ShitCat" through unless listed; the strong compounds above and the native entries
-    cover the common forms. The other path (an exceptions list of names) was kept small (`innocent`: Scunthorpe,
-    Atwater) because Japanese and South-Asian names that contain those letters are too many to list.
+13. **Blocklist trade-off** (superseded by the review, see "Review fixes"): whole-word matching for
+    "shit"/"porn"/"nazi"/"nigga" let compounds and spaced spellings of a slur through, so the four are strong again and
+    the names they sit in are listed as innocent words.
+
+## Review fixes (2026-10-14)
+
+Verified review findings F2–F6 and F12–F14 (profile group), each with unit tests in both directions:
+
+- **F2: strong short terms again.** "porn", "nazi", "shit" and "nigga" are back in `strong` (substring), so "NiggaCat",
+  "n i g g a", "N.i.g.g.a", "Nazism", "S h i t", "P o r n" and "Pornlover" are blocked; the redundant compounds the batch
+  added (porno, neonazi, shithead …) are gone. The measured names are `innocent` words, plus a few very common ones that
+  contain the same letters: pornchai, pornpimol, pornsak, pornthip, porntip, nazia, nazim, nazir, hoshita, kinoshita,
+  kshitij, matsushita, yamashita, yoshitaka, nigar. Innocent words are now cut from the name's letters **before** repeats
+  collapse, so "Nigar" is cut and "Niggar"/"NiggaRat" are not; the four terms also stay `ambiguous`, so a term split out
+  of an innocent word ("Ho Shit A", "Nazi A") is still a whole word that is caught. Other names that contain the
+  letters (Morishita, Pornpan, Nazih …) are refused as before the batch; add them to `innocent` when they are reported.
+- **F3: no italic-only look-alikes.** Cyrillic и (u) and д (d) are no longer folded: "Рита", "Кит", "Сим", "Вит" pass
+  (and no `nickname_blocked` flag is written for them). п (n) and г (r) stay: in the upright sans-serif of a ranking row
+  they read as n and r. 455 common Russian, Ukrainian, Serbian, Bulgarian and Greek names and words pass.
+- **F6: the terms are folded too.** The look-alike skeleton of a name is compared with the terms' look-alike skeletons,
+  so one Latin letter in a native Cyrillic term ("Xуй", "xyй", "пиздa", "бляtь") is caught.
+- **F4: spacing vowel signs count 1 wide** (`nameWidth`: only Mn and Me are 0): राम, रवि, सीता, पूजा, शिव, लता … pass;
+  राहुल is 4 wide.
+- **F12: no letter that draws nothing.** The Hangul fillers (U+115F, U+1160, U+3164, U+FFA0) and any other
+  default-ignorable code point that is not a mark are refused as `chars`.
+- **F13: a narrower link rule.** A link is an @, "http", a "www" word, a well-known domain ending in any case (.com,
+  .net, .org, .info, .io, .gg, .xyz, .app, .ru, .uk, .tv) or any lower-case 2–3 letter ending after a dot. "Dr.Cat",
+  "Mr.Tom", "J.Lo", "Mr.Comet" and "Awww" are names; "cats.com", "CATS.COM", "mew.io", "cat.tv", "www.cats" and "@cat"
+  are not.
+- **F5: IME-safe name field.** It ignores the Enter that confirms a conversion (`isComposing`, or WebKit's keyCode 229)
+  and does not clip while a composition is open (setting the value would abort it); the composed text is clipped on
+  `compositionend`.
+- **F14: looks only once the server said so.** Without a session (before sign-in finishes, or after it failed) the
+  sheet shows no frame or background picker and never sends those fields.
 
 ## Deploy order
 

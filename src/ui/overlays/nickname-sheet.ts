@@ -5,8 +5,9 @@
 // Lazy `ladder` chunk. The name is the player's own text: rendered with textContent and dir="auto" only, never
 // translated; the input never takes the first focus (a keyboard would cover the dialog in the Facebook webview),
 // counts its limit in code points (maxlength counts UTF-16 units), uses 16 px text (iOS zooms below) and saves on
-// Enter. The shape check is the app's (src/shared/nick-text.ts): the hint says what is wrong while typing; the
-// server's verdicts come back as states. Pictures, frames and backgrounds never wait for the name's cooldown.
+// Enter (never the Enter that confirms an IME conversion; the limit waits for the composition to end). The shape
+// check is the app's (src/shared/nick-text.ts): the hint says what is wrong while typing; the server's verdicts come
+// back as states. Pictures, frames and backgrounds never wait for the name's cooldown.
 // States: idle; saving (Save busy, every control disabled); offline (Save disabled, "Connect to the internet…");
 // rejected (a blocked name: "That name can't be used…"); invalid (the server's shape verdict); cooldown ("You can
 // change your name again in 5 h 12 min."; said up front, a look-only change still saves).
@@ -140,19 +141,32 @@ export function createNicknameSheet(): OverlayView<NicknameSheetProps> {
   shell.panel.append(head, me, tabs, panel, status, h('div', { class: 'overlay__actions overlay__actions--stack' }, save, cancelBtn));
 
   let typed = '';
-  input.addEventListener('input', () => {
+  let composing = false;
+  const onTyped = (imeOpen: boolean): void => {
     // The limit stops a name from growing past it (a paste is clipped); a longer generated name ("Mischievous
-    // Whisker 99") is never chopped, only shortened by the player (the hint says how long a name may be).
-    const max = Math.max(props?.nameRules.maxChars ?? 16, [...typed].length);
-    const clipped = clipName(input.value, max);
-    if (clipped !== input.value) input.value = clipped;
-    typed = input.value;
+    // Whisker 99") is never chopped, only shortened by the player (the hint says how long a name may be). Never
+    // during an IME composition (setting the value would abort it): the composed text is clipped when it ends.
+    if (!composing && !imeOpen) {
+      const max = Math.max(props?.nameRules.maxChars ?? 16, [...typed].length);
+      const clipped = clipName(input.value, max);
+      if (clipped !== input.value) input.value = clipped;
+      typed = input.value;
+    }
     edited = true;
     pick = { ...pick, name: tidyName(input.value) };
     renderState();
+  };
+  input.addEventListener('compositionstart', () => {
+    composing = true;
   });
+  input.addEventListener('compositionend', () => {
+    composing = false;
+    onTyped(false);
+  });
+  input.addEventListener('input', (ev) => onTyped((ev as InputEvent).isComposing === true));
   input.addEventListener('keydown', (ev) => {
-    if (ev.key !== 'Enter') return;
+    // The Enter that confirms an IME conversion is not a save (isComposing; WebKit sends it as keyCode 229).
+    if (ev.key !== 'Enter' || ev.isComposing || ev.keyCode === 229) return;
     ev.preventDefault();
     doSave();
   });
@@ -299,6 +313,7 @@ export function createNicknameSheet(): OverlayView<NicknameSheetProps> {
       avatarKey = '';
       input.value = p.current.name;
       typed = input.value;
+      composing = false;
       render(p);
       shell.show();
     },

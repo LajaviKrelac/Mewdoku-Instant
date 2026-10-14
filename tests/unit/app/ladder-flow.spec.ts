@@ -588,6 +588,23 @@ describe('name, Show me in rankings, Delete (spec §2.7)', () => {
     expect(s.save().ladder.me).toMatchObject({ avatarId: 5, frameId: 0, backgroundId: 0 });
   });
 
+  it('review fix (F14): before the server has answered (no session, my saved name only) no frame or background picker shows', async () => {
+    const me = { name: 'Velvet Pounce 27', avatarId: 4, frameId: 2, backgroundId: 1, code: '7KQ2M9XD' };
+    const s = setup({ save: (b) => ({ ...b, ladder: { ...b.ladder, me } }) });
+    s.fake.offline = true;
+    await s.flow.start(); // the sign-in fails: no session, no PlayerView
+    expect(s.flow.openProfile()).toBe(true);
+    await s.settle(0);
+    const sheet = sheetOf(s);
+    expect(sheet.current).toMatchObject({ name: 'Velvet Pounce 27', avatarId: 4 });
+    expect([sheet.frames, sheet.backgrounds]).toEqual([[], []]);
+    s.fake.offline = false;
+    sheet.onSave(pick(sheet, { frameId: 3, backgroundId: 4, avatarId: 5 }));
+    await s.settle(0);
+    // a server that may not have looks never gets the fields
+    expect(s.fake.calls.find((c) => c.path === '/v1/me/profile')?.body).toEqual({ avatarId: 5 });
+  });
+
   it('typed names switched off on the server (rules.nickname.freeText): the name is read-only, the looks still save', async () => {
     const s = setup({ rules: { nickname: { freeText: false, changeCooldownMs: 86_400_000 } } });
     await s.flow.start();

@@ -11,17 +11,44 @@ describe('typed names: the shape rule', () => {
     expect([NAME_MAX_CHARS, NAME_MIN_WIDTH, NAME_MAX_DIGITS]).toEqual([16, 3, 4]);
   });
 
-  it('measures display width: wide characters 2, combining marks 0', () => {
+  it('measures display width: wide characters 2, non-spacing marks 0, spacing marks 1', () => {
     expect(nameWidth('Cat')).toBe(3);
     expect(nameWidth('李明')).toBe(4);
     expect(nameWidth('ゆい')).toBe(4);
     expect(nameWidth('민준')).toBe(4);
-    expect(nameWidth('राहुल')).toBe(3); // र ा ह ु ल: the vowel signs are marks
+    expect(nameWidth('राहुल')).toBe(4); // र ा ह ु ल: ा takes room (Mc), ु sits under ह (Mn)
+    expect(nameWidth('राम')).toBe(3);
+    expect(nameWidth('सीता')).toBe(4);
+    expect(nameWidth('Zoë'.normalize('NFD'))).toBe(3); // a combining diaeresis (Mn) takes none
+    expect(nameWidth('ณัฐพล')).toBe(4); // Thai vowel and tone marks above are Mn
   });
 
   it('accepts names in our 17 languages, 2-character CJK ones included', () => {
     for (const ok of ['Captain Purr', 'Gato Feliz', 'Zoë', 'Łukasz', 'Nguyễn Huy', 'Ayşe', 'Алексей', 'Νίκος', '李明', 'ゆい', '민준', 'राहुल', 'ณัฐพล', 'محمد', 'J.R. Mew', 'cat_99', 'Mew-Mew'])
       expect(nameProblem(normalizeName(ok)), ok).toBeNull();
+  });
+
+  it('review fix (F4): short Hindi names are long enough (their spacing vowel signs count)', () => {
+    for (const ok of ['राम', 'रवि', 'सीता', 'गीता', 'मीना', 'राधा', 'रीना', 'नीता', 'पूजा', 'राज', 'रिया', 'दिया', 'शिव', 'लता'])
+      expect(nameProblem(normalizeName(ok)), ok).toBeNull();
+    expect(nameProblem(normalizeName('रा'))).toBe('short');
+  });
+
+  it('review fix (F12): invisible Hangul fillers (and other default-ignorable letters) are refused', () => {
+    const p = (raw: string): string | null => nameProblem(normalizeName(raw));
+    expect(p('ㅤㅤㅤ')).toBe('chars'); // NFKC → U+1160
+    expect(p('ᅟᅟ')).toBe('chars');
+    expect(p('aㅤㅤ')).toBe('chars');
+    expect(p('Catﾠ')).toBe('chars');
+    expect(p('CatᅠCat')).toBe('chars');
+    expect(p('민준')).toBeNull();
+  });
+
+  it('review fix (F13): abbreviations and long vowels are names, domains and handles are links', () => {
+    const p = (raw: string): string | null => nameProblem(normalizeName(raw));
+    for (const ok of ['Dr.Cat', 'Mr.Tom', 'J.Lo', 'Mr.Comet', 'Awww', 'Wwwhiskers', 'St. Purr', 'Cat.99']) expect(p(ok), ok).toBeNull();
+    const links = ['cats.com', 'CATS.COM', 'Cats.Com', 'Cats.Net', 'mew.io', 'MEW.IO', 'kitty.gg', 'meow.xyz', 'cat.tv'];
+    for (const link of [...links, 'kitty.cat', 'www.cats', 'WWW cats', '@cat', 'cat@mail', 'http cat']) expect(p(link), link).toBe('link');
   });
 
   it('names what is wrong', () => {

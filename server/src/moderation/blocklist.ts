@@ -7,10 +7,13 @@
 //   strong     — matched as a SUBSTRING of the whole name's skeleton: words that never sit inside an
 //                innocent word once skeletonised (display width ≥ 3: a 2-character Chinese term counts).
 //   ambiguous  — matched as a WHOLE WORD only: short or double-meaning words that appear inside innocent ones
-//                (and cat words with a second meaning we would not want on a stranger's screen). UI batch: "porn",
-//                "nazi", "shit" and "nigga" moved here (Pornchai, Nazia, Hoshita and Yoshitaka, Nigar are names), with
-//                their compounds kept strong; "ho" and "huy" left (Ho Minh, Huy Tran are common Vietnamese names).
-//   innocent   — place and family names that contain a strong term; cut out of a name before the substring test.
+//                (and cat words with a second meaning we would not want on a stranger's screen). UI batch: "ho" and
+//                "huy" left (Ho Minh, Huy Tran are common Vietnamese names).
+//   innocent   — place, given and family names that contain a strong term; cut out of a name before the substring
+//                test. Review fix (2026-10-14): "porn", "nazi", "shit" and "nigga" are strong again (as whole words
+//                they would let "NiggaCat", "Nazism" and "S h i t" through); the names they sit in are innocent
+//                words instead (Pornchai, Nazia, Hoshita, Yamashita, Kshitij, Nigar …), and the four stay ambiguous
+//                too, so a term split out of an innocent word ("Ho Shit A", "Nazi A") is still a word that is caught.
 // Each locale has romanised starters and, since the UI batch, the worst terms in its own script (Cyrillic, Thai,
 // Japanese, Korean, Chinese, Devanagari, Arabic, Vietnamese). Additions: keep each group's order and run
 // `npm --prefix server test -- nick`.
@@ -18,10 +21,10 @@
 export const BLOCKLIST: { readonly strong: readonly string[]; readonly ambiguous: readonly string[]; readonly innocent: readonly string[] } = {
   strong: [
     // English
-    'apeshit', 'asshole', 'bastard', 'batshit', 'bitch', 'blowjob', 'bollocks', 'bullshit', 'clitoris', 'cocksucker',
-    'cunt', 'dildo', 'dipshit', 'ejaculat', 'erection', 'faggot', 'fuck', 'genital', 'handjob', 'hitler', 'horseshit',
-    'jizz', 'masturbat', 'molest', 'motherfuck', 'neonazi', 'orgasm', 'paedophil', 'pedophil', 'porno', 'pornhub',
-    'pornstar', 'shitface', 'shithead', 'shithole', 'testicle', 'twat', 'wanker', 'whore',
+    'asshole', 'bastard', 'bitch', 'blowjob', 'bollocks', 'bullshit', 'clitoris', 'cocksucker', 'cunt', 'dildo',
+    'ejaculat', 'erection', 'faggot', 'fuck', 'genital', 'handjob', 'hitler', 'jizz', 'masturbat', 'molest',
+    'motherfuck', 'nazi', 'nigga', 'orgasm', 'paedophil', 'pedophil', 'porn', 'shit', 'testicle', 'twat', 'wanker',
+    'whore',
     // de, fr, es, it, pt, nl, pl, tr, ru, id, hi, ko, zh, ar, th, vi (romanised starters)
     'arschloch', 'fotze', 'hurensohn', 'wichser', 'schlampe', 'scheisse',
     'connard', 'encule', 'putain', 'salope',
@@ -67,5 +70,12 @@ export const BLOCKLIST: { readonly strong: readonly string[]; readonly ambiguous
     'زب', 'كس',
     'địt',
   ],
-  innocent: ['atwater', 'scunthorpe'],
+  innocent: [
+    'atwater', 'scunthorpe',
+    // review fix (2026-10-14): names around the four short strong terms (porn, nazi, shit, nigga)
+    'pornchai', 'pornpimol', 'pornsak', 'pornthip', 'porntip',
+    'nazia', 'nazim', 'nazir',
+    'hoshita', 'kinoshita', 'kshitij', 'matsushita', 'yamashita', 'yoshitaka',
+    'nigar',
+  ],
 };

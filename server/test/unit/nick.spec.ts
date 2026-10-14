@@ -86,11 +86,42 @@ describe('nick: skeletons and the check', () => {
   it('measured false positives pass: names that contain a short term', () => {
     for (const name of ['Pornchai', 'Nazia', 'Nazir', 'Huy Tran', 'Ho Minh', 'Hoshita', 'Yoshitaka', 'Scunthorpe', 'Nigar', 'Atwater', 'Cassandra', 'Hancock', 'Titus', 'Cumhur', 'Dickens', 'Analía'])
       expect(isBlocked(name), name).toBe(false);
+    // Review fix (F2): with the four short terms strong again, these common names are innocent words too.
+    for (const name of ['Nazim', 'Yamashita', 'Kinoshita', 'Matsushita', 'Kshitij', 'Pornthip', 'Porntip', 'Pornpimol', 'Pornsak', 'Nigar Aliyeva', 'Nazia_99'])
+      expect(isBlocked(name), name).toBe(false);
+  });
+
+  it('review fix (F2): the slur and obscenity compounds and spaced spellings are blocked (the four short terms are strong)', () => {
+    const attacks = [
+      'Niggaz', 'MyNigga', 'NiggaCat', 'Niggah', 'n i g g a', 'N.i.g.g.a', 'Shitcat', 'Catshit', 'S h i t', 'Nazicat', 'Nazism', 'N.a.z.i',
+      'P o r n', 'Pornlover',
+      // an innocent word never shelters a doubled spelling or a whole-word term split out of it
+      'Niggar', 'NiggaRat', 'Ho Shit A', 'Nazi A', 'Porn Chai', 'Yama Shit A',
+    ];
+    for (const bad of attacks) {
+      expect(isBlocked(bad), bad).toBe(true);
+      expect(checkFreeText(bad), bad).toMatchObject({ ok: false, code: 'nickname_blocked' });
+    }
+  });
+
+  it('review fix (F6): one Latin letter in a native Cyrillic term is caught (the terms are folded too)', () => {
+    for (const bad of ['Xуй', 'xyй', 'пиздa', 'бляtь', 'Xуй кот']) {
+      expect(isBlocked(bad), bad).toBe(true);
+      expect(checkFreeText(bad), bad).toMatchObject({ ok: false, code: 'nickname_blocked' });
+    }
+  });
+
+  it('review fix (F3): italic-only look-alikes are not folded (Рита is not "puta")', () => {
+    expect(skeleton('Рита', true)).not.toBe('puta');
+    for (const name of ['Рита', 'Кит', 'Сим', 'Вит', 'Дик', 'Гена', 'Дима']) {
+      expect(isBlocked(name), name).toBe(false);
+      expect(checkFreeText(name), name).toEqual({ ok: true, text: name });
+    }
   });
 
   it('common names in our 17 languages pass', () => {
     const names = [
-      'Алексей', 'Мария Кот', 'Сукачёв', 'Νίκος', 'Σοφία', 'Mehmet', 'Ayşe', 'François', 'José', 'Ngọc Anh', 'Nguyễn Huy',
+      'Алексей', 'Мария Кот', 'Сукачёв', 'Рита', 'Νίκος', 'Σοφία', 'Mehmet', 'Ayşe', 'François', 'José', 'Ngọc Anh', 'Nguyễn Huy',
       'Siti Nurhaliza', 'Priya', 'राहुल', 'चैतन्य', 'ณัฐพล', 'สมชาย', '李明', '王小红', 'ゆい', 'さくら', '민준', '서연', 'محمد', 'فاطمة',
       'Łukasz', 'Dvořák', 'Giulia', 'Lukas Müller',
     ];
@@ -149,6 +180,25 @@ describe('nick: generation, picks, free text, cooldown', () => {
     expect(checkFreeText('Cat\u200dCat')).toMatchObject({ ok: false, code: 'nickname_invalid' }); // a joiner
     expect(checkFreeText('блять кот')).toMatchObject({ ok: false, code: 'nickname_blocked' });
     expect(checkFreeText('fuсk cat')).toMatchObject({ ok: false, code: 'nickname_blocked' });
+  });
+
+  it('review fix (F4): short Hindi names pass (a spacing vowel sign takes room: it counts 1 wide)', () => {
+    for (const name of ['राम', 'रवि', 'सीता', 'गीता', 'मीना', 'राधा', 'रीना', 'नीता', 'पूजा', 'राज', 'रिया', 'दिया', 'शिव', 'लता'])
+      expect(checkFreeText(name), name).toEqual({ ok: true, text: name });
+    expect(checkFreeText('रा')).toMatchObject({ ok: false, code: 'nickname_invalid' }); // र ा: 2 wide
+  });
+
+  it('review fix (F12): invisible Hangul fillers are refused (no blank or padded ranking name)', () => {
+    for (const name of ['ㅤㅤㅤ', 'ᅟᅟ', 'aㅤㅤ', 'Catﾠ', 'CatᅠCat'])
+      expect(checkFreeText(name), JSON.stringify(name)).toMatchObject({ ok: false, code: 'nickname_invalid' });
+    expect(checkFreeText('민준')).toEqual({ ok: true, text: '민준' });
+  });
+
+  it('review fix (F13): a dot or "ww" in a name is not a link; real domains and handles still are', () => {
+    for (const name of ['Dr.Cat', 'Mr.Tom', 'J.Lo', 'Mr.Comet', 'Awww', 'J.R. Mew', 'St. Purr'])
+      expect(checkFreeText(name), name).toEqual({ ok: true, text: name });
+    const links = ['cats.com', 'CATS.COM', 'Cats.Com', 'mew.io', 'kitty.gg', 'meow.xyz', 'cat.tv', 'www.cats', 'www cats'];
+    for (const link of [...links, '@cat', 'cat@mail', 'http cat']) expect(checkFreeText(link), link).toMatchObject({ ok: false, code: 'nickname_invalid' });
   });
 
   it('the first change is free, then once per cooldown', () => {

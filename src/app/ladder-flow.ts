@@ -895,9 +895,9 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
   /**
    * The profile sheet (UI batch: a typed name, the picture, a frame and a background). Opens on the server's player
    * (else my saved one); in the cooldown state at once when the server said my next name change is later; frames and
-   * backgrounds only against a server that has them (PlayerView.frameId not null), their locks from this save
-   * (game/looks.ts). Saves only what changed: the name as typed (the server normalises and moderates it) and the
-   * looks (no cooldown). Analytics never carry the name (events.ts): which parts changed, as 0/1.
+   * backgrounds only against a server that has said it has them (PlayerView.frameId not null; none before it answers),
+   * their locks from this save (game/looks.ts). Saves only what changed: the name as typed (the server normalises and
+   * moderates it) and the looks (no cooldown). Analytics never carry the name (events.ts): which parts changed, as 0/1.
    */
   function openNameSheet(): void {
     const p = session?.player;
@@ -914,8 +914,9 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
         frameId: p?.frameId ?? me?.frameId ?? 0,
         backgroundId: p?.backgroundId ?? me?.backgroundId ?? 0,
       };
-      // A server without frames and backgrounds (an older one) gets no such pickers (it would refuse the fields).
-      const looks = p ? p.frameId !== null && p.backgroundId !== null : true;
+      // A server without frames and backgrounds (an older one) gets no such pickers (it would refuse the fields), and
+      // neither does one that has not answered yet (no session: before sign-in finishes, or after it failed).
+      const looks = p ? p.frameId !== null && p.backgroundId !== null : false;
       const changeAt = p?.nicknameChangeAt ?? null;
       let cooldownUntil: number | null = changeAt === null ? null : changeAt - client.offsetMs();
       let state: NicknameSheetProps['state'] = !online() ? 'offline' : cooldownUntil !== null && cooldownUntil > clock.now() ? 'cooldown' : 'idle';
