@@ -470,6 +470,8 @@ const VIEWS: Record<string, () => void> = {
   },
   // the ranking sheet (spec §2.5)
   'sheet-list': () => sheet(),
+  // No bracket now: the join line under the title (the (i) keeps its slot, so the title stays centred).
+  'sheet-join': () => sheet({ list: null }),
   'sheet-hearts': () => sheet({ list: bracket({ heartsNew: 3, firstLineName: 'Velvet Pounce 27' }) }),
   'sheet-final': () => sheet({ list: bracket({ final: true, endsAt: NOW - 60_000 }) }),
   'sheet-info': () => sheet({ view: 'info' }),

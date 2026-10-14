@@ -13,6 +13,7 @@ import { CHEST_COLORS, PALETTE, TOKENS } from '../../../src/ui/art/palette';
 import { MEDAL_COLORS } from '../../../src/ui/art/palette-2e';
 import { ladderArtSymbols } from '../../../src/ui/art/ladder-art';
 import { spriteMarkup } from '../../../src/ui/art/sprite';
+import { focusableElements } from '../../../src/ui/a11y/focus-trap';
 import { createBracketList } from '../../../src/ui/overlays/bracket-list';
 import { prizeFor, prizeText } from '../../../src/ui/overlays/bracket-prize';
 import { createLadderSheet, type LadderSheetProps } from '../../../src/ui/overlays/ladder-sheet';
@@ -79,6 +80,22 @@ function view(over: Partial<BracketListView> = {}): BracketListView {
     ...over,
   };
 }
+
+/** The post-win panel's props over a bracket with chests. */
+const panelProps = (): RankingPanelProps => ({
+  board: 'period',
+  eventNameKey: null,
+  result: { kind: 'ladder', gained: 3, total: 25 },
+  list: { kind: 'bracket', view: view() },
+  tapMinMs: cfg.rank.panelTapMinMs,
+  reducedMotion: true,
+  onContinue: vi.fn(),
+  onSeeTop: vi.fn(),
+  onListArea: vi.fn(),
+  onHeart: vi.fn(),
+  onInfo: vi.fn(),
+  bracketList: createBracketList,
+});
 
 const chestOf = (list: { el: HTMLElement }, rank: number): HTMLButtonElement => q<HTMLButtonElement>(list.el, `li.rank-row[data-rank="${rank}"] .rank-row__gift`);
 const tipOf = (list: { el: HTMLElement }): HTMLElement => q(list.el, '.lb-tip');
@@ -165,9 +182,10 @@ describe('the reward tooltip', () => {
     expect(chestOf(list, 1).getAttribute('aria-expanded')).toBe('false');
     expect(chestOf(list, 3).getAttribute('aria-expanded')).toBe('true');
     expect(qa(tip, '.lb-tip__count').map((c) => c.textContent)).toEqual(['×1', '×1']);
-    // A press inside the tip keeps it; anywhere else closes it.
+    // A press anywhere but its own chest closes it (review F1: the tip itself never keeps it; it takes no taps).
     tip.dispatchEvent(new Event('pointerdown', { bubbles: true }));
-    expect(tip.hidden).toBe(false);
+    expect(tip.hidden).toBe(true);
+    chestOf(list, 3).click();
     document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
     expect(tip.hidden).toBe(true);
     // The podium's chest opens it too.
@@ -191,6 +209,28 @@ describe('the reward tooltip', () => {
     list.destroy();
   });
 
+  it('review F1: the tip never catches a tap; a press on the heart under it closes it and the heart still counts', () => {
+    // The tip sits over the row above's heart and chest: it takes no pointer events, so a tap there reaches them.
+    const css = readFileSync(resolve(ROOT, 'src/styles/ladder-chunk.css'), 'utf8');
+    expect(/\.lb-tip \{([^}]*)\}/.exec(css)?.[1] ?? '').toMatch(/pointer-events: none;/);
+    const onHeart = vi.fn();
+    const list = createBracketList(view(), { onHeart });
+    document.body.appendChild(list.el);
+    chestOf(list, 3).click();
+    const heart = q<HTMLButtonElement>(list.el, 'li.rank-row[data-rank="2"] .rank-row__heart');
+    heart.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    expect(tipOf(list).hidden).toBe(true);
+    heart.click();
+    expect(onHeart).toHaveBeenCalledWith(11);
+    // Its own chest's press keeps it for the chest's click, which closes it (a second tap).
+    chestOf(list, 2).click();
+    chestOf(list, 2).dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    expect(tipOf(list).hidden).toBe(false);
+    chestOf(list, 2).click();
+    expect(tipOf(list).hidden).toBe(true);
+    list.destroy();
+  });
+
   it('a place that pays only hints shows only the bulb', () => {
     const list = createBracketList(view({ rewards: [{ place: 1, hints: 2, kitties: 0 }] }), { onHeart: vi.fn() });
     chestOf(list, 1).click();
@@ -200,20 +240,7 @@ describe('the reward tooltip', () => {
 
   it('the post-win panel: a chest tap never continues; Esc closes the tip first, then continues', () => {
     vi.useFakeTimers();
-    const p: RankingPanelProps = {
-      board: 'period',
-      eventNameKey: null,
-      result: { kind: 'ladder', gained: 3, total: 25 },
-      list: { kind: 'bracket', view: view() },
-      tapMinMs: cfg.rank.panelTapMinMs,
-      reducedMotion: true,
-      onContinue: vi.fn(),
-      onSeeTop: vi.fn(),
-      onListArea: vi.fn(),
-      onHeart: vi.fn(),
-      onInfo: vi.fn(),
-      bracketList: createBracketList,
-    };
+    const p = panelProps();
     const panel = createRankingPanel();
     document.body.appendChild(panel.el);
     panel.open(p);
@@ -225,6 +252,45 @@ describe('the reward tooltip', () => {
     expect(q(panel.el, '.lb-tip').hidden).toBe(true);
     expect(p.onContinue).not.toHaveBeenCalled();
     expect(panel.dismiss()).toBe(true);
+    expect(p.onContinue).toHaveBeenCalledTimes(1);
+  });
+
+  it('review F9, the post-win panel: a tap outside the list that closes a tip only closes it (as Esc); the next tap continues', () => {
+    vi.useFakeTimers();
+    const p = panelProps();
+    const panel = createRankingPanel();
+    document.body.appendChild(panel.el);
+    panel.open(p);
+    vi.advanceTimersByTime(cfg.rank.panelTapMinMs + 10);
+    const tap = (el: Element): void => {
+      el.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    };
+    const tip = q(panel.el, '.lb-tip');
+    for (const outside of ['.overlay__scrim', '.ranking__title', '.ranking__card']) {
+      q(panel.el, 'li.rank-row[data-rank="1"] .rank-row__gift').click();
+      expect(tip.hidden, outside).toBe(false);
+      tap(q(panel.el, outside));
+      expect(tip.hidden, outside).toBe(true);
+      expect(p.onContinue, outside).not.toHaveBeenCalled();
+    }
+    // A tap with no tip open continues as before.
+    tap(q(panel.el, '.overlay__scrim'));
+    expect(p.onContinue).toHaveBeenCalledTimes(1);
+  });
+
+  it('review F9: the footer button still continues with a tip open (its own explicit action)', () => {
+    vi.useFakeTimers();
+    const p = panelProps();
+    const panel = createRankingPanel();
+    document.body.appendChild(panel.el);
+    panel.open(p);
+    vi.advanceTimersByTime(cfg.rank.panelTapMinMs + 10);
+    q(panel.el, 'li.rank-row[data-rank="1"] .rank-row__gift').click();
+    const footer = q(panel.el, '.ranking__tap');
+    footer.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    expect(q(panel.el, '.lb-tip').hidden).toBe(true);
+    footer.click();
     expect(p.onContinue).toHaveBeenCalledTimes(1);
   });
 
@@ -240,6 +306,53 @@ describe('the reward tooltip', () => {
     expect(p.onClose).not.toHaveBeenCalled();
     expect(sheet.dismiss()).toBe(true);
     expect(p.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('review F9, the ranking sheet too: a scrim tap that closes a tip only closes it (as Esc); the next one closes the sheet', () => {
+    const p: LadderSheetProps = { view: 'list', list: view(), records: null, rules: null, infoOnly: false, reducedMotion: true, onHeart: vi.fn(), onClose: vi.fn() };
+    const sheet = createLadderSheet();
+    document.body.appendChild(sheet.el);
+    sheet.open(p);
+    const scrim = q(sheet.el, '.overlay__scrim');
+    const tap = (el: Element): void => {
+      el.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    };
+    chestOf({ el: q(sheet.el, '.rank-list') }, 2).click();
+    expect(q(sheet.el, '.lb-tip').hidden).toBe(false);
+    tap(scrim);
+    expect(q(sheet.el, '.lb-tip').hidden).toBe(true);
+    expect(p.onClose).not.toHaveBeenCalled();
+    tap(scrim);
+    expect(p.onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the ranking sheet head with no bracket now (review F10)', () => {
+  it('the (i) keeps its slot unseen (no focus, no screen reader), so the title stays centred; it shows once a bracket arrives', () => {
+    const p: LadderSheetProps = { view: 'list', list: null, records: null, rules: null, infoOnly: false, reducedMotion: true, onHeart: vi.fn(), onClose: vi.fn() };
+    const sheet = createLadderSheet();
+    document.body.appendChild(sheet.el);
+    sheet.open(p);
+    const info = q<HTMLButtonElement>(sheet.el, '.ladder-sheet__info');
+    expect(q(sheet.el, '.ladder-sheet__join').hidden).toBe(false);
+    // In the flex row (not display: none), so the head is (i) · title · × with two equal discs.
+    const head = Array.from(q(sheet.el, '.overlay__head').children) as HTMLElement[];
+    expect(head.filter((c) => !c.hidden).map((c) => c.className.split(' ').find((k) => /^(ladder-sheet__info|overlay__title|overlay__close)$/.test(k)))).toEqual([
+      'ladder-sheet__info',
+      'overlay__title',
+      'overlay__close',
+    ]);
+    // Unseen: inline visibility (the focus trap and the a11y tree skip it).
+    expect(info.style.visibility).toBe('hidden');
+    expect(focusableElements(q(sheet.el, '.ladder-sheet'))).not.toContain(info);
+    sheet.update({ ...p, list: view() });
+    expect(info.hidden).toBe(false);
+    expect(info.style.visibility).toBe('');
+    expect(focusableElements(q(sheet.el, '.ladder-sheet'))).toContain(info);
+    // The info view: Back takes the start, the (i) leaves the row as before.
+    info.click();
+    expect(info.hidden).toBe(true);
   });
 });
 
@@ -291,6 +404,19 @@ describe('my sticky row (user: it stays at the edge it leaves by)', () => {
     expect(rule).toMatch(/z-index: 3;/);
     expect(css).toMatch(/\.rank-list\[data-climbing\] \.rank-rows > \.rank-row\[data-me='1'\],\s*\.rank-list\[data-measuring\] \.rank-rows > \.rank-row\[data-me='1'\] \{\s*position: relative;/);
     expect(css).not.toMatch(/rank-row--pinned|rank-row__edit|ranking__count/);
+  });
+});
+
+describe('the paid rows on narrow phones', () => {
+  it('review F11: a paid row keeps "Online now" / "Playing now" whole: the pill takes its whole line, compact rows below 390 px', () => {
+    const css = readFileSync(resolve(ROOT, 'src/styles/ladder-chunk.css'), 'utf8');
+    // The pill is the tag line's last item: no end margin of its own (the line keeps its gap to the fish pill).
+    for (const m of css.matchAll(/\.rank-row__line \.lb-status \{([^}]*)\}/g)) expect(m[1]).not.toMatch(/margin/);
+    expect(/\.rank-row__line \{([^}]*)\}/.exec(css)?.[1]).toMatch(/margin-inline-end: 8px;/);
+    // The compact row (smaller picture, heart and chest; 11 px pills) covers every phone narrower than 390 px
+    // (a 375 px iPhone too), where a paid row's chest leaves the name column too little room.
+    const compact = /@media \(max-width: (\d+)px\) \{\s*\.rank-row__avatar,\s*\.rank-row__avatar-art \{\s*width: 30px;/.exec(css);
+    expect(Number(compact?.[1])).toBe(389);
   });
 });
 

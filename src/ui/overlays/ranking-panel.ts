@@ -23,8 +23,8 @@
 // UI batch (2026-10-13): the subtitle "+2 fish · Your total: 14" is hidden over the bracket (it stays the dialog's
 // description and in the announcement), so the stopwatch sits right under the title; the card is one row taller
 // (capped so the footer stays on screen). The panel stays interactive: a heart, a chest, the (i) button, a tap or
-// a drag inside the list never continues (Esc closes a chest's tooltip first); a tap elsewhere, the footer,
-// Enter, Space or Esc does (after the gate). My rank is announced
+// a drag inside the list never continues; a tap elsewhere, the footer, Enter, Space or Esc does (after the gate),
+// except that with a chest's tooltip open, Esc or a tap elsewhere only closes it (review F9). My rank is announced
 // politely once ("You are #5 of 37 in the daily ranking."); the countdown never is. Without the factory the
 // 'bracket' state shows the static skeleton (no fake rows). The records note widens: 'opted_out'
 // (ladder.optedOut) and 'paused' (ladder.paused); 'unavailable' while the ladder is active reads
@@ -185,6 +185,8 @@ export interface BracketListHandle {
   playClimb?(from: { readonly rank: number | null; readonly points: number }, reducedMotion: boolean): Promise<ClimbResult>;
   /** UI batch (leaderboard): closes a chest's reward tooltip; true when one was open (Esc closes it first). */
   closeTip?(): boolean;
+  /** Review F9: true when this press (a pointerdown) closed a chest's tooltip (a tap that only dismisses it). */
+  tipClosedBy?(ev: Event): boolean;
   destroy(): void;
 }
 
@@ -508,24 +510,31 @@ export function createRankingPanel(): OverlayView<RankingPanelProps> {
   // Phase 2e (§2.4 Taps): a drag (or a scroll) that started anywhere never counts as a tap to continue.
   let downAt: { x: number; y: number } | null = null;
   let dragged = false;
+  /** Review F9: this press closed a chest's tooltip (the list's capture listener ran first): as Esc, it only closes it. */
+  let tipDismissed = false;
   shell.el.addEventListener('pointerdown', (ev) => {
     downAt = { x: ev.clientX, y: ev.clientY };
     dragged = false;
+    tipDismissed = bracket?.handle.tipClosedBy?.(ev) === true;
   });
   shell.el.addEventListener('pointermove', (ev) => {
     if (downAt && Math.abs(ev.clientX - downAt.x) + Math.abs(ev.clientY - downAt.y) > DRAG_PX) dragged = true;
   });
   // A tap anywhere (scrim, panel, footer) continues after the gate; the "See top players" button does its own thing.
   // Phase 2e: the heart buttons, the (i) button and any tap inside the bracket list never continue.
+  // Review F9: a tap elsewhere that closed a chest's tooltip only closes it (the next tap continues); the footer
+  // button still continues (its own explicit action).
   shell.el.addEventListener('click', (ev) => {
     const target = ev.target as Element | null;
     const wasDrag = dragged;
+    const wasTipDismiss = tipDismissed;
     downAt = null;
     dragged = false;
+    tipDismissed = false;
     if (target?.closest('.rank-list__seetop')) return;
     if (target?.closest('.ranking__tap')) return; // its own onPress
     if (target?.closest('.ranking__info, .rank-list--bracket')) return;
-    if (wasDrag) return;
+    if (wasDrag || wasTipDismiss) return;
     tryContinue();
   });
   shell.el.addEventListener('keydown', (ev) => {

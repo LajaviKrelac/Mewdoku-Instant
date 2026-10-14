@@ -18,7 +18,8 @@ Both leaderboard screens: the post-win panel (overlay `ranking`) and the Home sh
 | 8 | My row sticks where it left the view | The real row is `position: sticky; top/bottom: -4px` in the `ol` scroller (flush with its edge over the 4 px padding), `z-index: 3`, lifted with `--shadow-2`. The pinned copy and `updatePinned` are gone. `centerAfter` measures with `[data-measuring]`, `playClimb` sets `[data-climbing]`/`.is-climbing` before measuring; both make my row `position: relative`. |
 | Sheet | No pencil; (i) to the left, title centred | `onEditName` removed from `BracketListCallbacks`, `LadderSheetProps` and its three callers (`ladder-flow.ts`, `boot.ts`, `dev/ladder-harness.ts`), the pencil code, its CSS and the key `nick.edit.a11y`. Head order back · (i) · title · × (back and (i) never show together); the head's start margin mirrors its end margin, so the ribbon is centred between two 44 px discs (RTL mirrors). The name sheet still opens from Settings → "Ranking name" and the Home profile picture. The panel's (i) is unchanged. |
 
-Chest sizes on narrow phones: rows keep a smaller chest at ≤ 360 px wide (26 px) and hide it only at ≤ 340 px (the row
+Chest sizes on narrow phones: rows keep a smaller chest below 390 px wide (26 px; ≤ 360 px before review F11, §8) and
+hide it only at ≤ 340 px (the row
 name still says the reward); the compact podium (≤ 740 px tall) keeps its chests as a badge in each step's top corner
 (the steps stay short). At 320 × 568 the panel has no chest (podium hidden ≤ 640 px tall, rows ≤ 340 px wide); the
 sheet shows them on its compact podium.
@@ -37,13 +38,14 @@ sheet shows them on its compact podium.
 3. **`BracketListView.rewards` is optional** (absent = no chest) and `BracketListHandle.closeTip` is optional, so the
    other workstreams' view literals and test doubles keep compiling.
 4. **Chest hit area:** a 30 × 44 button (art 30 px; 32 px of column as before, so "Playing now" truncates no more than
-   before), its `::after` reaching 14 px toward the fish pill (18 px at ≤ 360 px; mirrored in RTL), never over the
-   heart's 44 × 44.
+   before), its `::after` reaching 14 px toward the fish pill (18 px below 390 px; mirrored in RTL), never over the
+   heart's 44 × 44. (Review F11, §8: "Playing now" now fits whole on the paid rows.)
 5. **The ribbon title may wrap** (`flex: 0 1 auto; min-width: 0`, 14 px side padding below 360 px): a long
    translation ("Papan peringkat") at 320 px now wraps inside the ribbon instead of running under the head's discs
    (it overflowed before too; the head now has the same total room, split evenly).
-6. **A tap outside the list while a tip is open** closes the tip and, in the panel, continues as any outside tap
-   (no swallowed click). Inside the list (chest, tip, rows, podium) never continues, as before.
+6. ~~**A tap outside the list while a tip is open** closes the tip and, in the panel, continues as any outside tap
+   (no swallowed click).~~ Reversed by review F9 (§8): such a tap only closes the tip, as Esc does; the next tap
+   continues. Inside the list (chest, rows, podium) never continues, as before; the tip itself takes no taps (F1).
 7. **Contract fixtures unchanged:** `session.*.json`/`claim.*.json` keep 2 + 2 etc. (shape-only fixtures; the
    ladder-fake and `ladder-flow.spec` run on them). The visual e2e route fake (`FAKE_RULES`, the paid result) now
    uses the new defaults so the review captures show them.
@@ -131,3 +133,34 @@ over: 52.4 of 51.7 KB).
 
 See the commit message; screenshots (390 × 844, 320 × 568, 360 × 740, Arabic, FB safe zone) were looked at in the
 dev harness on port 5191.
+
+## 8. Review fixes (2026-10-14: F1, F9, F10, F11)
+
+- **F1, the tooltip caught taps meant for the row above.** `.lb-tip` is `pointer-events: none` (it holds no
+  controls), and `bracket-prize.ts` `onDown` no longer keeps the tip for a press inside it: any press except on its
+  own chest closes it and reaches what is under it (the row above's heart or chest), on iOS Safari too (no focus on
+  tap, so the blur close never fired there).
+- **F9, an outside tap that only dismissed a tip also left the panel.** `PrizeTip.closedBy(ev)` remembers the
+  pointerdown that closed the tip; the panel asks `BracketListHandle.tipClosedBy?(ev)` in its own pointerdown and
+  skips `tryContinue()` on that gesture's click, as Esc does (`dismiss()`). The next tap continues. The footer
+  button "Tap to keep going" still continues with a tip open (its own explicit action). No DOM marker is left behind.
+  The ranking sheet had the same gap (a scrim tap with a tip open closed the tip and the sheet; Esc only the tip):
+  its scrim tap now follows the same rule.
+- **F10, the sheet title off-centre with no bracket.** In the list view the (i) keeps its slot even with no bracket;
+  only its glyph goes, with inline `visibility: hidden` (out of focus, the focus trap and the a11y tree; the trap
+  reads inline styles). Focus goes to × then. Harness view `sheet-join`.
+- **F11, the paid rows' status pill cut ("Online n…", "Playing n…").** The pill had a 6 px end margin of its own
+  on top of the tag line's 8 px; it is gone (the pill is the line's last item). The compact row (30 px picture, 46 px
+  heart, 26 px chest) now starts below 390 px instead of at 360 px, and its pills take the podium's size (11 px,
+  6 px sides). Measured room left for "Playing now" on rows 1–3 (Chromium, harness): 3.5 px at 360, 4.5 at 361,
+  18.5 at 375, 8.5 at 341, 4.6 at 390 (was −0.5 to −6 at 360, −16 at 375, −1 at 390). Other locales can still
+  ellipsize where their words are longer (de "Spielt gerade" is 2–2.5 px short at 360 and 390; it was 8 px short).
+
+Sizes (FB build): Lazy JS (ladder) 45.7 / 47.0 KB, Lazy CSS (ladder) 24.9 / 25.7 KB, Lazy JS (overlay chunk)
+59.6 / 61.4 KB; all within the budgets. Screenshots (390 × 844, 360 × 740, 320 × 568, Arabic at 375 and 360) and
+real-pointer checks (mouse and touch: a tap on the row-2 heart under row 3's tip gives the heart; a scrim tap with a
+tip open does not continue, the next one does) were run against the dev harness on port 5191.
+
+Doc lines updated in the same commit: `docs/phase2e/CONTRACTS.md` §14.3 `BracketListHandle` (optional
+`tipClosedBy?(ev)`) and `docs/phase2e/spec.md` §2.4 **Taps** (with a tooltip open, Esc or a tap outside the list only
+closes it; the footer still continues; the tooltip takes no taps).

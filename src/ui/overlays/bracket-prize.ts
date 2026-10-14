@@ -9,7 +9,7 @@
 // The tooltip: one element in the list's root (never clipped by the scrolling rows), above the chest (below it when
 // there is no room), with the place's medal and the helpers' own art (the bulb, the kitty) and "×3". It closes on a
 // second tap, a tap elsewhere, focus leaving its chest, a scroll, a re-render, the rank-up and Esc (the overlays ask
-// closeTip() first).
+// closeTip() first). It never takes a tap itself (pointer-events: none): it can sit over the row above's heart.
 // A11y: a row's chest is a button named by the reward (its row's name ends with it too); the podium is aria-hidden,
 // so its chests are pointer-only. Reduced motion: no pop (ladder-chunk.css).
 // Classes: .lb-tip[role=tooltip][data-below?] > .lb-tip__medal(.lb-tip__medal-art .lb-tip__num)
@@ -42,6 +42,8 @@ export interface PrizeTip {
   toggle(anchor: Element, p: PlaceRewardView): void;
   /** Closes it; true when it was open. */
   close(): boolean;
+  /** True when this press (a pointerdown) closed it: the post-win panel then does not continue on its click. */
+  closedBy(ev: Event): boolean;
   destroy(): void;
 }
 
@@ -58,12 +60,16 @@ export function createPrizeTip(root: HTMLElement): PrizeTip {
   const el = h('div', { class: 'lb-tip', role: 'tooltip', id: `lb-tip-${++seq}`, hidden: true }, medal, items, sr);
   const doc = root.ownerDocument;
   let anchor: Element | null = null;
+  /** The press that last closed the tip (the panel asks, so that press only dismisses it, as Esc does). */
+  let closedOn: Event | null = null;
 
   const button = (): Element | null => anchor?.closest('button') ?? null;
-  // A press anywhere but the tip or its own chest closes it (that chest's click toggles it).
+  // A press anywhere but its own chest closes it (that chest's click toggles it). Review F1: the tip takes no taps
+  // (pointer-events: none), so a press on the heart or chest under it closes it and still reaches them.
   const onDown = (ev: Event): void => {
     const target = ev.target as Node | null;
-    if (target && (el.contains(target) || anchor?.parentElement?.contains(target))) return;
+    if (target && anchor?.parentElement?.contains(target)) return;
+    closedOn = ev;
     close();
   };
 
@@ -126,8 +132,10 @@ export function createPrizeTip(root: HTMLElement): PrizeTip {
       doc.addEventListener('pointerdown', onDown, true);
     },
     close,
+    closedBy: (ev) => ev === closedOn,
     destroy() {
       close();
+      closedOn = null;
     },
   };
 }

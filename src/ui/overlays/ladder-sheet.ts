@@ -5,7 +5,8 @@
 //            when I have no bracket now. UI batch (2026-10-13; user: "remove option to edit your username from
 //            that screen (pen icon)", "move info icon to the left so you can center the 'Leaderboard' label"): no
 //            pencil (the name sheet opens from Settings and the Home picture); the title sits between two equal
-//            discs, so it is truly centred. Esc closes a chest's tooltip first;
+//            discs, so it is truly centred (with no bracket the (i) keeps its slot unseen). Esc (or a scrim tap)
+//            closes a chest's tooltip first;
 //   info:    how it works (ladder.info.*), every count from the server's rules (C-5): the fish, the 24 h and
 //            up to N players, the rewards and their minimum, ×2 by video, hearts, names and pictures (never
 //            the Facebook name), how to switch the ranking off or delete the data; Back to the list;
@@ -119,7 +120,9 @@ export function createLadderSheet(): OverlayView<LadderSheetProps> {
   let view: SheetView = 'list';
   /** The view the sheet opened with (Back in the info view returns there when it was the list). */
   let base: SheetView = 'list';
-  const shell = createOverlayShell({ id: 'ladder', scrim: 'soft', panel: 'sheet', onScrimTap: () => void dismiss() });
+  /** Review F9 (as in the post-win panel): a scrim tap whose press closed a chest's tooltip only closes it, as Esc. */
+  let tipDismissed = false;
+  const shell = createOverlayShell({ id: 'ladder', scrim: 'soft', panel: 'sheet', onScrimTap: () => void (tipDismissed || dismiss()) });
   shell.panel.classList.add('ladder-sheet');
   const L = createLocaleText();
 
@@ -141,6 +144,9 @@ export function createLadderSheet(): OverlayView<LadderSheetProps> {
   // list view
   const join = h('p', { class: 'ladder-sheet__join' });
   let listHandle: BracketListHandle | null = null;
+  shell.el.addEventListener('pointerdown', (ev) => {
+    tipDismissed = listHandle?.tipClosedBy?.(ev) === true;
+  });
   const listHost = h('div', { class: 'ladder-sheet__list' });
   // info view
   const infoList = h('ul', { class: 'ladder-info' });
@@ -202,7 +208,10 @@ export function createLadderSheet(): OverlayView<LadderSheetProps> {
     recordsBox.hidden = v !== 'records';
     const infoOnly = props?.infoOnly === true;
     back.hidden = !(v === 'info' && base === 'list' && !infoOnly);
-    info.hidden = !(v === 'list' && props?.list) || infoOnly;
+    // Review F10: with no bracket now the (i) keeps its slot unseen (inline visibility: no focus, no screen reader;
+    // the focus trap honours it), so the title stays centred between two equal discs.
+    info.hidden = v !== 'list' || infoOnly;
+    info.style.visibility = props?.list ? '' : 'hidden';
     close.hidden = infoOnly;
     ok.parentElement!.hidden = !infoOnly;
     // Leaderboard update: the list view is titled "Leaderboard" (the orange ribbon).
@@ -210,7 +219,7 @@ export function createLadderSheet(): OverlayView<LadderSheetProps> {
     if (v === 'list' && listHandle && shell.isOpen()) listHandle.centerMe();
     if (!moveFocus) return;
     if (v === 'info') (back.hidden ? (infoOnly ? ok : close) : back).focus();
-    else if (v === 'list') (info.hidden ? close : info).focus();
+    else if (v === 'list') (props?.list && !infoOnly ? info : close).focus();
   }
 
   const render = (p: LadderSheetProps): void => {

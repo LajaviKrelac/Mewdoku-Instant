@@ -1183,10 +1183,8 @@
   background: var(--page-2);
 }
 
-.rank-row__line .lb-status {
-  margin-inline-end: 6px;
-}
-
+/* Review F11: the status pill is the tag line's last item and has no end margin of its own (the line's 8 px keeps it
+   off the fish pill), so a paid row's narrower name column still fits "Playing now". */
 .rank-row__tags:not([hidden]) {
   margin-inline-end: 6px;
 }
@@ -1237,10 +1235,13 @@
   height: 30px;
 }
 
-/* ── UI batch: a chest's reward tooltip (bracket-prize.ts), placed by script above the chest inside the list ── */
+/* ── UI batch: a chest's reward tooltip (bracket-prize.ts), placed by script above the chest inside the list ──
+   Review F1: it never takes a tap (no controls in it): it can sit over the row above's heart and chest, and a press
+   there closes it and reaches them. */
 .lb-tip {
   position: absolute;
   z-index: 6;
+  pointer-events: none;
   display: flex;
   align-items: center;
   padding: 5px 10px 5px 6px;
@@ -1690,8 +1691,10 @@
   }
 }
 
-/* Narrow screens: a smaller picture and heart so the name and its pills keep their width. */
-@media (max-width: 360px) {
+/* Narrow screens: a smaller picture and heart so the name and its pills keep their width. Review F11: every phone
+   narrower than 390 px (360 and 375 px too), where a paid row's chest leaves "Online now" / "Playing now" too little
+   room at the full sizes. */
+@media (max-width: 389px) {
   .rank-row__avatar,
   .rank-row__avatar-art {
     width: 30px;
@@ -1732,7 +1735,9 @@
     padding: 1px 7px 1px 3px;
   }
 
+  /* The podium's pill size (11 px, 6 px sides), so the paid rows keep a few px of room to spare. */
   .rank-row__line .lb-status {
+    padding: 0 6px;
     font-size: 11px;
   }
 }

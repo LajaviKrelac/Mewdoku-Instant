@@ -551,7 +551,7 @@ describe('ranking sheet (overlay `ladder`, spec §2.5)', () => {
     expect(p.onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('no bracket now: "Solve a puzzle to join the daily ranking." and no (i) on the list', () => {
+  it('no bracket now: "Solve a puzzle to join the daily ranking." (the (i) keeps its slot unseen: leaderboard-chests.spec)', () => {
     const sheet = createLadderSheet();
     document.body.appendChild(sheet.el);
     sheet.open(sheetProps({ list: null }));
