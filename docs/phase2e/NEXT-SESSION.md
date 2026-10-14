@@ -194,3 +194,14 @@ workstreams, merged and reviewed by the lead; per-area notes, decisions and size
   on 1d6ce5b: `npm run verify` (3,246 unit tests, 224 server tests), two full e2e runs (330 passed each; the only
   failures were a 1.3 px streak-screen fit at 320 × 568 in German, fixed, and one FB purchase test under load that passed
   4/4 alone and 59/59 with its whole spec), size check within the re-set budgets.
+- **Incident and fix (2026-10-14): the computer rivals went missing on staging.** The batch branch had been cut from a
+  stale ref, without the computer rivals another session had merged into the default branch, so the 2026-10-14 deploy
+  (`276dbd3f`) replaced the rivals server (`b4eaebb3`, `RIVALS="on"`) with one that had no rivals. Fixed by merging the
+  default branch into the batch (`c028b82`; resolutions: the UI batch's panel layout and rewards, the rivals' rule that a
+  place a computer player holds pays nobody, the disclosure line in the info view and How to play) plus `59688a2`
+  (computer players now wear a frame and a background, `rivalLook`, fixed by bracket and slot and never stored, so the
+  plain look never singles them out; the rivals' tests on the new amounts; ladder boot budget 41.1 KB). Then
+  `deploy:staging` (version `8e8b9710-01d3-48c1-8183-aa956a012a71`, `RIVALS="on"`; no migration pending). Smoke: health
+  ok; a fresh web session carries `computerPlayers: true`, places 3+3 / 2+2 / 1+1, free-text names, and its bracket
+  showed 8 computer players with looks (the smoke player then deleted itself). **Lesson:** fetch and merge the default
+  branch before any staging deploy.
