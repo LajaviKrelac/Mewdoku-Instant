@@ -120,6 +120,7 @@ describe('palette-check', () => {
       expect.arrayContaining([
         'victory praise, large text (--title-on-dark on --stage)',
         'victory lines (white .82 on --stage)',
+        'victory praise-line chips (white on white .1 over --stage)',
         'victory event reward (--tap-text on --stage)',
         'victory focus ring (--tap-text on --stage)',
       ]),

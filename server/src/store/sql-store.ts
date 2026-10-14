@@ -47,6 +47,18 @@ export interface WinWrite {
   readonly verdict: 'accepted' | 'accepted_flagged';
   readonly playedAt: number;
   readonly clientVersion: string;
+  /**
+   * UI batch (victory): an accepted daily win's solve-time bucket (dailyStats); the batch adds one to daily_times
+   * exactly when this win's row goes in and the player is in good standing. Absent: no rollup (levels, events,
+   * flagged wins, dailyStats off).
+   */
+  readonly dailyBucket?: number;
+}
+
+/** UI batch (victory): a daily's solvers in one pool, all of them and those in buckets above `bucket`. */
+export interface DailyTotals {
+  readonly total: number;
+  readonly slower: number;
 }
 
 export interface FlagWrite {
@@ -92,6 +104,8 @@ export interface WriteWinsResult {
   readonly joinedSlot: number | null;
   /** Per win (same order): did its row go in (its points were added)? */
   readonly inserted: readonly boolean[];
+  /** UI batch (victory), per win (same order): did it add one to the daily rollup (daily_times)? */
+  readonly rolled: readonly boolean[];
   /**
    * The batch applied: the player row took the new token, the level baseline, the budget and the flags. False
    * when the token had changed (a concurrent wins request of this player), the join lost its race, or the
@@ -147,6 +161,8 @@ export interface SweepCutoffs {
   readonly ipQuotaDayBefore: string;
   readonly statsDayBefore: string;
   readonly tombstoneUntil: number;
+  /** UI batch (victory): daily_times rows of daily ids below this one ('D' + a date key) go. */
+  readonly dailyTimesBefore: string;
 }
 
 /** "?, ?, ?" for n values. */
@@ -377,6 +393,7 @@ export class SqlStore {
       );
     }
     const insertIndex: number[] = [];
+    const rollIndex: number[] = [];
     if (bracketId !== null) {
       for (const w of input.wins) {
         stmts.push(
@@ -400,6 +417,37 @@ export class SqlStore {
             ...casArgs,
           ),
         );
+        // UI batch (victory): the daily rollup, BEFORE the win row and under the win row's own guards (no row yet for
+        // this puzzle or winId, the member exists, the bracket runs, the token), so it counts exactly the row that
+        // goes in next; only for a player in good standing. The pool is the player's own (H-7).
+        if (w.dailyBucket !== undefined) {
+          rollIndex.push(stmts.length);
+          stmts.push(
+            this.q(
+              `INSERT INTO daily_times (puzzle_id, pool, bucket, n)
+               SELECT ?, p.pool, ?, 1 FROM players p
+                WHERE p.key = ? AND p.wtok = ? AND p.status = 'ok'
+                  AND NOT EXISTS (SELECT 1 FROM wins WHERE player_key = ? AND puzzle_id = ?)
+                  AND NOT EXISTS (SELECT 1 FROM wins WHERE player_key = ? AND win_id = ?)
+                  AND EXISTS (SELECT 1 FROM members WHERE bracket_id = ? AND player_key = ?) AND ${RUNNING}
+               ON CONFLICT (puzzle_id, pool, bucket) DO UPDATE SET n = daily_times.n + 1`,
+              w.puzzleId,
+              w.dailyBucket,
+              key,
+              input.cas.expect,
+              key,
+              w.puzzleId,
+              key,
+              w.winId,
+              bracketId,
+              key,
+              bracketId,
+              now,
+            ),
+          );
+        } else {
+          rollIndex.push(-1);
+        }
         insertIndex.push(stmts.length);
         stmts.push(
           this.q(
@@ -468,8 +516,27 @@ export class SqlStore {
     return {
       joinedSlot,
       inserted: insertIndex.map((i) => (res[i]?.meta.changes ?? 0) === 1),
+      rolled: input.wins.map((_, k) => {
+        const i = rollIndex[k] ?? -1;
+        return i >= 0 && (res[i]?.meta.changes ?? 0) === 1;
+      }),
       applied: (res[playerIndex]?.meta.changes ?? 0) === 1,
     };
+  }
+
+  /**
+   * UI batch (victory): one daily's solvers in one pool from the rollup, all of them and those in buckets above
+   * `bucket` (strictly slower). One primary-key range read (≤ dailyStats.maxBucket + 1 rows).
+   */
+  async dailyTotals(puzzleId: string, pool: string, bucket: number): Promise<DailyTotals> {
+    const r = await this.q(
+      `SELECT COALESCE(SUM(n), 0) AS total, COALESCE(SUM(CASE WHEN bucket > ? THEN n ELSE 0 END), 0) AS slower
+         FROM daily_times WHERE puzzle_id = ? AND pool = ?`,
+      bucket,
+      puzzleId,
+      pool,
+    ).first<{ total: number; slower: number }>();
+    return { total: Number(r?.total ?? 0), slower: Number(r?.slower ?? 0) };
   }
 
   // ───────────────────────────────────────────── brackets
@@ -1003,6 +1070,8 @@ export class SqlStore {
     );
     add('ip_quota', (await this.q('DELETE FROM ip_quota WHERE day < ?', c.ipQuotaDayBefore).run()).meta.changes);
     add('stats_daily', (await this.q('DELETE FROM stats_daily WHERE day < ?', c.statsDayBefore).run()).meta.changes);
+    // UI batch (victory): a day's rollup is ≤ (maxBucket + 1) rows per pool, so one statement takes the old days.
+    add('daily_times', (await this.q('DELETE FROM daily_times WHERE puzzle_id < ?', c.dailyTimesBefore).run()).meta.changes);
     return out;
   }
 
@@ -1020,6 +1089,8 @@ export class SqlStore {
       this.q(`DELETE FROM wins WHERE player_key IN (${players})`, ...pools),
       this.q(`DELETE FROM flags WHERE player_key IN (${players})`, ...pools),
       this.q(`DELETE FROM tombstones WHERE player_key IN (${players})`, ...pools),
+      // UI batch (victory): the pool's daily rollup (a dev route: a range over the daily ids, then the pool).
+      this.q('DELETE FROM daily_times WHERE puzzle_id >= ? AND pool IN (?, ?)', 'D', ...pools),
       this.q('DELETE FROM brackets WHERE pool IN (?, ?)', ...pools),
       this.q('DELETE FROM players WHERE pool IN (?, ?)', ...pools),
     ]);

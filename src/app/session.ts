@@ -57,6 +57,7 @@ import { createFeedbackPlayer, createSessionTimers, defaultColors, defaultPraise
 import { createTransitions } from './session-transitions';
 import { shallowEqual, type AppState, type OverlayId, type SessionMeta, type SessionRequest } from './store';
 import { asTutorialStep, boardKindOf, boardLocked, personalRecords, selectGameView, selectRankingView, selectVictoryView, type ViewContext } from './views';
+import { pickVictoryLines, victoryFacts, type VictoryFacts } from './victory-lines';
 import { createWinFlow, victoryCrossfadeMs, type WinFlowVariant } from './win-flow';
 
 export type { GameCommands, Session, SessionDeps } from './session-types';
@@ -100,6 +101,8 @@ export function createSession(deps: SessionDeps): Session {
   let attempt = 0;
   /** UI batch (2026-10-13), messages: the attempt a Retry ended (its cats placed), for the Retry's ticker line. */
   let lastTry: LastTry | null = null;
+  /** UI batch (victory): the board was resumed from its slot at mount (its first attempt's mouse count is not known). */
+  let resumedAtMount = false;
   /**
    * Phase 2d.1: sounds the session schedules for the board's and the fx layer's motion (the mouse's
    * arrivals and landings, a mouse action's unit_done, the points star's landing). A props render of
@@ -328,6 +331,8 @@ export function createSession(deps: SessionDeps): Session {
     logged: boolean;
     /** Phase 2e §2.3: the worldwide ranking gives this win's panel its list (the flow was active at WON). */
     readonly ladder: boolean;
+    /** UI batch (victory): what the victory's praise and statistic lines may say about this win. */
+    readonly facts: VictoryFacts;
   } | null = null;
 
   /** Phase 2e: the loaded ladder flow, or null. */
@@ -440,28 +445,36 @@ export function createSession(deps: SessionDeps): Session {
     logPanel(w);
   }
 
-  function openVictory(): void {
-    const w = win;
-    if (!w) return;
-    const firstRunTutorial = w.summary.mode === 'tutorial' && !w.summary.replay;
-    // §3.2: the victory screen may carry a banner in its own reserved band (set before the props are built).
-    if (deps.banners) void deps.banners.screenShown('victory', { firstRunTutorial }).catch(() => undefined);
-    // requests-G3 R4: while the ladder is active the kept-fish row shows my bracket's total ('ladder').
+  /**
+   * The victory's props for this win. UI batch (victory): the praise and statistic lines (a daily's statistic waits for
+   * the ladder's answer: its standing, else our estimate; ladder:update re-renders); no Home; the daily's primary
+   * starts the next level (onDailyDone).
+   */
+  function victoryProps(w: NonNullable<typeof win>) {
     const lf = w.ladder ? ladderFlow() : null;
-    const ladderTotal = lf && lf.active() ? lf.panelTotal() : null;
-    const ladderWaiting = lf && lf.active() ? lf.panelWaiting() : 0;
-    const data = selectVictoryView(store.get(), viewCtx(), w.summary, { praise: w.praise, ladderTotal, ladderWaiting }, c);
+    const standing = w.summary.mode === 'daily' && lf ? lf.dailyStanding() : null;
+    const lines = pickVictoryLines(w.facts, standing, c);
+    const data = selectVictoryView(store.get(), viewCtx(), w.summary, { praise: w.praise, lines }, c);
     const m = w.meta;
-    // UI batch (2026-10-13): the day's first counted win shows the streak screen after the primary press.
-    router.open('victory', afterStreakScreen({ router, state: () => store.get(), now: () => clock.now(), config: c }, w.summary, {
+    // UI batch (streak): the day's first counted win shows the streak screen after the primary press. Wrapped here, so
+    // the daily's ladder:update re-render keeps the wrap (it is once per win, keyed by the WinSummary).
+    return afterStreakScreen({ router, state: () => store.get(), now: () => clock.now(), config: c }, w.summary, {
       ...data,
       now: () => clock.now(),
       onPrimary: () => {
         if (m.mode === 'daily') void session.onDailyDone();
         else void session.onNext();
       },
-      onHome: () => session.onHome(),
-    }));
+    });
+  }
+
+  function openVictory(): void {
+    const w = win;
+    if (!w) return;
+    const firstRunTutorial = w.summary.mode === 'tutorial' && !w.summary.replay;
+    // §3.2: the victory screen may carry a banner in its own reserved band (set before the props are built).
+    if (deps.banners) void deps.banners.screenShown('victory', { firstRunTutorial }).catch(() => undefined);
+    router.open('victory', victoryProps(w));
     deps.rankings?.closeList();
     // UX-4: a crossfade. The victory opens over the ranking panel at the tap and fades in (the overlay
     // fade, fx.overlayFadeMs; reduced: fx.screenReducedMs); the panel, fading out under it, closes
@@ -486,6 +499,18 @@ export function createSession(deps: SessionDeps): Session {
     });
     updateSave(() => book.save);
     const s = book.summary;
+    // UI batch (victory): the facts the praise lines may state (the save before and after, this attempt's helpers).
+    const facts = victoryFacts({
+      before,
+      after: book.save,
+      state,
+      mode: s.mode,
+      hard: m.hard,
+      restored,
+      mice: resumedAtMount && attempt === 0 ? null : helpers.mouseUses(),
+      retries: attempt,
+      ...(deps.levelSize ? { levelSize: deps.levelSize } : {}),
+    });
     if (m.mode === 'level' && !restored) helpers.levelWon(); // Phase 2e §3.2: the retry cadence restarts
     // Phase 2e §2.3 (critic C-25): a counted, scored win is queued for the ranking server in the SAME
     // critical save as the win (a crash after WON loses nothing); the flow sends it right after.
@@ -553,6 +578,7 @@ export function createSession(deps: SessionDeps): Session {
       panelOpen: false,
       logged: false,
       ladder: useLadder,
+      facts,
     };
     const w = win;
     // §5.5 steps 2 then 3, from t = 0 so the panel is ready in time (deadline rank.fetchTimeoutMs):
@@ -781,6 +807,7 @@ export function createSession(deps: SessionDeps): Session {
     helpers.newAttempt();
     attempt = 0;
     lastTry = null;
+    resumedAtMount = resumed;
     screen = router.showGame(selectGameView(store.get(), viewCtx(), c) as GameView, callbacks);
     unbindView = store.select(
       // ext: the settings dot (§1.15); purchases: No Ads takes the banner band away (§1.16).
@@ -1107,9 +1134,11 @@ export function createSession(deps: SessionDeps): Session {
     bus.on('overlay:open', syncModal),
     bus.on('overlay:close', syncModal),
     // Phase 2e §2.4: the ladder answered (or gave up): the open panel re-renders its list and total.
+    // UI batch (victory): an open daily victory re-renders too (its statistic waited for the answer).
     bus.on('ladder:update', () => {
       const w = win;
       if (w && w.ladder && w.panelOpen && router.isOpen('ranking')) router.update('ranking', rankingProps(w, panelTapMinMs));
+      if (w && w.ladder && w.summary.mode === 'daily' && router.isOpen('victory')) router.update('victory', victoryProps(w));
     }),
     bus.on('overlay:failed', ({ id }) => onOverlayFailed(id)),
   ];

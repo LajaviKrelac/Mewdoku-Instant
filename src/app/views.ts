@@ -36,6 +36,7 @@ import type { Capabilities, PlatformId } from '../platform/types';
 import type { BoardHighlight } from '../ui/board/board-view';
 import type { RuleChip } from '../ui/hud/rule-chips';
 import type { PersonalRecordsView, RankingBoardKind, RankingListState, RankingPanelProps } from '../ui/overlays/ranking-panel';
+import type { VictoryLine } from '../ui/overlays/victory-line-text';
 import type { VictoryProps } from '../ui/overlays/victory-screen';
 import type { EventScreenView } from '../ui/screens/event-screen';
 import type { GameView } from '../ui/screens/game-screen';
@@ -330,21 +331,19 @@ export function boardKindOf(_mode: WinSummary['mode']): RankingBoardKind {
  * The victory screen's props for the win that just happened (phase2b §2.5, phase2c §2.7). The
  * callbacks are bound by the caller (session); this maps the data. No fish pill, no "+", no bonus.
  * Phase 2c.1 §10.3: pointsEarned = the level's total when > 0 (counted or not), else null; no streak.
+ * UI batch (2026-10-13, victory): the kept-fish row is the fish only (no "+N", no "Your total"); a daily's primary is
+ * the next level (progress.level, ≥ 2; a daily never moves progress); the praise and statistic lines come picked
+ * (app/victory-lines.ts); no Home button.
  */
-export type VictoryData = Omit<VictoryProps, 'now' | 'onPrimary' | 'onHome'>;
+export type VictoryData = Omit<VictoryProps, 'now' | 'onPrimary'>;
 export function selectVictoryView(
   state: AppState,
   ctx: ViewContext,
   win: WinSummary,
   opts: {
     readonly praise: number;
-    /**
-     * Phase 2e (spec §2.3; requests-G3 R4): my bracket's total while the worldwide ranking is active for
-     * this win: the kept-fish row then reads "+2 · Your total: 14" (kind 'ladder'). Absent / null: this period's.
-     */
-    readonly ladderTotal?: number | null;
-    /** Audit B9 / A-H1: fish still waiting to be sent ("· +3 waiting" after the server's total); absent = 0. */
-    readonly ladderWaiting?: number;
+    /** UI batch (victory): the lines under the subtitle (pickVictoryLines); absent = none. */
+    readonly lines?: readonly VictoryLine[];
   },
   c: GameConfig = cfg,
 ): VictoryData {
@@ -387,15 +386,11 @@ export function selectVictoryView(
     variant,
     praise: opts.praise,
     level,
-    nextLevel: variant === 'level' && level !== null ? level + 1 : variant === 'tutorial' ? 2 : null,
+    nextLevel:
+      variant === 'level' && level !== null ? level + 1 : variant === 'tutorial' ? 2 : variant === 'daily' ? Math.max(2, state.save.progress.level) : null,
     pointsEarned: win.mode !== 'tutorial' && win.pointsEarned > 0 ? win.pointsEarned : null,
-    // The kept-fish row: only when the win added leaderboard points (§2.7: hidden when G = 0).
-    kept:
-      p && p.gained > 0
-        ? opts.ladderTotal !== undefined && opts.ladderTotal !== null
-          ? { fish: win.kept, max: Math.max(win.maxKept, win.kept), gained: p.gained, total: opts.ladderTotal, kind: 'ladder', waiting: opts.ladderWaiting ?? 0 }
-          : { fish: win.kept, max: Math.max(win.maxKept, win.kept), gained: p.gained, total: p.total, kind: p.kind }
-        : null,
+    // The kept-fish row: only when the win added leaderboard points (§2.7: hidden when G = 0); the fish alone.
+    kept: p && p.gained > 0 ? { fish: win.kept, max: Math.max(win.maxKept, win.kept) } : null,
     daily,
     event,
     buttonDelayMs: c.fx.winButtonDelayMs,
@@ -404,6 +399,7 @@ export function selectVictoryView(
     // Phase 2e §5.3: the streak row on the day's first counted win only (null = no row); §6.1: the daily reward.
     streak: win.streak && c.dayStreak.victoryRow && isFlagOn('dayStreak') ? win.streak : null,
     dailyReward: win.dailyReward ?? null,
+    lines: opts.lines ?? [],
   };
 }
 

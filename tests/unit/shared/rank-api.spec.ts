@@ -159,7 +159,7 @@ describe('rank-api: constants', () => {
 describe('rank-api: the golden fixtures', () => {
   it('has a fixture per endpoint and per error code', () => {
     const names = new Set(fixtures.map((f) => f.name));
-    for (const n of ['health.ok', 'config.ok', 'nonce.ok', 'session.fb', 'session.web', 'wins.ok', 'wins.mixed', 'bracket.open', 'bracket.none', 'bracket.alone', 'bracket.full', 'bracket.ended', 'claim.ok', 'claim.already', 'hearts.ok', 'profile.nickname', 'profile.listed', 'me.ok', 'me.delete']) {
+    for (const n of ['health.ok', 'config.ok', 'nonce.ok', 'session.fb', 'session.web', 'wins.ok', 'wins.mixed', 'wins.daily', 'bracket.open', 'bracket.none', 'bracket.alone', 'bracket.full', 'bracket.ended', 'claim.ok', 'claim.already', 'hearts.ok', 'profile.nickname', 'profile.listed', 'me.ok', 'me.delete']) {
       expect(names.has(n), n).toBe(true);
     }
     for (const code of ERROR_CODES) expect(names.has(`error.${code}`), code).toBe(true);
@@ -337,6 +337,17 @@ describe('rank-api: responses (client side; never invent, repair, trim or re-ran
     expect(parsed?.results).toHaveLength(3);
     expect(parsed?.results[0]).toEqual({ winId: results[1]?.winId, verdict: 'accepted_flagged', points: 3 });
     expect(parseWinsResponse({ ...w, bracket: { state: 'open' } })).toBeNull();
+  });
+
+  it('[UI batch, victory] wins: a daily standing is kept as sent; a malformed one is dropped from its result only', () => {
+    const w = clone(fixture('wins.daily').response.body) as Json;
+    const r0 = (w.results as Json[])[0] as Json;
+    expect(parseWinsResponse(w)?.results[0]).toEqual({ winId: r0.winId, verdict: 'accepted', points: 3, daily: { solvers: 37, slower: 22 } });
+    const base = { winId: r0.winId, verdict: 'accepted', points: 3 };
+    for (const daily of [{ solvers: 0, slower: 0 }, { solvers: 10, slower: 11 }, { solvers: 10, slower: -1 }, { solvers: 2.5, slower: 1 }, { solvers: '30', slower: 3 }, null, 'top 10%', []]) {
+      expect(parseWinsResponse({ ...w, results: [{ ...r0, daily }] })?.results[0], JSON.stringify(daily)).toEqual(base);
+    }
+    expect(parseWinsResponse({ ...w, results: [{ ...r0, daily: { solvers: 20, slower: 20, extra: 1 } }] })?.results[0]).toEqual({ ...base, daily: { solvers: 20, slower: 20 } });
   });
 
   it('session: a bad result is dropped, a bad player or rules rejects the answer', () => {

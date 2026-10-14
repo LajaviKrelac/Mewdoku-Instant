@@ -28,7 +28,10 @@ describe('victory screen (PAR-3, UX-1, UX-13)', () => {
     expect(decls('overlay-chunk.css', ".overlay[data-overlay='victory']")).toMatch(/background:\s*var\(--stage\)/);
     expect(decls('overlay-chunk.css', '.victory__praise')).toMatch(/color:\s*var\(--title-on-dark\)/);
     expect(decls('overlay-chunk.css', '.victory__sub')).toMatch(/color:\s*rgba\(255, 255, 255, 0\.82\)/);
-    expect(decls('overlay-chunk.css', '.victory__home.btn--ghost')).toMatch(/color:\s*rgba\(255, 255, 255/);
+    // UI batch (victory): no ghost Home any more; the praise lines are white on a faint white chip.
+    expect(decls('overlay-chunk.css', '.victory__home.btn--ghost')).toBe('');
+    expect(decls('overlay-chunk.css', '.victory__line')).toMatch(/(^|;)\s*color:\s*#fff\b/);
+    expect(decls('overlay-chunk.css', '.victory__line')).toMatch(/background:\s*rgba\(255, 255, 255, 0\.1\)/);
   });
 
   it('keeps the buttons sticky at the bottom, the reserve plus the clearance above the banner band', () => {
@@ -42,6 +45,10 @@ describe('victory screen (PAR-3, UX-1, UX-13)', () => {
     expect(decls('overlay-chunk.css', '.victory[data-fit]')).toMatch(/--v-hero:\s*136px/);
     expect(decls('overlay-chunk.css', '.victory[data-tight]')).toMatch(/--v-hero:\s*96px/);
     expect(decls('overlay-chunk.css', ".victory[data-fit='3']")).toMatch(/--v-hero:\s*64px/);
+    // UI batch (victory): step 5 is step 4 (no hero art) with the first praise line only.
+    expect(decls('overlay-chunk.css', ".victory[data-fit='5'] .victory__stage")).toMatch(/display:\s*none/);
+    expect(decls('overlay-chunk.css', ".victory[data-fit='5'] .victory__line + .victory__line")).toMatch(/display:\s*none/);
+    expect(decls('overlay-chunk.css', ".victory[data-fit='4'] .victory__line + .victory__line")).toBe('');
     expect(decls('overlay-chunk.css', '.victory__art > svg')).toMatch(/width:\s*var\(--v-hero\)/);
   });
 

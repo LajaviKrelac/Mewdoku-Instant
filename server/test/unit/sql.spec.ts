@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { admin, DAY, HOUR, makeTestApp, playersWithWins, SERVER_DIR, TestPlayer } from '../helpers/harness';
 
-const TABLES = ['meta', 'players', 'brackets', 'members', 'wins', 'hearts', 'rewards', 'flags', 'seen_nonces', 'ip_quota', 'tombstones', 'admin_log', 'stats_daily'];
+const TABLES = ['meta', 'players', 'brackets', 'members', 'wins', 'hearts', 'rewards', 'flags', 'seen_nonces', 'ip_quota', 'tombstones', 'admin_log', 'stats_daily', 'daily_times'];
 
 /** Statements allowed a full scan, with the reason. */
 const ALLOWED_SCANS: { readonly match: RegExp; readonly why: string }[] = [
@@ -22,6 +22,7 @@ async function scenario(): Promise<Set<string>> {
   await ps[1]!.profile({ nickname: { adj: 3, noun: 4, num: 5 }, avatarId: 3, listed: false });
   await ps[1]!.profile({ listed: true });
   await ps[2]!.win('L99'); // a level jump flag
+  await ps[3]!.win('D2026-11-15'); // UI batch (victory): the daily rollup and the standing read
   await ps[3]!.me();
   // Leaderboard update: the auto-join at sign-in and the presence ping.
   const joiner = new TestPlayer(t, 'x-join', { join: true });

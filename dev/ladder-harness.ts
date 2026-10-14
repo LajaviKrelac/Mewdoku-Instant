@@ -410,7 +410,7 @@ function victory(over: Partial<VictoryProps> = {}): void {
     level: 37,
     nextLevel: 38,
     pointsEarned: 7296,
-    kept: { fish: 2, max: 3, gained: 2, total: 14, kind: 'ladder' },
+    kept: { fish: 2, max: 3 },
     daily: null,
     event: null,
     buttonDelayMs: cfg.fx.winButtonDelayMs,
@@ -418,9 +418,10 @@ function victory(over: Partial<VictoryProps> = {}): void {
     bannerReserved: false,
     now: () => Date.now(),
     onPrimary: log('onPrimary'),
-    onHome: log('onHome'),
     streak: { day: 4, total: 7, reward: null },
     dailyReward: null,
+    // UI batch (victory): the praise and statistic lines (app/victory-lines.ts picks them in the game).
+    lines: [{ id: 'noHelp' }, { id: 'statLevel', pct: 65 }],
     ...over,
   });
 }
@@ -517,28 +518,34 @@ const VIEWS: Record<string, () => void> = {
   // victory (spec §5.3, §6.1)
   'victory-streak': () => victory(),
   'victory-day7': () => victory({ streak: { day: 7, total: 7, reward: { hints: 2, kitties: 2 } } }),
-  // audit B9 / A-H1: offline, the kept-fish row shows the server's total and the queued fish apart
-  'victory-offline': () => victory({ kept: { fish: 2, max: 3, gained: 2, total: 28, kind: 'ladder', waiting: 2 } }),
+  // UI batch (victory): the kept-fish row is the fish alone (no total, no "+3 waiting"), online or not
+  'victory-offline': () => victory({ kept: { fish: 2, max: 3 } }),
+  // UI batch (victory): a flawless Hard level with a new best time (the two best lines), and one with no line at all
+  'victory-lines': () =>
+    victory({ level: 60, nextLevel: 61, kept: { fish: 3, max: 3 }, streak: null, lines: [{ id: 'flawless' }, { id: 'best', ms: 151_000, n: 9 }] }),
+  'victory-no-lines': () => victory({ streak: null, lines: [] }),
   // audit B1: the tallest victory (the daily on a streak's day 7); &banner=1 reserves the banner band (fit step 4 at 320 × 568)
   'victory-daily-day7': () =>
     victory({
       variant: 'daily',
       level: null,
-      nextLevel: null,
-      kept: { fish: 3, max: 3, gained: 3, total: 17, kind: 'ladder' },
+      nextLevel: 38,
+      kept: { fish: 3, max: 3 },
       daily: { dateKey: '2026-10-10', ms: 188_000, mistakes: 0, hints: 0, kitties: 0, nextPuzzleAt: NOW + 9 * H },
       streak: { day: 7, total: 7, reward: { hints: 2, kitties: 2 } },
       bannerReserved: q.get('banner') === '1',
+      lines: [{ id: 'statFaster', pct: 70 }, { id: 'flawless' }],
     } as Partial<VictoryProps>),
   'victory-daily': () =>
     victory({
       variant: 'daily',
       level: null,
-      nextLevel: null,
-      kept: { fish: 3, max: 3, gained: 3, total: 17, kind: 'ladder' },
+      nextLevel: 38,
+      kept: { fish: 3, max: 3 },
       daily: { dateKey: '2026-10-10', ms: 188_000, mistakes: 0, hints: 0, kitties: 0, nextPuzzleAt: NOW + 9 * H },
       dailyReward: { hints: 1, kitties: 0 },
       streak: { day: 2, total: 7, reward: null },
+      lines: [{ id: 'statTop', pct: 15 }, { id: 'dailies', count: 12 }],
     } as Partial<VictoryProps>),
   // how to play (spec §2.3, §5)
   howto: () => {

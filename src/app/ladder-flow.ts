@@ -19,6 +19,7 @@ import {
   formatPlayerCode,
   type BracketView,
   type ClaimResponse,
+  type DailyStanding,
   type PresenceState,
   type ResultView,
   type RulesView,
@@ -117,12 +118,17 @@ export interface LadderFlow {
   /** The post-win panel's list for the current win; null = not the ladder's (the records path). */
   listState(): RankingListState | null;
   /**
-   * The panel subtitle's and the victory's total ("+2 fish · Your total: 14"): the server's, from this win's answer,
+   * The panel subtitle's total ("+2 fish · Your total: 14"; UI batch: the victory no longer shows it): the server's, from this win's answer,
    * else its last known one (audit B9 / A-H1, H-4: queued fish are never added in; see panelWaiting).
    */
   panelTotal(): number;
   /** Fish waiting to be sent (the queue; the "+3 waiting" my row shows), shown after the total; 0 = none. */
   panelWaiting(): number;
+  /**
+   * UI batch (victory): this win's daily standing from the server's answer (spec §0.4 H-2a): the standing, null when
+   * the answer carried none (or never came), 'pending' while it is on its way. null without a current win.
+   */
+  dailyStanding(): DailyStanding | null | 'pending';
   /** The panel's extra props: the bracket list factory, hearts and the info button. */
   panelExtras(): {
     bracketList?: BracketListFactory;
@@ -162,6 +168,8 @@ interface WinState {
   state: 'sending' | 'answered' | 'failed';
   view: BracketView | null;
   gained: number | null;
+  /** UI batch (victory): the answer's daily standing for this win (WinResult.daily), else null. */
+  daily: DailyStanding | null;
 }
 
 type AuthState = 'idle' | 'signing' | 'ok' | 'no_api' | 'rejected' | 'disabled' | 'suspended' | 'error' | 'old';
@@ -415,7 +423,10 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
                       ? 'counted_before'
                       : 'rejected';
             log({ name: 'ladder_submit', params: { mode: w ? modeOf(w.puzzleId) : 'level', result, reason: res.reason ?? '', ms } });
-            if (win && win.ref.winId === res.winId) win.gained = res.points;
+            if (win && win.ref.winId === res.winId) {
+              win.gained = res.points;
+              win.daily = res.daily ?? null;
+            }
           }
           applyView(answered.bracket);
           if (win && win.state === 'sending' && (win.ref.winId === null || answered.results.some((x) => x.winId === win?.ref.winId) || !save().ladder.pending.some((p) => p.winId === win?.ref.winId))) {
@@ -1186,13 +1197,13 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
       if (!active()) {
         // Not listed, paused, refused or switched off: the panel shows my records with the matching note
         // (spec §2.9) at once; nothing is sent (a queued win waits for the next usable session).
-        win = { ref, at: clock.now(), state: 'failed', view: null, gained: null, before: null };
+        win = { ref, at: clock.now(), state: 'failed', view: null, gained: null, before: null, daily: null };
         panelLogged = null;
         return;
       }
       const cur = save().ladder.current;
       const before = isRunning(cur, clock.now()) ? { bracketId: cur.bracketId, rank: cur.rank, points: cur.points } : null;
-      win = { ref, at: clock.now(), state: 'sending', view: null, gained: null, before };
+      win = { ref, at: clock.now(), state: 'sending', view: null, gained: null, before, daily: null };
       // The wins answer marks my row "online" on the server (the puzzle is over).
       presenceState = 'online';
       void loadChunk();
@@ -1241,6 +1252,10 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
     },
     panelWaiting() {
       return waitingFish(save().ladder);
+    },
+    dailyStanding() {
+      if (!win) return null;
+      return win.state === 'sending' ? 'pending' : win.daily;
     },
     panelExtras() {
       return {

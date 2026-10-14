@@ -243,6 +243,19 @@ describe('phase2c.1 §3.2.5: the victory and the records (no streak anywhere)', 
     expect(selectVictoryView(app(), ctx, win({ mode: 'tutorial', pointsEarned: 576, period: null }), { praise: 0 }).pointsEarned).toBeNull();
   });
 
+  it('[UI batch, victory] the kept fish alone, the lines as picked, a daily\'s primary is the next level (never below 2)', () => {
+    const v = selectVictoryView(app(), ctx, win({ kept: 2 }), { praise: 0, lines: [{ id: 'noHelp' }] });
+    expect(v.kept).toEqual({ fish: 2, max: 3 });
+    expect(v.lines).toEqual([{ id: 'noHelp' }]);
+    expect(v).not.toHaveProperty('onHome');
+    expect(selectVictoryView(app(), ctx, win(), { praise: 0 }).lines).toEqual([]);
+    expect(selectVictoryView(app(), ctx, win({ period: { kind: 'week', key: '2026-10-05', gained: 0, before: 3, total: 3 } }), { praise: 0 }).kept).toBeNull();
+    const daily = win({ mode: 'daily', level: null, dateKey: '2026-10-07' });
+    expect(selectVictoryView(app({ progress: { level: 44, completed: 43, best: {} } }), ctx, daily, { praise: 0 }).nextLevel).toBe(44);
+    expect(selectVictoryView(app({ progress: { level: 1, completed: 0, best: {} } }), ctx, daily, { praise: 0 }).nextLevel).toBe(2);
+    expect(selectVictoryView(app(), ctx, win({ mode: 'event', level: null }), { praise: 0 }).nextLevel).toBeNull();
+  });
+
   it('personalRecords (period board): This week, best week and Total points (points.total); no streak', () => {
     const r = personalRecords(app({ points: { total: 13_248 }, streak: { current: 4, best: 9 }, period: { key: '2026-10-05', total: 12, bestKey: '2026-09-28', bestTotal: 30 } }), ctx, { board: 'period', n: 8, thisMs: 1000 });
     expect(r).toMatchObject({ board: 'period', totalPoints: 13_248, period: { kind: 'week', total: 12, best: 30 } });

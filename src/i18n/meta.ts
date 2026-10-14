@@ -141,6 +141,9 @@ const GROUPS: readonly (readonly [prefix: string, description: string, maxLength
   // Phase 2c.1 (fish-lives-spec §10.7): "points" are always level points, earned per cat inside one level.
   ['points.', 'Level points: earned for each cat found inside one level (0 at the start of every level); never the leaderboard (that is fish)'],
   ['victory.', 'Victory screen after a win'],
+  // UI batch (2026-10-13, victory): one or two lines under "Level 37 complete" (one line of about 40 characters at 390 px).
+  ['victory.line.', 'Victory screen: a short line of praise about how THIS board went (the player\'s own facts only). Warm and playful, never "first try"', 40],
+  ['victory.stat.', 'Victory screen: an approximate comparison with other players ({pct} is rounded, e.g. 70). Always say "about"; your language may put % before or after the number', 40],
   ['rank.', 'Ranking panel after a win and the rankings hub (never invent players or scores)'],
   ['rank.records.', 'Ranking panel: a row label of the personal records card', 22],
   ['group.', 'Group challenge (FB group play); in participation mode never say "won"'],
@@ -279,6 +282,23 @@ const NOTES: Readonly<Partial<Record<I18nKey, Partial<KeyMeta>>>> = {
   'game.hearts.a11y': { description: 'Screen-reader label of the lives pill: the fish are the lives' },
   'howto.hearts': { description: 'How to play: the fish are the lives; a wrong cat costs one' },
   'victory.next': { description: 'The wide orange button to the next level (24 px)', maxLength: 18 },
+  // UI batch (2026-10-13, victory): the lines' notes (the groups victory.line. and victory.stat. give the width, 40).
+  'victory.line.flawless': { description: 'No wrong cat and no helper at all (no hint, kitty or mouse) on this board' },
+  'victory.line.noSlips': { description: 'Not one wrong cat on this board (helpers may have been used)' },
+  'victory.line.noHelp': { description: 'Solved without using a hint or a kitty (the two paid helpers)' },
+  'victory.line.best': { description: 'A new personal best time for boards of this size; {size} = "9×9", {time} = "2:41"' },
+  'victory.line.hard': { description: 'The player beat a level marked Hard ("Hard" as on the level badge)' },
+  'victory.line.revive': { description: 'The player ran out of fish (lives), got one back with a video and still finished' },
+  'victory.line.retry': { description: 'The player solved the board after pressing Retry' },
+  'victory.line.run.one': { description: 'How many correct cats in a row ended the board (5 or more)' },
+  'victory.line.run.other': { description: 'How many correct cats in a row ended the board (5 or more)' },
+  'victory.line.levels.one': { description: 'How many levels THIS player has solved (their own count)' },
+  'victory.line.levels.other': { description: 'How many levels THIS player has solved (their own count)' },
+  'victory.line.dailies.one': { description: 'How many daily puzzles THIS player has solved (their own count)' },
+  'victory.line.dailies.other': { description: 'How many daily puzzles THIS player has solved (their own count)' },
+  'victory.stat.dailyTop': { description: 'Daily puzzle: the player was among roughly the fastest {pct} percent of today\'s solvers (e.g. 10)' },
+  'victory.stat.dailyFaster': { description: 'Daily puzzle: the player was faster than roughly {pct} percent of today\'s solvers (e.g. 60)' },
+  'victory.stat.level': { description: 'A level: the player was faster than roughly {pct} percent of players on this level (an estimate)' },
   // Phase 2c.1 (§10.7): the level points.
   'game.points.a11y': { description: 'Screen-reader label of the level-points counter in the game HUD (never shown): the running total of this level' },
   'a11y.points.one': { description: 'A short sentence read right after "Cat placed. 3 of 8.": the level\'s running points total ("2,016 points.")' },

@@ -221,7 +221,7 @@ function victoryProps(over: Partial<VictoryProps> = {}): VictoryProps {
     level: 37,
     nextLevel: 38,
     pointsEarned: levelTotal(8),
-    kept: { fish: 3, max: 3, gained: 3, total: 42, kind: 'week' },
+    kept: { fish: 3, max: 3 },
     daily: null,
     event: null,
     buttonDelayMs: cfg.fx.winButtonDelayMs,
@@ -229,9 +229,10 @@ function victoryProps(over: Partial<VictoryProps> = {}): VictoryProps {
     bannerReserved: banner,
     streak: null,
     dailyReward: null,
+    // UI batch (victory): the praise and statistic lines (app/victory-lines.ts picks them in the game).
+    lines: [{ id: 'flawless' }, { id: 'statLevel', pct: 70 }],
     now: () => Date.now(),
     onPrimary: log('onPrimary'),
-    onHome: log('onHome'),
     ...over,
   };
 }
@@ -319,7 +320,7 @@ function winFlow(level: number, opts: { kept: number; tutorial: boolean }): void
         nextLevel: opts.tutorial ? 2 : level + 1,
         variant: opts.tutorial ? 'tutorial' : 'level',
         pointsEarned: pts,
-        kept: opts.tutorial ? null : { fish: kept, max: 3, gained: kept, total, kind: 'week' },
+        kept: opts.tutorial ? null : { fish: kept, max: 3 },
       }),
     );
   }
@@ -490,7 +491,7 @@ const VIEWS: Record<string, () => void> = {
   'victory-hard': () => {
     const pts = levelTotal(solved(40).puzzle.n, 1); // one mistake: 2 fish kept
     game(gameView(solved(40), { status: 'won', inputLocked: true, hearts: 2, points: pts }));
-    openOverlay(createVictoryScreen(), victoryProps({ level: 40, nextLevel: 41, pointsEarned: pts, kept: { fish: 2, max: 3, gained: 2, total: 41, kind: 'week' } }));
+    openOverlay(createVictoryScreen(), victoryProps({ level: 40, nextLevel: 41, pointsEarned: pts, kept: { fish: 2, max: 3 }, lines: [{ id: 'hard' }, { id: 'noHelp' }] }));
   },
   'victory-daily': () => {
     const pts = levelTotal(solved(80).puzzle.n, 1); // one mistake: 2 fish kept
@@ -500,9 +501,10 @@ const VIEWS: Record<string, () => void> = {
       victoryProps({
         variant: 'daily',
         level: null,
-        nextLevel: null,
+        nextLevel: 81,
         pointsEarned: pts,
-        kept: { fish: 2, max: 3, gained: 2, total: 44, kind: 'week' },
+        kept: { fish: 2, max: 3 },
+        lines: [{ id: 'statFaster', pct: 60 }, { id: 'noHelp' }],
         daily: { dateKey: '2026-10-06', ms: 252_000, mistakes: 1, hints: 0, kitties: 0, nextPuzzleAt: Date.now() + (7 * 60 + 48) * 60_000 },
       }),
     );
@@ -516,7 +518,8 @@ const VIEWS: Record<string, () => void> = {
         level: null,
         nextLevel: null,
         pointsEarned: levelTotal(solved(37).puzzle.n),
-        kept: { fish: 3, max: 3, gained: 3, total: 45, kind: 'week' },
+        kept: { fish: 3, max: 3 },
+        lines: [{ id: 'flawless' }],
         event: { nameKey: lantern.nameKey, index: 6, total: 21, solvedBefore: 6, solvedAfter: 7, reward: { hints: 2 }, last: false },
       }),
     );

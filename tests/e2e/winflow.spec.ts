@@ -62,6 +62,20 @@ async function playNext(page: Page): Promise<void> {
   await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
 }
 
+/** UI batch (victory): the victory has no Home: its primary starts the next level, whose own Home goes Home. */
+async function homeAfterVictory(page: Page): Promise<void> {
+  const before = await page.evaluate(() => (window as TestWindow).__mewdoku?.state()?.puzzle.id ?? '');
+  const next = page.locator('[data-overlay="victory"] .victory__primary');
+  await expect(next).toBeEnabled({ timeout: 3000 });
+  await next.click();
+  await page.waitForFunction((id) => {
+    const s = (window as TestWindow).__mewdoku?.state();
+    return !!s && s.puzzle.id !== id && s.status === 'playing';
+  }, before);
+  await page.locator('.top-bar--game .top-bar__btn--home').click();
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');
+}
+
 /** Solves through the hook; returns performance.now() at WON (page clock). */
 async function solve(page: Page): Promise<number> {
   return page.evaluate(() => {
@@ -184,7 +198,10 @@ test('win with 3 fish kept: rewards at once, the lives fly to "this week" (+3), 
   await expect(primary).toHaveText(/Level 3/);
   await expect(primary).toBeEnabled({ timeout: 2000 });
   await expect(victory.locator('.victory__kept')).toHaveAttribute('data-count', '3');
-  await expect(victory.locator('.victory__period')).toHaveText('This week: 3');
+  // UI batch (victory): the fish alone (no "+3", no "This week: 3"), no Home; praise lines under the subtitle.
+  await expect(victory.locator('.victory__kept')).toHaveText('');
+  await expect(victory.locator('.victory__period, .victory__plus, .victory__home')).toHaveCount(0);
+  await expect(victory.locator('.victory__line:not([hidden])').first()).toBeVisible();
   await expect(victory.locator('.victory__points')).toHaveText(`${run.text} points`);
   await expect(victory.getByText(/Perfect ×/)).toHaveCount(0); // 2c.1: no "Perfect ×N"
   // §2.7: no fish pill, no "+" (shop).
@@ -337,12 +354,17 @@ test('two wins: save.period.total = 6 and points.total = both levels\' totals; s
   await tapPanel(page);
   await expect(page.locator('[data-overlay="victory"]').getByText(/Perfect ×/)).toHaveCount(0);
   await expect(page.locator('[data-overlay="victory"] .victory__points')).toHaveText(`${second.text} points`);
-  await expect(page.locator('[data-overlay="victory"] .victory__period')).toHaveText('This week: 6');
   const s = await stored(page);
   expect(s?.period).toMatchObject({ key: periodKeyAt(Date.now()), total: 6 });
   expect(s?.points.total).toBe(first.total + second.total);
   expect(s?.streak).toEqual({ current: 0, best: 0 });
-  await page.locator('[data-overlay="victory"] .victory__home').click();
+  // UI batch (victory): the victory has no Home (and no "This week: 6"): the next level, then the game's own Home.
+  await expect(page.locator('[data-overlay="victory"] .victory__home, [data-overlay="victory"] .victory__period')).toHaveCount(0);
+  const next = page.locator('[data-overlay="victory"] .victory__primary');
+  await expect(next).toBeEnabled({ timeout: 3000 });
+  await next.click();
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.puzzle.id === 'L4');
+  await page.locator('.top-bar--game .top-bar__btn--home').click();
   await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');
   await expect(page.locator('.screen--home button.ladder-chip[data-state="records"]') /* 2e §2.9: the period pill is the records chip (a button) */).toHaveAttribute('aria-label', '6 fish this week');
 });
@@ -483,16 +505,8 @@ test('PAR-6 (UI batch 2026-10-13): the day\'s first win — the Daily Streak scr
   expect(end[0]).toMatch(/^Level 3(?!\d)/);
 });
 
-test('PAR-6: Home from the victory never shows the solved board again', async ({ page }) => {
-  await toVictory(page);
-  await startSampler(page);
-  await page.locator('[data-overlay="victory"] .victory__home').click();
-  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');
-  await page.waitForTimeout(400);
-  const samples = await stopSampler(page);
-  const stale = samples.filter((s) => s.games.some((g) => g.op > 0.02) && s.vic < 0.98);
-  expect(stale).toEqual([]);
-});
+// UI batch (victory): "PAR-6: Home from the victory" is gone with the victory's Home button (the user: "remove access
+// to home screen, let the default button be the next level"); the primary's crossfade above still covers PAR-6.
 
 // ── review UX-12, re-based in 2d (§1.13 critic C10): the in-game "+3" sits inside the period counter, at the
 // inline end of its total; it never covers that total, the bar's Level column or its Score column ──
@@ -588,7 +602,6 @@ test('the ranking: the panel at the same time with the bracket list; the next wi
     expect(values[0], `win ${k}`).toBe(String(before));
     expect(values.at(-1), `win ${k}`).toBe(String(before + 3));
     await tapPanel(page);
-    await page.locator('[data-overlay="victory"] .victory__home').click();
-    await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');
+    await homeAfterVictory(page);
   }
 });

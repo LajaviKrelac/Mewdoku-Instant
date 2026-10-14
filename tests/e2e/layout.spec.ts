@@ -376,7 +376,7 @@ test('keyboard only: Enter continues the panel, Enter on "Level N", and Settings
 
 // ── 2b review fixes (R): A11Y-FOCUS-1 — focus is never lost through a screen change (spec §7) ──
 
-test('keyboard only: focus moves into every new screen (event card → event, event Home → Home, victory Home → Home)', async ({ page }, info) => {
+test('keyboard only: focus moves into every new screen (event card → event, event Home → Home, victory "Level N" → the board, its Back → Home)', async ({ page }, info) => {
   test.skip(info.project.name !== 'web-1280', 'desktop keyboard only');
   // Inside our Lantern Walk (2026-11-13 → 27 UTC), so Home has the event card.
   await page.clock.setFixedTime(new Date('2026-11-14T12:00:00Z'));
@@ -395,7 +395,8 @@ test('keyboard only: focus moves into every new screen (event card → event, ev
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');
   await expect(page.locator('.home__play')).toBeFocused(); // its [data-autofocus] (was: <body>)
-  // A level, won, then Home from the victory screen.
+  // A level, won. UI batch (victory): the victory has no Home; its "Level N" by keyboard → focus in the next board,
+  // whose Back → Home.
   await page.locator('.home__play').focus();
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
@@ -403,9 +404,17 @@ test('keyboard only: focus moves into every new screen (event card → event, ev
   const panel = page.locator('[data-overlay="ranking"]');
   await expect(panel.locator('.ranking__tap')).toBeEnabled({ timeout: 10_000 });
   await page.keyboard.press('Enter');
-  const home = page.locator('[data-overlay="victory"] .victory__home');
-  await expect(home).toBeVisible();
-  await home.focus();
+  const primary = page.locator('[data-overlay="victory"] .victory__primary');
+  await expect(primary).toBeEnabled({ timeout: 3000 });
+  await expect(page.locator('[data-overlay="victory"] .victory__home')).toHaveCount(0);
+  await primary.focus();
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => {
+    const g = (window as TestWindow).__mewdoku?.state();
+    return g?.puzzle.id === 'L16' && g.status === 'playing';
+  });
+  await expect.poll(() => focusIn('.screen--game')).toBe(true); // was: <body>
+  await page.locator('.top-bar--game').getByRole('button', { name: 'Back' }).focus();
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');
   await expect(page.locator('.home__play')).toBeFocused(); // was: <body>
@@ -1133,11 +1142,12 @@ test('Phase 2e: the result card (a paid place, ×2) fits inside its dialog at 32
 });
 
 /**
- * Audit B1: the daily victory on a streak's day 7 carries the most lines of any victory (Solved, the stats, "Next
- * puzzle", the streak row with its reward line, the points and the fish pill). At 320 × 568 every line must sit above
- * the sticky Done (fit step 4 with the banner band), in English and German, on the records path and with the ranking's
- * "Your total". UI batch (2026-10-13): the streak row is off (dayStreak.victoryRow); the Daily Streak screen that Done
- * opens carries day 7 and its reward, and it must fit the same way (Continue fully on screen, above the band).
+ * Audit B1: the daily victory on a streak's day 7 carries the most lines of any victory (Solved, the praise and
+ * statistic lines (UI batch), the stats, "Next puzzle", the points and the fish pill). At 320 × 568 every line must sit
+ * above the sticky primary ("Level N"; it was Done) (fit step 4/5 with the banner band), in English and German, on the
+ * records path and with the ranking. UI batch (2026-10-13): the streak row is off (dayStreak.victoryRow); the Daily
+ * Streak screen that the primary opens carries day 7 and its reward, and it must fit the same way (Continue fully on
+ * screen, above the band).
  */
 test('Phase 2e (audit B1): the daily victory on a streak\'s day 7 at 320 × 568 — every line above Done, nothing to scroll (en, de; records and ranking)', async ({ page }, info) => {
   test.skip(info.project.name !== 'web-320', 'the small phone');
@@ -1184,7 +1194,7 @@ test('Phase 2e (audit B1): the daily victory on a streak\'s day 7 at 320 × 568 
       const scroller = document.querySelector('.overlay[data-overlay="victory"]') as HTMLElement;
       const actions = (scroller.querySelector('.victory__actions') as HTMLElement).getBoundingClientRect();
       const out: string[] = [];
-      for (const sel of ['.victory__praise', '.victory__sub', '.victory__daily', '.victory__daily-reward', '.victory__streak', '.victory__streak-reward', '.victory__points', '.victory__kept']) {
+      for (const sel of ['.victory__praise', '.victory__sub', '.victory__daily', '.victory__lines', '.victory__daily-reward', '.victory__streak', '.victory__streak-reward', '.victory__points', '.victory__kept']) {
         const el = scroller.querySelector<HTMLElement>(sel);
         if (!el || el.closest('[hidden]')) continue;
         const b = el.getBoundingClientRect();

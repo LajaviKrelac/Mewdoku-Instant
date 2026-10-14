@@ -248,7 +248,7 @@ function victoryProps(over: Partial<VictoryProps> = {}): VictoryProps {
     level: 37,
     nextLevel: 38,
     pointsEarned: 7296,
-    kept: { fish: 2, max: 3, gained: 2, total: 14, kind: 'ladder' },
+    kept: { fish: 2, max: 3 },
     daily: null,
     event: null,
     buttonDelayMs: cfg.fx.winButtonDelayMs,
@@ -258,7 +258,6 @@ function victoryProps(over: Partial<VictoryProps> = {}): VictoryProps {
     dailyReward: null,
     now: () => 0,
     onPrimary: vi.fn(),
-    onHome: vi.fn(),
     ...over,
   };
 }
@@ -315,35 +314,27 @@ describe('victory: the streak row, the daily reward line and the ranking total (
     expect(q(v.el, '.victory__daily-reward').hidden).toBe(true);
   });
 
-  it('the kept-fish row in ranking mode: "Your total: 14", never "this week"', () => {
+  it('the kept-fish row is the fish alone (UI batch: no "Your total: 14"); the panel\'s ranking texts stay', () => {
     const v = createVictoryScreen();
     document.body.appendChild(v.el);
     v.open(victoryProps());
-    expect(q(v.el, '.victory__period').textContent).toBe('Your total: 14');
-    expect(q(v.el, '.victory__kept').getAttribute('aria-label')).toBe('You kept 2 fish. Your ranking total: 14.');
+    expect(v.el.querySelector('.victory__period, .victory__waiting, .victory__plus')).toBeNull();
+    expect(v.el.textContent).not.toMatch(/Your total|waiting/);
+    expect(q(v.el, '.victory__kept').getAttribute('aria-label')).toBe('2 of 3 fish left');
+    // The post-win panel still names the ranking total with these.
     expect(periodTotalText('ladder', 14)).toBe('Your total: 14');
     expect(periodPillLabel('ladder', 1)).toBe('1 fish in the daily ranking');
     expect(periodResultText('ladder', 2, 14)).toBe('+2 fish · Your total: 14');
     expect(fishKeptText('ladder', 1, 9)).toBe('You kept 1 fish. Your ranking total: 9.');
   });
 
-  it('[audit B9 / A-H1] fish waiting to be sent: the server\'s total, then "+3 waiting" (never added in; my row says the same)', () => {
-    const v = createVictoryScreen();
-    document.body.appendChild(v.el);
-    v.open(victoryProps({ kept: { fish: 3, max: 3, gained: 3, total: 3, kind: 'ladder', waiting: 3 } }));
-    expect(q(v.el, '.victory__period-text').textContent).toBe('Your total: 3');
-    expect(q(v.el, '.victory__waiting').hidden).toBe(false);
-    expect(q(v.el, '.victory__waiting').textContent).toBe('+3 waiting'); // a line of its own: the pill fits 320 px
-    expect(q(v.el, '.victory__kept').getAttribute('aria-label')).toBe('You kept 3 fish. Your ranking total: 3. +3 waiting');
+  it('[audit B9 / A-H1] fish waiting to be sent: the panel shows the server\'s total, then "+3 waiting" (never added in)', () => {
+    // UI batch (victory): the victory no longer shows a total or the waiting fish; the panel's texts stay.
     expect(periodTotalText('ladder', 3, 3)).toBe('Your total: 3 · +3\u00A0waiting');
     expect(periodResultText('ladder', 3, 3, 3)).toBe('+3 fish · Your total: 3 · +3\u00A0waiting');
     expect(periodResultText('ladder', 0, 3, 2)).toBe('Your total: 3 · +2\u00A0waiting');
     expect(periodResultText('ladder', 3, 6, 0)).toBe('+3 fish · Your total: 6'); // counted: no waiting part
     expect(periodResultText('week', 3, 42, 5)).toBe('+3 fish · This week: 42'); // the records never carry it
-    // counted: no waiting line
-    v.update(victoryProps({ kept: { fish: 3, max: 3, gained: 3, total: 6, kind: 'ladder', waiting: 0 } }));
-    expect(q(v.el, '.victory__period').textContent).toBe('Your total: 6');
-    expect(q(v.el, '.victory__waiting').hidden).toBe(true);
   });
 });
 

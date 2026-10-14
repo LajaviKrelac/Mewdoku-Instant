@@ -749,6 +749,40 @@
   color: rgba(255, 255, 255, 0.82);
 }
 
+/* UI batch (2026-10-13, victory): the praise and statistic lines (victory-line-text.ts) under the subtitle, and in
+   the daily under its time: soft pills of light text on the stage; a long line wraps balanced inside its pill. */
+.victory__lines {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.victory__line {
+  max-width: 100%;
+  padding: 4px 14px;
+  border-radius: var(--radius-m);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-weight: 600;
+  font-size: var(--fs-m);
+  line-height: 1.3;
+  text-wrap: balance;
+}
+
+.victory__line + .victory__line {
+  margin-top: 6px;
+}
+
+.victory__daily .victory__lines {
+  margin-top: 6px;
+}
+
+.victory__daily .victory__lines + .victory__stats {
+  margin-top: 6px;
+}
+
 .victory__next {
   display: inline-block;
   margin-top: 10px;
@@ -762,7 +796,7 @@
 
 /* Phase 2c.1 §10.3: the reward block, two white pills. Row 1, the level's points total: the gold
    sparkle (icon-points) and "7,296 points". Row 2 (Phase 2c §2.7), the fish kept: the lives of this
-   attempt (kept fish full, lost ones as the empty outline), "+2" and "This week: 42". */
+   attempt (kept fish full, lost ones as the empty outline); UI batch: no "+2" and no total any more. */
 .victory__reward {
   display: flex;
   flex-direction: column;
@@ -805,8 +839,7 @@
   display: inline-flex;
   align-items: center;
   max-width: 100%;
-  padding: 6px 16px;
-  padding-inline-start: 10px;
+  padding: 6px 14px;
   border-radius: var(--radius-pill);
   background: var(--card);
   box-shadow: var(--shadow-1);
@@ -828,31 +861,6 @@
 
 .victory__fish + .victory__fish {
   margin-inline-start: -4px;
-}
-
-.victory__plus {
-  flex: none;
-  margin-inline-start: 8px;
-  margin-inline-end: 12px;
-  color: var(--accent-text);
-  font-size: var(--fs-xl);
-}
-
-.victory__period {
-  min-width: 0;
-  padding-inline-start: 12px;
-  border-inline-start: 1px solid var(--line-2);
-  color: var(--ink-2);
-  font-size: var(--fs-m);
-  white-space: nowrap;
-}
-
-/* Audit B9 / A-H1: fish waiting to be sent, under the server's total (never added into it). */
-.victory__waiting {
-  display: block;
-  color: var(--accent-text);
-  font-size: var(--fs-s);
-  line-height: 1.15;
 }
 
 .victory__event {
@@ -929,26 +937,14 @@
   height: calc(var(--banner-reserve, 58px) + var(--banner-clear, 16px) + var(--safe-bottom));
 }
 
-/* The wide orange "Level N" (§2.5): column − 32 px, 64 px tall, a 24 px label. */
+/* The wide orange "Level N" (§2.5): column − 32 px, 64 px tall, a 24 px label. UI batch: the only button (no Home). */
 .victory__primary.btn {
   width: 100%;
   min-height: 64px;
   font-size: 1.5rem;
 }
 
-.victory__home {
-  margin-top: 8px;
-}
-
-/* Light ghost and focus ring on the dark screen (as on the fail card). */
-.victory__home.btn--ghost {
-  color: rgba(255, 255, 255, 0.9);
-}
-
-.victory__home.btn--ghost:active:not([aria-disabled='true']) {
-  background: rgba(255, 255, 255, 0.12);
-}
-
+/* The focus ring on the dark screen (as on the fail card). */
 .overlay[data-overlay='victory'] .btn:focus-visible {
   outline-color: var(--tap-text);
 }
@@ -998,8 +994,17 @@
   margin-top: 6px;
 }
 
-.victory[data-tight] .victory__home {
-  margin-top: 2px;
+/* UI batch (victory): tighter lines from step 2; one size smaller from step 4; step 5 keeps the first line only. */
+.victory[data-tight] .victory__lines {
+  margin-top: 4px;
+}
+
+.victory[data-tight] .victory__line {
+  padding: 2px 12px;
+}
+
+.victory[data-tight] .victory__line + .victory__line {
+  margin-top: 4px;
 }
 
 .victory[data-fit='3'] .victory__rays {
@@ -1007,28 +1012,44 @@
 }
 
 /* Step 4 (audit B1: the daily victory with the streak row and its reward at 320 × 568): no hero art (it is
-   decorative), a tighter streak row; every line of text stays. */
-.victory[data-fit='4'] .victory__stage {
+   decorative), a tighter streak row; every line of text stays. Step 5 (UI batch, victory: the same daily with the
+   banner band and two praise lines) is step 4 with the first praise line only (the dialog's description follows). */
+.victory[data-fit='4'] .victory__stage,
+.victory[data-fit='5'] .victory__stage {
   display: none;
 }
 
-.victory[data-fit='4'] .victory__praise {
+.victory[data-fit='4'] .victory__praise,
+.victory[data-fit='5'] .victory__praise {
   margin-bottom: 6px;
 }
 
-.victory[data-fit='4'] .victory__streak .streak-steps {
+.victory[data-fit='4'] .victory__streak .streak-steps,
+.victory[data-fit='5'] .victory__streak .streak-steps {
   margin-top: 3px;
   padding: 2px 8px;
 }
 
-.victory[data-fit='4'] .victory__streak .streak-step {
+.victory[data-fit='4'] .victory__streak .streak-step,
+.victory[data-fit='5'] .victory__streak .streak-step {
   width: 18px;
   height: 18px;
 }
 
 .victory[data-fit='4'] .victory__daily-reward,
-.victory[data-fit='4'] .victory__streak-reward {
+.victory[data-fit='4'] .victory__streak-reward,
+.victory[data-fit='5'] .victory__daily-reward,
+.victory[data-fit='5'] .victory__streak-reward {
   margin-top: 3px;
+}
+
+.victory[data-fit='4'] .victory__line,
+.victory[data-fit='5'] .victory__line {
+  font-size: var(--fs-s);
+}
+
+.victory[data-fit='5'] .victory__line + .victory__line {
+  display: none;
 }
 
 /* ── Shop sheet (§8.5; Phase 2c §5.2: the Buy section only, no balance and no swaps) ── */
@@ -1251,6 +1272,12 @@
 
   .victory:not([data-fit]) {
     --v-praise: 2rem;
+  }
+
+  /* UI batch (victory): a praise line of about 40 characters stays on one line at 320 px. */
+  .victory__line {
+    padding: 3px 12px;
+    font-size: var(--fs-s);
   }
 
   .shop__name {
@@ -1610,7 +1637,7 @@
 
 /* ── Victory: the daily reward line and the streak row (spec §5.3, §6.1) ── */
 /* The sticky footer's ::after (stage colour) starts right under the actions: room for the primary's ring and
-   glow when no Home link follows it (the daily variant), so the ring is not cut. */
+   glow (UI batch: no Home link follows it in any variant), so the ring is not cut. */
 .victory__actions {
   padding-bottom: 6px;
 }

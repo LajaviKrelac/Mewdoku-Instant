@@ -1054,6 +1054,42 @@ export interface GameConfig {
     /** The card says "Ends soon!" in the last this-many hours (§4.6). */
     readonly cardEndsSoonHours: number;
   };
+  /**
+   * UI batch (2026-10-13, victory): the praise and statistic lines under the victory's subtitle (app/victory-lines.ts,
+   * from the player's own game) and the solve-time estimate behind "faster than about N%" (game/solve-time-model.ts;
+   * spec §0.4 H-2a: approximate, rounded, worded "about", only under victory.stat.*).
+   */
+  readonly victory: {
+    /** At most this many lines under the subtitle (a statistic counts as one). */
+    readonly maxLines: number;
+    /** "N cats in a row" after a slip: from a run this long. */
+    readonly runMin: number;
+    /** The levels-solved line (the fallback of a level win): from this many levels. */
+    readonly milestoneMin: number;
+    /** A daily statistic only from this "faster than" percentage (never a discouraging number). */
+    readonly statMinPct: number;
+    /** A level's estimated statistic only from this percentage (it then takes the second line). */
+    readonly levelStatMinPct: number;
+    /** "About the top N%" from this "faster than" percentage on (N = 100 − it); below it, "faster than about N%". */
+    readonly topFromPct: number;
+    /** The server's daily standing counts from this many other solvers (mirrors the server's dailyStats.minSolvers). */
+    readonly minSolvers: number;
+    /** The estimate: a log-normal solve time per board size and grade (ours, not measured). */
+    readonly model: {
+      /** Median solve seconds at grade 3 for boards of size 4, 5, … 12 (index n − 4). */
+      readonly medianSec: readonly number[];
+      /** Multiplier of the median per grade 1 … 5. */
+      readonly gradeFactor: readonly number[];
+      /** Multiplier of the median on a Hard level. */
+      readonly hardFactor: number;
+      /** Spread: σ of ln(seconds). */
+      readonly sigma: number;
+      /** Every percentage is floored to this step, then clamped to [minPct, maxPct]. */
+      readonly stepPct: number;
+      readonly minPct: number;
+      readonly maxPct: number;
+    };
+  };
   /** Rankings (phase2b §2.4, §5). Never fabricate a player, rank, score or row. */
   readonly rank: {
     /** Deadline for every provider call, counted from WON (§2.2, §5.4). */
@@ -1609,6 +1645,24 @@ export const cfg: GameConfig = deepFreeze({
     combo: { windowMs: 10_000, windowStepMs: 2_000, minWindowMs: 2_000, bonusPct: 10 } },
   period: { kind: 'week', pointsPerFish: 1, modes: ['level', 'daily', 'event'], max: 99_999 },
   events: { teaseHours: 72, cardEndsSoonHours: 48 },
+  victory: {
+    maxLines: 2,
+    runMin: 5,
+    milestoneMin: 2,
+    statMinPct: 25,
+    levelStatMinPct: 50,
+    topFromPct: 75,
+    minSolvers: 20,
+    model: {
+      medianSec: [25, 40, 60, 85, 115, 150, 190, 235, 285],
+      gradeFactor: [0.7, 0.85, 1, 1.25, 1.55],
+      hardFactor: 1.1,
+      sigma: 0.55,
+      stepPct: 5,
+      minPct: 5,
+      maxPct: 95,
+    },
+  },
   rank: {
     fetchTimeoutMs: 3000,
     topCount: 10,

@@ -152,7 +152,7 @@ function victoryProps(over: Partial<VictoryProps> = {}): VictoryProps {
     level: 37,
     nextLevel: 38,
     pointsEarned: 55,
-    kept: { fish: 3, max: 3, gained: 3, total: 42, kind: 'week' },
+    kept: { fish: 3, max: 3 },
     daily: null,
     event: null,
     buttonDelayMs: cfg.fx.winButtonDelayMs,
@@ -162,7 +162,6 @@ function victoryProps(over: Partial<VictoryProps> = {}): VictoryProps {
     dailyReward: null,
     now: () => 0,
     onPrimary: vi.fn(),
-    onHome: vi.fn(),
     ...over,
   };
 }
@@ -395,9 +394,24 @@ describe('victory screen review fixes', () => {
     // A short phone: the content is 120 px too tall, each step saves 60 px.
     vi.spyOn(v.el, 'clientHeight', 'get').mockReturnValue(568);
     vi.spyOn(v.el, 'scrollHeight', 'get').mockImplementation(() => 688 - 60 * Number(root.dataset.fit ?? 0));
-    v.open(victoryProps({ variant: 'daily', level: null, nextLevel: null, bannerReserved: true, daily: { dateKey: '2026-11-16', ms: 61_000, mistakes: 0, hints: 0, kitties: 0, nextPuzzleAt: DAY } }));
+    v.open(victoryProps({ variant: 'daily', level: null, nextLevel: 38, bannerReserved: true, daily: { dateKey: '2026-11-16', ms: 61_000, mistakes: 0, hints: 0, kitties: 0, nextPuzzleAt: DAY } }));
     expect(root.dataset.fit).toBe('2');
     expect(root.hasAttribute('data-banner')).toBe(true);
+  });
+
+  it('[UI batch, victory] the last step keeps the first praise line only, and the description follows', () => {
+    const v = createVictoryScreen();
+    document.body.appendChild(v.el);
+    const root = q(v.el, '.victory');
+    vi.spyOn(v.el, 'clientHeight', 'get').mockReturnValue(568);
+    vi.spyOn(v.el, 'scrollHeight', 'get').mockReturnValue(2000); // never fits
+    v.open(victoryProps({ lines: [{ id: 'flawless' }, { id: 'statLevel', pct: 70 }] }));
+    expect(root.dataset.fit).toBe(String(FIT_LEVELS));
+    expect(FIT_LEVELS).toBe(5);
+    const [first, second] = Array.from(v.el.querySelectorAll<HTMLElement>('.victory__line')).map((e) => e.id);
+    const described = (root.getAttribute('aria-describedby') ?? '').split(' ');
+    expect(described).toContain(first);
+    expect(described).not.toContain(second);
   });
 });
 

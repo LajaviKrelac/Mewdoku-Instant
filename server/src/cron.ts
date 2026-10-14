@@ -100,6 +100,8 @@ export async function runCron(s: Services, now: number, opts: CronOptions = {}):
         ipQuotaDayBefore: utcDateKey(now - (r.ipQuotaDays - 1) * DAY),
         statsDayBefore: utcDateKey(now - r.statsDays * DAY),
         tombstoneUntil: now + r.tombstoneDays * DAY,
+        // UI batch (victory): daily ids are 'D' + the date key, so this is every daily older than keepDays.
+        dailyTimesBefore: `D${utcDateKey(now - s.cfg.dailyStats.keepDays * DAY)}`,
       },
       s.cfg.cron.sweepChunk,
       s.cfg.cron.sweepChunksPerRun,

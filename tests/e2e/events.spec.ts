@@ -128,7 +128,15 @@ test('Lantern Walk: card → event screen → puzzle 1 → win → victory 1 / 2
   await expect(victory.locator('.victory__kept')).toHaveAttribute('data-count', '3');
   await expect(victory.locator('.victory__points')).toHaveText(`${total.toLocaleString('en-US')} points`);
   await expect(victory.getByText(/Perfect ×/)).toHaveCount(0); // `.victory__streak` is the 2e daily streak row
-  await victory.getByRole('button', { name: 'Home' }).click();
+  // UI batch (victory): no Home on the victory: "Play puzzle 2" starts the next puzzle, whose own Home goes Home.
+  await expect(victory.getByRole('button', { name: 'Home' })).toHaveCount(0);
+  await expect(victory.locator('.victory__primary')).toBeEnabled({ timeout: 3000 });
+  await victory.locator('.victory__primary').click();
+  await page.waitForFunction(() => {
+    const g = (window as TestWindow).__mewdoku?.state();
+    return !!g && g.puzzle.id.endsWith('/1') && g.status === 'playing';
+  });
+  await page.locator('.top-bar--game .top-bar__btn--home').click();
 
   await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');
   await expect(page.locator('.event-card')).toContainText('1 / 21 solved');

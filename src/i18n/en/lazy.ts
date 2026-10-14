@@ -117,6 +117,27 @@ export const enLazyUi2b = {
   // ── Victory screen (§2.5) ──────────────────────────────────────────────────
   'victory.next': 'Level {level}',
   'victory.eventReward': 'Event reward: {reward}',
+  // UI batch (2026-10-13): praise from the player's own game (app/victory-lines.ts picks; ours, never the
+  // original's words). Never "first try": these say what happened on this board.
+  'victory.line.flawless': 'No slips, no help: pure paw-work!',
+  'victory.line.noSlips': 'Not a single wrong cat on this board',
+  'victory.line.noHelp': 'Solved without a hint or a kitty',
+  // {size} = "9×9" (home.daily.size), {time} = "2:41".
+  'victory.line.best': 'New best for a {size} board: {time}',
+  'victory.line.hard': 'You tamed a Hard level!',
+  'victory.line.revive': 'Back from zero fish to the finish!',
+  'victory.line.retry': 'Another go, and you cracked it!',
+  'victory.line.run.one': '{count} cat in a row to finish',
+  'victory.line.run.other': '{count} cats in a row to finish',
+  'victory.line.levels.one': '{count} level solved so far!',
+  'victory.line.levels.other': '{count} levels solved so far!',
+  'victory.line.dailies.one': '{count} daily puzzle solved so far!',
+  'victory.line.dailies.other': '{count} daily puzzles solved so far!',
+  // Spec §0.4 H-2a: approximate and worded "about"; {pct} is rounded down to 5. The daily's comes from the ranking
+  // server's real solve times once it has its minimum of other solvers, else from our estimate; a level's is the estimate.
+  'victory.stat.dailyTop': "About the top {pct}% of today's solvers",
+  'victory.stat.dailyFaster': "Faster than about {pct}% of today's solvers",
+  'victory.stat.level': 'Faster than about {pct}% of players here',
 
   // ── Ranking panel and hub (§2.4, §5.5) ─────────────────────────────────────
   'rank.title.daily': "Today's fastest",

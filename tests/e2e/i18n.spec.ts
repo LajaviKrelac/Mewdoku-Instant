@@ -128,7 +128,7 @@ async function noClipping(page: Page): Promise<void> {
   const clipped = await page.evaluate(() => {
     const out: string[] = [];
     const sel =
-      '.btn, .btn__label, .chip, .chip__text, .top-bar__text, .top-bar__suffix, .overlay__title, .settings-row__label, .segmented__opt, .switch__state, .daily-card__text > *, .tool__badge, .shop__name, .victory__sub, .victory__praise, .ranking__title, .ranking__sub, .period-pill, .victory__kept, .victory__period, .victory__points, .points-pill, .points-pill__count, .ticker__text';
+      '.btn, .btn__label, .chip, .chip__text, .top-bar__text, .top-bar__suffix, .overlay__title, .settings-row__label, .segmented__opt, .switch__state, .daily-card__text > *, .tool__badge, .shop__name, .victory__sub, .victory__praise, .ranking__title, .ranking__sub, .period-pill, .victory__kept, .victory__line, .victory__points, .points-pill, .points-pill__count, .ticker__text';
     for (const el of Array.from(document.querySelectorAll<HTMLElement>(sel))) {
       if (el.closest('[hidden], [inert], .sr-only')) continue;
       const s = getComputedStyle(el);
@@ -249,6 +249,7 @@ for (const c of CASES) {
       await expect(page.locator('[data-overlay="victory"] .victory__primary')).toBeVisible({ timeout: 4000 });
       await expect(page.locator('[data-overlay="victory"] .victory__kept')).toBeVisible();
       await expect(page.locator('[data-overlay="victory"] .victory__points')).toBeVisible();
+      await expect(page.locator('[data-overlay="victory"] .victory__line:not([hidden])').first()).toBeVisible(); // UI batch: the praise lines
       await expect(page.locator('[data-overlay="victory"] .victory__streak')).toBeHidden();
       await page.waitForTimeout(800);
       await noOverflow(page);

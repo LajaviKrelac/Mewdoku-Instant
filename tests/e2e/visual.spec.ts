@@ -265,10 +265,11 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
     await page.waitForTimeout(1300); // the tap gate
     await page.mouse.click(10, (page.viewportSize()?.height ?? 600) - 10);
     await expect(page.locator('.overlay[data-overlay="victory"]')).toBeVisible({ timeout: 4000 });
-    // §2.7, 2c.1 §10.3: the level's total first, then the kept fish, "+3", "This week: 42"; no
-    // "Perfect ×N" and no fish pill.
+    // §2.7, 2c.1 §10.3: the level's total first, then the kept fish; no "Perfect ×N" and no fish pill. UI batch
+    // (victory): the fish alone (no "+3", no "This week: 42"), the praise lines under the subtitle, no Home.
     await expect(page.locator('.victory__kept')).toHaveAttribute('data-count', '3');
-    await expect(page.locator('.victory__period')).toHaveText('This week: 42');
+    await expect(page.locator('.victory__period, .victory__plus, .victory__home')).toHaveCount(0);
+    await expect(page.locator('.victory__line:not([hidden])').first()).toBeVisible();
     await expect(page.locator('.victory__points')).toHaveText(/^\d{1,2},\d{3} points$/);
     await expect(page.locator('.victory__score')).toHaveCount(0);
     // UI batch (2026-10-13): no victory streak row (dayStreak.victoryRow off); the Daily Streak screen follows the primary.
@@ -795,7 +796,8 @@ test.describe('short phones with the banner band (review UX-1, UX-2, I18N-LAYOUT
         await page.clock.runFor(1500);
         const top = await bannerTop(page);
         await clearOfBand(page, '.victory__primary', top);
-        if (variant !== 'daily') await clearOfBand(page, '.victory__home', top, 0);
+        // UI batch (victory): no Home under the primary in any variant.
+        await expect(page.locator('.victory__home')).toHaveCount(0);
         await shot(page, `review-victory-${variant}-banner-${size[1]}`);
       }
     });
@@ -853,7 +855,9 @@ test.describe('short phones with the banner band (review UX-1, UX-2, I18N-LAYOUT
       content:
         '.victory__rays{pointer-events:auto!important;background:#f00!important;-webkit-mask-image:none!important;mask-image:none!important;width:3000px!important;height:3000px!important;margin:-1500px 0 0 -1500px!important}',
     });
-    expect(await onTop(page, '.victory__kept .victory__period')).toBe(true);
+    // UI batch (victory): the kept-fish row is the fish alone; the praise line sits over the rays too.
+    expect(await onTop(page, '.victory__kept')).toBe(true);
+    expect(await onTop(page, '.victory__line:not([hidden])')).toBe(true);
     expect(await onTop(page, '.victory__points .victory__points-text')).toBe(true);
   });
 });

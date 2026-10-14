@@ -1,0 +1,47 @@
+{
+  "name": "wins.daily",
+  "request": {
+    "method": "POST",
+    "path": "/v1/wins",
+    "auth": true,
+    "body": {
+      "wins": [
+        {
+          "winId": "9b2e41d7-5c0a-4f3e-8a61-2d7c9e0b4f18",
+          "puzzleId": "D2026-10-12",
+          "source": "pack",
+          "contentVersion": "content-bb8a756dfaf9",
+          "cats": "46170352",
+          "fish": 3,
+          "mistakes": 0,
+          "revives": 0,
+          "hints": 0,
+          "kitties": 0,
+          "mice": 0,
+          "solveMs": 131480,
+          "playedAt": 1791799790000,
+          "clientVersion": "0.2.0"
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "results": [
+        {
+          "winId": "9b2e41d7-5c0a-4f3e-8a61-2d7c9e0b4f18",
+          "verdict": "accepted",
+          "points": 3,
+          "daily": {
+            "solvers": 37,
+            "slower": 22
+          }
+        }
+      ],
+      "windowPoints": 19,
+      "bracket": null,
+      "serverTime": 1791799801000
+    }
+  }
+}

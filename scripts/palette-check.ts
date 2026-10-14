@@ -344,7 +344,8 @@ export function uiContrast(): UiContrastRow[] {
     // The dark victory screen (review PAR-3): light text on opaque --stage, like the fail card.
     ['victory praise, large text (--title-on-dark on --stage)', T['title-on-dark'], T.stage, MIN_CONTRAST],
     ['victory lines (white .82 on --stage)', over(white, T.stage, 0.82), T.stage, MIN_TEXT_CONTRAST],
-    ['victory ghost Home (white .9 on --stage)', over(white, T.stage, 0.9), T.stage, MIN_TEXT_CONTRAST],
+    // UI batch (victory): the ghost Home is gone; the praise and statistic lines are white on a white .1 chip.
+    ['victory praise-line chips (white on white .1 over --stage)', white, over(white, T.stage, 0.1), MIN_TEXT_CONTRAST],
     ['victory event reward (--tap-text on --stage)', T['tap-text'], T.stage, MIN_TEXT_CONTRAST],
     ['victory focus ring (--tap-text on --stage)', T['tap-text'], T.stage, MIN_CONTRAST],
     ['victory event bar (--accent on white .14 over --stage)', T.accent, over(white, T.stage, 0.14), MIN_CONTRAST],
