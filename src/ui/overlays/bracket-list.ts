@@ -663,6 +663,7 @@ export function createBracketList(view: BracketListView, cb: BracketListCallback
     },
     playClimb,
     closeTip: () => tip.close(),
+    tipClosedBy: (ev) => tip.closedBy(ev),
     destroy() {
       destroyed = true;
       if (tick !== null) clearTimeout(tick);

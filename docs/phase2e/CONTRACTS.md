@@ -908,7 +908,7 @@ All additive unless marked; every row is in the code and covered by `npx tsc --n
 
 | Member | Note |
 |---|---|
-| `BracketListFactory`, `BracketListCallbacks` (`onHeart`; `onEditName` removed in the UI batch), `BracketListHandle` (`View` + `centerMe()`, optional `closeTip?()`: closes a chest's tooltip, true when one was open; UI batch), `RankingPanelProps.bracketList?` | The panel (overlay chunk) gets the list factory of the `ladder` chunk |
+| `BracketListFactory`, `BracketListCallbacks` (`onHeart`; `onEditName` removed in the UI batch), `BracketListHandle` (`View` + `centerMe()`, optional `closeTip?()`: closes a chest's tooltip, true when one was open; UI batch; optional `tipClosedBy?(ev)`: true when that pointerdown closed a chest's tooltip, so the panel does not continue on it and the sheet's scrim does not close the sheet, as with Esc; review F9), `RankingPanelProps.bracketList?` | The panel (overlay chunk) gets the list factory of the `ladder` chunk |
 | `RecordsReason` (`'local' \| 'unavailable' \| 'opted_out' \| 'paused'`), `LadderSheetProps.recordsReason?`, `streakBest?` | |
 | `LadderRulesView.durationMs?` | The info view's "lasts {hours} hours" from the server's rule (fallback 24) |
 | `O2BuyView` as specified; `FishTotalKind` (`PeriodPillProps.kind`; `VictoryProps.kept.kind` until the UI batch, which made `kept` `{ fish, max } \| null`, removed `onHome` and added `lines?`); `PillsView.showPeriodCounter(total, kind?)`; `HowToPlayProps.ladder?`, `streakDays?` | |
