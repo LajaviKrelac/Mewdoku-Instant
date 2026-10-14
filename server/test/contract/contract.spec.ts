@@ -117,6 +117,10 @@ async function realAnswers(): Promise<Map<string, { status: number; body: unknow
   await put('profile.listed', await many[2]!.rawProfile({ listed: false }));
   await put('me.ok', await many[3]!.rawMe());
   await put('me.delete', await many[4]!.rawMe('DELETE'));
+  // UI batch (victory): a daily win with its standing, once dailyStats.minSolvers (20) others solved that daily.
+  const today = `D${new Date(t.clock.now()).toISOString().slice(0, 10)}`;
+  for (const [i, p] of many.slice(10, 31).entries()) await p.win(today, { solveMs: 60_000 + i * 7_000 });
+  await put('wins.daily', await many[31]!.rawWins([makeWin(today, { playedAt: t.clock.now(), solveMs: 131_480 })]));
 
   // errors, one real answer per code
   const e = async (code: ErrorCode, r: Promise<Response>): Promise<void> => put(`error.${code}`, await r);
@@ -212,6 +216,12 @@ describe('contract: the golden fixtures match the real server', async () => {
       expect(v.rows.map((x) => x.rank), name).toEqual(v.rows.map((_, i) => i + 1));
     }
     expect((real.get('bracket.full')!.body as { rows: unknown[] }).rows).toHaveLength(50);
+  });
+
+  it('[UI batch, victory] wins.daily carries the daily standing: other solvers and the strictly slower ones', () => {
+    const w = parseWinsResponse(real.get('wins.daily')!.body)!;
+    // 21 others at 60 s + i × 7 s; 131.48 s is bucket 13: the ones at 140 s and up (buckets 14 …) were slower.
+    expect(w.results[0]).toEqual({ winId: expect.any(String), verdict: 'accepted', points: 3, daily: { solvers: 21, slower: 9 } });
   });
 
   it('wins.mixed carries the four verdicts the fixture shows', () => {

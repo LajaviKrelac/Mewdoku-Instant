@@ -43,6 +43,7 @@ import {
   type ClaimResponse,
   type ClaimView,
   type ConfigResponse,
+  type DailyStanding,
   type Grant,
   type HealthResponse,
   type HeartResponse,
@@ -301,7 +302,16 @@ export function parseSessionResponse(x: unknown): SessionResponse | null {
   };
 }
 
-/** A result with an unknown verdict is dropped (that win stays queued); an unknown reason is dropped from its result. */
+/** UI batch (victory): a daily standing, or undefined when absent or malformed (slower never above solvers). */
+function parseDailyStanding(x: unknown): DailyStanding | undefined {
+  if (!isObj(x) || !isInt(x.solvers, 1, 100_000_000) || !isInt(x.slower, 0, x.solvers)) return undefined;
+  return { solvers: x.solvers, slower: x.slower };
+}
+
+/**
+ * A result with an unknown verdict is dropped (that win stays queued); an unknown reason is dropped from its result;
+ * a malformed `daily` standing is dropped from its result (the client then shows its own estimate).
+ */
 export function parseWinsResponse(x: unknown): WinsResponse | null {
   if (!isObj(x) || !Array.isArray(x.results) || !isInt(x.windowPoints, 0, Number.MAX_SAFE_INTEGER) || !isMs(x.serverTime)) return null;
   const bracket = x.bracket === null ? null : parseBracketView(x.bracket);
@@ -310,7 +320,9 @@ export function parseWinsResponse(x: unknown): WinsResponse | null {
   for (const r of x.results as unknown[]) {
     if (!isObj(r) || !matches(r.winId, WIN_ID_RE) || !oneOf(r.verdict, WIN_VERDICTS) || !isInt(r.points, 0, 1000)) continue;
     const base = { winId: r.winId, verdict: r.verdict, points: r.points };
-    results.push(oneOf(r.reason, WIN_REASONS) ? { ...base, reason: r.reason } : base);
+    const withReason: WinResult = oneOf(r.reason, WIN_REASONS) ? { ...base, reason: r.reason } : base;
+    const daily = parseDailyStanding(r.daily);
+    results.push(daily === undefined ? withReason : { ...withReason, daily });
   }
   return { results, windowPoints: x.windowPoints, bracket, serverTime: x.serverTime };
 }

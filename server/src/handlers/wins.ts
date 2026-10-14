@@ -6,11 +6,13 @@
 // writes nothing and the wins are evaluated again, so the bracket cap and the budget hold under concurrency. A
 // join or create that lost its race left no trace and is tried again (≤ PLACE_TRIES; §1.5 steps 3–4). The answer
 // never reports a final verdict the database does not hold (audit A-S1): unplaced wins answer 503 and stay queued.
-import { MAX_WINS_PER_REQUEST, validateWinsRequest, type WinResult, type WinsResponse } from '../contract';
+// UI batch (victory): an accepted daily win adds to the day's solve-time rollup in the same batch, and a daily win
+// this request placed is answered with `daily` { solvers, slower } (H-2a) once the day has enough other solvers.
+import { MAX_WINS_PER_REQUEST, validateWinsRequest, type DailyStanding, type WinResult, type WinsResponse } from '../contract';
 import { bracketTimes } from '../core/brackets';
 import { newBracketId, newRowId } from '../core/ids';
 import { isBelowMin } from '../core/version';
-import { evaluateWins, type WinDecision } from '../core/wins';
+import { dailyBucket, evaluateWins, type WinDecision } from '../core/wins';
 import { authenticate } from '../http/auth';
 import type { Ctx } from '../http/context';
 import { fail, json } from '../http/errors';
@@ -24,6 +26,9 @@ const PLACE_TRIES = 8;
 const EVAL_TRIES = 4;
 /** retryAfterMs when a request could not be counted now (the client keeps its queue and sends it again). */
 const BUSY_RETRY_MS = 2_000;
+/** UI batch (victory): daily standings read per request (today's and yesterday's daily; the statement budget). */
+const DAILY_READS = 2;
+
 
 type Attempt =
   | { readonly kind: 'done'; readonly decisions: readonly WinDecision[]; readonly current: string | null; readonly flags: number }
@@ -48,6 +53,8 @@ export async function postWins(ctx: Ctx): Promise<Response> {
   // Wins this request placed (by winId), with the verdict they were placed with: an evaluation after a
   // conflict reads them back as stored ('duplicate') and the answer keeps the original verdict.
   const placedHere = new Map<string, WinDecision>();
+  /** UI batch (victory): the wins of this request that added one to the daily rollup (their own row is in the totals). */
+  const rolledHere = new Set<string>();
   let player = authed.player;
   let unknownLogged = false;
 
@@ -86,17 +93,21 @@ export async function postWins(ctx: Ctx): Promise<Response> {
     }
     const decisions = ev.decisions.map((d) => (d.verdict === 'duplicate' && placedHere.has(d.win.winId) ? (placedHere.get(d.win.winId) as WinDecision) : d));
     const toWrite = decisions.filter((d) => d.write);
-    const writes: WinWrite[] = toWrite.map((d) => ({
-      puzzleId: d.win.puzzleId,
-      winId: d.win.winId,
-      points: d.points,
-      fish: d.win.fish,
-      solveMs: d.win.solveMs,
-      n: d.n,
-      verdict: d.verdict === 'accepted_flagged' ? 'accepted_flagged' : 'accepted',
-      playedAt: d.win.playedAt,
-      clientVersion: d.win.clientVersion,
-    }));
+    const writes: WinWrite[] = toWrite.map((d) => {
+      const w: WinWrite = {
+        puzzleId: d.win.puzzleId,
+        winId: d.win.winId,
+        points: d.points,
+        fish: d.win.fish,
+        solveMs: d.win.solveMs,
+        n: d.n,
+        verdict: d.verdict === 'accepted_flagged' ? 'accepted_flagged' : 'accepted',
+        playedAt: d.win.playedAt,
+        clientVersion: d.win.clientVersion,
+      };
+      // UI batch (victory): an accepted (never a flagged) daily win joins the day's solve-time rollup.
+      return s.cfg.dailyStats.enabled && d.verdict === 'accepted' && d.ref?.mode === 'daily' ? { ...w, dailyBucket: dailyBucket(d.win.solveMs, s.cfg) } : w;
+    });
     const flags = decisions
       .filter((d) => !placedHere.has(d.win.winId))
       .flatMap((d) => d.flags)
@@ -140,6 +151,7 @@ export async function postWins(ctx: Ctx): Promise<Response> {
         // evaluate again (the stored rows then answer for themselves).
         toWrite.forEach((d, k) => {
           if (r.inserted[k] === true) placedHere.set(d.win.winId, d);
+          if (r.rolled[k] === true) rolledHere.add(d.win.winId);
         });
         if (r.inserted.some((x) => !x)) return { kind: 'conflict' };
         return done(into);
@@ -176,9 +188,24 @@ export async function postWins(ctx: Ctx): Promise<Response> {
     await s.store.suspend(player.key, newRowId(now, s.rng), now, `auto: ${player.flag_count + out.flags} flags`);
   }
 
+  // UI batch (victory, spec §0.4 H-2a): a daily win this request placed carries how many OTHER players of my pool
+  // solved that daily and how many of them were strictly slower (buckets above mine; my own bucket never counts as
+  // slower), once there are dailyStats.minSolvers of them. Newest first, at most DAILY_READS reads.
+  const standings = new Map<string, DailyStanding>();
+  if (s.cfg.dailyStats.enabled) {
+    const placed = decisions.filter((d) => d.ref?.mode === 'daily' && placedHere.get(d.win.winId) === d);
+    for (const d of placed.slice(-DAILY_READS)) {
+      const t = await s.store.dailyTotals(d.win.puzzleId, player.pool, dailyBucket(d.win.solveMs, s.cfg));
+      const solvers = t.total - (rolledHere.has(d.win.winId) ? 1 : 0);
+      if (solvers >= s.cfg.dailyStats.minSolvers) standings.set(d.win.winId, { solvers, slower: Math.max(0, Math.min(t.slower, solvers)) });
+    }
+  }
+
   const results: WinResult[] = decisions.map((d) => {
     const r = { winId: d.win.winId, verdict: d.verdict, points: d.verdict === 'rejected' || d.verdict === 'already_counted' ? 0 : d.points };
-    return d.reason === undefined ? r : { ...r, reason: d.reason };
+    const withReason = d.reason === undefined ? r : { ...r, reason: d.reason };
+    const daily = standings.get(d.win.winId);
+    return daily === undefined ? withReason : { ...withReason, daily };
   });
   for (const r of results) s.metrics.count('win', r.reason ? `${r.verdict}:${r.reason}` : r.verdict);
   ctx.fields.verdicts = results.map((r) => (r.reason ? `${r.verdict}:${r.reason}` : r.verdict)).join(',');

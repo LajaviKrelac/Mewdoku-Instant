@@ -71,8 +71,13 @@ describe('statements per invocation (Workers Free: 50; spec §1.2)', () => {
     await measure('session (returning, lazy finalise of 50)', () => x.signIn());
     const r = await measure('bracket (lazy finalise of 50)', () => y.bracket());
     expect(r.final).toBe(true);
+    // UI batch (victory): two of the ten are dailies (the rollup row and the standing read each).
     const w = await measure('wins: 10, lazy finalise of 50, new bracket', () =>
-      z.wins(Array.from({ length: 10 }, (_, i) => makeWin(`L${400 + i}`, { playedAt: t.clock.now() }))),
+      z.wins([
+        ...Array.from({ length: 8 }, (_, i) => makeWin(`L${400 + i}`, { playedAt: t.clock.now() })),
+        makeWin('D2026-11-15', { playedAt: t.clock.now() }),
+        makeWin('D2026-11-16', { playedAt: t.clock.now() }),
+      ]),
     );
     expect(w.results.filter((v) => v.verdict === 'accepted' || v.verdict === 'accepted_flagged').length).toBe(10);
     expect(t.count('SELECT COUNT(*) FROM brackets WHERE finalized_at IS NULL AND ends_at < ?', t.clock.now())).toBe(0);

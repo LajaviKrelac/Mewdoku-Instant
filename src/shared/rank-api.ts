@@ -186,11 +186,22 @@ export const WIN_REASONS: readonly WinReason[] = [
   'unverified',
   'soft_fast',
 ];
+/**
+ * UI batch (victory, spec §0.4 H-2a): a daily win's place among that daily's OTHER solvers in my pool, from the
+ * server's rollup of accepted solve times: `solvers` other players solved it, `slower` of them took strictly longer
+ * (a coarser bucket than mine). Sent only once the server's dailyStats.minSolvers is reached; absent otherwise.
+ */
+export interface DailyStanding {
+  readonly solvers: number;
+  readonly slower: number;
+}
 export interface WinResult {
   readonly winId: string;
   readonly verdict: WinVerdict;
   readonly reason?: WinReason;
   readonly points: number;
+  /** UI batch (victory): only on a daily win placed by this request, once the day has enough solvers (additive). */
+  readonly daily?: DailyStanding;
 }
 export interface WinsResponse {
   readonly results: readonly WinResult[]; // one per submitted win, same order

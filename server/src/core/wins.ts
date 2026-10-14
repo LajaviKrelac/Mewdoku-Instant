@@ -170,3 +170,9 @@ export function evaluateWins(input: EvaluateInput): EvaluateResult {
     unknownVersions: [...unknownVersions],
   };
 }
+
+/** UI batch (victory): a solve time's bucket in the daily rollup (dailyStats.bucketMs wide, the last one open-ended). */
+export function dailyBucket(solveMs: number, cfg: ServerConfig): number {
+  const width = Math.max(1, cfg.dailyStats.bucketMs);
+  return Math.max(0, Math.min(cfg.dailyStats.maxBucket, Math.floor(Math.max(0, solveMs) / width)));
+}

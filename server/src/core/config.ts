@@ -86,6 +86,23 @@ export interface ServerConfig {
     readonly ipQuotaDays: number;
     readonly statsDays: number;
   };
+  /**
+   * UI batch (victory, spec §0.4 H-2a): the daily percentile. Each accepted daily win adds one to its solve-time
+   * bucket (table daily_times, per puzzle and pool); a daily WinResult carries `daily` { solvers, slower } (other
+   * players only, strictly slower buckets) once at least `minSolvers` other players solved it. Below that the
+   * client shows its own estimate.
+   */
+  readonly dailyStats: {
+    readonly enabled: boolean;
+    /** Bucket width in ms (10 s). */
+    readonly bucketMs: number;
+    /** Solve times past (maxBucket + 1) × bucketMs share the last bucket (an hour at 10 s). */
+    readonly maxBucket: number;
+    /** Other solvers needed before the answer carries the numbers. */
+    readonly minSolvers: number;
+    /** The retention sweep deletes the rollup of dailies older than this many days. */
+    readonly keepDays: number;
+  };
   readonly identity: { readonly storeAsidKey: boolean };
   readonly cron: {
     /** Brackets finalised per hourly run: ≤ 6 statements each + ≈ 10 for the run, so 6 stays inside Workers Free's 50 queries per invocation (Paid: set 200 through CONFIG_OVERRIDES). Lazy finalisation on reads does the rest. */
@@ -181,6 +198,7 @@ export const DEFAULT_CONFIG: ServerConfig = {
     ipQuotaDays: 2,
     statsDays: 400,
   },
+  dailyStats: { enabled: true, bucketMs: 10_000, maxBucket: 359, minSolvers: 20, keepDays: 7 },
   identity: { storeAsidKey: false },
   cron: { finalizePerRun: 6, retentionHourUtc: 3, sweepChunk: 1000, sweepChunksPerRun: 4 },
   rateLimits: {
