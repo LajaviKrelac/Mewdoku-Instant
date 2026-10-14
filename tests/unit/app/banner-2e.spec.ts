@@ -6,6 +6,10 @@
 // one more load ads.banner.rateLimitedRetrySec after 'rate_limited' (once per hide); a new hide, Home or the
 // win cancels the timer; never a loop. ads.banner.untilDate ends banners ('ended': no band, no load); the
 // remote switches turn them off (switchesChanged hides one that is up); ad_banner once per load attempt.
+// D-2e-25 (2026-10-14, ads.banner.collapseWhenEmpty): an empty answer on the board keeps its band for the rest of
+// the level (never mid-level) and, after 'no_fill' / 'error', takes ONE more load when the window ends (once per
+// mount; the first 'rate_limited' keeps its own retry); the next board mounts with no band and never loads until
+// a banner loads again (the victory, Home); an empty answer on the open victory gives its band back at once.
 import { describe, expect, it } from 'vitest';
 import { createAdFlow } from '../../../src/app/ad-flow';
 import { createBannerFlow, type BannerFlow } from '../../../src/app/banner-flow';
@@ -103,6 +107,8 @@ function play(opts: { config?: DeepPartial<GameConfig>; caps?: Partial<FakePlatf
 
 const banner = (h: Harness): string[] => h.log.filter((l) => l === 'banner:show' || l === 'banner:hide');
 const shows = (h: Harness): number => h.log.filter((l) => l === 'banner:show').length;
+/** The band the game screen was last rendered with (GameView.bannerBand). */
+const band = (h: Harness): boolean | undefined => h.router.game?.last.bannerBand;
 
 describe('back after every hide (spec §3.1, GAP-B1)', () => {
   it('Settings over the board: hidden; closed inside the window → exactly one load when the window ends', async () => {
@@ -279,6 +285,170 @@ describe('back after every hide (spec §3.1, GAP-B1)', () => {
     p.answers.push({ ok: false, reason: 'no_fill' });
     await startLevel(p.h, 15);
     expect(p.h.analytics.filter((e) => e.name === 'ad_banner').map((e) => e.params)).toEqual([{ screen: 'game', result: 'no_fill' }]);
+  });
+});
+
+describe('D-2e-25 (2026-10-14): the band after an empty answer (ads.banner.collapseWhenEmpty)', () => {
+  const OFF: DeepPartial<GameConfig> = { ads: { banner: { collapseWhenEmpty: false } } };
+  const reserved = (h: Harness): boolean => h.store.get().ui.bannerReserved;
+
+  it("a miss on the board keeps its band (never mid-level); 'no_fill' takes exactly one more load when the window ends, a second miss none", async () => {
+    const p = play();
+    p.answers.push({ ok: false, reason: 'no_fill' }, { ok: false, reason: 'no_fill' });
+    await startLevel(p.h, 15);
+    expect(shows(p.h)).toBe(1);
+    expect([band(p.h), reserved(p.h), p.h.store.get().session?.bannerBand]).toEqual([true, true, true]);
+    await p.h.settle(WINDOW - 1);
+    expect(shows(p.h)).toBe(1); // never inside Meta's window
+    await p.h.settle(1);
+    expect(shows(p.h)).toBe(2);
+    await p.h.settle(5 * WINDOW);
+    expect(shows(p.h)).toBe(2); // the second miss on this mount schedules nothing (never a loop)
+    expect([band(p.h), reserved(p.h)]).toEqual([true, true]); // the band stays for the level
+    expect(p.flow.bandAtMount()).toBe(false); // the next board will not reserve one
+  });
+
+  it("'error' takes the one retry too; the retry's success fills the band and ends the starve", async () => {
+    const p = play();
+    p.answers.push({ ok: false, reason: 'error' }, { ok: true });
+    await startLevel(p.h, 15);
+    expect(p.flow.bandAtMount()).toBe(false);
+    await p.h.settle(WINDOW);
+    expect(shows(p.h)).toBe(2);
+    expect(p.flow.showing()).toBe(true);
+    expect(p.flow.bandAtMount()).toBe(true);
+  });
+
+  it('other empty answers (not_ready, skipped) keep the band and take no retry; nor does a miss with reshowAfterAnyHide off', async () => {
+    for (const reason of ['not_ready', 'skipped'] as const) {
+      const p = play();
+      p.answers.push({ ok: false, reason });
+      await startLevel(p.h, 15);
+      await p.h.settle(3 * WINDOW);
+      expect(shows(p.h), reason).toBe(1);
+      expect(reserved(p.h)).toBe(true);
+      expect(p.flow.bandAtMount()).toBe(true); // not starved
+    }
+    const off = play({ config: { ads: { banner: { reshowAfterAnyHide: false } } } });
+    off.answers.push({ ok: false, reason: 'no_fill' });
+    await startLevel(off.h, 15);
+    await off.h.settle(3 * WINDOW);
+    expect(shows(off.h)).toBe(1);
+    expect(reserved(off.h)).toBe(true);
+  });
+
+  it('the miss retry is cancelled by a hide (a modal over the board) or by Home', async () => {
+    const a = play();
+    a.answers.push({ ok: false, reason: 'no_fill' });
+    await startLevel(a.h, 15);
+    a.h.router.game?.cb.onSettings(); // a modal before the window ends: the retry is gone
+    await a.h.settle(2 * WINDOW);
+    expect(shows(a.h)).toBe(1);
+
+    const b = play();
+    b.answers.push({ ok: false, reason: 'no_fill' });
+    await startLevel(b.h, 15);
+    b.h.session.onHome();
+    await b.h.settle(0);
+    const atHome = shows(b.h);
+    await b.h.settle(2 * WINDOW);
+    expect(shows(b.h)).toBe(atHome); // nothing on the game screen's timer
+  });
+
+  it("the first 'rate_limited' on the board is still the one retry rateLimitedRetrySec later (not a miss); the second is a miss: band kept, no retry, not starved", async () => {
+    const p = play();
+    p.answers.push({ ok: false, reason: 'rate_limited' }, { ok: false, reason: 'rate_limited' });
+    await startLevel(p.h, 15);
+    await p.h.settle(cfg.ads.banner.rateLimitedRetrySec * 1000 - 1);
+    expect(shows(p.h)).toBe(1);
+    await p.h.settle(1);
+    expect(shows(p.h)).toBe(2); // the 2e retry, not the window's end
+    await p.h.settle(5 * WINDOW);
+    expect(shows(p.h)).toBe(2);
+    expect([band(p.h), reserved(p.h)]).toEqual([true, true]);
+    expect(p.flow.bandAtMount()).toBe(true);
+  });
+
+  it('after a miss the next board mounts with no band and never calls the banner adapter (modals, ads, the hint, the window: nothing)', async () => {
+    const p = play();
+    p.answers.push({ ok: false, reason: 'no_fill' }, { ok: false, reason: 'no_fill' });
+    await startLevel(p.h, 15);
+    await p.h.settle(WINDOW); // the one retry: empty again
+    expect(shows(p.h)).toBe(2);
+    p.h.session.onHome(); // Home, inside the retry's window: no load there
+    await p.h.settle(0);
+    expect(shows(p.h)).toBe(2);
+    p.h.log.length = 0;
+    await startLevel(p.h, 16);
+    expect(p.h.store.get().session?.bannerBand).toBe(false);
+    expect(band(p.h)).toBe(false);
+    expect(reserved(p.h)).toBe(false);
+    p.h.router.game?.cb.onSettings();
+    await p.h.settle(0);
+    p.h.router.close('settings');
+    p.flow.afterAd('interstitial');
+    p.flow.afterPurchase();
+    await p.h.settle(3 * WINDOW);
+    expect(banner(p.h)).toEqual([]); // not even a hide: nothing was ever asked for on this board
+    expect(band(p.h)).toBe(false);
+  });
+
+  it('a load that succeeds on the victory (or Home) gives the next board its band again', async () => {
+    const p = play();
+    p.answers.push({ ok: false, reason: 'no_fill' }, { ok: false, reason: 'no_fill' });
+    await startLevel(p.h, 15);
+    await p.h.settle(WINDOW); // the retry: empty again; starved
+    expect(p.flow.bandAtMount()).toBe(false);
+    p.h.clock.advance(WINDOW); // the victory may load again
+    winGame(p.h);
+    await p.h.settle(p.h.config.fx.winOverlayDelayMs);
+    await tapRanking(p.h); // the window passed: the victory loads (ok)
+    expect(shows(p.h)).toBe(3);
+    expect(p.flow.showing()).toBe(true);
+    expect(p.h.router.props.victory?.bannerReserved).toBe(true);
+    p.h.log.length = 0;
+    await p.h.session.onNext();
+    await p.h.settle(p.h.config.fx.boardEntryMs);
+    expect(p.h.log).toContain('screen:game:L16');
+    expect(banner(p.h)).toEqual([]); // the victory's banner stays into the board (no hide, inside the window)
+    expect([band(p.h), p.h.store.get().session?.bannerBand, reserved(p.h)]).toEqual([true, true, true]);
+
+    // Home: a miss there, then a success after the window.
+    const q = play();
+    q.answers.push({ ok: false, reason: 'no_fill' }, { ok: true });
+    q.shell.showHome();
+    await q.h.settle(0);
+    expect(reserved(q.h)).toBe(false); // Home gave its band back at once
+    expect(q.flow.bandAtMount()).toBe(false);
+    await q.h.settle(WINDOW);
+    q.shell.showHome();
+    await q.h.settle(0);
+    expect(q.flow.showing()).toBe(true);
+    expect(reserved(q.h)).toBe(true);
+    await startLevel(q.h, 15);
+    expect([band(q.h), q.h.store.get().session?.bannerBand]).toEqual([true, true]);
+  });
+
+  it('a miss on the open victory gives its band back at once (the victory re-renders); off: it keeps it', async () => {
+    for (const off of [false, true]) {
+      const p = play(off ? { config: OFF } : {});
+      await startLevel(p.h, 15); // the board's banner (ok)
+      p.h.clock.advance(WINDOW + 1_000); // the victory may load again
+      p.answers.push({ ok: false, reason: 'no_fill' });
+      winGame(p.h);
+      await p.h.settle(p.h.config.fx.winOverlayDelayMs);
+      await tapRanking(p.h);
+      expect(shows(p.h)).toBe(2);
+      expect(p.h.router.isOpen('victory')).toBe(true);
+      expect(reserved(p.h), `off ${off}`).toBe(off);
+      expect(p.h.router.props.victory?.bannerReserved, `off ${off}`).toBe(off);
+      p.h.log.length = 0;
+      await p.h.session.onNext();
+      await p.h.settle(p.h.config.fx.boardEntryMs);
+      // On: the next board has no band and loads nothing. Off: the 2e rule (band; a load, at once after the window).
+      expect([band(p.h), p.h.store.get().session?.bannerBand], `off ${off}`).toEqual([off, off]);
+      if (!off) expect(banner(p.h)).toEqual([]);
+    }
   });
 });
 

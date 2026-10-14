@@ -152,8 +152,9 @@ export interface SessionMeta {
   readonly event?: { readonly def: EventDef; readonly index: number } | null;
   /**
    * Phase 2d §1.16: the banner gate said a banner may show on this game screen when it mounted
-   * (BannerFlow.eligible('game')), so the band is reserved from the first frame and the board never
-   * jumps mid-level; only No Ads (bought meanwhile) takes the band away. Absent = false.
+   * (BannerFlow.eligible('game'); D-2e-25: BannerFlow.bandAtMount(), false after an empty banner answer
+   * with nothing up), so the band is reserved from the first frame and the board never jumps mid-level;
+   * only No Ads (bought meanwhile) takes the band away. Absent = false.
    */
   readonly bannerBand?: boolean;
 }

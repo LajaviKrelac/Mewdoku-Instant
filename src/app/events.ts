@@ -84,7 +84,10 @@ export interface AnalyticsParamsMap {
   mistake: { level: number; size: number; cats: number };
   hint_used: { level: number; kind: HintKind; charged: 0 | 1 };
   kitty_used: { level: number };
-  /** Phase 2e (spec §3.5): + `gate`, the GateDecision when the gate said no (result 'gated'). */
+  /**
+   * Phase 2e (spec §3.5): + `gate`, the GateDecision when the gate said no (result 'gated'). D-2e-25
+   * (2026-10-14): `gate` may be 'first_session' (no interstitial in the first lifetime session; no new param).
+   */
   ad_interstitial: { trigger: InterstitialPlacement; result: AdResultCode; gate?: GateDecision };
   ad_rewarded: { placement: RewardedPlacement; result: AdResultCode | 'fallback' };
   daily_start: { date: string; size: number; ms: number; mistakes: number };

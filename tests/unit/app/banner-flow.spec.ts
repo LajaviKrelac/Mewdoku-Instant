@@ -1,7 +1,8 @@
 // Owner: C. Banners (phase2b §3.2, §3.6): shown on Home, victory and event screens only, never on the
 // game screen or the ranking panel; hidden before a new board, before ads and under modal overlays;
 // skipped inside the 60 s reload window; `unsupported` latches them off; the reserve stays after a
-// failed load; no banner at all when the adapter has no banner API (no hideBannerAdAsync).
+// failed load (ads.banner.collapseWhenEmpty off; D-2e-25 below); no banner at all when the adapter has no
+// banner API (no hideBannerAdAsync).
 // Phase 2d (G1, docs/phase2d/look-spec.md §1.16, §5.1): with ads.banner.duringPlay the game screen is
 // a banner screen: its band is decided at mount (eligible), the banner shows at the board entry's
 // end, a banner up on the victory stays into the next board (no hide in between), the listed modals
@@ -10,6 +11,11 @@
 // Phase 2d.1 (G1, helpers-spec §3.2, §7.6, D-2d1-13): the hint card hides it; after it closes it loads
 // again at once when ads.banner.minReloadSec has passed, else exactly one timer loads it when the
 // window ends (not when the screen has gone, a modal is open or the board is won); off: the 2d rule.
+// D-2e-25 (2026-10-14, ads.banner.collapseWhenEmpty): an empty answer (any reason but 'timeout', same screen, no
+// hide since, nothing up) gives Home, the victory and the event screen their band back at once; a 'timeout' or a
+// thrown show() keeps it; 'no_fill' / 'error' leave the flow starved until any load succeeds, and bandAtMount()
+// (always eligible-gated) then says no band for a new board unless a banner is up or loading; off: the 2e rule.
+// The game screen's side (its band kept, the one retry, the next board) is in banner-2e.spec.ts.
 import { describe, expect, it } from 'vitest';
 import { createAdFlow } from '../../../src/app/ad-flow';
 import { createBannerFlow, type BannerFlow } from '../../../src/app/banner-flow';
@@ -27,7 +33,7 @@ import { createFakePlatform, createHarness, loseGame, NOW, startLevel, winGame, 
 
 const veteran = (s: SaveData): SaveData => ({ ...s, progress: { level: 15, completed: 14, best: {} } });
 
-function setup(opts: { completed?: number; noAds?: boolean; banner?: boolean; results?: AdResult[] } = {}) {
+function setup(opts: { completed?: number; noAds?: boolean; banner?: boolean; results?: AdResult[]; config?: DeepPartial<GameConfig> } = {}) {
   const log: string[] = [];
   const clock = createFakeClock(NOW);
   const save: SaveData = {
@@ -48,7 +54,7 @@ function setup(opts: { completed?: number; noAds?: boolean; banner?: boolean; re
       hide: async () => void log.push('banner:hide'),
     };
   }
-  const flow = createBannerFlow({ platform, store, clock });
+  const flow = createBannerFlow({ platform, store, clock, ...(opts.config ? { config: mergeConfig(opts.config) } : {}) });
   const reserved = (): boolean => store.get().ui.bannerReserved;
   return { log, clock, store, platform, flow, reserved };
 }
@@ -104,8 +110,8 @@ describe('banner-flow (§3.2)', () => {
     expect(s.log).toEqual(['banner:show:bottom', 'banner:hide', 'banner:show:bottom']);
   });
 
-  it('a failed load keeps the reserve until the screen unmounts; unsupported latches banners off', async () => {
-    const s = setup({ results: [{ ok: false, reason: 'no_fill' }, { ok: false, reason: 'unsupported' }] });
+  it('collapseWhenEmpty off (the 2e rule): a failed load keeps the reserve until the screen unmounts; unsupported latches banners off', async () => {
+    const s = setup({ results: [{ ok: false, reason: 'no_fill' }, { ok: false, reason: 'unsupported' }], config: { ads: { banner: { collapseWhenEmpty: false } } } });
     await s.flow.screenShown('home');
     expect(s.reserved()).toBe(true);
     expect(s.flow.showing()).toBe(false);
@@ -299,6 +305,154 @@ describe('banner-flow (§3.2)', () => {
     });
     await ads.interstitial('next_level');
     expect(s.log).toEqual(['banner:show:bottom', 'banner:hide', 'ad:interstitial:next_level', 'preload:interstitial']);
+  });
+});
+
+// ─────────────────────────── D-2e-25: an empty answer gives the band back ───────────────────────────
+
+describe('D-2e-25 (2026-10-14): an empty banner answer gives the band back (ads.banner.collapseWhenEmpty)', () => {
+  const OFF: DeepPartial<GameConfig> = { ads: { banner: { collapseWhenEmpty: false } } };
+  const WINDOW = cfg.ads.banner.minReloadSec * 1000;
+  /** show() answers when the test says so (the load is in flight until then). */
+  function held(s: ReturnType<typeof setup>): { answer(r: AdResult): void; fail(e: unknown): void } {
+    const ctl = { answer: (_r: AdResult): void => undefined, fail: (_e: unknown): void => undefined };
+    if (s.platform.ads.banner) {
+      s.platform.ads.banner.show = (pos) => {
+        s.log.push(`banner:show:${pos}`);
+        return new Promise<AdResult>((resolve, reject) => {
+          ctl.answer = resolve;
+          ctl.fail = reject;
+        });
+      };
+    }
+    return ctl;
+  }
+
+  it('Home, the victory and the event screen give the reserve back at once after any empty answer but timeout', async () => {
+    expect(cfg.ads.banner.collapseWhenEmpty).toBe(true);
+    for (const screen of ['home', 'victory', 'event'] as const) {
+      for (const reason of ['no_fill', 'error', 'not_ready', 'skipped', 'rate_limited', 'unsupported'] as const) {
+        const s = setup();
+        const ctl = held(s);
+        const shown = s.flow.screenShown(screen);
+        expect(s.reserved(), `${screen} ${reason}: reserved while loading`).toBe(true);
+        ctl.answer({ ok: false, reason });
+        await shown;
+        expect(s.reserved(), `${screen} ${reason}`).toBe(false);
+        await s.flow.hide(); // nothing is up: no adapter call
+        expect(s.log).toEqual(['banner:show:bottom']);
+      }
+    }
+  });
+
+  it("'timeout' keeps the reserve (the load may still land); so does a thrown show() (an unknown outcome)", async () => {
+    const timeout = setup({ results: [{ ok: false, reason: 'timeout' }] });
+    await timeout.flow.screenShown('home');
+    expect(timeout.reserved()).toBe(true);
+    expect(timeout.flow.bandAtMount()).toBe(true); // maybe up
+    const threw = setup();
+    if (threw.platform.ads.banner) threw.platform.ads.banner.show = async () => Promise.reject(new Error('boom'));
+    await threw.flow.screenShown('victory');
+    expect(threw.reserved()).toBe(true);
+    expect(threw.flow.bandAtMount()).toBe(true);
+    await threw.flow.hide();
+    expect(threw.log).toEqual(['banner:hide']); // still told (FB2B-1)
+  });
+
+  it('collapseWhenEmpty off: the 2e rule on every screen (the reserve stays until unmount; bandAtMount() = eligible)', async () => {
+    for (const screen of ['home', 'victory', 'event'] as const) {
+      for (const reason of ['no_fill', 'error', 'not_ready'] as const) {
+        const s = setup({ results: [{ ok: false, reason }], config: OFF });
+        await s.flow.screenShown(screen);
+        expect(s.reserved(), `${screen} ${reason}`).toBe(true);
+        expect(s.flow.bandAtMount()).toBe(true);
+        s.flow.screenGone();
+        expect(s.reserved()).toBe(false);
+      }
+    }
+    expect(setup({ completed: 8, config: OFF }).flow.bandAtMount()).toBe(false);
+  });
+
+  it("bandAtMount(): false after a 'no_fill' miss with nothing up; true while a load is in flight, while a banner is up, and again after a load succeeds on another screen", async () => {
+    const s = setup({ results: [{ ok: false, reason: 'no_fill' }] });
+    expect(s.flow.bandAtMount()).toBe(true); // nothing asked yet
+    await s.flow.screenShown('home');
+    expect(s.flow.bandAtMount()).toBe(false); // starved, nothing up
+    expect(s.flow.eligible('game')).toBe(true); // eligible() is unchanged
+    expect(s.log).toEqual(['banner:show:bottom']); // side-effect free
+    s.flow.screenGone();
+    s.clock.advance(WINDOW);
+    const ctl = held(s);
+    const victory = s.flow.screenShown('victory');
+    expect(s.flow.bandAtMount()).toBe(true); // a load in flight may still fill the band
+    ctl.answer({ ok: true });
+    await victory;
+    expect(s.flow.showing()).toBe(true);
+    expect(s.flow.bandAtMount()).toBe(true); // up
+    await s.flow.hide();
+    s.flow.screenGone();
+    expect(s.flow.bandAtMount()).toBe(true); // the success ended the starve
+  });
+
+  it("'error' starves too; rate_limited, unsupported, skipped and not_ready leave the flag as it was", async () => {
+    const err = setup({ results: [{ ok: false, reason: 'error' }] });
+    await err.flow.screenShown('event');
+    expect(err.flow.bandAtMount()).toBe(false);
+    for (const reason of ['rate_limited', 'skipped', 'not_ready'] as const) {
+      // Not starved before: still not.
+      const fresh = setup({ results: [{ ok: false, reason }] });
+      await fresh.flow.screenShown('home');
+      expect(fresh.reserved(), reason).toBe(false); // a miss all the same: the band goes
+      expect(fresh.flow.bandAtMount(), reason).toBe(true);
+      // Starved before: still starved.
+      const starved = setup({ results: [{ ok: false, reason: 'no_fill' }, { ok: false, reason }] });
+      await starved.flow.screenShown('home');
+      starved.flow.screenGone();
+      starved.clock.advance(WINDOW);
+      await starved.flow.screenShown('victory');
+      expect(starved.log.filter((l) => l.startsWith('banner:show')), reason).toHaveLength(2);
+      expect(starved.flow.bandAtMount(), reason).toBe(false);
+    }
+    // 'unsupported' latches banners off: no band either way (the gate).
+    const unsupported = setup({ results: [{ ok: false, reason: 'unsupported' }] });
+    await unsupported.flow.screenShown('home');
+    expect(unsupported.reserved()).toBe(false);
+    expect(unsupported.flow.eligible('game')).toBe(false);
+    expect(unsupported.flow.bandAtMount()).toBe(false);
+  });
+
+  it("bandAtMount() is always gated by eligible('game') (start level, No Ads, the first-run tutorial, no banner API, duringPlay off)", async () => {
+    expect(setup({ completed: 8 }).flow.bandAtMount()).toBe(false);
+    expect(setup({ noAds: true }).flow.bandAtMount()).toBe(false);
+    expect(setup({ banner: false }).flow.bandAtMount()).toBe(false);
+    expect(setup({ config: { ads: { banner: { duringPlay: false } } } }).flow.bandAtMount()).toBe(false);
+    const s = setup();
+    expect(s.flow.bandAtMount({ firstRunTutorial: true })).toBe(false);
+    expect(s.flow.bandAtMount({ firstRunTutorial: false })).toBe(true);
+    // A banner up does not lift the gate: No Ads bought while it shows.
+    await s.flow.screenShown('home');
+    expect(s.flow.showing()).toBe(true);
+    s.store.update((st) => ({ ...st, save: { ...st.save, purchases: { noAds: true, tokens: [], pending: [] } } }));
+    expect(s.flow.bandAtMount()).toBe(false);
+  });
+
+  it('not a miss: a hide since the load started, or the screen gone when it answers (no band given back, not starved)', async () => {
+    const hidden = setup();
+    const a = held(hidden);
+    const home = hidden.flow.screenShown('home');
+    await hidden.flow.hide(); // a modal opened while loading
+    a.answer({ ok: false, reason: 'no_fill' });
+    await home;
+    expect(hidden.reserved()).toBe(true); // until the screen unmounts, as before
+    expect(hidden.flow.bandAtMount()).toBe(true);
+
+    const gone = setup();
+    const b = held(gone);
+    const victory = gone.flow.screenShown('victory');
+    gone.flow.screenGone(); // into the next board, the load still in flight
+    b.answer({ ok: false, reason: 'no_fill' });
+    await victory;
+    expect(gone.flow.bandAtMount()).toBe(true);
   });
 });
 

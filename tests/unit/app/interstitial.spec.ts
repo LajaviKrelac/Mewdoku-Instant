@@ -1,12 +1,18 @@
 // Owner: C (Phase 2b; was app). Interstitial gating at the three transitions (02 §13.2, 04 §5.7 onNext): the gate is
 // checked first, the ad only when it passes, and the transition always goes ahead.
+// D-2e-25 (2026-10-14): none in the player's first lifetime session (save.sessions below
+// ads.interstitial.fromSession: gate 'first_session'); the transitions go on unchanged.
 import { describe, expect, it } from 'vitest';
 import type { SaveData } from '../../../src/game/types';
 import { createHarness, loseGame, NOW, slice, startLevel, winGame, type Harness, tapRanking } from './harness';
 
-/** 10+ completed levels, first seen long ago, no recent ad: the gate passes once the grace is over. */
+/**
+ * 10+ completed levels, first seen long ago, no recent ad, a later lifetime session (D-2e-25: sessions ≥
+ * ads.interstitial.fromSession): the gate passes once the grace is over.
+ */
 const veteran = (s: SaveData): SaveData => ({
   ...s,
+  sessions: 2,
   progress: { level: 15, completed: 14, best: {} },
   ads: { lastAdAt: 0, lastFallbackGrantAt: 0 },
 });
@@ -234,5 +240,82 @@ describe('Phase 2e: every level from level 10 with a 30 s floor (P-I2, the L1 co
       shown.push(slice(h.log, /^ad:interstitial/).join(',') || 'none');
     }
     expect(shown).toEqual(['ad:interstitial:next_level', 'none', 'ad:interstitial:next_level']);
+  });
+});
+
+// ─────────────────────────────── D-2e-25 (2026-10-14) ───────────────────────────────
+
+describe('D-2e-25: no interstitial in the first lifetime session (ads.interstitial.fromSession 2)', () => {
+  /** The veteran of the tests above, but on the first launch ever (boot made sessions 1). */
+  const firstSession = (s: SaveData): SaveData => ({ ...veteran(s), sessions: 1 });
+
+  it('next_level: gated (first_session) past level 10 and the grace; L+1 loads, the ad clock is untouched', async () => {
+    const h = createHarness({ save: firstSession });
+    await wonLevel(h);
+    await h.session.onNext();
+    expect(slice(h.log, AD)).toEqual(['screen:game:L16']);
+    expect(h.save().ads.lastAdAt).toBe(0);
+    expect(h.analytics).toContainEqual({ name: 'ad_interstitial', params: { trigger: 'next_level', result: 'gated', gate: 'first_session' } });
+  });
+
+  it('retry (the 2nd Retry, cadence passed), daily_done and fail_home are gated the same way; the transitions go on', async () => {
+    const h = createHarness({ save: firstSession, config: TARGET });
+    await startLevel(h, 15);
+    for (let i = 0; i < 2; i++) {
+      await loseGame(h);
+      h.clock.advance(31_000);
+      await h.session.onRetry();
+      await h.settle(h.config.fx.boardEntryMs);
+    }
+    expect(h.game().status).toBe('playing');
+    // Retry 1 would be 'retry_cadence' in a later session: first_session is checked before the cadence.
+    expect(h.analytics.filter((e) => e.name === 'ad_interstitial').map((e) => e.params)).toEqual([
+      { trigger: 'retry', result: 'gated', gate: 'first_session' },
+      { trigger: 'retry', result: 'gated', gate: 'first_session' },
+    ]);
+    await loseGame(h);
+    h.log.length = 0;
+    h.session.onHome();
+    expect(slice(h.log, AD)).toEqual(['goHome']);
+    expect(h.save().inProgress.level).toBeNull();
+    expect(h.analytics).toContainEqual({ name: 'ad_interstitial', params: { trigger: 'fail_home', result: 'gated', gate: 'first_session' } });
+
+    const d = createHarness({ save: firstSession });
+    await d.session.start({ mode: 'daily', dateKey: '2026-10-07' });
+    await d.settle(d.config.fx.boardEntryMs);
+    winGame(d);
+    await d.settle(d.config.fx.winOverlayDelayMs);
+    await tapRanking(d);
+    d.log.length = 0;
+    await d.session.onDailyDone();
+    expect(slice(d.log, AD)).toEqual(['screen:game:L15']);
+    expect(d.analytics).toContainEqual({ name: 'ad_interstitial', params: { trigger: 'daily_done', result: 'gated', gate: 'first_session' } });
+  });
+
+  it('min_levels is still the reason below 10 completed levels in the first session', async () => {
+    const h = createHarness({ save: (s) => ({ ...firstSession(s), progress: { level: 9, completed: 8, best: {} } }) });
+    await wonLevel(h, 9);
+    await h.session.onNext();
+    expect(h.analytics).toContainEqual({ name: 'ad_interstitial', params: { trigger: 'next_level', result: 'gated', gate: 'min_levels' } });
+  });
+
+  it('the second session: the rule is unchanged (the 60 s grace, then the ad)', async () => {
+    const early = createHarness({ save: veteran, sessionStartedAt: NOW });
+    await wonLevel(early);
+    await early.session.onNext();
+    expect(slice(early.log, AD)).toEqual(['screen:game:L16']);
+    expect(early.analytics).toContainEqual({ name: 'ad_interstitial', params: { trigger: 'next_level', result: 'gated', gate: 'grace' } });
+    const h = createHarness({ save: veteran });
+    expect(h.save().sessions).toBe(2);
+    await wonLevel(h);
+    await h.session.onNext();
+    expect(slice(h.log, AD)).toEqual(['ad:interstitial:next_level', 'screen:game:L16']);
+  });
+
+  it('fromSession 1 restores the 2e rule: the first session shows the ad', async () => {
+    const h = createHarness({ save: firstSession, config: { ads: { interstitial: { fromSession: 1 } } } });
+    await wonLevel(h);
+    await h.session.onNext();
+    expect(slice(h.log, AD)).toEqual(['ad:interstitial:next_level', 'screen:game:L16']);
   });
 });

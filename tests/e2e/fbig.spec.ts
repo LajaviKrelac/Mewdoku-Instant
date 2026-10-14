@@ -364,6 +364,21 @@ test.describe('FBIG ads', () => {
     expect(await stub(page, (s) => s.calls.filter((c) => c.name === 'ad.showAsync').length)).toBe(0);
   });
 
+  test('D-2e-25: no interstitial in the first lifetime session (sessions 0 → 1 at boot), even past level 10, the grace and the floor', async ({ page }) => {
+    const t0 = Date.UTC(2026, 9, 7, 10, 0, 0);
+    await openGame(page, { data: { save: seededSave(15, 14, (s) => ({ ...s, sessions: 0 })) } }, { clockAt: t0 });
+    expect((await appState(page)).save.sessions).toBe(1);
+    await startLevel(page);
+    await solve(page);
+    await page.clock.fastForward(65_000); // past ads.interstitial.sessionGraceSec
+    await toVictory(page);
+    await sel.victoryNext(page).click();
+    await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
+    expect(await stub(page, (s) => s.calls.filter((c) => c.name === 'ad.showAsync' && c.args[0] === 'interstitial').length)).toBe(0);
+    const logged = await stub(page, (s) => s.calls.filter((c) => c.name === 'logEvent' && c.args[0] === 'ad_interstitial').map((c) => c.args[2]));
+    expect(logged).toContainEqual(expect.objectContaining({ trigger: 'next_level', result: 'gated', gate: 'first_session' }));
+  });
+
   test('a 10 s rewarded video is not cut off and grants the hint', async ({ page }) => {
     test.setTimeout(45_000);
     await openGame(page, { presets: ['slow-rewarded'], data: { save: seededSave(5, 4, (s) => ({ ...s, stock: { hints: 0, kitties: 3 } })) } });

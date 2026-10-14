@@ -429,7 +429,8 @@ export function createHarness(opts: HarnessOptions = {}): Harness {
   const clock = createFakeClock(NOW);
   const bus = createEventBus<AppEventMap>();
   const config = opts.config ? mergeConfig(opts.config) : cfg;
-  const base: SaveData = { ...defaults(NOW - 30 * 86_400_000), tutorialDone: true, progress: { level: 5, completed: 4, best: {} } };
+  // A returning player (D-2e-25, 2026-10-14: sessions 2, so the interstitial gate is past ads.interstitial.fromSession).
+  const base: SaveData = { ...defaults(NOW - 30 * 86_400_000), tutorialDone: true, sessions: 2, progress: { level: 5, completed: 4, best: {} } };
   const store = createStore<AppState>(initialAppState(opts.save ? opts.save(base) : base));
   const platform = createFakePlatform(log, opts.caps);
   const router = createFakeRouter(bus, log);

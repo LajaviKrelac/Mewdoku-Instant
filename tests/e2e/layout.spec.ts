@@ -36,6 +36,8 @@
 // a 44 × 44 hit area; the result card and the name sheet (12 avatars, both pickers, Save) fit or scroll
 // inside their dialogs. The web Home's ranking chip is a button at the bar's inline start: the FB safe
 // zone matters only in the FBIG build, where the chip sits after the zone (fbig.spec.ts checks it).
+// D-2e-25 (2026-10-14, ads.banner.collapseWhenEmpty): with ?ads=nofill Home reserves its band for the load and gives
+// it back on the mock's no_fill answer, and the board opened next mounts without the band (data-play-band="0").
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -337,6 +339,38 @@ test('the banner reserve never overlaps the victory screen\'s primary button', a
   await expect(page.locator('.victory')).toHaveAttribute('data-banner', '');
   await clearOfBanner(page, '.victory__primary');
   await noHorizontalOverflow(page);
+});
+
+test('D-2e-25 (?ads=nofill): Home gives its banner reserve back after the empty answer; the board opened next mounts without the band', async ({ page }, info) => {
+  test.skip(info.project.name !== 'web-390', 'one phone is enough (no layout measured)');
+  // Every data-banner change on Home, in order ('on' = added, 'off' = removed), from the first frame of each page load.
+  await page.addInitScript(() => {
+    const seen: string[] = [];
+    (window as unknown as { __homeBand: string[] }).__homeBand = seen;
+    new MutationObserver((records) => {
+      for (const r of records) {
+        if ((r.target as Element).classList?.contains('screen--home')) seen.push(r.oldValue === null ? 'on' : 'off');
+      }
+    }).observe(document, { subtree: true, attributes: true, attributeFilter: ['data-banner'], attributeOldValue: true });
+  });
+  await page.goto('/?ads=nofill');
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen !== 'boot');
+  await page.evaluate((json) => (window as TestWindow).__mewdoku?.seedSave(json), JSON.stringify(veteranSave()));
+  await page.reload();
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');
+  await settleHome(page);
+  // A returning player past level 9: Home reserved its band for the load, then gave it back on the mock's no_fill.
+  expect(await page.evaluate(() => (window as unknown as { __homeBand: string[] }).__homeBand)).toEqual(['on', 'off']);
+  await expect(page.locator('.screen--home')).not.toHaveAttribute('data-banner', '');
+  expect(await page.evaluate(() => (window as TestWindow).__mewdoku?.app().ui.bannerReserved)).toBe(false);
+  await expect(page.locator('[data-testid="mock-banner"]')).toHaveCount(0);
+  // The next board: no band from its first frame (data-play-band="0"), so it never loads one mid-level.
+  await page.locator('.home__play').click();
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
+  await expect(page.locator('html')).toHaveAttribute('data-play-band', '0');
+  await expect(page.locator('.screen--game')).not.toHaveAttribute('data-banner', '');
+  expect(await page.evaluate(() => (window as TestWindow).__mewdoku?.app().session?.bannerBand)).toBe(false);
+  await expect(page.locator('[data-testid="mock-banner"]')).toHaveCount(0);
 });
 
 test('keyboard only: Enter continues the panel, Enter on "Level N", and Settings (no Shop row on the web) by keyboard', async ({ page }, info) => {

@@ -6,7 +6,8 @@
 // Hide BEFORE the screen unmounts, before a transition to the game screen, before any interstitial or
 // rewarded ad, and when a modal opens over the screen (not re-shown on close unless the window
 // passed). UiState.bannerReserved is set when a load is attempted and kept until the screen unmounts,
-// so nothing jumps; a failed load keeps the reserve. `unsupported` latches banners off for the session.
+// so nothing jumps; a failed load keeps the reserve only with ads.banner.collapseWhenEmpty off (D-2e-25
+// below: an empty answer gives the band back). `unsupported` latches banners off for the session.
 // A load that answered 'timeout' (ads.readyTimeoutMs) may still land and show itself, so it counts as
 // "maybe up" until the next hide(): that hide always reaches the adapter, which takes the banner down
 // (or makes the late load hide itself when it lands). Review FB2B-1: before, a slow load left the
@@ -39,13 +40,28 @@
 // (a local date) the gate answers 'ended': no band, no load. The remote switches banner / bannerInPlay
 // (remote-config.ts) can only turn banners off; switchesChanged() hides one that is up. ad_banner
 // {screen, result} is logged once per load attempt. reshowAfterAnyHide false = the 2d.1 rule.
+// D-2e-25 (2026-10-14, the user: "Removing strip when no banner loads makes sense"; ads.banner.collapseWhenEmpty,
+// banner.duringPlay unchanged): a load that came back empty gives its band back. A miss: show() answered !ok with
+// any reason but 'timeout' (the load may still land: the reserve stays), it was not the game screen's first
+// 'rate_limited' answer (that one keeps its one retry above), the same screen is still up with no hide since, and
+// nothing is up. A thrown show() is an unknown outcome, not a miss (pending stays, FB2B-1). On Home, the victory and
+// the event screen a miss drops the reserve at once (setReserved(false)): the column gets its room back. On the
+// game screen the band stays for the rest of the level (the board never moves under the player's finger: a
+// misplaced cat costs a life); after 'no_fill' or 'error', with reshowAfterAnyHide and the board free, ONE more
+// load runs when the reload window ends, at most once per game-screen mount (a second miss schedules nothing;
+// never a loop; a hide or a screen change cancels it as usual). A 'no_fill' / 'error' miss on any screen leaves
+// the flow "starved"; any successful load, on any screen, ends it. bandAtMount() (eligible('game') and, with
+// collapseWhenEmpty, a banner up or still loading or not starved) is what the session decides a new game screen's
+// band from, and whether a banner screen's banner may stay into it: a starved board mounts with no band and no
+// screenShown('game'), so it never loads (no re-show either: no current screen). collapseWhenEmpty false = the 2e
+// rule (a failed load keeps the reserve until the screen unmounts; bandAtMount() = eligible('game')).
 import { bannerGate } from '../game/ad-pacing';
 import type { TimerId } from './clock';
 import type { BannerScreen, GameConfig } from './config';
 import { cfg } from './config';
 import type { Clock } from './clock';
 import { isFlagOn } from './flags';
-import type { PlatformAdapter } from '../platform/types';
+import type { AdFailReason, PlatformAdapter } from '../platform/types';
 import type { AnalyticsEvent } from './events';
 import type { AppState, Store } from './store';
 
@@ -73,9 +89,18 @@ export interface BannerFlow {
   /**
    * Phase 2d §1.16: whether the gate lets `screen` carry a banner now (enabled, capability, the screen
    * — 'game' only with ads.banner.duringPlay —, levels completed, No Ads, the tutorial), without the
-   * 60 s window and without any side effect. The game screen reserves its band from this at mount.
+   * 60 s window and without any side effect. D-2e-25: the game screen reserves its band from
+   * bandAtMount(), which adds the empty-strip rule on top of this.
    */
   eligible(screen: BannerScreen, opts?: { readonly firstRunTutorial?: boolean }): boolean;
+  /**
+   * D-2e-25 (2026-10-14, ads.banner.collapseWhenEmpty): whether a new game screen reserves its band (and
+   * whether a banner up on the screen being left may stay into it): eligible('game') and, with
+   * collapseWhenEmpty, a banner up or still loading, or no empty answer ('no_fill' / 'error') since the
+   * last successful load. No side effect; decided once per mount (never mid-level). collapseWhenEmpty
+   * false: eligible('game').
+   */
+  bandAtMount(opts?: { readonly firstRunTutorial?: boolean }): boolean;
   /** Before unmount, a transition to the game screen, an interstitial or rewarded ad, or a modal overlay. */
   hide(): Promise<void>;
   /**
@@ -144,6 +169,13 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
   let reshow: TimerId | null = null;
   /** Phase 2e: the one 'rate_limited' retry of this hide was used. */
   let rateRetried = false;
+  /**
+   * D-2e-25: a miss answered 'no_fill' or 'error' (on any screen) and no load has succeeded since (the other
+   * reasons leave it as it is). Read by bandAtMount() with ads.banner.collapseWhenEmpty only.
+   */
+  let starved = false;
+  /** D-2e-25: the screenGen of the game-screen mount whose one miss retry was used (null = none yet). */
+  let missRetryGen: number | null = null;
   const cancelReshow = (): void => {
     clock.clearTimeout(reshow);
     reshow = null;
@@ -299,6 +331,8 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
     if (r.ok) {
       shown = true;
       pending = false;
+      // D-2e-25: a banner loaded (on any screen, even one left since): the next board may reserve its band again.
+      starved = false;
       // A hide (a modal, an ad, leaving to a non-banner screen) came while the banner was loading, or
       // the screen went away and no banner screen took over: hide it again at once (FB2B-1). Phase
       // 2d: a load that lands on the next banner screen (no hide in between) stays up there.
@@ -309,7 +343,28 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
     // 'timeout': the load goes on in the adapter and may still land; a hide since then (gen moved on)
     // already told the adapter, which hides a late banner itself. Any other answer: nothing is up.
     if (r.reason !== 'timeout' || mine !== gen) pending = false;
-    // Any failure keeps the reserve until the screen unmounts (nothing jumps).
+    // collapseWhenEmpty off (the 2e rule): any failure keeps the reserve until the screen unmounts (nothing
+    // jumps). D-2e-25: an empty answer on the same screen, no hide since and nothing up, is a miss.
+    if (c.ads.banner.collapseWhenEmpty && r.reason !== 'timeout' && mine === gen && current === cur && !shown && !pending) {
+      missed(cur, r.reason, now);
+    }
+  }
+
+  /**
+   * D-2e-25 (2026-10-14): the load attempted at `loadAt` on `cur` came back empty (see the header). Home, the
+   * victory and the event screen give their band back at once; the game screen keeps its band (never mid-level)
+   * and, after 'no_fill' / 'error', takes ONE more load when the reload window ends, once per mount.
+   */
+  function missed(cur: NonNullable<typeof current>, reason: AdFailReason, loadAt: number): void {
+    const empty = reason === 'no_fill' || reason === 'error';
+    if (empty) starved = true;
+    if (cur.screen !== 'game') {
+      setReserved(false);
+      return;
+    }
+    if (!empty || !anyHide() || missRetryGen === screenGen || !gameScreenFree()) return;
+    missRetryGen = screenGen;
+    scheduleReshow(loadAt + windowMs() - clock.perf(), false);
   }
 
   /** reshowGame with the overlay whose close is being reported (still listed in the store). */
@@ -334,6 +389,9 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
     },
     eligible(screen, opts) {
       return !!api() && gateOk(screen, opts?.firstRunTutorial === true);
+    },
+    bandAtMount(opts) {
+      return flow.eligible('game', opts) && (!c.ads.banner.collapseWhenEmpty || shown || pending || !starved);
     },
     async hide() {
       // Phase 2e: a new hide cancels a pending re-show and allows one more rate_limited retry.

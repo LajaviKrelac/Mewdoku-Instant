@@ -1,5 +1,7 @@
 // Owner: C (Phase 2b; was game). Hint/kitty ledger and free-fallback cooldown (02 §9, §13.3); interstitial gate (02 §13.2)
 // as a truth table driven by the fake clock.
+// D-2e-25 (2026-10-14): the gate's 'first_session' check (ads.interstitial.fromSession against save.sessions, the
+// lifetime boot counter); the seeds of the other gate tests are a returning player (sessions 2).
 import { describe, expect, it } from 'vitest';
 import { createFakeClock } from '../../../src/app/clock';
 import { cfg, mergeConfig } from '../../../src/app/config';
@@ -7,6 +9,7 @@ import {
   bannerEnded,
   bannerGate,
   canShowInterstitial,
+  fromSessionReached,
   retryCadenceOk,
   cooldownSecFor,
   interstitialGate,
@@ -123,6 +126,8 @@ interface Scenario {
   /** Seconds since the last ad (null = never). */
   sinceAdSec: number | null;
   completed: number;
+  /** save.sessions, the lifetime boot counter (D-2e-25); default 2 (a returning player). */
+  sessions?: number;
   trigger?: InterstitialTrigger;
   supported?: boolean;
   config?: Parameters<typeof mergeConfig>[0];
@@ -154,6 +159,11 @@ const TABLE: Scenario[] = [
   { name: 'day 7: 31 s', tenure: 7, sessionSec: 600, sinceAdSec: 31, completed: 50, expect: 'ok' },
   { name: 'order: min levels before grace', tenure: 0, sessionSec: 1, sinceAdSec: 1, completed: 0, expect: 'min_levels' },
   { name: 'order: grace before cooldown', tenure: 0, sessionSec: 1, sinceAdSec: 1, completed: 50, expect: 'grace' },
+  // D-2e-25 (2026-10-14): none in the first lifetime session (ads.interstitial.fromSession 2 against save.sessions).
+  { name: 'first lifetime session (sessions 1)', tenure: 0, sessionSec: 600, sinceAdSec: null, completed: 50, sessions: 1, expect: 'first_session' },
+  { name: 'second lifetime session (sessions 2)', tenure: 0, sessionSec: 600, sinceAdSec: null, completed: 50, sessions: 2, expect: 'ok' },
+  { name: 'order: min levels before first session', tenure: 0, sessionSec: 600, sinceAdSec: null, completed: 9, sessions: 1, expect: 'min_levels' },
+  { name: 'order: first session before grace and cooldown', tenure: 0, sessionSec: 1, sinceAdSec: 1, completed: 50, sessions: 1, expect: 'first_session' },
 ];
 
 describe('interstitial gate truth table (fake clock)', () => {
@@ -168,6 +178,7 @@ describe('interstitial gate truth table (fake clock)', () => {
     const base = defaults(firstSeen);
     const save: SaveData = {
       ...base,
+      sessions: row.sessions ?? 2, // D-2e-25: a returning player unless the row says otherwise
       progress: { ...base.progress, completed: row.completed, level: row.completed + 1 },
       ads: { ...base.ads, lastAdAt: row.sinceAdSec === null ? 0 : now - Math.round(row.sinceAdSec * 1000) },
     };
@@ -180,7 +191,7 @@ describe('interstitial gate truth table (fake clock)', () => {
   it('a completed rewarded ad resets the interstitial clock (resetsInterstitialClock)', () => {
     const clock = createFakeClock(T0);
     const sessionStartedAt = clock.now();
-    let save: SaveData = { ...defaults(T0), progress: { level: 31, completed: 30, best: {} } };
+    let save: SaveData = { ...defaults(T0), sessions: 2, progress: { level: 31, completed: 30, best: {} } };
     clock.advance(10 * 60 * SEC);
     const gate = (): GateDecision => interstitialGate({ trigger: 'next_level', now: clock.now(), sessionStartedAt, save, interstitialSupported: true, retryIndex: null });
     expect(gate()).toBe('ok');
@@ -221,14 +232,14 @@ describe('phase2b §3: cadence parity and the banner gate', () => {
   });
 
   it('event_next is an interstitial trigger like next_level', () => {
-    const save = { ...defaults(T0 - 10 * DAY), progress: { level: 30, completed: 29, best: {} } };
+    const save = { ...defaults(T0 - 10 * DAY), sessions: 2, progress: { level: 30, completed: 29, best: {} } };
     const input = { now: T0, sessionStartedAt: T0 - 600 * SEC, save, interstitialSupported: true, retryIndex: null };
     expect(interstitialGate({ ...input, trigger: 'event_next' })).toBe('ok');
     expect(interstitialGate({ ...input, trigger: 'event_next' }, mergeConfig({ ads: { interstitial: { triggers: ['next_level'] } } }))).toBe('trigger');
   });
 
   it('owning No Ads turns interstitials off (§8.3)', () => {
-    const save = { ...defaults(T0 - 10 * DAY), progress: { level: 30, completed: 29, best: {} }, purchases: { noAds: true, tokens: [] } };
+    const save = { ...defaults(T0 - 10 * DAY), sessions: 2, progress: { level: 30, completed: 29, best: {} }, purchases: { noAds: true, tokens: [] } };
     const input = { trigger: 'next_level' as const, now: T0, sessionStartedAt: T0 - 600 * SEC, save, interstitialSupported: true, retryIndex: null };
     expect(interstitialGate(input)).toBe('no_ads');
     expect(canShowInterstitial({ ...input, save: { ...save, purchases: { ...save.purchases, noAds: false } } })).toBe(true);
@@ -305,6 +316,7 @@ describe('Phase 2e: the interstitial cadence (spec §3.2)', () => {
   const target = mergeConfig({ ads: { interstitial: { cooldownSec: [{ fromDay: 0, sec: 30 }] } } });
   const veteranAt = (now: number, lastAdAt: number): SaveData => ({
     ...defaults(T0),
+    sessions: 2,
     progress: { level: 15, completed: 14, best: {} },
     ads: { lastAdAt, lastFallbackGrantAt: 0 },
   });
@@ -349,6 +361,96 @@ describe('Phase 2e: the interstitial cadence (spec §3.2)', () => {
     expect(interstitialGate({ ...input('fail_home', now, 0), save: { ...veteranAt(now, 0), purchases: { noAds: true } } }, target)).toBe('no_ads');
     expect(interstitialGate({ ...input('fail_home', T0 + 30 * SEC, 0) }, target)).toBe('grace');
     expect(interstitialGate(input('fail_home', now, 0), mergeConfig({ ads: { interstitial: { triggers: ['next_level'] } } }))).toBe('trigger');
+  });
+});
+
+// ─────────────────────────────── D-2e-25 (2026-10-14) ───────────────────────────────
+
+describe('D-2e-25: no interstitial in the first lifetime session (ads.interstitial.fromSession)', () => {
+  /** A veteran past every other check (50 levels, 10 min into the session, no ad yet) in lifetime session `sessions`. */
+  const input = (sessions: number, extra: { trigger?: InterstitialTrigger; retryIndex?: number; sessionSec?: number; lastAdAt?: number; completed?: number } = {}) => {
+    const now = T0 + 3 * DAY;
+    return {
+      trigger: extra.trigger ?? ('next_level' as InterstitialTrigger),
+      now,
+      sessionStartedAt: now - (extra.sessionSec ?? 600) * SEC,
+      save: {
+        ...defaults(T0),
+        sessions,
+        progress: { level: (extra.completed ?? 50) + 1, completed: extra.completed ?? 50, best: {} },
+        ads: { lastAdAt: extra.lastAdAt ?? 0, lastFallbackGrantAt: 0 },
+      },
+      interstitialSupported: true,
+      retryIndex: extra.retryIndex ?? null,
+    };
+  };
+
+  it('ships at 2: the first launch ever (sessions 1) is gated, from the second on the other checks decide', () => {
+    expect(cfg.ads.interstitial.fromSession).toBe(2);
+    expect(interstitialGate(input(1))).toBe('first_session');
+    expect(canShowInterstitial(input(1))).toBe(false);
+    for (const n of [2, 3, 40]) expect(interstitialGate(input(n))).toBe('ok');
+    // Sessions 0 (a save that never booted) is below it too.
+    expect(interstitialGate(input(0))).toBe('first_session');
+  });
+
+  it('every trigger is gated in the first session (next_level, retry, daily_done, event_next, fail_home)', () => {
+    for (const trigger of cfg.ads.interstitial.triggers) {
+      expect(interstitialGate(input(1, { trigger, retryIndex: trigger === 'retry' ? 2 : undefined }))).toBe('first_session');
+      expect(interstitialGate(input(2, { trigger, retryIndex: trigger === 'retry' ? 2 : undefined }))).toBe('ok');
+    }
+  });
+
+  it('sessions 2 passes on to the next checks: the retry cadence, the 60 s grace, the 30 s floor', () => {
+    const now = input(2).now;
+    expect(interstitialGate(input(2, { trigger: 'retry', retryIndex: 1 }))).toBe('retry_cadence');
+    expect(interstitialGate(input(2, { sessionSec: 59 }))).toBe('grace');
+    expect(interstitialGate(input(2, { sessionSec: 60 }))).toBe('ok');
+    expect(interstitialGate(input(2, { lastAdAt: now - 29 * SEC }))).toBe('cooldown');
+    expect(interstitialGate(input(2, { lastAdAt: now - 30 * SEC }))).toBe('ok');
+  });
+
+  it('order: disabled, No Ads, unsupported, trigger and min_levels win over first_session; first_session wins over retry_cadence, grace and cooldown', () => {
+    expect(interstitialGate(input(1), mergeConfig({ ads: { enabled: false } }))).toBe('disabled');
+    expect(interstitialGate({ ...input(1), save: { ...input(1).save, purchases: { noAds: true } } })).toBe('no_ads');
+    expect(interstitialGate({ ...input(1), interstitialSupported: false })).toBe('unsupported');
+    expect(interstitialGate(input(1), mergeConfig({ ads: { interstitial: { triggers: ['retry'] } } }))).toBe('trigger');
+    expect(interstitialGate(input(1, { completed: 9 }))).toBe('min_levels');
+    expect(interstitialGate(input(1, { trigger: 'retry', retryIndex: 1 }))).toBe('first_session');
+    expect(interstitialGate(input(1, { sessionSec: 1 }))).toBe('first_session');
+    const now = input(1).now;
+    expect(interstitialGate(input(1, { lastAdAt: now - 1 * SEC }))).toBe('first_session');
+    expect(interstitialGate(input(1, { trigger: 'retry', retryIndex: 1, sessionSec: 1, lastAdAt: now - 1 * SEC }))).toBe('first_session');
+  });
+
+  it('fromSession 1, 0 or NaN: no check (the 2e rule: the first session shows ads too)', () => {
+    for (const fromSession of [1, 0, -3, Number.NaN]) {
+      const c = mergeConfig({ ads: { interstitial: { fromSession } } });
+      expect(interstitialGate(input(1), c)).toBe('ok');
+      expect(interstitialGate(input(0), c)).toBe('ok');
+      expect(fromSessionReached(1, c)).toBe(true);
+    }
+  });
+
+  it('a larger fromSession (3) gates sessions 1 and 2; a fraction is floored (2.9 → 2)', () => {
+    const three = mergeConfig({ ads: { interstitial: { fromSession: 3 } } });
+    expect(interstitialGate(input(1), three)).toBe('first_session');
+    expect(interstitialGate(input(2), three)).toBe('first_session');
+    expect(interstitialGate(input(3), three)).toBe('ok');
+    const frac = mergeConfig({ ads: { interstitial: { fromSession: 2.9 } } });
+    expect(interstitialGate(input(1), frac)).toBe('first_session');
+    expect(interstitialGate(input(2), frac)).toBe('ok');
+  });
+
+  it('a save whose sessions is not a number (undefined, NaN, a string) counts as not reached', () => {
+    for (const bad of [undefined, Number.NaN, '5', null]) {
+      const i = input(5);
+      const save = { ...i.save, sessions: bad as unknown as number };
+      expect(interstitialGate({ ...i, save })).toBe('first_session');
+      expect(fromSessionReached(bad as unknown as number)).toBe(false);
+      // With the check off the bad value is never read.
+      expect(interstitialGate({ ...i, save }, mergeConfig({ ads: { interstitial: { fromSession: 1 } } }))).toBe('ok');
+    }
   });
 });
 

@@ -8,6 +8,12 @@
 // may show an ad; else 'retry_cadence'), and the banner end date (ads.banner.untilDate: from that local
 // date the banner gate answers 'ended'). The cadence itself ("every level from level 10, 30 s floor") is
 // the cooldown step table (ads.interstitial.cooldownSec), unchanged code.
+// D-2e-25 (2026-10-14, the user: "starting from 2nd session in a lifetime"; no interstitial at all in the
+// player's first lifetime session): the interstitial gate also reads save.sessions (the boot counter,
+// src/app/boot.ts: 1 = the first launch ever; the FB cloud merge takes the max) and answers
+// 'first_session' below ads.interstitial.fromSession (2). Checked after min_levels and before the retry
+// cadence; fromSession ≤ 1 = no check (the 2e rule). The rest of the gate (every level from 10, the
+// 60 s session grace, the 30 s floor, the retry cadence) is unchanged.
 import { cfg, type BannerScreen, type GameConfig } from '../app/config';
 import type { SaveData } from './types';
 
@@ -19,8 +25,11 @@ export interface PacingInput {
   readonly now: number;
   /** Clock time when platform.start() resolved in this page load. */
   readonly sessionStartedAt: number;
-  /** `purchases.noAds` (phase2b §8.3) turns interstitials off; absent = not owned. */
-  readonly save: Pick<SaveData, 'progress' | 'ads' | 'firstSeenAt'> & { readonly purchases?: Pick<SaveData['purchases'], 'noAds'> };
+  /**
+   * `purchases.noAds` (phase2b §8.3) turns interstitials off; absent = not owned. D-2e-25 (2026-10-14):
+   * + `sessions`, the lifetime boot counter (1 = the first launch), read against ads.interstitial.fromSession.
+   */
+  readonly save: Pick<SaveData, 'progress' | 'ads' | 'firstSeenAt' | 'sessions'> & { readonly purchases?: Pick<SaveData['purchases'], 'noAds'> };
   /** capabilities().interstitial */
   readonly interstitialSupported: boolean;
   /**
@@ -31,7 +40,10 @@ export interface PacingInput {
   readonly retryIndex: number | null;
 }
 
-/** Why the gate said no ('ok' = show). Logged as result 'gated' when not 'ok' (Phase 2e: with `gate`). */
+/**
+ * Why the gate said no ('ok' = show). Logged as result 'gated' when not 'ok' (Phase 2e: with `gate`).
+ * D-2e-25 (2026-10-14): + 'first_session' (a lifetime session before ads.interstitial.fromSession).
+ */
 export type GateDecision =
   | 'ok'
   | 'disabled'
@@ -41,14 +53,16 @@ export type GateDecision =
   | 'min_levels'
   | 'grace'
   | 'cooldown'
-  | 'retry_cadence';
+  | 'retry_cadence'
+  | 'first_session';
 
 const DAY_MS = 86_400_000;
 
 /**
  * 02 §13.2, checked in the spec's order; the first failing condition is the reason:
  * ads.enabled → No Ads not owned (phase2b §8.3; rewarded ads stay) → capabilities.interstitial → trigger listed → completed ≥ minCompletedLevels (the
- * tutorial counts, dailies do not) → (Phase 2e) the retry cadence → session grace → tenure cooldown
+ * tutorial counts, dailies do not) → (D-2e-25, 2026-10-14) lifetime session ≥ ads.interstitial.fromSession
+ * ('first_session') → (Phase 2e) the retry cadence → session grace → tenure cooldown
  * since save.ads.lastAdAt (2e: a 30 s floor after the L1 flip, the same step table).
  */
 export function interstitialGate(input: PacingInput, c: GameConfig = cfg): GateDecision {
@@ -58,6 +72,7 @@ export function interstitialGate(input: PacingInput, c: GameConfig = cfg): GateD
   if (!input.interstitialSupported) return 'unsupported';
   if (!ic.triggers.includes(input.trigger)) return 'trigger';
   if (input.save.progress.completed < ic.minCompletedLevels) return 'min_levels';
+  if (!fromSessionReached(input.save.sessions, c)) return 'first_session';
   if (input.trigger === 'retry' && input.retryIndex !== null && !retryCadenceOk(input.retryIndex, c)) return 'retry_cadence';
   if (input.now - input.sessionStartedAt < ic.sessionGraceSec * 1000) return 'grace';
   const cooldownMs = cooldownSecFor(tenureDays(input.now, input.save.firstSeenAt), c) * 1000;
@@ -73,6 +88,18 @@ export function retryCadenceOk(retryIndex: number, c: GameConfig = cfg): boolean
   const n = Math.floor(c.ads.interstitial.retryEveryN);
   if (!(n > 1)) return true;
   return retryIndex > 0 && retryIndex % n === 0;
+}
+
+/**
+ * D-2e-25 (2026-10-14, the user: "starting from 2nd session in a lifetime"): whether lifetime session
+ * `sessions` (save.sessions, the boot counter: 1 = the first launch ever) may show interstitials, i.e.
+ * sessions ≥ floor(ads.interstitial.fromSession). fromSession ≤ 1 (or not a number): every session (the
+ * 2e rule). A sessions value that is not a number counts as not reached.
+ */
+export function fromSessionReached(sessions: number, c: GameConfig = cfg): boolean {
+  const n = Math.floor(c.ads.interstitial.fromSession);
+  if (!(n > 1)) return true;
+  return typeof sessions === 'number' && sessions >= n;
 }
 
 /** interstitialGate(input) === 'ok'. */

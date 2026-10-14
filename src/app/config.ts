@@ -59,8 +59,9 @@
 // ads.interstitial.fromSession (2: no interstitial in the player's first lifetime session; the gate
 // answers 'first_session') and ads.banner.collapseWhenEmpty (true: a banner screen whose load came back
 // empty gives its band back: Home, victory and event screens at once, the game screen from its next
-// mount, never mid-level). No existing value changed; banner.duringPlay stays on and rewarded videos
-// stay uncapped (the user's call).
+// mount, never mid-level) and, after the review, ads.banner.bandChangeGuardMs (400: buttons ignore taps
+// that long after a band changes on a screen already on show). No existing value changed; banner.duringPlay
+// stays on and rewarded videos stay uncapped (the user's call).
 
 /** The 17 locales of phase2b §6.2 (BCP 47 ids; FB `ll_CC` codes are mapped onto them by i18n/locale.ts, §6.3). */
 export type LocaleId =
@@ -260,6 +261,12 @@ export interface GameConfig {
        * until the screen unmounts).
        */
       readonly collapseWhenEmpty: boolean;
+      /**
+       * D-2e-25 review (2026-10-14): when the band of a screen that is already on show changes (a miss gives it
+       * back), the screen's buttons ignore taps for this long, so a tap aimed before the column moved does not
+       * land on the control that moved under it (Home: Daily → Play). 0 = no guard. Read only with collapseWhenEmpty.
+       */
+      readonly bandChangeGuardMs: number;
     };
     readonly unsupportedFallback: { readonly cooldownSec: number };
     /** Dev/e2e mock ad overlay length (04 §6.2). */
@@ -1434,6 +1441,7 @@ export const cfg: GameConfig = deepFreeze({
       untilDate: '2027-03-31',
       rateLimitedRetrySec: 15,
       collapseWhenEmpty: true, // D-2e-25 (2026-10-14)
+      bandChangeGuardMs: 400, // D-2e-25 review: about a reaction time plus a tap
     },
     unsupportedFallback: { cooldownSec: 600 },
     mock: { durationMs: 1500 },

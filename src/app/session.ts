@@ -18,14 +18,18 @@
 // Phase 2d (G1, docs/phase2d/look-spec.md §1.12, §1.14, §1.16, §4.3): the mouse helper (onMouse, its
 // per-X mark sounds), the level-start toast from playBoardEntry on a fresh board or a Retry (never on
 // a resumed board, a revive or the tutorial), and the banner during play: the band is decided at
-// mount (BannerFlow.eligible('game') → SessionMeta.bannerBand), a banner already up stays into an
-// eligible board (no hide), and the board entry's end is the game screen's screenShown('game').
+// mount (BannerFlow.eligible('game') → SessionMeta.bannerBand; D-2e-25: bandAtMount()), a banner already up
+// stays into an eligible board (no hide), and the board entry's end is the game screen's screenShown('game').
 // Phase 2d.1 (G1, docs/phase2d/helpers-spec.md §1.6, §2.5, §3.2, §4.1, §4.3, §4.6, §5): the two
 // level-start tickers (playTickers(pickTickerLines(…)) where 2d played the toast); the mouse's sounds
 // (`mouse` at each arrival, `mark` at each landing) and its deferred `unit_done`; the `points` sound
 // when the star lands (fx.points); the hint card's new props (cells, boardRect, cellRect); the banner
 // hidden while the hint is open and shown again after it (banner-flow hintOpened / hintClosed); the
 // per-attempt mouse count and the last board-change time for the pulse rule; HelperHost.reducedMotion.
+// D-2e-25 (2026-10-14, ads.banner.collapseWhenEmpty): both band decisions (the hide before the board and
+// SessionMeta.bannerBand) read BannerFlow.bandAtMount(): after an empty banner answer a new board mounts with no
+// band and no screenShown('game') (so it never loads one) until a banner loads again on any screen; never
+// mid-level. An open victory re-renders when its reserve changes (a miss gives it back; the shell does Home, events).
 import type { CellIndex, HintStep, Puzzle } from '../engine/types';
 import { eventEnd, eventRules, type EventDef } from '../game/events';
 import { newGame, restoreGame, toInProgress } from '../game/factory';
@@ -802,8 +806,9 @@ export function createSession(deps: SessionDeps): Session {
       tutorialStep: mode === 'tutorial' ? 1 : null,
       substitute,
       event: eventDef && req.mode === 'event' ? { def: eventDef, index: req.index } : null,
-      // §1.16: decided once, at mount (the band never appears or goes mid-level, except for No Ads).
-      bannerBand: deps.banners?.eligible('game', { firstRunTutorial: mode === 'tutorial' }) === true,
+      // §1.16: decided once, at mount (the band never appears or goes mid-level, except for No Ads). D-2e-25:
+      // bandAtMount() = eligible('game') unless the last banner answer was empty with nothing up (no band, no load).
+      bannerBand: deps.banners?.bandAtMount({ firstRunTutorial: mode === 'tutorial' }) === true,
       // Phase 2e §2.3: the ranking's WinSubmission.source.
       source,
     };
@@ -982,8 +987,9 @@ export function createSession(deps: SessionDeps): Session {
       hideLoading();
       // §3.2 / phase 2d §1.16: a banner that is up stays only when the new game screen may carry one
       // (banner-to-banner: no screenGone + hide pair); otherwise (the tutorial, duringPlay off, No
-      // Ads, under 10 levels) it is hidden before the board.
-      if (deps.banners?.eligible('game', { firstRunTutorial: req.mode === 'tutorial' }) !== true) {
+      // Ads, under 10 levels; D-2e-25: the last answer empty, nothing up) it is hidden before the board.
+      // The same rule as SessionMeta.bannerBand at mount (bandAtMount()).
+      if (deps.banners?.bandAtMount({ firstRunTutorial: req.mode === 'tutorial' }) !== true) {
         deps.banners?.screenGone();
         void deps.banners?.hide().catch(() => undefined);
       }
@@ -1149,6 +1155,18 @@ export function createSession(deps: SessionDeps): Session {
       if (router.isOpen('victory')) router.update('victory', victoryProps(w));
     }),
     bus.on('overlay:failed', ({ id }) => onOverlayFailed(id)),
+    // D-2e-25 (2026-10-14, ads.banner.collapseWhenEmpty): an empty banner answer on the open victory gives its reserve
+    // back (banner-flow setReserved(false)), and a later load there (its one timer, a modal's close) takes it again:
+    // the victory, whose props are built at open, re-renders with the store's reserve, as Home and the event screen
+    // do through the shell, so a banner never lands over its buttons. Only with the switch on (off: the 2e rule, no
+    // re-render); leaving the victory closes it (and clears `win`) before the reserve goes.
+    store.select(
+      (s) => s.ui.bannerReserved,
+      () => {
+        const w = win;
+        if (w && c.ads.banner.collapseWhenEmpty && router.isOpen('victory')) router.update('victory', victoryProps(w));
+      },
+    ),
   ];
 
   return session;
