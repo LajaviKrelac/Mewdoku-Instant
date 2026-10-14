@@ -152,6 +152,7 @@ The 16 catalogues gained small blocks next to each workstream's anchor key, draf
 - **Leaderboard update (12 keys, 2026-10-12):** the status pills (`ladder.status.*`), the "New ranking" card (`ladder.session.*`), the rank-up bubble (`ladder.climb.*`) and two info lines (`ladder.info.window.rollingJoin`, `ladder.info.activity`).
 - **UI batch (2026-10-14):** the chest name and count (`ladder.chest.*`); the profile sheet's typed name, tabs, looks and their unlock lines (`nick.*`; `nick.title` → "Your profile", `nick.saved` → "Profile saved."); the Daily Streak screen (`streak.screen.*`, `streak.week.*`); the victory's praise and statistic lines (`victory.line.*`, `victory.stat.*`); the level-start lines (`ticker.*`, `ticker.odds.*`, `src/i18n/en/ui-tickers.ts`); "Extra hard" (`common.extraHard`). Removed everywhere: `ladder.players.*`, `ladder.rewards.line.*`, `nick.edit.a11y`, `nick.first`, `nick.second`, `nick.number`, `nick.shuffle`, `nick.fallback`, `nick.error`.
 - `docs/i18n/drafted-from.json` rewritten (`i18n-check --write-drafted-from`): no stale warning. `npm run i18n:check`: OK; the 6 width warnings are the older No Ads Buy label and an Italian ranking title.
+- **Review fix (2026-10-14):** `ticker.retry.again` lost its try number (the session counts only Retries since the board was opened, so a number could be lower than the real try count); its 16 drafts were redrafted without `{count}`.
 
 Points a reviewer should check first:
 

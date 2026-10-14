@@ -268,7 +268,7 @@
   "ticker.retry.found": "Last try: {placed} of {n} cats placed. Let's top that!",
   "ticker.retry.close.one": "Just {count} cat short last time. So close!",
   "ticker.retry.close.other": "Just {count} cats short last time. So close!",
-  "ticker.retry.again": "Try {count}: you know this board better every time",
+  "ticker.retry.again": "You know this board better with every try",
   "ticker.hard.first": "Your first Hard level! Take your time, think it through",
   "ticker.hard.beaten.one": "You've beaten {count} Hard level so far. Impressive!",
   "ticker.hard.beaten.other": "You've beaten {count} Hard levels so far. Impressive!",

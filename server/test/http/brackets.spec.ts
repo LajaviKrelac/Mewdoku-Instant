@@ -86,7 +86,9 @@ describe('assignment and capacity', () => {
   it('the same player racing itself: one join, every win counted once', async () => {
     const t = makeTestApp();
     const [a] = await signedIn(t, 1, 'self');
-    const res = await Promise.all([a!.wins([makeWin('L2')]), a!.wins([makeWin('L3')]), a!.wins([makeWin('L4')])]);
+    // UI batch review: one level and two dailies, so no win depends on the order the three requests commit in (a level
+    // at or below the player's max_level answers 'already_counted', so L2/L3/L4 raced flaked whenever L4 won first).
+    const res = await Promise.all([a!.wins([makeWin('L2')]), a!.wins([makeWin('D2026-11-15')]), a!.wins([makeWin('D2026-11-14')])]);
     expect(res.flatMap((r) => r.results.map((x) => x.verdict)).filter((v) => v === 'accepted')).toHaveLength(3);
     expect(t.count('SELECT COUNT(*) FROM members')).toBe(1);
     expect(t.rows<{ points: number }>('SELECT points FROM members')[0]?.points).toBe(9);
