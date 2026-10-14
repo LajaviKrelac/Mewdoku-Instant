@@ -123,3 +123,44 @@ and a rank-up animation after a win.
   `9ec83928-1f80-444c-b418-1552170aaffa`; the first try hit Cloudflare's rate limit, code 971, and passed after the
   wait). Smoke: `/v1/health` ok, `/v1/config` ok, `POST /v1/presence` without a token 401 (the route is live). The FB
   test builds now get auto-join, the card and the activity pills. Production is not migrated or deployed.
+
+## UI batch (branch `claude/brave-brahmagupta-p1g0b4`, 2026-10-13 … 2026-10-14)
+
+The user's batch after the leaderboard update (their reference screenshots in the session), built by six parallel
+workstreams, merged and reviewed by the lead; per-area notes, decisions and sizes in `docs/ui-batch/*.md`.
+
+- **Leaderboard (both screens):** no "+N fish · Your total" on the post-win panel, no "top 3 win…" line, no visible
+  player count; the stopwatch directly under the title; three different chests (gold with a crown band, silver, wood;
+  `reward-chest-1..3`) shown only on rows the server could pay; a tap opens a tooltip above the chest with the place's
+  rewards from the server's `rules.places` (the tooltip takes no taps; an outside tap or Esc only closes it); the
+  post-win card about one row taller; my row is the real row, `position: sticky` at whichever edge it leaves by; the Home
+  sheet has no pencil, (i) at the start, the title centred. **Server rewards re-set: 1st 3 + 3, 2nd 2 + 2, 3rd 1 + 1.**
+- **Profile:** typed names (server `nickname.freeText` default true, kill switch kept; shared shape rule
+  `src/shared/nick-text.ts`; moderation hardened: look-alike folding both ways, native-script terms, an innocent-names
+  list, IME-safe input); the word/number/shuffle pickers are gone; 8 frames and 8 backgrounds (0 = plain; ids 0–2 free,
+  the rest unlock by level, best streak or a claimed ranking reward, `src/game/looks.ts`), stored on the server
+  (migration `0004_profile_looks.sql`) and drawn wherever a picture shows (`avatarBadge`). Not built: a way for players to
+  report a name (admin can reset by player code only) — worth adding before a public launch with typed names.
+- **Daily Streak screen** (overlay `streak`): after the day's first counted win (between the victory's primary and the
+  next board) with Continue, and from Home's pill with a back arrow; our flame (faded until today counts), the run, "Best",
+  the week row = the run's current 7-day cycle with real weekday names and the chest on the paying day; the victory's
+  streak row is off (`dayStreak.victoryRow: false`, `dayStreak.screenAfterWin: true`).
+- **Victory:** fish only (no "+N", no "Your total"), points kept, no Home button (the daily's primary starts the next
+  level too); up to two praise lines from this game's own facts (`src/app/victory-lines.ts`); the daily percentile from
+  the server's real solve times once 20 other players solved it (migration `0005_daily_times.sql`, `WinResult.daily`),
+  else an estimate (`src/game/solve-time-model.ts`), always worded "about" (spec §0.4 H-2a).
+- **Level-start lines:** never cut ("…"), longer and richer; `ticker.odds.*` approximate expectations from our own
+  `src/game/level-odds.ts` (H-2a), retry encouragement from the lost attempt, records from the player's own save.
+- **Level button:** red frame + "HARD" tag on Hard levels, purple + "EXTRA HARD" on our hardest Hard boards (grade 5 or
+  effort ≥ `levels.extraHardMinEffort` 90: 30 of the 98 shipped Hard levels, `src/game/level-tiers.ts`); the game bar's
+  badge uses the same colours.
+- **Honesty change:** spec §0.4 H-2a (the user's decision): approximate statistics are allowed only in `ticker.odds.*`
+  and `victory.stat.*` (`scripts/i18n-check.ts` `ESTIMATE_KEY_PREFIXES`).
+- **Review:** seven read-only reviewers found 21 issues (8 major: the tooltip over the hearts, moderation regressions and
+  bypasses, Hindi name widths, IME Enter, a "new best" line that could be false); all fixed with tests. A pre-existing
+  flaky server test (`brackets.spec` self-race, order-dependent levels) was fixed too.
+- **Budgets:** every touched row re-set to measured + about 3 % (04 §9 "UI batch"); main JS 353.7 → 367.9 KB is the one
+  to watch (moving the victory and ticker pickers into their lazy chunks would win back about 6 KB).
+- **Deploy order (done on staging 2026-10-14):** `db:migrate:staging` (0004, 0005) **before** `deploy:staging` (version
+  `276dbd3f-94f0-4114-a686-34ab7ca54ed0`); smoke: `/v1/health` ok, `PUT /v1/me/profile` and `POST /v1/presence` without a
+  token 401. Production: not migrated or deployed (needs 0003, 0004 and 0005 before its deploy).
