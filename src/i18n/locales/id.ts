@@ -406,7 +406,7 @@ export const catalog: LocaleCatalog = {
   'ticker.odds.retry': 'Sekitar {pct}% berhasil di percobaan berikutnya. Giliranmu!',
   'ticker.retry.found': 'Percobaan lalu: {placed} dari {n} kucing. Ayo lampaui!',
   'ticker.retry.close.other': 'Tadi kurang {count} kucing saja. Nyaris!',
-  'ticker.retry.again': 'Percobaan ke-{count}: kamu makin kenal teka-teki ini',
+  'ticker.retry.again': 'Tiap percobaan, kamu makin kenal teka-teki ini',
   'ticker.hard.first': 'Level sulit pertamamu! Santai, pikirkan baik-baik',
   'ticker.hard.beaten.other': 'Kamu sudah menaklukkan {count} level sulit. Keren!',
   'ticker.flawless.other': '{count} level selesai tanpa satu kesalahan pun. Hebat!',

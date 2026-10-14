@@ -431,7 +431,7 @@ export const catalog: LocaleCatalog = {
   'ticker.retry.found': 'Son deneme: {n} kediden {placed} tanesi yerleşti. Daha iyisi!',
   'ticker.retry.close.one': 'Geçen sefer sadece {count} kedi eksikti. Çok yaklaştın!',
   'ticker.retry.close.other': 'Geçen sefer sadece {count} kedi eksikti. Çok yaklaştın!',
-  'ticker.retry.again': '{count}. deneme: Bu bulmacayı artık daha iyi tanıyorsun',
+  'ticker.retry.again': 'Her denemede bu bulmacayı daha iyi tanıyorsun',
   'ticker.hard.first': 'İlk zor bölümün! Zaman senin, iyice düşün',
   'ticker.hard.beaten.one': 'Şimdiye kadar {count} zor bölüm geçtin. Harika!',
   'ticker.hard.beaten.other': 'Şimdiye kadar {count} zor bölüm geçtin. Harika!',

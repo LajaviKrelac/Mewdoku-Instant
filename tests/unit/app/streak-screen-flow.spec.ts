@@ -56,6 +56,22 @@ describe('selectStreakScreen (the save only: run, best, the run\'s current cycle
     expect(d.reward).toEqual({ hints: 2, kitties: 2 });
     expect(d.week[6]).toMatchObject({ dateKey: TODAY, today: true, played: true, gift: true, paid: true });
   });
+
+  it('review F15: in mode \'win\' the screen keeps the date the win counted when the press comes after the day boundary', () => {
+    const nextDay = NOW + 86_400_000; // won before the day boundary, the victory's primary pressed after it
+    expect(dailyDateKey(nextDay)).toBe(dayAt(1));
+    const mid = selectStreakScreen(app({ dayStreak: runOf(3, 0) }), nextDay, 'win');
+    expect(mid.streak).toMatchObject({ state: 'done', day: 3, run: 3 });
+    expect(mid.week.find((c) => c.today)).toMatchObject({ dateKey: TODAY, played: true });
+    // Day 7: the closed cycle with its paid gift, never a new cycle that contradicts the reward line.
+    const ds = { ...runOf(7, 0), paid: [`${TODAY}|2|2`] };
+    const d7 = selectStreakScreen(app({ dayStreak: ds }), nextDay, 'win', { hints: 2, kitties: 2 });
+    expect(d7.streak).toMatchObject({ state: 'done', day: 7, rewardDay: true, run: 7 });
+    expect(d7.week.map((c) => c.played)).toEqual([true, true, true, true, true, true, true]);
+    expect(d7.week[6]).toMatchObject({ dateKey: TODAY, today: true, gift: true, paid: true });
+    // Home keeps the clock's day: the next day is not counted yet.
+    expect(selectStreakScreen(app({ dayStreak: runOf(3, 0) }), nextDay, 'home').streak).toMatchObject({ state: 'alive', day: 3 });
+  });
 });
 
 describe('streakScreenDue / afterStreakScreen', () => {
@@ -94,6 +110,15 @@ describe('streakScreenDue / afterStreakScreen', () => {
     p.onPrimary();
     expect(pressed).toBe(3);
     expect(opened).toHaveLength(1);
+  });
+
+  it('review F15: a press after the day boundary still shows the day the win counted (lit, today\'s check)', () => {
+    const opened: { id: OverlayId; props: unknown }[] = [];
+    const late = { ...host(opened), now: () => NOW + 86_400_000 };
+    afterStreakScreen(late, { streak: STREAK }, { onPrimary: () => undefined }).onPrimary();
+    const props = opened[0]?.props as { streak: { state: string; day: number }; week: { dateKey: string; today: boolean; played: boolean }[] };
+    expect(props.streak).toMatchObject({ state: 'done', day: 2 });
+    expect(props.week.find((c) => c.today)).toMatchObject({ dateKey: TODAY, played: true });
   });
 
   it('props wrapped again for the same win (an update) never show the screen a second time', () => {

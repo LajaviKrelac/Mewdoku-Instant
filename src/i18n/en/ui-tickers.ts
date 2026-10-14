@@ -15,7 +15,7 @@ export const enUiTickers = {
   'ticker.retry.found': "Last try: {placed} of {n} cats placed. Let's top that!",
   'ticker.retry.close.one': 'Just {count} cat short last time. So close!',
   'ticker.retry.close.other': 'Just {count} cats short last time. So close!',
-  'ticker.retry.again': 'Try {count}: you know this board better every time',
+  'ticker.retry.again': 'You know this board better with every try',
   // A Hard level (line 1), and the Hard levels behind the player (line 1 on Hard, else line 2).
   'ticker.hard.first': 'Your first Hard level! Take your time, think it through',
   'ticker.hard.beaten.one': "You've beaten {count} Hard level so far. Impressive!",

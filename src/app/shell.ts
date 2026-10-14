@@ -74,7 +74,7 @@ export interface ShellDeps {
   readonly eventTop?: EventTopFlow;
   /** Board size of a shipped level when known (personal records). */
   levelSize?(level: number): number | null;
-  /** UI batch (2026-10-13): a level's board (grade, effort) when it is in memory, for the Home button's tier. */
+  /** UI batch (2026-10-13): a level's board (grade, effort) when in memory (levels.peekBoard), for Home's tier. */
   levelBoard?(level: number): BoardDifficulty | null;
   /**
    * Settings → Language: applies the new override (boot resolves and loads the locale). Resolves the

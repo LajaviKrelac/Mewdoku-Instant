@@ -60,6 +60,8 @@ Tests changed: `day-streak.spec`, `format.spec`, `hud-2e.spec` (pill tap), `rout
    "day 1"); without a live run day 1 is today. *Played* = days of the live run only, so an older broken run's dates in
    the same week never show (map R9). The gift is drawn on every cycle day `rewardForDay` pays (today only day 7; also any
    `dayRewards` row), open when `paid` holds that date. It reads SUN … SAT only when the cycle started on a Sunday.
+   After a win (mode `win`) "today" is the date the win counted (the record's last date), not the clock's: a victory
+   primary pressed after the day boundary still shows the day just lit (review F15). From Home it is the clock's day.
 4. **Status line**: on a reward win the reward line ("Streak reward: +2 hints and +2 kitties", `victory.streakReward`,
    reused) replaces the sentence (the two said the same thing).
 5. **Continue is gated** for `fx.winButtonDelayMs` (600 ms), like the victory's primary, so a double tap on the victory

@@ -476,7 +476,7 @@ export const catalog: LocaleCatalog = {
   'ticker.retry.close.few': 'Ostatnio zabrakło tylko {count} kotów. Tak blisko!',
   'ticker.retry.close.many': 'Ostatnio zabrakło tylko {count} kotów. Tak blisko!',
   'ticker.retry.close.other': 'Ostatnio zabrakło tylko {count} kota. Tak blisko!',
-  'ticker.retry.again': 'Próba nr {count}: znasz tę zagadkę coraz lepiej',
+  'ticker.retry.again': 'Z każdą próbą znasz tę zagadkę lepiej',
   'ticker.hard.first': 'Twój pierwszy trudny poziom! Spokojnie, przemyśl to',
   'ticker.hard.beaten.one': 'Pokonane trudne poziomy: {count}. Imponujące!',
   'ticker.hard.beaten.few': 'Pokonane trudne poziomy: {count}. Imponujące!',

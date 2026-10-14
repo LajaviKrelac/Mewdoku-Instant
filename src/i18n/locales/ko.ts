@@ -407,7 +407,7 @@ export const catalog: LocaleCatalog = {
   'ticker.odds.retry': '약 {pct}%가 다음 시도에 성공해요. 이제 당신 차례!',
   'ticker.retry.found': '지난번: {n}마리 중 {placed}마리 배치. 이번엔 더!',
   'ticker.retry.close.other': '지난번엔 고양이 {count}마리만 남았어요. 아까워요!',
-  'ticker.retry.again': '{count}번째 시도: 이 퍼즐이 점점 익숙해져요',
+  'ticker.retry.again': '시도할 때마다 이 퍼즐이 더 익숙해져요',
   'ticker.hard.first': '첫 어려운 레벨이에요! 천천히 생각해 보세요',
   'ticker.hard.beaten.other': '지금까지 어려운 레벨 {count}개를 깼어요. 대단해요!',
   'ticker.flawless.other': '실수 없이 푼 레벨 {count}개. 훌륭해요!',

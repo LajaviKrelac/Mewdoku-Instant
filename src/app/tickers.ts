@@ -13,8 +13,9 @@
 //     approximate expectation from game/level-odds.ts, the board's own grade, effort, size and Hard flag, rounded and
 //     worded "about". Line 1 shows one on a Hard level and on a tough board (estimated first try ≤
 //     fx.tickers.oddsMaxFirstTryPct), and on a Retry;
-//   - a Retry also says how the lost attempt went (its own cats placed, session memory), how close it came, or which
-//     try this is;
+//   - a Retry also says how the lost attempt went (its own cats placed, session memory), how close it came, or (from
+//     the second Retry in a row) that each go teaches the board: no try number (review F19), since `attempt` counts
+//     only the Retries since this board was mounted (Home or a reload starts it again at 0), not every try of it;
 //   - a Hard level: the player's first one, or how many they have beaten (progress: levels are played in order);
 //   - line 2 gains the player's own records: levels solved without a mistake, the streak, dailies solved, Hard levels
 //     beaten, and every fx.tickers.milestoneEvery levels the milestone (which takes line 2).
@@ -88,7 +89,7 @@ function oddsLines(input: TickerInput, c: GameConfig): TickerLine[] {
   return out;
 }
 
-/** UI batch: line 1 after a Retry: how close the lost attempt came, else the odds, its cats, the try number or the cheer. */
+/** UI batch: line 1 after a Retry: how close the lost attempt came, else the odds, its cats, "again" or the cheer. */
 function retryLine(input: TickerInput, c: GameConfig): TickerLine {
   const last = input.lastTry;
   const placed = last && last.n === input.n && last.placed > 0 && last.placed < last.n ? last.placed : 0;
@@ -96,7 +97,7 @@ function retryLine(input: TickerInput, c: GameConfig): TickerLine {
   if (placed > 0 && short <= c.fx.tickers.retryCloseCats) return { key: 'ticker.retry.close', count: short };
   const pool: TickerLine[] = [{ key: 'ticker.odds.retry', pct: levelOdds(input).retryPct }];
   if (placed > 0) pool.push({ key: 'ticker.retry.found', placed, n: input.n });
-  if (input.attempt >= 2) pool.push({ key: 'ticker.retry.again', count: input.attempt + 1 });
+  if (input.attempt >= 2) pool.push({ key: 'ticker.retry.again' }); // no number: see the header (review F19)
   pool.push({ key: 'toast.start.retry' });
   return pick(pool, input.seed, 'line1');
 }

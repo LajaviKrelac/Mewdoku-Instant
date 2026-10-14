@@ -20,10 +20,13 @@ button frames for HARD (red) and EXTRA HARD (purple) levels."
     (`npx tsx scripts/gen-level-tiers.ts`; `--check` exits 1 when stale). `tests/property/level-tiers.spec.ts`
     re-reads every pack record and fails when the list, its header or the share (25–35 %) drifts, and checks that the
     list path and the board path of `levelTier` agree for all 1 000 levels.
-  - When a board is in memory it decides (`ViewContext.levelBoard`, wired boot → shell from `levels.peekLevel`): a
-    loaded pack record (same answer as the list), a **cached substitute board** (the board the player will really get),
-    or a **generated endless board**. An endless Hard level whose board is not generated yet shows **Hard**, never Extra
-    hard (we never claim more than the board can back). Only Hard levels look the board up.
+  - When a board is in memory it decides (`ViewContext.levelBoard`, wired boot → shell from `levels.peekBoard`): a
+    loaded pack record (same answer as the list), a **generated endless board**, or a **substitute board once Play has
+    generated it this session** (review F20: `peekBoard` = `peekLevel`, else the resolved substitute; `peekLevel` and
+    the records stay without substitutes). Before the first substitute play (a pack that fails to load, a corrupt record)
+    Home can only know the shipped board's tier from the list, so it may differ from the substitute's until then. An
+    endless Hard level whose board is not generated yet shows **Hard**, never Extra hard (we never claim more than the
+    board can back). Only Hard levels look the board up.
   - The game bar's badge uses the board being played (`selectGameView`: `session.hard` + `isExtraHardBoard(game.puzzle)`).
 - **Frames on Home's Play button** (`.home__play[data-tier=hard|extra]`, first-load `src/styles/overlays.css`): the
   button's own shadow draws a white 3 px separator ring, a 4 px ring in the tier colour (red / purple) and a 4 px 3D
@@ -48,7 +51,7 @@ button frames for HARD (red) and EXTRA HARD (purple) levels."
 | LB-1 | The tier label is a **tag on the frame's top edge for both tiers**, never inline. The old inline white pill (`.btn--primary .badge--hard`, white with `--hard` text) is removed. | At 320 px the button has 224 px of content; "Level 1000" (≈ 130 px) and "EXTRA HARD" (≈ 100 px) do not fit side by side, and de/ru/hi are longer. One placement for both tiers keeps Home consistent; the label stays centred. |
 | LB-2 | The frame replaces the orange 3D edge on framed buttons (the deep edge is in the tier colour). | Red on orange is 1.66:1 and purple 2.01:1; the white ring separates them, the tier-coloured edge makes the frame read as one object. |
 | LB-3 | The game bar shows the tier too (Extra hard in purple, Hard in red). | Plan: "Make the game-bar badge follow the same colours"; a red "Hard" in game after a purple "Extra hard" on Home would contradict itself. The h1's accessible name stays the title only (unchanged behaviour). |
-| LB-4 | `ViewContext.levelBoard` (+ `ShellDeps.levelBoard`, boot's `levelBoard`) instead of only the list. | The plan's "endless levels use the puzzle when known"; it also keeps a substitute board honest. |
+| LB-4 | `ViewContext.levelBoard` (+ `ShellDeps.levelBoard`, boot's `levelBoard`) instead of only the list. | The plan's "endless levels use the puzzle when known"; with `levels.peekBoard` (review F20) Home also agrees with the game bar on a substitute board once it has been generated (not before: the list describes the shipped board). |
 | LB-5 | No npm script for the generator (command in the generated file's header and the script's usage line). | Keeps `package.json` out of the six-way merge. The property test is the guard. |
 | LB-6 | The guard is a **new** property file, not an edit of `tests/property/levels.spec.ts` (its header says read-only). | Ownership. |
 | LB-7 | Tokens (ours, not measured): `--tier-hard #CF2A2A` (white 5.23), `--tier-hard-deep #9E1C1C` (7.96), `--tier-extra #7A3CC8` (white 6.35), `--tier-extra-deep #55278F` (10.13). `--hard` keeps `#6C3FB5` (the bulb art's violet; no stylesheet uses it any more, its comment says so). | Distinct from `--badge` (count badges) and from `--hard`; every small-text pair ≥ 4.5. |
@@ -61,7 +64,7 @@ button frames for HARD (red) and EXTRA HARD (purple) levels."
   (generated), `scripts/gen-level-tiers.ts`, `src/app/config.ts` (`levels.extraHardMinEffort: 90`).
 - App: `src/app/views.ts` (`ViewContext.levelBoard`; `HomeView.tier` in `selectHomeView`; `GameView.tier` in
   `selectGameView`), `src/app/shell.ts` (`ShellDeps.levelBoard`, passed into the view context), `src/app/boot.ts`
-  (`levelBoard` from `peekLevel`).
+  (`levelBoard` from `peekBoard`), `src/game/levels-repo.ts` (`peekBoard`, review F20).
 - UI: `src/ui/screens/home-screen.ts` (`HomeView.tier?`, the tag `.home__tier`, `data-tier`; `data-hard` is gone, nothing
   read it), `src/ui/screens/game-screen.ts` (`GameView.tier?` → bar), `src/ui/hud/game-bar.ts` (`GameBarProps.tier?`,
   `.badge--extra`, relabel on a tier change).

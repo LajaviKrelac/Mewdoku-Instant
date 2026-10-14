@@ -58,8 +58,10 @@ export interface ViewContext {
   /** Board size of a shipped level when it is known without loading (personal records "Your best n×n"). */
   readonly levelSize?: (level: number) => number | null;
   /**
-   * UI batch (2026-10-13, levelbutton): a level's board when it is in memory without loading (a loaded pack, a cached
-   * substitute or generated endless board), for the Home button's tier. Absent or null: the shipped list (levelTier).
+   * UI batch (2026-10-13, levelbutton): a level's board when it is in memory without loading (a loaded pack record, a
+   * generated endless board, or a substitute board once Play has generated it this session: levels.peekBoard), for the
+   * Home button's tier. Absent or null: the shipped list (levelTier), which describes the shipped pack board; before
+   * the first substitute play Home cannot know a substitute's tier (review F20).
    */
   readonly levelBoard?: (level: number) => BoardDifficulty | null;
   /** phase2b §2.2: the win flow is blocking (from WON until the ranking panel opens): Home and Gear are aria-disabled. */

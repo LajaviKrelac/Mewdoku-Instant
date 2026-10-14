@@ -21,10 +21,15 @@ import { streakStripOf } from './views';
 
 export type StreakScreenData = Omit<StreakScreenProps, 'onDone'>;
 
-/** The screen's data for `now` (today = dailyDateKey(now)); `reward` = what this win paid (mode 'win'). Pure. */
+/**
+ * The screen's data; `reward` = what this win paid (mode 'win'). Pure. Today = dailyDateKey(now) from Home. Mode 'win'
+ * (review F15) keeps the date the win counted: the press can come after the day boundary (a win at 23:59, the victory's
+ * primary at 00:00), and the screen must still show the day just lit, never the next, uncounted one. countWin only
+ * counts a date later than the last one, so on the day's first counted win that date is the record's last date.
+ */
 export function selectStreakScreen(state: AppState, now: number, mode: StreakScreenProps['mode'], reward: Reward | null = null, c: GameConfig = cfg): StreakScreenData {
-  const today = dailyDateKey(now, c);
   const ds = state.save.dayStreak;
+  const today = (mode === 'win' ? ds.dates[ds.dates.length - 1] : undefined) ?? dailyDateKey(now, c);
   const v = streakView(ds, today, c);
   return {
     mode,

@@ -407,7 +407,7 @@ export const catalog: LocaleCatalog = {
   'ticker.odds.retry': 'ราว {pct}% ผ่านได้ในครั้งถัดไป ตาคุณแล้ว!',
   'ticker.retry.found': 'ครั้งก่อน: วางแมวได้ {placed} จาก {n} ตัว มาทำให้ดีกว่าเดิม!',
   'ticker.retry.close.other': 'ครั้งก่อนขาดแมวแค่ {count} ตัว เกือบแล้ว!',
-  'ticker.retry.again': 'ครั้งที่ {count}: คุณรู้จักปริศนานี้ดีขึ้นทุกครั้ง',
+  'ticker.retry.again': 'คุณรู้จักปริศนานี้ดีขึ้นทุกครั้งที่ลอง',
   'ticker.hard.first': 'ด่านยากด่านแรกของคุณ! ค่อยๆ คิดให้รอบคอบ',
   'ticker.hard.beaten.other': 'คุณผ่านด่านยากมาแล้ว {count} ด่าน เก่งมาก!',
   'ticker.flawless.other': 'ผ่าน {count} ด่านโดยไม่พลาดเลยสักครั้ง เยี่ยม!',

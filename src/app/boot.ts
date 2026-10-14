@@ -371,7 +371,9 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
   };
   const levelSize = (level: number): number | null => attempt(() => levels.peekLevel(level)?.n ?? null, null);
   // UI batch (2026-10-13): the Home button's Hard / Extra hard tier from the board in memory (game/ramp.ts levelTier).
-  const levelBoard = (level: number): BoardDifficulty | null => attempt(() => levels.peekLevel(level), null);
+  // Review F20: peekBoard, so a substitute generated this session decides as it does in the game bar (records keep
+  // peekLevel above, which never returns a substitute).
+  const levelBoard = (level: number): BoardDifficulty | null => attempt(() => levels.peekBoard(level), null);
   const viewCtxFor = () => ({
     now: clock.now(),
     capabilities: platform.capabilities(),

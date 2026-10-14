@@ -63,7 +63,7 @@ describe('ticker lines (helpers-spec §5.4)', () => {
     }
   });
 
-  it('[UI batch] the richer lines: the odds with {pct} and tries in halves, the Retry\'s cats and try number, the records, the milestone', () => {
+  it('[UI batch] the richer lines: the odds with {pct} and tries in halves, the Retry\'s cats, the records, the milestone', () => {
     expect(tickerText({ key: 'ticker.odds.firstTry', pct: 45 })).toBe('About 45% of players crack this board on their first go');
     expect(tickerText({ key: 'ticker.odds.retry', pct: 70 })).toBe('About 70% of players solve it on the next try. Your turn!');
     expect(tickerText({ key: 'ticker.odds.tries', count: 2.5 })).toBe('On average, players take about 2.5 tries here. No rush!');
@@ -72,7 +72,9 @@ describe('ticker lines (helpers-spec §5.4)', () => {
     expect(tickerText({ key: 'ticker.retry.found', placed: 6, n: 9 })).toBe("Last try: 6 of 9 cats placed. Let's top that!");
     expect(tickerText({ key: 'ticker.retry.close', count: 1 })).toBe('Just 1 cat short last time. So close!');
     expect(tickerText({ key: 'ticker.retry.close', count: 2 })).toBe('Just 2 cats short last time. So close!');
-    expect(tickerText({ key: 'ticker.retry.again', count: 3 })).toBe('Try 3: you know this board better every time');
+    // Review F19: no try number (the session's Retries in a row are not the board's tries).
+    expect(tickerText({ key: 'ticker.retry.again' })).toBe('You know this board better with every try');
+    expect(en['ticker.retry.again']).not.toMatch(/[{}\d]/);
     expect(tickerText({ key: 'ticker.hard.first' })).toBe(en['ticker.hard.first']);
     expect(tickerText({ key: 'ticker.hard.beaten', count: 1 })).toBe("You've beaten 1 Hard level so far. Impressive!");
     expect(tickerText({ key: 'ticker.hard.beaten', count: 12 })).toBe("You've beaten 12 Hard levels so far. Impressive!");

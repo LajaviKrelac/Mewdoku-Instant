@@ -406,7 +406,7 @@ export const catalog: LocaleCatalog = {
   'ticker.odds.retry': 'Khoảng {pct}% giải được ở lần thử tiếp theo. Đến lượt bạn!',
   'ticker.retry.found': 'Lần trước: đặt được {placed} trên {n} mèo. Vượt qua nào!',
   'ticker.retry.close.other': 'Lần trước chỉ thiếu {count} chú mèo. Suýt nữa thôi!',
-  'ticker.retry.again': 'Lần thử thứ {count}: bạn ngày càng hiểu câu đố này hơn',
+  'ticker.retry.again': 'Bạn ngày càng hiểu câu đố này hơn sau mỗi lần thử',
   'ticker.hard.first': 'Màn khó đầu tiên của bạn! Cứ thong thả suy nghĩ',
   'ticker.hard.beaten.other': 'Bạn đã vượt qua {count} màn khó. Ấn tượng lắm!',
   'ticker.flawless.other': '{count} màn giải xong không một lỗi nào. Giỏi quá!',

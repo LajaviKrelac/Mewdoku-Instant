@@ -21,7 +21,7 @@ import { createHarness, levelPuzzle, loseGame, NOW, slice, SOL5, startLevel, win
 /** Phase 2d.1 §5.5: line 1's key of each playTickers call (the trigger of 2d's toast). */
 const starts = (h: Harness): string[] => (h.router.game?.tickers ?? []).map((lines) => lines[0].key);
 const FRESH = ['ticker.cats', 'toast.start.level'];
-/** UI batch (messages): line 1 after a Retry (the odds, the lost attempt's cats or closeness, the try number, the cheer). */
+/** UI batch (messages): line 1 after a Retry (the odds, the lost attempt's cats or closeness, the again line, the cheer). */
 const RETRY = /^(toast\.start\.retry|ticker\.odds\.retry|ticker\.retry\.(found|close|again))$/;
 
 /** After a revive (1 fish left): one more wrong cat (a tile loseGame did not use) loses again; O4 opens. */

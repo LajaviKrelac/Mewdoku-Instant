@@ -429,7 +429,7 @@ export const catalog: LocaleCatalog = {
   'ticker.retry.found': 'Zuletzt: {placed} von {n} Katzen gesetzt. Das toppst du!',
   'ticker.retry.close.one': 'Letztes Mal fehlte nur {count} Katze. So knapp!',
   'ticker.retry.close.other': 'Letztes Mal fehlten nur {count} Katzen. So knapp!',
-  'ticker.retry.again': 'Versuch {count}: Du kennst dieses Rätsel immer besser',
+  'ticker.retry.again': 'Du kennst dieses Rätsel mit jedem Versuch besser',
   'ticker.hard.first': 'Dein erstes schweres Level! Lass dir Zeit, denk in Ruhe',
   'ticker.hard.beaten.one': 'Du hast schon {count} schweres Level geschafft. Stark!',
   'ticker.hard.beaten.other': 'Du hast schon {count} schwere Level geschafft. Stark!',

@@ -407,7 +407,7 @@ export const catalog: LocaleCatalog = {
   'ticker.odds.retry': '约{pct}%的玩家下一次就能解开。轮到你了！',
   'ticker.retry.found': '上次：已放置{placed}只猫，共{n}只。这次更进一步！',
   'ticker.retry.close.other': '上次只差{count}只猫。就差一点！',
-  'ticker.retry.again': '第{count}次尝试：你对这道谜题越来越熟了',
+  'ticker.retry.again': '每尝试一次，你对这道谜题就更熟一些',
   'ticker.hard.first': '你的第一个困难关卡！慢慢想，别着急',
   'ticker.hard.beaten.other': '你已攻克{count}个困难关卡。真厉害！',
   'ticker.flawless.other': '{count}关零失误通关。太棒了！',

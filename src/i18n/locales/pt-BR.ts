@@ -430,7 +430,7 @@ export const catalog: LocaleCatalog = {
   'ticker.retry.found': 'Na última: {placed} de {n} gatos colocados. Vamos superar!',
   'ticker.retry.close.one': 'Faltou só {count} gato da última vez. Quase!',
   'ticker.retry.close.other': 'Faltaram só {count} gatos da última vez. Quase!',
-  'ticker.retry.again': 'Tentativa {count}: você conhece este tabuleiro cada vez mais',
+  'ticker.retry.again': 'A cada tentativa você conhece melhor este tabuleiro',
   'ticker.hard.first': 'Seu primeiro nível difícil! Vá com calma e pense bem',
   'ticker.hard.beaten.one': 'Você já venceu {count} nível difícil. Impressionante!',
   'ticker.hard.beaten.other': 'Você já venceu {count} níveis difíceis. Impressionante!',

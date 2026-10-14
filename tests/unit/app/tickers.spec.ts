@@ -4,9 +4,9 @@
 // solve this one!" by the seed); line 2 is the player's (the eligible lines 6–12 at seed mod count).
 // HONEST: every number a line carries comes from the input (the save or the board), never a constant.
 // UI batch (2026-10-13), messages: the richer lines. Line 1: a Retry says how close the lost attempt came, else picks
-// among the odds estimate, its cats placed, the try number and the cheer; a Hard level is the player's first (always
-// said) or picks among the Hard levels beaten, the cheer and the odds; a tough board (estimated first try ≤
-// oddsMaxFirstTryPct) shows the odds. Line 2 gains the player's records and the milestone. The odds numbers (H-2a)
+// among the odds estimate, its cats placed, "again" (no number: review F19) and the cheer; a Hard level is the
+// player's first (always said) or picks among the Hard levels beaten, the cheer and the odds; a tough board (estimated
+// first try ≤ oddsMaxFirstTryPct) shows the odds. Line 2 gains the player's records and the milestone. The odds numbers (H-2a)
 // are game/level-odds.ts's for this board; every other number is the input's.
 import { describe, expect, it } from 'vitest';
 import { cfg, mergeConfig } from '../../../src/app/config';
@@ -129,11 +129,11 @@ describe('pickTickerLines: line 1 (this board)', () => {
     expect([...seen].sort()).toEqual(['ticker.hard.beaten', 'ticker.odds.firstTry', 'ticker.odds.tries', 'toast.start.hard']);
   });
 
-  it('a Retry: "so close" when the lost attempt was retryCloseCats or fewer cats short; else the odds, its cats, the try number or the cheer', () => {
+  it('a Retry: "so close" when the lost attempt was retryCloseCats or fewer cats short; else the odds, its cats, the again line or the cheer', () => {
     const close = input({ retry: true, attempt: 1, n: 9, lastTry: { placed: 7, n: 9 } });
     for (const [l] of over(close, 40)) expect(l).toEqual({ key: 'ticker.retry.close', count: 2 });
     expect(pickTickerLines({ ...close, lastTry: { placed: 8, n: 9 } })[0]).toEqual({ key: 'ticker.retry.close', count: 1 });
-    // 3 short: not close; its cats are one of the choices, the try number only from the third try on.
+    // 3 short: not close; its cats are one of the choices, the again line only from the second Retry in a row on.
     const far = input({ retry: true, attempt: 1, n: 9, lastTry: { placed: 6, n: 9 } });
     const retryPct = levelOdds(far).retryPct;
     const seen = new Set<string>();
@@ -145,7 +145,9 @@ describe('pickTickerLines: line 1 (this board)', () => {
     expect([...seen].sort()).toEqual(['ticker.odds.retry', 'ticker.retry.found', 'toast.start.retry']);
     const third = new Set(over({ ...far, attempt: 2 }).map((l) => l[0].key));
     expect([...third].sort()).toEqual(['ticker.odds.retry', 'ticker.retry.again', 'ticker.retry.found', 'toast.start.retry']);
-    for (const [l] of over({ ...far, attempt: 4 })) if (l.key === 'ticker.retry.again') expect(l.count).toBe(5);
+    // Review F19: `attempt` counts only the Retries in a row since this board was mounted (Home or a reload resets it),
+    // so the line carries no try number.
+    for (const [l] of over({ ...far, attempt: 4 })) if (l.key === 'ticker.retry.again') expect(l).toEqual({ key: 'ticker.retry.again' });
     // No cats placed, no last attempt, or another board's: never a cats line (and never "so close").
     for (const lastTry of [{ placed: 0, n: 9 }, null, { placed: 8, n: 10 }]) {
       for (const [l] of over({ ...far, lastTry }, 60)) expect(['ticker.odds.retry', 'toast.start.retry']).toContain(l.key);
@@ -277,7 +279,7 @@ describe('honest numbers (§5.4: never a statistic we cannot back; H-2a: the odd
     // 49 solved, 2 Hard beaten (30 and 40: the next level is 50), 2 flawless, a 6-day run, 1 daily, 17 fish, the points, n 7.
     expect(hardLevelsBeaten(v)).toBe(2);
     const fromSave = new Set([49, 2, 6, 1, 17, 13_248, 7]);
-    const plural = ['ticker.cats', 'ticker.solved', 'ticker.points', `period.pill.${cfg.period.kind}`, 'ticker.flawless', 'ticker.streak', 'ticker.dailies', 'ticker.hard.beaten', 'ticker.retry.close', 'ticker.odds.tries', 'ticker.retry.again'];
+    const plural = ['ticker.cats', 'ticker.solved', 'ticker.points', `period.pill.${cfg.period.kind}`, 'ticker.flawless', 'ticker.streak', 'ticker.dailies', 'ticker.hard.beaten', 'ticker.retry.close', 'ticker.odds.tries'];
     const extras: Partial<TickerInput>[] = [
       {},
       { dailyOpen: true },
@@ -300,14 +302,13 @@ describe('honest numbers (§5.4: never a statistic we cannot back; H-2a: the odd
           else expect(l.pct, k).toBeUndefined();
           if (k === 'ticker.odds.tries') expect(l.count).toBe(o.tries);
           else if (k === 'ticker.retry.close') expect(l.count).toBe((base.lastTry?.n ?? 0) - (base.lastTry?.placed ?? 0));
-          else if (k === 'ticker.retry.again') expect(l.count).toBe(base.attempt + 1);
           else if (l.count !== undefined) expect(fromSave.has(l.count), `${k} ${l.count}`).toBe(true);
           if (k === 'ticker.retry.found') expect([l.placed, l.n]).toEqual([base.lastTry?.placed, base.lastTry?.n]);
           else expect(l.placed === undefined && l.n === undefined, k).toBe(true);
           if (k === 'ticker.milestone') expect(l.level).toBe(base.level);
           else expect(l.level, k).toBeUndefined();
           if (l.ms !== undefined) expect(l.ms).toBe(252_000);
-          // Only the plural keys (and the try number) carry a count, only ticker.best a time.
+          // Only the plural keys carry a count, only ticker.best a time.
           expect(l.count === undefined, k).toBe(!plural.includes(k));
           expect(l.ms === undefined).toBe(k !== 'ticker.best');
         }

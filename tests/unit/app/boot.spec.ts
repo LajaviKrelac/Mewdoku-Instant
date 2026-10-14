@@ -22,7 +22,7 @@ import { defaults, encodeCells } from '../../../src/game/save';
 import type { SaveData } from '../../../src/game/types';
 import { t } from '../../../src/i18n';
 import type { HomeCallbacks, HomeView } from '../../../src/ui/screens/home-screen';
-import { createFakeAudio, createFakeLevels, createFakePlatform, createLoggedEngine, NOW, TODAY, type FakePlatform } from './harness';
+import { createFakeAudio, createFakeLevels, createFakePlatform, createLoggedEngine, levelPuzzle, NOW, TODAY, type FakePlatform } from './harness';
 
 interface Ui {
   home: { view: HomeView; cb: HomeCallbacks } | null;
@@ -201,6 +201,21 @@ describe('boot', () => {
     expect(s.app.store.get().session?.mode).toBe('tutorial');
     expect(s.log).toContain('open:coach');
     s.app.dispose();
+  });
+
+  it('review F20: Home\'s Hard / Extra hard tier comes from levels.peekBoard (a substitute generated this session counts)', async () => {
+    // Pack out (peekLevel null) and a substitute in memory: its own board decides, as in the game bar.
+    const sub = (grade: 4 | 5) => ({ ...levelPuzzle(150), grade, effort: 10 });
+    const g5 = await start(returning({ progress: { level: 150, completed: 149, best: {} } }), { levels: { peekLevel: () => null, peekBoard: (l) => (l === 150 ? sub(5) : null) } });
+    expect(g5.ui.home?.view).toMatchObject({ level: 150, tier: 'extra' }); // 150 is not in the shipped Extra-hard list
+    g5.app.dispose();
+    const g4 = await start(returning({ progress: { level: 140, completed: 139, best: {} } }), { levels: { peekLevel: () => null, peekBoard: (l) => (l === 140 ? sub(4) : null) } });
+    expect(g4.ui.home?.view).toMatchObject({ level: 140, tier: 'hard' }); // 140 is in the list, but the substitute is G4
+    g4.app.dispose();
+    // No board in memory at all: the shipped list.
+    const none = await start(returning({ progress: { level: 140, completed: 139, best: {} } }), { levels: { peekLevel: () => null, peekBoard: () => null } });
+    expect(none.ui.home?.view).toMatchObject({ level: 140, tier: 'extra' });
+    none.app.dispose();
   });
 
   it('returning player: Home, sessions + 1 saved with touch', async () => {
