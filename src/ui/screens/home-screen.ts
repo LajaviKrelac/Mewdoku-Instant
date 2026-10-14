@@ -23,7 +23,7 @@
 // and the daily pill (with its status tab hanging below) low on the screen, about 70 % of the width. The streak strip
 // left Home: the pill carries the run, and a tap tells the strip's sentence (HomeCallbacks.onStreak).
 // Classes: .screen.screen--home[data-banner][data-streak?] > .home__body (+ .home__bg, the scrolling board, last) > .home__hero(.home__wordmark .home__tagline .home__mascot)
-//          .home__actions(.home__cards > .event-card[data-state] .home__play .badge.badge--hard
+//          .home__actions(.home__cards > .event-card[data-state] .home__play[data-tier=hard|extra] > .btn__label .badge.badge--hard.home__tier(.badge--extra)
 //          .daily-card[data-state] .home-card); the top bar's lead slot
 //          holds button.home__profile; its centre slot .home__streak > button.streak-pill | .streak-pill--pending;
 //          .home__hero > .home__rank > .period-pill | button.ladder-chip; .daily-card > .daily-card__icon
@@ -35,6 +35,7 @@
 import { cfg, type PeriodKind } from '../../app/config';
 import type { EventDef } from '../../game/events';
 import type { DailyCardState } from '../../game/progression';
+import type { LevelTier } from '../../game/ramp';
 import { formatClock, formatDuration, formatShortDate, onLocaleChanged, t, translate } from '../../i18n';
 import { homeBoardUrl } from '../art/home-board';
 import { mascotIllustration } from '../art/mascot';
@@ -112,6 +113,11 @@ export interface HomeView {
   /** Next level to play. */
   readonly level: number;
   readonly hard: boolean;
+  /**
+   * UI batch (2026-10-13, levelbutton): 'extra' on a Hard level whose board is one of our hardest (game/ramp.ts
+   * levelTier): the purple frame and the "Extra hard" tag instead of the red Hard ones. Absent: from `hard`.
+   */
+  readonly tier?: LevelTier;
   /** inProgress.level holds a board → "Continue · Level L". */
   readonly continueLevel: boolean;
   readonly daily: DailyCardView;
@@ -272,13 +278,17 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
 
   // Primary level button.
   const playLabel = h('span', { class: 'btn__label' });
-  const hardBadge = L.text(h('span', { class: 'badge badge--hard' }), () => t('common.hard'));
+  // UI batch (2026-10-13, levelbutton): on a Hard level the button wears a frame (red; purple for Extra hard) and its
+  // tag sits on the frame's top edge (a tag, not inline: "Level 1000" and a long "Extra hard" do not share 224 px at
+  // 320 px wide). The tag stays in the button, so its name reads "Level 340 Extra hard". Set before every L.apply().
+  let tier: Exclude<LevelTier, 'normal'> = 'hard';
+  const tierBadge = L.text(h('span', { class: 'badge badge--hard home__tier' }), () => t(tier === 'extra' ? 'common.extraHard' : 'common.hard'));
   const play = h(
     'button',
     // A11Y-FOCUS-1: the router lands focus here after a screen change (not the wordmark or the first chip).
     { type: 'button', class: 'btn btn--primary btn--block btn--lg home__play', 'data-autofocus': '', on: { click: () => cb.onPlay() } },
     playLabel,
-    hardBadge,
+    tierBadge,
   );
 
   // Daily card.
@@ -481,6 +491,7 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
   let last = view;
   const render = (v: HomeView): void => {
     last = v;
+    tier = v.tier === 'extra' ? 'extra' : 'hard';
     L.apply();
     topBar.update(topBarProps(v));
     periodPill.update(periodOf(v));
@@ -492,8 +503,10 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
     el.style.setProperty('--banner-reserve', `${cfg.ads.banner.reservePx}px`);
     // Home cleanup (2026-10-12): always "Level 38", also with a board in progress (Play resumes it).
     setText(playLabel, t('home.play', { level: v.level }));
-    hardBadge.hidden = !v.hard;
-    play.dataset.hard = String(v.hard);
+    tierBadge.hidden = !v.hard;
+    tierBadge.classList.toggle('badge--extra', v.hard && tier === 'extra');
+    if (v.hard) play.dataset.tier = tier;
+    else delete play.dataset.tier;
 
     const d = v.daily;
     const date = formatShortDate(d.dateKey);

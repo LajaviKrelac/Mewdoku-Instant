@@ -208,9 +208,13 @@ describe('a language switch relabels every view, open or cached (A11Y-I18N-1)', 
   it('Home under a dialog: the tagline, the Hard badge and the top bar follow at once', async () => {
     const home = createHomeScreen(homeView(), homeCb());
     document.body.appendChild(home.el);
+    // UI batch (2026-10-13): an Extra-hard tag relabels too
+    const extra = createHomeScreen(homeView({ level: 340, hard: true, tier: 'extra' }), homeCb());
     await setLocale('de');
     expect(text(q(home.el, '.home__tagline'))).toBe(de['app.tagline']);
     expect(text(q(home.el, '.home__play .badge--hard'))).toBe(de['common.hard']);
+    expect(text(q(extra.el, '.home__play .badge--extra'))).toBe(de['common.extraHard']);
+    extra.destroy();
     expect(text(q(home.el, '.home__play .btn__label'))).toBe(stripIsolates(t('home.play', { level: 37 })));
     // Phase 2e I-3: the Home trophy is gone; the gear relabels instead.
     expect(home.el.querySelector('.top-bar__btn--trophy')).toBeNull();

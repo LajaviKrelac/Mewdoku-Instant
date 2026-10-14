@@ -1,8 +1,10 @@
 // Owner: C (Phase 2b; was foundation). Shared by scripts/ and the runtime.
 // The 02 §11.2 size/difficulty ramp, the 02 §12 weekday table, seed strings (03 §7) and the
 // GenSpec builder that applies the shape-filter rules (03 §4.5). PURE.
+// UI batch (2026-10-13, levelbutton): the level tiers normal | hard | extra (levelTier, isExtraHardBoard).
 import { cfg, type GameConfig } from '../app/config';
 import type { GenSpec, Grade, GradeBand, SizeWeight } from '../engine/types';
+import { EXTRA_HARD_LEVELS } from './level-tiers';
 
 export interface RampRow {
   /** First and last level of the row, inclusive. */
@@ -35,6 +37,37 @@ export const ENDLESS_ROW: RampRow = RAMP[RAMP.length - 1] as RampRow;
 /** Level L is Hard iff L ≥ hardFrom && L % hardEvery === 0 (02 §11.3). */
 export function isHardLevel(level: number, c: GameConfig = cfg): boolean {
   return level >= c.levels.hardFrom && level % c.levels.hardEvery === 0;
+}
+
+// ── Level tiers (UI batch 2026-10-13, levelbutton: the Home button's Hard / Extra hard frames) ──
+
+/** A level's difficulty label: the Home button's frame and tag, and the game bar's badge. */
+export type LevelTier = 'normal' | 'hard' | 'extra';
+
+/** What a board's own record says about its difficulty (Puzzle and LevelRecord both carry it: g/grade, e/effort). */
+export interface BoardDifficulty {
+  readonly grade: number;
+  readonly effort: number;
+}
+
+/**
+ * An extra-hard board: it needs our hardest technique (G5, one-step trial) or its grader effort is at least
+ * levels.extraHardMinEffort. A property of the board itself, so the label is honest (spec §0.4).
+ */
+export function isExtraHardBoard(board: BoardDifficulty, c: GameConfig = cfg): boolean {
+  return board.grade >= 5 || board.effort >= c.levels.extraHardMinEffort;
+}
+
+/**
+ * normal | hard | extra. Only a Hard level can be extra, and only when its own board is: the board when the caller
+ * knows it (a loaded pack record, a cached substitute, a generated endless board), else the generated list of the
+ * shipped levels (level-tiers.ts, made from the packs with cfg's threshold), else plain Hard (an endless board not
+ * generated yet: never a label the board might not earn).
+ */
+export function levelTier(level: number, c: GameConfig = cfg, board?: BoardDifficulty | null): LevelTier {
+  if (!isHardLevel(level, c)) return 'normal';
+  if (board) return isExtraHardBoard(board, c) ? 'extra' : 'hard';
+  return level <= c.levels.shipped && EXTRA_HARD_LEVELS.indexOf(level) >= 0 ? 'extra' : 'hard';
 }
 
 /** The ramp row for level L (≥ 1); levels past the table use ENDLESS_ROW. */

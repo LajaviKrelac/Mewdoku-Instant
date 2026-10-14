@@ -27,6 +27,7 @@ This glossary is part of the translation brief (phase2b §6.7 step 2). The brief
 | The completion cheer (Phase 2d.1) | `fx.done` ("Done!") is a short **cheer** that pops for under a second under a row, column or colour the player just finished. An exclamation, never a button or a command; at most **8 characters** (CJK count 2). Use your language's natural "done!" / "finished!" word, never a word another game uses for this moment. |
 | Level-start tickers (Phase 2d.1) | `ticker.*` are one-line strips that slide across the top of the screen at a level start (at most **40 characters**). They state only the **player's own numbers** (their levels solved, their level points, their best time on this level), the board itself ("9 cats are hiding here"), a true fact or a tip. Never a statistic about other players, never "N players online", never a worldwide total. A "Tip:" prefix must not use your word for the hint (bulb) helper: de *Trick:*, pt-BR *Truque:*, tr *Tüyo:* because *Tipp*, *Dica* and *İpucu* are the hint. |
 | Length | Respect `maxLength` in `meta.ts` (chips 18, buttons 22, titles 28, badges 6–9). Abbreviate units ("h", "min") freely. |
+| Difficulty tags (UI batch, 2026-10-13) | `common.hard` ("Hard") and `common.extraHard` ("Extra hard") are small tags shown in capitals on a level's button and beside the level number. "Extra hard" is one plain step above "Hard" (your usual "very hard"), at most 12 characters; never slang, never a word that sounds like a rank or a prize. |
 
 ## 2. Core terms
 

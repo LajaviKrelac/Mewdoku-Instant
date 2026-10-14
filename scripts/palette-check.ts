@@ -307,6 +307,14 @@ export function uiContrast(): UiContrastRow[] {
     ['scrim text (white on --scrim over --page)', white, scrimOnPage, MIN_TEXT_CONTRAST],
     ['"Tap to keep going" (--tap-text on --scrim over --page)', T['tap-text'], scrimOnPage, MIN_TEXT_CONTRAST],
     ['Hard badge (white on --hard)', white, T.hard, MIN_TEXT_CONTRAST],
+    // UI batch (2026-10-13, levelbutton): the tier badges and tags (small white text), the Home frame's ring on its white
+    // separator ring and its 3D edge on the page (graphics; the frame is decoration, the tag carries the meaning).
+    ['Hard tier badge (white on --tier-hard)', white, T['tier-hard'], MIN_TEXT_CONTRAST],
+    ['Extra-hard tier badge (white on --tier-extra)', white, T['tier-extra'], MIN_TEXT_CONTRAST],
+    ['Hard frame ring (--tier-hard on white)', T['tier-hard'], white, MIN_CONTRAST],
+    ['Extra-hard frame ring (--tier-extra on white)', T['tier-extra'], white, MIN_CONTRAST],
+    ['Hard frame edge (--tier-hard-deep on --page)', T['tier-hard-deep'], T.page, MIN_CONTRAST],
+    ['Extra-hard frame edge (--tier-extra-deep on --page)', T['tier-extra-deep'], T.page, MIN_CONTRAST],
     ['empty tool badge (white on --ink-2)', white, T['ink-2'], MIN_TEXT_CONTRAST],
     ['free tool badge (--ink-deep on --gold)', T['ink-deep'], T.gold, MIN_TEXT_CONTRAST],
     ['"In progress" (--amber-text on --card)', T['amber-text'], T.card, MIN_TEXT_CONTRAST],

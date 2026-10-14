@@ -16,6 +16,7 @@ export const enCore = {
   'common.home': 'Home',
   'common.settings': 'Settings',
   'common.hard': 'Hard',
+  'common.extraHard': 'Extra hard', // UI batch (2026-10-13): the tag of a Hard level whose board is one of our hardest
 
   // ── Home (S1) ──────────────────────────────────────────────────────────────
   'home.play': 'Level {level}',

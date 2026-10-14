@@ -52,7 +52,12 @@
   --life-empty: #ede8e2; /* Phase 2c: the pale wash inside an empty life (icon-fish-empty) */
   --danger: #d33a4a; /* error flash */
   --wrong: #560a1c; /* wrong-X glyph + ring: ≥ 3.18:1 on every tile (Denim the lowest), ≥ 6.4 faded (2d.1 §6.4) */
-  --hard: #6c3fb5; /* Hard badge: white on it 6.96 */
+  --hard: #6c3fb5; /* the bulb art's violet (sprite); was the Hard badge until the tiers below: white on it 6.96 */
+  /* UI batch (2026-10-13, ours): the level tiers. The badges and the Home button's frame and tag; white on the fills. */
+  --tier-hard: #cf2a2a; /* Hard: white on it 5.23 */
+  --tier-hard-deep: #9e1c1c; /* its frame's 3D edge: white on it 7.96 */
+  --tier-extra: #7a3cc8; /* Extra hard: white on it 6.35 */
+  --tier-extra-deep: #55278f; /* its frame's 3D edge: white on it 10.13 */
   --cheer: #d9466a; /* Phase 2e: a given heart in the ranking (a cheer, never a life): 4.17 on --card, 3.54 on --accent-soft */
   --step-line: #a6827c; /* Phase 2e: the streak strip's empty paw outline: 3.10 on --page (a step may override it) */
 

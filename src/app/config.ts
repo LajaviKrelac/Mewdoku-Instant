@@ -297,6 +297,13 @@ export interface GameConfig {
      * a failed attempt (retry, then substitute / generated daily), so it can never hang (04 §8). [app addition]
      */
     readonly fetchTimeoutMs: number;
+    /**
+     * UI batch (2026-10-13, levelbutton): a Hard level is EXTRA HARD when its own board needs our hardest technique
+     * (grade 5) or its grader effort is at least this (game/ramp.ts isExtraHardBoard). 90 marks 30 of the 98 shipped
+     * Hard levels (about 31 %). The shipped levels' list is generated from the packs with this value
+     * (game/level-tiers.ts, scripts/gen-level-tiers.ts): changing it means re-running that script.
+     */
+    readonly extraHardMinEffort: number;
   };
   readonly fx: {
     /**
@@ -1358,6 +1365,7 @@ export const cfg: GameConfig = deepFreeze({
     packSize: 100,
     fetchRetryDelaysMs: [500, 2000],
     fetchTimeoutMs: 5000,
+    extraHardMinEffort: 90, // UI batch (2026-10-13): 30 of the 98 shipped Hard levels
   },
   fx: {
     boardEntryMs: 700,

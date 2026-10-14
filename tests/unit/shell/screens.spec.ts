@@ -163,6 +163,33 @@ describe('S1 home', () => {
     expect(play.querySelector('.btn__chev')).toBeNull();
   });
 
+  it('UI batch (2026-10-13): the Hard / Extra hard frame (data-tier) and the tag on it; none on a normal level', () => {
+    const home = createHomeScreen(view(), callbacks());
+    const play = q(home.el, '.home__play');
+    const tag = q(play, '.home__tier');
+    expect(play.hasAttribute('data-tier')).toBe(false);
+    expect(play.hasAttribute('data-hard')).toBe(false);
+    expect(tag.hidden).toBe(true);
+    home.update(view({ level: 40, hard: true }));
+    expect(play.dataset.tier).toBe('hard');
+    expect([tag.hidden, tag.textContent, tag.className]).toEqual([false, 'Hard', 'badge badge--hard home__tier']);
+    home.update(view({ level: 340, hard: true, tier: 'extra' }));
+    expect(play.dataset.tier).toBe('extra');
+    expect([tag.hidden, tag.textContent, tag.className]).toEqual([false, 'Extra hard', 'badge badge--hard home__tier badge--extra']);
+    // the tag is inside the button, after the label: the name reads "Level 340", then "Extra hard"
+    expect(Array.from(play.children).map((c) => c.textContent)).toEqual(['Level 340', 'Extra hard']);
+    home.update(view({ level: 350, hard: true, tier: 'hard' }));
+    expect([play.dataset.tier, tag.textContent, tag.classList.contains('badge--extra')]).toEqual(['hard', 'Hard', false]);
+    home.update(view({ level: 341 }));
+    expect(play.hasAttribute('data-tier')).toBe(false);
+    expect(tag.hidden).toBe(true);
+    // a tier without a Hard level never frames the button
+    home.update(view({ level: 37, hard: false, tier: 'extra' }));
+    expect(play.hasAttribute('data-tier')).toBe(false);
+    expect(tag.classList.contains('badge--extra')).toBe(false);
+    home.destroy();
+  });
+
   it('the daily pill shows the title without the date; the date stays in its name (Home layout 2026-10-11)', () => {
     const home = createHomeScreen(view(), callbacks());
     expect(q(home.el, '.daily-card__title').textContent).toBe('Daily puzzle');

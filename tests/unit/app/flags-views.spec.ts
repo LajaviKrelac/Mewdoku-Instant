@@ -95,6 +95,19 @@ describe('selectHomeView', () => {
     const save = { ...defaults(NOW), tutorialDone: true, progress: { level: 20, completed: 19, best: {} } };
     expect(selectHomeView(initialAppState(save), ctx).daily.state).toBe('locked');
   });
+
+  it('UI batch (2026-10-13): the Play button\'s tier, from the board in memory, else the shipped list', () => {
+    const tierAt = (level: number, c: ViewContext = ctx): ReturnType<typeof selectHomeView>['tier'] =>
+      selectHomeView(initialAppState({ ...defaults(NOW), tutorialDone: true, progress: { level, completed: level - 1, best: {} } }), c).tier;
+    expect([tierAt(29), tierAt(30), tierAt(140), tierAt(150), tierAt(1010)]).toEqual(['normal', 'hard', 'extra', 'hard', 'hard']);
+    // a board in hand decides (a cached substitute, a generated endless board); only Hard levels look it up
+    const asked: number[] = [];
+    const withBoard: ViewContext = { ...ctx, levelBoard: (level) => (asked.push(level), { grade: 5, effort: 30 }) };
+    expect([tierAt(150, withBoard), tierAt(1010, withBoard), tierAt(31, withBoard)]).toEqual(['extra', 'extra', 'normal']);
+    expect(asked).toEqual([150, 1010]);
+    expect(tierAt(140, { ...ctx, levelBoard: () => ({ grade: 4, effort: 50 }) })).toBe('hard');
+    expect(tierAt(140, { ...ctx, levelBoard: () => null })).toBe('extra');
+  });
 });
 
 describe('selectGameView', () => {
@@ -105,6 +118,26 @@ describe('selectGameView', () => {
 
   it('is null without a game', () => {
     expect(selectGameView(state({}), ctx)).toBeNull();
+  });
+
+  it('UI batch (2026-10-13): the badge\'s tier is the board being played: Extra hard only on a Hard level whose board is one', () => {
+    const g = { ...newGame({ ...levelPuzzle(340), grade: 5, effort: 60, hard: true }, 'level'), status: 'playing' as const };
+    const meta: SessionMeta = {
+      request: { mode: 'level', level: 340 },
+      mode: 'level',
+      puzzleId: g.puzzle.id,
+      level: 340,
+      dateKey: null,
+      hard: true,
+      colors: Uint8Array.from([3, 7, 2, 0, 5]),
+      tutorialStep: null,
+      substitute: false,
+    };
+    expect(selectGameView(state({ game: g, session: meta }), ctx)).toMatchObject({ hard: true, tier: 'extra' });
+    const plain = { ...g, puzzle: { ...g.puzzle, grade: 4 as const, effort: 89 } };
+    expect(selectGameView(state({ game: plain, session: meta }), ctx)?.tier).toBe('hard');
+    expect(selectGameView(state({ game: { ...g, puzzle: { ...plain.puzzle, effort: 90 } }, session: meta }), ctx)?.tier).toBe('extra');
+    expect(selectGameView(state({ game: g, session: { ...meta, level: 341, hard: false } }), ctx)?.tier).toBe('normal');
   });
 
   it('locks the board outside PLAYING, under modal overlays and during ads', async () => {

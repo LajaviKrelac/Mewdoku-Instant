@@ -23,6 +23,7 @@ import type { AudioEngine } from '../audio/audio-engine';
 import { isEventLive, type EventDef } from '../game/events';
 import { markSettingsSeen } from '../game/save';
 import { dailyCardState, dailyDateKey, dateKeyOf, nextDayStartAfter } from '../game/progression';
+import type { BoardDifficulty } from '../game/ramp';
 import type { LocaleId, SaveData, Settings } from '../game/types';
 import type { PlatformAdapter } from '../platform/types';
 import oflUrl from '../assets/fonts/OFL.txt?url';
@@ -72,6 +73,8 @@ export interface ShellDeps {
   readonly eventTop?: EventTopFlow;
   /** Board size of a shipped level when known (personal records). */
   levelSize?(level: number): number | null;
+  /** UI batch (2026-10-13): a level's board (grade, effort) when it is in memory, for the Home button's tier. */
+  levelBoard?(level: number): BoardDifficulty | null;
   /**
    * Settings → Language: applies the new override (boot resolves and loads the locale). Resolves the
    * locale now active (ROB-2: a chunk that could not load falls back), or undefined when unknown.
@@ -123,6 +126,7 @@ export function createShell(deps: ShellDeps): Shell {
     platformId: deps.platform.id,
     ...(deps.events ? { events: deps.events.defs() } : {}),
     ...(deps.levelSize ? { levelSize: deps.levelSize } : {}),
+    ...(deps.levelBoard ? { levelBoard: deps.levelBoard } : {}),
     ...(eventArt ? { eventArt } : {}),
     ...(ladderNow() ? { ladderChip: (ladderNow() as LadderFlow).chip() } : {}),
   });

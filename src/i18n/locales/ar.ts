@@ -25,6 +25,7 @@ export const catalog: LocaleCatalog = {
   'common.leaderboard': 'لوحة الصدارة',
   'common.notNow': 'ليس الآن',
   'common.hard': 'صعب',
+  'common.extraHard': 'صعب جدًا', // UI batch (2026-10-13)
   'common.locked': 'مقفل',
   'common.on': 'تشغيل',
   'common.off': 'إيقاف',

@@ -28,7 +28,7 @@ import { getMode } from '../game/modes';
 import { hasMouseCandidate } from '../game/mouse';
 import { settingsDotOn } from '../game/save';
 import { dailyCardState, dailyDateKey, isHard, nextDayStartAfter } from '../game/progression';
-import { dailySlotFor } from '../game/ramp';
+import { dailySlotFor, isExtraHardBoard, levelTier, type BoardDifficulty } from '../game/ramp';
 import { periodTotal } from '../game/scoring';
 import { tutorialAllowsTool, tutorialStep, TUTORIAL_STEP_COUNT, type TutorialStepIndex } from '../game/tutorial';
 import { CellState, type GameState } from '../game/types';
@@ -56,6 +56,11 @@ export interface ViewContext {
   readonly events?: readonly EventDef[];
   /** Board size of a shipped level when it is known without loading (personal records "Your best n×n"). */
   readonly levelSize?: (level: number) => number | null;
+  /**
+   * UI batch (2026-10-13, levelbutton): a level's board when it is in memory without loading (a loaded pack, a cached
+   * substitute or generated endless board), for the Home button's tier. Absent or null: the shipped list (levelTier).
+   */
+  readonly levelBoard?: (level: number) => BoardDifficulty | null;
   /** phase2b §2.2: the win flow is blocking (from WON until the ranking panel opens): Home and Gear are aria-disabled. */
   readonly chromeLocked?: boolean;
   /** phase2b §4.4: the events chunk's eventArt once that chunk has loaded (the Home event card's art). */
@@ -111,6 +116,8 @@ export function selectHomeView(state: AppState, ctx: ViewContext, c: GameConfig 
   return {
     level,
     hard: isHard(level, c),
+    // UI batch (2026-10-13): the Play button's Hard / Extra hard frame, from the board when it is in memory.
+    tier: levelTier(level, c, isHard(level, c) ? (ctx.levelBoard?.(level) ?? null) : null),
     continueLevel: save.inProgress.level !== null && save.inProgress.level.id === `L${level}`,
     daily: {
       state: dailyCardState(save, today, c),
@@ -255,6 +262,8 @@ export function selectGameView(state: AppState, ctx: ViewContext, c: GameConfig 
     level: session.level,
     dateKey: session.dateKey,
     hard: session.hard,
+    // UI batch (2026-10-13): the badge says Extra hard when the board being played is one (levelTier's rule).
+    tier: session.hard ? (isExtraHardBoard(game.puzzle, c) ? 'extra' : 'hard') : 'normal',
     showHome: !firstRunTutorial,
     hearts: game.hearts,
     maxHearts: game.rules.heartsPerAttempt,

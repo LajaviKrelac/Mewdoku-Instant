@@ -163,6 +163,7 @@ const NOTES: Readonly<Partial<Record<I18nKey, Partial<KeyMeta>>>> = {
   'boot.retry': { maxLength: 22 },
   'common.leaderboard': { maxLength: 22 },
   'common.hard': { description: 'Small badge on hard levels (Home play button, game top bar)', maxLength: 9 },
+  'common.extraHard': { description: 'Small badge on the hardest Hard levels, whose board needs the most work (Home play button, game top bar); shown in capitals. One step above "Hard" (common.hard): a plain "very hard", no slang', maxLength: 12 },
   'common.on': { description: 'State text next to a toggle switch', maxLength: 6 },
   'common.off': { description: 'State text next to a toggle switch', maxLength: 6 },
   'home.play': { description: 'Home: the big play button', maxLength: 22 },

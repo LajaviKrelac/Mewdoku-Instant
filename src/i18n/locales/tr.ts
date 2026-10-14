@@ -24,6 +24,7 @@ export const catalog: LocaleCatalog = {
   'common.leaderboard': 'Sıralama',
   'common.notNow': 'Şimdi değil',
   'common.hard': 'Zor',
+  'common.extraHard': 'Çok zor', // UI batch (2026-10-13)
   'common.locked': 'Kilitli',
   'common.on': 'Açık',
   'common.off': 'Kapalı',

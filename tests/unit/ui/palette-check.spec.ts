@@ -168,6 +168,19 @@ describe('palette-check', () => {
     expect(r(TOKENS['tap-text'], rgbaOver(TOKENS.scrim, TOKENS.page))).toBe(7.36);
   });
 
+  it('UI batch (2026-10-13): the level tiers pass as small white text, their frames as graphics; --hard keeps its value', () => {
+    const r = (fg: string, bg: string): number => Math.round(contrastRatio(fg, bg) * 100) / 100;
+    expect(r('#FFFFFF', TOKENS['tier-hard'])).toBe(5.23);
+    expect(r('#FFFFFF', TOKENS['tier-extra'])).toBe(6.35);
+    expect(r(TOKENS['tier-hard-deep'], TOKENS.page)).toBe(7.17);
+    expect(r(TOKENS['tier-extra-deep'], TOKENS.page)).toBe(9.12);
+    const rows = uiContrast().filter((x) => /tier|frame/.test(x.what));
+    expect(rows).toHaveLength(6);
+    for (const x of rows) expect(x.ratio, x.what).toBeGreaterThanOrEqual(x.min);
+    expect(rows.filter((x) => x.what.includes('badge')).map((x) => x.min)).toEqual([4.5, 4.5]);
+    expect(TOKENS.hard).toBe('#6C3FB5'); // the bulb art's violet (sprite.ts)
+  });
+
   it('the recorded parity exceptions stay informational (look-spec §1.2, D-2d-6)', () => {
     const rows = parityExceptions();
     expect(rows.filter((x) => x.what.startsWith('head tint'))).toHaveLength(PALETTE.length);
