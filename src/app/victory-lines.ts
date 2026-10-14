@@ -4,8 +4,9 @@
 // a lazy key; ui/overlays/victory-line-text.ts renders them in the overlay chunk), like app/tickers.ts.
 // HONEST praise: every line states a fact of THIS board from the game's own state and the player's own save (no wrong
 // cat, no helper, a new best time on this board size, a Hard level, a comeback after a revive or a Retry, the closing
-// run, the player's own solved count). It never says "first try" (a Home leaves no trace of earlier attempts), and it
-// claims "no helper" only when the mouse count is known (a resumed attempt does not save it).
+// run, the player's own solved count). It never says "first try" (a Home leaves no trace of earlier attempts), it
+// claims "no helper" only when the mouse count is known (a resumed attempt does not save it), "no wrong cat on this
+// board" never after a Retry, and "a new best" only over every earlier record that may be of this size.
 // The statistic is approximate by the user's decision (spec §0.4 H-2a, victory.stat.* only): a daily's comes from
 // the ranking server's standing (other solvers of the day, strictly slower ones) once it has victory.minSolvers of
 // them, else from our estimate (game/solve-time-model.ts); a level's is the estimate, shown only when encouraging.
@@ -37,9 +38,12 @@ export interface VictoryFacts {
   readonly retries: number;
   /** Correct cats in a row at the end (GameState.catStreak: a lower bound after a resume). */
   readonly run: number;
-  /** The best time on boards of this size BEFORE this win (levels, or earlier dailies); null = none to beat. */
+  /**
+   * The best time on boards of this size BEFORE this win (levels and dailies; a level of unknown size counts as one);
+   * null = none to beat.
+   */
   readonly bestBeforeMs: number | null;
-  /** The player's own counts after this win. */
+  /** The player's own counts after this win (levels: the won levels' records, never a skipped tutorial). */
   readonly levelsSolved: number;
   readonly dailiesSolved: number;
 }
@@ -57,29 +61,34 @@ export interface FactsInput {
   /** The attempt's mouse uses, or null when not known. */
   readonly mice: number | null;
   readonly retries: number;
-  /** A level's board size, when its pack is loaded (the same-size best times). */
+  /** A level's board size, when its pack is loaded (the same-size best times); null or absent = not known. */
   readonly levelSize?: (level: number) => number | null;
 }
 
 const count = (x: number): number => (Number.isFinite(x) ? Math.max(0, Math.floor(x)) : 0);
 
-/** The fastest earlier time on boards of size n: same-size levels in level mode, same-size dailies in daily mode. */
-function bestBefore(i: FactsInput, n: number): number | null {
-  let best: number | null = null;
-  const keep = (ms: number | undefined): void => {
-    if (ms !== undefined && ms > 0 && (best === null || ms < best)) best = ms;
-  };
-  if (i.mode === 'level' && i.levelSize) {
-    for (const [level, rec] of Object.entries(i.before.progress.best)) if (i.levelSize(Number(level)) === n) keep(rec[0]);
-  } else if (i.mode === 'daily') {
-    for (const [date, rec] of Object.entries(i.before.daily)) {
-      try {
-        if (dailySlotFor(date).n === n) keep(rec[0]);
-      } catch {
-        // a bad key never breaks the victory
-      }
-    }
+/** A record's board size, or null when not known (a level whose pack is not in memory, a bad key). */
+function sizeOf(get: () => number | null): number | null {
+  try {
+    return get();
+  } catch {
+    return null; // a bad key never breaks the victory
   }
+}
+
+/**
+ * The fastest earlier time that may have been on a board of size n (the line says "a {size} board", so levels AND
+ * dailies of that size, in either mode). A record whose size is not known (its pack is not in memory) counts as a
+ * possible same-size record: the line may then say less than it could, never more. Events and the tutorial: none.
+ */
+function bestBefore(i: FactsInput, n: number): number | null {
+  if (i.mode !== 'level' && i.mode !== 'daily') return null;
+  let best: number | null = null;
+  const keep = (size: number | null, ms: number | undefined): void => {
+    if ((size === null || size === n) && ms !== undefined && ms > 0 && (best === null || ms < best)) best = ms;
+  };
+  for (const [level, rec] of Object.entries(i.before.progress.best)) keep(sizeOf(() => i.levelSize?.(Number(level)) ?? null), rec[0]);
+  for (const [date, rec] of Object.entries(i.before.daily)) keep(sizeOf(() => dailySlotFor(date).n), rec[0]);
   return best;
 }
 
@@ -100,7 +109,8 @@ export function victoryFacts(i: FactsInput): VictoryFacts {
     retries: count(i.retries),
     run: count(s.catStreak),
     bestBeforeMs: i.restored ? null : bestBefore(i, n),
-    levelsSolved: count(i.after.progress.completed),
+    // Real wins only: every won level (2+) has a record; progress.completed also counts a skipped tutorial.
+    levelsSolved: Object.keys(i.after.progress.best).length,
     dailiesSolved: Object.keys(i.after.daily).length,
   };
 }
@@ -115,7 +125,8 @@ export function praiseLines(f: VictoryFacts, c: GameConfig = cfg): VictoryLine[]
   if (f.hard) out.push({ id: 'hard' });
   if (f.revives > 0) out.push({ id: 'revive' });
   if (f.retries > 0) out.push({ id: 'retry' });
-  if (f.mistakes === 0 && !flawless) out.push({ id: 'noSlips' });
+  // "On this board": not after a Retry (the lost attempt had wrong cats on this same board).
+  if (f.mistakes === 0 && !flawless && f.retries === 0) out.push({ id: 'noSlips' });
   if (f.mistakes > 0 && !helped) out.push({ id: 'noHelp' });
   if (f.mistakes > 0 && f.run >= c.victory.runMin) out.push({ id: 'run', count: f.run });
   if (f.mode === 'level' && f.levelsSolved >= c.victory.milestoneMin) out.push({ id: 'levels', count: f.levelsSolved });

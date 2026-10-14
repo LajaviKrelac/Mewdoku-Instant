@@ -197,6 +197,33 @@ describe('[UI batch, victory] the daily percentile from the wins answer (spec §
     expect(s.h.router.props.victory?.lines?.[0]).toEqual({ id: 'statFaster', pct: 60 });
   });
 
+  it('the answer comes after the panel gave up: the estimate stays (never flips to the server\'s number on screen)', async () => {
+    const s = setup();
+    await s.flow().start();
+    s.fake().dailyStanding = { solvers: 40, slower: 12 }; // the server's: "faster than about 30%"
+    s.fake().hold = true;
+    // 20 s on a 5 × 5 board: quicker than the model's median, so the estimate encourages.
+    await wonDaily(s, 20_000);
+    await s.h.settle(s.h.config.ladder.panelWaitMs);
+    await drain();
+    await tapRanking(s.h);
+    expect(s.flow().dailyStanding()).toBeNull();
+    const shown = s.h.router.props.victory?.lines?.[0];
+    expect(shown?.id).toMatch(/^stat(Top|Faster)$/);
+    expect(shown).not.toEqual({ id: 'statFaster', pct: 30 });
+    // The late answer (this request, or the retry flush that sends the win again) re-renders, the line stays.
+    s.fake().hold = false;
+    s.fake().release();
+    await drain();
+    for (const step of s.h.config.ladder.backoffMs) {
+      await s.h.settle(step);
+      await drain();
+    }
+    expect(s.h.save().ladder.pending).toEqual([]); // answered
+    expect(s.h.router.props.victory?.lines?.[0]).toEqual(shown);
+    expect(s.flow().dailyStanding()).toBeNull();
+  });
+
   it('no standing in the answer (too few solvers): our estimate, worded the same way', async () => {
     const s = setup();
     await s.flow().start();
