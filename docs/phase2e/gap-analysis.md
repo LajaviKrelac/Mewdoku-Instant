@@ -184,7 +184,7 @@ Dev and e2e builds show a mock 320 × 50 bar. Keys: `ads.banner.*`, env `VITE_FB
 
 **(b) What we have today (FBIG only; web-prod has none)**
 
-- **Triggers:** the victory's "Level N" tap (`next_level`), O4 Retry (`retry`), daily Done (`daily_done`) and event next (`event_next`). The ad comes after the tap and never during the win flow.
+- **Triggers:** the victory's "Level N" tap (`next_level`), O4 Retry (`retry`), daily Done (`daily_done`; since the UI batch, 2026-10-13, the daily victory's "Level N" → the next level) and event next (`event_next`). The ad comes after the tap and never during the win flow.
 - **Gate, in order:**
   1. No Ads not owned;
   2. the capability;
@@ -415,7 +415,7 @@ This is our own design, not the original's. It uses only what S1 says:
 - **Sizes by weekday:** Mon and Tue 8×8, Wed and Thu 9×9, Fri and Sat 10×10, Sun 11×11. **Every second Sunday from 2026-10-18 is 12×12.**
 - **Entry:** **only the Home daily card**, locked until **level 20** is beaten (`progress.level > 20`). It then reads not played, in progress, or solved; tapping a solved day reopens its result. There is no calendar, no past days, no replay and no reminder.
 - **Rules:** the same as levels (3 fish, 1 revive, shared helper stock, videos at 0). The timer is hidden during play.
-- **Win:** the fish fly to the **weekly** counter and the ranking panel shows the weekly board. The daily victory screen shows the time, mistakes, hints and "Next puzzle in …". Done passes the `daily_done` ad gate, then goes Home.
+- **Win:** the fish fly to the **weekly** counter and the ranking panel shows the weekly board. The daily victory screen shows the time, mistakes, hints and "Next puzzle in …". Done passes the `daily_done` ad gate, then goes Home (UI batch, 2026-10-13: "Level N" → gate `daily_done` → the next level).
 - **Rewards:** nothing daily-specific. A daily win does not count toward `progress.completed`, so it has no effect on the ad gates.
 - `daily_fastest` is off.
 - **Keys:** `daily.{unlockAfterLevel 20, firstPackMonth}`, `rank.dailyBoard`.

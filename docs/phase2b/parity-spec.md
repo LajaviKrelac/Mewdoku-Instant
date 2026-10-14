@@ -450,8 +450,8 @@ Interruptions:
 | Layer | Full screen, opaque `--stage` (dark, like the fail card and the original's dark full-screen overlays of §1.2), light text, the orange "Level N" (review PAR-3: the light `--page` of the first draft contradicted §1.2). Behind the cat, 12 sun rays in the accent at 16 % (conic gradient) turn once every 20 s; static with reduced motion. |
 | Content, top to bottom | Praise word (40 px, `--title-on-dark`); the win pose (210 px); "Level 37 complete" (18 px, white at 82 %); reward row: three fish icons with "+3" and the total ("128"), a bonus chip "Hard level bonus +2" if any, and "+55 points"; event milestone line if any (§4.5). |
 | Primary button | **Wide orange "Level 38"**: `btn--primary btn--lg`, width = column − 32 px, height 64 px, label 24 px; enabled 600 ms after the screen shows. |
-| Secondary | Ghost "Home" |
-| Variants | **Level**: "Level {L+1}". **Tutorial** (first run): "You're ready!" with "Play Level 2". **Tutorial replay**: no fish; "Home". **Daily**: time, mistakes, hints, the next-puzzle countdown and "Done" (orange). **Event**: progress bar plus "Puzzle {i+1}", or "Back to event" after the last one. |
+| Secondary | none (UI batch 2026-10-13: the victory has no Home; the game's own Home after the next level starts). Was: ghost "Home" |
+| Variants | **Level**: "Level {L+1}". **Tutorial** (first run): "You're ready!" with "Play Level 2". **Tutorial replay**: no fish; "Home". **Daily**: time, mistakes, hints, the next-puzzle countdown and "Level {N}" (the next level, orange; it was "Done" before the UI batch). **Event**: progress bar plus "Puzzle {i+1}", or "Back to event" after the last one. Up to two praise or statistic lines under the subtitle (UI batch). |
 | Fish pill on Home and the victory screen | A white pill: `icon-fish`, the count (`formatNumber`, §6.4) and a "+" button that opens the shop. On Home it sits at the top-bar **lead** (after the FB safe zone on FBIG; at the inline start on web). In game, the fish pill appears only during the win flow, **in the pills row, centred** between the cat counter and the hearts, with no "+" button (§2.2 t = 1 000; §2.10 explains why not in the game's top bar). |
 | Banner | On FBIG, when a banner is shown (§3.2), the screen root gets `data-banner` and the column reserves `ads.banner.reservePx` at the bottom; the primary button sits at least 16 px above that band. |
 
@@ -462,7 +462,7 @@ Interruptions:
 | Mode | Glow | Fish | Ranking panel | Victory |
 |---|---|---|---|---|
 | Level | yes | 3 (+2 if Hard) | points board | Level variant |
-| Daily | yes | 3 (+2 daily bonus) | daily board | Daily variant (Done → gate `daily_done`) |
+| Daily | yes | 3 (+2 daily bonus) | daily board | Daily variant ("Level N" → gate `daily_done` → the next level; UI batch, it was Done) |
 | Event | yes | 3 | event board | Event variant (gate `event_next`) |
 | Tutorial, first run | yes | 3 | **none**: victory at 3 300 ms (`fx.win.tutorialVictoryAtMs`) | "You're ready!" |
 | Tutorial replay | yes | none (nothing is saved) | none: victory at 1 200 ms | "Home" |

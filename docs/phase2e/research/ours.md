@@ -90,7 +90,7 @@ No provider. The panel always shows (the `rank.showPanelWithoutProvider` key is 
 
 ### 2.2 Interstitial (`interstitialGate` in `src/game/ad-pacing.ts`; `HelperFlows.interstitial` in `src/app/helper-flows.ts`; `src/app/session-transitions.ts`)
 
-- **Triggers** (`ads.interstitial.triggers`): `next_level` (victory's "Level N" tap), `retry` (O4 Retry tap), `daily_done` (daily victory's Done), `event_next` (event victory's next puzzle / back to event). The interstitial shows **after the button tap**, never during the win flow. The transition always goes ahead whatever the ad did.
+- **Triggers** (`ads.interstitial.triggers`): `next_level` (victory's "Level N" tap), `retry` (O4 Retry tap), `daily_done` (daily victory's Done; since the UI batch, 2026-10-13, its "Level N", which leads to the next level), `event_next` (event victory's next puzzle / back to event). The interstitial shows **after the button tap**, never during the win flow. The transition always goes ahead whatever the ad did.
 - **Gate order**: `ads.enabled` → not `purchases.noAds` → `capabilities().interstitial` → trigger listed → `progress.completed ≥ ads.interstitial.minCompletedLevels` (**10**; the tutorial counts, dailies don't) → **session grace** `sessionGraceSec` 60 s since `platform.start()` in this page load → **tenure cooldown** since `save.ads.lastAdAt`: 120 s for tenure days 0–1, 100 s for days 2–6, 90 s from day 7 (`cooldownSec [{0,120},{2,100},{7,90}]`, tenure from `save.firstSeenAt`). A gated call logs `ad_interstitial {result:'gated'}`.
 - `lastAdAt` is set after an interstitial that showed **and after every completed rewarded video** (`ads.rewarded.resetsInterstitialClock: true`).
 - **Never**: on game open, during play, in the first-run tutorial (its "Play Level 2" has no gate), on Home / "Home" buttons, on O4 Continue, or before 10 completed levels. With level times of 1–4 min this gives "after most levels" once past level 10. It is **not literally every level**: a quick level inside the cooldown, or the first 60 s of a page load, gets none.
@@ -188,7 +188,7 @@ Docs: 02 §12 "No replay and no past days in Phase 2. A calendar and streaks are
 ### 5.3 Rules and win
 
 - Same rules as levels (`MODES.daily`): 3 fish, 1 revive, hints, kitty and mouse charged from the shared stock (videos when out). The timer runs but is **not shown while playing**.
-- Win flow = the level win flow: fish fly to the weekly counter, the **ranking panel shows the weekly period board** (no daily board), then the **victory screen, daily variant**: "Solved in m:ss", mistakes and hints, "Next puzzle in …" countdown, **Done** → interstitial gate `daily_done` → Home.
+- Win flow = the level win flow: fish fly to the weekly counter, the **ranking panel shows the weekly period board** (no daily board), then the **victory screen, daily variant**: "Solved in m:ss", mistakes and hints, "Next puzzle in …" countdown, **Done** → interstitial gate `daily_done` → Home (UI batch, 2026-10-13: **"Level N"** → gate `daily_done` → the next level).
 - Fail: O4 as in levels. Retry gives the same daily fresh. Home discards the attempt.
 
 ### 5.4 Rewards

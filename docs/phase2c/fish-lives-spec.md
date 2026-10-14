@@ -161,7 +161,7 @@ Sound, vibration, sad cats, the red X and the board shake are unchanged (`mistak
 
 Glow (unchanged) → the **period counter** pill fades in where the fish pill used to (pills row, centred) showing this period's total before the win → each **life still full** lifts off the lives pill and flies to the counter (the life icon turns empty as its fish leaves: the lives become points) → the counter counts up per arrival, "+N" rises → scrim → **ranking panel** (the period board) → tap → **victory screen** with level points, ~~the streak,~~ the fish kept and the period total.
 
-**2c.1 (§10.3):** the level-points counter stays centred in the pills row through the whole win flow, showing the level's total (`[data-final]`); the period counter therefore fades in **in the cat counter's place** (inline start; the cat counter fades out in the same 200 ms) instead of the centre, and the kept fish fly there. The victory screen shows the **level's points total** and the fish kept with the period total; there is no streak and no "Perfect ×N". Every time in §2.2 is unchanged.
+**2c.1 (§10.3):** the level-points counter stays centred in the pills row through the whole win flow, showing the level's total (`[data-final]`); the period counter therefore fades in **in the cat counter's place** (inline start; the cat counter fades out in the same 200 ms) instead of the centre, and the kept fish fly there. The victory screen shows the **level's points total** and the fish kept with the period total (UI batch 2026-10-13: the fish alone, §2.7); there is no streak and no "Perfect ×N". Every time in §2.2 is unchanged.
 
 ### 2.2 Timeline (t = 0 at `WON`; N = fish kept, 1 ≤ N ≤ `maxHearts`; flight only when the win adds leaderboard points)
 
@@ -238,7 +238,7 @@ Removed from the 2b timeline: the cat-sourced pops, the "+2" bonus label (`bonus
 | Row | Content | Classes (e2e contract) |
 |---|---|---|
 | Level points (2c.1: first row) | `icon-points` and the level's total, "7,296 points" (`points.count`, plural; the value is `VictoryProps.pointsEarned` = `GameState.levelPoints` at `WON`), in a white pill like the fish row. Shown for every scored win, counted or not, when the total is > 0. ~~"+120 points" (`victory.points`) and the "Perfect ×4" chip (`victory.streak`)~~ (2c) | `.victory__points` (~~`.victory__streak`~~: must not exist) |
-| Fish kept | `maxHearts` fish icons, the kept ones full and the lost ones as `icon-fish-empty`; then "+G" (`fish.plus`) and `period.total.<kind>` "This week: 42". Hidden when G = 0. `aria-label` = `a11y.fishKept.<kind>` | `.victory__kept[data-count=N]`, `.victory__period` |
+| Fish kept | `maxHearts` fish icons, the kept ones full and the lost ones as `icon-fish-empty`: the fish alone (UI batch 2026-10-13: no "+G", no total; it was "+G" (`fish.plus`) and `period.total.<kind>` "This week: 42"). Hidden when G = 0. `aria-label` = `game.hearts.a11y` ("2 of 3 fish left"; was `a11y.fishKept.<kind>`) | `.victory__kept[data-count=N]` (`.victory__period` removed in the UI batch) |
 
 - Tutorial variants: no reward block (as the replay had). Daily and event variants keep their own lines (time, mistakes, hints, countdown; progress bar, milestone line) above the reward block.
 - Reduced motion: unchanged (crossfade, static rays).
@@ -827,7 +827,7 @@ Verified after the edit: `npx tsc --noEmit` clean; `npx vitest run` 107 files, 1
 - [ ] Panel at 4 200 / 4 350 / 4 500 ms for N = 1 / 2 / 3 (± one frame in unit tests; e2e windows §7.3); scrim 300 ms before; reduced motion: panel at 1 200 ms.
 - [ ] Tutorial: no counter, no flight, victory at 1 200 ms; restored board: victory at once, nothing granted twice.
 - [ ] The panel shows the period board ("Weekly ranking", "+2 fish · This week: 42"), my rank inside this week's band on the classic stub, "Your score: 42 fish" on NEZP, personal period records on the web.
-- [ ] The victory shows ~~"+120 points", "Perfect ×4" only after a perfect win,~~ (2c.1: the level's total, no streak chip, §10.11) the kept-fish row and "This week: 42"; no fish pill, no "+", no bonus chip.
+- [ ] The victory shows ~~"+120 points", "Perfect ×4" only after a perfect win,~~ (2c.1: the level's total, no streak chip, §10.11) the kept-fish row (UI batch: fish only; it was the row and "This week: 42"); no fish pill, no "+", no bonus chip.
 
 **Scoring and save**
 - [ ] ~~Level points follow §3.1 (unit table); a mistake breaks the streak at once and Home, reload, fail and Retry cannot restore it; a revive resets it.~~ (2c.1: §10.11)

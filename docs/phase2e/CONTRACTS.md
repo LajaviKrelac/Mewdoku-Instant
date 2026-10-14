@@ -45,7 +45,8 @@ cfg.ladder   // { enabled: true, web: 'off', timeoutMs: 4000, panelWaitMs: 8000,
              //   countdownTickMs: 60_000, panelRows: 0 }
 cfg.dayStreak // { enabled: true, modes: ['level','daily','event'], cycleDays: 7, reward: { hints: 2, kitties: 2 },
               //   dayRewards: [], doubleByVideo: false, missResets: true, repairByVideo: false, historyDays: 14,
-              //   paidKept: 8, showOnHome: true, victoryRow: true, serverSkewCheck: false, maxSkewMs: 129_600_000 }
+              //   paidKept: 8, showOnHome: true, victoryRow: false, screenAfterWin: true, serverSkewCheck: false,
+              //   maxSkewMs: 129_600_000 }   // UI batch: victoryRow off, the Daily Streak screen after the day's first win
 cfg.remote    // { enabled: true, ttlSec: 3600, timeoutMs: 4000 }
 // @deprecated phase2e: rank.showPanelWithoutProvider (unread since 2b).
 ```
@@ -71,6 +72,9 @@ export const MAX_WINS_PER_REQUEST = 10;
 export const MAX_BODY_BYTES = 16_384;
 /** Our avatars (G2 draws avatar-0 … avatar-{AVATAR_COUNT − 1}); append-only. [PROVISIONAL P-L13] */
 export const AVATAR_COUNT = 12;
+/** UI batch (profile): frames and backgrounds (frame-1 …, bg-1 …; 0 = the plain look); append-only. */
+export const FRAME_COUNT = 8;
+export const BACKGROUND_COUNT = 8;
 export const NICK_NUM_MIN = 1;
 export const NICK_NUM_MAX = 99;
 export const REMOTE_SWITCHES = ['iapIos', 'iapInPlay', 'banner', 'bannerInPlay', 'ladder'] as const;
@@ -103,6 +107,8 @@ export interface PlayerView {
   readonly trust: Trust;
   readonly listed: boolean;                  // "Show me in rankings"
   readonly nicknameChangeAt: Ms | null;      // the next allowed change; null = any time
+  readonly frameId: number | null;           // UI batch: 0 … FRAME_COUNT − 1; null = a server without them (no pickers)
+  readonly backgroundId: number | null;      // UI batch: 0 … BACKGROUND_COUNT − 1; null as above
 }
 
 /** The rules the server applies (spec §1.16); the client shows these, never its own copy. */
@@ -173,7 +179,13 @@ export type WinReason =
   | 'not_scored' | 'unlisted' | 'bad_puzzle_id' | 'bad_solution' | 'bad_fish' | 'inconsistent' | 'too_fast'
   | 'stale_date' | 'event_closed' | 'level_jump' | 'budget' | 'window_cap' | 'suspended'
   | 'unverified' | 'soft_fast';              // 'unverified', 'soft_fast' and (critic pass) 'level_jump' come with accepted_flagged; the rest with rejected
-export interface WinResult { readonly winId: string; readonly verdict: WinVerdict; readonly reason?: WinReason; readonly points: number }
+/** UI batch (victory, spec §0.4 H-2a): a daily win's place among that daily's OTHER solvers in my pool, from the
+ *  server's solve-time rollup; `slower` took strictly longer. Sent only once dailyStats.minSolvers is reached. */
+export interface DailyStanding { readonly solvers: number; readonly slower: number }
+export interface WinResult {
+  readonly winId: string; readonly verdict: WinVerdict; readonly reason?: WinReason; readonly points: number;
+  readonly daily?: DailyStanding;            // UI batch: a daily win placed by this request (additive in v1)
+}
 export interface WinsResponse {
   readonly results: readonly WinResult[];    // one per submitted win, same order
   readonly windowPoints: number;             // my points in my current bracket after these wins
@@ -191,6 +203,8 @@ export interface BracketRow {
   readonly hearts: number;
   readonly me: boolean;
   readonly likedByMe: boolean;
+  readonly frameId: number;                  // UI batch: absent or bad → 0 (the row is never dropped)
+  readonly backgroundId: number;             // UI batch: as frameId
 }
 export interface BracketView {
   readonly state: 'open' | 'ended' | 'none';
@@ -248,6 +262,8 @@ export interface ProfileRequest {
   readonly nickname?: { readonly adj: number; readonly noun: number; readonly num?: number } | { readonly text: string };
   readonly avatarId?: number;
   readonly listed?: boolean;
+  readonly frameId?: number;                 // UI batch: no cooldown; out of range → 422 avatar_invalid
+  readonly backgroundId?: number;            // UI batch: as frameId
 }
 export interface ProfileResponse { readonly player: PlayerView; readonly serverTime: Ms }
 export interface MeResponse {
@@ -285,7 +301,7 @@ export interface ApiError {
  *  (null), never trimmed or re-ranked by the client. */
 export function parseNonceResponse(x: unknown): NonceResponse | null;
 export function parseSessionResponse(x: unknown): SessionResponse | null;
-export function parseWinsResponse(x: unknown): WinsResponse | null;
+export function parseWinsResponse(x: unknown): WinsResponse | null;   // UI batch: keeps WinResult.daily only when 1 ≤ solvers and 0 ≤ slower ≤ solvers (else drops it from that result)
 export function parseBracketView(x: unknown): BracketView | null;
 export function parseClaimResponse(x: unknown): ClaimResponse | null;
 export function parseHeartResponse(x: unknown): HeartResponse | null;
@@ -318,7 +334,7 @@ export const NICK_WORDS_V1: NickWords;          // ≈ 64 adjectives, ≈ 64 cat
 export const RETIRED_V1: { readonly adj: readonly number[]; readonly noun: readonly number[] };
 ```
 
-The name is `${adj[i]} ${noun[j]} ${num}` with `NICK_NUM_MIN ≤ num ≤ NICK_NUM_MAX`. G4's test checks every pair against the blocklist; G3 runs `npm --prefix server test -- nick` before landing a list change. Starter words (G3 completes and the lead reviews): adjectives Sleepy, Fluffy, Velvet, Misty, Brave, Cozy, Curious, Gentle, Lucky, Sunny, Quiet, Nimble, Dreamy, Cheerful, Clever, Merry, Snowy, Golden, Silver, Breezy, Mellow, Plucky, Toasty, Dapper, Jolly, Bouncy, Starry, Maple; nouns Whisker, Paws, Mittens, Tabby, Biscuit, Pounce, Purr, Muffin, Pebble, Socks, Noodle, Button, Marble, Pudding, Clover, Ginger, Shadow, Pepper, Bean, Toffee, Waffle, Comet, Nugget, Tuft.
+Since the UI batch (2026-10-13) the lists serve the server's generated first names only (the client no longer ships them; players type their own name, checked by the shared shape rule `src/shared/nick-text.ts` and the server blocklist). The name is `${adj[i]} ${noun[j]} ${num}` with `NICK_NUM_MIN ≤ num ≤ NICK_NUM_MAX`. G4's test checks every pair against the blocklist; G3 runs `npm --prefix server test -- nick` before landing a list change. Starter words (G3 completes and the lead reviews): adjectives Sleepy, Fluffy, Velvet, Misty, Brave, Cozy, Curious, Gentle, Lucky, Sunny, Quiet, Nimble, Dreamy, Cheerful, Clever, Merry, Snowy, Golden, Silver, Breezy, Mellow, Plucky, Toasty, Dapper, Jolly, Bouncy, Starry, Maple; nouns Whisker, Paws, Mittens, Tabby, Biscuit, Pounce, Purr, Muffin, Pebble, Socks, Noodle, Button, Marble, Pudding, Clover, Ginger, Shadow, Pepper, Bean, Toffee, Waffle, Comet, Nugget, Tuft.
 
 ---
 
@@ -335,12 +351,12 @@ POST /v1/session
  "nonce":"n1.mgk2x8.Zk3…Q.9fA…","clientVersion":"0.2.0","contentVersion":"content-bb8a756dfaf9"}
 → 200 {"token":"v1.eyJr…","expiresAt":1791886200000,
    "player":{"code":"7KQ2M9XD","nickname":"Velvet Pounce 27","nick":{"adj":2,"noun":5,"num":27},"avatarId":4,
-             "status":"ok","pool":"fb","trust":"signed","listed":true,"nicknameChangeAt":null},
+             "status":"ok","pool":"fb","trust":"signed","listed":true,"nicknameChangeAt":null,"frameId":0,"backgroundId":0},
    "rules":{"periodMode":"rolling","durationMs":86400000,"maxMembers":50,"scoringModes":["level","daily","event"],
             "places":[{"place":1,"hints":2,"kitties":2},{"place":2,"hints":1,"kitties":1},{"place":3,"hints":1,"kitties":0}],
             "minMembers":5,"doubleByVideo":true,"claimTtlMs":604800000,
             "hearts":{"enabled":true,"allowSelf":true,"maxGivenPerBracket":20},
-            "nickname":{"freeText":false,"changeCooldownMs":86400000}},
+            "nickname":{"freeText":true,"changeCooldownMs":86400000}},
    "results":[{"bracketId":"mgj1a0k3x9f2","endedAt":1791790000000,"place":2,"members":37,"points":22,
                "reward":{"rewardId":"mgj1a0k3x9f2:11","place":2,"grant":{"hints":1,"kitties":1},"canDouble":true,
                          "expiresAt":1792394800000,"claim":null}}],
@@ -676,12 +692,13 @@ export interface BracketRowView {
 export interface BracketListView {
   readonly bracketId: string;
   readonly rows: readonly BracketRowView[];   // EXACTLY the server's rows, in its order (H-3)
-  readonly members: number;                   // the server's count ("37 players")
+  readonly members: number;                   // the server's count (the announcement; no visible count since the UI batch)
   readonly endsAt: number | null;             // DEVICE-clock ms (the app applied the server offset)
   readonly final: boolean;
-  readonly rewardsLine: 'places' | 'min' | 'none';   // critic pass: 'places' (was 'top3'); the count is paidPlaces
-  readonly paidPlaces: number;                 // rules.places.length ("The top 3 …" / "First place …")
+  readonly rewardsLine: 'places' | 'min' | 'none';   // critic pass: 'places' (was 'top3'); UI batch: 'places' draws no line, the chests show
+  readonly paidPlaces: number;                 // rules.places.length
   readonly minMembers: number;
+  readonly rewards?: readonly PlaceRewardView[];   // UI batch: rules.places as sent ({ place, hints, kitties }); absent or empty = no chest
   readonly heartsNew: number;                 // 0 = no line
   readonly waiting: number;                   // queued fish shown on my row ("+2 waiting"); 0 = none
   readonly stale: { readonly at: number } | null;   // "Last updated hh:mm"
@@ -721,8 +738,7 @@ export interface LadderSheetProps {
   readonly infoOnly: boolean;
   readonly reducedMotion: boolean;
   onHeart(slot: number): void;
-  onEditName(): void;
-  onClose(): void;
+  onClose(): void;                            // UI batch: onEditName removed with the sheet's pencil
 }
 
 // src/ui/overlays/ladder-result.ts (new; overlay 'ladder_result')
@@ -739,20 +755,23 @@ export interface LadderResultProps {
   onClose(): void;                            // OK / Esc ("later")
 }
 
-// src/ui/overlays/nickname-sheet.ts (new; overlay 'nickname')
-export interface NicknamePick { readonly adj: number; readonly noun: number; readonly num: number; readonly avatarId: number }
+// src/ui/overlays/nickname-sheet.ts (new; overlay 'nickname'; UI batch: typed names, frames and backgrounds)
+export interface ProfilePick { readonly name: string; readonly avatarId: number; readonly frameId: number; readonly backgroundId: number }
 export interface NicknameSheetProps {
-  readonly words: { readonly adj: readonly string[]; readonly noun: readonly string[] };
-  readonly current: NicknamePick;
+  readonly current: ProfilePick;
   readonly avatarCount: number;               // AVATAR_COUNT
-  readonly numMin: number; readonly numMax: number;
-  readonly state: 'idle' | 'saving' | 'offline' | 'rejected' | 'cooldown';
+  readonly frames: readonly LookLock[];       // one per frame id (null = free to pick); [] hides the tab (a server without them)
+  readonly backgrounds: readonly LookLock[];  // as frames
+  readonly nameEditable: boolean;             // rules.nickname.freeText (false: the name is read-only, the looks still save)
+  readonly nameRules: NameRules;              // { maxChars, minWidth, maxDigits } from src/shared/nick-text.ts
+  checkName(raw: string): NameProblem | null; // the shared shape rule, passed in by the app (ui/ imports shared/ for types only)
+  readonly state: 'idle' | 'saving' | 'offline' | 'rejected' | 'invalid' | 'cooldown';
   readonly cooldownUntil: number | null;      // device clock
   now(): number;
-  shuffle(): NicknamePick;                    // the app picks (the UI has no randomness)
-  onSave(pick: NicknamePick): void;
+  onSave(pick: ProfilePick): void;
   onClose(): void;
 }
+// UI batch: words, numMin, numMax and shuffle() are gone (the word pickers were removed).
 
 // src/ui/hud/ladder-chip.ts (new)
 export type LadderChipView =
@@ -809,7 +828,7 @@ The 2c kinds of `RankingListState`, the hub's `RankHubProps` (until I-3) and `Pe
 
 ## 9. Art (G2)
 
-New symbol ids (placeholders at S0, final art in the build; spec Appendix C): `medal-1`, `medal-2`, `medal-3`, `avatar-0` … `avatar-11`, `icon-heart-line`, `icon-heart-fill`, `icon-streak-flame`, `streak-step-empty`, `streak-step-done`, `streak-step-today`, `streak-step-chest`, `reward-chest`, `reward-chest-open`, `nick-tag`, `icon-pencil`, `icon-shuffle`, `icon-info`. `IconSymbol` (`src/ui/art/sprite.ts`) widens with them; avatars, medals, the chest and the name tag go to the lazy art (or the `ladder` chunk); `icon-heart-*`, `icon-streak-flame` and the steps are needed by first-load views (the chip has none; the strip and the panel do) — G2 decides with the lead at I-4.
+New symbol ids (placeholders at S0, final art in the build; spec Appendix C): `medal-1`, `medal-2`, `medal-3`, `avatar-0` … `avatar-11`, `icon-heart-line`, `icon-heart-fill`, `icon-streak-flame`, `streak-step-empty`, `streak-step-done`, `streak-step-today`, `streak-step-chest`, `reward-chest`, `reward-chest-open`, `nick-tag`, `icon-pencil`, `icon-info`; UI batch: `reward-chest-1`, `reward-chest-2`, `reward-chest-3` (the paid places' chests), `frame-1` … `frame-7` and `bg-1` … `bg-7` (`looks-art.ts`, lazy, mounted with the ranking art); `icon-shuffle` removed. `IconSymbol` (`src/ui/art/sprite.ts`) widens with them; avatars, medals, the chest and the name tag go to the lazy art (or the `ladder` chunk); `icon-heart-*`, `icon-streak-flame` and the steps are needed by first-load views (the chip has none; the strip and the panel do) — G2 decides with the lead at I-4.
 
 ## 10. DOM contract and test hooks
 
@@ -869,7 +888,7 @@ All additive unless marked; every row is in the code and covered by `npx tsc --n
 |---|---|
 | `LadderRecord.noticeSeen: boolean` (save v4) | Merged by OR; a copy without it reads `false`, not corrupt (the `ladder.noticeFirst` dialog's OK) |
 | `LadderClient.onSignIn(fn)`; `LadderFailureCode` + `'no_api'` | |
-| `LadderFlow` as built | `active()`, `start()`, `onWin(LadderWinRef)`, `listState()`, `panelTotal()`, `panelExtras()` (`{ bracketList?, onHeart(slot), onInfo() }`), `counterBefore()`, `chip()`, `homeMounted()`, `openSheet(from, view?)`, `settingsRows()`, `streakClockOk()`, `prefetchChunk()`, `debug()`, `dispose()` |
+| `LadderFlow` as built | `active()`, `start()`, `onWin(LadderWinRef)`, `listState()`, `panelTotal()`, `panelExtras()` (`{ bracketList?, onHeart(slot), onInfo() }`), `dailyStanding()` (UI batch: this win's `DailyStanding`, `null` without one, `'pending'` while sending), `counterBefore()`, `chip()`, `homeMounted()`, `openSheet(from, view?)`, `settingsRows()`, `streakClockOk()`, `prefetchChunk()`, `debug()`, `dispose()` |
 | `startLadder(deps: StartLadderDeps): Promise<LadderFlow>` (`src/app/ladder-boot.ts`, lead I-4) | Boot's ladder wiring (remote config, client, flow, the first sign-in) moved into the lazy `ladder-boot` chunk; boot passes `setRemote(r)` and `setFlow(f)` to receive the remote switches and the flow as soon as they exist |
 | `game/ladder-sync.ts` (new, lazy) | `applyVerdicts`, `pruneAged`, `sendable`, `currentFrom`, `isRunning`, `markDoubleWatched`, `markResultSeen`, `afterDelete`, `waitingFish`, `droppedBy`, `claimEntry`, `isClaimed`, `counterBefore`, `recordClaim`, `claimsToRepair`, `resultsToShow` (same signatures as §6); `game/ladder.ts` keeps `emptyLadder`, `toWinSubmission`, `encodeSolution`, `enqueueWin`, `wireWin`, `parseClaimEntry`, `readLadder`, `mergeLadder` |
 | `BannerFlow.modalClosed(closing?)`; `BannerHideReason` + `'helper'` | The banner's re-show after a modal over the board |
@@ -889,11 +908,11 @@ All additive unless marked; every row is in the code and covered by `npx tsc --n
 
 | Member | Note |
 |---|---|
-| `BracketListFactory`, `BracketListCallbacks` (`onHeart`, optional `onEditName`), `BracketListHandle` (`View` + `centerMe()`), `RankingPanelProps.bracketList?` | The panel (overlay chunk) gets the list factory of the `ladder` chunk |
+| `BracketListFactory`, `BracketListCallbacks` (`onHeart`; `onEditName` removed in the UI batch), `BracketListHandle` (`View` + `centerMe()`, optional `closeTip?()`: closes a chest's tooltip, true when one was open; UI batch), `RankingPanelProps.bracketList?` | The panel (overlay chunk) gets the list factory of the `ladder` chunk |
 | `RecordsReason` (`'local' \| 'unavailable' \| 'opted_out' \| 'paused'`), `LadderSheetProps.recordsReason?`, `streakBest?` | |
 | `LadderRulesView.durationMs?` | The info view's "lasts {hours} hours" from the server's rule (fallback 24) |
-| `O2BuyView` as specified; `FishTotalKind` (`PeriodPillProps.kind`, `VictoryProps.kept.kind`); `PillsView.showPeriodCounter(total, kind?)`; `HowToPlayProps.ladder?`, `streakDays?` | |
-| English keys beyond Appendix A | `common.cancel`, `nick.edit.a11y`, `ladder.chip.rank`, `ladder.total`, `ladder.pill.*`, `ladder.records.title`, `streak.best`, `streak.days.*`; `nick.cooldown` = "You can change your name again in {time}."; Appendix A's `victory.streak` ships as `victory.streakDay` |
+| `O2BuyView` as specified; `FishTotalKind` (`PeriodPillProps.kind`; `VictoryProps.kept.kind` until the UI batch, which made `kept` `{ fish, max } \| null`, removed `onHome` and added `lines?`); `PillsView.showPeriodCounter(total, kind?)`; `HowToPlayProps.ladder?`, `streakDays?` | |
+| English keys beyond Appendix A | `common.cancel`, `ladder.chest.a11y`, `ladder.chest.count` (UI batch; `nick.edit.a11y` removed with the pencil), `ladder.chip.rank`, `ladder.total`, `ladder.pill.*`, `ladder.records.title`, `streak.best`, `streak.days.*`; `nick.cooldown` = "You can change your name again in {time}."; Appendix A's `victory.streak` ships as `victory.streakDay` |
 | `src/ui/screens/home-extras.ts` (lead I-4): `HomeExtras { createLadderChip, createStreakStrip }`, `homeExtras()`, `provideHomeExtras(x)`, `whenHomeExtras(fn)` | Home's chip and strip are created by factories the **overlay chunk** provides at load (`app/overlay-chunk.ts`); until then Home shows the period pill and an invisible reserved strip row (`.streak-strip--pending`) and re-renders when they land (spec §7.9's rule) |
 | `src/ui/art/streak-art.ts` (lead I-4; was G2's `art2e()` in `sprite.ts`): `streakArtSymbols`, `mountStreakArt(doc?)` | The flame and the four streak steps, mounted by the overlay chunk with the strip (requests-G2 R4); `sprite.ts` exports `icon24` |
 | The chip's and the strip's CSS moved from `screens.css` to `overlay-chunk.css` (lead I-4) | `screens.css` keeps `.home__lead`, the strip's margin and `.streak-strip--pending` |

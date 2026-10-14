@@ -74,7 +74,7 @@ Every value JS reads goes into `GameConfig`; keyframe stops and sizes no JS read
 | `fx.points` (new) | `{ starAtMs: 783, flightMs: 530, countMs: 350, burstMs: 650 }` | §2.5 |
 | `fx.unitDone` (new) | `{ waveStepMs: 33, labelMs: 720 }` | §4.1–§4.3 |
 | `fx.hint` (new) | `{ dimMs: 300, ghostFirstMs: 333, ghostStaggerMs: 60, ghostPopMs: 500 }` | §3 |
-| `fx.tickers` (new) | `{ enabled: true, delayMs: 150, crossMs: 9000, lead: 0.086, reducedHoldMs: 3000 }` | §5 |
+| `fx.tickers` (new) | `{ enabled: true, delayMs: 150, crossMs: 9000, lead: 0.086, reducedHoldMs: 4500, maxPxPerSec: 110, oddsMaxFirstTryPct: 55, oddsMinTries: 2, retryCloseCats: 2, milestoneEvery: 50 }` (UI batch, messages: `reducedHoldMs` 3000 → 4500 and the five new keys) | §5 |
 | `layout.hint` (new) | `{ cardW: 334.4, cardMinH: 70.3, cardGap: 5.9, applyW: 278.7, applyH: 59.3, applyGap: 31 }` (× s) | §3.2 |
 | `kitty.revealMs` | 600 → **820** (the board stays locked while the cat celebrates) | §2.4 |
 | `ads.banner.hideDuringHint` (new) | `true` | §3.2 |
@@ -418,23 +418,23 @@ Two cream pills stacked over the top of the HUD, both moving **right → left**:
 | Slots | line 1 **top y0 + 89.2**, line 2 **top y0 + 130.0**; each **29.3** tall. Over the HUD rows, below every overlay; `pointer-events: none`; in the game screen's fx layer (2d's toast layer). |
 | Pill | fill **`--toast-fill` → `#FFF1C8`** (PNG; 2d's `#FEF0C7`, ΔE00 0.2), border **1.2** **`--toast-line` → `#E98E33`** (PNG; 2d's `#DD9045` came from the video, ΔE00 3.0), the inline-end cap a full semicircle (radius 14.65); no shadow. |
 | Paw cap | `art-paw-cap` (new, G2; our drawing): at the inline start, the pill's full height; four round toe beans in an arc along the outer edge (peach `#FFCD9B`) and a large main pad (a soft gradient `#FFD4A5` → `#FFE1B5` fading into the fill); the border follows the scalloped outline. The text starts **20** from the paw's outer edge. **Final audit B8 (measured on still-a: the beans ≈ 7.8 px across form the outer edge and overhang the pill ≈ 2 px):** the cap is 28.4 × 33.5, 2.1 above and below the pill, four bordered scallops (outer r 5.4) with beans r 3.5; the pill's body (fill, border, round end) is `.ticker::before` from 8 s in, so its straight edges never run past the scallops and meet the paw's border in one line. |
-| Text | `--ink` (4.85:1 on the fill), `max(10px, 16.5 s px)`, weight 600, one line, no wrap. **Final audit B7:** thinned like the labels (a 0.04 em stroke in the pill's fill): stroke 1.34 px against the still's 1.40 (was 1.87). |
+| Text | `--ink` (4.85:1 on the fill), `max(10px, 16.5 s px)`, weight 600, one line, no wrap (reduced motion: wraps, balanced, UI batch). **Final audit B7:** thinned like the labels (a 0.04 em stroke in the pill's fill): stroke 1.34 px against the still's 1.40 (was 1.87). |
 | Icon | at the inline end, after the text: line 1 **`art-bolt`** (our lightning bolt, ≈ 20 × 22, 6 after the text, 3 from the border), line 2 **`art-star`** (our five-point star with a soft highlight, ≈ 26 × 22, 4 after the text, touching the border). Both new, G2. 2d's `art-flex` is retired. |
-| Width | content (paw + text + icon); at most `colW − 24` (a longer translation is cut with an ellipsis; G3 checks in the i18n e2e). |
+| Width | content (paw + text + icon), never cut: the column clips a pill only while it crosses (UI batch, messages; the `colW − 24` cap and the ellipsis are gone). Reduced motion: at most `colW − 24`, the text wraps. |
 | DOM | `.tickers > .ticker[data-line=1|2][data-key=<i18n key>] > svg.ticker__paw + span.ticker__text + svg.ticker__icon`, `aria-hidden`. |
 
 ### 5.3 Motion
 
 - **Final audit B14:** the crossing is the **game column's** (`.tickers` is the column, clipped), not the viewport's: on a wide desktop window the lines stay over the HUD and move as fast as on a phone; on a phone the column is the viewport.
-- Each line starts with its inline-start edge just past the **inline-end edge of the viewport** and moves **linearly** toward the inline start until its inline-end edge has left the viewport: distance `vw + width_i`, duration **T = `fx.tickers.crossMs`** (9 000) for both lines, so speed_i = (vw + width_i) / T (≈ 100 px/s for a 440 px line at 402, the speed measured in the first recording).
+- Each line starts with its inline-start edge just past the **inline-end edge of the viewport** and moves **linearly** toward the inline start until its inline-end edge has left the viewport: distance `vw + width_i`, duration **T = `fx.tickers.crossMs`** (9 000) for both lines, so speed_i = (vw + width_i) / T (≈ 100 px/s for a 440 px line at 402, the speed measured in the first recording). UI batch: T = max(crossMs, (vw + the longer width) / (maxPxPerSec × s)) for both lines, so a long translation never races.
 - **Line 2 starts first**, `fx.tickers.delayMs` (150) after the board entry starts; **line 1** starts `lead × T` (0.086 × 9 000 = 774 ms) later.
 - Each is removed when it has left. A new board or a Retry removes running tickers first.
 - **RTL:** mirrored (they enter at the left edge and move right; the paw is at the inline start, on the right).
-- **Reduced motion:** no movement: both fade in (150 ms) at the inline start of the column (x = 12 s), hold `reducedHoldMs` (3 000), fade out.
+- **Reduced motion:** no movement: both fade in (150 ms) stacked from line 1's slot (11.5 s apart) at the inline start of the column (x = 12 s), a long line wrapping; hold `reducedHoldMs` (4 500, UI batch; was 3 000), fade out.
 
 ### 5.4 Copy: honest lines from real data (G1 picks, G3 renders; Appendix A)
 
-We have no live player counts and no worldwide totals, so a ticker **never states a statistic we cannot back**: every number in a line comes from this player's own save or from the board itself, and the rest is plain encouragement or a true tip.
+We have no live player counts and no worldwide totals, so a ticker **never states a statistic we cannot back**: every number in a line comes from this player's own save or from the board itself, and the rest is plain encouragement or a true tip. UI batch (spec §0.4 H-2a): the one exception is `ticker.odds.*`, an approximate expectation from the board's own difficulty (`game/level-odds.ts`), rounded and worded "about".
 
 | # | Line | Key | Shown when | Data |
 |---|---|---|---|---|
@@ -450,8 +450,22 @@ We have no live player counts and no worldwide totals, so a ticker **never state
 | 10 | Every puzzle has exactly one answer | `ticker.unique` (new) | line 2, always eligible | true for every shipped level (`levels:verify`) |
 | 11 | Tip: double-tap a tile to place a cat | `ticker.tip.cat` (new) | line 2 while `progress.completed` < 20 | — |
 | 12 | Tip: drag across tiles to cross out many | `ticker.tip.drag` (new) | line 2 while `progress.completed` < 20 | — |
+| 13 | About {pct}% of players crack this board on their first go | `ticker.odds.firstTry` (UI batch) | line 1 on a Hard level (in its pool) and on a tough board (estimated first try ≤ `oddsMaxFirstTryPct` 55) | `levelOdds` (an estimate, H-2a) |
+| 14 | On average, players take about {count} tries here. No rush! | `ticker.odds.tries` (UI batch, plural) | with 13, when the estimate is ≥ `oddsMinTries` (2) | `levelOdds` (an estimate) |
+| 15 | About {pct}% of players solve it on the next try. Your turn! | `ticker.odds.retry` (UI batch) | line 1 on a Retry (in its pool) | `levelOdds` (an estimate) |
+| 16 | Just {count} cats short last time. So close! | `ticker.retry.close` (UI batch, plural) | line 1 on a Retry when the lost attempt was ≤ `retryCloseCats` (2) cats short | the lost attempt (session memory, never saved) |
+| 17 | Last try: {placed} of {n} cats placed. Let's top that! | `ticker.retry.found` (UI batch) | line 1 on a Retry (in its pool) when the lost attempt placed any | the lost attempt |
+| 18 | Try {count}: you know this board better every time | `ticker.retry.again` (UI batch) | line 1 on a Retry from the third try (in its pool) | the session's attempt |
+| 19 | Your first Hard level! Take your time, think it through | `ticker.hard.first` (UI batch) | line 1 on the player's first Hard level | `progress.level` |
+| 20 | You've beaten {count} Hard levels so far. Impressive! | `ticker.hard.beaten` (UI batch, plural) | line 1 on a later Hard level (in its pool); line 2 when ≥ 1, not on a Hard board | `progress.level` (levels are played in order) |
+| 21 | {count} levels solved without a single mistake. Sharp! | `ticker.flawless` (UI batch, plural) | line 2 when ≥ 2 | `progress.best` records with 0 mistakes |
+| 22 | {count} days in a row with a solved puzzle. Lovely! | `ticker.streak` (UI batch, plural) | line 2 when the streak is alive and ≥ 2 days | `dayStreak` |
+| 23 | You've solved {count} daily puzzles so far | `ticker.dailies` (UI batch, plural) | line 2 when ≥ 1 | `save.daily` |
+| 24 | Level {level}! Look how far you've come | `ticker.milestone` (UI batch) | line 2 on a fresh board of a level that is a multiple of `milestoneEvery` (50); never on a Retry, a daily or an event | the level number |
 
 **Selection** (`pickTickerLines`, G1, pure): line 1 = the first that applies of 1 → 2 → 3 → (4 or 5, chosen by the seed); line 2 = among the eligible 6–12, the one at index `seed mod count`. Seed = a hash of `puzzleId + ':' + attempt` (so a Retry may show another line 2). Daily and event boards use the same pool **without line 3** (critic: an event's index is not a level number, so `progress.best[index]` would show another level's time; a daily has no level). Our copy keeps the original's **role** (two short upbeat lines) but not its content type (worldwide statistics).
+
+**UI batch (2026-10-13, messages)** (the user: "so the user feels special or understands the difficulty of the level"): **line 1** on a Retry = 16 when the lost attempt was ≤ `retryCloseCats` cats short, else by the seed among 15, 17 (when it placed any), 18 (from the third try) and 1; on a Hard level = 19 on the player's first, else by the seed among 20, 2, 13 and 14 (when ≥ `oddsMinTries`); then 3 (unchanged); then, on a tough board (estimated first try ≤ `oddsMaxFirstTryPct`; any mode), 13 or 14; otherwise 4 or 5. **Line 2** = the pool 6–12 plus 20–23 (each when it applies); on a fresh board of a level that is a multiple of `milestoneEvery` the milestone (24) takes line 2. About 17 % of the normal levels and 11 % of the dailies are tough boards (`tests/unit/game/level-odds.spec.ts`).
 
 ### 5.5 When
 
@@ -566,7 +580,7 @@ Unchanged rows: the plain white X stays a recorded parity exception on light til
 6. `tool-bar.ts`, `hud.css`: §4.5 (press, release spring); the busy tool row without the disabled fade (§1.2); the pulse look unchanged.
 7. `fx/tickers.ts`: §5.2–§5.5 (replaces `start-toast.ts`); `game-screen.ts`: `playTickers`, the fx orchestration (which event plays what; the deferral of mouse-completed units, §4.1).
 8. `audio/sfx.ts`: `mouse`, `points` (the star landing), `unit_done`.
-9. i18n: Appendix A in `en/ui-2d1.ts` (**new**), the 16 drafts, `meta.ts` (`fx.done` ≤ 8, `ticker.*` ≤ 40 characters), glossary ("Denim"; "Done!" is the completion label, not a button), review log, `drafted-from.json`.
+9. i18n: Appendix A in `en/ui-2d1.ts` (**new**), the 16 drafts, `meta.ts` (`fx.done` ≤ 8, `ticker.*` ≤ 40 characters; ≤ 60 since the UI batch), glossary ("Denim"; "Done!" is the completion label, not a button), review log, `drafted-from.json`.
 10. Tests and e2e (§7.6, §7.7); screenshots `docs/phase2d/screenshots/G3-2d1-*.png`.
 
 **Bundle note (G3):** `points-flight.ts`, `cat-burst.ts` and `done-label.ts` may form one **lazy fx chunk** (`fx/celebrate.ts`), prefetched at idle after the first game screen mounts; until it has loaded, a POINTS event falls back to 2d's roll (no star) and a completed unit shows no label. This keeps the first-load JS row flat (§7.9). When the chunk has loaded the fx layer carries `.game-fx[data-celebrate=ready]` (critic: the `smoke` e2e waits for it, since the fallback roll would read 576 by 360 ms).
@@ -603,7 +617,7 @@ Unchanged rows: the plain white X stays a recorded parity exception on light til
 - `mouse.spec`: the pick order is the shuffle order (not sorted), deterministic per seed, a permutation-prefix of the candidates; `mouseRunMs(3, false)` = 3 × 935 + 170; reduced = 150; `onMouse` keeps the board busy for `mouseRunMs` (reduced motion: 150, through `HelperHost.reducedMotion`) and ends early when the session ends.
 - `kitty-pick.spec` (new, **our own fixtures**): on a 9 × 9 board of ours with a one-tile region in the top-right corner the picker returns that tile; with no forced region it returns the solution cell of the cat-less region with the fewest candidates after shadows; ties go to the earlier solution cell; it never returns a cell whose region has a cat; it throws when every region has one; the result is always a solution cell. A property test over 200 shipped levels with random partial boards: always a solution cell of a cat-less region.
 - `flags-views.spec`: the pulse (§4.6): none before `idleMs`, the kitty on an untouched board after it with stock, none with the kitty at 0 (and not the bulb instead), the bulb on a marked board with stock, none at 0; a board change and a visibility return reset the idle time; **none once a hint, the kitty or the mouse was used in the attempt**, again after a Retry; `needsStock: false`, `untilHelperUsed: false` and the pinned targets via `mergeConfig`.
-- `tickers.spec` (new): line 1 priorities (Retry > Hard > best > seeded cats / level); line 2 eligibility per row of §5.4; every `{count}` / `{time}` equals a value from the inputs (no constants); deterministic per seed; Retry may change line 2; `period.pill.{kind}` follows `cfg.period.kind`; line 3 only in level mode (never for a daily or an event index) and carries the best time in ms for `formatClock`; line 9 never on the daily itself.
+- `tickers.spec` (new): line 1 priorities (Retry > Hard > best > seeded cats / level); line 2 eligibility per row of §5.4; every `{count}` / `{time}` equals a value from the inputs (no constants); deterministic per seed; Retry may change line 2; `period.pill.{kind}` follows `cfg.period.kind`; line 3 only in level mode (never for a daily or an event index) and carries the best time in ms for `formatClock`; line 9 never on the daily itself. UI batch: every new line and threshold; the odds equal `levelOdds`, every other number comes from the input.
 - `banner-flow.spec`: the hint hides the banner when `hideDuringHint`; after close it reloads at once when `minReloadSec` has passed, else exactly one timer reloads it when the window ends (not when the screen has gone, a modal is open or the board is won); off restores the 2d rule.
 - `session` / `session-2d.spec`: `openHint` passes `cells`, `boardRect`, `cellRect`; `playTickers` on fresh boards and Retry, never on resume, revive or the tutorial; the mouse's sounds at k × 935 and k × 935 + 850; the `points` sound 1 330 ms after `POINTS` (at once with reduced motion; cancelled by a props render); a mouse action's `unit_done` at its anchor's landing; no `unit_done` sound in an action with `REGION_DONE`.
 

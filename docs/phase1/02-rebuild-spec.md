@@ -1,8 +1,8 @@
 # 02 · Rebuild spec: Phase 2 "as is"
 
-Status: Phase 1 deliverable (2026-10-06); **Phase 2b notes added at integration (2026-10-09); Phase 2c notes (2026-10-09); Phase 2c.1 notes (2026-10-10); Phase 2e notes (2026-10-11)** · Applies to: Phase 2 (rebuild), Phase 2b ("parity") and Phase 4 (Facebook Instant Games)
+Status: Phase 1 deliverable (2026-10-06); **Phase 2b notes added at integration (2026-10-09); Phase 2c notes (2026-10-09); Phase 2c.1 notes (2026-10-10); Phase 2e notes (2026-10-11); UI batch notes (2026-10-13)** · Applies to: Phase 2 (rebuild), Phase 2b ("parity") and Phase 4 (Facebook Instant Games)
 
-> **Phase 2e (2026-10-11).** [phase2e spec](../phase2e/spec.md) wins over this document wherever they differ ([STATUS-2e](../phase2e/STATUS-2e.md)). In short: (1) **the ranking** after every scored win is a real worldwide daily ranking on our own server (§10 here): rolling brackets of up to 50 real players, points = fish kept (1–3 per win), places 1–3 paid when at least 5 players took part (2 + 2 hints and kitties for 1st, ×2 by video), hearts as cheers, our own names and avatars; the FB weekly board and the rankings hub are retired; web-prod shows personal records. (2) **The daily streak** (§12): any win counts a day, a 7-day cycle, day 7 pays 2 hints + 2 kitties, a missed day resets; a strip on Home and a row on the day's first victory. (3) **The daily unlock** moves to after level 21 (`daily.unlockAfterLevel`, an earlier unlock is kept). (4) **The out-of-helpers card (O2)** offers the helper's own pack and No Ads next to the video on FB (§13.3; consume first, iOS behind the `iapIos` switch, off). (5) **The ads cadence** (§13): the banner during play from level 10's board (`ads.banner.fromCompletedLevels` 9) and back after every hide within 46 s; an interstitial after every level from level 10 with a 30 s floor, every 2nd Retry and on the fail card's Home; rewarded placements per helper. Every value not confirmed by the user is a provisional key (spec §0.7).
+> **Phase 2e (2026-10-11).** [phase2e spec](../phase2e/spec.md) wins over this document wherever they differ ([STATUS-2e](../phase2e/STATUS-2e.md)). In short: (1) **the ranking** after every scored win is a real worldwide daily ranking on our own server (§10 here): rolling brackets of up to 50 real players, points = fish kept (1–3 per win), places 1–3 paid when at least 5 players took part (2 + 2 hints and kitties for 1st, ×2 by video; since the UI batch of 2026-10-13: 3 + 3, 2 + 2, 1 + 1), hearts as cheers, our own names and avatars (typed names, frames and backgrounds since the UI batch); the FB weekly board and the rankings hub are retired; web-prod shows personal records. (2) **The daily streak** (§12): any win counts a day, a 7-day cycle, day 7 pays 2 hints + 2 kitties, a missed day resets; a pill on Home and the Daily Streak screen after the day's first win (UI batch, 2026-10-13; it was a strip on Home and a row on the day's first victory). (3) **The daily unlock** moves to after level 21 (`daily.unlockAfterLevel`, an earlier unlock is kept). (4) **The out-of-helpers card (O2)** offers the helper's own pack and No Ads next to the video on FB (§13.3; consume first, iOS behind the `iapIos` switch, off). (5) **The ads cadence** (§13): the banner during play from level 10's board (`ads.banner.fromCompletedLevels` 9) and back after every hide within 46 s; an interstitial after every level from level 10 with a 30 s floor, every 2nd Retry and on the fail card's Home; rewarded placements per helper. Every value not confirmed by the user is a provisional key (spec §0.7).
 
 > **Phase 2c (2026-10-09).** The user, who plays the Play Store app, reported first-hand that **the lives are fish**, that the fish left at a win are **added to the leaderboard points ranked per period**, that **level points grow without mistakes**, and that our fish currency was an invention. [fish-lives-spec](../phase2c/fish-lives-spec.md) wins over this document and over the 2b notes wherever they talk about hearts, fish, points, the shop or the save; the HUD (S2), win flow (§10), monetization (§13) and persistence (§15) sections carry a "Phase 2c" pointer. Status: [STATUS-2c](../phase2c/STATUS-2c.md). **Phase 2c.1 (2026-10-10):** the user gave the exact level-points rule (first-hand): each correct cat inside one level adds 96 × (5 + s), s being the cats in a row since the start or the last mistake; every level and Retry starts at 0; hint and kitty cats count; the running total shows during play and at the win (fish-lives-spec §0.1 F5, §3.1–§3.2, §10). The 2c per-win formula and its "Perfect ×N" streak are gone.
 
@@ -198,7 +198,7 @@ All screens are portrait. The wireframes show a 390×844 CSS-px phone. Legend: `
 ```
 
 - Locked daily card: "Unlocks after level 20", greyed out with a lock icon. Tapping it shows a toast.
-- The primary button reads "Level L" with a "Hard" badge when level L is a hard level (§11.3), or "Continue · Level L" when `inProgress.level` holds a board. (L is the level number; N is always the board size.)
+- The primary button reads "Level L"; on a Hard level it wears a red frame with a "Hard" tag on its top edge, on an Extra-hard level (§11.3) a purple frame with an "Extra hard" tag (UI batch, 2026-10-13); or "Continue · Level L" when `inProgress.level` holds a board. (L is the level number; N is always the board size.)
 
 ### S2 Game
 
@@ -553,7 +553,7 @@ Here L is the **level number** (N stays the board size). Saving at the moment of
 
 Mode differences:
 
-- **Daily win**: `daily[date] = [elapsedMs, mistakes, hintsUsed, kittiesUsed]`, `inProgress.daily = null`, as one `critical` save. O7 replaces O3 and shows the solve time, mistakes and hints. Its **Done** button is the gate trigger `daily_done`, then Home.
+- **Daily win**: `daily[date] = [elapsedMs, mistakes, hintsUsed, kittiesUsed]`, `inProgress.daily = null`, as one `critical` save. O7 replaces O3 and shows the solve time, mistakes and hints. Its **Done** button is the gate trigger `daily_done`, then Home. (UI batch, 2026-10-13: at the win the daily victory's "Level N" is the `daily_done` trigger and leads to the next level; O7 reopened from Home keeps its Done.)
 - **Tutorial win** (first run): `tutorialDone = true`, `progress.level = 2`, `progress.completed = 1`, as one `critical` save, with no stats record and no gate. "You're ready!" leads to Level 2.
 - **Tutorial replay** win: no save at all; the button leads to Home.
 
@@ -623,8 +623,10 @@ Ordering inside a band (03 §8.3): the generator fills every slot, and then reor
 Every 10th level from level 30 onward (30, 40, 50, …) is **Hard** [DECISION, based on inferred 01 §10.8]. A Hard level:
 
 - uses the band's hard grade column;
-- shows a **"Hard"** badge on the Home button and next to the title;
+- shows a red frame and a **"Hard"** tag on the Home button, a red "Hard" badge next to the title (UI batch, 2026-10-13);
 - otherwise plays exactly like a normal level.
+
+**Extra hard** (UI batch 2026-10-13): a Hard level whose own board needs G5 or has effort ≥ `levels.extraHardMinEffort` (90): 30 of the 98 shipped Hard levels (`game/level-tiers.ts`, generated from the packs; an endless level is Extra hard once its board is generated). It plays like any Hard level; it changes only the label and the frame (purple).
 
 ### 11.4 Endless beyond the shipped packs
 
@@ -700,7 +702,7 @@ Existence is confirmed (01 §10.10). Everything else is [DECISION]:
 |---|---|---|---|
 | `next_level` | Interstitial | Tap Next on O3 | likely (01 §11.3) |
 | `retry` | Interstitial | Tap Retry on O4 | likely (01 §11.4, fail-retry) |
-| `daily_done` | Interstitial | Tap Done on O7 | [DECISION] It is a level transition |
+| `daily_done` | Interstitial | Tap Done on O7 (UI batch, 2026-10-13: tap the daily victory's "Level N", which then leads to the next level) | [DECISION] It is a level transition |
 | `hint` | Rewarded | Hint at stock 0 | likely (01 §6.6) |
 | `kitty` | Rewarded | Kitty at stock 0 | likely (01 §6.3) |
 | `revive` | Rewarded | Continue on O4 | likely (01 §5.7) |
