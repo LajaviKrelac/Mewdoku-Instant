@@ -164,3 +164,9 @@ workstreams, merged and reviewed by the lead; per-area notes, decisions and size
 - **Deploy order (done on staging 2026-10-14):** `db:migrate:staging` (0004, 0005) **before** `deploy:staging` (version
   `276dbd3f-94f0-4114-a686-34ab7ca54ed0`); smoke: `/v1/health` ok, `PUT /v1/me/profile` and `POST /v1/presence` without a
   token 401. Production: not migrated or deployed (needs 0003, 0004 and 0005 before its deploy).
+- **Test builds (2026-10-14):** FB `mewdoku-instant-fbig-preview-0.1.0-1d6ce5b.zip` (543,153 bytes, 89 files; staging
+  ranking) uploaded, in Web Hosting as Standby (comment "Game test build 0.1.0 1d6ce5b - UI batch: …"); the claude.ai
+  preview link republished from the same commit (version 22; it plays against the in-page sample server). Checked first
+  on 1d6ce5b: `npm run verify` (3,246 unit tests, 224 server tests), two full e2e runs (330 passed each; the only
+  failures were a 1.3 px streak-screen fit at 320 × 568 in German, fixed, and one FB purchase test under load that passed
+  4/4 alone and 59/59 with its whole spec), size check within the re-set budgets.
