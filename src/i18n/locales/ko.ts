@@ -452,6 +452,7 @@ export const catalog: LocaleCatalog = {
   'ladder.info.rewards.other': '랭킹이 끝날 때 {min}명 이상이 참여했다면 상위 {count}명이 힌트와 냥이를 받아요.',
   'ladder.info.double': '영상을 보면 보상이 두 배가 돼요.',
   'ladder.info.hearts': '하트를 눌러 다른 플레이어를 응원해요. 하트는 그냥 재미예요.',
+  'ladder.info.computerPlayers': '랭킹에는 컴퓨터 플레이어도 포함돼요.',
   'ladder.info.names': '다른 플레이어에게는 랭킹 이름과 그림만 보이고, Facebook 이름이나 사진은 절대 보이지 않아요.',
   'ladder.info.privacy': '설정에서 랭킹을 끄거나 랭킹 데이터를 삭제할 수 있어요.',
   'ladder.records.title': '내 기록',

@@ -451,6 +451,7 @@ export const catalog: LocaleCatalog = {
   'ladder.info.rewards.other': 'Khi bảng xếp hạng kết thúc, top {count} nhận gợi ý và mèo con nếu có ít nhất {min} người chơi tham gia.',
   'ladder.info.double': 'Bạn có thể xem video để nhân đôi phần thưởng.',
   'ladder.info.hearts': 'Chạm vào tim để cổ vũ người chơi. Tim chỉ để cho vui.',
+  'ladder.info.computerPlayers': 'Bảng xếp hạng có cả người chơi do máy tính điều khiển.',
   'ladder.info.names': 'Người khác thấy tên xếp hạng và hình của bạn, không bao giờ thấy tên hay ảnh Facebook của bạn.',
   'ladder.info.privacy': 'Trong Cài đặt, bạn có thể tắt xếp hạng hoặc xóa dữ liệu xếp hạng.',
   'ladder.records.title': 'Kỷ lục của bạn',

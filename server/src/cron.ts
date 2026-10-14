@@ -50,7 +50,9 @@ export async function runCron(s: Services, now: number, opts: CronOptions = {}):
   const noncesPurged = await s.store.purgeNonces(Math.min(now, s.clock.now()));
 
   // Stats rollup: the last hour's wins and flags are added; DAU and the members-per-bracket spread of
-  // brackets ended today are set (each read by index range; critic C-18). The watermark `stats_at` ("<ms>:<nonce>")
+  // brackets ended today are set (each read by index range; critic C-18). 2026-10-12, D-2e-24: the spread
+  // stays REAL sizes (final_real; final_members now counts computer players too) and brackets_rivals counts the
+  // brackets ended today that were created with computer players. The watermark `stats_at` ("<ms>:<nonce>")
   // moves in the same batch as the sums, guarded by the value read here, so overlapping runs never add twice
   // (audit A-S6).
   let stats = false;
@@ -65,13 +67,14 @@ export async function runCron(s: Services, now: number, opts: CronOptions = {}):
       const add: Record<string, number> = {};
       for (const r of w.winsByVerdict) add[`wins_${r.verdict}`] = Number(r.n);
       for (const r of w.flagsByKind) add[`flags_${r.kind}`] = Number(r.n);
-      const sizes = w.endedToday.map((b) => b.final_members ?? b.members).sort((a, b) => a - b);
+      const sizes = w.endedToday.map((b) => b.final_real ?? b.final_members ?? b.members).sort((a, b) => a - b);
       stats = await s.store.writeStats(
         day,
         add,
         {
           dau: w.dau,
           brackets_ended: sizes.length,
+          brackets_rivals: w.endedToday.filter((b) => Number(b.has_rivals) === 1).length,
           members_p10: percentile(sizes, 10),
           members_p50: percentile(sizes, 50),
           members_p90: percentile(sizes, 90),

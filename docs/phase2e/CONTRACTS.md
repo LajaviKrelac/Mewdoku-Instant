@@ -2,7 +2,7 @@
 
 Spec: [spec.md](spec.md) §9 (this file repeats it, copy-paste ready). Date 2026-10-11. Built on top of the 2d.1 build ([CONTRACTS-2d1](../phase2d/CONTRACTS-2d1.md) and [CONTRACTS-2d](../phase2d/CONTRACTS.md) stay in force; this file only adds or changes).
 
-**Status: FINAL (I-5, 2026-10-11).** The S0 contract with the critic pass (§13) and what changed at integration (§14). Where §1–§11 and §14 differ, §14 is right.
+**Status: FINAL (I-5, 2026-10-11), amended 2026-10-12.** The S0 contract with the critic pass (§13) and what changed at integration (§14), then the post-win fixes of `afc67c8` (§14.7) and computer rivals (§15, D-2e-24, the user's decision U-e). Where §1–§11 and §14–§15 differ, §14–§15 are right; the members §15 adds are also written into §2.1, §3, §4 and §8 below.
 Owners: **G1** logic, app, platform client · **G2** art, board, tokens · **G3** HUD, screens, overlays, fx, i18n, the nickname words · **G4** server and the wire contract · **lead** config, env, layering, Playwright, size-check, the probe, docs.
 
 Rules (as in 2b–2d.1): S0 lands every interface **additively**, in the order G4 → G2 → G3 → G1, each keeping `npx tsc --noEmit` and `npx vitest run` green; a member another workstream uses is never deleted before I-3; members marked *optional until I-3* become required there. `config.ts` is lead-only. `tsc` covers `dev/**`, so props the harnesses use only gain optional members until I-1 / I-3. Honesty (spec §0.4) is part of every contract: no interface below may carry an invented row, count or statistic. Clean room: no fixture, harness or capture uses the original's material.
@@ -123,6 +123,10 @@ export interface RulesView {
   readonly claimTtlMs: number;
   readonly hearts: { readonly enabled: boolean; readonly allowSelf: boolean; readonly maxGivenPerBracket: number };
   readonly nickname: { readonly freeText: boolean; readonly changeCooldownMs: number };
+  /** 2026-10-12 (D-2e-24, H-9): present and true when this pool's rankings include computer players and the
+   *  disclosure is on ("Rankings include computer players."); never false on the wire (absent instead). The
+   *  parser keeps it only as `true` and drops any other value without rejecting the rules. */
+  readonly computerPlayers?: boolean;
 }
 
 // ── session
@@ -196,7 +200,7 @@ export interface WinsResponse {
 // ── brackets
 export interface BracketRow {
   readonly rank: number;                     // 1 … members, positions (no shared ranks)
-  readonly slot: number;                     // stable handle inside this bracket (hearts); never a player id
+  readonly slot: number;                     // stable handle inside this bracket (hearts); never a player id; ≥ 9000: a computer player (never paid; D-2e-24)
   readonly nickname: string;
   readonly avatarId: number;
   readonly points: number;                   // fish kept, summed in this bracket
@@ -213,9 +217,11 @@ export interface BracketView {
   readonly mode: PeriodMode;
   readonly openedAt: Ms | null;
   readonly endsAt: Ms | null;
-  readonly members: number;                  // REAL visible members; === rows.length on a valid server answer
+  readonly members: number;                  // rows of this table: visible real members plus computer players (D-2e-24); === rows.length on an
+                                             // open answer; final: every row ranked at finalisation (brackets.final_members), so a later deletion leaves a gap
+                                             // (2026-10-11 wording: "REAL visible members; === rows.length on a valid server answer")
   readonly maxMembers: number;
-  readonly rows: readonly BracketRow[];      // every visible member, best first (≤ maxMembers)
+  readonly rows: readonly BracketRow[];      // every visible row (real members and computer players), best first (≤ maxMembers)
   readonly me: BracketRow | null;            // also inside rows; null when not a member
   readonly final: boolean;                   // ended and finalised
   readonly heartsNew: number;                // hearts received from OTHER players since my last bracket read
@@ -245,7 +251,7 @@ export interface ResultView {
   readonly bracketId: string;
   readonly endedAt: Ms;
   readonly place: number;                    // my final rank
-  readonly members: number;                  // visible members at finalisation (brackets.final_members; a later deletion never changes it)
+  readonly members: number;                  // every row ranked at finalisation, computer players included (brackets.final_members; a later deletion never changes it)
   readonly points: number;
   readonly reward: RewardView | null;        // null: not a paid place (or too few members, see members vs rules.minMembers)
 }
@@ -397,6 +403,21 @@ Errors (one fixture each): 400 bad_request · 401 token_expired · 401 bad_signa
 → {"error":{"code":"rate_limited","message":"wins: 30 per minute","retryAfterMs":12000},"serverTime":…}
 ```
 
+**Computer rivals** (2026-10-12, D-2e-24): three more fixtures come from a rivals-on scenario (`server/test/contract/contract.spec.ts`; `shapeDiff`, the parse round trip and `rows.length === members` run on them): `session.rivals.json` (the rules end with `"computerPlayers":true`), `bracket.rivals.json` (a full open bracket of 50 rows: 2 real members at slots 0 and 1, 48 computer players at slots 9000 and up, `members` 50) and `hearts.rival.json`. With rivals off nothing changes on the wire, so every other fixture is byte-identical.
+
+```http
+GET /v1/bracket   (a bracket created with computer players)
+→ 200 {"state":"open","bracketId":"mwhs8lc0tijs942z",…,"members":50,"maxMembers":50,
+   "rows":[{"rank":1,"slot":9027,"nickname":"Bright Willow 60","avatarId":6,"points":8,"hearts":1,"me":false,"likedByMe":true},
+           {"rank":2,"slot":9024,"nickname":"Quiet Nutmeg 31","avatarId":0,"points":6,"hearts":2,"me":false,"likedByMe":false},
+           {"rank":3,"slot":0,"nickname":"Spry Pretzel 62","avatarId":5,"points":6,"hearts":0,"me":true,"likedByMe":false}, …],
+   …}
+POST /v1/hearts {"bracketId":"mwhs8lc0tijs942z","slot":9027}
+→ 200 {"bracketId":"mwhs8lc0tijs942z","slot":9027,"hearts":1,"likedByMe":true,"givenInBracket":1,"serverTime":…}
+```
+
+A heart on a computer player answers `hearts` = its built-in hearts at that time plus the real hearts given to that slot (the same for every viewer); `404 not_found` for a rival that has not arrived, one retired by joins, a slot ≥ 9000 in a bracket without rivals, or any rival under `rivals.hide`.
+
 The FB signed payload the server expects (and the stub signs): `encPayload = b64url(JSON {"algorithm":"HMAC-SHA256","issued_at":<unix s>,"player_id":"<id>","request_payload":"<nonce>"})`, `signature = b64url(HMAC-SHA256(FB_APP_SECRET, encPayload)) + "." + encPayload`. G-SRV-2 confirms it against one real signature before launch.
 
 ---
@@ -448,7 +469,7 @@ export interface Env {
 export default { fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response>, scheduled(ev, env, ctx): Promise<void> };
 ```
 
-`ServerConfig` mirrors spec §1.16 (defaults in `core/config.ts`, overridden by `Env` variables where named). `core/*` never touches `Env`, `fetch`, `Date.now()` or D1.
+`ServerConfig` mirrors spec §1.16 (defaults in `core/config.ts`, overridden by `Env` variables where named). `core/*` never touches `Env`, `fetch`, `Date.now()` or D1. 2026-10-12: `Env` also carries `RIVALS?: string` (`on` | `off`; through `AppEnv` → `ConfigVars`) and `ServerConfig` gains `rivals` (§15); the store, migration and route additions for computer rivals are listed in §15.2.
 
 ---
 
@@ -701,7 +722,7 @@ export interface BracketListView {
   readonly rewards?: readonly PlaceRewardView[];   // UI batch: rules.places as sent ({ place, hints, kitties }); absent or empty = no chest
   readonly heartsNew: number;                 // 0 = no line
   readonly waiting: number;                   // queued fish shown on my row ("+2 waiting"); 0 = none
-  readonly stale: { readonly at: number } | null;   // "Last updated hh:mm"
+  readonly stale: { readonly at: number; readonly offline: boolean } | null;   // "Last updated hh:mm"; `offline` adds ladder.offline (2026-10-12, §14.7)
   readonly firstLineName: string | null;      // nick.first.line once, else null
   readonly panelRows: number;                 // ladder.panelRows
   readonly hearts: boolean;                   // rules.hearts.enabled
@@ -728,6 +749,8 @@ export interface LadderRulesView {
   readonly periodMode: 'rolling' | 'utc_day'; readonly maxMembers: number; readonly minMembers: number;
   readonly doubleByVideo: boolean; readonly heartsEnabled: boolean;
   readonly paidPlaces: number;                // critic pass: the info text's place count comes from the server's rules
+  readonly durationMs?: number;               // §14.3
+  readonly computerPlayers?: boolean;         // 2026-10-12 (§15): RulesView.computerPlayers; true adds the disclosure line after the window line
 }
 export interface LadderSheetProps {
   readonly view: 'list' | 'info' | 'records';
@@ -789,7 +812,14 @@ export interface StreakStripView {
 // src/ui/screens/home-screen.ts — additive
 export interface HomeView { /* … */ readonly ladder?: LadderChipView; readonly streak?: StreakStripView | null }  // optional until I-3
 export interface HomeCallbacks { /* … */ onLadder?(): void }                                                  // optional until I-3
+// 2026-10-12 (§14.7): HomeCallbacks.onLadderEnded?(): the chip's visible countdown reached 00:00:00 (once per end time).
 // Removed at I-3: HomeView.showTrophy, HomeCallbacks.onTrophy.
+
+// src/ui/overlays/how-to-play.ts — additive (§14.3: ladder?, streakDays?)
+export interface HowToPlayProps {
+  /* … */
+  readonly ladderComputerPlayers?: boolean;   // 2026-10-12 (§15): with `ladder`, "Rankings include computer players." after the points note
+}
 
 // src/ui/overlays/victory-screen.ts — additive
 export interface VictoryProps {
@@ -962,3 +992,65 @@ All in the code and covered by `npx tsc --noEmit`, `npx vitest run` and `npm --p
 | `scripts/i18n-check.ts`: `URGENCY_WORDS`, `localeHonestyProblems(locale, catalog)`; urgency and promises checked in every English key | A-H2 |
 | `scripts/size-check.ts`: `Lazy CSS (overlay chunk)` 32 → 33.5 KB | 32.5 measured; 04 §9 |
 
+
+### 14.7 Post-win and Home-chip fixes (lead, 2026-10-12, `afc67c8`; client only, no wire change)
+
+| Member | Note |
+|---|---|
+| `LadderFlow.winCounted(): boolean \| null` | Whether the server's answer counted this win's fish (true: points added; false: rejected or already counted; null: no answer yet). The panel shows "+N fish" and the victory its ranking row only when it is not false (spec §2.4) |
+| `counterBeforeWin(rec, deviceNow, winId, c?)` (`src/game/ladder-sync.ts`) | The in-game counter before a win: the bracket's points plus my earlier queued fish, this win's own left out (spec §2.3) |
+| `BracketListView.stale: { at, offline } \| null` (was `{ at }`) | `offline` adds `ladder.offline` only when the device is offline or the last call failed for want of a network; a 503, a timeout or a boot from the stored cache show "Last updated hh:mm" alone (spec §2.4, §2.9) |
+| `countdownText(endsAt, now, final)` (`bracket-list.ts`) | Same signature; "Final results" only when `final`; null (no line) once the end passed without it (spec §2.4) |
+| `LadderChipCallbacks.onEnded?()`, `HomeCallbacks.onLadderEnded?()` | The chip's countdown reached 00:00:00 (once per end time); the app refreshes the chip |
+| `.ladder-chip__time` (`ladder-chip.ts`) | The countdown "07:48:12" in a bracket with an end time; `.ladder-chip__rank` and `.ladder-chip__points` are hidden then, and rank, members, fish and time are in the accessible name (spec §2.5, §9.4) |
+| `src/ui/time-text.ts` `formatCountdown(ms)` | Moved from `home-screen.ts` (which re-exports it), shared with the chip |
+
+## 15. Computer rivals (2026-10-12, D-2e-24; the user's decision U-e)
+
+The approved design, built in three stages and documented in spec §1.5 "Computer rivals", §0.4 (H-1, H-2, H-4, H-8 rewritten, H-9 new) and `server/README.md` "Computer rivals". Off in code; on only with the Worker variable `RIVALS=on` (spec §1.16). All additive; with rivals off the wire is byte-identical to §2–§3.
+
+### 15.1 Wire and shared (`src/shared/rank-api.ts`, `rank-api-parse.ts`)
+
+| Member | Meaning |
+|---|---|
+| `RulesView.computerPlayers?: boolean` | Present and `true` when the player's pool has rivals on (or its test pool's `/dev/rivals` switch), not hidden, and `rivals.disclose` on; never `false` on the wire. `parseRules` keeps it only as `true` and drops any other value silently (the rules are never rejected over it) |
+| `BracketRow.slot` | ≥ 9000 (`RIVAL_SLOT_BASE` + index; at most 9048 under preset r1, ≤ 9999 accepted in a snapshot): a computer player. Real slots stay below 1000 in practice; no reward id can name a slot ≥ 1000 (`REWARD_ID_RE` `:\d{1,3}`), so a rival is never payable even by a forged claim |
+| `BracketView.members` | The rows of this table: visible real members plus computer players; `=== rows.length` on an open answer; a final view's `members` is `brackets.final_members`, every row ranked at finalisation (a later deletion leaves a gap) |
+| `BracketView.rows` | Every visible row, real or computer, best first, ≤ `maxMembers` (the K rule guarantees it, so the parser's checks are unchanged) |
+| `ResultView.members` | Every row ranked at finalisation, computer players included (`final_members`); `place ≤ members` always holds |
+| `BracketSummary.members` | The summarised view's `members` (the Home chip's "of 37") |
+| `HeartResponse.hearts` on a rival slot | Its built-in hearts at that time (or the snapshot's) plus the real hearts given to that slot |
+
+No new endpoint for players, no new error code, no new request field.
+
+### 15.2 Server (informative; binding inside `server/`)
+
+| Member | Note |
+|---|---|
+| `migrations/0003_rivals.sql` | `brackets.rivals TEXT` (the tag `r1:<seed12>:<strength>:<adjN>:<nounN>`, since 2026-10-12 `r2:…` for new brackets; NULL = none), `brackets.final_rivals TEXT` (JSON `[[slot, rank, points, scoredAtOffsetMs, hearts, avatar, "name"], …]`, ≤ `max_members` entries, ≤ 8 KB), `brackets.final_real INTEGER`. Expand-only, no index, no backfill |
+| `migrations/0004_deleted_joins.sql` (2026-10-12, r2) | `brackets.deleted_joins TEXT`: `slot:joined_at,…` of the members deleted from an r2 bracket, in deletion order (NULL = none, and always for r1 and untagged brackets), so r2's replay of the real joins keeps every join's time. Written only by `deletePlayer`, read with the bracket row. Expand-only, no index, no backfill; apply it before deploying the code (its `deletePlayer` writes the column) |
+| **`brackets.final_members`** | **Meaning changed:** every row ranked at finalisation, computer players included (before 0003: the real visible members). **`final_real`**: the real visible members ranked (null before 0003). Readers that want real sizes (stats, dashboards) use `final_real ?? final_members` |
+| `store/rows.ts` `BracketRow.rivals`, `final_rivals`, `final_real`, `deleted_joins` (0004) | The secret tag is never on the wire and never in admin answers; nor is `deleted_joins` |
+| `ServerConfig.rivals: { enabled, pools, strength, disclose, hide, testPools }`; `ConfigVars.RIVALS`; `RivalPool`, `RIVAL_POOLS` (`core/config.ts`) | Defaults `{ false, ['fb','web'], 100, true, false, false }`; `loadConfig` parses `RIVALS=on\|off`, the production guard (only `RIVALS=on` itself), pools, strength 50…200, and the scoring guard (r1 needs `pointsPerFish` 1, `fishMax` 3) |
+| `DevState.rivals: Map<string, boolean>`; `rivalsForPool(s, pool)`, `rivalsNoteFor(s, pool)` (`services.ts`) | Who gets a tag at creation; who gets `computerPlayers` |
+| `core/rivals.ts` (new, pure, integer-only) | `RIVAL_SLOT_BASE`, `isRivalSlot`, `RIVAL_TAG_RE`, `parseRivalsTag`, `newRivalsTag(strength, rng, words)`, `rivalRoster(tag, b)`, `rivalAt(script, joinUntil, t)`, `liveRivalCount(roster, b)`, `rivalNames(roster, takenLower, words, retired)`, `encodeFinalRivals`, `decodeFinalRivals`, `FINAL_RIVALS_MAX_CHARS`; types `RivalsTag`, `RivalScript`, `Roster`, `FinalRival`. Preset r1 is frozen by a golden test (also run inside workerd). 2026-10-12, r2: `newRivalsTag` writes preset r2; `RivalsTag.preset` and `Roster.preset` (`RivalPreset` `'r1' \| 'r2'`), `RivalScript.winsPerDay?` (r2 only; r2's `pace` is 0); `rivalSleep(roster, index) → { start, minutes }` (a rival's daily sleep window, for tests); r2 has its own golden test |
+| `core/table.ts` (new, pure) | The one place real rows and rivals meet: `TableRow` (`kind: 'player' \| 'rival'`, `playerKey` null for a rival), `RankedRow`, `liveTable`, `freezeTable` (at `ends_at`), `finalTable`, `finalPlan(b, members, cfg, now, claimable) → { ranks, rewards, totals, rivalPlaces }`, `rivalHeartTarget`, `withRealHearts`, `pointsForRank` (the preview and tests). 2026-10-12, r2: `liveRivals(roster, b, members) → { live, retired: RetiredRival[] }` (r1: index < K; r2: the replay of the real joins) used by every path; `rivalHeartTarget(b, slot, now, hide, members = [])` (an open r2 bracket needs its members); `joinTimesKnown(b, members)` (false only when the reads straddle a deletion: `finalizeIfDue` reads the bracket row again, `rivalHeartTarget` answers null); `RetiredRival.at` is null when that join's time was guessed |
+| `core/brackets.ts` `paidPlaces` | Unchanged code; its input is every visible row, computer players included; callers drop places held by rival slots |
+| `SqlStore` | `NewBracket.rivals` (the create binds one more value); `finalize(id, ranks, rewards, now, totals?)` and `refinalize(…, totals?)` with `FinalTotals { finalMembers, finalReal, finalRivals }` (defaults = the old behaviour); new `bracketHearts(id)`, `giveRivalHeart(…) → RivalHeartResult { added, realHearts, given, exists }` (4 statements), `adminBracket(id)`; `statsWindow().endedToday` gains `final_real`, `has_rivals`; `playerDetail` brackets gain `final_real`, `rivals` (0/1). Still exactly one `INSERT INTO members`; no change to the join, member insert or win statements. 2026-10-12, r2: `deletePlayer`'s capacity decrement also appends to `deleted_joins` in r2 brackets (the same statement count) |
+| `handlers/views.ts` `rulesView(cfg, computerPlayers?)` | `computerPlayers` defaults to `enabled && disclose && !hide`; `session.ts` passes `rivalsNoteFor(s, player.pool)`. `bracketView` and `finalizeIfDue` go through `core/table.ts` |
+| Routes | `GET /admin/v1/brackets/{id}[?at=][&live=1]` (spec §1.4); refinalize answers `{bracket: {id, finalMembers, finalReal, rivalRows, rewards}}`; `POST /dev/rivals {devPool, on}` (dev routes only; `/dev/reset` clears it) |
+| Metrics, stats | `heart/rival`, `reward/rival_place`, `bracket_final/rivals`, `rivals/tag_invalid`, `rivals/decode_error`; stats `brackets_rivals`; `members_p*` from `final_real` |
+
+### 15.3 Client
+
+| Member | Note |
+|---|---|
+| `LadderRulesView.computerPlayers?: boolean` (`ladder-sheet.ts`) | `infoLines` adds "Rankings include computer players." (`icon-users`) right after the window line; the notice dialog (`ladder.noticeFirst`) renders the same lines |
+| `LadderFlow.computerPlayers(): boolean` (`ladder-flow.ts`) | From the session's rules or the cached ones (`rules ?? cached?.rules`); `rulesView()` copies the flag only for a literal `true` |
+| `HowToPlayProps.ladderComputerPlayers?: boolean` (`how-to-play.ts`) | `p.howto__computer` after the points note, with `ladder`; `shell.ts` `openHowToPlay` passes it while the ladder is active and `computerPlayers()` |
+| `ladder.info.computerPlayers` | English in `src/i18n/en/lazy.ts`, the note in `meta.ts`, drafts in all 16 locales (unreviewed AI drafts), `docs/i18n/drafted-from.json` |
+| `bracket-list.ts`, `ranking-panel.ts`, `ladder-chip.ts` | No logic change: they render the server's rows and count (H-3); rival rows are never labelled |
+
+### 15.4 Preview (`preview/sample-server.ts`, `preview/sample-state.ts`)
+
+`previewConfig()` turns rivals on, so the preview's other players are the production computer players and its rules carry `computerPlayers`; the sample member rows are gone. `MemStore` implements `bracketHearts` and `finalize(…, totals)`; `ViewStore` adds `'bracketHearts'`. The returning player is placed 5th and "end the day" 2nd among the rivals with `pointsForRank`; old saved states (with `sample:` members) still load and show no rivals.

@@ -47,8 +47,10 @@ export interface PaidPlace extends RewardPlace {
 
 /**
  * Who is paid from the frozen standings (spec §1.6, H-4): the bracket has at least `rewards.minMembers`
- * visible members and, with `needOneBelow`, at least place + 1 (you beat a real player); the member has
- * points > 0. `ranked` holds the VISIBLE members only, in rank order.
+ * visible rows and, with `needOneBelow`, at least place + 1 (you beat someone); the row has points > 0.
+ * `ranked` = every visible row in rank order, computer players included (2026-10-12, D-2e-24: they count
+ * toward minMembers and the one-below rule); callers drop places held by `isRivalSlot` slots (core/table.ts
+ * finalPlan), which are never paid and never passed down.
  */
 export function paidPlaces(ranked: readonly (Rankable & { readonly rank: number })[], cfg: ServerConfig): PaidPlace[] {
   const visible = ranked.length;

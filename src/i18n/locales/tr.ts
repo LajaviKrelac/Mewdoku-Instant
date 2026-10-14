@@ -485,6 +485,7 @@ export const catalog: LocaleCatalog = {
   'ladder.info.rewards.other': 'Sıralama bittiğinde, en az {min} oyuncu katıldıysa ilk {count} ipucu ve pisi kazanır.',
   'ladder.info.double': 'Ödülünü ikiye katlamak için bir video izleyebilirsin.',
   'ladder.info.hearts': 'Bir oyuncuya destek olmak için kalbe dokun. Kalpler sadece eğlence için.',
+  'ladder.info.computerPlayers': 'Sıralamalarda bilgisayar oyuncuları da yer alır.',
   'ladder.info.names': 'Diğer oyuncular sıralama adını ve resmini görür, Facebook adını ya da fotoğrafını asla.',
   'ladder.info.privacy': 'Ayarlar\'dan sıralamaları kapatabilir ya da sıralama verilerini silebilirsin.',
   'ladder.records.title': 'Rekorların',

@@ -1,5 +1,5 @@
 // Owner: G4 (Phase 2e). Row shapes of migrations/0001_init.sql (+ 0002_wins_token.sql, 0003_presence.sql,
-// 0004_profile_looks.sql) as SqlStore reads them.
+// 0003_rivals.sql, 0004_deleted_joins.sql, 0004_profile_looks.sql) as SqlStore reads them.
 import type { Trust } from '../contract';
 
 export interface PlayerRow {
@@ -43,7 +43,19 @@ export interface BracketRow {
   readonly next_slot: number;
   readonly max_members: number;
   readonly finalized_at: number | null;
+  /** Every row ranked at finalisation, computer players included (since 0003; before: the real visible members). */
   readonly final_members: number | null;
+  /** The computer rivals' tag (migration 0003, D-2e-24): `r1:<seed>:<strength>:<adjN>:<nounN>` (2026-10-12, r2: `r2:…` for new brackets), frozen at creation; null = none. Secret: never on the wire. */
+  readonly rivals: string | null;
+  /** The computer-player rows of the frozen final standings (JSON, core/rivals.ts decodeFinalRivals); null = none. */
+  readonly final_rivals: string | null;
+  /** The real visible members ranked at finalisation (0003; null for brackets finalised before it). */
+  readonly final_real: number | null;
+  /**
+   * 2026-10-12, r2 (migration 0004): `slot:joined_at,…` of the members deleted from an r2 bracket (deletePlayer), so
+   * the replay of the real joins (core/table.ts liveRivals) keeps each join's time; null = none (and every r1 bracket).
+   */
+  readonly deleted_joins: string | null;
 }
 
 export interface MemberRow {

@@ -2,9 +2,14 @@
 // and the rows' activity (POST /v1/presence, BracketRow.seenAt / .playing). Every join rule of spec §1.5 still
 // holds for a 0-fish join (one running bracket per player, one open bracket per pool, listed players only), and a
 // 0-fish member is never paid (§1.6).
+// 2026-10-13 (merge with the computer rivals): a bracket a sign-in opens gets computer players like one a win opens,
+// and their rows carry an activity from their scripts (core/table.ts rivalActivity), frozen at ends_at when final; the
+// rivals present at the opening each carry their own sighting from before it (review fix, core/rivals.ts openingSeenBefore).
 import { describe, expect, it } from 'vitest';
-import { parseBracketView } from '../../src/contract';
-import { DAY, makeTestApp, TestPlayer } from '../helpers/harness';
+import { parseBracketView, parseSessionResponse, type BracketView } from '../../src/contract';
+import { RIVAL_TAG_RE } from '../../src/core/rivals';
+import { RIVAL_PING_MS } from '../../src/core/table';
+import { DAY, HOUR, makeTestApp, TestPlayer } from '../helpers/harness';
 
 describe('auto-join at sign-in', () => {
   it('a session with join puts a listed player into a bracket at once, with 0 fish and a full countdown', async () => {
@@ -135,5 +140,101 @@ describe('presence', () => {
     await q.signIn();
     expect((await q.presence('playing')).updated).toBe(false);
     expect((await q.bracket()).me).toMatchObject({ seenAt: null, playing: false });
+  });
+});
+
+describe('auto-join and activity with computer players (2026-10-13, merge)', () => {
+  const rivalsOf = (v: BracketView): BracketView['rows'] => v.rows.filter((r) => r.slot >= 9000);
+
+  it('a sign-in that opens a bracket tags it like a win does: computer players at once, my 0-fish row last, the disclosure', async () => {
+    const t = makeTestApp({ env: { RIVALS: 'on' } });
+    const p = new TestPlayer(t, 'ajr', { join: true });
+    const s = await p.signIn();
+    expect(parseSessionResponse(s)).toEqual(s);
+    expect(s.rules.computerPlayers).toBe(true);
+    const tags = t.rows<{ rivals: string | null }>('SELECT rivals FROM brackets');
+    expect(tags).toHaveLength(1);
+    expect(tags[0]?.rivals).toMatch(RIVAL_TAG_RE);
+    expect(tags[0]?.rivals?.startsWith('r2:')).toBe(true);
+    const v = await p.bracket();
+    expect(parseBracketView(v)).toEqual(v);
+    expect(rivalsOf(v).length).toBeGreaterThanOrEqual(8); // the opening group
+    expect(v.members).toBe(v.rows.length);
+    expect(v.me).toMatchObject({ points: 0, rank: v.members, seenAt: t.clock.now(), playing: false });
+    expect(s.bracket).toMatchObject({ rank: v.members, members: v.members, points: 0 });
+    // Without RIVALS the same sign-in opens an untagged bracket (exactly the leaderboard update's behaviour).
+    const off = makeTestApp();
+    await new TestPlayer(off, 'ajr-off', { join: true }).signIn();
+    expect(off.rows<{ rivals: string | null }>('SELECT rivals FROM brackets')).toEqual([{ rivals: null }]);
+  });
+
+  it('rival rows carry seenAt ≤ serverTime and playing (at most a ping old while playing); some play and some do not over the day; frozen at ends_at once final', async () => {
+    const t = makeTestApp({ env: { RIVALS: 'on' } });
+    const p = new TestPlayer(t, 'ajr-act', { join: true });
+    await p.signIn();
+    let playing = 0,
+      away = 0;
+    for (let h = 0; h < 24; h++) {
+      const v = await p.bracket();
+      for (const r of rivalsOf(v)) {
+        expect(Number.isInteger(r.seenAt)).toBe(true);
+        expect(r.seenAt as number).toBeLessThanOrEqual(v.serverTime);
+        // 2026-10-13 (review): the opening group may still show its sighting from before the opening (openingSeenBefore, < 20 h).
+        expect(r.seenAt as number).toBeGreaterThan((v.openedAt as number) - 20 * HOUR);
+        if (r.playing) {
+          playing++;
+          expect(v.serverTime - (r.seenAt as number)).toBeLessThan(RIVAL_PING_MS);
+        } else away++;
+      }
+      t.clock.advance(HOUR - 7 * 60_000);
+      if (h === 12) await p.signIn(); // a fresh token (sessions last a day); the bracket still runs, so no new join
+    }
+    expect(playing).toBeGreaterThan(0);
+    expect(away).toBeGreaterThan(playing);
+    const endsAt = (await p.bracket()).endsAt as number;
+    t.clock.set(endsAt); // ended, not final yet (the finalising grace): the table at ends_at
+    const atEnd = await p.bracket();
+    expect([atEnd.state, atEnd.final]).toEqual(['ended', false]);
+    t.clock.advance(HOUR);
+    const final = await p.bracket();
+    expect(final.final).toBe(true);
+    const act = (v: BracketView): [number, number | null, boolean][] => rivalsOf(v).map((r) => [r.slot, r.seenAt, r.playing]);
+    expect(act(final)).toEqual(act(atEnd));
+    expect(final.me).toMatchObject({ points: 0, rank: final.members });
+    // A 0-fish member is never paid, computer players or not.
+    expect(t.count('SELECT COUNT(*) FROM rewards')).toBe(0);
+  });
+
+  it('the computer players present when a sign-in opens the bracket do not share one status (review)', async () => {
+    const t = makeTestApp({ env: { RIVALS: 'on' } });
+    const p = new TestPlayer(t, 'coh', { join: true });
+    await p.signIn();
+    const t0 = t.clock.now();
+    const first = await p.bracket();
+    expect(first.openedAt).toBe(t0);
+    const opening = new Set(rivalsOf(first).map((r) => r.slot));
+    expect(opening.size).toBeGreaterThanOrEqual(8);
+    // Before the fix every one of them was "Playing now" at the first view, seen at my own sign-in time, then all
+    // "Online now" together and the same "Nm ago" for hours. Now: a mix at once, and no two seen at the same ms.
+    expect(rivalsOf(first).filter((r) => r.seenAt === t0)).toEqual([]);
+    expect(rivalsOf(first).some((r) => !r.playing)).toBe(true);
+    for (const dt of [0, 60_000, 150_000, 5 * 60_000, 20 * 60_000, HOUR]) {
+      t.clock.set(t0 + dt);
+      const v = await p.bracket();
+      const seen = rivalsOf(v).filter((r) => opening.has(r.slot)).map((r) => r.seenAt as number);
+      expect(seen.length, `+${dt} ms`).toBe(opening.size);
+      expect(new Set(seen).size, `+${dt} ms: no two share a seenAt`).toBe(seen.length);
+      expect(seen.every((x) => x <= v.serverTime)).toBe(true);
+    }
+  });
+
+  it('presence off: no activity on any row, computer players included', async () => {
+    const t = makeTestApp({ env: { RIVALS: 'on' }, overrides: { presence: { enabled: false } } });
+    const p = new TestPlayer(t, 'ajr-off', { join: true });
+    await p.signIn();
+    t.clock.advance(3 * HOUR);
+    const v = await p.bracket();
+    expect(rivalsOf(v).length).toBeGreaterThan(0);
+    expect(v.rows.every((r) => r.seenAt === null && r.playing === false)).toBe(true);
   });
 });

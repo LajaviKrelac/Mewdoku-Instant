@@ -1,7 +1,8 @@
 // Owner: G4 (Phase 2e). /dev/* (spec §1.3, §1.4, §10.3): only with DEV_ROUTES exactly "true", outside
 // production, on a loopback host (the Node dev server that Playwright starts). Per test pool: move its clock,
-// set its remote switches, run the cron, wipe it. There is NO seeding route (H-1): other players are made
-// by test clients through the public API (tests/e2e/helpers/rank-players.ts).
+// set its remote switches, turn computer rivals on for its new brackets, run the cron, wipe it. There is NO
+// seeding route (H-1): other players are made by test clients through the public API
+// (tests/e2e/helpers/rank-players.ts); computer rivals are not rows (D-2e-24), so /dev/rivals seeds nothing.
 import { DEV_POOL_RE, REMOTE_SWITCHES, type RemoteSwitch } from '../contract';
 import type { Ctx } from '../http/context';
 import { fail, json } from '../http/errors';
@@ -38,6 +39,7 @@ export async function devRoute(ctx: Ctx, method: string, rest: string): Promise<
     await s.store.resetPool(pool);
     s.dev.offsets.delete(pool);
     s.dev.switches.delete(pool);
+    s.dev.rivals.delete(pool);
     s.limiter.clear();
     return json({ devPool: pool, serverTime: s.clock.now() });
   }
@@ -53,6 +55,16 @@ export async function devRoute(ctx: Ctx, method: string, rest: string): Promise<
     }
     s.dev.switches.set(pool, switches);
     return json({ devPool: pool, switches, serverTime: s.nowFor(`fb:${pool}`) });
+  }
+  if (rest === 'rivals') {
+    // 2026-10-12, D-2e-24: computer rivals for this test pool's NEW brackets and the disclosure line for its
+    // players (services.ts rivalsForPool / rivalsNoteFor), whatever RIVALS says; /dev/reset clears it.
+    const body = await readJson(ctx.req, s.cfg.api.maxBodyBytes);
+    const pool = poolOf(body);
+    const on = (body as { on?: unknown }).on;
+    if (typeof on !== 'boolean') return fail('bad_request', 'on');
+    s.dev.rivals.set(pool, on);
+    return json({ devPool: pool, on, serverTime: s.nowFor(`fb:${pool}`) });
   }
   if (rest === 'cron') {
     const body = await readJson(ctx.req, s.cfg.api.maxBodyBytes);

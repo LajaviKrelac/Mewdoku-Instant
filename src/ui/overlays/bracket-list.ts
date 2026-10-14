@@ -4,7 +4,8 @@
 // chunk) and the ranking sheet (overlay `ladder`). Lazy `ladder` chunk only.
 //
 // Honesty (H-1 … H-3, H-8): the rows are EXACTLY the server's rows, in its order, with its ranks; the count
-// is the server's `members`; a bracket that is not full shows exactly its members, alone shows my row and
+// is the server's `members`; the list shows exactly the server's rows (real players and, in a bracket created with
+// them, computer players: 2026-10-12, D-2e-24, never labelled one by one), alone shows my row and
 // "You're the only player in this ranking." (audit B14: no "so far"); nothing here ever adds, pads, trims or re-ranks a row
 // (ladder.panelRows > 0 shows a contiguous window of the server's rows around mine, never a made-up one).
 // Names are rendered with textContent and dir="auto" (bidi-isolated in RTL rows), the same English words
@@ -20,6 +21,8 @@
 // The rank-up (playClimb, the post-win panel): my fish count up, then my row rides up to its new place while the
 // rows it passes step down and the list follows it; a podium place of mine pops in with confetti. It animates
 // between the server's two answers only (my place before the win, as the server last said, and now).
+// 2026-10-12 (compare §D3): the pill says "Final results" only over the server's final standings (`final`); an end
+// that passed without them (a list left open over the end, the server's finalising grace) stops it at 00:00:00.
 //
 // Layout (top to bottom): the stopwatch pill (the countdown words are for screen readers only), the podium, the
 // minimum line ("Rewards need at least 5 players …", only while too few play), "Last updated 14:02" + the offline
@@ -58,12 +61,16 @@ import '../../styles/ladder-chunk.css';
 import { chestSymbol, createPrizeTip, prizeFor, prizeText } from './bracket-prize';
 import type { BracketListCallbacks, BracketListHandle, BracketListView, BracketRowView, ClimbResult, PlaceRewardView } from './ranking-panel';
 
-/** "Ends in 7 h 48 min" / "Ends in less than a minute" / "Final results" (spec §2.4 Countdown). */
+/**
+ * "Ends in 7 h 48 min" / "Ends in less than a minute" / "Final results" (spec §2.4 Countdown). 2026-10-12 (compare
+ * §D3): "Final results" only over the server's final standings (`final`); a bracket whose end passed without them
+ * (a list left open over the end, or the server's view inside its finalising grace) shows no countdown line.
+ */
 export function countdownText(endsAt: number | null, now: number, final: boolean): string | null {
   if (final) return t('ladder.ended');
   if (endsAt === null) return null;
   const left = endsAt - now;
-  if (left <= 0) return t('ladder.ended');
+  if (left <= 0) return null;
   if (left < 60_000) return t('ladder.endsSoon');
   return t('ladder.endsIn', { time: formatDuration(left) });
 }
@@ -464,7 +471,10 @@ export function createBracketList(view: BracketListView, cb: BracketListCallback
     if (next !== null) tick = setTimeout(renderCountdown, next);
   };
 
-  /** The stopwatch pill: hh:mm:ss once a second on the second's edge; "Final results" once ended. */
+  /**
+   * The stopwatch pill: hh:mm:ss once a second on the second's edge; "Final results" once final. 2026-10-12 (compare
+   * §D3, as countdownText): an end that passed without the server's final standings stops it at 00:00:00.
+   */
   const renderClock = (): void => {
     if (clockTick !== null) clearTimeout(clockTick);
     clockTick = null;
@@ -473,7 +483,7 @@ export function createBracketList(view: BracketListView, cb: BracketListCallback
     timer.hidden = cur.endsAt === null && !cur.final;
     const ended = cur.final || (left !== null && left <= 0);
     timer.toggleAttribute('data-ended', ended);
-    setText(timerText, ended ? t('ladder.ended') : clockText(left ?? 0));
+    setText(timerText, cur.final ? t('ladder.ended') : clockText(left ?? 0));
     if (!ended && left !== null) clockTick = setTimeout(renderClock, (left % 1000) + 20);
   };
 
@@ -492,11 +502,11 @@ export function createBracketList(view: BracketListView, cb: BracketListCallback
     rewards.hidden = rw === null;
     setText(rewards, rw ?? '');
     stale.hidden = !v.stale;
-    offline.hidden = !v.stale;
-    if (v.stale) {
-      setText(stale, t('ladder.stale', { time: timeOfDay(v.stale.at) }));
-      setText(offline, t('ladder.offline'));
-    }
+    // 2026-10-12 (verify C9): "You're offline" only when the app knows it is (not on a 503, a timeout or a boot
+    // from the stored cache): there the neutral "Last updated hh:mm" stands alone.
+    offline.hidden = !v.stale?.offline;
+    if (v.stale) setText(stale, t('ladder.stale', { time: timeOfDay(v.stale.at) }));
+    if (v.stale?.offline) setText(offline, t('ladder.offline'));
     // Alone: exactly my row (H-2; C-4: no promise that others will join).
     const isAlone = v.members === 1 && v.rows.length === 1 && v.rows[0]?.me === true;
     alone.hidden = !isAlone;

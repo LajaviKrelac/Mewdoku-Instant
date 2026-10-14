@@ -8,7 +8,8 @@
 //            discs, so it is truly centred (with no bracket the (i) keeps its slot unseen). Esc (or a scrim tap)
 //            closes a chest's tooltip first;
 //   info:    how it works (ladder.info.*), every count from the server's rules (C-5): the fish, the 24 h and
-//            up to N players, the rewards and their minimum, ×2 by video, hearts, names and pictures (never
+//            up to N players, "Rankings include computer players." while the server's rules say so (2026-10-12,
+//            D-2e-24), the rewards and their minimum, ×2 by video, hearts, names and pictures (never
 //            the Facebook name), how to switch the ranking off or delete the data; Back to the list;
 //   records: without a server (the web, offline with no cache, not listed, paused): "Your records", the
 //            personal records card plus the streak's best run, and the honest note (spec §2.9).
@@ -42,6 +43,8 @@ export interface LadderRulesView {
   readonly paidPlaces: number;
   /** G3 addition (spec §2.4: the window line from rules.durationMs); absent = 24 h. */
   readonly durationMs?: number;
+  /** 2026-10-12, D-2e-24 (H-9): the server's RulesView.computerPlayers; true adds the disclosure line. */
+  readonly computerPlayers?: boolean;
 }
 
 export interface LadderSheetProps {
@@ -72,6 +75,9 @@ export function infoLines(rules: LadderRulesView | null): { icon: SymbolId; text
     // Leaderboard update: with the sign-in join (ladder.autoJoin) a new ranking starts when the game is next opened.
     const rolling = cfg.ladder.autoJoin ? t('ladder.info.window.rollingJoin', { count, hours }) : t('ladder.info.window.rolling', { count, hours });
     out.push({ icon: 'icon-users', text: rules.periodMode === 'utc_day' ? t('ladder.info.window.utcDay', { count }) : rolling });
+    // 2026-10-12, D-2e-24 (H-9): "Rankings include computer players." right after the window line, only while the
+    // server discloses them (never which rows or how many).
+    if (rules.computerPlayers) out.push({ icon: 'icon-users', text: t('ladder.info.computerPlayers') });
     if (rules.paidPlaces > 0) {
       out.push({ icon: 'icon-trophy', text: tn('ladder.info.rewards', rules.paidPlaces, { count: formatNumber(rules.paidPlaces), min: formatNumber(rules.minMembers) }) });
       if (rules.doubleByVideo) out.push({ icon: 'icon-play-video', text: t('ladder.info.double') });

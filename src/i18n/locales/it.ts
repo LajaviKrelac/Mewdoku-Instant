@@ -483,6 +483,7 @@ export const catalog: LocaleCatalog = {
   'ladder.info.rewards.other': 'Quando una classifica finisce, i primi {count} vincono indizi e mici se hanno partecipato almeno {min} giocatori.',
   'ladder.info.double': 'Puoi guardare un video per raddoppiare il premio.',
   'ladder.info.hearts': 'Tocca un cuore per fare il tifo per un giocatore. I cuori sono solo per divertimento.',
+  'ladder.info.computerPlayers': 'Le classifiche includono giocatori controllati dal computer.',
   'ladder.info.names': 'Gli altri vedono il tuo nome in classifica e la tua immagine, mai il tuo nome o la tua foto di Facebook.',
   'ladder.info.privacy': 'Nelle Impostazioni puoi disattivare le classifiche o eliminare i tuoi dati di classifica.',
   'ladder.records.title': 'I tuoi record',

@@ -330,6 +330,14 @@ export function createShell(deps: ShellDeps): Shell {
           if (lf) lf.openSheet('home');
           else deps.openRecordsSheet?.();
         },
+        // 2026-10-12: the chip's countdown reached 0: Home re-renders at once (the ended bracket reads "Join"), and the
+        // Home refresh asks the server (unthrottled), whose answer re-renders the chip through `ladder:update`. That
+        // read lands inside the server's finalising grace (no final standings, no result card yet); the flow reads
+        // again after it while Home shows (ladder-flow scheduleFinalRead), and a later Home mount skips the throttle.
+        onLadderEnded: () => {
+          if (home && router.screen() === 'home') home.update(selectHomeView(store.get(), ctx(), c));
+          ladderNow()?.homeMounted();
+        },
         // Home layout (2026-10-11): the profile picture opens the name sheet, else Settings. UI batch (2026-10-13): the
         // streak pill opens the Daily Streak screen (a back arrow closes it; not in MODALS: the Home banner stays up).
         onProfile: () => {
@@ -418,6 +426,8 @@ export function createShell(deps: ShellDeps): Shell {
         // Phase 2e (requests-G3 R6): the points note names the daily ranking while it is active; the
         // streak note with dayStreak.cycleDays while the streak is on (Appendix A howto.ladder / howto.streak).
         ...(ladderNow()?.active() ? { ladder: true } : {}),
+        // 2026-10-12, D-2e-24 (H-9): "Rankings include computer players." while the server's rules disclose them.
+        ...(ladderNow()?.active() && ladderNow()?.computerPlayers() ? { ladderComputerPlayers: true } : {}),
         ...(c.dayStreak.enabled && isFlagOn('dayStreak') ? { streakDays: c.dayStreak.cycleDays } : {}),
         onSkip: () => {
           router.closeAll();

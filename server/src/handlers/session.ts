@@ -17,6 +17,7 @@ import { devAllowed, type Ctx } from '../http/context';
 import { fail, json } from '../http/errors';
 import { limitByIp } from '../http/auth';
 import { readJson } from '../http/json';
+import { rivalsNoteFor } from '../services';
 import type { PlayerRow } from '../store/sql-store';
 import { joinOnSession } from './join';
 import { bracketView, finalizeIfDue, playerView, resultsFor, rulesView, summaryOf } from './views';
@@ -178,7 +179,8 @@ export async function postSession(ctx: Ctx): Promise<Response> {
     token,
     expiresAt,
     player: playerView(player, s.cfg, now),
-    rules: rulesView(s.cfg),
+    // D-2e-24, H-9: the disclosure line for this player's pool (a test pool by its /dev/rivals switch).
+    rules: rulesView(s.cfg, rivalsNoteFor(s, player.pool)),
     results,
     bracket: summaryOf(view),
     limits: { maxWinsPerRequest: s.cfg.api.maxWinsPerRequest, queueMax: s.cfg.api.queueMax },

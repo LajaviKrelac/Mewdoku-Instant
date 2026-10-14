@@ -452,6 +452,7 @@ export const catalog: LocaleCatalog = {
   'ladder.info.rewards.other': 'เมื่ออันดับจบลง {count} อันดับแรกจะได้คำใบ้และเหมียว หากมีผู้เล่นร่วมอย่างน้อย {min} คน',
   'ladder.info.double': 'คุณดูวิดีโอเพื่อรับรางวัลสองเท่าได้',
   'ladder.info.hearts': 'แตะหัวใจเพื่อเชียร์ผู้เล่น หัวใจมีไว้เพื่อความสนุกเท่านั้น',
+  'ladder.info.computerPlayers': 'อันดับมีผู้เล่นที่เป็นคอมพิวเตอร์รวมอยู่ด้วย',
   'ladder.info.names': 'ผู้เล่นอื่นจะเห็นชื่อในอันดับและรูปของคุณ ไม่เห็นชื่อหรือรูป Facebook ของคุณ',
   'ladder.info.privacy': 'คุณปิดอันดับหรือลบข้อมูลอันดับได้ในการตั้งค่า',
   'ladder.records.title': 'สถิติของคุณ',

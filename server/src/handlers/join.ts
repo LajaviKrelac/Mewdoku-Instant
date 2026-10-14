@@ -5,7 +5,8 @@
 // bracket per pool and the wins token all hold, and a lost race leaves no trace (spec §1.5, critic C-9).
 import { bracketTimes } from '../core/brackets';
 import { newBracketId, newRowId } from '../core/ids';
-import type { Services } from '../services';
+import { newRivalsTag } from '../core/rivals';
+import { rivalsForPool, type Services } from '../services';
 import type { BracketTarget, PlayerRow } from '../store/sql-store';
 
 /** Joins and creates tried per sign-in (each lost race re-reads the player and looks again). */
@@ -28,7 +29,18 @@ export async function joinOnSession(s: Services, player: PlayerRow, now: number)
       const t = bracketTimes(s.cfg.bracket.periodMode, now, s.cfg);
       target = {
         kind: 'create',
-        bracket: { id: newBracketId(now, s.rng), pool: p.pool, mode: s.cfg.bracket.periodMode, openedAt: t.openedAt, joinUntil: t.joinUntil, endsAt: t.endsAt, maxMembers: s.cfg.bracket.maxMembers },
+        bracket: {
+          id: newBracketId(now, s.rng),
+          pool: p.pool,
+          mode: s.cfg.bracket.periodMode,
+          openedAt: t.openedAt,
+          joinUntil: t.joinUntil,
+          endsAt: t.endsAt,
+          maxMembers: s.cfg.bracket.maxMembers,
+          // 2026-10-13 (merge of the computer rivals and the leaderboard update): a bracket a sign-in opens gets its
+          // computer rivals exactly like one a win opens (wins.ts), so the ranking shown at sign-in is filled too.
+          rivals: rivalsForPool(s, p.pool) ? newRivalsTag(s.cfg.rivals.strength, s.rng, s.words) : null,
+        },
       };
     }
     const r = await s.store.writeWins({

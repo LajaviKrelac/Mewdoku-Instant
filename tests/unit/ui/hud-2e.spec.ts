@@ -45,48 +45,136 @@ const href = (el: Element | null | undefined): string | null => el?.querySelecto
 const BRACKET: LadderChipView = { state: 'bracket', rank: 5, members: 37, points: 14, endsAt: NOW + 7 * H + 48 * 60_000, now: () => NOW };
 
 describe('Home ranking chip (spec §2.5 table, §9.4)', () => {
-  it('in a bracket: trophy "#5" · fish "14", named with the server rank, count and the countdown', () => {
+  it('in a bracket: the dark pill shows the countdown "07:48:00" alone; the name has the server rank, count, fish and time left', () => {
     const onPress = vi.fn();
     const chip = createLadderChip(BRACKET, { onPress });
     expect(chip.el.tagName).toBe('BUTTON');
     expect(chip.el.dataset.state).toBe('bracket');
-    expect(q(chip.el, '.ladder-chip__rank').textContent).toBe('#5');
-    expect(q(chip.el, '.ladder-chip__points').textContent).toBe('14');
-    expect(href(q(chip.el, '.ladder-chip__points'))).toBe('#icon-fish');
+    // 2026-10-12 (01 row 7.1.7: the original's pill reads "23:59:53", no rank or points on it).
+    const time = q(chip.el, '.ladder-chip__time');
+    expect(time.hidden).toBe(false);
+    expect(time.textContent).toBe('07:48:00');
+    expect(time.classList.contains('num')).toBe(true); // Latin digits, read left to right in RTL
+    expect(q(chip.el, '.ladder-chip__rank').hidden).toBe(true);
+    expect(q(chip.el, '.ladder-chip__points').hidden).toBe(true);
     expect(chip.el.getAttribute('aria-label')).toBe('Daily ranking: #5 of 37, 14 fish. Ends in 7 h 48 min.');
     chip.el.click();
     expect(onPress).toHaveBeenCalledTimes(1);
     chip.destroy();
   });
 
-  it('join, off, records and a rank the server did not give', () => {
+  it('join, off, records, a rank the server did not give, and a bracket without an end time', () => {
     const chip = createLadderChip({ state: 'join' }, { onPress: vi.fn() });
     expect(q(chip.el, '.ladder-chip__rank').textContent).toBe('Join');
     expect(q(chip.el, '.ladder-chip__points').hidden).toBe(true);
+    expect(q(chip.el, '.ladder-chip__time').hidden).toBe(true);
     expect(chip.el.getAttribute('aria-label')).toBe('Daily ranking: solve a puzzle to join.');
     chip.update({ state: 'off' });
     expect(chip.el.dataset.state).toBe('off');
     expect(q(chip.el, '.ladder-chip__rank').hidden).toBe(true);
+    expect(q(chip.el, '.ladder-chip__time').hidden).toBe(true);
     expect(chip.el.getAttribute('aria-label')).toBe('Daily ranking: off.');
     chip.update({ state: 'records', period: { kind: 'week', total: 42 } });
     expect(q(chip.el, '.ladder-chip__points').textContent).toBe('42');
     expect(q(chip.el, '.ladder-chip__points').hasAttribute('data-plain')).toBe(true);
+    expect(q(chip.el, '.ladder-chip__time').hidden).toBe(true);
     expect(chip.el.getAttribute('aria-label')).toBe('42 fish this week');
+    // No rank from the server: the pill still counts down; the name has the fish and the time left.
     chip.update({ ...BRACKET, rank: null });
     expect(q(chip.el, '.ladder-chip__rank').hidden).toBe(true);
+    expect(q(chip.el, '.ladder-chip__points').hidden).toBe(true);
+    expect(q(chip.el, '.ladder-chip__time').textContent).toBe('07:48:00');
+    expect(chip.el.getAttribute('aria-label')).toBe('Daily ranking: 14 fish. Ends in 7 h 48 min');
+    // No end time (never from the flow today): the pill keeps "#5" and the fish, no countdown.
+    chip.update({ ...BRACKET, endsAt: null });
+    expect(q(chip.el, '.ladder-chip__time').hidden).toBe(true);
+    expect(q(chip.el, '.ladder-chip__rank').textContent).toBe('#5');
+    expect(q(chip.el, '.ladder-chip__points').textContent).toBe('14');
+    expect(href(q(chip.el, '.ladder-chip__points'))).toBe('#icon-fish');
+    chip.update({ ...BRACKET, rank: null, endsAt: null });
+    expect(q(chip.el, '.ladder-chip__rank').hidden).toBe(true);
+    expect(q(chip.el, '.ladder-chip__points').hidden).toBe(false);
     expect(chip.el.getAttribute('aria-label')).toBe('Daily ranking: 14 fish');
     chip.destroy();
   });
 
-  it('the name refreshes its countdown once a minute (never a live region)', () => {
-    vi.useFakeTimers();
-    let now = NOW;
-    const chip = createLadderChip({ ...BRACKET, endsAt: NOW + 2 * H, now: () => now }, { onPress: vi.fn() });
-    expect(ladderChipLabel({ ...BRACKET, endsAt: NOW + 2 * H, now: () => now })).toContain('Ends in 2 h 0 min');
-    now += 60_000;
-    vi.advanceTimersByTime(60_000);
+  it('the pill ticks every second just after each second edge; the name keeps minute text and is rewritten only when it changes (never a live region)', () => {
+    vi.useFakeTimers({ now: NOW });
+    const chip = createLadderChip({ ...BRACKET, endsAt: NOW + 2 * H + 1_500, now: () => Date.now() }, { onPress: vi.fn() });
+    const time = q(chip.el, '.ladder-chip__time');
+    expect(time.textContent).toBe('02:00:01');
+    expect(chip.el.getAttribute('aria-label')).toContain('Ends in 2 h 0 min');
+    const setAttr = vi.spyOn(chip.el, 'setAttribute');
+    vi.advanceTimersByTime(519);
+    expect(time.textContent).toBe('02:00:01');
+    vi.advanceTimersByTime(1); // 1.5 s left → 0.98 s: the edge passed
+    expect(time.textContent).toBe('02:00:00');
+    expect(setAttr).not.toHaveBeenCalled(); // still "2 h 0 min"
+    vi.advanceTimersByTime(1_000);
+    expect(time.textContent).toBe('01:59:59');
     expect(chip.el.getAttribute('aria-label')).toContain('Ends in 1 h 59 min');
+    expect(setAttr).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(3_000);
+    expect(time.textContent).toBe('01:59:56');
+    expect(setAttr).toHaveBeenCalledTimes(1);
     expect(chip.el.hasAttribute('aria-live')).toBe(false);
+    expect(vi.getTimerCount()).toBe(1); // one pending tick, never an interval pile-up
+    chip.destroy();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('at 00:00:00 it stops (clamped) and calls onEnded once per end time, never inside an update', () => {
+    vi.useFakeTimers({ now: NOW });
+    const onEnded = vi.fn();
+    const v: LadderChipView = { ...BRACKET, endsAt: NOW + 1_500, now: () => Date.now() };
+    const chip = createLadderChip(v, { onPress: vi.fn(), onEnded });
+    const time = q(chip.el, '.ladder-chip__time');
+    expect(time.textContent).toBe('00:00:01');
+    vi.advanceTimersByTime(520);
+    expect(time.textContent).toBe('00:00:00');
+    expect(onEnded).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1_000);
+    expect(time.textContent).toBe('00:00:00');
+    expect(onEnded).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0); // no more ticks
+    // The same ended view again (an app re-render): no second call, no loop.
+    chip.update(v);
+    vi.advanceTimersByTime(5_000);
+    expect(onEnded).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+    // A view that has already ended (another end time): the call comes from the tick, after the update returned.
+    chip.update({ ...v, endsAt: NOW - 1 });
+    expect(time.textContent).toBe('00:00:00');
+    expect(onEnded).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(0);
+    expect(onEnded).toHaveBeenCalledTimes(2);
+    // The next bracket counts again.
+    chip.update({ ...v, endsAt: Date.now() + 24 * H });
+    expect(time.textContent).toBe('24:00:00');
+    expect(vi.getTimerCount()).toBe(1);
+    chip.destroy();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('a hidden chip stops ticking; the next update starts it again; leaving the bracket stops it', () => {
+    vi.useFakeTimers({ now: NOW });
+    const onEnded = vi.fn();
+    const v: LadderChipView = { ...BRACKET, endsAt: NOW + 10_000, now: () => Date.now() };
+    const chip = createLadderChip(v, { onPress: vi.fn(), onEnded });
+    const time = q(chip.el, '.ladder-chip__time');
+    expect(time.textContent).toBe('00:00:10');
+    chip.el.hidden = true;
+    vi.advanceTimersByTime(20_000);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(time.textContent).toBe('00:00:10'); // untouched while hidden
+    expect(onEnded).not.toHaveBeenCalled();
+    chip.el.hidden = false;
+    chip.update({ ...v, endsAt: Date.now() + 5_000 });
+    expect(time.textContent).toBe('00:00:05');
+    expect(vi.getTimerCount()).toBe(1);
+    chip.update({ state: 'join' });
+    expect(vi.getTimerCount()).toBe(0);
+    expect(q(chip.el, '.ladder-chip__time').hidden).toBe(true);
     chip.destroy();
   });
 });
@@ -177,6 +265,32 @@ describe('Home: the floating ranking button, the profile and streak pill in the 
     expect(chip.hidden).toBe(true);
     expect(q(home.el, '.period-pill').hidden).toBe(false);
     home.destroy();
+  });
+
+  it('2026-10-12: the chip\'s countdown ticks on Home; hidden (no ladder) it stops; at 0 Home hands over onLadderEnded once; destroy stops it', () => {
+    vi.useFakeTimers({ now: NOW });
+    const cb = { ...homeCb(), onLadderEnded: vi.fn() };
+    const ladder: LadderChipView = { ...BRACKET, endsAt: NOW + 3_500, now: () => Date.now() };
+    const home = createHomeScreen(homeView({ ladder }), cb);
+    document.body.appendChild(home.el);
+    const time = q(home.el, '.home__rank button.ladder-chip .ladder-chip__time');
+    expect(time.textContent).toBe('00:00:03');
+    vi.advanceTimersByTime(520);
+    expect(time.textContent).toBe('00:00:02');
+    home.update(homeView()); // no ladder: the period pill, the chip hidden
+    vi.advanceTimersByTime(5_000);
+    expect(time.textContent).toBe('00:00:02'); // stopped while hidden
+    expect(cb.onLadderEnded).not.toHaveBeenCalled();
+    home.update(homeView({ ladder: { ...ladder, endsAt: Date.now() + 1_500 } }));
+    expect(time.textContent).toBe('00:00:01');
+    vi.advanceTimersByTime(1_520);
+    expect(time.textContent).toBe('00:00:00');
+    expect(cb.onLadderEnded).toHaveBeenCalledTimes(1);
+    home.update(homeView({ ladder: { ...ladder, endsAt: Date.now() + 60_000 } }));
+    home.destroy();
+    vi.advanceTimersByTime(120_000);
+    expect(time.textContent).toBe('00:01:00'); // destroyed: no tick
+    expect(cb.onLadderEnded).toHaveBeenCalledTimes(1);
   });
 
   it('the streak pill sits in the top bar\'s centre with the days in a row; a tap opens the streak screen (UI batch); null hides it', () => {
@@ -644,5 +758,23 @@ describe('How to play: the ranking note and the streak note (Appendix A howto.la
     v.update(howto());
     expect(v.el.querySelector('.howto__streak')).toBeNull();
     expect(q(v.el, '.howto__points').textContent).not.toMatch(/daily ranking/);
+  });
+
+  it('2026-10-12, D-2e-24 (H-9): "Rankings include computer players." after the points note only with ladder && ladderComputerPlayers', () => {
+    const v = createHowToPlay();
+    document.body.appendChild(v.el);
+    v.open(howto({ ladder: true, ladderComputerPlayers: true, streakDays: 7 }));
+    const note = q(v.el, '.howto__computer');
+    expect(note.textContent).toBe('Rankings include computer players.');
+    expect(note.previousElementSibling?.classList.contains('howto__points')).toBe(true);
+    expect(note.querySelector('use')?.getAttribute('href')).toBe('#icon-users');
+    // Without the ranking (or without the rules' flag) there is no such line.
+    for (const p of [howto({ ladderComputerPlayers: true }), howto({ ladder: true }), howto({ ladder: true, ladderComputerPlayers: false }), howto()]) {
+      v.update(p);
+      expect(v.el.querySelector('.howto__computer')).toBeNull();
+      expect(v.el.textContent).not.toMatch(/computer players/);
+    }
+    v.update(howto({ ladder: true, ladderComputerPlayers: true }));
+    expect(v.el.querySelectorAll('.howto__computer')).toHaveLength(1);
   });
 });

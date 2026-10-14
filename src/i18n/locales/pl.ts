@@ -548,6 +548,7 @@ export const catalog: LocaleCatalog = {
   'ladder.info.rewards.other': 'Gdy ranking się kończy, pierwsze {count} miejsca dostają podpowiedzi i kotki, jeśli liczba graczy wynosiła co najmniej {min}.',
   'ladder.info.double': 'Możesz obejrzeć film, aby podwoić nagrodę.',
   'ladder.info.hearts': 'Dotknij serduszka, aby kibicować graczowi. Serduszka są tylko dla zabawy.',
+  'ladder.info.computerPlayers': 'Rankingi obejmują też graczy komputerowych.',
   'ladder.info.names': 'Inni widzą twoją nazwę w rankingu i obrazek, nigdy twoje imię ani zdjęcie z Facebooka.',
   'ladder.info.privacy': 'W Ustawieniach możesz wyłączyć rankingi lub usunąć swoje dane rankingowe.',
   'ladder.records.title': 'Twoje rekordy',

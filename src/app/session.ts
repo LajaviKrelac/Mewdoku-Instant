@@ -39,6 +39,7 @@ import { advance, filterTutorialAction, tutorialStep } from '../game/tutorial';
 import type { PuzzleSource } from '../game/levels-repo';
 import type { Action, BoardKey, GameEvent, GameState, ModeId, RuleFlags } from '../game/types';
 import type { RankingListState, RankScoreView } from '../ui/overlays/ranking-panel';
+import type { VictoryProps } from '../ui/overlays/victory-screen';
 import { periodRankTitle } from '../ui/period-text';
 import type { GameScreen, GameScreenCallbacks, GameView } from '../ui/screens/game-screen';
 import type { TickerLine } from '../ui/fx/tickers';
@@ -406,10 +407,12 @@ export function createSession(deps: SessionDeps): Session {
     const band = w.summary.period ? { periodKey: w.summary.period.key } : undefined;
     const lf = w.ladder ? ladderFlow() : null;
     // Phase 2e §2.4: "+2 fish · Your total: 14", the bracket list factory, hearts and the info button
-    // (only while the ladder is active: its records keep this week's subtitle).
+    // (only while the ladder is active: its records keep this week's subtitle). 2026-10-12 (compare §D2): once the
+    // server's answer counted none of this win's fish (rejected, already counted), no "+2 fish" for it: the
+    // subtitle reads "Your total: 14" alone, as after any win that did not count (no error text).
     const ladderExtras = lf && lf.active()
       ? {
-          result: { kind: 'ladder' as const, gained: w.summary.counted ? w.summary.kept : 0, total: lf.panelTotal(), waiting: lf.panelWaiting() },
+          result: { kind: 'ladder' as const, gained: w.summary.counted && lf.winCounted() !== false ? w.summary.kept : 0, total: lf.panelTotal(), waiting: lf.panelWaiting() },
           ...lf.panelExtras(),
         }
       : {};
@@ -448,16 +451,18 @@ export function createSession(deps: SessionDeps): Session {
   /**
    * The victory's props for this win. UI batch (victory): the praise and statistic lines (a daily's statistic waits for
    * the ladder's answer: its standing, else our estimate; ladder:update re-renders); no Home; the daily's primary
-   * starts the next level (onDailyDone).
+   * starts the next level (onDailyDone). 2026-10-12 (compare §D2): when the server's answer counted none of this win's
+   * fish (rejected, already counted) there is no kept-fish row, as after any win that did not count.
    */
   function victoryProps(w: NonNullable<typeof win>) {
     const lf = w.ladder ? ladderFlow() : null;
     const standing = w.summary.mode === 'daily' && lf ? lf.dailyStanding() : null;
     const lines = pickVictoryLines(w.facts, standing, c);
-    const data = selectVictoryView(store.get(), viewCtx(), w.summary, { praise: w.praise, lines }, c);
+    const view = selectVictoryView(store.get(), viewCtx(), w.summary, { praise: w.praise, lines }, c);
+    const data = lf !== null && lf.active() && lf.winCounted() === false ? { ...view, kept: null } : view;
     const m = w.meta;
     // UI batch (streak): the day's first counted win shows the streak screen after the primary press. Wrapped here, so
-    // the daily's ladder:update re-render keeps the wrap (it is once per win, keyed by the WinSummary).
+    // the ladder:update re-render keeps the wrap (it is once per win, keyed by the WinSummary).
     return afterStreakScreen({ router, state: () => store.get(), now: () => clock.now(), config: c }, w.summary, {
       ...data,
       now: () => clock.now(),
@@ -1137,8 +1142,11 @@ export function createSession(deps: SessionDeps): Session {
     // UI batch (victory): an open daily victory re-renders too (its statistic waited for the answer).
     bus.on('ladder:update', () => {
       const w = win;
-      if (w && w.ladder && w.panelOpen && router.isOpen('ranking')) router.update('ranking', rankingProps(w, panelTapMinMs));
-      if (w && w.ladder && w.summary.mode === 'daily' && router.isOpen('victory')) router.update('victory', victoryProps(w));
+      if (!w || !w.ladder) return;
+      if (w.panelOpen && router.isOpen('ranking')) router.update('ranking', rankingProps(w, panelTapMinMs));
+      // 2026-10-12 (compare §D1, verify C6): an answer after the panel's tap reaches the open victory too (its kept-fish
+      // row follows whether the win counted); UI batch: the daily's statistic too (its standing is frozen per win).
+      if (router.isOpen('victory')) router.update('victory', victoryProps(w));
     }),
     bus.on('overlay:failed', ({ id }) => onOverlayFailed(id)),
   ];

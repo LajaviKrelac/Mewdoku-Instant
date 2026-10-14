@@ -121,6 +121,21 @@
 // the drift and the wordmark's sticker look: CSS 49.3 → 51.7 (50.2 measured in web and FBIG, + about 3 %). Main JS,
 // the first-load total and gzip stay within.
 //
+// Combo bar (lead decision, 2026-10-12): the combo bar's row in the game screen (src/styles/hud.css, tokens.css, merged
+// from the default branch) is first-load CSS: 51.7 → 54.0 (52.4 measured in web and FBIG, + about 3 %). A scan found
+// no dead first-load selector worth cutting (one 25-byte rule). Main JS, the first-load total and gzip stay within.
+//
+// Post-win and ranking fixes (lead decision, 2026-10-12): the ladder boot chunk 34.9 → 36.4 KB (35.35 measured in web,
+// 35.30 in FBIG; + about 3 %): the flow now keeps the server's ended view, re-reads the final standings once after the
+// server's finalising grace, keeps the hearts and first-time lines per display, tells "offline" from a slow answer and
+// counts queued fish in the HUD counter. A lazy chunk: the first load is unchanged by it.
+//
+// Merge of the computer rivals and the leaderboard update (2026-10-13): each side fit its own ceilings, the two together
+// do not. Only the three lazy rows over budget moved, each to the largest build's measured value + about 3 %: the ladder
+// boot chunk 36.6 → 38.9 KB (37.80 web, 37.75 FBIG: both sides' flow, parsers and presence), the lazy English strings
+// 13.6 → 14.1 (13.70: both sides' new lazy keys), each locale chunk 41.9 → 43.3 (42.05, hi: both sides' copy). Lazy
+// chunks: the first load and its totals are unchanged and within (the + 1 locale total, 470, still binds).
+//
 // Phase 2e I-4: every dir measured is also run through scripts/release-check.ts (test data in any bundle; the release
 // rules in dist/release-*), and a problem fails the check like a budget does.
 //

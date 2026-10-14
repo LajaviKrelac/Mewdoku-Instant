@@ -235,13 +235,99 @@ describe('the rank-up (playClimb)', () => {
     const play3 = vi.fn(() => Promise.resolve({ fromRank: 9, toRank: 5, climbed: true }));
     const p3 = createRankingPanel();
     document.body.appendChild(p3.el);
-    p3.open(props({ list: { kind: 'bracket', view: view({ stale: { at: NOW - MIN } }) }, bracketList: (v) => ({ ...createBracketList(v, { onHeart: vi.fn() }), playClimb: play3 }) }));
+    p3.open(props({ list: { kind: 'bracket', view: view({ stale: { at: NOW - MIN, offline: false } }) }, bracketList: (v) => ({ ...createBracketList(v, { onHeart: vi.fn() }), playClimb: play3 }) }));
     await new Promise((r) => setTimeout(r, 80));
     expect(play3).not.toHaveBeenCalled();
     expect(q(p3.el, '.ranking__bubble').hidden).toBe(true);
     // … and when the fresh answer comes in, it plays once.
     p3.update(props({ bracketList: (v) => ({ ...createBracketList(v, { onHeart: vi.fn() }), playClimb: play3 }) }));
     await vi.waitFor(() => expect(play3).toHaveBeenCalledTimes(1));
+  });
+});
+
+// 2026-10-13 (merge with the computer rivals): the server's computer players are rows like any other (slots ≥ 9000,
+// a name and a picture, no player key on the wire, an activity from their script): the podium, the pills, the
+// rank-up and the bubble treat them as they treat real rows, never labelled one by one.
+describe('with computer players (slots ≥ 9000; merge 2026-10-13)', () => {
+  const NAMES = ['Bright Willow 60', 'Quiet Nutmeg 31', 'Sunny Biscuit 7', 'Misty Pounce 12', 'Brave Noodle 44'];
+  /** 30 rows: computer players everywhere but my auto-joined row (slot 0), ranked `myRank` with `myPoints`. */
+  function rivalRows(myRank: number, myPoints: number): BracketRowView[] {
+    let rival = 0;
+    return Array.from({ length: 30 }, (_, i) => {
+      const me = i + 1 === myRank;
+      const k = me ? -1 : rival++;
+      return {
+        rank: i + 1,
+        slot: me ? 0 : 9000 + ((k * 7) % 30),
+        name: me ? 'Velvet Pounce 27' : `${NAMES[k % NAMES.length] as string}${k >= NAMES.length ? ` ${k}` : ''}`,
+        avatarId: me ? 4 : k % 12,
+        points: me ? myPoints : Math.max(1, 31 - i),
+        hearts: k === 0 ? 2 : 0,
+        me,
+        likedByMe: false,
+        heartEnabled: true,
+        seenAt: me ? NOW : NOW - (k % 4 === 0 ? 40_000 : (k + 3) * 5 * MIN),
+        playing: !me && k % 4 === 0,
+      };
+    });
+  }
+
+  it('the podium and the list show the computer players\' names, pictures and pills; mine alone is marked', () => {
+    const list = createBracketList(view({ rows: rivalRows(30, 0), members: 30 }), { onHeart: vi.fn() });
+    document.body.appendChild(list.el);
+    const pods = qa(q(list.el, '.lb-podium'), '.lb-pod');
+    // displayName keeps the number with its word (a no-break space), as for every row.
+    expect(pods.map((p) => q(p, '.lb-pod__name').textContent?.replace(/\u00a0/gu, ' '))).toEqual(['Quiet Nutmeg 31', 'Bright Willow 60', 'Sunny Biscuit 7']);
+    expect(pods.map((p) => p.dataset.mine)).toEqual(['0', '0', '0']);
+    expect(pods.every((p) => p.querySelector('.lb-pod__frame svg, .lb-pod__frame use') !== null)).toBe(true);
+    const items = qa(list.el, 'ol.rank-rows > li.rank-row');
+    expect(items).toHaveLength(30);
+    expect(items.slice(0, 29).every((li) => Number(li.dataset.slot) >= 9000)).toBe(true);
+    expect(items.map((li) => li.dataset.me).filter((m) => m === '1')).toHaveLength(1);
+    expect(items[29]?.dataset.slot).toBe('0');
+    // The scripted activity reads like a real row's: "Playing now" while playing and seen within nowMs, else its age.
+    const pill = (li: HTMLElement | undefined): string | null => li?.querySelector<HTMLElement>('.lb-status:not([hidden])')?.textContent ?? null;
+    expect(pill(items[0])).toBe('Playing now');
+    expect(pill(items[1])).toBe('20m ago');
+    expect(pill(items[29])).toBe('Online now');
+    expect(items[0]?.getAttribute('aria-label')).toBe('#1, Bright Willow 60, 31 fish, 2 hearts, Playing now');
+    list.destroy();
+  });
+
+  it('the rank-up from my auto-joined last place (0 fish) past computer rows lands on the server rows; the panel says the place', async () => {
+    const after = view({ rows: rivalRows(2, 33), members: 30 });
+    const list = createBracketList(after, { onHeart: vi.fn() });
+    document.body.appendChild(list.el);
+    const r = await list.playClimb?.({ rank: 30, points: 0 }, false);
+    expect(r).toEqual({ fromRank: 30, toRank: 2, climbed: true });
+    const items = qa(list.el, 'ol.rank-rows > li.rank-row');
+    expect(items.map((li) => q(li, '.rank-row__num').textContent)).toEqual(after.rows.map((x) => String(x.rank)));
+    expect(items.map((li) => li.dataset.slot)).toEqual(after.rows.map((x) => String(x.slot)));
+    expect(items.every((li) => li.style.transform === '')).toBe(true);
+    expect(q(items[1] as HTMLElement, '.rank-row__pts').textContent).toBe('33');
+    expect(qa(q(list.el, '.lb-podium'), '.lb-pod').map((p) => p.dataset.mine)).toEqual(['1', '0', '0']);
+    list.destroy();
+
+    const panel = createRankingPanel();
+    document.body.appendChild(panel.el);
+    panel.open({
+      board: 'period',
+      eventNameKey: null,
+      result: { kind: 'ladder', gained: 33, total: 33 },
+      list: { kind: 'bracket', view: after },
+      tapMinMs: 0,
+      reducedMotion: true,
+      onContinue: vi.fn(),
+      onSeeTop: vi.fn(),
+      onListArea: vi.fn(),
+      onHeart: vi.fn(),
+      onInfo: vi.fn(),
+      bracketList: (v) => createBracketList(v, { onHeart: vi.fn() }),
+      climbFrom: { bracketId: 'mgk0b7q1z4a8', rank: 30, points: 0 },
+    });
+    await vi.waitFor(() => expect(q(panel.el, '.ranking__bubble').hidden).toBe(false));
+    expect(q(panel.el, '.ranking__bubble').textContent).toBe('Nice! You climbed to #2!');
+    panel.close();
   });
 });
 

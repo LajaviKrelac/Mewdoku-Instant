@@ -12,6 +12,8 @@
 // Phase 2e (G3, Appendix A, §5.3): with `ladder` the points note reads howto.ladder ("The fish you keep … count
 // for the daily ranking."); with `streakDays` a streak note follows (howto.streak, {days} = dayStreak.cycleDays,
 // next to our streak flame). Both optional until G1 passes them (absent = today's notes).
+// 2026-10-12, D-2e-24 (H-9): with `ladder` and `ladderComputerPlayers` (the server's rules disclose them) a note
+// "Rankings include computer players." follows the points note (ladder.info.computerPlayers, as in the info view).
 // The three rule pictures are small SVG boards drawn here (our own art, 06 §5).
 //
 // Classes: .overlay[data-overlay=how_to_play] > .overlay__panel--dialog.howto
@@ -40,6 +42,8 @@ export interface HowToPlayProps {
   readonly ladder?: boolean;
   /** Phase 2e: dayStreak.cycleDays when the streak is on (the streak note); absent or 0 hides it. */
   readonly streakDays?: number;
+  /** 2026-10-12, D-2e-24: the ranking's rules disclose computer players (the note after the points note, with `ladder`). */
+  readonly ladderComputerPlayers?: boolean;
 }
 
 const TILE = 20;
@@ -113,6 +117,14 @@ export function createHowToPlay(): OverlayView<HowToPlayProps> {
     () => t('howto.replay'),
   );
   const extra = h('div', { class: 'overlay__actions howto__extra' }, skip, replay);
+  const pointsNote = h(
+    'p',
+    { class: 'howto__points' },
+    icon('icon-trophy', { class: 'howto__note-icon howto__note-icon--trophy' }),
+    L.text(h('span'), () => (props?.ladder ? t('howto.ladder') : howtoPointsText(cfg.period.kind))),
+  );
+  // 2026-10-12, D-2e-24: the computer players note, in the DOM only while the ladder's rules disclose them.
+  const computerNote = h('p', { class: 'howto__computer' }, icon('icon-users', { class: 'howto__note-icon' }), note('ladder.info.computerPlayers'));
   const levelPointsNote = h('p', { class: 'howto__level-points' }, icon('icon-points', { class: 'howto__note-icon howto__note-icon--points' }), note('howto.levelPoints'));
   // Phase 2e: the streak note, built only while the app passes streakDays (no streak copy otherwise).
   const streakText = h('span');
@@ -139,12 +151,7 @@ export function createHowToPlay(): OverlayView<HowToPlayProps> {
       // Keyboard play (02 §6.3); CSS shows it only where a mouse or trackpad is present.
       h('p', { class: 'howto__keys' }, icon('icon-paw', { class: 'howto__note-icon howto__note-icon--paw' }), note('howto.keys')),
       h('p', { class: 'howto__lives' }, icon('icon-fish', { class: 'howto__note-icon howto__note-icon--fish' }), note('howto.hearts')),
-      h(
-        'p',
-        { class: 'howto__points' },
-        icon('icon-trophy', { class: 'howto__note-icon howto__note-icon--trophy' }),
-        L.text(h('span'), () => (props?.ladder ? t('howto.ladder') : howtoPointsText(cfg.period.kind))),
-      ),
+      pointsNote,
       levelPointsNote,
       h(
         'p',
@@ -168,6 +175,8 @@ export function createHowToPlay(): OverlayView<HowToPlayProps> {
       setText(streakText, t('howto.streak', { days: formatNumber(p.streakDays) }));
       if (!streakNote.isConnected) levelPointsNote.after(streakNote);
     } else streakNote.remove();
+    if (p.ladder && p.ladderComputerPlayers) pointsNote.after(computerNote);
+    else computerNote.remove();
     skip.hidden = !p.showSkip;
     replay.hidden = !p.showReplay;
     extra.hidden = !p.showSkip && !p.showReplay;

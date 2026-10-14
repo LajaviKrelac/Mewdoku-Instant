@@ -7,7 +7,10 @@
 //   - every hot-path, sweep and stats statement reads by key or index range (EXPLAIN QUERY PLAN test).
 // The ONE statement that inserts a `members` row is in writeWins (spec §10.6 #2 greps for it). H-1 as of the
 // leaderboard update: a row exists only for a real, signed-in player, after an accepted win or, when the session
-// asked for it (`join`), at sign-in with 0 fish (writeWins with no wins and `joinEmpty`).
+// asked for it (`join`), at sign-in with 0 fish (writeWins with no wins and `joinEmpty`). Computer players are
+// never rows (2026-10-12, D-2e-24): no members, players or rewards row exists for one; a bracket created with them
+// carries its tag (brackets.rivals), its frozen final standings keep them in brackets.final_rivals, and a heart on
+// one is an ordinary hearts row.
 import type { SqlDb, SqlStatement, SqlValue } from './sql-db';
 import type { BracketRow, FlagRow, MemberRow, PlayerRow, ResultRow, RewardRow } from './rows';
 
@@ -35,6 +38,8 @@ export interface NewBracket {
   readonly joinUntil: number;
   readonly endsAt: number;
   readonly maxMembers: number;
+  /** The computer rivals' tag (core/rivals.ts newRivalsTag), frozen at creation; null = none (D-2e-24). */
+  readonly rivals: string | null;
 }
 
 export interface WinWrite {
@@ -148,6 +153,25 @@ export interface RewardWrite {
   readonly hints: number;
   readonly kitties: number;
   readonly expiresAt: number;
+}
+
+/**
+ * The frozen standings' totals (2026-10-12, D-2e-24; core/table.ts finalPlan): every ranked row (computer
+ * players included), the real visible members ranked, and the computer players' snapshot (null: none).
+ */
+export interface FinalTotals {
+  readonly finalMembers: number;
+  readonly finalReal: number;
+  readonly finalRivals: string | null;
+}
+
+/** What one rival heart did (giveRivalHeart). */
+export interface RivalHeartResult {
+  readonly added: boolean;
+  /** Real hearts given to this rival slot (the built-in ones are added by the caller). */
+  readonly realHearts: number;
+  readonly given: number;
+  readonly exists: boolean;
 }
 
 export interface SweepCutoffs {
@@ -330,8 +354,9 @@ export class SqlStore {
       const poolGuard = 'NOT EXISTS (SELECT 1 FROM brackets o WHERE o.pool = ? AND o.join_until > ? AND o.finalized_at IS NULL AND o.members < o.max_members)';
       stmts.push(
         this.q(
-          `INSERT INTO brackets (id, pool, mode, opened_at, join_until, ends_at, members, next_slot, max_members)
-           SELECT ?, ?, ?, ?, ?, ?, 0, 0, ? WHERE ${cas} AND ${freeGuard} AND ${newGuard} AND ${poolGuard}`,
+          // D-2e-24: the computer rivals' tag goes in with the bracket (one more bound value, no other change).
+          `INSERT INTO brackets (id, pool, mode, opened_at, join_until, ends_at, members, next_slot, max_members, rivals)
+           SELECT ?, ?, ?, ?, ?, ?, 0, 0, ?, ? WHERE ${cas} AND ${freeGuard} AND ${newGuard} AND ${poolGuard}`,
           b.id,
           b.pool,
           b.mode,
@@ -339,6 +364,7 @@ export class SqlStore {
           b.joinUntil,
           b.endsAt,
           b.maxMembers,
+          b.rivals,
           ...casArgs,
           ...guardArgs,
           b.pool,
@@ -555,6 +581,14 @@ export class SqlStore {
   }
 
   /**
+   * Every heart pair of a bracket (hearts PK prefix; ≤ 20 per real member): replaces likedSlots when the table
+   * holds computer players, so the real hearts on their rows read the same for every viewer (D-2e-24, design §4.2).
+   */
+  async bracketHearts(bracketId: string): Promise<{ from_slot: number; to_slot: number }[]> {
+    return (await this.q('SELECT from_slot, to_slot FROM hearts WHERE bracket_id = ?', bracketId).all<{ from_slot: number; to_slot: number }>()).results;
+  }
+
+  /**
    * Leaderboard update: my own row's activity ("Online now", "Playing now", "2m ago"), in my running bracket only
    * and only while it is visible (a hidden row is never touched). True when a row changed.
    */
@@ -622,24 +656,59 @@ export class SqlStore {
 
   /**
    * Freezes the standings (spec §1.5 "Finalise", idempotent): ranks for the visible members, the rewards
-   * of the paid places, finalized_at and final_members — every statement guarded by `finalized_at IS
-   * NULL`, so a concurrent finaliser changes nothing. True when this call finalised.
+   * of the paid places, finalized_at and the totals — every statement guarded by `finalized_at IS NULL`, so a
+   * concurrent finaliser changes nothing. True when this call finalised. 2026-10-12, D-2e-24: final_members
+   * counts every ranked row (computer players included), final_real the real ones, final_rivals freezes the
+   * computer players (no member rows: `ranks` holds real slots only); same statement count as before.
    */
-  async finalize(bracketId: string, ranks: readonly RankWrite[], rewards: readonly RewardWrite[], now: number): Promise<boolean> {
+  async finalize(
+    bracketId: string,
+    ranks: readonly RankWrite[],
+    rewards: readonly RewardWrite[],
+    now: number,
+    totals: FinalTotals = { finalMembers: ranks.length, finalReal: ranks.length, finalRivals: null },
+  ): Promise<boolean> {
     const stmts = this.rankStatements(bracketId, ranks, true);
     const rw = this.rewardStatement(bracketId, rewards, now, true);
     if (rw) stmts.push(rw);
-    stmts.push(this.q('UPDATE brackets SET finalized_at = ?, final_members = ? WHERE id = ? AND finalized_at IS NULL', now, ranks.length, bracketId));
+    stmts.push(
+      this.q(
+        'UPDATE brackets SET finalized_at = ?, final_members = ?, final_real = ?, final_rivals = ? WHERE id = ? AND finalized_at IS NULL',
+        now,
+        totals.finalMembers,
+        totals.finalReal,
+        totals.finalRivals,
+        bracketId,
+      ),
+    );
     const res = await this.db.batch(stmts);
     return (res[res.length - 1]?.meta.changes ?? 0) === 1;
   }
 
-  /** Admin re-rank after a removal (spec §1.5): new ranks, final_members, rewards for newly paid places; claimed ones stay. */
-  async refinalize(bracketId: string, ranks: readonly RankWrite[], rewards: readonly RewardWrite[], now: number): Promise<void> {
+  /**
+   * Admin re-rank after a removal (spec §1.5): new ranks, the totals, rewards for newly paid places; claimed ones
+   * stay. D-2e-24: the computer players come back re-numbered in `totals.finalRivals` (core/table.ts finalPlan).
+   */
+  async refinalize(
+    bracketId: string,
+    ranks: readonly RankWrite[],
+    rewards: readonly RewardWrite[],
+    now: number,
+    totals: FinalTotals = { finalMembers: ranks.length, finalReal: ranks.length, finalRivals: null },
+  ): Promise<void> {
     const stmts = [this.q('UPDATE members SET final_rank = NULL WHERE bracket_id = ?', bracketId), ...this.rankStatements(bracketId, ranks, false)];
     const rw = this.rewardStatement(bracketId, rewards, now, false);
     if (rw) stmts.push(rw);
-    stmts.push(this.q('UPDATE brackets SET final_members = ?, finalized_at = CASE WHEN finalized_at IS NULL THEN ? ELSE finalized_at END WHERE id = ?', ranks.length, now, bracketId));
+    stmts.push(
+      this.q(
+        'UPDATE brackets SET final_members = ?, final_real = ?, final_rivals = ?, finalized_at = CASE WHEN finalized_at IS NULL THEN ? ELSE finalized_at END WHERE id = ?',
+        totals.finalMembers,
+        totals.finalReal,
+        totals.finalRivals,
+        now,
+        bracketId,
+      ),
+    );
     await this.db.batch(stmts);
   }
 
@@ -740,6 +809,56 @@ export class SqlStore {
     };
   }
 
+  /**
+   * A heart on a computer player's row (2026-10-12, D-2e-24, design §6.2): one hearts row, no members row to
+   * bump (the shown count is the rival's built-in hearts plus COUNT of these). One batch of 4 statements (a real
+   * heart takes 5); the insert's guards cover the races: the giver deleted meanwhile, a join that retired this
+   * rival meanwhile (`next_slot <= maxNextSlot`; r1: a join that does not retire it does not fail the heart;
+   * 2026-10-12, r2: any join that forces a removal fails it, see core/table.ts rivalHeartTarget), the cap. A
+   * deletion meanwhile needs no guard: it never retires a rival (r1: K counts next_slot; r2: deletePlayer keeps the
+   * join's time in deleted_joins). Every read uses the hearts PK or a prefix of it.
+   */
+  async giveRivalHeart(
+    bracketId: string,
+    fromSlot: number,
+    playerKey: string,
+    toSlot: number,
+    maxNextSlot: number,
+    now: number,
+    cap: number,
+  ): Promise<RivalHeartResult> {
+    const res = await this.db.batch([
+      this.q(
+        `INSERT INTO hearts (bracket_id, from_slot, to_slot, at) SELECT ?, ?, ?, ?
+          WHERE EXISTS (SELECT 1 FROM members WHERE bracket_id = ? AND slot = ? AND player_key = ?)
+            AND EXISTS (SELECT 1 FROM brackets WHERE id = ? AND rivals IS NOT NULL AND next_slot <= ?)
+            AND (SELECT COUNT(*) FROM hearts WHERE bracket_id = ? AND from_slot = ?) < ?
+         ON CONFLICT DO NOTHING`,
+        bracketId,
+        fromSlot,
+        toSlot,
+        now,
+        bracketId,
+        fromSlot,
+        playerKey,
+        bracketId,
+        maxNextSlot,
+        bracketId,
+        fromSlot,
+        cap,
+      ),
+      this.q('SELECT COUNT(*) AS n FROM hearts WHERE bracket_id = ? AND to_slot = ?', bracketId, toSlot),
+      this.q('SELECT COUNT(*) AS n FROM hearts WHERE bracket_id = ? AND from_slot = ?', bracketId, fromSlot),
+      this.q('SELECT 1 AS x FROM hearts WHERE bracket_id = ? AND from_slot = ? AND to_slot = ?', bracketId, fromSlot, toSlot),
+    ]);
+    return {
+      added: (res[0]?.meta.changes ?? 0) === 1,
+      realHearts: Number((res[1]?.results?.[0] as { n: number } | undefined)?.n ?? 0),
+      given: Number((res[2]?.results?.[0] as { n: number } | undefined)?.n ?? 0),
+      exists: (res[3]?.results?.length ?? 0) > 0,
+    };
+  }
+
   // ───────────────────────────────────────────── profile
 
   /**
@@ -830,6 +949,9 @@ export class SqlStore {
    * brackets decremented (next_slot untouched: no slot is reused), then their members, wins, rewards and
    * flags, a tombstone when suspended (delete-and-return does not lift a suspension), the player row.
    * Finalised brackets keep final_rank and final_members.
+   * 2026-10-12, r2 (migration 0004): the same statement that decrements the count appends the member's
+   * `slot:joined_at` to `deleted_joins` in r2 brackets (open or final; no key, no name), so the replay of the real
+   * joins (core/table.ts liveRivals) keeps that join's time and a deletion never changes which rivals show.
    */
   async deletePlayer(key: string, tombstoneUntil: number): Promise<void> {
     const mine = 'SELECT bracket_id FROM members WHERE player_key = ?';
@@ -850,7 +972,15 @@ export class SqlStore {
       ),
       this.q('DELETE FROM hearts WHERE (bracket_id, from_slot) IN (SELECT bracket_id, slot FROM members WHERE player_key = ?)', key),
       this.q('DELETE FROM hearts WHERE (bracket_id, to_slot) IN (SELECT bracket_id, slot FROM members WHERE player_key = ?)', key),
-      this.q(`UPDATE brackets SET members = members - 1 WHERE id IN (${mine})`, key),
+      this.q(
+        `UPDATE brackets SET members = members - 1,
+                deleted_joins = CASE WHEN rivals LIKE 'r2:%'
+                  THEN COALESCE(deleted_joins || ',', '') || (SELECT m.slot || ':' || m.joined_at FROM members m WHERE m.bracket_id = brackets.id AND m.player_key = ?)
+                  ELSE deleted_joins END
+          WHERE id IN (${mine})`,
+        key,
+        key,
+      ),
       this.q('DELETE FROM members WHERE player_key = ?', key),
       this.q('DELETE FROM wins WHERE player_key = ?', key),
       this.q('DELETE FROM rewards WHERE player_key = ?', key),
@@ -888,7 +1018,9 @@ export class SqlStore {
       ).all<Record<string, unknown>>(),
       this.q('SELECT id, at, kind, detail, resolved_at FROM flags WHERE player_key = ? ORDER BY at DESC LIMIT 100', key).all<Omit<FlagRow, 'player_key'>>(),
       this.q(
-        `SELECT m.bracket_id, m.slot, m.points, m.wins, m.hidden, m.final_rank, b.ends_at, b.finalized_at, b.final_members
+        // D-2e-24: final_members counts computer players too; final_real is the real count; rivals 1 = a bracket with them.
+        `SELECT m.bracket_id, m.slot, m.points, m.wins, m.hidden, m.final_rank, b.ends_at, b.finalized_at, b.final_members, b.final_real,
+                CASE WHEN b.rivals IS NULL THEN 0 ELSE 1 END AS rivals
            FROM members m JOIN brackets b ON b.id = m.bracket_id WHERE m.player_key = ? ORDER BY b.ends_at DESC LIMIT 50`,
         key,
       ).all<Record<string, unknown>>(),
@@ -920,6 +1052,16 @@ export class SqlStore {
     await this.q('INSERT INTO admin_log (id, at, action, target, detail) VALUES (?, ?, ?, ?, ?)', id, now, action, target, detail).run();
   }
 
+  /**
+   * GET /admin/v1/brackets/{id} (D-2e-24): every member row of a bracket, hidden ones included, with the
+   * player's code (members PK prefix + players PK). Computer players are computed by the caller (core/table.ts).
+   */
+  async adminBracket(bracketId: string): Promise<(MemberRow & { code: string | null })[]> {
+    return (
+      await this.q('SELECT m.*, p.code FROM members m LEFT JOIN players p ON p.key = m.player_key WHERE m.bracket_id = ?', bracketId).all<MemberRow & { code: string | null }>()
+    ).results;
+  }
+
   async stats(fromDay: string): Promise<{ day: string; name: string; v: number }[]> {
     return (await this.q('SELECT day, name, v FROM stats_daily WHERE day >= ? ORDER BY day ASC, name ASC', fromDay).all<{ day: string; name: string; v: number }>()).results;
   }
@@ -939,13 +1081,19 @@ export class SqlStore {
     winsByVerdict: { verdict: string; n: number }[];
     flagsByKind: { kind: string; n: number }[];
     dau: number;
-    endedToday: { final_members: number | null; members: number }[];
+    endedToday: { final_members: number | null; final_real: number | null; members: number; has_rivals: number }[];
   }> {
     const [w, f, d, e] = await Promise.all([
       this.q('SELECT verdict, COUNT(*) AS n FROM wins WHERE received_at >= ? AND received_at < ? GROUP BY verdict', from, to).all<{ verdict: string; n: number }>(),
       this.q('SELECT kind, COUNT(*) AS n FROM flags WHERE at >= ? AND at < ? GROUP BY kind', from, to).all<{ kind: string; n: number }>(),
       this.q('SELECT COUNT(*) AS n FROM players WHERE seen_at >= ?', dayStart).first<{ n: number }>(),
-      this.q('SELECT final_members, members FROM brackets WHERE ends_at >= ? AND ends_at < ?', dayStart, to).all<{ final_members: number | null; members: number }>(),
+      // D-2e-24: final_real (real members ranked) beside final_members (every ranked row, computer players included).
+      this.q('SELECT final_members, final_real, members, CASE WHEN rivals IS NULL THEN 0 ELSE 1 END AS has_rivals FROM brackets WHERE ends_at >= ? AND ends_at < ?', dayStart, to).all<{
+        final_members: number | null;
+        final_real: number | null;
+        members: number;
+        has_rivals: number;
+      }>(),
     ]);
     return { winsByVerdict: w.results, flagsByKind: f.results, dau: Number(d?.n ?? 0), endedToday: e.results };
   }

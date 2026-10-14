@@ -7,7 +7,7 @@ import type { ContentLookup } from './content/lookup';
 import type { Clock } from './core/clock';
 import type { ConfigVars, ServerConfig } from './core/config';
 import { hmacKey, type HmacKey, type Rng } from './core/crypto';
-import { devPoolOf } from './core/ids';
+import { devPoolOf, wirePool } from './core/ids';
 import type { Retired, Words } from './core/nickname';
 import { RateLimiter } from './http/ratelimit';
 import type { Store } from './store/sql-store';
@@ -36,6 +36,8 @@ export type LogLine = Record<string, unknown>;
 export interface DevState {
   readonly offsets: Map<string, number>;
   readonly switches: Map<string, Partial<Record<RemoteSwitch, boolean>>>;
+  /** Per test pool: computer rivals for its new brackets and the disclosure line (POST /dev/rivals; D-2e-24). */
+  readonly rivals: Map<string, boolean>;
 }
 
 export interface Keys {
@@ -119,7 +121,7 @@ export function makeServices(parts: {
   metrics: Metrics;
   log: (l: LogLine) => void;
 }): Services {
-  const dev: DevState = { offsets: new Map(), switches: new Map() };
+  const dev: DevState = { offsets: new Map(), switches: new Map(), rivals: new Map() };
   const cfg = parts.cfg;
   const sha = parts.env.BUILD_SHA?.trim();
   return {
@@ -139,4 +141,28 @@ export function makeServices(parts: {
     },
     health: null,
   };
+}
+
+/**
+ * Whether a NEW bracket of this stored pool gets computer rivals (2026-10-12, D-2e-24; read at creation only,
+ * the tag then freezes it): never under `hide`; a test pool by its /dev/rivals switch (dev routes only) or,
+ * while rivals are on, by `testPools`; a real pool while rivals are on and its wire pool is in `pools`.
+ */
+export function rivalsForPool(s: Pick<Services, 'cfg' | 'dev'>, pool: string): boolean {
+  const r = s.cfg.rivals;
+  if (r.hide) return false;
+  const dev = devPoolOf(pool); // 'fb' | 'web' -> null
+  if (dev !== null) return (s.cfg.devRoutes && s.dev.rivals.get(dev) === true) || (r.enabled && r.testPools);
+  return r.enabled && r.pools.includes(wirePool(pool));
+}
+
+/**
+ * RulesView.computerPlayers for a player of this stored pool (D-2e-24, H-9): the disclosure is on, rivals are
+ * not hidden, and rivals are on (or this test pool's /dev/rivals switch is). It stays on after `pools: []`
+ * (running brackets keep their rivals; the runbook holds it 48 h before RIVALS=off).
+ */
+export function rivalsNoteFor(s: Pick<Services, 'cfg' | 'dev'>, pool: string): boolean {
+  const r = s.cfg.rivals;
+  const dev = devPoolOf(pool);
+  return r.disclose && !r.hide && (r.enabled || (dev !== null && s.cfg.devRoutes && s.dev.rivals.get(dev) === true));
 }

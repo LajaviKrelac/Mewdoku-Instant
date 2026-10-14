@@ -271,6 +271,8 @@ export const enLazyUi2e = {
   'ladder.info.rewards.other': 'When a ranking ends, the top {count} win hints and kitties if at least {min} players took part.',
   'ladder.info.double': 'You can watch a video to double your reward.',
   'ladder.info.hearts': 'Tap a heart to cheer on a player. Hearts are just for fun.',
+  // 2026-10-12, D-2e-24 (H-9): the disclosure, in the info view and How to play while the server's rules say so.
+  'ladder.info.computerPlayers': 'Rankings include computer players.',
   'ladder.info.names': 'Other players see your ranking name and picture, never your Facebook name or photo.',
   'ladder.info.privacy': 'You can turn rankings off or delete your ranking data in Settings.',
   // The sheet without a server: the personal records card (+ the streak's best run).

@@ -38,6 +38,9 @@ DEV_ROUTES = "false"
 ALLOWED_ORIGINS = "http://127.0.0.1:4173,http://127.0.0.1:4174,https://localhost:8080"
 MIN_CLIENT_VERSION = "0.0.0"
 RC_SWITCHES = "{}"
+# Computer rivals in new brackets (D-2e-24, design §1.1): on | off. Off in code; staging soaks them; production
+# flips to "on" at rollout step 4 only (a CONFIG_OVERRIDES value never turns them on in production).
+RIVALS = "off"
 CONFIG_OVERRIDES = ""
 
 # ── staging: mewdoku-rank-staging.<account>.workers.dev until the public name exists (task #36) ─────────────
@@ -59,6 +62,7 @@ DEV_ROUTES = "false"
 ALLOWED_ORIGINS = "https://*.apps.fbsbx.com,http://127.0.0.1:4173,http://127.0.0.1:4174"
 MIN_CLIENT_VERSION = "0.0.0"
 RC_SWITCHES = "{}"
+RIVALS = "on"
 CONFIG_OVERRIDES = ""
 
 # ── production ───────────────────────────────────────────────────────────────────────────────────────────
@@ -91,4 +95,5 @@ DEV_ROUTES = "false"
 ALLOWED_ORIGINS = "https://apps-2382571989149479.apps.fbsbx.com"
 MIN_CLIENT_VERSION = "0.0.0"
 RC_SWITCHES = "{}"
+RIVALS = "off"
 CONFIG_OVERRIDES = ""

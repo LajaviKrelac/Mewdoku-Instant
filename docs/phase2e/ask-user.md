@@ -1,4 +1,4 @@
-<!-- Phase 2e: the material list sent to the user on 2026-10-10 (items 1–11 are the gap analysis's M1–M11; item 12 holds the decisions U1–U4). Copied into the repo at the 2e spec stage, text unchanged. Item 12 was answered on 2026-10-11 (docs/phase2e/spec.md §0.2); items 1–11 are still open (spec §12). -->
+<!-- Phase 2e: the material list sent to the user on 2026-10-10 (items 1–11 are the gap analysis's M1–M11; item 12 holds the decisions U1–U4). Copied into the repo at the 2e spec stage, text unchanged. Item 12 was answered on 2026-10-11 (docs/phase2e/spec.md §0.2); items 1–11 are still open (spec §12). 2026-10-12: a later decision outside this list, U-e (computer rivals: fill each ranking to about 50 with computer players, a low-key disclosure line on by default), is recorded in spec §0.2 and D-2e-24; it reverses the "We won't fake other players" of item 12 b for brackets created while the server switch is on, and its open choices are spec §12 Q-CP1 (keep the line), Q-CP2 (difficulty), Q-CP3 (the web pool). The text below is still unchanged. -->
 
 # What we need from you to make these "same as Meowdoku"
 

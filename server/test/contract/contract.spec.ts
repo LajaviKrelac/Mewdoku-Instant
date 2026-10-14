@@ -182,6 +182,23 @@ async function realAnswers(): Promise<Map<string, { status: number; body: unknow
   const unconfigured = makeTestApp({ env: { SESSION_SECRET: '' } });
   await e('unavailable', unconfigured.fetch('/v1/session/nonce', { method: 'POST' }));
   expect(h5).toBeDefined();
+
+  // 2026-10-12, D-2e-24: a server with computer rivals on (RIVALS=on; every fixture above comes from servers with
+  // them off, so those stay byte-identical): two real players and about 48 computer players after the join
+  // window, a heart on a computer player's row, and a session whose rules carry the disclosure line.
+  const rt = makeTestApp({ env: { RIVALS: 'on' } });
+  const rv = new TestPlayer(rt, 'rv');
+  await rv.signIn();
+  await rv.win('L2');
+  const rv2 = new TestPlayer(rt, 'rv2');
+  await rv2.signIn();
+  await rv2.win('L3');
+  rt.clock.advance(3 * HOUR);
+  await rv.win('L4');
+  const rb = await rv.bracket();
+  await put('hearts.rival', await rv.rawHeart(rb.bracketId!, rb.rows.find((r) => r.slot >= 9000)!.slot));
+  await put('bracket.rivals', await rv.rawBracket());
+  await put('session.rivals', await rv.rawSession());
   return out;
 }
 
@@ -225,6 +242,20 @@ describe('contract: the golden fixtures match the real server', async () => {
     const w = parseWinsResponse(real.get('wins.daily')!.body)!;
     // 21 others at 60 s + i × 7 s; 131.48 s is bucket 13: the ones at 140 s and up (buckets 14 …) were slower.
     expect(w.results[0]).toEqual({ winId: expect.any(String), verdict: 'accepted', points: 3, daily: { solvers: 21, slower: 9 } });
+  });
+
+  it('[D-2e-24] the rivals answers: computer rows at slots ≥ 9000 counted in members, a heart on one, the disclosure in the rules', () => {
+    const v = parseBracketView(real.get('bracket.rivals')!.body)!;
+    expect(v.members).toBe(v.rows.length);
+    expect(v.rows.filter((r) => r.slot >= 9000).length).toBe(v.members - 2);
+    expect(v.rows.filter((r) => r.likedByMe).map((r) => r.slot)).toEqual([(real.get('hearts.rival')!.body as { slot: number }).slot]);
+    const s = parseSessionResponse(real.get('session.rivals')!.body)!;
+    expect(s.rules.computerPlayers).toBe(true);
+    expect(s.bracket?.members).toBe(v.members);
+    // the fixtures of the servers with rivals off carry no computerPlayers key (the rules are byte-identical to before)
+    for (const name of ['session.fb', 'session.web']) expect('computerPlayers' in (real.get(name)!.body as { rules: object }).rules, name).toBe(false);
+    const fx = FIXTURES.find((f) => f.name === 'session.rivals')!;
+    expect((fx.response.body as { rules: { computerPlayers?: boolean } }).rules.computerPlayers).toBe(true);
   });
 
   it('wins.mixed carries the four verdicts the fixture shows', () => {

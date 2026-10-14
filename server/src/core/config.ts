@@ -1,12 +1,16 @@
 // Owner: G4 (Phase 2e). Server configuration (spec §1.16): the defaults below, overridden by the Worker
 // variables named in the spec (RANKING_ENABLED, PERIOD_MODE, WEB_MODE, DEV_ROUTES, ALLOWED_ORIGINS,
-// MIN_CLIENT_VERSION, RC_SWITCHES) and, for any other key, by CONFIG_OVERRIDES (a JSON object deep-merged
-// over the defaults; a value of the wrong type is ignored and reported). PURE: no Env, no clock.
+// MIN_CLIENT_VERSION, RC_SWITCHES, RIVALS) and, for any other key, by CONFIG_OVERRIDES (a JSON object
+// deep-merged over the defaults; a value of the wrong type is ignored and reported). PURE: no Env, no clock.
 import { REMOTE_SWITCHES, type PeriodMode, type RemoteSwitch, type ScoredModeWire } from '../contract';
 
 export type DeployEnv = 'dev' | 'staging' | 'production';
 export type WebMode = 'records' | 'anon';
 export type RateBucket = 'wins' | 'bracket' | 'hearts' | 'profile' | 'claims' | 'session' | 'me' | 'admin';
+
+/** The wire pools whose new brackets may get computer rivals (D-2e-24). */
+export type RivalPool = 'fb' | 'web';
+export const RIVAL_POOLS: readonly RivalPool[] = ['fb', 'web'];
 
 export interface RewardPlace {
   readonly place: 1 | 2 | 3;
@@ -126,6 +130,25 @@ export interface ServerConfig {
   readonly rcSwitches: Readonly<Partial<Record<RemoteSwitch, boolean>>>;
   /** DEV_ROUTES exactly "true" and not a production deploy; each request must also be on a loopback host. */
   readonly devRoutes: boolean;
+  /**
+   * Computer rivals (2026-10-12, D-2e-24, user decision U-e): fill each ranking to about 50 rows with computer
+   * players, disclosed by "Rankings include computer players.". Read at bracket creation (a new bracket is
+   * tagged, the tag freezes the strength), so every switch but `disclose` and `hide` reaches new brackets only.
+   */
+  readonly rivals: {
+    /** RIVALS=on|off; production only from RIVALS=on itself (never CONFIG_OVERRIDES). Decides NEW brackets only. */
+    readonly enabled: boolean;
+    /** The wire pools whose new brackets get rivals. */
+    readonly pools: readonly RivalPool[];
+    /** Percent, an integer 50…200, frozen into each new bracket's tag (80 easier, 120 harder; P-L19). */
+    readonly strength: number;
+    /** RulesView.computerPlayers: the disclosure line (P-L20). */
+    readonly disclose: boolean;
+    /** Emergency: act as if there were no rivals for everything not frozen (no tags, no rival rows or hearts, real-only finalisation). */
+    readonly hide: boolean;
+    /** Dev and test pools (fb:<p>, web:<p>, fb:synthetic) get rivals too while enabled (the staging soak). */
+    readonly testPools: boolean;
+  };
 }
 
 const MIN = 60_000;
@@ -223,6 +246,8 @@ export const DEFAULT_CONFIG: ServerConfig = {
   allowedOrigins: [],
   rcSwitches: {},
   devRoutes: false,
+  // 2026-10-12, D-2e-24: off in code; on only by RIVALS=on (the test environments pin it off).
+  rivals: { enabled: false, pools: ['fb', 'web'], strength: 100, disclose: true, hide: false, testPools: false },
 };
 
 /** The Worker variables that shape the config (all strings, all optional; spec §1.2 `[vars]`). */
@@ -235,6 +260,8 @@ export interface ConfigVars {
   readonly ALLOWED_ORIGINS?: string | undefined;
   readonly MIN_CLIENT_VERSION?: string | undefined;
   readonly RC_SWITCHES?: string | undefined;
+  /** Computer rivals for new brackets: "on" | "off" (D-2e-24); unset keeps the config's value. */
+  readonly RIVALS?: string | undefined;
   readonly CONFIG_OVERRIDES?: string | undefined;
 }
 
@@ -335,10 +362,12 @@ export function loadConfig(vars: ConfigVars, base: ServerConfig = DEFAULT_CONFIG
     webMode = 'records';
     problems.push('web.mode: anon ignored in production without WEB_MODE=anon');
   }
+  const rivals = rivalsConfig(cfg, vars, deployEnv, problems);
   const min = vars.MIN_CLIENT_VERSION?.trim();
   return {
     cfg: {
       ...cfg,
+      rivals,
       deployEnv,
       rankingEnabled: vars.RANKING_ENABLED === undefined ? cfg.rankingEnabled : vars.RANKING_ENABLED.trim().toLowerCase() !== 'false',
       bracket: { ...cfg.bracket, periodMode },
@@ -350,6 +379,38 @@ export function loadConfig(vars: ConfigVars, base: ServerConfig = DEFAULT_CONFIG
     },
     problems,
   };
+}
+
+/**
+ * `rivals` after the variables (2026-10-12, D-2e-24): RIVALS=on|off sets `enabled`; a production deploy runs
+ * rivals only when RIVALS says "on" itself (like WEB_MODE=anon: a deliberate switch, never a CONFIG_OVERRIDES
+ * value); `pools` keeps 'fb' and 'web'; `strength` is an integer 50…200 (else 100); and preset r1 assumes one
+ * point per fish and at most 3 fish a win, so any other scoring turns rivals off. 2026-10-12, r2: preset r2 (new
+ * brackets) assumes the same (its wins are 1–3 fish too); the problem text still names r1, as it always has.
+ */
+function rivalsConfig(cfg: ServerConfig, vars: ConfigVars, deployEnv: DeployEnv, problems: string[]): ServerConfig['rivals'] {
+  let enabled = cfg.rivals.enabled;
+  if (vars.RIVALS === 'on' || vars.RIVALS === 'off') enabled = vars.RIVALS === 'on';
+  else if (vars.RIVALS !== undefined) problems.push('RIVALS: expected on | off');
+  if (deployEnv === 'production' && enabled && vars.RIVALS !== 'on') {
+    enabled = false;
+    problems.push('rivals.enabled: ignored in production without RIVALS=on');
+  }
+  const pools: RivalPool[] = [];
+  for (const p of cfg.rivals.pools as readonly unknown[]) {
+    if ((RIVAL_POOLS as readonly unknown[]).includes(p)) pools.push(p as RivalPool);
+    else problems.push(`rivals.pools: dropped ${JSON.stringify(p)}`);
+  }
+  let strength = cfg.rivals.strength;
+  if (!Number.isInteger(strength) || strength < 50 || strength > 200) {
+    problems.push('rivals.strength: expected an integer 50..200');
+    strength = DEFAULT_CONFIG.rivals.strength;
+  }
+  if (enabled && (cfg.scoring.pointsPerFish !== 1 || cfg.scoring.fishMax !== 3)) {
+    enabled = false;
+    problems.push('rivals: preset r1 needs pointsPerFish 1 and fishMax 3');
+  }
+  return { ...cfg.rivals, enabled, pools, strength };
 }
 
 /** [hard, soft] floors for a board of size n (sizes below the table's smallest use its smallest). */

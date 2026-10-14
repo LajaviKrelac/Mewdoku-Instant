@@ -100,6 +100,11 @@ export interface RulesView {
   readonly claimTtlMs: number;
   readonly hearts: { readonly enabled: boolean; readonly allowSelf: boolean; readonly maxGivenPerBracket: number };
   readonly nickname: { readonly freeText: boolean; readonly changeCooldownMs: number };
+  /**
+   * Present and true when this pool's rankings include computer players and the disclosure is on (2026-10-12,
+   * D-2e-24, H-9: "Rankings include computer players."); never false on the wire (absent instead).
+   */
+  readonly computerPlayers?: boolean;
 }
 
 // ── session
@@ -225,7 +230,7 @@ export interface WinsResponse {
 // ── brackets
 export interface BracketRow {
   readonly rank: number; // 1 … members, positions (no shared ranks)
-  readonly slot: number; // stable handle inside this bracket (hearts); never a player id
+  readonly slot: number; // stable handle inside this bracket (hearts); never a player id; ≥ 9000: a computer player (never paid; D-2e-24)
   readonly nickname: string;
   readonly avatarId: number;
   readonly points: number; // fish kept, summed in this bracket
@@ -234,10 +239,11 @@ export interface BracketRow {
   readonly likedByMe: boolean;
   /**
    * Leaderboard update: the member's last activity in this bracket (server clock: joined, a counted win, or a
-   * presence ping). null from a server without it (the client then shows no status).
+   * presence ping). null from a server without it (the client then shows no status). 2026-10-13: a computer
+   * player's comes from its script (its last win or a later ping tick; never after serverTime).
    */
   readonly seenAt: Ms | null;
-  /** The last presence ping said "in a puzzle" (the client shows "Playing now" while seenAt is recent). */
+  /** The last presence ping said "in a puzzle" (the client shows "Playing now" while seenAt is recent); a computer player: one of its sessions runs. */
   readonly playing: boolean;
   /** UI batch (profile): the member's frame and background (0 = the plain look; also from a server without them). */
   readonly frameId: number;
@@ -250,9 +256,11 @@ export interface BracketView {
   readonly mode: PeriodMode;
   readonly openedAt: Ms | null;
   readonly endsAt: Ms | null;
-  readonly members: number; // REAL visible members; === rows.length on a valid server answer
+  // Rows of this table: visible real members plus computer players (D-2e-24); === rows.length on an open answer;
+  // final: every row ranked at finalisation (brackets.final_members), so a later deletion leaves a gap.
+  readonly members: number;
   readonly maxMembers: number;
-  readonly rows: readonly BracketRow[]; // every visible member, best first (≤ maxMembers)
+  readonly rows: readonly BracketRow[]; // every visible row (real members and computer players), best first (≤ maxMembers)
   readonly me: BracketRow | null; // also inside rows; null when not a member
   readonly final: boolean; // ended and finalised
   readonly heartsNew: number; // hearts received from OTHER players since my last bracket read
@@ -287,7 +295,7 @@ export interface ResultView {
   readonly bracketId: string;
   readonly endedAt: Ms;
   readonly place: number; // my final rank
-  readonly members: number; // visible members at finalisation (brackets.final_members; a later deletion never changes it)
+  readonly members: number; // every row ranked at finalisation, computer players included (brackets.final_members; a later deletion never changes it)
   readonly points: number;
   readonly reward: RewardView | null; // null: not a paid place (or too few members, see members vs rules.minMembers)
 }

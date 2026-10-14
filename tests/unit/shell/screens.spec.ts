@@ -85,7 +85,8 @@ vi.mock('../../../src/ui/board/board-view', () => ({
 
 import { createBootScreen } from '../../../src/ui/screens/boot-screen';
 import { createGameScreen, gameTitle, loadCelebrate, sameHighlight, type GameScreenCallbacks, type GameView } from '../../../src/ui/screens/game-screen';
-import { createHomeScreen, formatCountdown, type HomeCallbacks, type HomeView } from '../../../src/ui/screens/home-screen';
+import { createHomeScreen, formatCountdown as homeFormatCountdown, type HomeCallbacks, type HomeView } from '../../../src/ui/screens/home-screen';
+import { formatCountdown } from '../../../src/ui/time-text';
 import type { HintStep } from '../../../src/engine/types';
 import { mouseLandMs } from '../../../src/game/mouse';
 
@@ -229,6 +230,8 @@ describe('S1 home', () => {
     expect(formatCountdown(7 * 3_600_000 + 48 * 60_000 + 12_000)).toBe('07:48:12');
     expect(formatCountdown(23 * 3_600_000 + 59 * 60_000 + 53_999)).toBe('23:59:53');
     expect(formatCountdown(-5)).toBe('00:00:00');
+    // 2026-10-12: it lives in ui/time-text (shared with the lazy ranking chip); Home re-exports the same function.
+    expect(homeFormatCountdown).toBe(formatCountdown);
   });
 
   it('routes taps to the callbacks; no stock readout on Home (Home cleanup 2026-10-12)', () => {

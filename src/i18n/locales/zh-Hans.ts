@@ -452,6 +452,7 @@ export const catalog: LocaleCatalog = {
   'ladder.info.rewards.other': '排行结束时，如果至少有{min}名玩家参与，前{count}名可获得提示和猫咪。',
   'ladder.info.double': '看一段视频即可让奖励翻倍。',
   'ladder.info.hearts': '点一下爱心为玩家加油。爱心只是为了好玩。',
+  'ladder.info.computerPlayers': '排行中包含电脑玩家。',
   'ladder.info.names': '其他玩家只能看到你的排行昵称和头像，绝不会看到你的 Facebook 名字或照片。',
   'ladder.info.privacy': '你可以在设置中关闭排行或删除排行数据。',
   'ladder.records.title': '你的记录',

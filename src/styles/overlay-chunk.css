@@ -358,24 +358,27 @@
   }
 }
 
+/* 2026-10-12 (verify C1): the footer fades in first (its 200 ms opacity transition, below), then pulses from
+   full opacity: the pulse waits out the fade and starts at 1, where the fade ends. Started at once from 0.55,
+   it overrode the transition and the footer popped in at 0.55. */
 .overlay[data-overlay='ranking'].is-ready .ranking__tap {
-  animation: tap-pulse var(--pulse-ms, 1400ms) ease-in-out infinite;
+  animation: tap-pulse var(--pulse-ms, 1400ms) ease-in-out 200ms infinite;
 }
 
 @keyframes tap-pulse {
   0%,
   100% {
-    opacity: 0.55;
+    opacity: 1;
   }
   50% {
-    opacity: 1;
+    opacity: 0.55;
   }
 }
 
 /* The tap's fade-out (rank.panelOutMs) fades the content only: the dark scrim stays opaque while the
-   victory fades in over it, so the board never shows through mid-crossfade (review UX-4). */
-.overlay[data-overlay='ranking'].is-leaving .overlay__panel,
-.overlay[data-overlay='ranking'].is-leaving .ranking__tap {
+   victory fades in over it, so the board never shows through mid-crossfade (review UX-4). The footer sits
+   in the panel and fades with it (2026-10-12: its own rule here never applied, verify B1). */
+.overlay[data-overlay='ranking'].is-leaving .overlay__panel {
   opacity: 0;
   transition: opacity var(--out-ms, 200ms) ease;
 }
@@ -391,10 +394,12 @@
   }
 }
 
-/* Static rays, a steady footer, no breathing (phase2b §2.5, §2.7, §2.9). */
+/* Static rays, a steady footer, no breathing (phase2b §2.5, §2.7, §2.9). The footer still fades in (its
+   transition; 150 ms under [data-motion='reduced'], fx.css). 2026-10-12: also by the panel's data-reduced. */
 [data-motion='reduced'] .victory__rays,
 .victory[data-reduced] .victory__rays,
-[data-motion='reduced'] .overlay[data-overlay='ranking'] .ranking__tap {
+[data-motion='reduced'] .overlay[data-overlay='ranking'] .ranking__tap,
+.overlay[data-overlay='ranking'][data-reduced] .ranking__tap {
   animation: none;
 }
 
@@ -441,7 +446,8 @@
   font-size: var(--fs-l);
 }
 
-/* Hidden until the tap gate opens (beats the stage's opaque gated-button rule in overlays.css). */
+/* Hidden until the tap gate opens (beats the stage's opaque gated-button rule in overlays.css), then fades in
+   over 200 ms (the tap-pulse waits the same 200 ms, above). */
 .overlay[data-overlay='ranking'] .ranking__tap.btn {
   display: flex;
   margin: 24px auto 0;
@@ -950,9 +956,10 @@
 }
 
 /* fit() measures each step with transitions off (also the reduced-motion 150 ms ones of fx.css), so a step's
-   sizes apply at once. */
+   sizes apply at once. 2026-10-12: not the event bar's fill: its width never moves the layout, and switching its
+   transition off mid-fill (a re-render during the opening, e.g. a late ranking answer) jumps it to the end. */
 .victory[data-measuring],
-.victory[data-measuring] *,
+.victory[data-measuring] *:not(.victory__bar-fill),
 .victory[data-measuring] *::before,
 .victory[data-measuring] *::after {
   transition: none !important;
@@ -1507,16 +1514,17 @@
 
 /* ── Phase 2e (G3, spec §2.5, §5.3): the Home ranking chip and the streak strip (moved here from screens.css at
    I-4: both arrive with this chunk; screens.css keeps the lead slot and the strip's reserved row) ──
-   The chip is a button in the period pill's look (a white pill, the trophy in gold wash): "#5" and the fish, "Join",
-   the trophy alone (off), or the period total (records); on Home it floats (below). The strip left Home for the
-   streak pill (screens.css, 2026-10-11); its paw steps stay for the victory's streak row. */
+   The chip is a button in the period pill's look (a white pill, the trophy in gold wash): the bracket's countdown
+   (2026-10-12; "#5" and the fish without an end time), "Join", the trophy alone (off), or the period total (records);
+   on Home it floats (below). The strip left Home for the streak pill (screens.css, 2026-10-11); its paw steps stay
+   for the victory's streak row. */
 .ladder-chip { display: inline-flex; flex: none; align-items: center; min-width: 44px; height: 44px; padding: 0 14px 0 6px; padding-inline-start: 6px; padding-inline-end: 14px;
   border: 0; border-radius: var(--radius-pill); background: var(--card); box-shadow: var(--shadow-1);
   color: var(--ink); font-family: var(--font-display); font-weight: var(--display-weight); font-size: var(--fs-l); cursor: pointer;
   transition: transform 80ms ease-out; }
 .ladder-chip:active { transform: scale(0.95); }
 .ladder-chip__icon { width: 30px; height: 30px; color: var(--ink); --icon-fill: var(--gold); }
-.ladder-chip__rank { margin-inline-start: 3px; white-space: nowrap; }
+.ladder-chip__rank, .ladder-chip__time { margin-inline-start: 3px; white-space: nowrap; }
 .ladder-chip[data-state='join'] .ladder-chip__rank { color: var(--accent-text); }
 .ladder-chip[data-state='off'] { padding-inline-end: 6px; }
 .ladder-chip[data-state='off'] .ladder-chip__icon { opacity: 0.5; }
@@ -1533,7 +1541,9 @@
 }
 
 /* Home layout (2026-10-11): the chip floats at the left edge halfway down Home (the original's leaderboard button): the
-   trophy on a white disc with a gold ring, the rank and fish in a dark pill over the disc's lower edge. */
+   trophy on a white disc with a gold ring, a dark pill over the disc's lower edge. 2026-10-12 (01 row 7.1.7): in a
+   bracket the pill holds the countdown alone ("23:59:53" on the original's), across both columns; else "Join", or the
+   records total (rank and fish only for a bracket without an end time). */
 .home__rank .ladder-chip { display: grid; grid-template-columns: 1fr auto auto 1fr; justify-items: center; height: auto;
   min-width: 80px; padding: 0; background: none; box-shadow: none; color: #fff; font-size: var(--fs-m); }
 .home__rank .ladder-chip::before { content: ''; z-index: 1; grid-column: 2 / 4; grid-row: 2; align-self: stretch; justify-self: stretch; border-radius: var(--radius-pill);
@@ -1541,8 +1551,9 @@
 .home__rank .ladder-chip[data-state='off']::before { display: none; }
 .home__rank .ladder-chip__icon { grid-column: 1 / -1; grid-row: 1; width: 64px; height: 64px; margin-bottom: -12px; padding: 10px;
   border: 3px solid var(--gold); border-radius: 50%; background: var(--card); box-shadow: var(--shadow-1); }
-.home__rank .ladder-chip__rank, .home__rank .ladder-chip__points { z-index: 2; grid-row: 2; margin: 0; padding: 3px 12px; }
+.home__rank .ladder-chip__rank, .home__rank .ladder-chip__time, .home__rank .ladder-chip__points { z-index: 2; grid-row: 2; margin: 0; padding: 3px 12px; }
 .home__rank .ladder-chip__rank { grid-column: 2; }
+.home__rank .ladder-chip__time { grid-column: 2 / 4; }
 .home__rank .ladder-chip__points { grid-column: 3; }
 .home__rank .ladder-chip__rank:not([hidden]) + .ladder-chip__points { padding-inline-start: 0; }
 .home__rank .ladder-chip__rank:not([hidden]) { padding-inline-end: 6px; }

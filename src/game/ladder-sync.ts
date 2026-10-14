@@ -1,10 +1,11 @@
 // Owner: G1 (Phase 2e)
 // The ranking flow's side of the client record (docs/phase2e/spec.md §2.3, §2.6, §2.9): sending the queue
 // (aged wins, the server's verdicts, the fish waiting), the cached bracket WITHOUT rows and the counter's
-// "before" value, the claim ledger, the ×2 bookkeeping, the claim repair, the result cards, and Settings →
-// Delete. Split from game/ladder.ts (G1 resume, spec §7.9 budget): only the lazy ladder flow uses these, so
-// they ship in its chunk; game/ladder.ts keeps what the first load needs (the record's default, queueing a
-// win in the same critical save as WON, and the save's validation and merge).
+// "before" values (the server's; the in-game counter's with my earlier queued fish), the claim ledger, the ×2
+// bookkeeping, the claim repair, the result cards, and Settings → Delete. Split from game/ladder.ts (G1
+// resume, spec §7.9 budget): only the lazy ladder flow uses these, so they ship in its chunk; game/ladder.ts
+// keeps what the first load needs (the record's default, queueing a win in the same critical save as WON,
+// and the save's validation and merge).
 // Honesty (spec §0.4): nothing here creates a row, a rank or a count; the cache keeps the server's own
 // numbers only. PURE: the device clock is passed in.
 import { cfg, type GameConfig } from '../app/config';
@@ -90,6 +91,20 @@ export function isRunning(cur: LadderCurrent | null, deviceNow: number): cur is 
  */
 export function counterBefore(rec: LadderRecord, deviceNow: number): number {
   return isRunning(rec.current, deviceNow) ? rec.current.points : 0;
+}
+
+/**
+ * The in-game counter's "before" value at a win (2026-10-12, verify C7): counterBefore plus the fish of my
+ * EARLIER wins still in the queue (not aged; `winId`, this win's own entry, is left out: the counter adds it as
+ * the fish land). The server puts a queued win into the bracket that runs when it arrives, so while mine runs
+ * they land there: two offline wins of 3 count 22 → 25, then 25 → 28, where the panel shows 22 "+6 waiting"
+ * (fish, as waitingFish; pointsPerFish is 1 on both sides) — no longer 22 → 25 twice. 0 without a running bracket.
+ */
+export function counterBeforeWin(rec: LadderRecord, deviceNow: number, winId: string | null, c: GameConfig = cfg): number {
+  if (!isRunning(rec.current, deviceNow)) return 0;
+  let n = rec.current.points;
+  for (const w of sendable(rec, deviceNow, c)) if (w.winId !== winId) n += w.fish;
+  return n;
 }
 
 // ─────────────────────────────── claims and results (spec §2.6) ───────────────────────────────

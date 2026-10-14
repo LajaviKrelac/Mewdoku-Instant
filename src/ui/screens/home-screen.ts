@@ -47,6 +47,7 @@ import type { StreakStripView, createStreakPill } from '../hud/streak-strip';
 import { homeExtras, whenHomeExtras } from './home-extras';
 import { createTopBar, splitTitle, type TopBarProps } from '../hud/top-bar';
 import { createLocaleText } from '../locale-text';
+import { formatCountdown } from '../time-text';
 
 /** The smallest Home mascot (CSS px) before the tagline, and then the mascot, give way (fitHero). */
 export const MASCOT_MIN_PX = 64;
@@ -158,6 +159,8 @@ export interface HomeCallbacks {
   onEvent(): void;
   /** Phase 2e §2.5: the ranking chip (opens the ranking sheet, overlay `ladder`). Required since I-3. */
   onLadder(): void;
+  /** 2026-10-12: the chip's visible countdown reached 00:00:00 (the app refreshes the chip; once per end time). */
+  onLadderEnded?(): void;
   /** The profile picture at the top left (the name sheet when there is a ranking name, else Settings). */
   onProfile?(): void;
   /** The streak pill (UI batch 2026-10-13: opens the Daily Streak screen; it was a toast of the strip's sentence). */
@@ -188,12 +191,8 @@ export function eventStatusText(e: HomeEventCardView): string {
   }
 }
 
-/** The daily tab's countdown: "07:48:12" (hours, minutes, seconds, zero-padded; clamps at 0). */
-export function formatCountdown(ms: number): string {
-  const total = Math.max(0, Math.floor(ms / 1000));
-  const p2 = (n: number): string => String(n).padStart(2, '0');
-  return `${p2(Math.floor(total / 3600))}:${p2(Math.floor((total % 3600) / 60))}:${p2(total % 60)}`;
-}
+/** The daily tab's countdown: "07:48:12" (2026-10-12: it lives in ../time-text, shared with the ranking chip). */
+export { formatCountdown };
 
 /** The daily card's status line ("Not played yet", "Solved 4:12", "Unlocks after level 20"). */
 export function dailyStatusText(d: DailyCardView): string {
@@ -385,12 +384,12 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
     const x = homeExtras();
     if (!v || (!chip && !x)) {
       periodPill.el.hidden = false;
-      if (chip) chip.el.hidden = true;
+      if (chip) chip.el.hidden = true; // a hidden chip stops its countdown tick (the next update starts it again)
       if (v) awaitExtras();
       return;
     }
     if (!chip) {
-      chip = (x as NonNullable<typeof x>).createLadderChip(v, { onPress: () => cb.onLadder() });
+      chip = (x as NonNullable<typeof x>).createLadderChip(v, { onPress: () => cb.onLadder(), onEnded: () => cb.onLadderEnded?.() });
       lead.appendChild(chip.el);
     } else chip.update(v);
     chip.el.hidden = false;
