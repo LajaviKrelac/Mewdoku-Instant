@@ -1,72 +1,76 @@
-// Owner: G3 (Phase 2e)
-// The name sheet (overlay `nickname`, spec §1.8, §2.7, §7.7, §9.4; CONTRACTS §8): pick a ranking name from
-// our word lists (first word, second word, number 1–99) and one of our 12 pictures. Opened from Settings →
-// "Ranking name" and from the pencil on my row in the ranking sheet. Lazy `ladder` chunk.
-// No free text (nickname.freeText off, D-2e-16): only our words, the same English words in every locale,
-// rendered with textContent and dir="auto". The UI has no randomness: Shuffle asks the app (props.shuffle).
-// States: idle; saving (Save busy, every control disabled); offline (Save disabled, "Connect to the internet
-// to change your name."); rejected ("That name can't be used. Please pick another.", the sheet stays);
-// cooldown ("You can change your name again in 5 h 12 min."; a picture-only change still saves: pictures
-// have no cooldown, spec §1.8).
-// A11y: the pictures are a radio group (arrow keys move and pick, roving tabindex, "Picture 3 of 12"); the
-// pickers are native <select>s and a number <input> with visible labels; the status line is polite.
+// Owner: G3 (Phase 2e). UI batch (2026-10-13): profile — rewritten as the profile sheet.
+// The profile sheet (overlay `nickname`, spec §1.8, §2.7, §7.7, §9.4; CONTRACTS §8): the player types their ranking
+// name and picks a picture, a frame and a background (the last two from the server's FRAME_COUNT / BACKGROUND_COUNT;
+// some unlock by progress, the app says which). Opened from Home's profile picture and Settings → "Ranking name".
+// Lazy `ladder` chunk. The name is the player's own text: rendered with textContent and dir="auto" only, never
+// translated; the input never takes the first focus (a keyboard would cover the dialog in the Facebook webview),
+// counts its limit in code points (maxlength counts UTF-16 units), uses 16 px text (iOS zooms below) and saves on
+// Enter. The shape check is the app's (src/shared/nick-text.ts): the hint says what is wrong while typing; the
+// server's verdicts come back as states. Pictures, frames and backgrounds never wait for the name's cooldown.
+// States: idle; saving (Save busy, every control disabled); offline (Save disabled, "Connect to the internet…");
+// rejected (a blocked name: "That name can't be used…"); invalid (the server's shape verdict); cooldown ("You can
+// change your name again in 5 h 12 min."; said up front, a look-only change still saves).
+// A11y: the name has a visible label and its hint as description; Picture · Frame · Background is a tab list
+// (arrows move and select, RTL-aware); each panel is a radio group (look-grid.ts); the status line is polite.
 // Classes: .overlay[data-overlay=nickname] > .overlay__panel--dialog.nickname[data-state]
 //          > .overlay__head(.nickname__tag h2.overlay__title button.overlay__close)
-//          .nickname__preview(.nickname__avatar .nickname__name) .nickname__label [role=radiogroup].nickname__avatars > button.nickname__pic[role=radio]
-//          .nickname__fields(label select.nickname__adj, label select.nickname__noun, label input.nickname__num)
-//          button.nickname__shuffle .nickname__status .overlay__actions(button.nickname__save button.nickname__cancel)
+//          .nickname__me(.nickname__avatar .nickname__field(label.nickname__label input.nickname__input .nickname__hint))
+//          [role=tablist].nickname__tabs > button.nickname__tab[role=tab][data-tab]
+//          [role=tabpanel].nickname__panel > [role=radiogroup].nickname__grid(.nickname__avatars|.nickname__frames|.nickname__bgs)
+//          .nickname__unlock .nickname__status .overlay__actions(button.nickname__save button.nickname__cancel)
+import type { NameProblem } from '../../shared/nick-text';
 import { formatDuration, formatNumber, t } from '../../i18n';
-import { avatarSymbol, mountLadderArt } from '../art/ladder-art';
-import { icon } from '../art/sprite';
+import { mountLadderArt } from '../art/ladder-art';
+import { avatarBadge, icon } from '../art/sprite';
 import { h, setText, type OverlayView } from '../dom';
 import { createLocaleText } from '../locale-text';
-import { arrowStep, closeButton, createOverlayShell, inlineDir, makeButton, nextId, setButtonLabel, setGated } from './overlay-base';
+import { createLookGrid } from './look-grid';
+import { clipName, lockText, problemText, tidyName, type LookLock, type NameRules } from './profile-text';
+import { arrowStep, closeButton, createOverlayShell, inlineDir, makeButton, nextId, setButtonLabel, setGated, setTextKeepTogether } from './overlay-base';
 import '../../styles/ladder-chunk.css';
 
-export interface NicknamePick {
-  readonly adj: number;
-  readonly noun: number;
-  readonly num: number;
+export interface ProfilePick {
+  /** The name as typed (trimmed, inner white space as one space); the app and the server normalise it further. */
+  readonly name: string;
   readonly avatarId: number;
+  readonly frameId: number;
+  readonly backgroundId: number;
 }
 
+export type { LookLock } from './profile-text';
+
 export interface NicknameSheetProps {
-  /** NICK_WORDS_V1 (src/shared/nick-words.ts), passed by the app (ui/ imports shared/ for types only). */
-  readonly words: { readonly adj: readonly string[]; readonly noun: readonly string[] };
-  readonly current: NicknamePick;
+  readonly current: ProfilePick;
   /** AVATAR_COUNT. */
   readonly avatarCount: number;
-  readonly numMin: number;
-  readonly numMax: number;
-  readonly state: 'idle' | 'saving' | 'offline' | 'rejected' | 'cooldown';
+  /** One entry per frame / background id (FRAME_COUNT / BACKGROUND_COUNT); [] hides that tab (a server without them). */
+  readonly frames: readonly LookLock[];
+  readonly backgrounds: readonly LookLock[];
+  /** rules.nickname.freeText: false keeps the name read-only (the looks still save). */
+  readonly nameEditable: boolean;
+  /** The limits the hints name (src/shared/nick-text.ts). */
+  readonly nameRules: NameRules;
+  /** The shape check of a typed name (the app passes src/shared/nick-text.ts: ui/ imports shared/ for types only). */
+  checkName(raw: string): NameProblem | null;
+  readonly state: 'idle' | 'saving' | 'offline' | 'rejected' | 'invalid' | 'cooldown';
   /** Device clock: the next allowed name change (state 'cooldown'). */
   readonly cooldownUntil: number | null;
   now(): number;
-  /** A fresh random pick (the app's randomness; the UI has none). */
-  shuffle(): NicknamePick;
-  onSave(pick: NicknamePick): void;
+  onSave(pick: ProfilePick): void;
   onClose(): void;
 }
 
-/** The rendered name: `${adj} ${noun} ${num}` (spec §1.8), "Cat {num}" when a word is missing. */
-export function pickName(words: NicknameSheetProps['words'], p: NicknamePick): string {
-  const adj = words.adj[p.adj];
-  const noun = words.noun[p.noun];
-  return adj && noun ? `${adj} ${noun} ${p.num}` : t('nick.fallback', { num: p.num });
-}
-
-/** Clamps a typed number into numMin … numMax (an empty or bad value keeps `fallback`). */
-export function clampNum(raw: string, min: number, max: number, fallback: number): number {
-  const n = Number.parseInt(raw, 10);
-  if (!Number.isFinite(n)) return fallback;
-  return Math.max(min, Math.min(max, n));
-}
+type Tab = 'avatar' | 'frame' | 'bg';
+const TABS: readonly Tab[] = ['avatar', 'frame', 'bg'];
 
 export function createNicknameSheet(): OverlayView<NicknameSheetProps> {
   mountLadderArt(typeof document === 'undefined' ? undefined : document);
   let props: NicknameSheetProps | null = null;
-  let pick: NicknamePick = { adj: 0, noun: 0, num: 1, avatarId: 0 };
-  let opened: NicknamePick = pick;
+  let pick: ProfilePick = { name: '', avatarId: 0, frameId: 0, backgroundId: 0 };
+  let opened: ProfilePick = pick;
+  let tab: Tab = 'avatar';
+  let edited = false;
+  let unlockLine = '';
   const shell = createOverlayShell({ id: 'nickname', scrim: 'soft', panel: 'dialog', onScrimTap: () => void cancel() });
   shell.panel.classList.add('nickname');
   const L = createLocaleText();
@@ -75,128 +79,151 @@ export function createNicknameSheet(): OverlayView<NicknameSheetProps> {
   const close = L.attr(closeButton(() => props?.onClose()), 'aria-label', () => t('common.close'));
   const head = h('div', { class: 'overlay__head' }, h('span', { class: 'nickname__tag', 'aria-hidden': 'true' }, icon('nick-tag')), title, close);
 
-  // The preview row: my picture and the name as other players will see it.
-  const previewAvatar = h('span', { class: 'nickname__avatar', 'aria-hidden': 'true' });
-  const previewName = h('span', { class: 'nickname__name', dir: 'auto' });
-  const preview = h('p', { class: 'nickname__preview', id: shell.descId }, previewAvatar, previewName);
-  let previewAvatarId = -1;
+  // Me: my picture as others will see it, and my name.
+  const avatar = h('span', { class: 'nickname__avatar', 'aria-hidden': 'true' });
+  const inputId = nextId('nick-name');
+  const hintId = nextId('nick-hint');
+  const input = h('input', {
+    class: 'nickname__input',
+    id: inputId,
+    type: 'text',
+    dir: 'auto',
+    autocomplete: 'off',
+    autocapitalize: 'words',
+    spellcheck: 'false',
+    enterkeyhint: 'done',
+    'aria-describedby': `${hintId} ${shell.descId}`,
+  });
+  const hint = h('p', { class: 'nickname__hint', id: hintId });
+  const field = h('div', { class: 'nickname__field' }, L.text(h('label', { class: 'nickname__label', for: inputId }), () => t('nick.name')), input, hint);
+  const me = h('div', { class: 'nickname__me' }, avatar, field);
+  let avatarKey = '';
 
-  // The pictures: a radio group of AVATAR_COUNT buttons.
-  const picLabelId = nextId('nick-pic');
-  const picLabel = L.text(h('p', { class: 'nickname__label', id: picLabelId }), () => t('nick.picture'));
-  const pics = h('div', { class: 'nickname__avatars', role: 'radiogroup', 'aria-labelledby': picLabelId });
-  let picButtons: HTMLButtonElement[] = [];
-
-  // The pickers.
-  const adjId = nextId('nick-adj');
-  const nounId = nextId('nick-noun');
-  const numId = nextId('nick-num');
-  const adj = h('select', { class: 'nickname__adj', id: adjId });
-  const noun = h('select', { class: 'nickname__noun', id: nounId });
-  const num = h('input', { class: 'nickname__num num', id: numId, type: 'number', inputmode: 'numeric', step: '1' });
-  const field = (id: string, label: () => string, control: HTMLElement): HTMLElement =>
-    h('div', { class: 'nickname__field' }, L.text(h('label', { class: 'nickname__field-label', for: id }), label), control);
-  const shuffle = L.label(
-    makeButton({ variant: 'secondary', label: '', icon: 'icon-shuffle', className: 'nickname__shuffle', onPress: () => doShuffle() }),
-    () => t('nick.shuffle'),
-  );
-  // A 2 × 2 grid: the two words, then the number and Shuffle.
-  const fields = h(
-    'div',
-    { class: 'nickname__fields' },
-    field(adjId, () => t('nick.first'), adj),
-    field(nounId, () => t('nick.second'), noun),
-    field(numId, () => t('nick.number'), num),
-    shuffle,
-  );
-  const status = h('p', { class: 'nickname__status', role: 'status', 'aria-live': 'polite' });
-  const save = L.label(
-    makeButton({ variant: 'primary', label: '', block: true, className: 'nickname__save', onPress: () => doSave() }),
-    () => t('nick.save'),
-  );
-  const cancelBtn = L.label(makeButton({ variant: 'ghost', label: '', className: 'nickname__cancel', onPress: () => void cancel() }), () => t('common.cancel'));
-  shell.panel.append(head, preview, picLabel, pics, fields, status, h('div', { class: 'overlay__actions overlay__actions--stack' }, save, cancelBtn));
-
-  let wordsKey = '';
-  const fillWords = (p: NicknameSheetProps): void => {
-    const key = `${p.words.adj.join('|')}#${p.words.noun.join('|')}`;
-    if (key === wordsKey) return;
-    wordsKey = key;
-    for (const [sel, list] of [
-      [adj, p.words.adj],
-      [noun, p.words.noun],
-    ] as const) {
-      sel.textContent = '';
-      list.forEach((w, i) => {
-        // The words are ours and the same in every locale (glossary): textContent only.
-        const o = h('option', { value: String(i), dir: 'auto' });
-        o.textContent = w;
-        sel.appendChild(o);
-      });
-    }
-  };
-
-  const fillPics = (count: number): void => {
-    if (picButtons.length === count) return;
-    pics.textContent = '';
-    picButtons = [];
-    for (let i = 0; i < count; i++) {
-      const b = h('button', { type: 'button', class: 'nickname__pic', role: 'radio', 'aria-checked': 'false', dataset: { avatar: String(i) } }, icon(avatarSymbol(i), { class: 'nickname__pic-art' }));
-      b.addEventListener('click', () => {
-        if (busy()) return;
-        setPick({ ...pick, avatarId: i });
-      });
-      picButtons.push(b);
-      pics.appendChild(b);
-    }
-  };
-  pics.addEventListener('keydown', (ev) => {
-    const step = arrowStep(ev.key, inlineDir(pics) === 'rtl');
-    if (!step || picButtons.length === 0 || busy()) return;
+  // Picture · Frame · Background: one grid at a time.
+  const tabIds: Record<Tab, string> = { avatar: nextId('nick-tab'), frame: nextId('nick-tab'), bg: nextId('nick-tab') };
+  const panelId = nextId('nick-panel');
+  const tabLabel: Record<Tab, () => string> = { avatar: () => t('nick.picture'), frame: () => t('nick.frame'), bg: () => t('nick.background') };
+  const tabButtons = TABS.map((k) => {
+    const b = L.text(h('button', { type: 'button', class: 'nickname__tab', role: 'tab', id: tabIds[k], 'aria-controls': panelId, dataset: { tab: k } }), tabLabel[k]);
+    b.addEventListener('click', () => showTab(k));
+    return b;
+  });
+  const tabs = h('div', { class: 'nickname__tabs', role: 'tablist' }, tabButtons);
+  tabs.addEventListener('keydown', (ev) => {
+    const step = arrowStep(ev.key, inlineDir(tabs) === 'rtl');
+    if (!step) return;
     ev.preventDefault();
-    const next = (pick.avatarId + step + picButtons.length) % picButtons.length;
-    setPick({ ...pick, avatarId: next });
-    picButtons[next]?.focus();
+    const shown = TABS.filter((k) => !tabButtons[TABS.indexOf(k)]?.hidden);
+    const next = shown[(shown.indexOf(tab) + step + shown.length) % shown.length] ?? 'avatar';
+    showTab(next);
+    tabButtons[TABS.indexOf(next)]?.focus();
+  });
+  const onLocked = (lock: LookLock): void => {
+    unlockLine = lock ? lockText(lock) : '';
+    renderState();
+  };
+  const setPick = (p: Partial<ProfilePick>): void => {
+    pick = { ...pick, ...p };
+    unlockLine = '';
+    renderPick();
+  };
+  const grids: Record<Tab, ReturnType<typeof createLookGrid>> = {
+    avatar: createLookGrid('nickname__avatars', 'avatar', tabIds.avatar, (id) => setPick({ avatarId: id }), () => undefined),
+    frame: createLookGrid('nickname__frames', 'frame', tabIds.frame, (id) => setPick({ frameId: id }), (id) => onLocked(props?.frames[id] ?? null)),
+    bg: createLookGrid('nickname__bgs', 'bg', tabIds.bg, (id) => setPick({ backgroundId: id }), (id) => onLocked(props?.backgrounds[id] ?? null)),
+  };
+  const unlock = h('p', { class: 'nickname__unlock', 'aria-live': 'polite' });
+  const panel = h('div', { class: 'nickname__panel', role: 'tabpanel', id: panelId }, grids.avatar.el, grids.frame.el, grids.bg.el, unlock);
+  const status = h('p', { class: 'nickname__status', role: 'status', 'aria-live': 'polite', id: shell.descId });
+  const save = L.label(makeButton({ variant: 'primary', label: '', block: true, className: 'nickname__save', onPress: () => doSave() }), () => t('nick.save'));
+  const cancelBtn = L.label(makeButton({ variant: 'ghost', label: '', className: 'nickname__cancel', onPress: () => void cancel() }), () => t('common.cancel'));
+  shell.panel.append(head, me, tabs, panel, status, h('div', { class: 'overlay__actions overlay__actions--stack' }, save, cancelBtn));
+
+  let typed = '';
+  input.addEventListener('input', () => {
+    // The limit stops a name from growing past it (a paste is clipped); a longer generated name ("Mischievous
+    // Whisker 99") is never chopped, only shortened by the player (the hint says how long a name may be).
+    const max = Math.max(props?.nameRules.maxChars ?? 16, [...typed].length);
+    const clipped = clipName(input.value, max);
+    if (clipped !== input.value) input.value = clipped;
+    typed = input.value;
+    edited = true;
+    pick = { ...pick, name: tidyName(input.value) };
+    renderState();
+  });
+  input.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Enter') return;
+    ev.preventDefault();
+    doSave();
   });
 
-  adj.addEventListener('change', () => setPick({ ...pick, adj: Number(adj.value) }));
-  noun.addEventListener('change', () => setPick({ ...pick, noun: Number(noun.value) }));
-  const readNum = (): void => {
-    if (!props) return;
-    setPick({ ...pick, num: clampNum(num.value, props.numMin, props.numMax, pick.num) });
-  };
-  num.addEventListener('change', readNum);
-  num.addEventListener('blur', readNum);
-
   const busy = (): boolean => props?.state === 'saving';
-  const nameChanged = (): boolean => pick.adj !== opened.adj || pick.noun !== opened.noun || pick.num !== opened.num;
-  const avatarChanged = (): boolean => pick.avatarId !== opened.avatarId;
-  /** A name change waits for the cooldown; a picture-only change never does (spec §1.8). */
+  const nameChanged = (): boolean => pick.name !== opened.name;
+  const looksChanged = (): boolean => pick.avatarId !== opened.avatarId || pick.frameId !== opened.frameId || pick.backgroundId !== opened.backgroundId;
+  /** A name change waits for the cooldown; a picture, frame or background change never does (spec §1.8). */
   const cooling = (): boolean => !!props && props.state === 'cooldown' && props.cooldownUntil !== null && props.cooldownUntil > props.now();
+  const problem = (): NameProblem | null => (props && nameChanged() ? props.checkName(input.value) : null);
 
-  function setPick(p: NicknamePick): void {
-    pick = p;
+  function showTab(k: Tab): void {
+    if (tab === k) return;
+    tab = k;
+    unlockLine = '';
     renderPick();
   }
 
   function renderPick(): void {
     if (!props) return;
-    setText(previewName, pickName(props.words, pick));
-    if (pick.avatarId !== previewAvatarId) {
-      previewAvatarId = pick.avatarId;
-      previewAvatar.textContent = '';
-      previewAvatar.appendChild(icon(avatarSymbol(pick.avatarId), { class: 'nickname__avatar-art' }));
+    const p = props;
+    const key = `${pick.avatarId}/${pick.frameId}/${pick.backgroundId}`;
+    if (key !== avatarKey) {
+      avatarKey = key;
+      avatar.textContent = '';
+      avatar.appendChild(avatarBadge(pick.avatarId, pick.frameId, pick.backgroundId, { class: 'nickname__avatar-art' }));
     }
-    adj.value = String(pick.adj);
-    noun.value = String(pick.noun);
-    if (num.value !== String(pick.num)) num.value = String(pick.num);
-    picButtons.forEach((b, i) => {
-      const on = i === pick.avatarId;
-      b.setAttribute('aria-checked', String(on));
-      b.setAttribute('aria-label', pictureLabel(i, picButtons.length));
-      b.tabIndex = on ? 0 : -1;
-      // The sheet opens on the chosen picture, the first control (Save starts gated: nothing changed yet).
-      b.toggleAttribute('data-autofocus', on);
+    const shown: Record<Tab, boolean> = { avatar: true, frame: p.frames.length > 0, bg: p.backgrounds.length > 0 };
+    // Against a server without frames and backgrounds only the Picture tab shows (the grid's visible label).
+    if (!shown[tab]) tab = 'avatar';
+    TABS.forEach((k, i) => {
+      const b = tabButtons[i] as HTMLButtonElement;
+      b.hidden = !shown[k];
+      b.setAttribute('aria-selected', String(k === tab));
+      b.tabIndex = k === tab ? 0 : -1;
+      grids[k].el.hidden = k !== tab;
+    });
+    panel.setAttribute('aria-labelledby', tabIds[tab]);
+    const disabled = p.state === 'saving' || p.state === 'offline';
+    const n = (id: number, count: number, key: 'nick.avatar.a11y' | 'nick.frame.a11y' | 'nick.background.a11y'): string =>
+      t(key, { index: formatNumber(id + 1), count: formatNumber(count) });
+    const label = (base: string, lock: LookLock): string => (lock ? t('nick.locked.a11y', { label: base, how: lockText(lock) }) : base);
+    grids.avatar.render({
+      count: Math.max(0, Math.floor(p.avatarCount)),
+      selected: pick.avatarId,
+      locked: [],
+      artKey: `${pick.frameId}/${pick.backgroundId}`,
+      art: (id) => avatarBadge(id, pick.frameId, pick.backgroundId, { class: 'nickname__pic-art' }),
+      label: (id) => n(id, p.avatarCount, 'nick.avatar.a11y'),
+      disabled,
+      autofocus: tab === 'avatar',
+    });
+    grids.frame.render({
+      count: p.frames.length,
+      selected: pick.frameId,
+      locked: p.frames.map((l) => l !== null),
+      artKey: `${pick.avatarId}/${pick.backgroundId}`,
+      art: (id) => avatarBadge(pick.avatarId, id, pick.backgroundId, { class: 'nickname__pic-art' }),
+      label: (id) => label(n(id, p.frames.length, 'nick.frame.a11y'), p.frames[id] ?? null),
+      disabled,
+      autofocus: tab === 'frame',
+    });
+    grids.bg.render({
+      count: p.backgrounds.length,
+      selected: pick.backgroundId,
+      locked: p.backgrounds.map((l) => l !== null),
+      artKey: `${pick.avatarId}/${pick.frameId}`,
+      art: (id) => avatarBadge(pick.avatarId, pick.frameId, id, { class: 'nickname__pic-art' }),
+      label: (id) => label(n(id, p.backgrounds.length, 'nick.background.a11y'), p.backgrounds[id] ?? null),
+      disabled,
+      autofocus: tab === 'bg',
     });
     renderState();
   }
@@ -206,32 +233,38 @@ export function createNicknameSheet(): OverlayView<NicknameSheetProps> {
     const p = props;
     shell.panel.dataset.state = p.state;
     let line = '';
+    let time = '';
     if (p.state === 'offline') line = t('nick.offline');
     else if (p.state === 'rejected') line = t('nick.rejected');
-    // Said up front (not only once a word changed): the player knows before picking; pictures still save.
-    else if (cooling()) line = t('nick.cooldown', { time: formatDuration((p.cooldownUntil ?? 0) - p.now()) });
-    setText(status, line);
+    else if (p.state === 'invalid') line = t('nick.invalid');
+    // Said up front (not only once the name changed): the player knows before typing; the looks still save.
+    else if (cooling()) {
+      time = formatDuration((p.cooldownUntil ?? 0) - p.now());
+      line = t('nick.cooldown', { time });
+    }
+    // "5 h 12 min" on one line (UX-15)
+    if (status.textContent !== line) setTextKeepTogether(status, line, [time]);
     status.hidden = line === '';
-    const blocked = p.state === 'offline' || p.state === 'saving' || (cooling() && nameChanged()) || (!nameChanged() && !avatarChanged());
+    const bad = problem();
+    const hintText = !p.nameEditable ? t('nick.name.off') : bad && edited ? problemText(bad, p.nameRules) : '';
+    setText(hint, hintText);
+    hint.hidden = hintText === '';
+    if (bad && edited) input.setAttribute('aria-invalid', 'true');
+    else input.removeAttribute('aria-invalid');
+    setText(unlock, unlockLine);
+    unlock.hidden = unlockLine === '';
+    const blocked = p.state === 'offline' || p.state === 'saving' || (cooling() && nameChanged()) || bad !== null || (!nameChanged() && !looksChanged());
     setGated(save, blocked);
     // aria-busy needs the value "true" (an empty value reads as false).
     if (p.state === 'saving') save.setAttribute('aria-busy', 'true');
     else save.removeAttribute('aria-busy');
-    const lock = p.state === 'saving';
-    for (const c of [adj, noun, num] as const) c.disabled = lock || p.state === 'offline';
-    setGated(shuffle, lock || p.state === 'offline');
-    for (const b of picButtons) b.disabled = lock || p.state === 'offline';
-  }
-
-  function doShuffle(): void {
-    if (!props || busy() || props.state === 'offline') return;
-    const next = props.shuffle();
-    setPick({ ...next, num: Math.max(props.numMin, Math.min(props.numMax, next.num)) });
+    input.readOnly = !p.nameEditable;
+    input.disabled = p.state === 'saving' || p.state === 'offline';
   }
 
   function doSave(): void {
     if (!props) return;
-    readNum();
+    edited = true;
     renderState();
     if (save.getAttribute('aria-disabled') === 'true') return;
     props.onSave(pick);
@@ -246,10 +279,6 @@ export function createNicknameSheet(): OverlayView<NicknameSheetProps> {
   const render = (p: NicknameSheetProps): void => {
     props = p;
     L.apply();
-    fillWords(p);
-    fillPics(Math.max(0, Math.floor(p.avatarCount)));
-    num.min = String(p.numMin);
-    num.max = String(p.numMax);
     setButtonLabel(save, t('nick.save'));
     renderPick();
   };
@@ -264,15 +293,20 @@ export function createNicknameSheet(): OverlayView<NicknameSheetProps> {
     open(p) {
       pick = { ...p.current };
       opened = pick;
-      previewAvatarId = -1;
+      tab = 'avatar';
+      edited = false;
+      unlockLine = '';
+      avatarKey = '';
+      input.value = p.current.name;
+      typed = input.value;
       render(p);
       shell.show();
     },
     update(p) {
       // A save that went through moves the baseline (the sheet may stay open on a later error).
-      if (p.current.adj !== props?.current.adj || p.current.noun !== props?.current.noun || p.current.num !== props?.current.num || p.current.avatarId !== props?.current.avatarId) {
-        opened = { ...p.current };
-      }
+      const c = p.current;
+      const o = props?.current;
+      if (!o || c.name !== o.name || c.avatarId !== o.avatarId || c.frameId !== o.frameId || c.backgroundId !== o.backgroundId) opened = { ...c };
       render(p);
     },
     close() {
@@ -285,9 +319,4 @@ export function createNicknameSheet(): OverlayView<NicknameSheetProps> {
       shell.el.remove();
     },
   };
-}
-
-/** "Picture 3 of 12" (radio names; exported for tests). */
-export function pictureLabel(index: number, count: number): string {
-  return t('nick.avatar.a11y', { index: formatNumber(index + 1), count: formatNumber(count) });
 }

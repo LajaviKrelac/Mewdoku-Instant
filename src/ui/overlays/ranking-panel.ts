@@ -105,6 +105,9 @@ export interface BracketRowView {
   readonly seenAt: number | null;
   /** The server's "in a puzzle" for this player ("Playing now" while seenAt is recent). */
   readonly playing: boolean;
+  /** UI batch (profile): the player's frame and background (absent or 0: the plain look). */
+  readonly frameId?: number;
+  readonly backgroundId?: number;
 }
 
 /** UI batch (leaderboard): one paid place's reward, as the server's rules state it (RulesView.places). */

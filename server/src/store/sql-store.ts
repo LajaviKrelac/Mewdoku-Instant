@@ -64,6 +64,9 @@ export interface WriteWinsInput {
   readonly playerKey: string;
   readonly nickname: string;
   readonly avatar: number;
+  /** UI batch (profile): the frame and background the new members row copies (0 = the plain look). */
+  readonly frame: number;
+  readonly bg: number;
   readonly now: number;
   /** null: no win to write (only the player update and flags). */
   readonly target: BracketTarget | null;
@@ -108,6 +111,9 @@ export interface ProfileUpdate {
   };
   avatar?: number;
   listed?: boolean;
+  /** UI batch (profile): the frame and background (no cooldown, like the avatar). */
+  frame?: number;
+  bg?: number;
 }
 
 export interface StoredWinRow {
@@ -328,8 +334,8 @@ export class SqlStore {
       joinIndex = stmts.length;
       stmts.push(
         this.q(
-          `INSERT INTO members (bracket_id, slot, player_key, nickname, avatar, points, wins, hearts, hearts_seen, hearts_self, scored_at, joined_at, hidden, active_at, playing)
-           SELECT b.id, b.next_slot, ?, ?, ?, 0, 0, 0, 0, 0, ?, ?, 0, ?, 0 FROM brackets b
+          `INSERT INTO members (bracket_id, slot, player_key, nickname, avatar, frame, bg, points, wins, hearts, hearts_seen, hearts_self, scored_at, joined_at, hidden, active_at, playing)
+           SELECT b.id, b.next_slot, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, ?, ?, 0, ?, 0 FROM brackets b
             WHERE b.id = ? AND b.finalized_at IS NULL AND b.join_until > ? AND b.ends_at > ?
               AND (SELECT COUNT(*) FROM members m WHERE m.bracket_id = b.id) < b.max_members
               AND NOT EXISTS (SELECT 1 FROM members m WHERE m.bracket_id = b.id AND m.player_key = ?)
@@ -338,6 +344,8 @@ export class SqlStore {
           key,
           input.nickname,
           input.avatar,
+          input.frame,
+          input.bg,
           now,
           now,
           now,
@@ -668,7 +676,8 @@ export class SqlStore {
   // ───────────────────────────────────────────── profile
 
   /**
-   * Name, avatar and listed in one batch; the rows of my OPEN brackets follow (spec §1.5 hidden rows, §1.8).
+   * Name, avatar, frame, background and listed in one batch; the rows of my OPEN brackets follow (spec §1.5 hidden
+   * rows, §1.8).
    * The name change is guarded by its cooldown (`changeAllowedBefore`: nick_changed_at must be null or
    * ≤ it), so two concurrent changes cannot both pass. False when the guarded name change did not apply.
    */
@@ -698,6 +707,19 @@ export class SqlStore {
       stmts.push(
         this.q('UPDATE players SET avatar = ? WHERE key = ?', p.avatar, key),
         this.q(`UPDATE members SET avatar = ? WHERE player_key = ? AND ${open}`, p.avatar, key),
+      );
+    }
+    // UI batch (profile): the frame and the background follow the avatar's two fixed statements.
+    if (p.frame !== undefined) {
+      stmts.push(
+        this.q('UPDATE players SET frame = ? WHERE key = ?', p.frame, key),
+        this.q(`UPDATE members SET frame = ? WHERE player_key = ? AND ${open}`, p.frame, key),
+      );
+    }
+    if (p.bg !== undefined) {
+      stmts.push(
+        this.q('UPDATE players SET bg = ? WHERE key = ?', p.bg, key),
+        this.q(`UPDATE members SET bg = ? WHERE player_key = ? AND ${open}`, p.bg, key),
       );
     }
     if (p.listed !== undefined) {

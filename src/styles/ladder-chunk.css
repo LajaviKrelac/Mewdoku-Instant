@@ -559,7 +559,7 @@
   font-weight: 600;
 }
 
-/* ── The name sheet (overlay `nickname`) ── */
+/* ── The profile sheet (overlay `nickname`; UI batch: a typed name, the picture, a frame, a background) ── */
 .nickname {
   text-align: start;
 }
@@ -576,55 +576,127 @@
   height: 44px;
 }
 
-.nickname__preview {
+/* Me: my picture as the other players will see it, next to my name. */
+.nickname__me {
   display: flex;
-  align-items: center;
-  min-height: 60px;
-  padding: 8px 12px;
+  align-items: flex-start;
+  padding: 10px 12px;
   border-radius: var(--radius-l);
   background: var(--accent-soft);
 }
 
 .nickname__avatar {
   flex: none;
-  width: 44px;
-  height: 44px;
-  margin-inline-end: 10px;
+  width: 64px;
+  height: 64px;
+  margin-inline-end: 12px;
 }
 
 .nickname__avatar-art {
   display: block;
-  width: 44px;
-  height: 44px;
+  width: 64px;
+  height: 64px;
 }
 
-.nickname__name {
+.nickname__field {
   flex: 1;
   min-width: 0;
-  color: var(--ink);
-  font-family: var(--font-display);
-  font-weight: var(--display-weight);
-  font-size: var(--fs-xl);
-  line-height: 1.2;
-  overflow-wrap: anywhere;
 }
 
 .nickname__label {
-  margin-top: 12px;
+  display: block;
+  margin-bottom: 4px;
   color: var(--ink);
   font-family: var(--font-display);
   font-weight: var(--display-weight);
+  font-size: var(--fs-s);
 }
 
-/* 12 pictures: as many 48 px columns as fit (4 at 320 px, 6 on wider phones); every one ≥ 44 × 44. */
-.nickname__avatars {
+.nickname__input {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 2px solid var(--line-2);
+  border-radius: var(--radius-m);
+  background: var(--card);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  font-size: 16px; /* never under 16 px: iOS would zoom the page on focus */
+}
+
+.nickname__input:focus-visible {
+  outline: var(--focus-ring) solid var(--focus);
+  outline-offset: 1px;
+}
+
+.nickname__input[aria-invalid='true'] {
+  border-color: var(--accent-text);
+}
+
+/* Typed names switched off (rules.nickname.freeText): the name shows, it cannot change. */
+.nickname__input[readonly] {
+  border-style: dashed;
+  background: transparent;
+}
+
+.nickname__hint {
+  margin-top: 4px;
+  color: var(--accent-text);
+  font-size: var(--fs-s);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+/* Picture · Frame · Background: a segmented tab bar (its own rules: the Settings one lives in the overlay chunk). */
+.nickname__tabs {
+  display: flex;
+  margin-top: 12px;
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--page-2);
+}
+
+.nickname__tab {
+  /* sized by its label ("Background" needs more room than "Frame" at 320 px), never broken inside a word it can fit */
+  flex: 1 1 auto;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink-2);
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  font-size: var(--fs-s);
+  line-height: 1.15;
+  overflow-wrap: break-word;
+  cursor: pointer;
+}
+
+.nickname__tab[aria-selected='true'] {
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: var(--shadow-1);
+}
+
+.nickname__tab:focus-visible {
+  outline: var(--focus-ring) solid var(--focus);
+  outline-offset: -1px;
+}
+
+/* 12 pictures, 8 frames, 8 backgrounds: as many 48 px columns as fit (4 at 320 px); every one ≥ 44 × 44. */
+.nickname__grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
   grid-gap: 6px;
-  margin-top: 6px;
+  margin-top: 8px;
 }
 
 .nickname__pic {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -658,58 +730,31 @@
   outline-offset: 1px;
 }
 
-.nickname__fields {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-gap: 10px 10px;
-  align-items: end;
-  margin-top: 14px;
+/* A look not unlocked yet: faded, with a lock badge at the bottom (the line under the grid says what unlocks it). */
+.nickname__pic[data-locked] .nickname__pic-art {
+  opacity: 0.45;
 }
 
-.nickname__field {
-  min-width: 0;
-}
-
-.nickname__field-label {
-  display: block;
-  margin-bottom: 4px;
-  color: var(--ink-2);
-  font-size: var(--fs-s);
-  font-weight: 600;
-}
-
-.nickname__adj,
-.nickname__noun,
-.nickname__num {
-  width: 100%;
-  min-height: 44px;
-  padding: 0 10px;
-  border: 2px solid var(--line-2);
-  border-radius: var(--radius-m);
+.nickname__lock {
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  width: 22px;
+  height: 22px;
+  margin-left: -11px;
+  padding: 3px;
+  border-radius: 50%;
   background: var(--card);
   color: var(--ink);
-  font-family: var(--font-display);
-  font-weight: var(--display-weight);
-  font-size: 16px; /* never under 16 px: iOS would zoom the page on focus */
+  box-shadow: var(--shadow-1);
 }
 
-.nickname__adj:focus-visible,
-.nickname__noun:focus-visible,
-.nickname__num:focus-visible {
-  outline: var(--focus-ring) solid var(--focus);
-  outline-offset: 1px;
-}
-
-.nickname__shuffle.btn {
-  min-height: 44px;
-  padding: 0 14px;
-  font-size: var(--fs-m);
-}
-
-.nickname__shuffle .btn__icon {
-  width: 20px;
-  height: 20px;
-  margin-inline-end: 6px;
+.nickname__unlock {
+  margin-top: 8px;
+  color: var(--ink);
+  font-size: var(--fs-s);
+  font-weight: 600;
+  text-align: center;
 }
 
 .nickname__status {
@@ -723,7 +768,7 @@
 /* RTL: a ranking name runs LTR (dir=auto, a Latin name) but sits at the row's start, the right (text-align: start
    would follow the name's own direction; match-parent is not honoured by Chromium). */
 [dir='rtl'] .rank-row__name,
-[dir='rtl'] .nickname__name {
+[dir='rtl'] .nickname__input {
   text-align: right;
 }
 
@@ -765,16 +810,28 @@
   }
 }
 
-/* Short screens: the dialog scrolls inside itself; trim the preview and the gaps first. */
+/* Short screens: the dialog scrolls inside itself; trim my row and the gaps first. */
 @media (max-height: 639px) {
-  .nickname__preview {
-    min-height: 52px;
+  .nickname__me {
     padding: 6px 10px;
   }
 
-  .nickname__label,
-  .nickname__fields {
+  .nickname__avatar,
+  .nickname__avatar-art {
+    width: 52px;
+    height: 52px;
+  }
+
+  .nickname__tabs {
     margin-top: 8px;
+  }
+
+  .nickname__grid {
+    margin-top: 6px;
+  }
+
+  .nickname__status {
+    margin-top: 6px;
   }
 }
 
@@ -912,6 +969,23 @@
 
 .lb-pod[data-mine='1'] .lb-pod__frame {
   border-color: var(--accent);
+}
+
+/* UI batch (profile): my place shows by more than the border's colour (my avatar frame may be any colour): an accent
+   dot in a white ring over the top of my picture. */
+.lb-pod[data-mine='1']::before {
+  content: '';
+  position: absolute;
+  z-index: 2;
+  top: -6px;
+  left: 50%;
+  width: 14px;
+  height: 14px;
+  margin-left: -7px;
+  border: 3px solid var(--card);
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: var(--shadow-1);
 }
 
 .lb-pod__avatar {

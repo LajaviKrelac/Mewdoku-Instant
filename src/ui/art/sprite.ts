@@ -73,8 +73,8 @@ export type IconSymbol =
   | 'art-bolt'
   | 'art-star'
   // Phase 2e (spec Appendix C, CONTRACTS §9): the streak strip's flame and steps (first-load sprite: Home
-  // draws them); the ranking's medals, avatars, hearts, reward chests, name tag and the edit, shuffle and
-  // info glyphs (art/ladder-art.ts, the lazy `ladder` chunk mounts them).
+  // draws them); the ranking's medals, avatars, hearts, reward chests, name tag and the edit and info glyphs
+  // (art/ladder-art.ts, the lazy `ladder` chunk mounts them; the shuffle glyph went with the word pickers, UI batch).
   | 'icon-streak-flame'
   | 'streak-step-empty'
   | 'streak-step-done'
@@ -92,16 +92,22 @@ export type IconSymbol =
   | 'icon-heart-fill'
   | 'nick-tag'
   | 'icon-pencil'
-  | 'icon-shuffle'
   | 'icon-info'
   // Leaderboard update: the countdown pill's stopwatch (ladder-art.ts).
-  | 'icon-stopwatch';
+  | 'icon-stopwatch'
+  // UI batch (profile): the avatar frames and backgrounds (looks-art.ts, mounted with the ranking art).
+  | FrameSymbol
+  | BackgroundSymbol;
 /** UI batch (leaderboard): the chest of a paid place, 1st to 3rd. */
 export type RewardChestSymbol = `reward-chest-${1 | 2 | 3}`;
 /** Phase 2e: avatar ids 0 … AVATAR_COUNT − 1 (src/shared/rank-api.ts, 12, append-only; P-L13). */
 export type AvatarIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
 /** Phase 2e: one of our 12 avatars (art/ladder-art.ts). */
 export type AvatarSymbol = `avatar-${AvatarIndex}`;
+/** UI batch (profile): frame and background ids with a drawing (0, the plain look, has none). */
+export type LookIndex = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+export type FrameSymbol = `frame-${LookIndex}`;
+export type BackgroundSymbol = `bg-${LookIndex}`;
 export type GlyphIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
 /** Pattern glyphs by palette index: dot, ring, triangle, square, diamond, star, plus, bar, chevron, heart, drop, moon (02 §18). */
 export type GlyphSymbol = `glyph-${GlyphIndex}`;
@@ -353,6 +359,45 @@ export function icon(id: SymbolId, opts?: { class?: string; label?: string }): S
   const use = document.createElementNS(SVG_NS, 'use');
   use.setAttribute('href', `#${id}`);
   svg.appendChild(use);
+  return svg;
+}
+
+/**
+ * UI batch (profile): how many avatars, frames and backgrounds the lazy ranking art draws (art/ladder-art.ts,
+ * art/looks-art.ts); tests keep them equal to AVATAR_COUNT, FRAME_COUNT and BACKGROUND_COUNT (src/shared/rank-api.ts).
+ */
+export const ART_LOOKS = Object.freeze({ avatars: 12, frames: 8, backgrounds: 8 });
+
+const lookIn = (id: number, count: number): number => (Number.isInteger(id) && id >= 0 && id < count ? id : 0);
+
+/**
+ * UI batch (profile): a player's picture as one <svg viewBox="0 0 100 100"> of up to three <use>s — the background
+ * (bg-K) under; the avatar (avatar-N), whose own coat disc `--avatar-bg: none` turns off when a background shows, and
+ * which sits 86 % inside a frame so its ears clear the ring; the frame (frame-K) over. Frame and background 0 are the
+ * plain look (nothing added: the picture is exactly the avatar), an id we do not draw reads 0, an unknown avatar
+ * avatar-0. Home (first load) and the ranking (lazy) share it; the symbols are the lazy ranking art, so before they
+ * are mounted the <use>s draw nothing. aria-hidden unless `label` (then role="img").
+ */
+export function avatarBadge(avatarId: number, frameId: number, backgroundId: number, opts?: { class?: string; label?: string }): SVGSVGElement {
+  const a = lookIn(avatarId, ART_LOOKS.avatars) as AvatarIndex;
+  const fr = lookIn(frameId, ART_LOOKS.frames);
+  const bg = lookIn(backgroundId, ART_LOOKS.backgrounds);
+  const svg = icon(`avatar-${a}`, { ...opts, class: `avatar-badge${opts?.class ? ` ${opts.class}` : ''}` });
+  svg.setAttribute('viewBox', '0 0 100 100');
+  const head = svg.firstChild as SVGUseElement;
+  const use = (id: FrameSymbol | BackgroundSymbol): SVGUseElement => {
+    const u = document.createElementNS(SVG_NS, 'use');
+    u.setAttribute('href', `#${id}`);
+    return u;
+  };
+  if (bg > 0) {
+    svg.insertBefore(use(`bg-${bg as LookIndex}`), head);
+    head.setAttribute('style', '--avatar-bg:none');
+  }
+  if (fr > 0) {
+    head.setAttribute('transform', 'matrix(.86 0 0 .86 7 7.28)');
+    svg.appendChild(use(`frame-${fr as LookIndex}`));
+  }
   return svg;
 }
 

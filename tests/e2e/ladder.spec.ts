@@ -444,7 +444,7 @@ test('a suspended player (admin): told with the paused line and shown their reco
   expect(wins).toEqual([]);
 });
 
-test('the name sheet: pick two words and a number, save → the new name in the panel; a second change inside the cooldown says when', async ({ page }) => {
+test('the profile sheet: type a name, save → the new name in the panel; inside the cooldown the sheet says when and a frame still saves', async ({ page }) => {
   test.setTimeout(90_000);
   const pool = newPool('lad10');
   const [a] = await others(pool, [6]);
@@ -453,14 +453,11 @@ test('the name sheet: pick two words and a number, save → the new name in the 
   await page.locator('[data-overlay="settings"] button.settings__ladder-name').click();
   const sheet = page.locator('.overlay[data-overlay="nickname"]');
   await expect(sheet).toBeVisible({ timeout: 10_000 });
-  await sheet.locator('select.nickname__adj').selectOption({ index: 3 });
-  await sheet.locator('select.nickname__noun').selectOption({ index: 5 });
-  await sheet.locator('input.nickname__num').fill('42');
-  const adj = (await sheet.locator('select.nickname__adj option:checked').textContent())?.trim() ?? '';
-  const noun = (await sheet.locator('select.nickname__noun option:checked').textContent())?.trim() ?? '';
-  const name = `${adj} ${noun} 42`;
+  // UI batch (profile): a typed name (the server's nickname.freeText is on by default)
+  const name = 'Captain Purr';
+  await sheet.locator('input.nickname__input').fill(name);
   await sheet.locator('button.nickname__save').click();
-  await expect(page.getByText('Name saved.')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText('Profile saved.')).toBeVisible({ timeout: 10_000 });
   await expect.poll(() => overlays(page)).not.toContain('nickname');
   expect(await page.evaluate(() => (window as TestWindow).__mewdoku?.app().save.ladder.me?.name)).toBe(name);
   await closeAll(page);
@@ -469,14 +466,22 @@ test('the name sheet: pick two words and a number, save → the new name in the 
   expect((await rowTexts(page)).find((r) => r.me === '1')?.name).toBe(name);
   expect((await (a as RankPlayer).bracket()).rows.find((r) => !r.me)?.nickname).toBe(name);
   await tapThrough(page);
-  // A second change: the server's cooldown → the sheet says when.
+  // Inside the server's cooldown the sheet says when up front, and a new name cannot be saved…
   await openSettings(page);
   await page.locator('[data-overlay="settings"] button.settings__ladder-name').click();
   await expect(sheet).toBeVisible({ timeout: 10_000 });
-  await sheet.locator('select.nickname__adj').selectOption({ index: 1 });
-  await sheet.locator('button.nickname__save').click();
   await expect(sheet).toContainText('You can change your name again', { timeout: 10_000 });
+  await sheet.locator('input.nickname__input').fill('Captain Purr 2');
+  await expect(sheet.locator('button.nickname__save')).toHaveAttribute('aria-disabled', 'true');
   expect(await page.evaluate(() => (window as TestWindow).__mewdoku?.app().save.ladder.me?.name)).toBe(name);
+  // …but a frame (no cooldown) saves, and the other players see it on my row.
+  await sheet.locator('input.nickname__input').fill(name);
+  await sheet.locator('[role="tab"][data-tab="frame"]').click();
+  await sheet.locator('.nickname__frames [role="radio"][data-frame="1"]').click();
+  await sheet.locator('button.nickname__save').click();
+  await expect(page.getByText('Profile saved.')).toBeVisible({ timeout: 10_000 });
+  expect(await page.evaluate(() => (window as TestWindow).__mewdoku?.app().save.ladder.me?.frameId)).toBe(1);
+  expect((await (a as RankPlayer).bracket()).rows.find((r) => !r.me)?.frameId).toBe(1);
 });
 
 test('the web-prod path (no ranking origin, ?flags=-ladder ≡ ladder.web off): not one request to the ranking origin, /v1/config included; records everywhere', async ({ page }) => {

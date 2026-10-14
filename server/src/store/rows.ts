@@ -1,4 +1,5 @@
-// Owner: G4 (Phase 2e). Row shapes of migrations/0001_init.sql (+ 0002_wins_token.sql) as SqlStore reads them.
+// Owner: G4 (Phase 2e). Row shapes of migrations/0001_init.sql (+ 0002_wins_token.sql, 0003_presence.sql,
+// 0004_profile_looks.sql) as SqlStore reads them.
 import type { Trust } from '../contract';
 
 export interface PlayerRow {
@@ -26,6 +27,9 @@ export interface PlayerRow {
   readonly client_version: string | null;
   /** The wins write token (migration 0002, audit A-S3): every wins batch is guarded by the one it read and sets a new one. */
   readonly wtok: string;
+  /** UI batch (migration 0004): the frame and background around my picture (0 = the plain look). */
+  readonly frame: number;
+  readonly bg: number;
 }
 
 export interface BracketRow {
@@ -61,6 +65,9 @@ export interface MemberRow {
   readonly active_at: number;
   /** 1: the last presence ping said "in a puzzle". */
   readonly playing: number;
+  /** UI batch (migration 0004): the player's frame and background, copied at the join, following changes while open. */
+  readonly frame: number;
+  readonly bg: number;
 }
 
 export interface RewardRow {

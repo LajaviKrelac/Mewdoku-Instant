@@ -1,7 +1,8 @@
-// Owner: G4 (Phase 2e). PUT /v1/me/profile (spec §1.8, §2.7): a word pick (first change free, then once per
-// `nickname.changeCooldownMs`, guarded in SQL), the avatar (no cooldown), "Show me in rankings" (bit 2 of my
-// rows in OPEN brackets only). Free text only with `nickname.freeText`. Copied to my open-bracket rows.
-import { AVATAR_COUNT, validateProfileRequest, type ProfileResponse } from '../contract';
+// Owner: G4 (Phase 2e). PUT /v1/me/profile (spec §1.8, §2.7): a word pick or a typed name (first change free, then
+// once per `nickname.changeCooldownMs`, guarded in SQL), the avatar, and since the UI batch the frame and the
+// background (no cooldown), "Show me in rankings" (bit 2 of my rows in OPEN brackets only). Free text only with
+// `nickname.freeText` (on by default since the UI batch). Copied to my open-bracket rows.
+import { AVATAR_COUNT, BACKGROUND_COUNT, FRAME_COUNT, validateProfileRequest, type ProfileResponse } from '../contract';
 import { newRowId } from '../core/ids';
 import { checkFreeText, checkPick } from '../core/nickname';
 import { authenticate } from '../http/auth';
@@ -48,6 +49,15 @@ export async function putProfile(ctx: Ctx): Promise<Response> {
   if (req.avatarId !== undefined) {
     if (req.avatarId < 0 || req.avatarId >= AVATAR_COUNT) return fail('avatar_invalid', 'avatarId');
     update.avatar = req.avatarId;
+  }
+  // A frame or background we do not draw is the avatar's 422 (one code for "that picture does not exist").
+  if (req.frameId !== undefined) {
+    if (req.frameId < 0 || req.frameId >= FRAME_COUNT) return fail('avatar_invalid', 'frameId');
+    update.frame = req.frameId;
+  }
+  if (req.backgroundId !== undefined) {
+    if (req.backgroundId < 0 || req.backgroundId >= BACKGROUND_COUNT) return fail('avatar_invalid', 'backgroundId');
+    update.bg = req.backgroundId;
   }
   if (req.listed !== undefined) update.listed = req.listed;
   const applied = await s.store.updateProfile(player.key, update);

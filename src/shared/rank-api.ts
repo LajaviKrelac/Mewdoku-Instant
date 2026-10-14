@@ -17,6 +17,12 @@ export const MAX_WINS_PER_REQUEST = 10;
 export const MAX_BODY_BYTES = 16_384;
 /** Our avatars (G2 draws avatar-0 … avatar-{AVATAR_COUNT − 1}); append-only. [PROVISIONAL P-L13] */
 export const AVATAR_COUNT = 12;
+/**
+ * UI batch (profile): our avatar frames and backgrounds (ladder-art.ts draws frame-1 … and bg-1 …; id 0 is the plain
+ * look every player had before, no frame and the coat's own disc); append-only, like AVATAR_COUNT.
+ */
+export const FRAME_COUNT = 8;
+export const BACKGROUND_COUNT = 8;
 export const NICK_NUM_MIN = 1;
 export const NICK_NUM_MAX = 99;
 /** A rendered nickname's length bound (the save keeps `ladder.me.name` 1–40, spec §7.1). */
@@ -74,6 +80,12 @@ export interface PlayerView {
   readonly trust: Trust;
   readonly listed: boolean; // "Show me in rankings"
   readonly nicknameChangeAt: Ms | null; // the next allowed change; null = any time
+  /**
+   * UI batch (profile): the frame and background (0 … FRAME_COUNT − 1 / BACKGROUND_COUNT − 1; 0 = the plain look).
+   * This server always sends both; null only from a server without them (the client then hides those pickers).
+   */
+  readonly frameId: number | null;
+  readonly backgroundId: number | null;
 }
 
 /** The rules the server applies (spec §1.16); the client shows these, never its own copy. */
@@ -216,6 +228,9 @@ export interface BracketRow {
   readonly seenAt: Ms | null;
   /** The last presence ping said "in a puzzle" (the client shows "Playing now" while seenAt is recent). */
   readonly playing: boolean;
+  /** UI batch (profile): the member's frame and background (0 = the plain look; also from a server without them). */
+  readonly frameId: number;
+  readonly backgroundId: number;
 }
 export interface BracketView {
   readonly state: 'open' | 'ended' | 'none';
@@ -306,6 +321,9 @@ export interface ProfileRequest {
   readonly nickname?: NicknamePick | NicknameText;
   readonly avatarId?: number;
   readonly listed?: boolean;
+  /** UI batch (profile): no cooldown, like the avatar; out of range is the server's 422 `avatar_invalid`. */
+  readonly frameId?: number;
+  readonly backgroundId?: number;
 }
 export interface ProfileResponse {
   readonly player: PlayerView;
@@ -555,13 +573,13 @@ export function validateHeartRequest(x: unknown): Checked<HeartRequest> {
 }
 
 /**
- * Shape only: indices are small non-negative integers and the avatar an integer; whether an index exists
- * in the word lists, the number lies in NICK_NUM_MIN…MAX or the avatar below AVATAR_COUNT is the server's
+ * Shape only: indices are small non-negative integers and the avatar, frame and background integers; whether an
+ * index exists in the word lists, the number lies in NICK_NUM_MIN…MAX or a picture below its count is the server's
  * 422 (`nickname_invalid`, `avatar_invalid`). At least one field.
  */
 export function validateProfileRequest(x: unknown): Checked<ProfileRequest> {
   if (!isObj(x)) return fail('body');
-  const out: { nickname?: NicknamePick | NicknameText; avatarId?: number; listed?: boolean } = {};
+  const out: { nickname?: NicknamePick | NicknameText; avatarId?: number; listed?: boolean; frameId?: number; backgroundId?: number } = {};
   if (x.nickname !== undefined) {
     const n = x.nickname;
     if (!isObj(n)) return fail('nickname');
@@ -584,7 +602,15 @@ export function validateProfileRequest(x: unknown): Checked<ProfileRequest> {
     if (!isBool(x.listed)) return fail('listed');
     out.listed = x.listed;
   }
-  if (out.nickname === undefined && out.avatarId === undefined && out.listed === undefined) return fail('body');
+  if (x.frameId !== undefined) {
+    if (!isInt(x.frameId, 0, 9999)) return fail('frameId');
+    out.frameId = x.frameId;
+  }
+  if (x.backgroundId !== undefined) {
+    if (!isInt(x.backgroundId, 0, 9999)) return fail('backgroundId');
+    out.backgroundId = x.backgroundId;
+  }
+  if (Object.keys(out).length === 0) return fail('body');
   return ok(out);
 }
 

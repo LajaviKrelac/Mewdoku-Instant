@@ -24,10 +24,11 @@ import {
   type RulesView,
   type SessionResponse,
   AVATAR_COUNT,
-  NICK_NUM_MAX,
-  NICK_NUM_MIN,
+  BACKGROUND_COUNT,
+  FRAME_COUNT,
 } from '../shared/rank-api';
 import { parseBracketView } from '../shared/rank-api-parse';
+import { NAME_MAX_CHARS, NAME_MAX_DIGITS, NAME_MIN_WIDTH, nameProblem, normalizeName } from '../shared/nick-text';
 import { wireWin } from '../game/ladder';
 import {
   afterDelete,
@@ -44,14 +45,14 @@ import {
   sendable,
   waitingFish,
 } from '../game/ladder-sync';
-import { shufflePick } from '../game/nickname';
+import { BACKGROUND_UNLOCKS, FRAME_UNLOCKS, lookLocks, lookProgress, type LookUnlock } from '../game/looks';
 import type { LadderRecord, ModeId, SaveData } from '../game/types';
 import { t } from '../i18n';
 import type { LadderChipView } from '../ui/hud/ladder-chip';
 import type { LadderResultProps } from '../ui/overlays/ladder-result';
 import type { LadderSessionProps } from '../ui/overlays/ladder-session';
 import type { LadderRulesView, LadderSheetProps } from '../ui/overlays/ladder-sheet';
-import type { NicknamePick, NicknameSheetProps } from '../ui/overlays/nickname-sheet';
+import type { LookLock, NicknameSheetProps, ProfilePick } from '../ui/overlays/nickname-sheet';
 import type { BracketListFactory, BracketListView, BracketRowView, PersonalRecordsView, RankingListState, RecordsReason } from '../ui/overlays/ranking-panel';
 import type { SettingsLadderRows } from '../ui/overlays/settings-modal';
 import type { Clock, TimerId } from './clock';
@@ -66,11 +67,9 @@ export const ROWS_KEY = 'mewdoku.ladder.rows.v1';
 /** Leaderboard update: the bracket whose "New ranking" card was shown last (this device only; never in the save). */
 export const SESSION_CARD_KEY = 'mewdoku.ladder.sessionCard.v1';
 
-/** What the lazy `ladder` chunk gives the flow (app/ladder-chunk.ts). */
+/** What the lazy `ladder` chunk gives the flow (app/ladder-chunk.ts). UI batch: no word lists any more (typed names). */
 export interface LadderChunk {
   readonly createBracketList: BracketListFactory;
-  readonly NICK_WORDS_V1: { readonly adj: readonly string[]; readonly noun: readonly string[] };
-  readonly RETIRED_V1: { readonly adj: readonly number[]; readonly noun: readonly number[] };
 }
 
 export interface LadderFlowDeps {
@@ -98,8 +97,6 @@ export interface LadderFlowDeps {
   records(): PersonalRecordsView;
   /** A result card may open now (Home showing, no modal, not in the tutorial). */
   canOpenCard(): boolean;
-  /** A random number in [0, 1) (the name sheet's shuffle). */
-  random?(): number;
 }
 
 export interface LadderWinRef {
@@ -176,6 +173,15 @@ interface CachedRows {
   readonly offset: number;
   readonly rules: RulesView | null;
 }
+
+/** save.ladder.me from the server's player (UI batch: with the frame and background; a server without them: 0). */
+const meOf = (p: SessionResponse['player']): NonNullable<LadderRecord['me']> => ({
+  name: p.nickname,
+  avatarId: p.avatarId,
+  frameId: p.frameId ?? 0,
+  backgroundId: p.backgroundId ?? 0,
+  code: p.code,
+});
 
 const modeOf = (puzzleId: string): ModeId => (puzzleId.startsWith('D') ? 'daily' : puzzleId.startsWith('E') ? 'event' : 'level');
 
@@ -522,7 +528,7 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
       dropCache();
     }
     const p = sr.player;
-    updateLadder((l) => ({ ...l, listed: p.listed, me: { name: p.nickname, avatarId: p.avatarId, code: p.code } }));
+    updateLadder((l) => ({ ...l, listed: p.listed, me: meOf(p) }));
     const b = sr.bracket;
     if (b && b.state !== 'none' && b.bracketId !== null && b.endsAt !== null) {
       updateLadder((l) => ({
@@ -619,6 +625,9 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
       // Leaderboard update: the server's activity on the device clock (null: no status shown).
       seenAt: c.ladder.presence.enabled && row.seenAt !== null ? row.seenAt - offsetMs : null,
       playing: c.ladder.presence.enabled && row.playing,
+      // UI batch (profile): the server's frame and background of each row (0: the plain look).
+      frameId: row.frameId,
+      backgroundId: row.backgroundId,
     }));
     const paidPlaces = r?.places.length ?? 0;
     const minMembers = r?.minMembers ?? 0;
@@ -872,6 +881,13 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
     if (deps.router.isOpen('ladder')) deps.router.update('ladder', sheetProps(sheetView));
   }
 
+  /**
+   * The profile sheet (UI batch: a typed name, the picture, a frame and a background). Opens on the server's player
+   * (else my saved one); in the cooldown state at once when the server said my next name change is later; frames and
+   * backgrounds only against a server that has them (PlayerView.frameId not null), their locks from this save
+   * (game/looks.ts). Saves only what changed: the name as typed (the server normalises and moderates it) and the
+   * looks (no cooldown). Analytics never carry the name (events.ts): which parts changed, as 0/1.
+   */
   function openNameSheet(): void {
     const p = session?.player;
     const me = save().ladder.me;
@@ -881,47 +897,60 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
         deps.router.toast(t('toast.error'));
         return;
       }
-      const words = m.NICK_WORDS_V1;
-      const nick = p?.nick ?? { adj: 0, noun: 0, num: NICK_NUM_MIN };
-      let current: NicknamePick = { adj: nick.adj, noun: nick.noun, num: nick.num, avatarId: p?.avatarId ?? me?.avatarId ?? 0 };
-      let state: NicknameSheetProps['state'] = online() ? 'idle' : 'offline';
-      let cooldownUntil: number | null = null;
-      const rand = deps.random ?? Math.random;
+      const current: ProfilePick = {
+        name: p?.nickname ?? me?.name ?? '',
+        avatarId: p?.avatarId ?? me?.avatarId ?? 0,
+        frameId: p?.frameId ?? me?.frameId ?? 0,
+        backgroundId: p?.backgroundId ?? me?.backgroundId ?? 0,
+      };
+      // A server without frames and backgrounds (an older one) gets no such pickers (it would refuse the fields).
+      const looks = p ? p.frameId !== null && p.backgroundId !== null : true;
+      const changeAt = p?.nicknameChangeAt ?? null;
+      let cooldownUntil: number | null = changeAt === null ? null : changeAt - client.offsetMs();
+      let state: NicknameSheetProps['state'] = !online() ? 'offline' : cooldownUntil !== null && cooldownUntil > clock.now() ? 'cooldown' : 'idle';
+      const locks = (table: readonly LookUnlock[], count: number, worn: number): LookLock[] =>
+        lookLocks(table, count, lookProgress(save()), worn).map((u) => (u === null || u.kind === 'free' ? null : u));
       const props = (): NicknameSheetProps => ({
-        words,
         current,
         avatarCount: AVATAR_COUNT,
-        numMin: NICK_NUM_MIN,
-        numMax: NICK_NUM_MAX,
+        frames: looks ? locks(FRAME_UNLOCKS, FRAME_COUNT, current.frameId) : [],
+        backgrounds: looks ? locks(BACKGROUND_UNLOCKS, BACKGROUND_COUNT, current.backgroundId) : [],
+        // the server's switch (rules.nickname.freeText); unknown before any answer: editable (the server decides)
+        nameEditable: (rules ?? cached?.rules)?.nickname.freeText ?? true,
+        nameRules: { maxChars: NAME_MAX_CHARS, minWidth: NAME_MIN_WIDTH, maxDigits: NAME_MAX_DIGITS },
+        checkName: (raw) => nameProblem(normalizeName(raw)),
         state,
         cooldownUntil,
         now: () => clock.now(),
-        shuffle: () => {
-          const s = shufflePick(words, rand, m.RETIRED_V1, current);
-          return { ...s, avatarId: current.avatarId };
-        },
         onSave: (pick) => void saveName(pick),
         onClose: () => deps.router.close('nickname'),
       });
       const update = (): void => {
         if (deps.router.isOpen('nickname')) deps.router.update('nickname', props());
       };
-      async function saveName(pick: NicknamePick): Promise<void> {
+      async function saveName(pick: ProfilePick): Promise<void> {
         if (state === 'saving') return;
-        const nameChanged = pick.adj !== nick.adj || pick.noun !== nick.noun || pick.num !== nick.num;
-        const avatarChanged = pick.avatarId !== (p?.avatarId ?? me?.avatarId);
+        const text = normalizeName(pick.name);
+        const nameChanged = text !== normalizeName(current.name);
+        const avatarChanged = pick.avatarId !== current.avatarId;
+        const frameChanged = looks && pick.frameId !== current.frameId;
+        const bgChanged = looks && pick.backgroundId !== current.backgroundId;
+        const changed = { avatar: avatarChanged ? 1 : 0, frame: frameChanged ? 1 : 0, bg: bgChanged ? 1 : 0 } as const;
         state = 'saving';
         update();
         const r = await client.setProfile({
-          ...(nameChanged ? { nickname: { adj: pick.adj, noun: pick.noun, num: pick.num } } : {}),
-          ...(avatarChanged || !nameChanged ? { avatarId: pick.avatarId } : {}),
+          ...(nameChanged ? { nickname: { text } } : {}),
+          // nothing changed at all: the avatar alone (a request needs a field; it changes nothing)
+          ...(avatarChanged || (!nameChanged && !frameChanged && !bgChanged) ? { avatarId: pick.avatarId } : {}),
+          ...(frameChanged ? { frameId: pick.frameId } : {}),
+          ...(bgChanged ? { backgroundId: pick.backgroundId } : {}),
         });
         if (r.ok) {
           const pl = r.value.player;
           if (session) session = { ...session, player: pl };
-          updateLadder((l) => ({ ...l, me: { name: pl.nickname, avatarId: pl.avatarId, code: pl.code } }));
+          updateLadder((l) => ({ ...l, me: meOf(pl) }));
           deps.saves.touch();
-          log({ name: 'nick_set', params: { result: 'ok', avatar: avatarChanged ? 1 : 0 } });
+          log({ name: 'nick_set', params: { result: 'ok', ...changed } });
           deps.router.toast(t('nick.saved'));
           deps.router.close('nickname');
           // The name and picture in open brackets changed on the server: re-read the bracket.
@@ -930,18 +959,18 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
           emit('profile');
           return;
         }
-        current = pick;
         if (r.code === 'nickname_cooldown') {
           state = 'cooldown';
-          const at = session?.player.nicknameChangeAt ?? null;
-          cooldownUntil = at === null ? null : at - client.offsetMs();
-          log({ name: 'nick_set', params: { result: 'cooldown', avatar: avatarChanged ? 1 : 0 } });
+          // The server's own wait (the name may have changed on another device since this sign-in).
+          if (r.retryAfterMs !== undefined) cooldownUntil = clock.now() + r.retryAfterMs;
+          log({ name: 'nick_set', params: { result: 'cooldown', ...changed } });
         } else if (r.code === 'nickname_invalid' || r.code === 'nickname_blocked' || r.code === 'avatar_invalid') {
-          state = 'rejected';
-          log({ name: 'nick_set', params: { result: 'rejected', avatar: avatarChanged ? 1 : 0 } });
+          // A shape the server refuses vs a name it will not show (blocked) or a look it does not have.
+          state = r.code === 'nickname_invalid' ? 'invalid' : 'rejected';
+          log({ name: 'nick_set', params: { result: 'rejected', ...changed } });
         } else {
           state = r.code === 'network' || r.code === 'timeout' ? 'offline' : 'idle';
-          log({ name: 'nick_set', params: { result: 'error', avatar: avatarChanged ? 1 : 0 } });
+          log({ name: 'nick_set', params: { result: 'error', ...changed } });
           if (state === 'idle') deps.router.toast(t('toast.error'));
         }
         update();
@@ -1124,6 +1153,8 @@ export function createLadderFlow(deps: LadderFlowDeps): LadderFlow {
         endsAt: cur.endsAt - cur.serverOffsetMs,
         now: () => clock.now(),
         avatarId: save().ladder.me?.avatarId ?? null,
+        frameId: save().ladder.me?.frameId ?? 0,
+        backgroundId: save().ladder.me?.backgroundId ?? 0,
         reducedMotion: store.get().ui.reducedMotion,
         onClose: () => deps.router.close('ladder_session'),
       };

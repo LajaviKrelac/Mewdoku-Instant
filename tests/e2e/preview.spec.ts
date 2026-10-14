@@ -266,15 +266,15 @@ test.describe('the preview link (dist/preview-e2e)', () => {
     await page.locator('.screen--home .home__profile').click();
     const nick = page.locator('.overlay[data-overlay="nickname"]');
     await expect(nick).toBeVisible({ timeout: 10_000 });
-    await nick.locator('select.nickname__adj').selectOption({ index: 3 });
-    await nick.locator('select.nickname__noun').selectOption({ index: 5 });
-    await nick.locator('input.nickname__num').fill('42');
-    const adj = (await nick.locator('select.nickname__adj option:checked').textContent())?.trim() ?? '';
-    const noun = (await nick.locator('select.nickname__noun option:checked').textContent())?.trim() ?? '';
+    // UI batch (profile): a typed name and a background, saved by the sample server
+    await nick.locator('input.nickname__input').fill('Captain Purr');
+    await nick.locator('[role="tab"][data-tab="bg"]').click();
+    await nick.locator('.nickname__bgs [role="radio"][data-bg="2"]').click();
     await shot(page, '13-name-sheet');
     await nick.locator('button.nickname__save').click();
-    await expect(page.getByText('Name saved.')).toBeVisible({ timeout: 10_000 });
-    expect((await app(page)).save.ladder.me?.name).toBe(`${adj} ${noun} 42`);
+    await expect(page.getByText('Profile saved.')).toBeVisible({ timeout: 10_000 });
+    expect((await app(page)).save.ladder.me?.name).toBe('Captain Purr');
+    expect((await app(page)).save.ladder.me?.backgroundId).toBe(2);
   });
 
   test('New player: a fresh save starts the tutorial; Reset brings the returning player back', async ({ page }) => {

@@ -39,7 +39,7 @@ describe('statements per invocation (Workers Free: 50; spec §1.2)', () => {
     expect(view.rows.length).toBe(50);
     const other = view.rows.find((r) => !r.me);
     await measure('heart', () => m.heart(view.bracketId as string, other?.slot ?? 0));
-    await measure('profile (name, avatar, listed)', () => m.profile({ nickname: { adj: 3, noun: 5, num: 42 }, avatarId: 3, listed: true }));
+    await measure('profile (name, avatar, frame, background, listed)', () => m.profile({ nickname: { adj: 3, noun: 5, num: 42 }, avatarId: 3, frameId: 2, backgroundId: 4, listed: true }));
     await measure('me', () => m.me());
 
     // Round 2 one hour later: three more full brackets, which end an hour after the first six.

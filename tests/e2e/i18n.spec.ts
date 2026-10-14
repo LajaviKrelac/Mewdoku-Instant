@@ -765,6 +765,8 @@ const longestName = (): string => {
   const longest = (ws: readonly string[]): string => ws.reduce((a, b) => (b.length > a.length ? b : a), '');
   return `${longest(NICK_WORDS_V1.adj)} ${longest(NICK_WORDS_V1.noun)} 99`;
 };
+/** UI batch (profile): typed names (≤ 16 code points, src/shared/nick-text.ts) — the widest Latin, Chinese, Arabic. */
+const TYPED_NAMES = { 'widest typed name': 'W'.repeat(16), 'CJK typed name': '猫'.repeat(16), 'Arabic typed name': 'محمد عبد الرحمن' } as const;
 
 for (const c of [
   { name: 'de', browser: 'de-DE', lang: 'de' },
@@ -784,8 +786,9 @@ for (const c of [
       const row = page.locator('[data-overlay="settings"] button.settings__ladder-name');
       await expect(row).toBeVisible({ timeout: 10_000 });
       await expect(row.locator('.settings__ladder-value')).not.toHaveText('');
-      for (const variant of ['server name', 'longest name'] as const) {
+      for (const variant of ['server name', 'longest name', ...(Object.keys(TYPED_NAMES) as (keyof typeof TYPED_NAMES)[])] as const) {
         if (variant === 'longest name') await row.locator('.settings__ladder-value').evaluate((el, name) => (el.textContent = name), longestName());
+        else if (variant !== 'server name') await row.locator('.settings__ladder-value').evaluate((el, name) => (el.textContent = name), TYPED_NAMES[variant]);
         await page.waitForTimeout(100);
         const m = await row.evaluate((btn) => {
           const label = btn.querySelector('.btn__label') as HTMLElement;

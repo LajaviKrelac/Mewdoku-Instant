@@ -275,7 +275,7 @@ describe('claims, repair and result cards (spec §2.6)', () => {
   });
 
   it('afterDelete: the local fields reset, claimed stays, not listed', () => {
-    let rec: LadderRecord = { ...emptyLadder(), me: { name: 'Velvet Pounce 27', avatarId: 4, code: '7KQ2M9XD' } };
+    let rec: LadderRecord = { ...emptyLadder(), me: { name: 'Velvet Pounce 27', avatarId: 4, frameId: 0, backgroundId: 0, code: '7KQ2M9XD' } };
     rec = enqueueWin(rec, queued(1));
     rec = recordClaim(rec, { rewardId: 'aaaaaaaaaa01:11', grant: { hints: 1, kitties: 1 } });
     const d = afterDelete(rec);
@@ -293,7 +293,7 @@ describe('readLadder and mergeLadder (spec §7.1)', () => {
     resultsSeen: ['mgj1a0k3x9f2'],
     nickLineSeen: true,
     noticeSeen: true,
-    me: { name: 'Velvet Pounce 27', avatarId: 4, code: '7KQ2M9XD' },
+    me: { name: 'Velvet Pounce 27', avatarId: 4, frameId: 3, backgroundId: 5, code: '7KQ2M9XD' },
   });
 
   it('a valid record round-trips through JSON unchanged, nothing reported', () => {
@@ -313,6 +313,9 @@ describe('readLadder and mergeLadder (spec §7.1)', () => {
     ['me with a bad avatar', (d: Record<string, unknown>): unknown => ((d.me as Record<string, unknown>).avatarId = 12), (r: LadderRecord): void => void expect(r.me).toBeNull(), 'ladder.me'],
     ['me with a lowercase code', (d: Record<string, unknown>): unknown => ((d.me as Record<string, unknown>).code = '7kq2m9xd'), (r: LadderRecord): void => void expect(r.me).toBeNull(), 'ladder.me'],
     ['noticeSeen not a boolean', (d: Record<string, unknown>): unknown => (d.noticeSeen = 1), (r: LadderRecord): void => void expect(r.noticeSeen).toBe(false), 'ladder.noticeSeen'],
+    // UI batch (profile): a bad frame or background takes the plain look; the name, picture and code stay
+    ['me with a frame past FRAME_COUNT', (d: Record<string, unknown>): unknown => ((d.me as Record<string, unknown>).frameId = 8), (r: LadderRecord): void => void expect(r.me).toMatchObject({ name: 'Velvet Pounce 27', frameId: 0, backgroundId: 5 }), 'ladder.me.frameId'],
+    ['me with a background not a number', (d: Record<string, unknown>): unknown => ((d.me as Record<string, unknown>).backgroundId = '2'), (r: LadderRecord): void => void expect(r.me).toMatchObject({ avatarId: 4, frameId: 3, backgroundId: 0 }), 'ladder.me.backgroundId'],
   ] as const)('%s → its default, reported', (_name, patch, check, path) => {
     const d = JSON.parse(JSON.stringify(full())) as Record<string, unknown>;
     const out = patch(d);
@@ -327,6 +330,15 @@ describe('readLadder and mergeLadder (spec §7.1)', () => {
     delete d.noticeSeen;
     const rep: string[] = [];
     expect(readLadder(d, cfg, rep).noticeSeen).toBe(false);
+    expect(rep).toEqual([]);
+  });
+
+  it('me without a frame and a background (a copy from before the UI batch): the plain look, not reported', () => {
+    const d = JSON.parse(JSON.stringify(full())) as Record<string, unknown>;
+    delete (d.me as Record<string, unknown>).frameId;
+    delete (d.me as Record<string, unknown>).backgroundId;
+    const rep: string[] = [];
+    expect(readLadder(d, cfg, rep).me).toEqual({ name: 'Velvet Pounce 27', avatarId: 4, frameId: 0, backgroundId: 0, code: '7KQ2M9XD' });
     expect(rep).toEqual([]);
   });
 

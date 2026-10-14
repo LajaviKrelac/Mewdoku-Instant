@@ -38,6 +38,9 @@ export function playerView(p: PlayerRow, cfg: ServerConfig, now: number): Player
     trust: p.trust,
     listed: p.listed === 1,
     nicknameChangeAt: nextNickChange(p.nick_changed_at, cfg.nickname.changeCooldownMs, now),
+    // UI batch (profile): rows from before migration 0004 read 0 (the column default), the plain look.
+    frameId: p.frame ?? 0,
+    backgroundId: p.bg ?? 0,
   };
 }
 
@@ -154,6 +157,8 @@ const toWire = (m: MemberRow, rank: number, myKey: string, liked: ReadonlySet<nu
   likedByMe: liked.has(m.slot),
   seenAt: seenAtOf(m, presence),
   playing: presence && m.playing === 1,
+  frameId: m.frame ?? 0,
+  backgroundId: m.bg ?? 0,
 });
 
 /**

@@ -283,6 +283,25 @@ describe('the name sheet and Settings (spec §1.8, §2.7)', () => {
     expect((await s.call('PUT', '/v1/me/profile', { avatarId: 12 })).body).toMatchObject({ error: { code: 'avatar_invalid' } });
   });
 
+  it('UI batch (profile): a typed name as the real server takes it (shape, blocklist, cooldown); a frame and a background any time, on my row', async () => {
+    const s = setup({ returning: true });
+    await s.signIn();
+    const bad = async (text: string): Promise<unknown> => (await s.call('PUT', '/v1/me/profile', { nickname: { text } })).body;
+    expect(await bad('Ko')).toMatchObject({ error: { code: 'nickname_invalid' } });
+    expect(await bad('Sh1t Cat')).toMatchObject({ error: { code: 'nickname_blocked' } });
+    const p = parseProfileResponse((await s.call('PUT', '/v1/me/profile', { nickname: { text: '  Captain  Purr ' } })).body);
+    expect(p?.player).toMatchObject({ nickname: 'Captain Purr', nick: null, frameId: 0, backgroundId: 0 });
+    expect((await s.bracket()).me?.nickname).toBe('Captain Purr');
+    expect(await bad('Another Name')).toMatchObject({ error: { code: 'nickname_cooldown' } });
+    const looks = parseProfileResponse((await s.call('PUT', '/v1/me/profile', { frameId: 4, backgroundId: 6 })).body);
+    expect(looks?.player).toMatchObject({ frameId: 4, backgroundId: 6 });
+    expect((await s.bracket()).me).toMatchObject({ frameId: 4, backgroundId: 6 });
+    expect((await s.call('PUT', '/v1/me/profile', { frameId: 8 })).body).toMatchObject({ error: { code: 'avatar_invalid' } });
+    // some sample players wear a look too (fixed by their place, no randomness)
+    const rows = (await s.bracket()).rows.filter((r) => !r.me);
+    expect(rows.some((r) => r.frameId > 0) && rows.some((r) => r.backgroundId > 0) && rows.some((r) => r.frameId === 0)).toBe(true);
+  });
+
   it('"Show me in rankings" off hides my row in the open bracket; Delete removes my data (204) and the token', async () => {
     const s = setup({ returning: true });
     await s.signIn();

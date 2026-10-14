@@ -1,0 +1,32 @@
+{
+  "name": "profile.text",
+  "request": {
+    "method": "PUT",
+    "path": "/v1/me/profile",
+    "auth": true,
+    "body": {
+      "nickname": {
+        "text": "Gato Feliz"
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "player": {
+        "code": "7KQ2M9XD",
+        "nickname": "Gato Feliz",
+        "nick": null,
+        "avatarId": 4,
+        "status": "ok",
+        "pool": "fb",
+        "trust": "signed",
+        "listed": true,
+        "nicknameChangeAt": 1791886200000,
+        "frameId": 0,
+        "backgroundId": 0
+      },
+      "serverTime": 1791799800000
+    }
+  }
+}

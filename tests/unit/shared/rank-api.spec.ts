@@ -8,10 +8,12 @@ import { describe, expect, it } from 'vitest';
 import {
   API_VERSION,
   AVATAR_COUNT,
+  BACKGROUND_COUNT,
   BRACKET_ID_RE,
   ERROR_CODES,
   ERROR_STATUS,
   formatPlayerCode,
+  FRAME_COUNT,
   isRemoteSwitch,
   isWinSubmission,
   MAX_BODY_BYTES,
@@ -395,5 +397,44 @@ describe('rank-api: leaderboard update (join, presence, row activity)', () => {
     expect(old?.rows).toHaveLength(body.rows.length);
     expect(old?.rows.every((r) => r.seenAt === null && r.playing === false)).toBe(true);
     expect(old?.me).toMatchObject({ seenAt: null, playing: false });
+  });
+});
+
+describe('rank-api: UI batch (profile: frames and backgrounds)', () => {
+  it('counts are append-only constants; a profile request may carry a frame and a background (shape only, at least one field)', () => {
+    expect([FRAME_COUNT, BACKGROUND_COUNT]).toEqual([8, 8]);
+    expect(validateProfileRequest({ frameId: 3 })).toEqual({ ok: true, value: { frameId: 3 } });
+    expect(validateProfileRequest({ backgroundId: 0, frameId: 99 })).toEqual({ ok: true, value: { frameId: 99, backgroundId: 0 } }); // 422 is the server's
+    expect(validateProfileRequest({ frameId: -1 })).toEqual({ ok: false, path: 'frameId' });
+    expect(validateProfileRequest({ backgroundId: '2' })).toEqual({ ok: false, path: 'backgroundId' });
+    expect(validateProfileRequest({ backgroundId: 1.5 })).toEqual({ ok: false, path: 'backgroundId' });
+    expect(validateProfileRequest({ other: 1 })).toEqual({ ok: false, path: 'body' });
+  });
+
+  it('a row keeps its frame and background; a server without them (or a bad value) gives the plain look, never a dropped row', () => {
+    const body = clone(fixture('bracket.full').response.body) as Json & { rows: Json[] };
+    const parsed = parseBracketView(body);
+    expect(parsed?.rows.map((r) => [r.frameId, r.backgroundId])).toEqual(body.rows.map((r) => [r.frameId, r.backgroundId]));
+    expect(parsed?.rows.some((r) => r.frameId > 0) && parsed?.rows.some((r) => r.backgroundId > 0)).toBe(true);
+    for (const r of body.rows) {
+      delete r.frameId;
+      delete r.backgroundId;
+    }
+    (body.rows[0] as Json).frameId = 'gold';
+    (body.rows[1] as Json).backgroundId = -3;
+    const old = parseBracketView(body);
+    expect(old?.rows).toHaveLength(body.rows.length);
+    expect(old?.rows.every((r) => r.frameId === 0 && r.backgroundId === 0)).toBe(true);
+  });
+
+  it('the player: absent (or null) = a server without frames and backgrounds (null, the client hides the pickers); a bad value is 0', () => {
+    const body = clone(fixture('profile.looks').response.body) as Json & { player: Json };
+    expect(parseProfileResponse(body)?.player).toMatchObject({ frameId: 3, backgroundId: 5 });
+    delete body.player.frameId;
+    body.player.backgroundId = null;
+    expect(parseProfileResponse(body)?.player).toMatchObject({ frameId: null, backgroundId: null });
+    body.player.frameId = 2.5;
+    body.player.backgroundId = 'x';
+    expect(parseProfileResponse(body)?.player).toMatchObject({ frameId: 0, backgroundId: 0 });
   });
 });

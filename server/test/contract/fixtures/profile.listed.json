@@ -24,7 +24,9 @@
         "pool": "fb",
         "trust": "signed",
         "listed": false,
-        "nicknameChangeAt": null
+        "nicknameChangeAt": null,
+        "frameId": 0,
+        "backgroundId": 0
       },
       "serverTime": 1791799800000
     }

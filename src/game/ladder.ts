@@ -11,7 +11,9 @@
 import { cfg, type GameConfig } from '../app/config';
 import {
   AVATAR_COUNT,
+  BACKGROUND_COUNT,
   BRACKET_ID_RE,
+  FRAME_COUNT,
   isWinSubmission,
   NICKNAME_MAX_LENGTH,
   PLAYER_CODE_RE,
@@ -197,7 +199,8 @@ function isCurrent(x: unknown): x is LadderCurrent {
   );
 }
 
-function isMe(x: unknown): x is NonNullable<LadderRecord['me']> {
+/** The required part of `me` (the frame and background are read leniently, readLook). */
+function isMe(x: unknown): x is Pick<NonNullable<LadderRecord['me']>, 'name' | 'avatarId' | 'code'> & Record<string, unknown> {
   return (
     isRecord(x) &&
     typeof x.name === 'string' &&
@@ -207,6 +210,17 @@ function isMe(x: unknown): x is NonNullable<LadderRecord['me']> {
     typeof x.code === 'string' &&
     PLAYER_CODE_RE.test(x.code)
   );
+}
+
+/**
+ * UI batch (profile): `me.frameId` / `me.backgroundId`, added inside v4 (no version bump). A copy without one is not
+ * corrupt (the plain look, 0); a wrong one takes 0 and is reported, and the name, picture and code stay.
+ */
+function readLook(x: unknown, count: number, path: string, rep: string[]): number {
+  if (x === undefined) return 0;
+  if (isInt(x, 0, count - 1)) return x;
+  rep.push(path);
+  return 0;
 }
 
 /** Reads a string list; invalid entries are dropped and the path reported. */
@@ -261,8 +275,15 @@ export function readLadder(x: unknown, c: GameConfig, rep: string[]): LadderReco
   const noticeSeen = typeof x.noticeSeen === 'boolean' ? x.noticeSeen : (x.noticeSeen !== undefined && rep.push('ladder.noticeSeen'), false);
   let me: LadderRecord['me'] = null;
   if (x.me !== null && x.me !== undefined) {
-    if (isMe(x.me)) me = { name: x.me.name, avatarId: x.me.avatarId, code: x.me.code };
-    else rep.push('ladder.me');
+    if (isMe(x.me)) {
+      me = {
+        name: x.me.name,
+        avatarId: x.me.avatarId,
+        frameId: readLook(x.me.frameId, FRAME_COUNT, 'ladder.me.frameId', rep),
+        backgroundId: readLook(x.me.backgroundId, BACKGROUND_COUNT, 'ladder.me.backgroundId', rep),
+        code: x.me.code,
+      };
+    } else rep.push('ladder.me');
   } else if (x.me === undefined) rep.push('ladder.me');
   return { listed, pending, current, claimed, doubleWatched, resultsSeen, nickLineSeen, noticeSeen, me };
 }

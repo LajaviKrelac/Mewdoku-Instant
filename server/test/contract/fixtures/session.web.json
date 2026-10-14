@@ -31,7 +31,9 @@
         "pool": "web",
         "trust": "anon",
         "listed": true,
-        "nicknameChangeAt": null
+        "nicknameChangeAt": null,
+        "frameId": 0,
+        "backgroundId": 0
       },
       "rules": {
         "periodMode": "rolling",
@@ -68,7 +70,7 @@
           "maxGivenPerBracket": 20
         },
         "nickname": {
-          "freeText": false,
+          "freeText": true,
           "changeCooldownMs": 86400000
         }
       },

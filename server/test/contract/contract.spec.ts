@@ -115,6 +115,9 @@ async function realAnswers(): Promise<Map<string, { status: number; body: unknow
   await put('hearts.ok', await many[0]!.rawHeart(v.bracketId!, v.rows[0]!.slot));
   await put('profile.nickname', await many[1]!.rawProfile({ nickname: { adj: 7, noun: 12, num: 3 }, avatarId: 9 }));
   await put('profile.listed', await many[2]!.rawProfile({ listed: false }));
+  // UI batch (profile): a frame and a background; a typed name (nickname.freeText is on by default)
+  await put('profile.looks', await many[6]!.rawProfile({ frameId: 3, backgroundId: 5 }));
+  await put('profile.text', await many[7]!.rawProfile({ nickname: { text: 'Gato Feliz' } }));
   await put('me.ok', await many[3]!.rawMe());
   await put('me.delete', await many[4]!.rawMe('DELETE'));
 
