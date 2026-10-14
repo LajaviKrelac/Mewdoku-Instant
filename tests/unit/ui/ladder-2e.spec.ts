@@ -1,11 +1,12 @@
 // Owner: G3 (Phase 2e)
 // The worldwide daily ranking's views (spec §2.4–§2.8, §7.7, §9.4, §10.1, §10.6 #1): the bracket list (exactly
-// the server's rows, my row, the pinned copy, medals WITH numbers, names as text, a11y names, the counts and
-// lines from the server's rules), the post-win panel's 'bracket' state and its tap rule with an interactive
-// list, the ranking sheet (list, info, records, notice), the result card's three cases and the name sheet.
+// the server's rows, my row, medals WITH numbers, names as text, a11y names, the lines from the server's rules),
+// the post-win panel's 'bracket' state and its tap rule with an interactive list, the ranking sheet (list, info,
+// records, notice), the result card's three cases and the name sheet. UI batch (2026-10-13): no visible player
+// count, no pinned copy (my row is sticky), no "top 3" line, no pencil, the panel's subtitle hidden over the list.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cfg } from '../../../src/app/config';
-import { formatNumber, setLocale, t, tn } from '../../../src/i18n';
+import { setLocale, t } from '../../../src/i18n';
 import { NICK_WORDS_V1 } from '../../../src/shared/nick-words';
 import {
   countdownText,
@@ -114,22 +115,20 @@ describe('bracket list: exactly the server rows (H-3, §10.6 #1)', () => {
     // The server's names, character for character, except the one no-break space before the number (audit B7).
     expect(items.map((li) => q(li, '.rank-row__name').textContent?.replace(/\u00A0/gu, ' '))).toEqual(v.rows.map((r) => r.name));
     expect(items.map((li) => q(li, '.rank-row__name').textContent)).toEqual(v.rows.map((r) => displayName(r.name)));
-    // The count is the server's members, never the rows we drew.
-    expect(q(list.el, '.ranking__count').textContent).toBe(n === 1 ? '1 player' : `${n} players`);
-    // The pinned copy is outside the list and carries no data attributes (never counted as a row).
-    const pinned = q(list.el, '.rank-row--pinned');
-    expect(pinned.parentElement?.matches('ol')).toBe(false);
-    expect(pinned.getAttribute('aria-hidden')).toBe('true');
-    expect(pinned.hasAttribute('inert')).toBe(true);
-    expect(pinned.dataset.me).toBeUndefined();
+    // UI batch: no visible player count, and no pinned copy: my row is the one real row (sticky in CSS).
+    expect(list.el.querySelector('.ranking__count, .rank-row--pinned')).toBeNull();
+    expect(list.el.textContent).not.toMatch(/\d\s*players?\b/);
     expect(qa(list.el, '[data-me="1"]')).toHaveLength(1);
+    expect(q(list.el, '[data-me="1"]').parentElement?.matches('ol.rank-rows')).toBe(true);
     list.destroy();
   });
 
-  it('shows the server count even when it differs from the rows it sent (C-34: shown as sent, never trimmed or padded)', () => {
-    const list = createBracketList(view({ rows: rows(3, 2), members: 4 }), { onHeart: vi.fn() });
+  it('a server count that differs from the rows it sent (C-34): the rows as sent; the count only in the announcement', () => {
+    const v = view({ rows: rows(3, 2), members: 4 });
+    const list = createBracketList(v, { onHeart: vi.fn() });
     expect(qa(list.el, 'ol.rank-rows > li')).toHaveLength(3);
-    expect(q(list.el, '.ranking__count').textContent).toBe('4 players');
+    expect(list.el.textContent).not.toMatch(/players?/);
+    expect(announcement({ list: { kind: 'bracket', view: v }, result: { kind: 'ladder', gained: 1, total: 39 } })).toContain('#2 of 4');
   });
 
   it('alone: my row and "You\'re the only player in this ranking." (C-4: no promise that others join)', () => {
@@ -227,14 +226,16 @@ describe('bracket list: exactly the server rows (H-3, §10.6 #1)', () => {
     expect(q(list.el, 'ol > li[data-me="1"]').getAttribute('aria-label')).toBe('#5, Brave Noodle 12, you, 36 fish');
   });
 
-  it('the rewards line follows the server rules (C-5), never a literal "3"', () => {
-    expect(rewardsLineText({ rewardsLine: 'places', paidPlaces: 3, minMembers: 5 })).toBe('The top 3 win hints and kitties.');
-    expect(rewardsLineText({ rewardsLine: 'places', paidPlaces: 2, minMembers: 5 })).toBe('The top 2 win hints and kitties.');
-    expect(rewardsLineText({ rewardsLine: 'places', paidPlaces: 1, minMembers: 5 })).toBe('First place wins hints and kitties.');
-    expect(rewardsLineText({ rewardsLine: 'min', paidPlaces: 3, minMembers: 7 })).toBe('Rewards need at least 7 players in this ranking.');
-    expect(rewardsLineText({ rewardsLine: 'none', paidPlaces: 3, minMembers: 5 })).toBeNull();
-    const list = createBracketList(view({ rewardsLine: 'none' }), { onHeart: vi.fn() });
-    expect(q(list.el, '.ranking__rewards').hidden).toBe(true);
+  it('the rewards line: only the minimum (C-5, the server rule); UI batch: no "The top 3 win …" line', () => {
+    expect(rewardsLineText({ rewardsLine: 'places', minMembers: 5 })).toBeNull();
+    expect(rewardsLineText({ rewardsLine: 'min', minMembers: 7 })).toBe('Rewards need at least 7 players in this ranking.');
+    expect(rewardsLineText({ rewardsLine: 'none', minMembers: 5 })).toBeNull();
+    for (const rewardsLine of ['none', 'places'] as const) {
+      const list = createBracketList(view({ rewardsLine }), { onHeart: vi.fn() });
+      expect(q(list.el, '.ranking__rewards').hidden).toBe(true);
+      expect(list.el.textContent).not.toMatch(/win hints/);
+      list.destroy();
+    }
   });
 
   it('the countdown: hours and minutes, "less than a minute", "Final results"; refreshed, never a live region', () => {
@@ -292,18 +293,12 @@ describe('bracket list: exactly the server rows (H-3, §10.6 #1)', () => {
     expect(qa(list.el, 'ol > li').map((li) => li.dataset.rank)).toEqual(['18', '19', '20', '21', '22']);
   });
 
-  it('the sheet\'s pencil sits on my row only and opens the name sheet', () => {
-    const onEditName = vi.fn();
-    const list = createBracketList(view(), { onHeart: vi.fn(), onEditName });
-    const pencils = qa(list.el, 'ol .rank-row__edit').filter((b) => !b.hidden);
-    expect(pencils).toHaveLength(1);
-    expect(pencils[0]?.closest('li')?.dataset.me).toBe('1');
-    expect(pencils[0]?.getAttribute('aria-label')).toBe('Change your ranking name and picture');
-    pencils[0]?.click();
-    expect(onEditName).toHaveBeenCalledTimes(1);
-    // The panel's list has no pencil.
-    const panelList = createBracketList(view(), { onHeart: vi.fn() });
-    expect(panelList.el.querySelector('.rank-row__edit')).toBeNull();
+  it('UI batch: no pencil on my row (the name sheet opens from Settings and the Home picture)', () => {
+    const list = createBracketList(view(), { onHeart: vi.fn() });
+    expect(list.el.querySelector('.rank-row__edit')).toBeNull();
+    // My row's one button is its heart (rows are not tab stops; my row is not a paid place here).
+    expect(qa(q(list.el, 'li[data-me="1"]'), 'button:not([hidden])').map((b) => b.className)).toEqual(['rank-row__heart']);
+    list.destroy();
   });
 
   it('row and heart labels (pure helpers)', () => {
@@ -332,8 +327,8 @@ describe('bracket list: exactly the server rows (H-3, §10.6 #1)', () => {
       expect(items.map((li) => q(li, '.rank-row__name').textContent)).toEqual(NAMES.concat(NAMES[0] as string).slice(0, 6).map(displayName));
       for (const li of items) expect(q(li, '.rank-row__name').getAttribute('dir')).toBe('auto');
       // The lines and the a11y names re-render in Arabic on the locale change (A11Y-I18N-1), still the server's numbers.
-      expect(q(list.el, '.ranking__count').textContent).toBe(tn('ladder.players', 6, { count: formatNumber(6) }));
-      expect(q(list.el, '.ranking__count').textContent).not.toMatch(/players/);
+      expect(q(list.el, '.ranking__countdown').textContent).toBe(countdownText(NOW + 7 * H + 48 * 60_000, NOW, false));
+      expect(q(list.el, '.ranking__countdown').textContent).not.toMatch(/Ends in/);
       const mine = q(list.el, '.rank-row[data-me="1"]');
       expect(mine.getAttribute('aria-label')).toContain('Velvet Paws 3');
       expect(mine.getAttribute('aria-label')).not.toMatch(/\byou\b|fish|hearts?/);
@@ -369,34 +364,40 @@ function panelProps(over: Partial<RankingPanelProps> = {}): RankingPanelProps {
 describe('ranking panel: the bracket state (spec §2.4, §9.4)', () => {
   beforeEach(() => vi.useFakeTimers());
 
-  it('"Leaderboard", "+2 fish · Your total: 14", and the bracket list in the DOM contract', () => {
+  it('"Leaderboard", the stopwatch right under it, and the bracket list in the DOM contract', () => {
     const panel = createRankingPanel();
     document.body.appendChild(panel.el);
     panel.open(panelProps());
     expect(q(panel.el, '.ranking__title').textContent).toBe('Leaderboard');
-    expect(q(panel.el, '.ranking__sub').textContent).toBe('+2 fish · Your total: 14');
+    // UI batch (user: remove "+1 fish · Your total: 16"): hidden over the list, still the dialog's description.
+    const sub = q(panel.el, '.ranking__sub');
+    expect(sub.hidden).toBe(true);
+    expect(sub.textContent).toBe('+2 fish · Your total: 14');
+    expect(q(panel.el, '[role=dialog]').getAttribute('aria-describedby')).toBe(sub.id);
     // audit B9 / A-H1: unanswered (offline), the server's total and the queued fish apart, as my row shows them
     panel.update(panelProps({ result: { kind: 'ladder', gained: 3, total: 3, waiting: 3 } }));
     expect(q(panel.el, '.ranking__sub').textContent).toBe('+3 fish · Your total: 3 · +3\u00A0waiting');
+    // The skeleton while the win is sent: hidden too; the records card keeps it (the only total it shows).
+    panel.update(panelProps({ list: { kind: 'loading' } }));
+    expect(q(panel.el, '.ranking__sub').hidden).toBe(true);
+    panel.update(panelProps({ list: { kind: 'records', records: RECORDS, reason: 'unavailable' } }));
+    expect(q(panel.el, '.ranking__sub').hidden).toBe(false);
     panel.update(panelProps());
     // Worded: never forced LTR (.num) in Arabic.
     expect(q(panel.el, '.ranking__sub').classList.contains('num')).toBe(false);
     const list = q(document, '.overlay[data-overlay=ranking] .rank-list[data-kind=bracket][data-stale="0"]');
     expect(list.querySelector(':scope > ol.rank-rows')).not.toBeNull();
     expect(qa(list, 'ol.rank-rows > li.rank-row')).toHaveLength(37);
-    // audit B10: the dot is drawn (aria-hidden); a screen reader hears the list separator instead of a run-on
+    // The stopwatch is the list's first child (right under the title); the worded countdown is for screen readers
+    // only and no player count shows (UI batch).
+    expect(list.firstElementChild?.classList.contains('lb-timer')).toBe(true);
     const meta = q(panel.el, '.ranking__meta');
-    const textOf = (skip: string): string =>
-      Array.from(meta.childNodes)
-        .filter((n) => !(n instanceof HTMLElement && (n.matches(skip) || n.hidden)))
-        .map((n) => n.textContent)
-        .join('');
-    // Leaderboard update: the time is seen on the stopwatch pill ("07:48:00"); the line shows the count.
-    expect(textOf('.sr-only')).toBe('37 players'); // what is seen
-    expect(textOf('[aria-hidden="true"]')).toBe('Ends in 7 h 48 min, 37 players'); // what is read
+    expect(meta.classList.contains('sr-only')).toBe(true);
+    expect(meta.textContent).toBe('Ends in 7 h 48 min');
+    expect(panel.el.querySelector('.ranking__count')).toBeNull();
     expect(q(panel.el, '.lb-timer').getAttribute('aria-hidden')).toBe('true');
     expect(q(panel.el, '.lb-timer__text').textContent).toMatch(/^07:4[78]:\d\d$/);
-    expect(q(panel.el, '.ranking__rewards').textContent).toBe('The top 3 win hints and kitties.');
+    expect(q(panel.el, '.ranking__rewards').hidden).toBe(true);
     expect(q(panel.el, 'button.ranking__info').hidden).toBe(false);
     expect(q(panel.el, 'button.ranking__info').getAttribute('aria-label')).toBe('How it works');
     // The footer button keeps the first focus (rows are not tab stops).
@@ -437,14 +438,14 @@ describe('ranking panel: the bracket state (spec §2.4, §9.4)', () => {
     q(panel.el, 'ol > li[data-rank="3"]').click();
     expect(p.onContinue).not.toHaveBeenCalled();
     // A drag that ends outside the list is still not a tap.
-    const sub = q(panel.el, '.ranking__sub');
-    sub.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, clientX: 10, clientY: 10 }));
-    sub.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 12, clientY: 60 }));
-    sub.click();
+    const title = q(panel.el, '.ranking__title');
+    title.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, clientX: 10, clientY: 10 }));
+    title.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 12, clientY: 60 }));
+    title.click();
     expect(p.onContinue).not.toHaveBeenCalled();
     // A plain tap on the header continues.
-    sub.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, clientX: 10, clientY: 10 }));
-    sub.click();
+    title.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, clientX: 10, clientY: 10 }));
+    title.click();
     expect(p.onContinue).toHaveBeenCalledTimes(1);
   });
 
@@ -498,14 +499,13 @@ function sheetProps(over: Partial<LadderSheetProps> = {}): LadderSheetProps {
     infoOnly: false,
     reducedMotion: false,
     onHeart: vi.fn(),
-    onEditName: vi.fn(),
     onClose: vi.fn(),
     ...over,
   };
 }
 
 describe('ranking sheet (overlay `ladder`, spec §2.5)', () => {
-  it('list: the bracket with the pencil on my row; hearts; the (i) button opens the info view; Back and Esc return', () => {
+  it('list: (i) · "Leaderboard" · ×, no pencil; hearts; the (i) button opens the info view; Back and Esc return', () => {
     const p = sheetProps();
     const sheet = createLadderSheet();
     document.body.appendChild(sheet.el);
@@ -513,11 +513,19 @@ describe('ranking sheet (overlay `ladder`, spec §2.5)', () => {
     expect(sheet.el.dataset.overlay).toBe('ladder');
     expect(q(sheet.el, '.ladder-sheet').dataset.view).toBe('list');
     expect(q(sheet.el, '.overlay__title').textContent).toBe('Leaderboard');
+    // UI batch: the (i) at the start, the title between it and × (truly centred); Back takes the start in the info view.
+    const head = Array.from(q(sheet.el, '.overlay__head').children) as HTMLElement[];
+    expect(head.map((c) => ['overlay__back', 'ladder-sheet__info', 'overlay__title', 'overlay__close'].find((k) => c.classList.contains(k)))).toEqual([
+      'overlay__back',
+      'ladder-sheet__info',
+      'overlay__title',
+      'overlay__close',
+    ]);
+    expect(head.filter((c) => !c.hidden).map((c) => c.tagName)).toEqual(['BUTTON', 'H2', 'BUTTON']);
     expect(qa(sheet.el, 'ol.rank-rows > li')).toHaveLength(37);
     // Full height while the list is there (its rows scroll inside).
     expect(q(sheet.el, '.ladder-sheet').hasAttribute('data-fit')).toBe(false);
-    q(sheet.el, 'li[data-me="1"] .rank-row__edit').click();
-    expect(p.onEditName).toHaveBeenCalledTimes(1);
+    expect(sheet.el.querySelector('.rank-row__edit')).toBeNull();
     qa(sheet.el, 'ol button.rank-row__heart')[0]?.click();
     expect(p.onHeart).toHaveBeenCalledWith(p.list?.rows[0]?.slot);
     q(sheet.el, '.ladder-sheet__info').click();

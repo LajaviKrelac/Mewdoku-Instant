@@ -132,14 +132,22 @@ describe('the stopwatch pill and the podium', () => {
     list.destroy();
   });
 
-  it('reward chests on the paid places only, and only while the rewards line names them', () => {
-    const list = createBracketList(view(), { onHeart: vi.fn() });
+  it('reward chests on the paid places only, and only while the rewards line names them (UI batch: one per place)', () => {
+    const rewards = [
+      { place: 1, hints: 3, kitties: 3 },
+      { place: 2, hints: 2, kitties: 2 },
+      { place: 3, hints: 1, kitties: 1 },
+    ] as const;
+    const list = createBracketList(view({ rewards }), { onHeart: vi.fn() });
     const chests = (): string[] => qa(list.el, 'li.rank-row').filter((li) => !q(li, '.rank-row__gift').hidden).map((li) => li.dataset.rank as string);
     expect(chests()).toEqual(['1', '2', '3']);
     expect(qa(list.el, '.lb-pod__gift').filter((g) => !g.hidden)).toHaveLength(3);
-    list.update(view({ rewardsLine: 'min' }));
+    list.update(view({ rewards, rewardsLine: 'min' }));
     expect(chests()).toEqual([]);
     expect(qa(list.el, '.lb-pod__gift').filter((g) => !g.hidden)).toHaveLength(0);
+    // No rules (no amounts): no chest.
+    list.update(view());
+    expect(chests()).toEqual([]);
     list.destroy();
   });
 });

@@ -41,6 +41,8 @@ describe('the catalogue set', () => {
         'home.daily.sub', 'list.separator', 'time.daysHours', 'time.hoursMinutes', 'time.minutes', 'unit.colorWithGlyph',
         // Phase 2e: the chip's "#5" (a rank sign; a locale changes it only where it writes ranks otherwise).
         'ladder.chip.rank',
+        // UI batch (leaderboard): the chest tooltip's "×3" (a count sign, like the chip's "#5").
+        'ladder.chest.count',
       ].sort(),
     );
   });

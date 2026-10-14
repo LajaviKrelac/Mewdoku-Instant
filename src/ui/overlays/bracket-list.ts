@@ -21,28 +21,33 @@
 // rows it passes step down and the list follows it; a podium place of mine pops in with confetti. It animates
 // between the server's two answers only (my place before the win, as the server last said, and now).
 //
-// Layout (top to bottom): the stopwatch pill, "37 players" (with the countdown words for screen readers only), the
-// podium, the rewards line, "Last updated 14:02" + the offline line (a cached bracket), the alone line, the scroll
-// list of rows (my row highlighted with a "You" tag; places 1–3 carry our medal AND their number), the pinned copy of
-// my row (aria-hidden, shown while my row is scrolled out of view), "+3 hearts from other players", and once the
-// first-time line "This is you in the ranking: …".
+// Layout (top to bottom): the stopwatch pill (the countdown words are for screen readers only), the podium, the
+// minimum line ("Rewards need at least 5 players …", only while too few play), "Last updated 14:02" + the offline
+// line (a cached bracket), the alone line, the scroll list of rows (my row highlighted with a "You" tag; places 1–3
+// carry our medal AND their number), "+3 hearts from other players", and once the first-time line "This is you in
+// the ranking: …".
+// UI batch (2026-10-13; user: the list "cleaned up"): no player count and no "The top 3 win …" line; the paid places
+// show three different chests (bracket-prize.ts: gold, silver, bronze; a tap shows their reward above them); my own
+// row is the real row made sticky inside the scrolling list, so it stays at the edge it leaves by (scrolled up to see
+// the top, it waits at the bottom; scrolled down, at the top); the pinned copy is gone.
 // A11y (§7.7): the list is role="list"; each row is a listitem named "#5, Brave Noodle 12, you, 14 fish,
-// 2 hearts, Online now" (my row adds ", +2 waiting" while fish wait, audit B11; the header's dot is read as a
-// comma, B10); the rows are not tab stops, only their heart buttons (and, in the sheet, my row's pencil) are;
-// a heart is "Give a heart to Velvet Paws 3, 1 heart" with aria-pressed. Reduced motion: no heart pop, no climb
-// and no confetti (the final places at once).
+// 2 hearts, Online now" (my row adds ", +2 waiting" while fish wait, audit B11; a paid place adds ", Reward for #1:
+// 3 hints and 3 kitties"); the rows are not tab stops, only their heart buttons and the chests of the paid places
+// are; a heart is "Give a heart to Velvet Paws 3, 1 heart" with aria-pressed. Reduced motion: no heart pop, no
+// climb, no confetti and no tooltip pop (the final places at once).
 //
-// Classes: .rank-list.rank-list--bracket[data-kind=bracket][data-stale=0|1][data-climbing?]
+// Classes: .rank-list.rank-list--bracket[data-kind=bracket][data-stale=0|1][data-climbing?][data-measuring?]
 //          > .lb-timer(.lb-timer__icon .lb-timer__text)
-//            .ranking__meta(.ranking__countdown.sr-only .ranking__sep[aria-hidden] .ranking__sep-sr.sr-only .ranking__count)
+//            .ranking__meta.sr-only(.ranking__countdown)
 //            .lb-podium[aria-hidden] > .lb-pod[data-place=1|2|3][data-mine=0|1] > (.lb-pod__frame .lb-pod__step(.lb-pod__medal
-//              .lb-pod__num) .lb-pod__name .lb-pod__fish(.lb-pod__pts) .lb-pod__gift? .lb-status) .lb-confetti?
+//              .lb-pod__num) .lb-pod__name .lb-pod__fish(.lb-pod__pts) .lb-pod__gift[data-place]? .lb-status) .lb-confetti?
 //            .ranking__rewards .ranking__stale .ranking__offline .ranking__alone
 //            ol.rank-rows[role=list] > li.rank-row[data-rank][data-me=0|1][data-slot]
 //              > .rank-row__place(.rank-row__medal? .rank-row__num) .rank-row__avatar .rank-row__who(.rank-row__name
-//                .rank-row__line(.rank-row__tags(.rank-row__you .rank-row__waiting) .lb-status button.rank-row__edit?))
-//                .rank-row__points(.rank-row__pts) .rank-row__gift? button.rank-row__heart[aria-pressed] > .rank-row__hearts
-//            .rank-row.rank-row--pinned[aria-hidden=true] .ranking__hearts-new .ranking__first
+//                .rank-row__line(.rank-row__tags(.rank-row__you .rank-row__waiting) .lb-status))
+//                .rank-row__points(.rank-row__pts) button.rank-row__gift[data-place][aria-expanded]?
+//                button.rank-row__heart[aria-pressed] > .rank-row__hearts
+//            .ranking__hearts-new .ranking__first .lb-tip (bracket-prize.ts)
 //          .lb-status[data-status=online|playing|away]
 import { cfg } from '../../app/config';
 import { formatDuration, formatNumber, getLocale, onLocaleChanged, t, tn } from '../../i18n';
@@ -50,7 +55,8 @@ import { avatarSymbol, HEART_POP, HEART_POP_MS, mountLadderArt } from '../art/la
 import { icon } from '../art/sprite';
 import { h, setText } from '../dom';
 import '../../styles/ladder-chunk.css';
-import type { BracketListCallbacks, BracketListHandle, BracketListView, BracketRowView, ClimbResult } from './ranking-panel';
+import { chestSymbol, createPrizeTip, prizeFor, prizeText } from './bracket-prize';
+import type { BracketListCallbacks, BracketListHandle, BracketListView, BracketRowView, ClimbResult, PlaceRewardView } from './ranking-panel';
 
 /** "Ends in 7 h 48 min" / "Ends in less than a minute" / "Final results" (spec §2.4 Countdown). */
 export function countdownText(endsAt: number | null, now: number, final: boolean): string | null {
@@ -88,11 +94,12 @@ export function timeOfDay(ms: number): string {
   }
 }
 
-/** The rewards line (spec §2.4, C-5): the counts come from the server's rules, never a literal. */
-export function rewardsLineText(v: Pick<BracketListView, 'rewardsLine' | 'paidPlaces' | 'minMembers'>): string | null {
-  if (v.rewardsLine === 'places' && v.paidPlaces > 0) return tn('ladder.rewards.line', v.paidPlaces, { count: formatNumber(v.paidPlaces) });
-  if (v.rewardsLine === 'min' && v.minMembers > 0) return t('ladder.rewards.min', { count: formatNumber(v.minMembers) });
-  return null;
+/**
+ * The rewards line (spec §2.4, C-5; the count is the server's rule, never a literal). UI batch (user: "remove 'the
+ * top 3 win hints and kitties.'"): only the minimum line is left, which says why no chest shows.
+ */
+export function rewardsLineText(v: Pick<BracketListView, 'rewardsLine' | 'minMembers'>): string | null {
+  return v.rewardsLine === 'min' && v.minMembers > 0 ? t('ladder.rewards.min', { count: formatNumber(v.minMembers) }) : null;
 }
 
 export type StatusKind = 'online' | 'playing' | 'away';
@@ -119,14 +126,16 @@ const fishText = (n: number): string => tn('fish.count', n, { count: formatNumbe
 /**
  * A row's listitem name: "#5, Brave Noodle 12, you, 14 fish, 2 hearts" (spec §7.7). Audit B11: my row with fish
  * waiting to be sent ends with the chip's own words ("…, 2 hearts, +3 waiting"), so a screen reader hears them too.
- * Leaderboard update: the row's status ("Online now", "4m ago") ends it when there is one.
+ * Leaderboard update: the row's status ("Online now", "4m ago") ends it when there is one. UI batch: a paid place's
+ * reward ("Reward for #1: 3 hints and 3 kitties") comes last, so it is heard where the chest is too small to show.
  */
-export function rowLabel(r: BracketRowView, hearts: boolean, waiting = 0, status: string | null = null): string {
+export function rowLabel(r: BracketRowView, hearts: boolean, waiting = 0, status: string | null = null, prize: string | null = null): string {
   const p = { rank: formatNumber(r.rank), name: r.name, fish: fishText(r.points), hearts: hearts ? heartsText(r.hearts) : '' };
   const s = r.me ? t('ladder.row.me.a11y', p) : t('ladder.row.a11y', p);
   let label = hearts ? s : s.replace(/[,،、]\s*$/u, '');
   if (r.me && waiting > 0) label = `${label}${t('list.separator')}${t('ladder.waiting', { count: formatNumber(waiting) })}`;
-  return status ? `${label}${t('list.separator')}${status}` : label;
+  for (const extra of [status, prize]) if (extra) label = `${label}${t('list.separator')}${extra}`;
+  return label;
 }
 
 /**
@@ -156,8 +165,8 @@ export function visibleRows(rows: readonly BracketRowView[], panelRows: number):
   return rows.slice(start, start + n);
 }
 
-/** A paid place shows our reward chest (only while the rewards line names the places: enough players, H-4). */
-const paidPlace = (rank: number, v: Pick<BracketListView, 'rewardsLine' | 'paidPlaces'>): boolean => v.rewardsLine === 'places' && rank >= 1 && rank <= v.paidPlaces;
+/** A chest's tap: the list opens (or closes) its one tooltip over the chest's art. */
+type OnChest = (art: Element, p: PlaceRewardView) => void;
 
 /** One status pill (shared by the rows and the podium); hidden without a status. */
 function statusPill(): { el: HTMLElement; set(s: { kind: StatusKind; text: string } | null): void } {
@@ -183,17 +192,15 @@ interface RowParts {
 }
 
 /**
- * One row's DOM. `interactive` false builds the pinned copy: a div (outside the list), no buttons, no data
- * attributes (so `ol.rank-rows > li.rank-row` and `[data-me="1"]` count the server's rows only), aria-hidden
- * and inert. `cb.onEditName` adds the pencil to my row (the sheet).
+ * One row's DOM (a listitem of the server's rows). UI batch: a paid place's chest is a button that opens its reward
+ * tooltip (`onChest`); the sheet's pencil is gone (the name sheet opens from Settings and the Home picture).
  */
-function buildRow(cb: BracketListCallbacks, interactive: boolean): RowParts {
+function buildRow(cb: BracketListCallbacks, onChest: OnChest): RowParts {
   const num = h('span', { class: 'rank-row__num num' });
   const medalHost = h('span', { class: 'rank-row__medal' });
   const place = h('span', { class: 'rank-row__place', 'aria-hidden': 'true' }, medalHost, num);
   const avatar = h('span', { class: 'rank-row__avatar', 'aria-hidden': 'true' });
-  // The row's text is aria-hidden (the row's aria-label reads it once); my row's pencil sits on the tag line
-  // after "You", so the name keeps the row's full width (a 40-character name would not fit next to it).
+  // The row's text is aria-hidden (the row's aria-label reads it once).
   const name = h('span', { class: 'rank-row__name', dir: 'auto', 'aria-hidden': 'true' });
   const you = h('span', { class: 'rank-row__you' });
   const waiting = h('span', { class: 'rank-row__waiting' });
@@ -204,27 +211,12 @@ function buildRow(cb: BracketListCallbacks, interactive: boolean): RowParts {
   const who = h('span', { class: 'rank-row__who' }, name, line);
   const pts = h('span', { class: 'rank-row__pts num' });
   const points = h('span', { class: 'rank-row__points', 'aria-hidden': 'true' }, icon('icon-fish', { class: 'rank-row__fish' }), pts);
-  const gift = h('span', { class: 'rank-row__gift', 'aria-hidden': 'true' }, icon('reward-chest', { class: 'rank-row__gift-art' }));
+  // The chest of a paid place (hidden otherwise): its tooltip shows the place's reward; named by it.
+  const gift = h('button', { type: 'button', class: 'rank-row__gift', 'aria-expanded': 'false', hidden: true });
   const heartCount = h('span', { class: 'rank-row__hearts num' });
   const heartIcon = h('span', { class: 'rank-row__heart-icon' });
-  const heart = interactive
-    ? h('button', { type: 'button', class: 'rank-row__heart', 'aria-pressed': 'false' }, heartIcon, heartCount)
-    : h('span', { class: 'rank-row__heart' }, heartIcon, heartCount);
-  const el: HTMLElement = interactive ? h('li', { class: 'rank-row' }, place, avatar, who) : h('div', { class: 'rank-row rank-row--pinned' }, place, avatar, who);
-  let edit: HTMLButtonElement | null = null;
-  if (interactive && cb.onEditName) {
-    edit = h(
-      'button',
-      { type: 'button', class: 'rank-row__edit', 'aria-label': t('nick.edit.a11y'), hidden: true, on: { click: () => cb.onEditName?.() } },
-      icon('icon-pencil', { class: 'rank-row__edit-icon' }),
-    );
-    line.appendChild(edit);
-  }
-  el.append(points, gift, heart);
-  if (!interactive) {
-    el.setAttribute('aria-hidden', 'true');
-    el.setAttribute('inert', '');
-  }
+  const heart = h('button', { type: 'button', class: 'rank-row__heart', 'aria-pressed': 'false' }, heartIcon, heartCount);
+  const el: HTMLElement = h('li', { class: 'rank-row' }, place, avatar, who, points, gift, heart);
 
   let cur: BracketRowView | null = null;
   let curView: BracketListView | null = null;
@@ -232,6 +224,7 @@ function buildRow(cb: BracketListCallbacks, interactive: boolean): RowParts {
   let avatarId = -1;
   let medal = 0;
   let liked: boolean | null = null;
+  let prize: PlaceRewardView | null = null;
   /** The place shown: the number, our medal for 1–3 (never colour alone) and the chest of a paid place. */
   const showPlace = (rank: number): void => {
     const m = rank >= 1 && rank <= 3 ? rank : 0;
@@ -243,16 +236,26 @@ function buildRow(cb: BracketListCallbacks, interactive: boolean): RowParts {
     medalHost.hidden = m === 0;
     place.toggleAttribute('data-medal', m !== 0);
     setText(num, formatNumber(rank));
-    gift.hidden = !curView || !paidPlace(rank, curView);
+    // Every frame of the rank-up for the rows passed: the chest's art changes only with its place.
+    const p = cur && curView ? prizeFor(rank, cur.points, curView) : null;
+    gift.hidden = p === null;
+    if (p && p.place !== prize?.place) {
+      gift.textContent = '';
+      gift.appendChild(icon(chestSymbol(p.place), { class: 'rank-row__gift-art' }));
+      gift.dataset.place = String(p.place);
+    }
+    prize = p;
   };
-  if (interactive) {
-    heart.addEventListener('click', () => {
-      if (!cur || !cur.heartEnabled || sent) return;
-      sent = true;
-      heart.setAttribute('aria-busy', 'true');
-      cb.onHeart(cur.slot);
-    });
-  }
+  heart.addEventListener('click', () => {
+    if (!cur || !cur.heartEnabled || sent) return;
+    sent = true;
+    heart.setAttribute('aria-busy', 'true');
+    cb.onHeart(cur.slot);
+  });
+  gift.addEventListener('click', () => {
+    const art = gift.firstElementChild;
+    if (prize && art) onChest(art, prize);
+  });
 
   return {
     el,
@@ -270,12 +273,13 @@ function buildRow(cb: BracketListCallbacks, interactive: boolean): RowParts {
       heart.removeAttribute('aria-busy');
       const st = statusOf(r, v.now());
       status.set(st);
-      if (interactive) {
-        el.dataset.rank = String(r.rank);
-        el.dataset.me = r.me ? '1' : '0';
-        el.dataset.slot = String(r.slot);
-        el.setAttribute('aria-label', rowLabel(r, v.hearts, r.me ? v.waiting : 0, st?.text ?? null));
-      }
+      el.dataset.rank = String(r.rank);
+      el.dataset.me = r.me ? '1' : '0';
+      el.dataset.slot = String(r.slot);
+      const won = prizeFor(r.rank, r.points, v);
+      const wonText = won ? prizeText(won) : null;
+      el.setAttribute('aria-label', rowLabel(r, v.hearts, r.me ? v.waiting : 0, st?.text ?? null, wonText));
+      if (wonText) gift.setAttribute('aria-label', wonText);
       showPlace(r.rank);
       if (r.avatarId !== avatarId) {
         avatarId = r.avatarId;
@@ -299,33 +303,27 @@ function buildRow(cb: BracketListCallbacks, interactive: boolean): RowParts {
         heartIcon.appendChild(icon(r.likedByMe ? 'icon-heart-fill' : 'icon-heart-line', { class: 'rank-row__heart-art' }));
       }
       setText(heartCount, formatNumber(r.hearts));
-      if (interactive) {
-        heart.setAttribute('aria-pressed', String(r.likedByMe));
-        heart.setAttribute('aria-label', heartLabel(r));
-        // A pressed heart stays focusable and reads "pressed"; a heart that cannot be given is disabled.
-        if (r.heartEnabled) {
-          heart.removeAttribute('aria-disabled');
-          (heart as HTMLButtonElement).disabled = false;
-        } else if (r.likedByMe) {
-          heart.setAttribute('aria-disabled', 'true');
-          (heart as HTMLButtonElement).disabled = false;
-        } else {
-          heart.removeAttribute('aria-disabled');
-          (heart as HTMLButtonElement).disabled = true;
-        }
-        // The like pop (G2's HEART_POP), none with reduced motion (§7.7).
-        const art = heartIcon.firstElementChild as (Element & { animate?: Element['animate'] }) | null;
-        if (changedLike && art && typeof art.animate === 'function' && !el.closest('[data-reduced], [data-motion="reduced"]')) {
-          try {
-            art.animate(HEART_POP as Keyframe[], { duration: HEART_POP_MS, easing: 'ease-out' });
-          } catch {
-            // decorative
-          }
-        }
+      heart.setAttribute('aria-pressed', String(r.likedByMe));
+      heart.setAttribute('aria-label', heartLabel(r));
+      // A pressed heart stays focusable and reads "pressed"; a heart that cannot be given is disabled.
+      if (r.heartEnabled) {
+        heart.removeAttribute('aria-disabled');
+        heart.disabled = false;
+      } else if (r.likedByMe) {
+        heart.setAttribute('aria-disabled', 'true');
+        heart.disabled = false;
+      } else {
+        heart.removeAttribute('aria-disabled');
+        heart.disabled = true;
       }
-      if (edit) {
-        edit.hidden = !r.me;
-        edit.setAttribute('aria-label', t('nick.edit.a11y'));
+      // The like pop (G2's HEART_POP), none with reduced motion (§7.7).
+      const art = heartIcon.firstElementChild as (Element & { animate?: Element['animate'] }) | null;
+      if (changedLike && art && typeof art.animate === 'function' && !el.closest('[data-reduced], [data-motion="reduced"]')) {
+        try {
+          art.animate(HEART_POP as Keyframe[], { duration: HEART_POP_MS, easing: 'ease-out' });
+        } catch {
+          // decorative
+        }
       }
     },
   };
@@ -337,15 +335,24 @@ interface PodParts {
   setPoints(n: number): void;
 }
 
-/** One podium place (decorative: the list reads the same row). Hidden while the server has no row at that place. */
-function buildPod(place: 1 | 2 | 3): PodParts {
+/**
+ * One podium place (decorative: the list reads the same row). Hidden while the server has no row at that place.
+ * UI batch: its chest opens the reward tooltip on a tap (pointer only: the podium is aria-hidden; the row's chest
+ * is the button).
+ */
+function buildPod(place: 1 | 2 | 3, onChest: OnChest): PodParts {
   const frame = h('span', { class: 'lb-pod__frame' });
   const num = h('span', { class: 'lb-pod__num num' }, String(place));
   const medal = h('span', { class: 'lb-pod__medal' }, icon(`medal-${place}`, { class: 'lb-pod__medal-art' }), num);
   const name = h('span', { class: 'lb-pod__name', dir: 'auto' });
   const pts = h('span', { class: 'lb-pod__pts num' });
   const fish = h('span', { class: 'lb-pod__fish' }, icon('icon-fish', { class: 'lb-pod__fish-art' }), pts);
-  const gift = h('span', { class: 'lb-pod__gift' }, icon('reward-chest', { class: 'lb-pod__gift-art' }));
+  const art = icon(chestSymbol(place), { class: 'lb-pod__gift-art' });
+  const gift = h('span', { class: 'lb-pod__gift', dataset: { place: String(place) } }, art);
+  let prize: PlaceRewardView | null = null;
+  gift.addEventListener('click', () => {
+    if (prize) onChest(art, prize);
+  });
   const status = statusPill();
   const step = h('span', { class: 'lb-pod__step' }, medal, name, fish, gift, status.el);
   const el = h('div', { class: 'lb-pod', dataset: { place: String(place) } }, frame, step);
@@ -368,7 +375,8 @@ function buildPod(place: 1 | 2 | 3): PodParts {
       const shown = displayName(r.name);
       if (name.textContent !== shown) name.textContent = shown;
       setText(pts, formatNumber(r.points));
-      gift.hidden = !paidPlace(r.rank, v);
+      prize = prizeFor(r.rank, r.points, v);
+      gift.hidden = prize === null;
       status.set(statusOf(r, v.now()));
     },
   };
@@ -396,23 +404,17 @@ export function createBracketList(view: BracketListView, cb: BracketListCallback
   const timerText = h('span', { class: 'lb-timer__text num' });
   const timer = h('div', { class: 'lb-timer', 'aria-hidden': 'true' }, icon('icon-stopwatch', { class: 'lb-timer__icon' }), timerText);
   // The worded countdown is for screen readers (the stopwatch pill shows it); never announced as it changes.
-  const countdown = h('span', { class: 'ranking__countdown sr-only' });
-  const sep = h('span', { class: 'ranking__sep', 'aria-hidden': 'true' }, ' · ');
-  // Audit B10: the dot is drawn only; screen readers get the locale's list separator ("Ends in 7 h 48 min, 37
-  // players"), never the two parts run together.
-  const sepSr = h('span', { class: 'ranking__sep-sr sr-only' });
-  const count = h('span', { class: 'ranking__count' });
-  const meta = h('p', { class: 'ranking__meta' }, countdown, sep, sepSr, count);
-  sep.hidden = true; // the visible line is the count alone (the stopwatch pill shows the time)
-  const pods = { 1: buildPod(1), 2: buildPod(2), 3: buildPod(3) } as const;
+  // UI batch (user: "remove number of players on the leaderboard"): the visible count is gone.
+  const countdown = h('span', { class: 'ranking__countdown' });
+  const meta = h('p', { class: 'ranking__meta sr-only' }, countdown);
+  const onChest: OnChest = (art, p) => tip.toggle(art, p);
+  const pods = { 1: buildPod(1, onChest), 2: buildPod(2, onChest), 3: buildPod(3, onChest) } as const;
   const podium = h('div', { class: 'lb-podium', 'aria-hidden': 'true' }, pods[2].el, pods[1].el, pods[3].el);
   const rewards = h('p', { class: 'ranking__rewards' });
   const stale = h('p', { class: 'ranking__stale' });
   const offline = h('p', { class: 'ranking__offline' });
   const alone = h('p', { class: 'ranking__alone' });
   const ol = h('ol', { class: 'rank-rows', role: 'list' });
-  const pinned = buildRow(cb, false);
-  pinned.el.hidden = true;
   const heartsNew = h('p', { class: 'ranking__hearts-new' });
   const first = h('p', { class: 'ranking__first' });
   const el = h(
@@ -426,10 +428,11 @@ export function createBracketList(view: BracketListView, cb: BracketListCallback
     offline,
     alone,
     ol,
-    pinned.el,
     heartsNew,
     first,
   );
+  const tip = createPrizeTip(el);
+  el.appendChild(tip.el);
 
   let cur = view;
   const rows = new Map<number, RowParts>();
@@ -442,21 +445,9 @@ export function createBracketList(view: BracketListView, cb: BracketListCallback
   let destroyed = false;
 
   const myRow = (): HTMLElement | null => ol.querySelector<HTMLElement>('.rank-row[data-me="1"]');
-
-  /** The pinned copy shows while my row is (partly) out of the list's visible area. */
-  const updatePinned = (): void => {
-    const mine = myRow();
-    const meRow = cur.rows.find((r) => r.me);
-    if (climbing || !mine || !meRow || ol.scrollHeight <= ol.clientHeight + 1) {
-      pinned.el.hidden = true;
-      return;
-    }
-    const top = mine.offsetTop - ol.scrollTop;
-    const out = top < 0 || top + mine.offsetHeight > ol.clientHeight + 1;
-    pinned.el.hidden = !out;
-    if (out) pinned.update(meRow, cur);
-  };
-  ol.addEventListener('scroll', updatePinned, { passive: true });
+  // UI batch: my row is sticky in CSS (no copy); a scroll closes a chest's tooltip (it would float off its chest).
+  const closeTip = (): void => void tip.close();
+  ol.addEventListener('scroll', closeTip, { passive: true });
 
   const renderCountdown = (): void => {
     if (tick !== null) clearTimeout(tick);
@@ -464,8 +455,6 @@ export function createBracketList(view: BracketListView, cb: BracketListCallback
     const now = cur.now();
     const text = countdownText(cur.endsAt, now, cur.final);
     countdown.hidden = text === null;
-    sepSr.hidden = text === null;
-    setText(sepSr, t('list.separator'));
     setText(countdown, text ?? '');
     const next = cur.final ? null : nextTickMs(cur.endsAt, now);
     if (next !== null) tick = setTimeout(renderCountdown, next);
@@ -493,8 +482,8 @@ export function createBracketList(view: BracketListView, cb: BracketListCallback
 
   const render = (v: BracketListView): void => {
     cur = v;
+    tip.close();
     el.dataset.stale = v.stale ? '1' : '0';
-    setText(count, tn('ladder.players', v.members, { count: formatNumber(v.members) }));
     const rw = rewardsLineText(v);
     rewards.hidden = rw === null;
     setText(rewards, rw ?? '');
@@ -519,7 +508,7 @@ export function createBracketList(view: BracketListView, cb: BracketListCallback
       seen.add(r.slot);
       let row = rows.get(r.slot);
       if (!row) {
-        row = buildRow(cb, true);
+        row = buildRow(cb, onChest);
         rows.set(r.slot, row);
       }
       row.update(r, v);
@@ -544,7 +533,6 @@ export function createBracketList(view: BracketListView, cb: BracketListCallback
     if (v.firstLineName !== null) setText(first, t('nick.first.line', { name: v.firstLineName }));
     renderCountdown();
     renderClock();
-    updatePinned();
   };
   render(view);
   const offLocale = onLocaleChanged(() => render(cur));
@@ -570,6 +558,11 @@ export function createBracketList(view: BracketListView, cb: BracketListCallback
     if (reducedMotion || !mineRow || !win?.requestAnimationFrame) return Promise.resolve(result);
     // Where my row starts: its old place in this list (as the server last said), or just below the last row.
     const fromIdx = Math.min(shown.length - 1, from.rank === null ? shown.length - 1 : toIdx + Math.max(0, from.rank - toRank));
+    // UI batch: climbing first (my row leaves its sticky place for the ride), so the rows are measured in the flow.
+    climbing = true;
+    tip.close();
+    el.toggleAttribute('data-climbing', true);
+    mineRow.el.classList.add('is-climbing');
     const rowEls = shown.map((r) => rows.get(r.slot)?.el ?? null);
     const tops = rowEls.map((e) => (e ? e.offsetTop : 0));
     const step = shown.length > 1 ? Math.max(40, (tops[tops.length - 1]! - tops[0]!) / (shown.length - 1)) : mineRow.el.offsetHeight;
@@ -577,10 +570,6 @@ export function createBracketList(view: BracketListView, cb: BracketListCallback
     const span = fromIdx - toIdx + extra;
     const myTop = mineRow.el.offsetTop;
     const myH = mineRow.el.offsetHeight;
-    climbing = true;
-    pinned.el.hidden = true;
-    el.toggleAttribute('data-climbing', true);
-    mineRow.el.classList.add('is-climbing');
     const passed = rowEls.slice(toIdx + 1, fromIdx + 1);
     // Start: my row at its old place, the rows I pass one place higher (where they were), my old fish.
     const lastRank = shown[shown.length - 1]?.rank ?? toRank;
@@ -650,8 +639,12 @@ export function createBracketList(view: BracketListView, cb: BracketListCallback
 
   const centerAfter = (): void => {
     const mine = myRow();
-    if (mine && ol.scrollHeight > ol.clientHeight) ol.scrollTop = centerOn(mine.offsetTop, mine.offsetHeight);
-    updatePinned();
+    if (!mine || ol.scrollHeight <= ol.clientHeight) return;
+    // A stuck row's offsetTop is where it is drawn: measure its place in the flow (not sticky while measuring).
+    el.toggleAttribute('data-measuring', true);
+    const top = mine.offsetTop;
+    el.removeAttribute('data-measuring');
+    ol.scrollTop = centerOn(top, mine.offsetHeight);
   };
 
   return {
@@ -665,6 +658,7 @@ export function createBracketList(view: BracketListView, cb: BracketListCallback
       if (!climbing) centerAfter();
     },
     playClimb,
+    closeTip: () => tip.close(),
     destroy() {
       destroyed = true;
       if (tick !== null) clearTimeout(tick);
@@ -673,7 +667,8 @@ export function createBracketList(view: BracketListView, cb: BracketListCallback
       if (climbRaf) el.ownerDocument.defaultView?.cancelAnimationFrame(climbRaf);
       tick = null;
       offLocale();
-      ol.removeEventListener('scroll', updatePinned);
+      ol.removeEventListener('scroll', closeTip);
+      tip.destroy();
       el.remove();
     },
   };

@@ -9,7 +9,9 @@
    Reduced motion: no row or heart motion here (the heart pop is WAAPI in bracket-list.ts, skipped there). */
 
 /* ── The bracket list ─────────────────────────────────────────────────── */
+/* UI batch: position: relative holds the chests' tooltip (.lb-tip), which must not be clipped by the scrolling rows. */
 .rank-list--bracket {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -38,11 +40,6 @@
   font-weight: var(--display-weight);
   font-size: var(--fs-m);
   color: var(--ink);
-}
-
-.ranking__countdown,
-.ranking__count {
-  white-space: nowrap;
 }
 
 .ranking__rewards,
@@ -105,18 +102,27 @@
   margin-top: 2px;
 }
 
-/* My row (and its pinned copy): highlighted in --accent-soft with a soft accent ring; the "You" tag says it
-   too (never colour alone). */
-.rank-row[data-me='1'],
-.rank-row--pinned {
+/* My row: highlighted in --accent-soft with a soft accent ring; the "You" tag says it too (never colour alone).
+   UI batch: lifted (--shadow-2), as it floats over the others while it sticks to an edge. */
+.rank-row[data-me='1'] {
   background: var(--accent-soft);
-  box-shadow: inset 0 0 0 2px rgba(var(--accent-rgb), 0.35);
+  box-shadow: inset 0 0 0 2px rgba(var(--accent-rgb), 0.35), var(--shadow-2);
 }
 
-.rank-row--pinned {
-  flex: none;
-  margin-top: 6px;
-  box-shadow: inset 0 0 0 2px rgba(var(--accent-rgb), 0.35), var(--shadow-1);
+/* UI batch (user: my row "stuck to the position where it exited out of view"): the real row is sticky in the
+   scrolling list, so it waits at the edge it leaves by (top or bottom) and floats over the others there (its heart
+   still works; no copy). z-index: above the other rows' positioned parts (the place, the heart). The rank-up moves
+   it by hand, and the centring measures it in the flow: both make it relative first. */
+.rank-rows > .rank-row[data-me='1'] {
+  position: sticky;
+  top: -4px; /* flush with the list's edge: the list's 4 px padding shows nothing scrolling past it */
+  bottom: -4px;
+  z-index: 3;
+}
+
+.rank-list[data-climbing] .rank-rows > .rank-row[data-me='1'],
+.rank-list[data-measuring] .rank-rows > .rank-row[data-me='1'] {
+  position: relative;
 }
 
 .rank-row__place {
@@ -304,13 +310,12 @@
 }
 
 .rank-row__heart:focus-visible,
-.rank-row__edit:focus-visible {
+.rank-row__gift:focus-visible {
   outline: var(--focus-ring) solid var(--focus);
   outline-offset: 1px;
 }
 
-/* My row's pencil in the sheet: a small white disc with the warm shadow (the Classic look) on the tag line after
-   "You", so the name keeps the row's width; its tap area is 44 × 44 (the ::after), the line does not grow. */
+/* The tag line under the name: "You", "+2 waiting", the status pill. */
 .rank-row__line {
   display: flex;
   grid-area: line;
@@ -319,39 +324,6 @@
   align-self: start;
   margin-top: 1px;
   margin-inline-end: 8px;
-}
-
-.rank-row__edit {
-  position: relative;
-  display: flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  margin: -5px 0 -5px 0;
-  margin-inline-start: 8px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: var(--card);
-  box-shadow: var(--shadow-btn);
-  color: var(--ink-icon);
-  cursor: pointer;
-}
-
-.rank-row__edit::after {
-  content: '';
-  position: absolute;
-  top: -9px;
-  left: -9px;
-  width: 44px;
-  height: 44px;
-}
-
-.rank-row__edit-icon {
-  width: 16px;
-  height: 16px;
 }
 
 /* ── The post-win panel (overlay `ranking`, the dark stage): the header lines light, the list a white card ── */
@@ -369,6 +341,18 @@
 .overlay[data-overlay='ranking'] .rank-list--bracket {
   flex: 1 1 auto;
   min-height: 0;
+  margin-top: 6px; /* UI batch: the stopwatch right under the title (the subtitle is hidden here) */
+}
+
+/* UI batch (user: "make whole popup slightly longer so it fits 1 more row"): one row pitch (60 px) taller, capped so
+   the footer (24 + 48 px) stays on screen under the overlay's padding (16 px, 64 px at the top in FB builds). Short
+   screens (≤ 640 px tall) keep their own rule below: they gain only the lines this batch removed. */
+.ranking[data-list='bracket'] .ranking__card {
+  max-height: min(calc(78vh + 60px), calc(100vh - 104px - var(--safe-top) - var(--safe-bottom)));
+}
+
+:root[data-fb-safe] .ranking[data-list='bracket'] .ranking__card {
+  max-height: min(calc(78vh + 60px), calc(100vh - var(--fb-safe) - 88px - var(--safe-bottom)));
 }
 
 .overlay[data-overlay='ranking'] .ranking__hearts-new {
@@ -427,11 +411,11 @@
   flex: none;
 }
 
+/* UI batch: (i) at the head's start, × at its end, the title centred between the two equal discs. */
 .ladder-sheet__info.btn {
   width: 44px;
   height: 44px;
   min-height: 44px;
-  margin-inline-end: 8px;
   padding: 0;
   background: var(--card);
   box-shadow: var(--shadow-btn);
@@ -802,10 +786,19 @@
   justify-content: center;
 }
 
+/* UI batch: the sheet's head mirrors its -4px end margin at the start, so (i) and × sit alike and the title is
+   centred between them. */
+.ladder-sheet[data-view='list'] .overlay__head {
+  margin-inline-start: -4px;
+}
+
+/* The ribbon keeps one line where it fits; a long word in a narrow phone wraps inside the ribbon (UI batch: it
+   never runs under the head's discs). */
 .overlay[data-overlay='ranking'] .ranking[data-list='bracket'] .ranking__title,
 .ladder-sheet[data-view='list'] .overlay__title {
   position: relative;
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
   margin: 0 auto;
   padding: 2px 22px 4px;
   border-radius: 12px;
@@ -814,21 +807,29 @@
   color: #fff;
   font-size: var(--fs-btn);
   line-height: 1.3;
+  text-align: center;
   text-shadow: 0 2px 0 rgba(var(--accent-shadow-rgb), 0.35);
-  white-space: nowrap;
+}
+
+@media (max-width: 359px) {
+  .overlay[data-overlay='ranking'] .ranking[data-list='bracket'] .ranking__title,
+  .ladder-sheet[data-view='list'] .overlay__title {
+    padding-right: 14px;
+    padding-left: 14px;
+  }
 }
 
 .ladder-sheet[data-view='list'] {
   background: linear-gradient(var(--gold-soft), var(--page) 220px);
 }
 
-/* The stopwatch pill: "23:48:55" under the title (the worded countdown is for screen readers). */
+/* The stopwatch pill: "23:48:55" right under the title (the worded countdown is for screen readers). */
 .lb-timer {
   display: inline-flex;
   flex: none;
   align-items: center;
   align-self: center;
-  margin: 8px auto 0;
+  margin: 4px auto 0;
   padding: 2px 12px 2px 6px;
   border-radius: var(--radius-pill);
   background: var(--card);
@@ -848,11 +849,6 @@
   width: 22px;
   height: 22px;
   margin-inline-end: 6px;
-}
-
-.rank-list--bracket .ranking__meta {
-  margin-top: 4px;
-  font-size: var(--fs-s);
 }
 
 /* ── The podium: 2nd, 1st, 3rd from the inline start; only the places the server has ── */
@@ -1006,15 +1002,17 @@
   margin-inline-end: 3px;
 }
 
+/* UI batch: the place's own chest (gold, silver, bronze; drawn at three sizes in one box) opens its tooltip on a tap. */
 .lb-pod__gift {
   display: block;
   margin-top: 2px;
+  cursor: pointer;
 }
 
 .lb-pod__gift-art {
   display: block;
-  width: 30px;
-  height: 30px;
+  width: 38px;
+  height: 38px;
 }
 
 .lb-pod .lb-status {
@@ -1098,8 +1096,7 @@
   background: linear-gradient(rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.82)), var(--accent);
 }
 
-.rank-rows .rank-row[data-me='1'],
-.rank-row--pinned {
+.rank-rows .rank-row[data-me='1'] {
   background: var(--accent-soft);
 }
 
@@ -1124,16 +1121,146 @@
   display: none;
 }
 
+/* UI batch: a paid place's chest is a button (its reward tooltip), 30 × 44 in the chest's old room; its tap reaches
+   14 px toward the fish pill (44 × 44), never over the heart's. */
 .rank-row__gift {
-  display: block;
+  position: relative;
+  display: flex;
   grid-area: gift;
-  margin-inline-start: 4px;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 44px;
+  margin-inline-start: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-m);
+  background: transparent;
+  cursor: pointer;
+}
+
+.rank-row__gift::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: -14px;
+}
+
+[dir='rtl'] .rank-row__gift::after {
+  right: -14px;
+  left: 0;
+}
+
+.rank-row__gift:active {
+  background: rgba(var(--ink-rgb), 0.08);
 }
 
 .rank-row__gift-art {
   display: block;
+  width: 30px;
+  height: 30px;
+}
+
+/* ── UI batch: a chest's reward tooltip (bracket-prize.ts), placed by script above the chest inside the list ── */
+.lb-tip {
+  position: absolute;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  padding: 5px 10px 5px 6px;
+  border: 2px solid var(--toast-line);
+  border-radius: 14px;
+  background: var(--toast-fill);
+  box-shadow: var(--shadow-2);
+  color: var(--ink);
+  font-family: var(--font-num);
+  font-weight: var(--display-weight);
+  font-size: var(--fs-l);
+  line-height: 1;
+  white-space: nowrap;
+  animation: lb-tip-in 180ms var(--ease-drop) both;
+}
+
+.lb-tip[hidden] {
+  display: none;
+}
+
+/* The arrow points at the chest: --tip-x is measured from the tip's left edge (the script places the tip by its
+   measured left, so these physical sides are right in RTL too). */
+.lb-tip::after {
+  content: '';
+  position: absolute;
+  bottom: -7px;
+  left: var(--tip-x, 50%);
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  border-right: 2px solid var(--toast-line);
+  border-bottom: 2px solid var(--toast-line);
+  background: var(--toast-fill);
+  transform: rotate(45deg);
+}
+
+.lb-tip[data-below]::after {
+  top: -7px;
+  bottom: auto;
+  transform: rotate(225deg);
+}
+
+.lb-tip__medal {
+  position: relative;
+  flex: none;
+  width: 30px;
+  height: 30px;
+}
+
+.lb-tip__medal-art {
+  display: block;
+  width: 30px;
+  height: 30px;
+}
+
+/* The place number on the medal's face (MEDAL_FACE, as on the rows). */
+.lb-tip__num {
+  position: absolute;
+  top: 53%;
+  left: 0;
+  width: 100%;
+  margin-top: -0.6em;
+  color: var(--ink-deep);
+  font-size: 12px;
+  line-height: 1.2em;
+  text-align: center;
+}
+
+.lb-tip__items {
+  display: flex;
+  align-items: center;
+}
+
+.lb-tip__item {
+  display: inline-flex;
+  align-items: center;
+  margin-inline-start: 8px;
+}
+
+.lb-tip__art {
   width: 28px;
   height: 28px;
+  margin-inline-end: 2px;
+}
+
+@keyframes lb-tip-in {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.85);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .ladder-sheet .rank-rows {
@@ -1277,7 +1404,7 @@
   }
 }
 
-/* Reduced motion: the final places at once, no confetti, no live dot, no pop. */
+/* Reduced motion: the final places at once, no confetti, no live dot, no pop (the chest's tooltip appears at once). */
 [data-motion='reduced'] .lb-status[data-status='playing']::before,
 [data-reduced] .lb-status[data-status='playing']::before,
 [data-motion='reduced'] .lb-confetti,
@@ -1290,7 +1417,9 @@
 [data-motion='reduced'] .rank-row.is-pulsing,
 [data-reduced] .rank-row.is-pulsing,
 [data-motion='reduced'] .ranking__bubble,
-[data-reduced] .ranking__bubble {
+[data-reduced] .ranking__bubble,
+[data-motion='reduced'] .lb-tip,
+[data-reduced] .lb-tip {
   animation: none;
 }
 
@@ -1415,7 +1544,7 @@
   text-wrap: balance;
 }
 
-/* Short screens (a 320 × 568 phone): a compact podium (smaller pictures and steps, the chests only in the rows), so
+/* Short screens (a 320 × 568 phone): a compact podium (smaller pictures and steps, the chests as corner badges), so
    the list keeps room for its rows under it. */
 @media (max-height: 740px) {
   .lb-timer {
@@ -1464,8 +1593,26 @@
     font-size: 10px;
   }
 
+  /* UI batch: the compact podium keeps its chests, as a badge in the step's top corner (the steps stay short). */
+  .lb-pod__step {
+    position: relative;
+  }
+
   .lb-pod__gift {
-    display: none;
+    position: absolute;
+    top: -3px;
+    right: 1px;
+    margin: 0;
+  }
+
+  [dir='rtl'] .lb-pod__gift {
+    right: auto;
+    left: 1px;
+  }
+
+  .lb-pod__gift-art {
+    width: 28px;
+    height: 28px;
   }
 }
 
@@ -1488,9 +1635,23 @@
     padding: 0 3px;
   }
 
-  /* The chest leaves the rows (the medal still marks a paid place; the sheet's podium shows the chests). */
-  .rank-row__gift {
-    display: none;
+  /* UI batch: a smaller chest (it stays on 360 px phones); its tap still reaches 44 × 44 toward the fish. */
+  .rank-row__gift,
+  .rank-row__gift-art {
+    width: 26px;
+  }
+
+  .rank-row__gift-art {
+    height: 26px;
+  }
+
+  .rank-row__gift::after {
+    left: -18px;
+  }
+
+  [dir='rtl'] .rank-row__gift::after {
+    right: -18px;
+    left: 0;
   }
 
   .rank-row__points {
@@ -1499,6 +1660,14 @@
 
   .rank-row__line .lb-status {
     font-size: 11px;
+  }
+}
+
+/* Only where a chest truly cannot fit next to the name (≤ 340 px wide) it leaves the rows: the medal still marks the
+   place, the row's name says the reward, and the sheet's podium shows the chest. */
+@media (max-width: 340px) {
+  .rank-row__gift {
+    display: none;
   }
 }
 
@@ -1530,6 +1699,11 @@
   /* The panel takes a little more of the height and its footer sits closer (still on screen). */
   .ranking[data-list='bracket'] .ranking__card {
     max-height: 84vh;
+  }
+
+  /* UI batch: in FB builds (64 px at the top) the cap keeps the footer (10 + 48 px) on screen too. */
+  :root[data-fb-safe] .ranking[data-list='bracket'] .ranking__card {
+    max-height: min(84vh, calc(100vh - var(--fb-safe) - 74px - var(--safe-bottom)));
   }
 
   .overlay[data-overlay='ranking'] .ranking[data-list='bracket'] .ranking__tap.btn {

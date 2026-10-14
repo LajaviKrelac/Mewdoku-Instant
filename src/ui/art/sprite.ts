@@ -82,6 +82,8 @@ export type IconSymbol =
   | 'streak-step-chest'
   | 'reward-chest'
   | 'reward-chest-open'
+  // UI batch (2026-10-13, leaderboard): the three place chests (gold, silver, bronze; ladder-art.ts).
+  | RewardChestSymbol
   | 'medal-1'
   | 'medal-2'
   | 'medal-3'
@@ -94,6 +96,8 @@ export type IconSymbol =
   | 'icon-info'
   // Leaderboard update: the countdown pill's stopwatch (ladder-art.ts).
   | 'icon-stopwatch';
+/** UI batch (leaderboard): the chest of a paid place, 1st to 3rd. */
+export type RewardChestSymbol = `reward-chest-${1 | 2 | 3}`;
 /** Phase 2e: avatar ids 0 … AVATAR_COUNT − 1 (src/shared/rank-api.ts, 12, append-only; P-L13). */
 export type AvatarIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
 /** Phase 2e: one of our 12 avatars (art/ladder-art.ts). */

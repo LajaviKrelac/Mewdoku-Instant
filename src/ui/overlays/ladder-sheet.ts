@@ -1,8 +1,11 @@
 // Owner: G3 (Phase 2e)
 // The ranking sheet (overlay `ladder`, spec §2.5, §2.9, §7.7, §9.4; CONTRACTS §8), opened from the Home chip
 // at any time (and from Settings, and from the panel's (i) for the info view). Lazy `ladder` chunk.
-//   list:    "Daily ranking" (i) ×, my bracket (bracket-list.ts) with a pencil on my row (opens the name
-//            sheet), or "Solve a puzzle to join the daily ranking." when I have no bracket now;
+//   list:    (i) "Leaderboard" ×, my bracket (bracket-list.ts), or "Solve a puzzle to join the daily ranking."
+//            when I have no bracket now. UI batch (2026-10-13; user: "remove option to edit your username from
+//            that screen (pen icon)", "move info icon to the left so you can center the 'Leaderboard' label"): no
+//            pencil (the name sheet opens from Settings and the Home picture); the title sits between two equal
+//            discs, so it is truly centred. Esc closes a chest's tooltip first;
 //   info:    how it works (ladder.info.*), every count from the server's rules (C-5): the fish, the 24 h and
 //            up to N players, the rewards and their minimum, ×2 by video, hearts, names and pictures (never
 //            the Facebook name), how to switch the ranking off or delete the data; Back to the list;
@@ -12,7 +15,7 @@
 // A light sheet in the Classic look (white card, mauve-brown ink, warm shadows); the list is the same
 // component the post-win panel shows on its dark stage.
 // Classes: .overlay[data-overlay=ladder] > .overlay__panel--sheet.ladder-sheet[data-view=list|info|records][data-info-only?][data-fit?]
-//          > .overlay__head(button.overlay__back? h2.overlay__title button.ladder-sheet__info? button.overlay__close)
+//          > .overlay__head(button.overlay__back? button.ladder-sheet__info? h2.overlay__title button.overlay__close)
 //          .ladder-sheet__body(.rank-list--bracket | .ladder-sheet__join | ul.ladder-info > li | .rank-records + .rank-list__note)
 //          .ladder-sheet__ok (info-only)
 import { cfg } from '../../app/config';
@@ -51,7 +54,6 @@ export interface LadderSheetProps {
   readonly infoOnly: boolean;
   readonly reducedMotion: boolean;
   onHeart(slot: number): void;
-  onEditName(): void;
   onClose(): void;
   // ── G3 additions (optional; spec §2.5, §2.9) ──
   /** The records view's note (rank.localOnly, ladder.unavailable, ladder.optedOut, ladder.paused). Default 'local'. */
@@ -133,7 +135,8 @@ export function createLadderSheet(): OverlayView<LadderSheetProps> {
     () => t('ladder.info'),
   );
   const close = L.attr(closeButton(() => props?.onClose()), 'aria-label', () => t('common.close'));
-  const head = h('div', { class: 'overlay__head' }, back, title, info, close);
+  // Back and (i) never show together (the info view has Back, the list (i)): the title sits between two discs.
+  const head = h('div', { class: 'overlay__head' }, back, info, title, close);
 
   // list view
   const join = h('p', { class: 'ladder-sheet__join' });
@@ -185,7 +188,7 @@ export function createLadderSheet(): OverlayView<LadderSheetProps> {
       return;
     }
     if (!listHandle) {
-      listHandle = createBracketList(l, { onHeart: (slot) => props?.onHeart(slot), onEditName: () => props?.onEditName() });
+      listHandle = createBracketList(l, { onHeart: (slot) => props?.onHeart(slot) });
       listHost.appendChild(listHandle.el);
     } else listHandle.update(l);
   };
@@ -226,6 +229,7 @@ export function createLadderSheet(): OverlayView<LadderSheetProps> {
 
   function dismiss(): boolean {
     if (!props || !shell.isOpen()) return false;
+    if (listHandle?.closeTip?.()) return true;
     // Esc in the info view returns to the list it came from; otherwise it closes (the notice too).
     if (view === 'info' && base === 'list' && !props.infoOnly) showView('list');
     else props.onClose();

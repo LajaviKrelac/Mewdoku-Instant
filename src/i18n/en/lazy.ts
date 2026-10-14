@@ -214,12 +214,6 @@ export const enLazyUi2e = {
   'ladder.endsIn': 'Ends in {time}',
   'ladder.endsSoon': 'Ends in less than a minute',
   'ladder.ended': 'Final results',
-  // The server's real count of visible players (H-2); never an estimate.
-  'ladder.players.one': '{count} player',
-  'ladder.players.other': '{count} players',
-  // {count} = the number of paid places (rules.places.length).
-  'ladder.rewards.line.one': 'First place wins hints and kitties.',
-  'ladder.rewards.line.other': 'The top {count} win hints and kitties.',
   'ladder.rewards.min': 'Rewards need at least {count} players in this ranking.',
   // Audit B14: no "so far" (once the join window has closed nobody else can join; C-4: never suggest that others will).
   'ladder.alone': "You're the only player in this ranking.",
@@ -289,8 +283,6 @@ export const enLazyUi2e = {
   'nick.fallback': 'Cat {num}',
   'nick.first.line': 'This is you in the ranking: {name}. You can change your name and picture in Settings.',
   'nick.avatar.a11y': 'Picture {index} of {count}',
-  // The pencil on my row in the ranking sheet.
-  'nick.edit.a11y': 'Change your ranking name and picture',
 
   // ── Settings (§2.7) ────────────────────────────────────────────────────────
   'settings.ladder.name': 'Ranking name',
@@ -348,6 +340,11 @@ export const enLazyUi2e = {
   // The bubble after a win moved me up ({rank} formatted).
   'ladder.climb.first': "Wonderful! You're in first place!",
   'ladder.climb.up': 'Nice! You climbed to #{rank}!',
+  // UI batch (leaderboard): the chest of a paid place, read by screen readers ({rank} formatted; {reward} = "3 hints
+  // and 3 kitties", the server's amounts). It names the place's reward, never "your" reward.
+  'ladder.chest.a11y': 'Reward for #{rank}: {reward}',
+  // The chest's tooltip: how many of a helper, next to its picture ("×3").
+  'ladder.chest.count': '×{count}',
   // The info view when the sign-in joins (ladder.autoJoin): no "first win" rule any more.
   'ladder.info.window.rollingJoin':
     'A ranking lasts {hours} hours and holds up to {count} players. When it ends, you join a new one the next time you open the game.',

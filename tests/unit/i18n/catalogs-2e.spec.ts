@@ -36,7 +36,7 @@ describe('Phase 2e English (Appendix A, ours)', () => {
       const v = E2[k] as string;
       expect(v, k).not.toMatch(/\btop 3\b|\b7 days\b|\bweekly\b|\b50 players\b|\b24 h(ours)?\b(?!.*first win)/i);
     }
-    expect(E2['ladder.rewards.line.other']).toContain('{count}');
+    expect(E2['ladder.info.rewards.other']).toContain('{count}');
     expect(E2['howto.streak']).toContain('{days}');
     // The one rule that is a fixed fact of the game (fish kept per win, 1–3) may say "up to 3".
     expect(E2['ladder.info.fish']).toContain('up to 3');
@@ -50,7 +50,8 @@ describe('Phase 2e English (Appendix A, ours)', () => {
     expect(all).not.toMatch(/hurry|don't lose|lose your streak|last chance|before it'?s too late/i);
     // Player counts appear only where the server's number or rule goes in.
     const counted = KEYS.filter((k) => /\{count\} players?\b/.test(E2[k] as string));
-    expect(counted.sort()).toEqual(['ladder.info.window.rolling', 'ladder.info.window.rollingJoin', 'ladder.info.window.utcDay', 'ladder.players.other', 'ladder.players.one', 'ladder.rewards.min'].sort());
+    // UI batch (leaderboard): the visible "37 players" (ladder.players.*) is gone.
+    expect(counted.sort()).toEqual(['ladder.info.window.rolling', 'ladder.info.window.rollingJoin', 'ladder.info.window.utcDay', 'ladder.rewards.min'].sort());
   });
 
   it('"ranking" never "leaderboard"; a heart is a cheer, never a life (glossary)', () => {

@@ -18,11 +18,13 @@
 // (Phase 2c.1 §4.6, D24: "Total points" replaced the retired "Perfect streak").
 //
 // Phase 2e (G3, spec §2.4, §7.7, §9.4): the 'bracket' state shows MY BRACKET of the worldwide daily ranking:
-// the title "Daily ranking" with an (i) button (onInfo), the subtitle "+2 fish · Your total: 14", then the
-// bracket list (bracket-list.ts, from the lazy `ladder` chunk through props.bracketList): "Ends in 7 h 48 min ·
-// 37 players", the rewards line, exactly the server's rows (H-3) with my row highlighted and a pinned copy,
-// the hearts. The panel stays interactive: a heart, the (i) button, a tap or a drag inside the list never
-// continues; a tap elsewhere, the footer, Enter, Space or Esc does (after the gate). My rank is announced
+// the title "Leaderboard" with an (i) button (onInfo), then the bracket list (bracket-list.ts, from the lazy
+// `ladder` chunk through props.bracketList): exactly the server's rows (H-3) with my row highlighted, the hearts.
+// UI batch (2026-10-13): the subtitle "+2 fish · Your total: 14" is hidden over the bracket (it stays the dialog's
+// description and in the announcement), so the stopwatch sits right under the title; the card is one row taller
+// (capped so the footer stays on screen). The panel stays interactive: a heart, a chest, the (i) button, a tap or
+// a drag inside the list never continues (Esc closes a chest's tooltip first); a tap elsewhere, the footer,
+// Enter, Space or Esc does (after the gate). My rank is announced
 // politely once ("You are #5 of 37 in the daily ranking."); the countdown never is. Without the factory the
 // 'bracket' state shows the static skeleton (no fake rows). The records note widens: 'opted_out'
 // (ladder.optedOut) and 'paused' (ladder.paused); 'unavailable' while the ladder is active reads
@@ -105,6 +107,13 @@ export interface BracketRowView {
   readonly playing: boolean;
 }
 
+/** UI batch (leaderboard): one paid place's reward, as the server's rules state it (RulesView.places). */
+export interface PlaceRewardView {
+  readonly place: 1 | 2 | 3;
+  readonly hints: number;
+  readonly kitties: number;
+}
+
 /** My bracket for the panel and the sheet (CONTRACTS §8). Never carries an invented row or count. */
 export interface BracketListView {
   readonly bracketId: string;
@@ -115,12 +124,20 @@ export interface BracketListView {
   /** DEVICE-clock ms (the app applied the server offset); null: no countdown line. */
   readonly endsAt: number | null;
   readonly final: boolean;
-  /** 'places': "The top 3 win …" (paidPlaces); 'min': "Rewards need at least 5 players …"; 'none': no line. */
+  /**
+   * 'places': enough players, the paid places show their chests (UI batch: no line any more); 'min': "Rewards need
+   * at least 5 players …"; 'none': no line, no chest.
+   */
   readonly rewardsLine: 'places' | 'min' | 'none';
   /** rules.places.length. */
   readonly paidPlaces: number;
   /** rules.minMembers. */
   readonly minMembers: number;
+  /**
+   * UI batch (2026-10-13, leaderboard): rules.places, each paid place's reward (the chests and their tooltip; C-5:
+   * the server's amounts, never ours). Absent or empty: no chest.
+   */
+  readonly rewards?: readonly PlaceRewardView[];
   /** Hearts received from other players since my last read; 0 = no line. */
   readonly heartsNew: number;
   /** Queued fish shown on my row ("+2 waiting"); 0 = none. */
@@ -149,8 +166,6 @@ export type BracketListFactory = (view: BracketListView, cb: BracketListCallback
 
 export interface BracketListCallbacks {
   onHeart(slot: number): void;
-  /** The pencil on my row (the ranking sheet only); absent = no pencil. */
-  onEditName?(): void;
 }
 
 export interface BracketListHandle {
@@ -165,6 +180,8 @@ export interface BracketListHandle {
    * my row). Never changes a row, a rank or a number: it animates between the server's last two answers.
    */
   playClimb?(from: { readonly rank: number | null; readonly points: number }, reducedMotion: boolean): Promise<ClimbResult>;
+  /** UI batch (leaderboard): closes a chest's reward tooltip; true when one was open (Esc closes it first). */
+  closeTip?(): boolean;
   destroy(): void;
 }
 
@@ -616,6 +633,10 @@ export function createRankingPanel(): OverlayView<RankingPanelProps> {
     // Its glyph and the sheet it opens come with the lazy `ladder` chunk: no factory yet, no (i) (never a blank disc).
     info.hidden = !(p.list.kind === 'bracket' && p.bracketList);
     setText(sub, resultText(p.result));
+    // UI batch (user: "remove '+1 fish · Your total: 16'"): over my bracket (and its skeleton) the stopwatch sits
+    // right under the title; the line stays the dialog's description and in the announcement (the victory screen
+    // shows the total next). The records card and the other boards keep it.
+    sub.hidden = p.result.kind === 'ladder' && (p.list.kind === 'bracket' || p.list.kind === 'loading');
     if (p.list.kind === 'bracket') {
       renderBracket(p, p.list.view);
       listKind = 'bracket';
@@ -675,7 +696,8 @@ export function createRankingPanel(): OverlayView<RankingPanelProps> {
       ready = false;
       shell.hide();
     },
-    dismiss: () => tryContinue(),
+    // Esc closes a chest's tooltip first (UI batch), then continues.
+    dismiss: () => bracket?.handle.closeTip?.() === true || tryContinue(),
     destroy() {
       gate.cancel();
       announceDelay.cancel();

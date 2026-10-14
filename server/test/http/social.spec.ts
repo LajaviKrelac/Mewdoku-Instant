@@ -22,17 +22,17 @@ describe('rewards (§1.6)', () => {
     const t = makeTestApp();
     const ps = await endedFive(t);
     const r1 = ps[0]!.session!.results[0]!.reward!;
-    expect(r1).toMatchObject({ place: 1, grant: { hints: 2, kitties: 2 }, canDouble: true, claim: null });
-    expect(await ps[0]!.claim(r1.rewardId, false)).toMatchObject({ grant: { hints: 2, kitties: 2 }, doubled: false, alreadyClaimed: false });
+    expect(r1).toMatchObject({ place: 1, grant: { hints: 3, kitties: 3 }, canDouble: true, claim: null });
+    expect(await ps[0]!.claim(r1.rewardId, false)).toMatchObject({ grant: { hints: 3, kitties: 3 }, doubled: false, alreadyClaimed: false });
     // a later ×2 after a plain claim does not double: the stored claim stands
-    expect(await ps[0]!.claim(r1.rewardId, true)).toMatchObject({ grant: { hints: 2, kitties: 2 }, doubled: false, alreadyClaimed: true });
+    expect(await ps[0]!.claim(r1.rewardId, true)).toMatchObject({ grant: { hints: 3, kitties: 3 }, doubled: false, alreadyClaimed: true });
     const theft = await ps[1]!.rawClaim(r1.rewardId, true);
     expect(theft.status).toBe(404);
     const second = ps[1]!.session!.results[0]!.reward!;
     expect(second.place).toBe(2);
     const [a, b] = await Promise.all([ps[1]!.claim(second.rewardId, true), ps[1]!.claim(second.rewardId, true)]);
     expect([a.alreadyClaimed, b.alreadyClaimed].sort()).toEqual([false, true]);
-    expect(a.grant).toEqual({ hints: 2, kitties: 2 });
+    expect(a.grant).toEqual({ hints: 4, kitties: 4 }); // 2nd: 2 + 2, doubled
     expect(t.rows<{ doubled: number }>('SELECT doubled FROM rewards WHERE id = ?', second.rewardId)[0]?.doubled).toBe(1);
   });
 
@@ -60,7 +60,7 @@ describe('rewards (§1.6)', () => {
     const r = rs[0]!.session!;
     expect(r.rules.doubleByVideo).toBe(false);
     expect(r.results[0]?.reward?.canDouble).toBe(false);
-    expect(await rs[0]!.claim(r.results[0]!.reward!.rewardId, true)).toMatchObject({ doubled: false, grant: { hints: 2, kitties: 2 } });
+    expect(await rs[0]!.claim(r.results[0]!.reward!.rewardId, true)).toMatchObject({ doubled: false, grant: { hints: 3, kitties: 3 } });
   });
 
   it('refinalize after a removal pays a place that became eligible inside the window; claimed rewards stay', async () => {

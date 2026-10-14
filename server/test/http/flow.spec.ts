@@ -52,19 +52,19 @@ describe('flow: session → wins → bracket → result → claim', () => {
     expect(v.final).toBe(true);
     expect(v.result?.place).toBe(1);
     expect(v.result?.members).toBe(5);
-    expect(v.result?.reward?.grant).toEqual({ hints: 2, kitties: 2 });
+    expect(v.result?.reward?.grant).toEqual({ hints: 3, kitties: 3 });
     const c = await ps[0]!.claim(v.result!.reward!.rewardId, true);
     expect(parseClaimResponse(c)).toEqual(c);
-    expect(c).toMatchObject({ grant: { hints: 4, kitties: 4 }, doubled: true, alreadyClaimed: false, place: 1 });
+    expect(c).toMatchObject({ grant: { hints: 6, kitties: 6 }, doubled: true, alreadyClaimed: false, place: 1 });
     const again = await ps[0]!.claim(v.result!.reward!.rewardId, false);
-    expect(again).toMatchObject({ grant: { hints: 4, kitties: 4 }, doubled: true, alreadyClaimed: true });
+    expect(again).toMatchObject({ grant: { hints: 6, kitties: 6 }, doubled: true, alreadyClaimed: true });
     // the next session lists the result with its claim
     const s = await ps[0]!.signIn();
     expect(s.results[0]?.reward?.claim?.doubled).toBe(true);
-    // 4th and 5th place get no reward; 3rd gets 1 hint
+    // 4th and 5th place get no reward; 3rd gets 1 hint and 1 kitty (UI batch: the server's new amounts)
     const third = (await ps[2]!.bracket()).result;
     expect(third?.place).toBe(3);
-    expect(third?.reward?.grant).toEqual({ hints: 1, kitties: 0 });
+    expect(third?.reward?.grant).toEqual({ hints: 1, kitties: 1 });
     expect((await ps[4]!.bracket()).result?.reward).toBeNull();
   });
 

@@ -206,7 +206,7 @@ test.describe('the preview link (dist/preview-e2e)', () => {
     expect((await app(page)).save.stock.kitties).toBe(0);
   });
 
-  test('End ranking day: the result card (2nd, the sample ranking) → Collect ×2 plays the video → +2 hints, +2 kitties once', async ({ page }) => {
+  test('End ranking day: the result card (2nd, the sample ranking) → Collect ×2 plays the video → +4 hints, +4 kitties once', async ({ page }) => {
     test.setTimeout(90_000);
     await page.goto('/');
     await onScreen(page, 'home');
@@ -223,7 +223,8 @@ test.describe('the preview link (dist/preview-e2e)', () => {
     await double.click();
     await expect(mockAd(page, 'rewarded')).toBeVisible();
     await expect(mockAd(page, 'rewarded')).toContainText('Watch to double your ranking reward');
-    await expect.poll(async () => (await app(page)).save.stock, { timeout: 15_000 }).toEqual({ hints: before.hints + 2, kitties: before.kitties + 2 });
+    // UI batch: 2nd place pays 2 + 2 (the server's new rules.places), doubled.
+    await expect.poll(async () => (await app(page)).save.stock, { timeout: 15_000 }).toEqual({ hints: before.hints + 4, kitties: before.kitties + 4 });
     await expect.poll(() => overlays(page)).not.toContain('ladder_result');
     expect((await app(page)).save.ladder.claimed).toHaveLength(1);
     // A reload shows no second card and grants nothing again.
@@ -231,7 +232,7 @@ test.describe('the preview link (dist/preview-e2e)', () => {
     await onScreen(page, 'home');
     await page.waitForTimeout(2_000);
     expect(await overlays(page)).not.toContain('ladder_result');
-    expect((await app(page)).save.stock).toEqual({ hints: before.hints + 2, kitties: before.kitties + 2 });
+    expect((await app(page)).save.stock).toEqual({ hints: before.hints + 4, kitties: before.kitties + 4 });
   });
 
   test('the ranking sheet from the chip: sample players labelled, a heart, and the name sheet', async ({ page }) => {
@@ -257,8 +258,12 @@ test.describe('the preview link (dist/preview-e2e)', () => {
     await expect(heart.locator('.rank-row__hearts')).toHaveText(String(n0 + 1));
     await page.waitForTimeout(400);
     await shot(page, '12-ranking-sheet-heart');
-    // My row's pencil → the name sheet → a new name, saved by the sample server.
-    await list.locator('ol.rank-rows > li.rank-row[data-me="1"] button.rank-row__edit').click();
+    // UI batch: the sheet has no pencil; the Home profile picture opens the name sheet → a new name, saved by the
+    // sample server.
+    await expect(list.locator('.rank-row__edit')).toHaveCount(0);
+    await sheet.locator('.overlay__close').click();
+    await expect(sheet).toBeHidden();
+    await page.locator('.screen--home .home__profile').click();
     const nick = page.locator('.overlay[data-overlay="nickname"]');
     await expect(nick).toBeVisible({ timeout: 10_000 });
     await nick.locator('select.nickname__adj').selectOption({ index: 3 });
