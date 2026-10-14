@@ -1574,7 +1574,9 @@
   --ss-foot: calc(12px + var(--safe-bottom));
   position: relative; display: flex; flex: 1 0 auto; flex-direction: column; align-items: center; width: 100%; max-width: 480px;
   margin: 0 auto; padding: calc(8px + var(--safe-top)) 16px var(--ss-foot); text-align: center; outline: none; }
-.streak-screen[data-banner] { --ss-foot: calc(var(--banner-reserve, 58px) + var(--banner-clear, 16px) + var(--safe-bottom)); }
+.streak-screen[data-banner] { --ss-foot: calc(var(--banner-reserve, 58px) + var(--banner-clear, 16px) + var(--safe-bottom));
+  /* The band takes ~74 px: the flame gives back 16 px so a two-line reward status (de) clears Continue at 320 × 568. */
+  --ss-flame: clamp(64px, 32.6vh - 115px, 168px); }
 /* Back disc, title, and an empty column of the disc's width: the title stays centred on the screen. */
 .streak-screen__head { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; width: 100%; min-height: 48px; }
 .streak-screen__back { grid-column: 1; justify-self: center; }
