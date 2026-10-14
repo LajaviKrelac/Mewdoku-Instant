@@ -369,11 +369,13 @@ describe('Phase 2d.1: the fx layer and the tickers (§2.5, §5.2)', () => {
       'top: calc(var(--y-top) + var(--s) * 89.2px)',
       'height: calc(var(--s) * 29.3px)',
       'padding-inline-start: calc(var(--s) * 20px)',
-      'max-width: calc(var(--col-w) - var(--s) * 24px)',
+      // UI batch (2026-10-13), messages: as wide as its whole line, never cut (was max-width column − 24 s + ellipsis)
+      'width: max-content',
       'white-space: nowrap',
       'color: var(--ink)',
     ])
       expect(t, d).toContain(d);
+    expect(t).not.toContain('max-width');
     // audit B8: the body (fill, border, round end) is the ::before, starting under the paw (8 s in), so its
     // straight top and bottom never run past the scallops; the ticker box itself has none
     expect(t).not.toMatch(/(?:^|[;\s])(?:border(?:-[a-z]+)*|background)\s*:/);
@@ -390,12 +392,42 @@ describe('Phase 2d.1: the fx layer and the tickers (§2.5, §5.2)', () => {
       expect(body, d).toContain(d);
     expect(ruleOf(celebrate, ".ticker[data-line='2']")).toContain('top: calc(var(--y-top) + var(--s) * 130px)');
     const text = ruleOf(celebrate, '.ticker__text') ?? '';
-    for (const d of ['font-size: max(10px, calc(var(--s) * 16.5px))', 'text-overflow: ellipsis', 'overflow: hidden']) expect(text, d).toContain(d);
+    for (const d of ['font-size: max(10px, calc(var(--s) * 16.5px))', 'flex: none']) expect(text, d).toContain(d);
+    // UI batch, messages: no "…" anywhere in the tickers' CSS
+    expect(stripComments(celebrate)).not.toMatch(/text-overflow|ellipsis/);
+    expect(text).not.toMatch(/overflow|min-width/);
     // audit B7: thinned like the labels (measured stroke 1.40 vs 1.87 px), in the pill's own fill
     expect(text).toContain('-webkit-text-stroke: calc((700 - var(--display-weight)) * 0.0004em) var(--toast-fill)');
     // audit B8: the paw's scallops overhang the pill 2.1 s above and below
     expect(ruleOf(celebrate, '.ticker__paw')).toContain('height: calc(var(--s) * 33.5px)');
     expect(ruleOf(celebrate, '.ticker__paw')).toContain('top: calc(var(--s) * -2.1px)');
+  });
+
+  it('[UI batch, messages] reduced motion: the lines stack from line 1\'s slot, 11.5 s apart, at most the column − 24 s, and wrap', () => {
+    const box = ruleOf(celebrate, '.tickers[data-reduced]') ?? '';
+    for (const d of ['display: flex', 'flex-direction: column', 'align-items: flex-start', 'padding-top: calc(var(--y-top) + var(--s) * 89.2px)']) expect(box, d).toContain(d);
+    const t = ruleOf(celebrate, '.tickers[data-reduced] .ticker') ?? '';
+    for (const d of [
+      'position: relative',
+      'top: auto',
+      'max-width: calc(var(--col-w) - var(--s) * 24px)',
+      'min-height: calc(var(--s) * 29.3px)',
+      'padding-block: calc(var(--s) * 4.75px)',
+      'white-space: normal',
+    ])
+      expect(t, d).toContain(d);
+    // line 2's own top (y0 + 130 s) yields to the stack, 11.5 s under line 1 (130 − 89.2 − 29.3)
+    expect(ruleOf(celebrate, ".tickers[data-reduced] .ticker[data-line='2']")).toContain('top: auto');
+    expect(ruleOf(celebrate, ".tickers[data-reduced] .ticker[data-line='2']")).toContain('margin-top: calc(var(--s) * 11.5px)');
+    const text = ruleOf(celebrate, '.tickers[data-reduced] .ticker__text') ?? '';
+    for (const d of ['min-width: 0', 'text-wrap: balance']) expect(text, d).toContain(d);
+    // a taller pill closes its own start edge (above and below the paw): one radius on every corner, no RTL variant
+    const body = ruleOf(celebrate, '.tickers[data-reduced] .ticker::before') ?? '';
+    for (const d of ['border: calc(var(--s) * 1.2px) solid var(--toast-line)', 'border-radius: calc(var(--s) * 14.65px)']) expect(body, d).toContain(d);
+    // the paw stays centred on a taller pill (− 2.1 s on a one-line pill: 14.65 − 16.75)
+    expect(ruleOf(celebrate, '.tickers[data-reduced] .ticker__paw')).toContain('top: calc(50% - var(--s) * 16.75px)');
+    // no flex gap, no inset (baseline, 04 §1)
+    expect(stripComments(celebrate)).not.toMatch(/(^|[^-])gap\s*:|(^|[^-])inset\s*:/m);
   });
 
   it('audit B14: the tickers cross the game column, clipped to it (not the whole desktop viewport)', () => {

@@ -657,6 +657,23 @@ export interface GameConfig {
       readonly crossMs: number;
       readonly lead: number;
       readonly reducedHoldMs: number;
+      /**
+       * UI batch (2026-10-13), messages: the speed ceiling in s-px per second (× --s). A pair whose longer line would
+       * cross faster takes longer than crossMs instead (both lines, so they keep their spacing): a long translated line
+       * stays readable. Our English lines (≤ 60 characters) stay under it at every phone width.
+       */
+      readonly maxPxPerSec: number;
+      /**
+       * UI batch, messages (spec §0.4 H-2a): line 1 sets expectations (ticker.odds.*, game/level-odds.ts) on a Hard
+       * level and on any board whose estimated first-try share is at most this percentage; the average-tries line only
+       * when the estimate is at least oddsMinTries.
+       */
+      readonly oddsMaxFirstTryPct: number;
+      readonly oddsMinTries: number;
+      /** UI batch, messages: a Retry after a loss this many cats short (or fewer) says how close it was. */
+      readonly retryCloseCats: number;
+      /** UI batch, messages: every this many levels, line 2 marks the milestone ("Level 100! …"). */
+      readonly milestoneEvery: number;
     };
   };
   readonly save: {
@@ -1456,7 +1473,19 @@ export const cfg: GameConfig = deepFreeze({
     points: { starAtMs: 783, flightMs: 530, countMs: 350, burstMs: 650 },
     unitDone: { waveStepMs: 33, labelMs: 720 },
     hint: { dimMs: 300, ghostFirstMs: 333, ghostStaggerMs: 60, ghostPopMs: 500 },
-    tickers: { enabled: true, delayMs: 150, crossMs: 9000, lead: 0.086, reducedHoldMs: 3000 },
+    tickers: {
+      enabled: true,
+      delayMs: 150,
+      crossMs: 9000,
+      lead: 0.086,
+      // UI batch, messages: 3000 → 4500 (the lines grew to ≤ 60 characters; reduced motion shows both at once).
+      reducedHoldMs: 4500,
+      maxPxPerSec: 110,
+      oddsMaxFirstTryPct: 55,
+      oddsMinTries: 2,
+      retryCloseCats: 2,
+      milestoneEvery: 50,
+    },
   },
   save: {
     localDebounceMs: 400,

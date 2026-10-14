@@ -21,6 +21,8 @@ import { createHarness, levelPuzzle, loseGame, NOW, slice, SOL5, startLevel, win
 /** Phase 2d.1 §5.5: line 1's key of each playTickers call (the trigger of 2d's toast). */
 const starts = (h: Harness): string[] => (h.router.game?.tickers ?? []).map((lines) => lines[0].key);
 const FRESH = ['ticker.cats', 'toast.start.level'];
+/** UI batch (messages): line 1 after a Retry (the odds, the lost attempt's cats or closeness, the try number, the cheer). */
+const RETRY = /^(toast\.start\.retry|ticker\.odds\.retry|ticker\.retry\.(found|close|again))$/;
 
 /** After a revive (1 fish left): one more wrong cat (a tile loseGame did not use) loses again; O4 opens. */
 async function loseAgain(h: Harness): Promise<void> {
@@ -42,10 +44,15 @@ describe('level-start trigger (2d §1.14; 2d.1 §5.5: the two tickers replace th
   });
 
   it('a Hard level: line 1 is the Hard line; a daily and an event puzzle: a fresh line', async () => {
+    // UI batch (messages): the first Hard level says so; a later one picks a Hard line (levels beaten, cheer, odds).
     const hard = createHarness({ save: (s) => ({ ...s, progress: { level: 30, completed: 29, best: {} } }) });
     await startLevel(hard, 30);
     expect(hard.store.get().session?.hard).toBe(true);
-    expect(starts(hard)).toEqual(['toast.start.hard']);
+    expect(starts(hard)).toEqual(['ticker.hard.first']);
+    const later = createHarness({ save: (s) => ({ ...s, progress: { level: 40, completed: 39, best: {} } }) });
+    await startLevel(later, 40);
+    expect(starts(later)).toHaveLength(1);
+    expect(starts(later)[0]).toMatch(/^(ticker\.hard\.beaten|toast\.start\.hard|ticker\.odds\.(firstTry|tries))$/);
 
     const daily = createHarness({ save: (s) => ({ ...s, progress: { level: 30, completed: 29, best: {} } }) });
     await daily.session.start({ mode: 'daily', dateKey: '2026-10-07' });
@@ -73,7 +80,7 @@ describe('level-start trigger (2d §1.14; 2d.1 §5.5: the two tickers replace th
     await loseAgain(h); // the second loss: no revive left
     expect(h.router.isOpen('fail')).toBe(true);
     await h.session.onRetry();
-    expect(starts(h)[1]).toBe('toast.start.retry');
+    expect(starts(h)[1]).toMatch(RETRY);
     expect(starts(h)).toHaveLength(2);
     await h.settle(h.config.fx.boardEntryMs);
     expect(h.game().status).toBe('playing');

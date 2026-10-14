@@ -3,6 +3,8 @@
 // `npx vite --port 5174 --strictPort` and open /dev/board-harness.html?scene=…
 //   scene=game&n=5|9|12[&patterns=1][&hint=1][&coach=1][&hard=1][&fb=1][&rm=1][&fresh=1][&entry=1]
 //     [&video=1][&band=1][&dot=0][&tickers=1]   (Phase 2d: the real game screen; M = mouse)
+//     UI batch (messages): &tickers=odds|retry|records|long shows the richer level-start lines (long: the two longest
+//     English ones), &lang=<id> in that language (rm=1: the reduced-motion layout, stacked and wrapping)
 //   scene=gallery (cat moods, icons, glyphs, marks)   scene=illus (illustrations)
 // The game scene is playable with the real reducer (tap, double-tap, drag; H = hint, M = mouse).
 import '../src/i18n/en-lazy'; // Phase 2e I-4: the harness shows lazy views without their chunk barrels
@@ -26,7 +28,8 @@ import { newGame } from '../src/game/factory';
 import { hasMouseCandidate, mouseSeed, pickMouseCells } from '../src/game/mouse';
 import { reduce } from '../src/game/reducer';
 import { CellState, type Action, type GameState } from '../src/game/types';
-import { t } from '../src/i18n';
+import { setLocale, t } from '../src/i18n';
+import type { TickerLine } from '../src/ui/fx/tickers';
 import { illustration, type IllustrationKind } from '../src/ui/art/illustrations';
 import { regionColorsFor } from '../src/ui/art/palette';
 import { icon, mountSprite, type SymbolId } from '../src/ui/art/sprite';
@@ -158,9 +161,25 @@ function gameScene(): void {
   if (q.get('hint') === '1') hint();
   if (q.get('entry') === '1') screen.playEntry();
   // Phase 2d.1 §5: ?tickers=1 plays the two level-start tickers (2d's ?toast= and its toast were retired at I-3).
-  if (q.get('tickers') === '1') screen.playTickers([{ key: 'toast.start.level' }, { key: 'ticker.unique' }]);
+  // UI batch (messages): the other presets show the richer lines, in &lang= when given.
+  const tickers = TICKER_SETS[q.get('tickers') ?? ''];
+  const lang = q.get('lang');
+  if (tickers) {
+    void (lang ? setLocale(lang, { override: lang } as never) : Promise.resolve())
+      .catch((e: unknown) => console.error(e))
+      .then(() => screen.playTickers(tickers));
+  }
   (window as unknown as { __harness: unknown }).__harness = { dispatch, state: () => state, screen, puzzle, CellState };
 }
+
+/** ?tickers= presets (UI batch, messages): the numbers are samples; the game picks lines with app/tickers.ts. */
+const TICKER_SETS: Readonly<Record<string, readonly [TickerLine, TickerLine]>> = {
+  '1': [{ key: 'toast.start.level' }, { key: 'ticker.unique' }],
+  odds: [{ key: 'ticker.odds.firstTry', pct: 45 }, { key: 'ticker.flawless', count: 12 }],
+  retry: [{ key: 'ticker.retry.found', placed: 6, n: 9 }, { key: 'ticker.streak', count: 9 }],
+  records: [{ key: 'ticker.hard.first' }, { key: 'ticker.hard.beaten', count: 12 }],
+  long: [{ key: 'ticker.odds.tries', count: 2.5 }, { key: 'ticker.odds.retry', pct: 70 }],
+};
 
 function swatch(label: string, el: Element): HTMLElement {
   const fig = document.createElement('figure');

@@ -49,7 +49,7 @@ import type { AnalyticsEvent, RankResult } from './events';
 import { isFlagOn } from './flags';
 import { createHelperFlows } from './helper-flows';
 import { queueWin } from './ladder-origin';
-import { pickTickerLines } from './tickers';
+import { pickTickerLines, type LastTry } from './tickers';
 import type { BoardScore } from './ranking-flow';
 import { feedbackFor, failEvent, levelParam, mistakeEvent, startEvents, winBookkeeping, type WinSummary } from './session-effects';
 import { createFeedbackPlayer, createSessionTimers, defaultColors, defaultPraise, overlayProps, withoutSlot, withSlot, type SaveSlot } from './session-parts';
@@ -97,6 +97,8 @@ export function createSession(deps: SessionDeps): Session {
   let lastChangeAt: number | undefined;
   /** Phase 2d.1 §5.4: attempts on this board in this session (0 at mount, +1 per Retry): the tickers' seed. */
   let attempt = 0;
+  /** UI batch (2026-10-13), messages: the attempt a Retry ended (its cats placed), for the Retry's ticker line. */
+  let lastTry: LastTry | null = null;
   /**
    * Phase 2d.1: sounds the session schedules for the board's and the fx layer's motion (the mouse's
    * arrivals and landings, a mouse action's unit_done, the points star's landing). A props render of
@@ -246,6 +248,7 @@ export function createSession(deps: SessionDeps): Session {
     if (a.type === 'RETRY') {
       lastChangeAt = undefined;
       attempt++;
+      lastTry = { placed: prev.catsPlaced, n: prev.puzzle.n };
       clearFxTimers();
     } else if (state.cells !== prev.cells || a.type === 'START' || a.type === 'REVIVE') lastChangeAt = now;
     if (state !== prev || writeSlot) {
@@ -775,6 +778,7 @@ export function createSession(deps: SessionDeps): Session {
     if (cleared) deps.saves.touch();
     helpers.newAttempt();
     attempt = 0;
+    lastTry = null;
     screen = router.showGame(selectGameView(store.get(), viewCtx(), c) as GameView, callbacks);
     unbindView = store.select(
       // ext: the settings dot (§1.15); purchases: No Ads takes the banner band away (§1.16).
@@ -855,8 +859,12 @@ export function createSession(deps: SessionDeps): Session {
         mode: m.mode,
         level: m.mode === 'level' ? m.level : null,
         n: s.puzzle.n,
+        grade: s.puzzle.grade,
+        effort: s.puzzle.effort,
         hard: m.hard,
         retry,
+        attempt,
+        lastTry: retry ? lastTry : null,
         dailyOpen: daily === 'not_played' || daily === 'in_progress',
         todayKey: today,
         seed: `${m.puzzleId}:${attempt}`,

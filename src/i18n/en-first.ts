@@ -13,9 +13,10 @@ import { enUi2c } from './en/ui-2c';
 import { enUi2d } from './en/ui-2d';
 import { enUi2d1 } from './en/ui-2d1';
 import { enUi2e } from './en/ui-2e';
+import { enUiTickers } from './en/ui-tickers';
 
 /** The first-load English strings (the first screens, the board, the tutorial coach, the boot and error copy). */
-export const enFirst = { ...enCore, ...enArt, ...enUi2b, ...enUi2c, ...enUi2d, ...enUi2d1, ...enUi2e, ...enEvents, ...enPlatform, ...enI18n } as const;
+export const enFirst = { ...enCore, ...enArt, ...enUi2b, ...enUi2c, ...enUi2d, ...enUi2d1, ...enUi2e, ...enEvents, ...enPlatform, ...enI18n, ...enUiTickers } as const;
 
 /** A key of the first-load table (the key lists below must be: first-load code indexes them). */
 export type FirstKey = keyof typeof enFirst;
