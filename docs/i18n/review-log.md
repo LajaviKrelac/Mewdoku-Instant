@@ -145,6 +145,25 @@ Points a reviewer should check first:
 | `tr` | `rewarded.buy.label` "Satın al {items} · {price}" puts the verb first on purpose (money is spent, C-3); a reviewer may prefer a colon |
 | `de`, `fr` | `ladder.result.place` and the streak lines were shortened to fit 320 px ("Dein Platz: …", "Ta place : …") |
 
+## Leaderboard update and UI batch drafts (2026-10-12 … 2026-10-14)
+
+The 16 catalogues gained small blocks next to each workstream's anchor key, drafted by Claude (AI) from our own English copy, `meta.ts` and the [glossary](glossary.md) only. Every line is an **unreviewed AI draft**; the release still ships English only. Notes per workstream: `docs/ui-batch/*.md`.
+
+- **Leaderboard update (12 keys, 2026-10-12):** the status pills (`ladder.status.*`), the "New ranking" card (`ladder.session.*`), the rank-up bubble (`ladder.climb.*`) and two info lines (`ladder.info.window.rollingJoin`, `ladder.info.activity`).
+- **UI batch (2026-10-14):** the chest name and count (`ladder.chest.*`); the profile sheet's typed name, tabs, looks and their unlock lines (`nick.*`; `nick.title` → "Your profile", `nick.saved` → "Profile saved."); the Daily Streak screen (`streak.screen.*`, `streak.week.*`); the victory's praise and statistic lines (`victory.line.*`, `victory.stat.*`); the level-start lines (`ticker.*`, `ticker.odds.*`, `src/i18n/en/ui-tickers.ts`); "Extra hard" (`common.extraHard`). Removed everywhere: `ladder.players.*`, `ladder.rewards.line.*`, `nick.edit.a11y`, `nick.first`, `nick.second`, `nick.number`, `nick.shuffle`, `nick.fallback`, `nick.error`.
+- `docs/i18n/drafted-from.json` rewritten (`i18n-check --write-drafted-from`): no stale warning. `npm run i18n:check`: OK; the 6 width warnings are the older No Ads Buy label and an Italian ranking title.
+
+Points a reviewer should check first:
+
+| Locale | Check |
+|---|---|
+| all | `ticker.odds.*` and `victory.stat.*` are **approximate** statistics (spec §0.4 H-2a): every one must read as approximate ("about", "roughly") and never as an exact count; no urgency anywhere ("keep going" is fine, "hurry" is not) |
+| all | the profile's name hint and its unlock lines ("Reach level {level}", "a {days}-day streak") must stay short (tabs at 320 px); a typed ranking name is the player's own text and is never translated |
+| `de`, `es`, `fr`, `ru` | a no-break space before `%` so the number and the sign never split across lines |
+| `fr`, `it`, `pt-BR`, `pl`, `ru` | "Extra hard" was kept within 12 characters with short forms ("Très dur", "Durissimo", "Dificílimo", "Arcytrudny", "Сверхсложный"); a native reviewer may prefer the longer natural phrase |
+| `ar`, `pl` | weekday names on the Daily Streak screen come from `Intl` (not the catalogue); the screen shrinks long names, check they stay legible |
+| `ru`, `pl`, `ar` | the tries plural in `ticker.odds.*` must read correctly for a half ("2,5") |
+
 ## Known limits of the drafts
 
 - Event names, product names and praise words are our own and were translated for meaning and tone, not literally; reviewers may propose better local names (they must stay our own, never another game's).

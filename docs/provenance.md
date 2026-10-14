@@ -419,3 +419,133 @@ The ranking art is mounted into the sprite by `mountLadderArt()` when the lazy `
 |---|---|
 | The rankings hub (`src/ui/overlays/rank-hub.ts`, `src/app/rank-hub-flow.ts`, the overlay id `rank_hub`, its CSS) and Home's trophy button | Replaced by the chip and the ranking sheet (spec §2.10); deleted at I-3. The event Top list opens through `src/app/event-top-flow.ts` |
 | The FB weekly period board in the post-win panel | Retired (D-2e-4, `rank.fbPeriodBoard: false`); the code path stays behind the flag until gate G1 |
+
+## 14. UI batch and the leaderboard update (2026-10-12 … 2026-10-14)
+
+Six parallel workstreams plus the lead's integration; each workstream's notes (decisions, stale docs, sizes) are in `docs/ui-batch/<area>.md`. All art is hand-coded SVG or CSS from our own written words; all copy is ours (the user's example sentences, which belong to another game, are not used); every locale line is an unreviewed AI draft from our English, `meta.ts` and the glossary only ([review-log](i18n/review-log.md)).
+
+### 14.0 Leaderboard update (2026-10-12, lead)
+
+| Asset | File(s) | Method |
+|---|---|---|
+| `icon-stopwatch`, the podium steps and medals, the ribbon title, the status pills, the "New ranking" card | `src/ui/art/ladder-art.ts`, `src/ui/overlays/bracket-list.ts`, `ladder-session.ts`, `src/styles/ladder-chunk.css` | Hand-coded SVG / CSS from our written descriptions after the user's screenshots (layout and order measured; no tracing) |
+| 12 English keys (`ladder.status.*`, `ladder.session.*`, `ladder.climb.*`, `ladder.info.window.rollingJoin`, `ladder.info.activity`) and their 16 drafts | `src/i18n/en/lazy.ts`, `src/i18n/locales/*.ts` | Our sentences; AI drafts |
+
+### 14.1 Leaderboard cleanup (chests, tooltip, sticky row)
+
+From `docs/ui-batch/leaderboard.md`:
+
+§13.1 Art:
+
+| Asset | File(s) | Method and words drawn from | Markup (B) |
+|---|---|---|---|
+| `reward-chest-1`, `reward-chest-2`, `reward-chest-3` | `src/ui/art/ladder-art.ts` (`chestArt` → `tier`) | UI batch 2026-10-13, hand-coded SVG by an AI coding agent from our written words: "the same wooden chest in three sizes on one ground line; 1st gold straps and corner caps, a gold crown band set with a ruby, a sapphire and a jade, the fish lock, gold sparkles; 2nd silver straps, rivets, corner caps and a silver fish lock; 3rd plain wood, bronze straps, a round bronze lock plate". Built on our own `reward-chest` geometry; no reference image. | 2 100 / 1 433 / 1 151 |
+
+§13.3 Screens: the chest tooltip (`.lb-tip`, `src/ui/overlays/bracket-prize.ts`, `ladder-chunk.css`; our own layout:
+a toast-coloured bubble with an arrow, the medal and the helpers' art), the sticky own row, the centred sheet head.
+
+§13.4 Copy: `ladder.chest.a11y` "Reward for #{rank}: {reward}" and `ladder.chest.count` "×{count}" (ours; 16 AI
+drafts from our English, `meta.ts` and the glossary only). Removed: `ladder.players.*`, `ladder.rewards.line.*`,
+`nick.edit.a11y` (the §13.4 bullet that lists `nick.edit.a11y` should drop it).
+
+### 14.2 Profile (typed names, frames and backgrounds)
+
+From `docs/ui-batch/profile.md`:
+
+| Asset | File(s) | Method and words drawn from | Markup (B) |
+|---|---|---|---|
+| `frame-1` (solid) | `src/ui/art/looks-art.ts`, `palette-2e.ts` `LOOK_COLORS` | "A plain denim ring around the picture with a soft white highlight at the upper left"; 100 grid, band r 41–48 around the avatar disc. | 338 |
+| `frame-2` (double) | same | "Two lagoon rings with a white line between them". | 293 |
+| `frame-3` (beaded) | same | "Eighteen orchid beads on a thin line, each with a white glint". | 2 132 |
+| `frame-4` (scalloped) | same | "An apricot ring whose outer edge is a row of sixteen round bumps". | 996 |
+| `frame-5` (studded) | same | "A gold ring with darker gold edges and eight round gems (sky, coral, lime, violet) with glints". | 1 364 |
+| `frame-6` (laurel) | same | "Two leafy branches of alternating green leaves up the sides, open at the top, tied at the bottom with a small coral bow". | 2 428 |
+| `frame-7` (starry) | same | "A violet ring with eight gold five-point stars and small white dots between them". | 1 530 |
+| `bg-1` (sunny) | same | "A soft yellow disc with a paler halo ring". | 185 |
+| `bg-2` (mint) | same | "A mint disc with a lighter mint centre". | 143 |
+| `bg-3` (polka) | same | "A rose disc with staggered white dots, each wholly inside the disc". | 2 375 |
+| `bg-4` (stripes) | same | "A sky disc with five pale horizontal bands (the bands are cut to the disc by their own arcs, no clip path)". | 513 |
+| `bg-5` (night) | same | "A navy disc, a gold crescent moon between the ears, a few gold and white stars around the head". | 782 |
+| `bg-6` (sunburst) | same | "Sixteen gold rays on an apricot tint from the centre". | 705 |
+| `bg-7` (rainbow) | same | "Six concentric rings of our palette colours (coral, apricot, mustard, lime, sky, violet)". | 331 |
+| Avatar disc override | `ladder-art.ts` `avatar()` | The coat disc's fill is `var(--avatar-bg, <tint>)`; `avatarBadge` sets `--avatar-bg:none` under a background. | — |
+| Podium "mine" dot | `src/styles/ladder-chunk.css` | An accent dot in a white ring over the top of my podium picture. | — |
+
+Colours (`palette-2e.ts` `LOOK_COLORS`): palette colours (Denim, Lagoon, Orchid, Apricot, Sky, Coral, Lime, Violet,
+Mustard), the gold tokens, palette tints toward white (sunny, mint, mintLight, rose, skyTint, skyLight, rays) and six
+deeper shades of ours (denimDeep `#3F5891`, orchidDeep `#C25C93`, apricotDeep `#E0803F`, violetDeep `#6A4FB0`, leaf
+`#6E9F57`, night `#2F3A66`). Decorative only: every look also differs by shape or pattern (not added to
+`scripts/palette-check.ts`; the art test's allowed set includes them).
+
+Copy (ours, `src/i18n/en/lazy.ts` nick block; AI drafts in all 16 locales from our English, meta and the glossary only):
+`nick.title` (now "Your profile"), `nick.saved` (now "Profile saved."), `nick.name`, `nick.name.off`,
+`nick.rule.length`, `nick.rule.chars`, `nick.rule.digits`, `nick.rule.link`, `nick.invalid`, `nick.frame`,
+`nick.background`, `nick.frame.a11y`, `nick.background.a11y`, `nick.locked.a11y`, `nick.lock.level`,
+`nick.lock.streak.*`, `nick.lock.prize`. New placeholders in `meta.ts` `PLACEHOLDER_NOTES`: `from`, `to`, `digits`,
+`label`, `how`. Glossary §6: "Ranking name" rewritten for typed names, new rows "Profile", "Frame, background" and the
+two term rows in both tables.
+
+### 14.3 Daily Streak screen
+
+From `docs/ui-batch/streak.md`:
+
+| Asset | Files | Author, date | Method |
+|---|---|---|---|
+| Daily Streak screen layout (title, flame, run, best pill, week row, status, Continue / back disc) | `src/ui/overlays/streak-screen.ts`, `src/styles/overlay-chunk.css` | streak workstream (Claude), 2026-10-13 | Our layout; the order of the parts measured from the user's own screenshots (D-2d-0 a), nothing traced. Reuses our `icon-streak-flame` and `streak-step-chest` (G2, 2e); the discs, the check and the ring are CSS from tokens |
+| Week row data (the run's current cycle, the gift where a reward pays) | `src/game/day-streak.ts` `streakWeek` | streak workstream (Claude), 2026-10-13 | Ours, from our reward rule (D-2e-12), not the reference's calendar week |
+| Faded pill flame until today counts | `src/styles/overlay-chunk.css` | streak workstream (Claude), 2026-10-13 | Ours (opacity + grayscale of our flame), from the user's description of a washed-out icon |
+| English copy: `streak.screen.*`, `streak.week.*` and the 16 drafts (**AI drafts, unreviewed**) | `src/i18n/en/lazy.ts`, `src/i18n/meta.ts`, `src/i18n/locales/*.ts` | streak workstream (Claude), 2026-10-13 | Our sentences; the drafts from our English, `meta.ts` and the glossary only (06 §2 step 6). "Daily streak" is the user's own feature name |
+
+### 14.4 Victory lines and the daily percentile
+
+From `docs/ui-batch/victory.md`:
+
+| Asset | File(s) | Author, date | Method |
+|---|---|---|---|
+| Victory praise and statistic lines (13 English strings) | `src/i18n/en/lazy.ts` (`victory.line.*`, `victory.stat.*`) | victory workstream (AI), 2026-10-13 | Written from the user's request ("praising and encouraging messages/statistics"), our own words; none of the user's example sentences |
+| Their 16 locale drafts | `src/i18n/locales/*.ts` after `victory.streakReward` | same, 2026-10-13 | AI drafts from our English, `meta.ts` and `docs/i18n/glossary.md` only; unreviewed |
+| The line chips and the fit step 5 | `src/styles/overlay-chunk.css` (`.victory__lines`, `.victory__line`, `[data-fit='5']`) | same | Hand-written CSS, tokens and the white/black alpha allow-list only |
+| The solve-time estimate | `src/game/solve-time-model.ts`, config `victory.model` | same | Our model (log-normal, our medians); not measured from any game |
+| The daily rollup | `server/migrations/0005_daily_times.sql`, `sql-store.ts`, `handlers/wins.ts` | same | Our code from spec §0.4 H-2a and this plan |
+
+No new art (no SVG symbol).
+
+### 14.5 Level-start lines
+
+From `docs/ui-batch/messages.md`:
+
+- `src/i18n/en/ui-tickers.ts` (UI batch, messages) is ours: 18 level-start lines written from the intent of the user's
+  request (expectations, encouragement after a Retry, the player's own records). The three example sentences the user
+  quoted belong to another game: neither their wording nor their numbers are used. The only approximate statistics are
+  the `ticker.odds.*` lines (spec §0.4 H-2a, `ESTIMATE_KEY_PREFIXES`), estimated by our own model.
+- `src/game/level-odds.ts` (UI batch, messages): our own estimate model, written from our grader's grade and effort and
+  calibrated on our packs only; no data or number from another game.
+- The 16 locales' `ticker.odds.*`, `ticker.retry.*`, `ticker.hard.*`, `ticker.flawless.*`, `ticker.streak.*`,
+  `ticker.dailies.*` and `ticker.milestone` drafts are AI drafts by the same agent from our English, `meta.ts` and the
+  glossary only, unreviewed (inserted after `'ticker.tip.drag'` in each catalogue).
+
+### 14.6 Hard and Extra-hard level frames
+
+From `docs/ui-batch/levelbutton.md`:
+
+Colours (§ "Colours (ours; checked or reported by scripts/palette-check.ts)"):
+
+| Colour | Where | Check |
+|---|---|---|
+| `--tier-hard` `#CF2A2A` | The Hard badge (game bar), Home's Hard frame ring and tag | White on it 5.23 (≥ 4.5 row); on white 5.23 (≥ 3 row) |
+| `--tier-hard-deep` `#9E1C1C` | The Hard frame's 3D edge | 7.17 on `--page` (≥ 3 row) |
+| `--tier-extra` `#7A3CC8` | The Extra-hard badge, Home's Extra-hard frame ring and tag | White on it 6.35 (≥ 4.5 row); on white 6.35 (≥ 3 row) |
+| `--tier-extra-deep` `#55278F` | The Extra-hard frame's 3D edge | 9.12 on `--page` (≥ 3 row) |
+
+Screens (§ "Screens, overlays and motions"):
+
+| Surface | File(s) | Notes |
+|---|---|---|
+| Home's Play button frames and tier tag | `src/ui/screens/home-screen.ts`, `src/styles/overlays.css`, `src/styles/base.css` | Hand-written CSS from a written description ("a white ring, then a ring in the tier colour and a deeper 3D edge; a small pill with the tier's name on the frame's top edge"). No art file; no motion of its own (the button's existing press). |
+
+Copy (§ "Copy and words"):
+
+- `common.extraHard` "Extra hard" (`src/i18n/en/core.ts`): a generic two-word difficulty label, named by the lead's plan
+  (map Q5 noted it may also be the original's label; it is a plain English phrase, not a slogan). The 16 drafts are AI
+  drafts by the same agent from our English, `meta.ts` and the glossary only; unreviewed (review-log entry for the lead).
+

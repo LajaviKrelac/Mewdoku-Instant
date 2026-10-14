@@ -178,23 +178,31 @@ export const LOCALE_CHUNK = /^assets\/locale-[A-Za-z-]+-[^/]*\.js$/;
  * art re-set at the final audit fixes, 2026-10-10): the largest measured build (FBIG for JS) plus about 3 % (04 §9).
  * Phase 2e I-4 (2026-10-11): main JS, the three first-load totals, the locale chunk and the two ladder rows re-set; the
  * overlay chunk (JS, CSS), ladder boot and lazy English rows added, and the core lazy rows re-set to what is left.
+ * UI batch (2026-10-14, lead decision; measured on dist/fbig-e2e, the largest build): main JS 353.7 → 367.9 KB (the
+ * victory praise picker and solve-time model, the ticker lines + level-odds model + their English, the streak screen
+ * flow, avatarBadge, the level tiers), CSS 52.4 → 53.1 (the level-button frames; the row was already over at the
+ * combo bar), the three first-load totals with them; locale chunk 41.8 → 47.8 (the batch's ~70 new keys in every
+ * language); fx chunk JS/CSS 14.9/3.2 → 15.6/3.9 (wider tickers, reduced-motion wrap); ladder 37.9 → 45.6 KB JS and
+ * 21.8 → 24.9 KB CSS (chests, tooltip, profile looks art, the profile sheet), ladder boot 36.2 → 38.2, overlay chunk
+ * 55.4/33.2 → 59.6/38.9 (the Daily Streak screen, victory lines), lazy English 13.6 → 15.3. Each re-set to measured +
+ * about 3 %; the first-load total to 450 KB (it must stay below the sum of its rows' ceilings, 451.8 KB).
  */
 export const BUDGETS: readonly SizeBudget[] = [
   // The entry and the modulepreload chunks index.html links (since 2d.1 I-4: core-*, and the tutorial coach's
   // coach-chunk-* and rich-text-*, preloaded for a first run).
-  { label: 'Main JS', pattern: /^assets\/index-[^/]*\.js$/, maxBytes: 360 * KB, fromHtml: 'js', firstLoad: true },
+  { label: 'Main JS', pattern: /^assets\/index-[^/]*\.js$/, maxBytes: 379 * KB, fromHtml: 'js', firstLoad: true },
   // Only the stylesheets index.html links (the first-load sheet and, since 2d.1 I-4, the coach chunk's); the lazy
   // chunks' stylesheets are the lazy CSS rows.
-  { label: 'CSS', pattern: /^$/, maxBytes: 51.7 * KB, fromHtml: 'css', firstLoad: true },
+  { label: 'CSS', pattern: /^$/, maxBytes: 54.7 * KB, fromHtml: 'css', firstLoad: true },
   // The latin-ext face (tr, pl) is fetched only when such glyphs appear (unicode-range, phase2b §6.6).
   { label: 'Font (lazy)', pattern: /-ext-[^/]*\.woff2$/, maxBytes: LISTED },
   { label: 'Font', pattern: /\.woff2$/, maxBytes: 17 * KB, firstLoad: true },
   { label: 'index.html', pattern: /^index\.html$/, maxBytes: 1.14 * KB, firstLoad: true },
   { label: 'Worker JS (lazy)', pattern: /^assets\/[^/]*worker[^/]*\.js$/, maxBytes: 18.5 * KB },
-  { label: 'Locale chunk (each)', pattern: LOCALE_CHUNK, maxBytes: 41.9 * KB, perFile: true },
+  { label: 'Locale chunk (each)', pattern: LOCALE_CHUNK, maxBytes: 49.3 * KB, perFile: true },
   { label: 'Lazy JS (optional)', pattern: /^assets\/(?:events|fb-social|social-flows)-[^/]*\.js$/, maxBytes: 29.3 * KB },
   // Phase 2d.1 (I-4): the fx chunk (src/ui/fx/celebrate.ts), prefetched at idle after the first game screen mounts.
-  { label: 'Lazy JS (fx chunk)', pattern: /^assets\/celebrate-[^/]*\.js$/, maxBytes: 15.3 * KB },
+  { label: 'Lazy JS (fx chunk)', pattern: /^assets\/celebrate-[^/]*\.js$/, maxBytes: 16_100 }, // 16.1 KB (an integer: 16.1 * KB is not exact)
   // Phase 2d.1 (I-4): the board's lazy motion (src/ui/board/board-mouse.ts: the mouse, the cat sequence, the wave).
   { label: 'Lazy JS (board motion)', pattern: /^assets\/board-mouse-[^/]*\.js$/, maxBytes: 3.8 * KB },
   // Phase 2d.1: the symbols only those two chunks draw (src/ui/art/lazy-art.ts), split out because both import it.
@@ -203,36 +211,36 @@ export const BUDGETS: readonly SizeBudget[] = [
   // The 8-character hash keeps chunks named after other ladder-* modules (ladder-flow, ladder-sheet, …) out of it.
   // Leaderboard update (2026-10-12): 30.0 → 37.9 KB measured (the podium, the status pills, the rank-up and the
   // "New ranking" card); lazy, never on the first load.
-  { label: 'Lazy JS (ladder)', pattern: /^assets\/ladder-[\w-]{8}\.js$/, maxBytes: 38.5 * KB },
+  { label: 'Lazy JS (ladder)', pattern: /^assets\/ladder-[\w-]{8}\.js$/, maxBytes: 47 * KB },
   // Phase 2e I-4: the ladder's sign-in, sync, remote config and response parsers (src/app/ladder-boot.ts), loaded after
   // the first screen when the ranking is on.
-  { label: 'Lazy JS (ladder boot)', pattern: /^assets\/ladder-boot-[\w-]{8}\.js$/, maxBytes: 36.6 * KB }, // leaderboard update: 33.9 → 36.2 KB (presence, the card, the parsers' activity)
+  { label: 'Lazy JS (ladder boot)', pattern: /^assets\/ladder-boot-[\w-]{8}\.js$/, maxBytes: 39.4 * KB }, // leaderboard update: 33.9 → 36.2 KB (presence, the card, the parsers' activity); UI batch 38.2 KB
   // Phase 2e I-4: the overlay chunk (src/app/overlay-chunk.ts: every core overlay, Home's chip and strip), on its own row.
-  { label: 'Lazy JS (overlay chunk)', pattern: /^assets\/overlay-chunk-[\w-]{8}\.js$/, maxBytes: 56.2 * KB },
+  { label: 'Lazy JS (overlay chunk)', pattern: /^assets\/overlay-chunk-[\w-]{8}\.js$/, maxBytes: 61.4 * KB },
   // Phase 2e I-4: the English strings only lazy chunks show (src/i18n/en-lazy.ts), shared by those chunks.
-  { label: 'Lazy JS (English)', pattern: /^assets\/en-lazy-[\w-]{8}\.js$/, maxBytes: 13.6 * KB },
+  { label: 'Lazy JS (English)', pattern: /^assets\/en-lazy-[\w-]{8}\.js$/, maxBytes: 15.8 * KB },
   // The rest: the hint card, RPC, sounds, the generator and the grader (re-set at 2e I-4 when the rows above split out).
   { label: 'Lazy JS (core)', pattern: /^assets\/[^/]*\.js$/, maxBytes: 23.3 * KB },
-  { label: 'Lazy CSS (fx chunk)', pattern: /^assets\/celebrate-[^/]*\.css$/, maxBytes: 3.26 * KB },
+  { label: 'Lazy CSS (fx chunk)', pattern: /^assets\/celebrate-[^/]*\.css$/, maxBytes: 4 * KB },
   { label: 'Lazy CSS (board motion)', pattern: /^assets\/board-mouse-[^/]*\.css$/, maxBytes: 6.4 * KB },
   // Phase 2e: the ladder chunk's own stylesheet (the CSS keeps the barrel's name, as events-chunk-*.css does; L0's
   // placeholder ceiling re-set at I-4).
   // Leaderboard update (2026-10-12): 11.0 → 21.6 KB measured (the podium, the pills, the rank-up's motion, the card,
   // the short and narrow screens).
-  { label: 'Lazy CSS (ladder)', pattern: /^assets\/ladder-chunk-[\w-]{8}\.css$/, maxBytes: 22.2 * KB },
+  { label: 'Lazy CSS (ladder)', pattern: /^assets\/ladder-chunk-[\w-]{8}\.css$/, maxBytes: 25.7 * KB },
   // Phase 2e I-4: the overlay chunk's stylesheet (with Home's chip and strip since I-4), on its own row.
-  { label: 'Lazy CSS (overlay chunk)', pattern: /^assets\/overlay-chunk-[\w-]{8}\.css$/, maxBytes: 33.5 * KB },
+  { label: 'Lazy CSS (overlay chunk)', pattern: /^assets\/overlay-chunk-[\w-]{8}\.css$/, maxBytes: 40.1 * KB },
   // The rest: the events chunk's stylesheet (re-set at 2e I-4 when the overlay chunk's row split out).
   { label: 'Lazy CSS', pattern: /^assets\/[^/]*\.css$/, maxBytes: 7.2 * KB },
   { label: 'Event packs', pattern: /^assets\/[a-z][a-z-]*-\d{4}-[^/]*\.json$/, maxBytes: LISTED },
 ];
 
 /** Everything index.html loads before the first screen, English (the firstLoad rows). */
-export const FIRST_LOAD_MAX = 427 * KB;
+export const FIRST_LOAD_MAX = 450 * KB;
 /** The first load plus the largest non-English locale chunk (phase2b §11). */
-export const FIRST_LOAD_LOCALE_MAX = 470 * KB;
+export const FIRST_LOAD_LOCALE_MAX = 501 * KB;
 /** The first load gzipped (woff2 as is): what players download from a compressing host. */
-export const FIRST_LOAD_GZIP_MAX = 158 * KB;
+export const FIRST_LOAD_GZIP_MAX = 166 * KB;
 export const FB_MAX_FILES = 100;
 
 interface FileEntry {
