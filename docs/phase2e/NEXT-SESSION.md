@@ -205,3 +205,9 @@ workstreams, merged and reviewed by the lead; per-area notes, decisions and size
   ok; a fresh web session carries `computerPlayers: true`, places 3+3 / 2+2 / 1+1, free-text names, and its bracket
   showed 8 computer players with looks (the smoke player then deleted itself). **Lesson:** fetch and merge the default
   branch before any staging deploy.
+- **Test builds after the merge (2026-10-14):** FB `mewdoku-instant-fbig-preview-0.1.0-c414f3e.zip` (544.9 KB, 89
+  files; staging ranking) uploaded, in Web Hosting as Standby (comment "Game test build 0.1.0 c414f3e - UI batch merged
+  with computer rivals (rivals wear frames/backgrounds), staging ranking"); the claude.ai preview link republished from
+  the same commit (version 23; its in-page sample server now shows computer players instead of sample players). Checked
+  first on c414f3e: `npm run verify` (3,285 unit tests, 359 server tests), one full e2e run (331 passed, 0 failed), size
+  check within budget. The default branch `claude/mewdoku-instant` was fast-forwarded to this work.
