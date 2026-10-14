@@ -48,11 +48,14 @@ export interface GameCommands {
    * gate 'event_next' → the next puzzle, or back to the event screen after the last one.
    */
   onNext(): Promise<void>;
-  /** O7 Done: gate 'daily_done' → Home. */
+  /**
+   * The daily victory's primary: gate 'daily_done' → the next level ("Level N", progress.level ≥ 2). UI batch
+   * (victory): was "Done" → Home.
+   */
   onDailyDone(): Promise<void>;
   /**
-   * Top-bar Home saves the board (also a lost one before O4 shows); O3 Home after a win; Home while
-   * O4 is open (status lost) discards the attempt (02 §4.2, §10.2).
+   * Top-bar Home saves the board (also a lost one before O4 shows); Home while O4 is open (status lost)
+   * discards the attempt (02 §4.2, §10.2). UI batch (victory): the victory has no Home button any more.
    */
   onHome(): void;
   /** How to play → "I know how to play" (first-run tutorial only). */

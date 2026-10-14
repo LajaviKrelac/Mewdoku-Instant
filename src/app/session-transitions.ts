@@ -1,7 +1,7 @@
 // Owner: C (Phase 2b; was app)
 // Transitions out of a finished or failed attempt (02 §4.2, §10, §13; 04 §5.7): O4 Continue / Retry,
 // the victory screen's primary (next level / Play Level 2 / next event puzzle or back to the event /
-// daily Done), Home (save or discard) and "I know how to play". Interstitials go through the
+// after a daily, the next level: UI batch), Home (save or discard) and "I know how to play". Interstitials go through the
 // pacing gate first, and the transition always goes ahead whatever the ad did.
 // Phase 2e (G1, docs/phase2e/spec.md §3.2, P-I5): the fail card's Home after a loss runs the
 // 'fail_home' interstitial gate (busy), then discards the attempt and goes Home.
@@ -131,8 +131,10 @@ export function createTransitions(host: TransitionHost): TransitionCommands {
       const mine = host.generation();
       await host.runBusy(() => host.helpers.interstitial('daily_done'));
       if (host.generation() !== mine || host.disposed()) return;
-      host.leave('home');
-      host.goHome();
+      // UI batch (victory, the user: "let the default button be the next level"): the daily's primary is "Level N"
+      // (progress.level; a daily never moves it), after the same 'daily_done' gate; there is no Home from the victory.
+      host.leave('next');
+      await host.start({ mode: 'level', level: Math.max(2, host.save().progress.level) });
     },
 
     onHome() {

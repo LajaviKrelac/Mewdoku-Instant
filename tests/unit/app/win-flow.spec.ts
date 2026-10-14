@@ -449,9 +449,13 @@ describe('session win flow (phase2c §2.2 t = 0, §2.5–§2.7, §3.7)', () => {
       level: 5,
       nextLevel: 6,
       pointsEarned: 3_840,
-      kept: { fish: 3, max: 3, gained: 3, total: 3, kind: 'week' },
+      kept: { fish: 3, max: 3 },
       buttonDelayMs: 600,
     });
+    // UI batch (victory): no Home; the praise lines lead with this board's own facts (no slip, no helper).
+    expect(v).not.toHaveProperty('onHome');
+    expect(v?.lines?.[0]).toEqual({ id: 'flawless' });
+    expect(v?.lines?.length ?? 0).toBeLessThanOrEqual(cfg.victory.maxLines);
     expect(v?.streak).toMatchObject({ day: 1, total: 7, reward: null }); // Phase 2e: the daily streak's row (2c.1's "Perfect ×N" stays retired)
     // §2.7: no fish pill, no "+" (shop), no bonus chip.
     expect(v).not.toHaveProperty('onShop');
@@ -483,7 +487,10 @@ describe('session win flow (phase2c §2.2 t = 0, §2.5–§2.7, §3.7)', () => {
     expect(h.router.game?.departed).toEqual([1, 0]); // the last full slot first
     expect(h.router.game?.counters.slice(0, 3)).toEqual([0, 1, 2]);
     await tapRanking(h);
-    expect(h.router.props.victory).toMatchObject({ pointsEarned: 3_264, kept: { fish: 2, max: 3, gained: 2, total: 2 } });
+    expect(h.router.props.victory).toMatchObject({ pointsEarned: 3_264, kept: { fish: 2, max: 3 } });
+    // UI batch (victory): one slip and no hint or kitty; the closing run (3) is below victory.runMin.
+    expect(h.router.props.victory?.lines?.[0]).toEqual({ id: 'noHelp' });
+    expect(h.router.props.victory?.lines?.map((l) => l.id)).not.toContain('run');
     expect(h.router.props.victory?.streak).toMatchObject({ total: 7 }); // Phase 2e: the daily streak's row (2c.1's streak stays retired)
   });
 
@@ -539,7 +546,7 @@ describe('session win flow (phase2c §2.2 t = 0, §2.5–§2.7, §3.7)', () => {
     expect(h.router.props.victory).toMatchObject({ pointsEarned: 3_840, kept: null });
   });
 
-  it('teardown mid-flow (Home from the victory, or dispose) leaves the saved rewards', async () => {
+  it('teardown mid-flow (dispose) leaves the saved rewards', async () => {
     const h = createHarness();
     await wonLevel(h);
     await h.settle(1500);

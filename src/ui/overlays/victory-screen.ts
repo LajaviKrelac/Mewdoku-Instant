@@ -3,15 +3,21 @@
 // Victory screen (new overlay `victory`, phase2b §2.5; replaces O3 `win` and, for dailies, O7
 // `daily_result`, which stay one release unopened). Full screen, opaque --page; 12 --accent-soft sun
 // rays behind the cat turning once per fx.victoryRaysTurnMs (static with reduced motion). Top to
-// bottom: praise word, the win pose, "Level 37 complete", the reward block, the event milestone line;
-// then the wide orange primary button (btn--primary btn--lg, enabled `buttonDelayMs` after open) and
-// a ghost "Home".
+// bottom: praise word, the win pose, "Level 37 complete", the praise lines, the reward block, the event
+// milestone line; then the wide orange primary button (btn--primary btn--lg, enabled `buttonDelayMs`
+// after open).
 // Phase 2c (fish-lives-spec §2.7): no fish pill, no "+" (shop) and no bonus chip. Phase 2c.1 (§10.3):
 // the reward block has two rows: first the LEVEL'S POINTS TOTAL (icon-points and "7,296 points" in a
 // white pill; every scored variant whenever the total is > 0, counted or not; never the tutorial),
-// then the FISH KEPT (maxHearts fish, the kept ones full and the lost ones as icon-fish-empty, "+2" and
-// "This week: 42"; hidden when the win added no leaderboard points). There is no streak chip any more
-// (the 2c "Perfect ×N" went with the cross-level streak).
+// then the FISH KEPT (maxHearts fish, the kept ones full and the lost ones as icon-fish-empty; hidden
+// when the win added no leaderboard points). There is no streak chip any more (the 2c "Perfect ×N" went
+// with the cross-level streak).
+// UI batch (2026-10-13, the user: "remove fishes 'Your total: X' … +1/2/3 is surplus … remove access to home
+// screen, let the default button be the next level … add praising and encouraging messages/statistics"): the
+// kept-fish row shows the fish only (no "+2", no "Your total: 14" / "This week: 42", no "+3 waiting"); there is no
+// Home button (the daily's primary is the next level too; the tutorial replay keeps its "Home" primary); one or two
+// lines of praise or an approximate statistic (VictoryProps.lines, picked by app/victory-lines.ts, text in
+// ./victory-line-text.ts) sit under the subtitle, in the daily under its time.
 // With `bannerReserved` the root gets data-banner (phase2b §3.2) and the column keeps the
 // ads.banner.reservePx band free under the buttons.
 // Esc and Enter: Enter presses the focused primary (autofocus); Esc is ignored (a choice is needed).
@@ -32,13 +38,13 @@
 //
 // Classes: .overlay[data-overlay=victory] > .victory[data-variant][data-banner]
 //          > .victory__col(.victory__praise .victory__stage(.victory__rays .victory__art)
-//            .victory__sub .victory__daily .victory__event(.victory__bar .victory__milestone)
+//            .victory__sub .victory__lines(.victory__line[data-line]) .victory__daily(.victory__time [.victory__lines]
+//            .victory__stats .victory__next) .victory__event(.victory__bar .victory__milestone)
 //            .victory__daily-reward .victory__streak[data-day](.victory__streak-text .streak-steps .victory__streak-reward)
 //            .victory__reward(.victory__points(.victory__points-icon .victory__points-text)
-//              .victory__kept[data-count](.victory__fishes > .victory__fish[data-kept] .victory__plus
-//                .victory__period(.victory__period-text .victory__waiting[hidden])))
-//            .victory__actions(.victory__primary .victory__home))
-import { cfg, type PeriodKind } from '../../app/config';
+//              .victory__kept[data-count](.victory__fishes > .victory__fish[data-kept]))
+//            .victory__actions(.victory__primary))
+import { cfg } from '../../app/config';
 import type { Reward } from '../../game/events';
 import { formatClock, formatDuration, formatNumber, formatShortDate, joinList, praise, t, tn, translate, type I18nKey } from '../../i18n';
 import { illustration } from '../art/illustrations';
@@ -46,13 +52,13 @@ import { icon } from '../art/sprite';
 import { h, setText, type OverlayView } from '../dom';
 import { renderStreakSteps, streakStepKinds } from '../hud/streak-strip';
 import { createLocaleText } from '../locale-text';
-import { fishKeptText, periodTotalText, type FishTotalKind } from '../period-text';
 import { createDelay, createOverlayShell, createTicker, makeButton, nextId, setButtonLabel, setGated, setTextKeepTogether } from './overlay-base';
+import { victoryLineText, type VictoryLine } from './victory-line-text';
 
 /**
  * level: "Level {L+1}"; tutorial (first run): "You're ready!" + "Play Level 2"; tutorial_replay:
- * no fish, "Home"; daily: time, mistakes, hints, countdown, "Done"; event: progress + "Puzzle {i+1}"
- * or "Back to event" after the last (§2.5 Variants).
+ * no fish, "Home"; daily: time, mistakes, hints, countdown, "Level {N}" (UI batch: the next level, was
+ * "Done"); event: progress + "Puzzle {i+1}" or "Back to event" after the last (§2.5 Variants).
  */
 export type VictoryVariant = 'level' | 'tutorial' | 'tutorial_replay' | 'daily' | 'event';
 
@@ -86,7 +92,7 @@ export interface VictoryProps {
   readonly praise: number;
   /** The level just won (tutorial: 1); null for daily and event. */
   readonly level: number | null;
-  /** The primary button's level ("Level 38"); 2 for the first-run tutorial; null otherwise. */
+  /** The primary button's level ("Level 38"); 2 for the first-run tutorial; the next level after a daily; null otherwise. */
   readonly nextLevel: number | null;
   /**
    * Phase 2c.1 §10.3: the level's points total (GameState.levelPoints at WON), counted or not:
@@ -94,18 +100,10 @@ export interface VictoryProps {
    */
   readonly pointsEarned: number | null;
   /**
-   * Phase 2c §2.7: the fish-kept row (`fish` of `max` lives kept, "+`gained`", the period `total`
-   * after the win); null when the win added no leaderboard points (tutorial, not counted, mode excluded).
+   * Phase 2c §2.7: the fish-kept row (`fish` of `max` lives kept; UI batch: the fish alone, no "+N" and no total);
+   * null when the win added no leaderboard points (tutorial, not counted, mode excluded).
    */
-  readonly kept: {
-    readonly fish: number;
-    readonly max: number;
-    readonly gained: number;
-    readonly total: number;
-    readonly kind: FishTotalKind;
-    /** Audit B9 / A-H1 ('ladder' only): fish waiting to be sent, shown after the server's total ("· +3 waiting"), never added in. */
-    readonly waiting?: number;
-  } | null;
+  readonly kept: { readonly fish: number; readonly max: number } | null;
   readonly daily: VictoryDailyView | null;
   readonly event: VictoryEventView | null;
   /** fx.winButtonDelayMs (600): the primary button turns active this long after open. */
@@ -124,9 +122,13 @@ export interface VictoryProps {
   readonly streak: { readonly day: number; readonly total: number; readonly reward: Reward | null } | null;
   /** "Daily reward: +1 hint" (daily.reward, already granted); shown only when not null and not zero. Required since I-3. */
   readonly dailyReward: Reward | null;
-  /** The orange primary: next level / Play Level 2 / Home (replay) / Done (daily) / next puzzle or back to event. */
+  /**
+   * UI batch (victory): the praise and statistic lines under the subtitle (≤ config victory.maxLines, already
+   * picked); absent or empty: none.
+   */
+  readonly lines?: readonly VictoryLine[];
+  /** The orange primary: next level (also after a daily) / Play Level 2 / Home (replay) / next puzzle or back to event. */
   onPrimary(): void;
-  onHome(): void;
 }
 
 /** "+2 hints and +3 kitties" (§4.5 "Event reward: +2 hints"). Phase 2c: milestones grant no fish. */
@@ -147,7 +149,8 @@ export function primaryLabel(p: Pick<VictoryProps, 'variant' | 'nextLevel' | 'ev
     case 'tutorial_replay':
       return t('common.home');
     case 'daily':
-      return t('daily.done');
+      // UI batch (victory): the next level, as after a level ("Done" and Home are gone).
+      return t('victory.next', { level: p.nextLevel ?? 2 });
     case 'event':
       return p.event && !p.event.last ? t('event.play', { index: p.event.index + 2 }) : t('event.back');
   }
@@ -158,9 +161,12 @@ const REFRESH_MS = 1000;
 /**
  * Compaction steps of fit() (overlay-chunk.css .victory[data-fit]). Step 4 (audit B1): the daily victory on a
  * streak's day 7 at 320 × 568 (the streak row and its reward line on top of the daily's lines) still ran under
- * the sticky Done; the last step drops the hero art (decorative, aria-hidden) and tightens the streak row.
+ * the sticky Done; step 4 drops the hero art (decorative, aria-hidden) and tightens the streak row. Step 5 (UI batch,
+ * victory: that daily with the banner band and two praise lines) keeps the first praise line only.
  */
-export const FIT_LEVELS = 4;
+export const FIT_LEVELS = 5;
+/** UI batch (victory): from this step only the first praise line shows (and is described). */
+const ONE_LINE_STEP = 5;
 
 /**
  * The compaction step that lets the content fit: the first of 0…FIT_LEVELS whose measured overflow
@@ -171,11 +177,11 @@ export function fitLevel(overflowAt: (level: number) => number): number {
   return FIT_LEVELS;
 }
 
-/** The kept-fish row's data, clamped; null when the row is hidden (no row, or no fish added). */
+/** The kept-fish row's data, clamped; null when the row is hidden. */
 function keptRow(k: VictoryProps['kept'] | undefined): NonNullable<VictoryProps['kept']> | null {
-  if (!k || !(k.gained > 0)) return null;
+  if (!k) return null;
   const max = Math.max(1, Math.min(12, Math.floor(k.max)));
-  return { ...k, max, fish: Math.max(0, Math.min(max, Math.floor(k.fish))) };
+  return { max, fish: Math.max(0, Math.min(max, Math.floor(k.fish))) };
 }
 
 export function createVictoryScreen(): OverlayView<VictoryProps> {
@@ -200,22 +206,40 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
   const dailyNext = h('p', { class: 'victory__next' });
   const daily = h('div', { class: 'victory__daily' }, dailyTime, dailyStats, dailyNext);
 
+  // UI batch (victory): the praise and statistic lines. One <p> each (created as needed, reused); the box sits under
+  // the subtitle, and in the daily under its time (the statistic is about that time).
+  const linesBox = h('div', { class: 'victory__lines' });
+  const lineEls: HTMLElement[] = [];
+  const renderLines = (ls: readonly VictoryLine[]): string[] => {
+    while (lineEls.length < ls.length) {
+      const el = h('p', { class: 'victory__line', id: nextId('victory-line') });
+      lineEls.push(el);
+      linesBox.append(el);
+    }
+    const shown: string[] = [];
+    lineEls.forEach((el, i) => {
+      const l = ls[i];
+      el.hidden = !l;
+      if (l) {
+        el.dataset.line = l.id;
+        setText(el, victoryLineText(l));
+        shown.push(el.id);
+      } else delete el.dataset.line;
+    });
+    linesBox.hidden = shown.length === 0;
+    return shown;
+  };
+
   // Reward block (Phase 2c.1 §10.3), row 1: the level's points total ("[sparkle] 7,296 points"); its
   // accessible name is the visible text.
   const pointsText = h('span', { class: 'victory__points-text num' });
   const pointsId = nextId('victory-points');
   const pointsRow = h('div', { class: 'victory__points', id: pointsId }, icon('icon-points', { class: 'victory__points-icon' }), pointsText);
-  // Row 2: the fish kept ("[fish][fish][empty] +2 | This week: 42").
+  // Row 2: the fish kept ("[fish][fish][empty]"; UI batch: no "+2" and no total, the user's "surplus").
   const fishes = h('span', { class: 'victory__fishes', 'aria-hidden': 'true' });
   let fishFor = '';
-  const plus = h('span', { class: 'victory__plus num', 'aria-hidden': 'true' });
-  // Audit B9 / A-H1: the total is the server's; fish still waiting to be sent are a second, smaller line
-  // ("+2 waiting", as my ranking row shows them), so the pill never grows past a 320 px screen.
-  const periodText = h('span', { class: 'victory__period-text' });
-  const waitingLine = h('span', { class: 'victory__waiting', hidden: true });
-  const periodLine = h('span', { class: 'victory__period', 'aria-hidden': 'true' }, periodText, waitingLine);
   const keptId = nextId('victory-kept');
-  const kept = h('div', { class: 'victory__kept', role: 'img', id: keptId }, fishes, plus, periodLine);
+  const kept = h('div', { class: 'victory__kept', role: 'img', id: keptId }, fishes);
   const reward = h('div', { class: 'victory__reward' }, pointsRow, kept);
 
   // Event: progress bar + milestone line. The bar's name is its visible "3 / 21 solved" line (A11Y-NAME-1).
@@ -244,10 +268,6 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
     className: 'btn--lg victory__primary',
     onPress: () => props?.onPrimary(),
   });
-  const home = L.label(
-    makeButton({ variant: 'ghost', label: '', icon: 'icon-house', className: 'victory__home', onPress: () => props?.onHome() }),
-    () => t('common.home'),
-  );
 
   const col = h(
     'div',
@@ -255,13 +275,14 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
     title,
     h('div', { class: 'victory__stage' }, rays, art),
     sub,
+    linesBox,
     daily,
     // Phase 2c §2.7: the daily's and the event's own lines sit above the reward block.
     event,
     dailyReward,
     streak,
     reward,
-    h('div', { class: 'victory__actions' }, primary, home),
+    h('div', { class: 'victory__actions' }, primary),
   );
   root.append(col);
   root.style.setProperty('--rays-ms', `${cfg.fx.victoryRaysTurnMs}ms`);
@@ -284,11 +305,21 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
 
   // ── fit (UX-1, I18N-LAYOUT-1): compact the hero while the content is taller than the screen ──
   const scroller = shell.el;
-  /** data-fit = the step (1–4); data-tight marks steps 2 to 4 (overlay-chunk.css). */
+  /** data-fit = the step (1–5); data-tight marks steps 2 to 5 (overlay-chunk.css). */
   const setFit = (lv: number): void => {
     if (lv === 0) delete root.dataset.fit;
     else root.dataset.fit = String(lv);
     root.toggleAttribute('data-tight', lv >= 2);
+  };
+  /**
+   * The dialog's description (§7 screen reader): the result line, the praise lines (UI batch: only the first one at
+   * the one-line fit step, as shown), then the rest; only what is shown, in the order shown.
+   */
+  let describedLines: readonly string[] = [];
+  let describedRest: readonly string[] = [];
+  const applyDescribed = (): void => {
+    const one = Number(root.dataset.fit ?? '0') >= ONE_LINE_STEP;
+    root.setAttribute('aria-describedby', [shell.descId, ...(one ? describedLines.slice(0, 1) : describedLines), ...describedRest].join(' '));
   };
   const fit = (): void => {
     if (!shell.isOpen() || !scroller.isConnected) return;
@@ -305,6 +336,7 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
     } finally {
       root.removeAttribute('data-measuring');
     }
+    applyDescribed();
   };
   let fitRaf = 0;
   const win = (): Window | null => shell.el.ownerDocument.defaultView;
@@ -371,12 +403,8 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
           fishes.appendChild(f);
         }
       }
-      setText(plus, t('fish.plus', { count: formatNumber(k.gained) }));
-      setText(periodText, periodTotalText(k.kind, k.total));
-      const waitingN = k.kind === 'ladder' ? Math.max(0, Math.floor(k.waiting ?? 0)) : 0;
-      waitingLine.hidden = waitingN === 0;
-      setText(waitingLine, waitingN > 0 ? t('ladder.waiting', { count: formatNumber(waitingN) }) : '');
-      kept.setAttribute('aria-label', fishKeptText(k.kind, k.fish, k.total, k.waiting ?? 0));
+      // The row's name: "2 of 3 fish left" (the lives pill's own words).
+      kept.setAttribute('aria-label', t('game.hearts.a11y', { hearts: formatNumber(k.fish), max: formatNumber(k.max) }));
     } else {
       delete kept.dataset.count;
     }
@@ -430,20 +458,26 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
       streak.removeAttribute('data-reward');
     }
 
-    // The dialog's description (§7 screen reader): the result line, the level's points ("7,296
-    // points"), the fish kept ("You kept 2 fish. Your total this week: 42."), the event progress and
-    // milestone; only what is shown, in the order shown.
-    const described = [shell.descId];
-    if (!pointsRow.hidden) described.push(pointsId);
-    if (!kept.hidden) described.push(keptId);
-    if (!event.hidden) described.push(eventId);
-    if (!dailyReward.hidden) described.push(dailyRewardId);
-    if (!streak.hidden) described.push(streakId);
-    root.setAttribute('aria-describedby', described.join(' '));
+    // UI batch (victory): the lines, under the subtitle, or in the daily under its time (moved only when that changes).
+    const lineIds = renderLines(tutorial ? [] : (p.lines ?? []));
+    if (p.variant === 'daily') {
+      if (linesBox.parentNode !== daily) daily.insertBefore(linesBox, dailyStats);
+    } else if (linesBox.parentNode !== col) col.insertBefore(linesBox, daily);
+
+    // The dialog's description (§7 screen reader): the result line, the praise lines, the level's points
+    // ("7,296 points"), the fish kept ("2 of 3 fish left"), the event progress and milestone; only what is
+    // shown, in the order shown (applyDescribed; fit() applies it again at its step).
+    const rest: string[] = [];
+    if (!pointsRow.hidden) rest.push(pointsId);
+    if (!kept.hidden) rest.push(keptId);
+    if (!event.hidden) rest.push(eventId);
+    if (!dailyReward.hidden) rest.push(dailyRewardId);
+    if (!streak.hidden) rest.push(streakId);
+    describedLines = lineIds;
+    describedRest = rest;
+    applyDescribed();
 
     setButtonLabel(primary, primaryLabel(p));
-    // The ghost Home only where the primary does not already lead home (§2.5 Variants).
-    home.hidden = p.variant === 'tutorial' || p.variant === 'tutorial_replay' || p.variant === 'daily';
     if (!opening) refit();
   };
 

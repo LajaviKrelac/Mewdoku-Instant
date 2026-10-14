@@ -24,6 +24,8 @@
 // run with ?flags=-ladder (spec §7.3: the flag `ladder` off = the web-prod path), and assert that not
 // one request reaches the ranking origin. The victory's `.victory__streak` is now the daily streak row
 // (§5.3); "no Perfect ×N" is checked by its text.
+// UI batch (2026-10-13, victory): the victory has no Home (homeAfterVictory: its "Level N", then the game's own Home)
+// and its kept-fish row is the fish alone; 4g: the daily victory's primary is the next level.
 import { expect, test, type Page } from '@playwright/test';
 import type { E2EHooks } from '../../src/app/boot';
 import { cfg } from '../../src/app/config';
@@ -167,6 +169,20 @@ async function continueFromPanel(page: Page): Promise<void> {
   await panel.locator('.ranking__tap').click();
 }
 
+/** UI batch (victory): the victory has no Home: its "Level N" starts the next level, whose own Home goes Home. */
+async function homeAfterVictory(page: Page): Promise<void> {
+  const before = (await game(page))?.id ?? '';
+  const next = page.locator('[data-overlay="victory"] .victory__primary');
+  await expect(next).toBeEnabled({ timeout: 5000 });
+  await next.click();
+  await page.waitForFunction((id) => {
+    const g = (window as TestWindow).__mewdoku?.state();
+    return !!g && g.puzzle.id !== id && g.status === 'playing';
+  }, before);
+  await page.locator('.top-bar--game .top-bar__btn--home').click();
+  await ready(page, 'home');
+}
+
 test('4 · a win: ranking panel, then the victory screen; "Level 6" loads the following level', async ({ page }) => {
   await open(page, '', returning());
   await playLevel(page);
@@ -207,8 +223,7 @@ test('4b · web-prod rankings (?flags=-ladder): my own records and the rankings-
   // §2.11: nothing queued for a server and not one request to it (the win, Home, the panel).
   expect((await app(page))?.save.ladder.pending).toEqual([]);
   await continueFromPanel(page);
-  await page.locator('[data-overlay="victory"] .victory__home').click();
-  await ready(page, 'home');
+  await homeAfterVictory(page);
   await page.waitForTimeout(500);
   expect(sent).toEqual([]);
 });
@@ -227,9 +242,8 @@ test('4c · no shop on the web (phase2c §5.2): no fish pill "+" on Home, no Sho
   expect((await app(page))?.save).not.toHaveProperty('wallet');
 });
 
-test('4d · the victory rows: the level\'s points total, the fish kept and "This week"; no "Perfect ×N" (web-prod, ?flags=-ladder)', async ({ page }) => {
-  // Phase 2e (requests-G3 R4): with the ranking active the row names my bracket's total instead
-  // ("Your total: 3", ladder.spec.ts); the weekly records path is web-prod's (?flags=-ladder).
+test('4d · the victory rows: the level\'s points total and the fish kept (no total, no "+3"); no "Perfect ×N" (web-prod, ?flags=-ladder)', async ({ page }) => {
+  // UI batch (victory): the kept-fish row is the fish alone on every path (no "This week: 3", no "Your total: 3").
   await open(page, '?flags=-ladder', returning());
   await playLevel(page);
   const sol = await solution(page);
@@ -237,13 +251,32 @@ test('4d · the victory rows: the level\'s points total, the fish kept and "This
   await continueFromPanel(page);
   const victory = page.locator('[data-overlay="victory"]');
   await expect(victory.locator('.victory__kept')).toHaveAttribute('data-count', '3');
-  await expect(victory.locator('.victory__period')).toHaveText('This week: 3');
+  await expect(victory.locator('.victory__kept')).toHaveAttribute('aria-label', '3 of 3 fish left');
+  await expect(victory.locator('.victory__period, .victory__plus, .victory__home')).toHaveCount(0);
   // 2c.1: n cats in a row, 96 × (5 + s) each; each found well inside the combo's countdown, so the
   // s-th at combo xs: + 10 % × (s − 1) × 3 fish (no mistake): comboRunMax(n, 3).
   const total = comboRunMax(sol.length, pointsRuleFor('level'), comboRuleFor('level'), 3);
   await expect(victory.locator('.victory__points')).toHaveText(`${total.toLocaleString('en-US')} points`);
   await expect(victory.getByText(/Perfect ×/)).toHaveCount(0); // 2c.1; `.victory__streak` is the 2e daily streak row
   expect((await app(page))?.save.points.total).toBe(total);
+});
+
+test('4g · the daily victory (UI batch): no Home or Done; its "Level N" starts the next level; the praise lines sit under its time', async ({ page }) => {
+  const L = cfg.daily.unlockAfterLevel + 5;
+  await open(page, '?flags=-ladder', returning({ progress: { level: L, completed: L - 1, best: {} } }));
+  await page.locator('.daily-card').click();
+  await playing(page);
+  const sol = await solution(page);
+  for (let r = 0; r < sol.length; r++) await dbl(page, r * sol.length + (sol[r] as number));
+  await continueFromPanel(page);
+  const victory = page.locator('[data-overlay="victory"]');
+  await expect(victory.locator('.victory')).toHaveAttribute('data-variant', 'daily');
+  await expect(victory.locator('.victory__home')).toHaveCount(0);
+  await expect(victory.getByRole('button', { name: 'Done' })).toHaveCount(0);
+  await expect(victory.locator('.victory__daily .victory__line:not([hidden])').first()).toBeVisible();
+  await victory.getByRole('button', { name: `Level ${L}` }).click();
+  await playing(page);
+  expect((await game(page))?.id).toBe(`L${L}`);
 });
 
 test('4e · the daily streak (Phase 2e §5): the first win of the day → day 1 on the victory and on Home\'s streak pill, today done; saved', async ({ page }) => {
@@ -262,8 +295,7 @@ test('4e · the daily streak (Phase 2e §5): the first win of the day → day 1 
   const s = (await app(page))?.save;
   expect(s?.dayStreak.run).toBe(1);
   expect(s?.dayStreak.dates).toEqual([today()]);
-  await page.locator('[data-overlay="victory"] .victory__home').click();
-  await ready(page, 'home');
+  await homeAfterVictory(page);
   await expect(strip).toHaveText('1');
   await expect(strip).toHaveAttribute('data-today', '1');
   await expect(strip).toHaveAttribute('data-state', 'done');
@@ -283,8 +315,7 @@ test('4f · the daily streak across days (fake clock): the next day → day 2; a
     const row = page.locator('[data-overlay="victory"] .victory__streak');
     await expect(row).toHaveAttribute('data-day', String(day));
     await expect(row).toContainText(new RegExp(`day ${day} of ${cfg.dayStreak.cycleDays}`, 'i'));
-    await page.locator('[data-overlay="victory"] .victory__home').click();
-    await ready(page, 'home');
+    await homeAfterVictory(page);
     await expect(strip).toHaveText(String(day));
     await expect(strip).toHaveAttribute('data-today', '1');
   };

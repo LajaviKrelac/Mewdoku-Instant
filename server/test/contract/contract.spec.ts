@@ -241,8 +241,13 @@ describe('contract: client and server config agree (spec §1.16)', async () => {
       revive: { heartsRestored: number; maxPerAttempt: number };
       ladder: { pendingMaxAgeMs: number; pendingMax: number; batchMax: number };
       daily: { dayStartHour: number };
+      victory: { minSolvers: number };
     };
   };
+
+  it('[UI batch, victory] the daily standing\'s minimum of other solvers is the same on both sides', () => {
+    expect(cfg.victory.minSolvers).toBe(DEFAULT_CONFIG.dailyStats.minSolvers);
+  });
 
   it('scoring.modes = period.modes; fishMax, fishOnRevive, maxRevives mirror the lives', () => {
     expect([...DEFAULT_CONFIG.scoring.modes]).toEqual([...cfg.period.modes]);

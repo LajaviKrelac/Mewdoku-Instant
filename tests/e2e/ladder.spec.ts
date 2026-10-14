@@ -79,9 +79,16 @@ async function tapThrough(page: Page): Promise<void> {
   const tap = panel(page).locator('.ranking__tap');
   await expect(tap).toBeEnabled({ timeout: 5_000 });
   await tap.click();
-  const home = page.locator('[data-overlay="victory"] .victory__home');
-  await expect(home).toBeEnabled({ timeout: 5_000 });
-  await home.click();
+  // UI batch (victory): no Home on the victory: its "Level N" starts the next level, whose own Home goes Home.
+  const before = await page.evaluate(() => (window as TestWindow).__mewdoku?.state()?.puzzle.id ?? '');
+  const next = page.locator('[data-overlay="victory"] .victory__primary');
+  await expect(next).toBeEnabled({ timeout: 5_000 });
+  await next.click();
+  await page.waitForFunction((id) => {
+    const g = (window as TestWindow).__mewdoku?.state();
+    return !!g && g.puzzle.id !== id && g.status === 'playing';
+  }, before);
+  await page.locator('.top-bar--game .top-bar__btn--home').click();
   await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'home');
 }
 
@@ -123,9 +130,10 @@ test('a win: the panel lists exactly the server bracket (rows, order, ranks, cou
   expect(save?.ladder.pending).toEqual([]);
   expect(save?.ladder.current).toMatchObject({ points: 3, members: 4 });
   expect(JSON.stringify(save)).not.toContain(server.rows.find((r) => !r.me && r.rank === 1)?.nickname ?? '#');
-  // requests-G3 R4: the victory's kept-fish row names my bracket's total, not this week's.
+  // UI batch (victory): the victory's kept-fish row is the fish alone (no "Your total: 3"; the panel says it).
   await panel(page).locator('.ranking__tap').click();
-  await expect(page.locator('[data-overlay="victory"] .victory__period')).toHaveText('Your total: 3', { timeout: 10_000 });
+  await expect(page.locator('[data-overlay="victory"] .victory__kept')).toHaveAttribute('data-count', '3', { timeout: 10_000 });
+  await expect(page.locator('[data-overlay="victory"] .victory__period')).toHaveCount(0);
 });
 
 test('leaderboard update: the sign-in joins with 0 fish, the "New ranking" card shows once, the others see me online then playing, the podium and pills in the panel', async ({ page }) => {

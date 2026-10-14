@@ -6,7 +6,9 @@
 // personal period records), the hub's "This week" tab, and the victory's kept-fish row (no fish pill,
 // no "+", no bonus chip). Phase 2c.1 (§10.3, §4.6): the victory's first row is the level's points total
 // ("7,296 points"), there is no "Perfect ×N" chip, and the period records show Total points instead of
-// the perfect streak (a stale `streak` prop is ignored).
+// the perfect streak (a stale `streak` prop is ignored). UI batch (2026-10-13, victory): the kept-fish row is the fish
+// alone (no "+3", no "This week: 42"), there is no Home button (a daily's primary is the next level), and the praise
+// and statistic lines sit under the subtitle (in the daily under its time).
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cfg } from '../../../src/app/config';
 import type { I18nKey } from '../../../src/i18n';
@@ -22,6 +24,7 @@ import {
   type RankingPanelProps,
 } from '../../../src/ui/overlays/ranking-panel';
 import { createVictoryScreen, primaryLabel, rewardText, type VictoryProps } from '../../../src/ui/overlays/victory-screen';
+import { victoryLineText, type VictoryLine } from '../../../src/ui/overlays/victory-line-text';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -350,7 +353,7 @@ function victoryProps(over: Partial<VictoryProps> = {}): VictoryProps {
     level: 37,
     nextLevel: 38,
     pointsEarned: 7296,
-    kept: { fish: 3, max: 3, gained: 3, total: 42, kind: 'week' },
+    kept: { fish: 3, max: 3 },
     daily: null,
     event: null,
     buttonDelayMs: cfg.fx.winButtonDelayMs,
@@ -360,7 +363,6 @@ function victoryProps(over: Partial<VictoryProps> = {}): VictoryProps {
     dailyReward: null,
     now: () => 0,
     onPrimary: vi.fn(),
-    onHome: vi.fn(),
     ...over,
   };
 }
@@ -375,7 +377,7 @@ function openVictory(p: VictoryProps) {
 const fishes = (root: ParentNode): string[] =>
   Array.from(root.querySelectorAll('.victory__kept .victory__fish')).map((f) => f.querySelector('use')?.getAttribute('href') ?? '');
 
-describe('victory screen (§2.5; Phase 2c §2.7; 2c.1 §10.3)', () => {
+describe('victory screen (§2.5; Phase 2c §2.7; 2c.1 §10.3; UI batch: no "+N", no total, no Home)', () => {
   it('level: praise, "Level 37 complete", "7,296 points", the kept fish, and "Level 38" after 600 ms', () => {
     vi.useFakeTimers();
     // A stale 2c `streak` number (deleted from VictoryProps at 2c.1 I-3; Phase 2e reuses the name for the
@@ -391,14 +393,15 @@ describe('victory screen (§2.5; Phase 2c §2.7; 2c.1 §10.3)', () => {
     expect(points.hasAttribute('role')).toBe(false);
     expect(points.querySelector('.victory__points-icon use')?.getAttribute('href')).toBe('#icon-points');
     expect(points.querySelector('.victory__points-icon')?.getAttribute('aria-hidden')).toBe('true');
-    // Row 2: the lives of this attempt, all kept; "+3"; "This week: 42".
+    // Row 2: the lives of this attempt, all kept; UI batch: the fish alone (no "+3", no "This week: 42").
     const kept = q(v.el, '.victory__kept');
     expect(kept.dataset.count).toBe('3');
     expect(fishes(v.el)).toEqual(['#icon-fish', '#icon-fish', '#icon-fish']);
-    expect(q(v.el, '.victory__plus').textContent).toBe('+3');
-    expect(q(v.el, '.victory__period').textContent).toBe('This week: 42');
+    expect(v.el.querySelector('.victory__plus, .victory__period, .victory__waiting')).toBeNull();
+    expect(kept.textContent).toBe('');
+    expect(v.el.textContent).not.toMatch(/\+3|This week|Your total|waiting/);
     expect(kept.getAttribute('role')).toBe('img');
-    expect(kept.getAttribute('aria-label')).toBe('You kept 3 fish. Your total this week: 42.');
+    expect(kept.getAttribute('aria-label')).toBe('3 of 3 fish left');
     // The points row comes first, then the kept fish (§10.3).
     expect(Array.from(q(v.el, '.victory__reward').children).map((c) => c.className.split(' ')[0])).toEqual(['victory__points', 'victory__kept']);
     // Gone in 2c: the fish pill at the top, its "+", the bonus chip; in 2c.1 the "Perfect ×N" chip and the chips row.
@@ -417,8 +420,9 @@ describe('victory screen (§2.5; Phase 2c §2.7; 2c.1 §10.3)', () => {
     vi.advanceTimersByTime(cfg.fx.winButtonDelayMs);
     primary.click();
     expect(p.onPrimary).toHaveBeenCalledTimes(1);
-    q(v.el, '.victory__home').click();
-    expect(p.onHome).toHaveBeenCalledTimes(1);
+    // UI batch: no Home button at all; the primary is the only button.
+    expect(v.el.querySelector('.victory__home')).toBeNull();
+    expect(v.el.querySelectorAll('.victory__actions button')).toHaveLength(1);
     expect(v.dismiss()).toBe(false);
     const dialog = q(v.el, '[role="dialog"]');
     expect(dialog.getAttribute('aria-modal')).toBe('true');
@@ -427,21 +431,21 @@ describe('victory screen (§2.5; Phase 2c §2.7; 2c.1 §10.3)', () => {
     expect(ids.map((id) => document.getElementById(id)?.className.split(' ')[0])).toEqual(['victory__sub', 'victory__points', 'victory__kept']);
   });
 
-  it('a win with a mistake: the lost fish show empty, "+2", the total as it is; one fish after a revive', () => {
-    const v = openVictory(victoryProps({ pointsEarned: 7104, kept: { fish: 2, max: 3, gained: 2, total: 41, kind: 'week' } }));
+  it('a win with a mistake: the lost fish show empty; one fish after a revive; five lives', () => {
+    const v = openVictory(victoryProps({ pointsEarned: 7104, kept: { fish: 2, max: 3 } }));
     expect(q(v.el, '.victory__kept').dataset.count).toBe('2');
     expect(fishes(v.el)).toEqual(['#icon-fish', '#icon-fish', '#icon-fish-empty']);
     expect(Array.from(v.el.querySelectorAll('.victory__fish')).map((f) => f.hasAttribute('data-kept'))).toEqual([true, true, false]);
-    expect(q(v.el, '.victory__plus').textContent).toBe('+2');
     expect(q(v.el, '.victory__points').textContent).toBe('7,104 points');
-    v.update(victoryProps({ pointsEarned: 576, kept: { fish: 1, max: 3, gained: 1, total: 12, kind: 'week' } }));
+    expect(q(v.el, '.victory__kept').getAttribute('aria-label')).toBe('2 of 3 fish left');
+    v.update(victoryProps({ pointsEarned: 576, kept: { fish: 1, max: 3 } }));
     expect(q(v.el, '.victory__points').textContent).toBe('576 points');
     expect(fishes(v.el)).toEqual(['#icon-fish', '#icon-fish-empty', '#icon-fish-empty']);
-    expect(q(v.el, '.victory__kept').getAttribute('aria-label')).toBe('You kept 1 fish. Your total this week: 12.');
-    // Five lives (an event rule), a monthly period.
-    v.update(victoryProps({ kept: { fish: 4, max: 5, gained: 4, total: 9, kind: 'month' } }));
+    expect(q(v.el, '.victory__kept').getAttribute('aria-label')).toBe('1 of 3 fish left');
+    // Five lives (an event rule).
+    v.update(victoryProps({ kept: { fish: 4, max: 5 } }));
     expect(fishes(v.el)).toHaveLength(5);
-    expect(q(v.el, '.victory__period').textContent).toBe('This month: 9');
+    expect(q(v.el, '.victory__kept').getAttribute('aria-label')).toBe('4 of 5 fish left');
   });
 
   it('no kept row when the win added no leaderboard points; banner reserve and the rays variable', () => {
@@ -460,9 +464,6 @@ describe('victory screen (§2.5; Phase 2c §2.7; 2c.1 §10.3)', () => {
     expect(q<HTMLElement>(v.el, '.victory__points').hidden).toBe(true);
     v.update(victoryProps({ kept: null, pointsEarned: 1, bannerReserved: true }));
     expect(q(v.el, '.victory__points').textContent).toBe('1 point');
-    // A kept row with nothing gained is hidden too (G = 0).
-    v.update(victoryProps({ kept: { fish: 3, max: 3, gained: 0, total: 42, kind: 'week' }, bannerReserved: true }));
-    expect(q<HTMLElement>(v.el, '.victory__kept').hidden).toBe(true);
     const root = q(v.el, '.victory');
     expect(root.hasAttribute('data-banner')).toBe(true);
     expect(root.style.getPropertyValue('--rays-ms')).toBe(`${cfg.fx.victoryRaysTurnMs}ms`);
@@ -473,7 +474,7 @@ describe('victory screen (§2.5; Phase 2c §2.7; 2c.1 §10.3)', () => {
     const t = openVictory(victoryProps({ variant: 'tutorial', level: 1, nextLevel: 2, pointsEarned: null, kept: null }));
     expect(q(t.el, '.victory__praise').textContent).toBe("You're ready!");
     expect(q(t.el, '.victory__primary').textContent).toBe('Play Level 2');
-    expect(q<HTMLElement>(t.el, '.victory__home').hidden).toBe(true);
+    expect(t.el.querySelector('.victory__home')).toBeNull();
     expect(q<HTMLElement>(t.el, '.victory__reward').hidden).toBe(true);
     // Even if the app hands in a row, the tutorial shows none (§2.5: not scored).
     const r = openVictory(victoryProps({ variant: 'tutorial_replay', level: 1, nextLevel: null, pointsEarned: 50 }));
@@ -482,16 +483,16 @@ describe('victory screen (§2.5; Phase 2c §2.7; 2c.1 §10.3)', () => {
     expect(q(r.el, '.victory__primary').textContent).toBe('Home');
   });
 
-  it('daily: time, mistakes and hints, the countdown above the reward block, and "Done"', () => {
+  it('daily: time, mistakes and hints, the countdown above the reward block, and the next level (UI batch: was "Done")', () => {
     vi.useFakeTimers();
     let now = 0;
     const v = openVictory(
       victoryProps({
         variant: 'daily',
         level: null,
-        nextLevel: null,
+        nextLevel: 52,
         pointsEarned: 3264,
-        kept: { fish: 3, max: 3, gained: 3, total: 45, kind: 'week' },
+        kept: { fish: 3, max: 3 },
         daily: { dateKey: '2026-10-06', ms: 252_000, mistakes: 1, hints: 0, kitties: 0, nextPuzzleAt: 61_000 },
         now: () => now,
       }),
@@ -504,8 +505,9 @@ describe('victory screen (§2.5; Phase 2c §2.7; 2c.1 §10.3)', () => {
     // The daily's own lines come first, then the reward block.
     const col = Array.from(q(v.el, '.victory__col').children).map((c) => c.className.split(' ')[0]);
     expect(col.indexOf('victory__daily')).toBeLessThan(col.indexOf('victory__reward'));
-    expect(q(v.el, '.victory__primary').textContent).toBe('Done');
-    expect(q<HTMLElement>(v.el, '.victory__home').hidden).toBe(true);
+    expect(q(v.el, '.victory__primary').textContent).toBe('Level 52');
+    expect(primaryLabel({ variant: 'daily', nextLevel: null, event: null })).toBe('Level 2');
+    expect(v.el.querySelector('.victory__home')).toBeNull();
     now = 62_000;
     vi.advanceTimersByTime(1000);
     expect(q(v.el, '.victory__next').textContent).toBe('A new puzzle is ready');
@@ -539,5 +541,77 @@ describe('victory screen (§2.5; Phase 2c §2.7; 2c.1 §10.3)', () => {
     expect(rewardText({ hints: 1 })).toBe('+1 hint');
     // A stray 2b fish milestone (Reward.fish was deleted at I-3) is never shown.
     expect(rewardText({ fish: 100, kitties: 3 } as Parameters<typeof rewardText>[0])).toBe('+3 kitties');
+  });
+
+  it('[UI batch] praise and statistic lines under the subtitle, described in order; in the daily under its time', () => {
+    const v = openVictory(victoryProps({ lines: [{ id: 'flawless' }, { id: 'statLevel', pct: 70 }] }));
+    const lines = Array.from(v.el.querySelectorAll<HTMLElement>('.victory__line')).filter((l) => !l.hidden);
+    expect(lines.map((l) => l.textContent)).toEqual(['No slips, no help: pure paw-work!', 'Faster than about 70% of players here']);
+    expect(lines.map((l) => l.dataset.line)).toEqual(['flawless', 'statLevel']);
+    // Under the subtitle, above the reward block.
+    const col = Array.from(q(v.el, '.victory__col').children).map((c) => c.className.split(' ')[0]);
+    expect(col.indexOf('victory__lines')).toBe(col.indexOf('victory__sub') + 1);
+    // The description: the result line, the lines, the points, the fish.
+    const dialog = q(v.el, '[role="dialog"]');
+    const described = () => (dialog.getAttribute('aria-describedby') ?? '').split(' ').map((id) => document.getElementById(id)?.className.split(' ')[0]);
+    expect(described()).toEqual(['victory__sub', 'victory__line', 'victory__line', 'victory__points', 'victory__kept']);
+    // Fewer lines: the extra element hides and leaves the description; none hides the box.
+    v.update(victoryProps({ lines: [{ id: 'run', count: 6 }] }));
+    expect(Array.from(v.el.querySelectorAll<HTMLElement>('.victory__line')).filter((l) => !l.hidden).map((l) => l.textContent)).toEqual(['6 cats in a row to finish']);
+    expect(described()).toEqual(['victory__sub', 'victory__line', 'victory__points', 'victory__kept']);
+    v.update(victoryProps({ lines: [] }));
+    expect(q<HTMLElement>(v.el, '.victory__lines').hidden).toBe(true);
+    expect(described()).toEqual(['victory__sub', 'victory__points', 'victory__kept']);
+    // Every id has its text (numbers formatted, plurals).
+    v.update(
+      victoryProps({
+        lines: [
+          { id: 'best', ms: 161_000, n: 9 },
+          { id: 'levels', count: 1204 },
+        ],
+      }),
+    );
+    expect(Array.from(v.el.querySelectorAll<HTMLElement>('.victory__line')).map((l) => l.textContent)).toEqual(['New best for a 9×9 board: 2:41', '1,204 levels solved so far!']);
+    // The daily: under its time, the top-N% wording.
+    v.update(
+      victoryProps({
+        variant: 'daily',
+        level: null,
+        nextLevel: 40,
+        daily: { dateKey: '2026-10-06', ms: 252_000, mistakes: 0, hints: 0, kitties: 0, nextPuzzleAt: 61_000 },
+        lines: [{ id: 'statTop', pct: 15 }, { id: 'dailies', count: 1 }],
+      }),
+    );
+    const daily = Array.from(q(v.el, '.victory__daily').children).map((c) => c.className.split(' ')[0]);
+    expect(daily).toEqual(['victory__time', 'victory__lines', 'victory__stats', 'victory__next']);
+    expect(Array.from(v.el.querySelectorAll<HTMLElement>('.victory__line')).map((l) => l.textContent)).toEqual(["About the top 15% of today's solvers", '1 daily puzzle solved so far!']);
+    // Back to a level: the box returns under the subtitle. The tutorial shows none.
+    v.update(victoryProps({ lines: [{ id: 'statFaster', pct: 55 }] }));
+    expect(q(v.el, '.victory__lines').previousElementSibling?.className).toBe('victory__sub');
+    expect(q(v.el, '.victory__line').textContent).toBe("Faster than about 55% of today's solvers");
+    v.update(victoryProps({ variant: 'tutorial', level: 1, nextLevel: 2, kept: null, pointsEarned: null, lines: [{ id: 'hard' }] }));
+    expect(q<HTMLElement>(v.el, '.victory__lines').hidden).toBe(true);
+  });
+
+  it('[UI batch] every line id renders a text of its own in English', () => {
+    const ids: VictoryLine[] = [
+      { id: 'flawless' },
+      { id: 'noSlips' },
+      { id: 'noHelp' },
+      { id: 'best', ms: 61_000, n: 7 },
+      { id: 'hard' },
+      { id: 'revive' },
+      { id: 'retry' },
+      { id: 'run', count: 1 },
+      { id: 'levels', count: 2 },
+      { id: 'dailies', count: 3 },
+      { id: 'statTop', pct: 10 },
+      { id: 'statFaster', pct: 60 },
+      { id: 'statLevel', pct: 80 },
+    ];
+    const texts = ids.map(victoryLineText);
+    expect(new Set(texts).size).toBe(ids.length);
+    for (const t of texts) expect(t, t).not.toMatch(/\{|victory\./);
+    expect(texts[7]).toBe('1 cat in a row to finish');
   });
 });

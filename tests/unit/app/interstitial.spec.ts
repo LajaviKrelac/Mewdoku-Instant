@@ -117,8 +117,8 @@ describe('retry (O4 Retry)', () => {
   });
 });
 
-describe('daily_done (victory "Done")', () => {
-  it('gate → interstitial → Home', async () => {
+describe('daily_done (the daily victory\'s "Level N"; UI batch: was "Done" → Home)', () => {
+  it('gate → interstitial → the next level (progress.level; a daily never moves it)', async () => {
     const h = createHarness({ save: veteran });
     await h.session.start({ mode: 'daily', dateKey: '2026-10-07' });
     await h.settle(h.config.fx.boardEntryMs);
@@ -127,10 +127,14 @@ describe('daily_done (victory "Done")', () => {
     expect(h.router.isOpen('ranking')).toBe(true);
     await tapRanking(h);
     expect(h.router.props.victory?.variant).toBe('daily');
+    expect(h.router.props.victory?.nextLevel).toBe(15);
+    expect(h.router.props.victory).not.toHaveProperty('onHome');
     h.log.length = 0;
     await h.session.onDailyDone();
-    expect(slice(h.log, AD)).toEqual(['ad:interstitial:daily_done', 'goHome']);
-    expect(h.store.get().game).toBeNull();
+    expect(slice(h.log, AD)).toEqual(['ad:interstitial:daily_done', 'screen:game:L15']);
+    expect(h.store.get().session?.mode).toBe('level');
+    expect(h.store.get().session?.level).toBe(15);
+    expect(h.analytics).toContainEqual({ name: 'ad_interstitial', params: { trigger: 'daily_done', result: 'ok' } });
     // Dailies never count toward the interstitial's completed-level minimum.
     expect(h.save().progress.completed).toBe(14);
   });

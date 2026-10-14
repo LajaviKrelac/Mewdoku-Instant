@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { createLadderClient } from '../../../src/app/ladder-client';
 import { createLadderFlow, type LadderChunk, type LadderFlow } from '../../../src/app/ladder-flow';
 import type { SessionLadder } from '../../../src/app/session-types';
+import { statLine, victoryFacts } from '../../../src/app/victory-lines';
 import { createLadderFake, type LadderFake } from '../../fixtures/ladder-fake';
 import { createHarness, startLevel, tapRanking, winGame, type Harness } from './harness';
 
@@ -100,12 +101,13 @@ describe('the win is queued with the win (spec §2.3, critic C-25)', () => {
     ]);
     expect(props?.result).toEqual({ kind: 'ladder', gained: 3, total: 3, waiting: 0 });
     expect(s.h.save().ladder.pending).toEqual([]);
-    // requests-G3 R4: the counter names my bracket's fish, and so does the victory's kept-fish row.
+    // requests-G3 R4: the counter names my bracket's fish; UI batch (victory): the victory's kept-fish row is the fish
+    // alone (no total, no waiting fish).
     const g = s.h.router.game;
     expect(g?.counterKinds.filter((k) => k !== undefined)).toEqual(['ladder']);
     expect(g?.counters[0]).toBe(0); // my bracket's points before this win (none yet)
     await tapRanking(s.h);
-    expect(s.h.router.props.victory?.kept).toEqual({ fish: 3, max: 3, gained: 3, total: 3, kind: 'ladder', waiting: 0 });
+    expect(s.h.router.props.victory?.kept).toEqual({ fish: 3, max: 3 });
   });
 
   it('the ladder not active (not listed): the counter and the victory keep this week\'s records (no ladder kind)', async () => {
@@ -120,7 +122,7 @@ describe('the win is queued with the win (spec §2.3, critic C-25)', () => {
     expect(s.h.router.props.ranking?.list).toMatchObject({ kind: 'records', reason: 'opted_out' });
     expect(s.h.router.props.ranking?.result.kind).toBe('period');
     await tapRanking(s.h);
-    expect(s.h.router.props.victory?.kept?.kind).toBe(s.h.config.period.kind);
+    expect(s.h.router.props.victory?.kept).toEqual({ fish: 3, max: 3 });
   });
 
   it('the retired FB weekly board is never read (rank.fbPeriodBoard false)', async () => {
@@ -155,5 +157,60 @@ describe('the win is queued with the win (spec §2.3, critic C-25)', () => {
     await drain();
     expect(s.h.save().ladder.pending).toHaveLength(1);
     expect(s.h.router.props.ranking?.list.kind).toBe('records');
+  });
+});
+
+describe('[UI batch, victory] the daily percentile from the wins answer (spec §0.4 H-2a)', () => {
+  /** Plays a daily (the harness puzzle, 5 × 5) to WON in about `playMs` of game time; the ranking panel is open. */
+  async function wonDaily(s: ReturnType<typeof setup>, playMs = 0): Promise<void> {
+    await s.h.session.start({ mode: 'daily', dateKey: '2026-10-07' });
+    await s.h.settle(s.h.config.fx.boardEntryMs);
+    await s.h.settle(playMs);
+    winGame(s.h);
+    await s.h.settle(s.h.config.fx.winOverlayDelayMs);
+  }
+
+  it('the server\'s standing leads the daily victory\'s lines ("about the top 25%" for 30 slower of 40)', async () => {
+    const s = setup();
+    await s.flow().start();
+    s.fake().dailyStanding = { solvers: 40, slower: 30 };
+    await wonDaily(s);
+    await drain();
+    await tapRanking(s.h);
+    const v = s.h.router.props.victory;
+    expect(v?.variant).toBe('daily');
+    expect(v?.lines?.[0]).toEqual({ id: 'statTop', pct: 25 });
+    expect(s.flow().dailyStanding()).toEqual({ solvers: 40, slower: 30 });
+  });
+
+  it('opened while the answer is on its way: no statistic yet, then the late answer re-renders the victory', async () => {
+    const s = setup();
+    await s.flow().start();
+    s.fake().dailyStanding = { solvers: 40, slower: 24 };
+    s.fake().hold = true;
+    await wonDaily(s);
+    await tapRanking(s.h);
+    expect(s.flow().dailyStanding()).toBe('pending');
+    expect(s.h.router.props.victory?.lines?.some((l) => l.id.startsWith('stat'))).toBe(false);
+    s.fake().hold = false;
+    s.fake().release();
+    await drain();
+    await s.h.settle(0);
+    expect(s.h.router.props.victory?.lines?.[0]).toEqual({ id: 'statFaster', pct: 60 });
+  });
+
+  it('no standing in the answer (too few solvers): our estimate, worded the same way', async () => {
+    const s = setup();
+    await s.flow().start();
+    // 20 s on a 5 × 5 board (grade 2): quicker than the model's median, so the estimate encourages.
+    await wonDaily(s, 20_000);
+    await drain();
+    await tapRanking(s.h);
+    expect(s.flow().dailyStanding()).toBeNull();
+    const game = s.h.game();
+    const expected = statLine(victoryFacts({ before: s.h.save(), after: s.h.save(), state: game, mode: 'daily', hard: false, restored: false, mice: 0, retries: 0 }), null);
+    expect(game.elapsedMs).toBeGreaterThan(10_000);
+    expect(expected?.id).toMatch(/^stat(Top|Faster)$/);
+    expect(s.h.router.props.victory?.lines?.[0]).toEqual(expected);
   });
 });

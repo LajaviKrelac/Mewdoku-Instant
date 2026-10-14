@@ -16,6 +16,7 @@ import {
   type BracketRow,
   type BracketView,
   type ClaimView,
+  type DailyStanding,
   type ErrorCode,
   type PlayerView,
   type RemoteSwitch,
@@ -78,6 +79,8 @@ export interface LadderFake {
   expireTokens(): void;
   /** A verdict for a winId (default: accepted, points = fish). */
   verdict(winId: string, verdict: WinVerdict, reason?: WinResult['reason']): void;
+  /** UI batch (victory): the standing an accepted daily win's result carries (the real server's WinResult.daily); null = none. */
+  dailyStanding: DailyStanding | null;
   /** Another real player in my bracket. */
   addOther(o: Omit<FakeOther, 'hearts'> & { hearts?: number }): void;
   /** Ends my bracket: a result (with a reward for a paid place when enough members) and a fresh period. */
@@ -235,7 +238,7 @@ export function createLadderFake(opts: LadderFakeOptions = {}): LadderFake {
     }
     if (!authed()) return error('token_expired');
     if (bare === '/v1/wins' && method === 'POST') {
-      const wins = (body?.wins ?? []) as { winId: string; fish: number }[];
+      const wins = (body?.wins ?? []) as { winId: string; fish: number; puzzleId?: string }[];
       if (!Array.isArray(wins) || wins.length === 0 || wins.length > 10) return error('bad_request');
       const results: WinResult[] = [];
       for (const w of wins) {
@@ -252,7 +255,8 @@ export function createLadderFake(opts: LadderFakeOptions = {}): LadderFake {
           state.mySeenAt = now();
           state.myPlaying = false;
         }
-        results.push({ winId: w.winId, verdict, points, ...(forced?.reason ? { reason: forced.reason } : {}) });
+        const daily = verdict === 'accepted' && fake.dailyStanding && w.puzzleId?.startsWith('D') ? { daily: fake.dailyStanding } : {};
+        results.push({ winId: w.winId, verdict, points, ...(forced?.reason ? { reason: forced.reason } : {}), ...daily });
       }
       return json(200, { results, windowPoints: state.points ?? 0, bracket: state.points === null ? null : view(), serverTime: now() });
     }
@@ -331,6 +335,7 @@ export function createLadderFake(opts: LadderFakeOptions = {}): LadderFake {
     calls,
     offline: false,
     hold: false,
+    dailyStanding: null,
     paths: () => calls.map((c) => `${c.method} ${c.path.split('?')[0]}`),
     failNext(path, code, retryAfterMs) {
       const list = failures.get(path) ?? [];
