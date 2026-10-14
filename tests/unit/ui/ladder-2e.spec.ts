@@ -806,6 +806,30 @@ describe('profile sheet (overlay `nickname`, spec §2.7; UI batch)', () => {
     expect(p.onSave).toHaveBeenCalledWith({ ...CURRENT, name: 'Captain Purr' });
   });
 
+  it('review fix (F5): an IME composition is never saved by its confirming Enter nor clipped mid-way', () => {
+    const { sheet, p } = openNick();
+    const input = q<HTMLInputElement>(sheet.el, 'input.nickname__input');
+    type(sheet.el, '猫好');
+    // Chrome / Firefox: the Enter that confirms a conversion has isComposing; WebKit (Safari, iOS webview): keyCode 229.
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true }));
+    const webkit = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true });
+    Object.defineProperty(webkit, 'keyCode', { value: 229 });
+    input.dispatchEvent(webkit);
+    expect(p.onSave).not.toHaveBeenCalled();
+    // Romaji past the limit while composing: left alone (a clip would abort the composition) …
+    input.dispatchEvent(new CompositionEvent('compositionstart'));
+    input.value = 'a'.repeat(14) + 'nekoga';
+    input.dispatchEvent(new InputEvent('input', { isComposing: true }));
+    expect(input.value).toBe('a'.repeat(14) + 'nekoga');
+    // … and clipped once the composition ends.
+    input.value = 'a'.repeat(14) + '猫が好き';
+    input.dispatchEvent(new CompositionEvent('compositionend'));
+    expect([...input.value]).toHaveLength(16);
+    // a plain Enter still saves
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(p.onSave).toHaveBeenCalledWith({ ...CURRENT, name: 'a'.repeat(14) + '猫が' });
+  });
+
   it('frames and backgrounds: each shown on my picture; a locked one shows a lock and says what unlocks it, never picked', () => {
     const { sheet, p } = openNick();
     q(sheet.el, '[role=tab][data-tab="frame"]').click();

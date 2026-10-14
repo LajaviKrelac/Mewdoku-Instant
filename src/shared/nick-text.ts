@@ -5,9 +5,10 @@
 // itself never leaves the server.
 //
 // A name: NFKC, trimmed, inner runs of white space as one space; 3 … 16 characters wide, where a wide character
-// (CJK, kana, Hangul, fullwidth) counts 2, so a 2-character Chinese or Japanese name fits; at most 16 code points;
-// letters (with their combining marks: Hindi, Thai, Vietnamese …), digits, space, `.`, `_`, `-`; at least one
-// letter; at most 4 digits; no web address or @ handle.
+// (CJK, kana, Hangul, fullwidth) counts 2, so a 2-character Chinese or Japanese name fits, and a spacing vowel sign
+// counts 1 (राम is 3 wide); at most 16 code points; letters (with their combining marks: Hindi, Thai, Vietnamese …),
+// digits, space, `.`, `_`, `-`, never a letter that draws nothing (the Hangul fillers); at least one letter; at most
+// 4 digits; no web address or @ handle ("Dr.Cat" and "J.Lo" are names, "cats.com" is not).
 
 /** At most this many code points (the sheet's input stops there; the save keeps `ladder.me.name` ≤ 40 units). */
 export const NAME_MAX_CHARS = 16;
@@ -43,25 +44,37 @@ function isWide(cp: number): boolean {
   );
 }
 
-/** Display width: a wide character 2, a combining mark 0, anything else 1. */
+/**
+ * Display width: a wide character 2, a non-spacing or enclosing mark 0 (it sits on its letter), anything else 1 —
+ * a spacing mark too (Devanagari ा ि ी take room: राम is 3 wide, सीता 4).
+ */
 export function nameWidth(text: string): number {
   let w = 0;
   for (const ch of text) {
-    if (/\p{M}/u.test(ch)) continue;
+    if (/[\p{Mn}\p{Me}]/u.test(ch)) continue;
     w += isWide(ch.codePointAt(0) ?? 0) ? 2 : 1;
   }
   return w;
 }
 
 const MARK_RUN = new RegExp(`\\p{M}{${NAME_MAX_MARKS + 1},}`, 'u');
+/**
+ * A link: an @ handle, http, a "www" word, a well-known top-level domain in any case ("Cats.Com", "MEW.IO"), or any
+ * lower-case 2–3 letter ending after a dot ("cat.tv"). Not a dot before a capital or a longer word: "Dr.Cat", "J.Lo",
+ * "Mr.Comet", and not "Awww".
+ */
+const LINK = /@|http|\bwww\b|\.(?:com|net|org|info|io|gg|xyz|app|ru|uk|tv)\b/i;
+const LINK_END = /\.[a-z]{2,3}$/;
+/** Letters that draw nothing (the Hangul fillers; any default-ignorable code point that is not a mark). */
+const INVISIBLE = /(?!\p{M})\p{Default_Ignorable_Code_Point}/u;
 
 /** The shape check of a NORMALISED name (normalizeName first). */
 export function nameProblem(text: string): NameProblem | null {
   if (text === '') return 'short';
   if ([...text].length > NAME_MAX_CHARS) return 'long';
   // a link or a handle first: "@cat" is said as a handle, not as a character we do not take
-  if (/www|\.com|\.net|\.org|http|@|\.\w{2,3}$/i.test(text)) return 'link';
-  if (!/^[\p{L}\p{M}\p{N} ._-]+$/u.test(text) || !/\p{L}/u.test(text)) return 'chars';
+  if (LINK.test(text) || LINK_END.test(text)) return 'link';
+  if (!/^[\p{L}\p{M}\p{N} ._-]+$/u.test(text) || !/\p{L}/u.test(text) || INVISIBLE.test(text)) return 'chars';
   // A mark sits on a letter, and only a few of them (no stacked noise over the row above or below).
   if (/(^|[^\p{L}\p{M}])\p{M}/u.test(text) || MARK_RUN.test(text)) return 'chars';
   if (nameWidth(text) < NAME_MIN_WIDTH) return 'short';
