@@ -193,6 +193,56 @@ export function streakView(ds: DayStreakRecord, today: string, c: GameConfig = c
   return { day: cycleDay(ds.run, c), total, todayDone, alive: true, broken: false, best: ds.best, run: ds.run };
 }
 
+/** One day of the streak screen's week row (UI batch 2026-10-13): a date of the current cycle. */
+export interface StreakWeekDay {
+  readonly dateKey: string;
+  /** The date's place in the cycle, 1 … cycleDays. */
+  readonly day: number;
+  /** A counted day of the live run. */
+  readonly played: boolean;
+  readonly today: boolean;
+  /** What this cycle day pays (rewardForDay), or null: the row draws the gift only where a reward really pays. */
+  readonly reward: StreakReward | null;
+  /** That reward was paid on this date (save.dayStreak.paid). */
+  readonly paid: boolean;
+}
+
+/** The YYYY-MM-DD key of a day number (dayNumber's inverse). */
+export function dateKeyOfDay(n: number): string {
+  return new Date(n * 86_400_000).toISOString().slice(0, 10);
+}
+
+/**
+ * The streak screen's week row (UI batch 2026-10-13; our reward pays on the cycle's last day of the RUN, so the row
+ * is the run's current cycle, not a calendar week): the cycleDays dates from the cycle's day 1. With a live run the
+ * cycle is the one holding the last counted day, except when that day closed a cycle and today is not counted yet:
+ * then the next cycle starts today. Without a live run (none, broken) day 1 is today. Played = a counted day of the
+ * live run (a day of an older, broken run never shows). [] for a bad `today`. Pure.
+ */
+export function streakWeek(ds: DayStreakRecord, today: string, c: GameConfig = cfg): StreakWeekDay[] {
+  if (!isDateKey(today)) return [];
+  const total = cycleOf(c);
+  const v = streakView(ds, today, c);
+  const todayN = dayNumber(today);
+  const last = ds.dates[ds.dates.length - 1];
+  const lastN = v.alive && last !== undefined ? dayNumber(last) : -Infinity;
+  let start = todayN;
+  if (v.alive && !(v.day === total && !v.todayDone)) start = lastN - (v.day - 1);
+  const paidDates = new Set<string>();
+  for (const p of ds.paid) {
+    const e = parsePaidEntry(p);
+    if (e) paidDates.add(e.date);
+  }
+  const out: StreakWeekDay[] = [];
+  for (let i = 0; i < total; i++) {
+    const n = start + i;
+    const dateKey = dateKeyOfDay(n);
+    const reward = rewardForDay(i + 1, c);
+    out.push({ dateKey, day: i + 1, played: n <= lastN, today: n === todayN, reward, paid: reward !== null && paidDates.has(dateKey) });
+  }
+  return out;
+}
+
 /**
  * Merge of two copies (spec §5.2): dates = the union (newest historyDays); run recomputed from the
  * union: the consecutive chain ending at the newest date; when that chain reaches the oldest kept date

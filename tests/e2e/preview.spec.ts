@@ -3,7 +3,7 @@
 // link, dist/preview, has none). Driven through the preview menu like the owner would, it checks every Phase 2e
 // feature the plain web build hides: the returning player's Home (streak day 6 of 7, the daily unlocked, the ranking
 // chip), the banner during a level, the ranking panel after a win with "Preview: sample players", the day-7 reward on
-// the victory, an interstitial after the level (only once the real pacing rules allow one: the session's first 60 s
+// the Daily Streak screen after the victory (UI batch), an interstitial after the level (only once the real pacing rules allow one: the session's first 60 s
 // pass on Playwright's clock), the out-of-helpers card with the video and the Buy rows, a mock purchase granting +15
 // hints through the real ledger, a rewarded video granting a kitty, the end of the ranking day with the result card
 // and Collect ×2, the ranking sheet's hearts and the name sheet, and a new player's tutorial.
@@ -17,10 +17,12 @@ import type { AppState } from '../../src/app/store';
 import type { PreviewOp } from '../../preview/ribbon';
 import { watchStrings } from './helpers/strings';
 import { gotItNewRanking } from './helpers/new-ranking';
+import { continueStreak, keepStreakScreen, streakContinue, streakScreen } from './helpers/streak-screen';
 
 watchStrings(test);
 // Leaderboard update: the "New ranking" card is closed with Got it whenever it shows.
 gotItNewRanking(test);
+continueStreak(test); // UI batch (2026-10-13): Continue on the Daily Streak screen after the day's first win
 
 type TestWindow = Window & { __mewdoku?: E2EHooks };
 
@@ -125,18 +127,23 @@ test.describe('the preview link (dist/preview-e2e)', () => {
     await page.waitForTimeout(900);
     await shot(page, '04-ranking-panel-sample-players');
 
-    // The victory: the streak's day 7 and its reward (2 hints + 2 kitties).
+    // The victory (the streak's day 7 is already counted and paid: 2 hints + 2 kitties) …
+    await keepStreakScreen(page);
     await toVictory(page);
-    const streak = page.locator('[data-overlay="victory"] .victory__streak');
-    await expect(streak.locator('.victory__streak-text')).toHaveText('Streak: day 7 of 7');
-    await expect(streak.locator('.victory__streak-reward')).toContainText('2');
+    await expect(page.locator('[data-overlay="victory"] .victory__streak')).toBeHidden(); // UI batch: dayStreak.victoryRow off
     expect((await app(page)).save.dayStreak.run).toBe(7);
     expect((await app(page)).save.stock).toEqual({ hints: 3 + 2, kitties: 2 + 2 });
-    await page.waitForTimeout(900);
-    await shot(page, '05-victory-day7-reward');
-
-    // Next level → the real pacing rules allow an interstitial (37 levels done, past the grace, no ad yet).
+    // … then (UI batch 2026-10-13) "Level 38" opens the Daily Streak screen: day 7 of the run with its reward, the chest open.
     await page.locator('[data-overlay="victory"]').getByRole('button', { name: 'Level 38' }).click();
+    const streak = streakScreen(page);
+    await expect(streak.locator('.streak-screen__run')).toHaveText('7 days in a row');
+    await expect(streak.locator('.streak-screen__status')).toHaveText('Streak reward: +2 hints and +2 kitties');
+    await expect(streak.locator('.streak-week__day').nth(6)).toHaveAttribute('data-paid', '');
+    await page.waitForTimeout(1300);
+    await shot(page, '05-streak-day7-reward');
+
+    // Continue → the real pacing rules allow an interstitial (37 levels done, past the grace, no ad yet).
+    await streakContinue(page).click();
     const ad = mockAd(page, 'interstitial');
     await expect(ad).toBeVisible({ timeout: 10_000 });
     await expect(ad).toContainText('Preview ad');

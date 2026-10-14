@@ -491,6 +491,13 @@ export const catalog: LocaleCatalog = {
   'streak.today': 'วันนี้นับแล้ว!',
   'streak.rewardDone': 'ได้รับรางวัลสตรีคแล้ว!',
   'streak.a11y': 'สตรีค: วันที่ {day} จาก {total} {status}',
+  // UI batch (2026-10-13): the streak screen (AI draft from our English, meta.ts and the glossary; awaiting review).
+  'streak.screen.title': 'สตรีครายวัน',
+  'streak.screen.run.other': 'วันติดต่อกัน',
+  'streak.screen.best': 'สถิติสูงสุด: {best}',
+  'streak.screen.continue': 'ต่อไป',
+  'streak.week.a11y': 'วันของสตรีค: ทำได้ {done} จาก {total} วัน',
+  'streak.week.gift.a11y': 'วันที่ {day} ได้รับรางวัล',
   'streak.best': 'สตรีคที่ดีที่สุด',
   'streak.days.other': '{count} วัน',
   'victory.streakDay': 'สตรีค: วันที่ {day} จาก {total}',

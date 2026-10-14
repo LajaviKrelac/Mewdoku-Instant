@@ -52,6 +52,7 @@ import { queueWin } from './ladder-origin';
 import { pickTickerLines } from './tickers';
 import type { BoardScore } from './ranking-flow';
 import { feedbackFor, failEvent, levelParam, mistakeEvent, startEvents, winBookkeeping, type WinSummary } from './session-effects';
+import { afterStreakScreen } from './streak-screen-flow';
 import { createFeedbackPlayer, createSessionTimers, defaultColors, defaultPraise, overlayProps, withoutSlot, withSlot, type SaveSlot } from './session-parts';
 import { createTransitions } from './session-transitions';
 import { shallowEqual, type AppState, type OverlayId, type SessionMeta, type SessionRequest } from './store';
@@ -448,7 +449,8 @@ export function createSession(deps: SessionDeps): Session {
     const ladderWaiting = lf && lf.active() ? lf.panelWaiting() : 0;
     const data = selectVictoryView(store.get(), viewCtx(), w.summary, { praise: w.praise, ladderTotal, ladderWaiting }, c);
     const m = w.meta;
-    router.open('victory', {
+    // UI batch (2026-10-13): the day's first counted win shows the streak screen after the primary press.
+    router.open('victory', afterStreakScreen({ router, state: () => store.get(), now: () => clock.now(), config: c }, w.summary, {
       ...data,
       now: () => clock.now(),
       onPrimary: () => {
@@ -456,7 +458,7 @@ export function createSession(deps: SessionDeps): Session {
         else void session.onNext();
       },
       onHome: () => session.onHome(),
-    });
+    }));
     deps.rankings?.closeList();
     // UX-4: a crossfade. The victory opens over the ranking panel at the tap and fades in (the overlay
     // fade, fx.overlayFadeMs; reduced: fx.screenReducedMs); the panel, fading out under it, closes
@@ -1069,7 +1071,7 @@ export function createSession(deps: SessionDeps): Session {
       return toast(t('hint.unavailable'));
     }
     toast(t('toast.error'));
-    const winOverlay = id === 'daily_result' || id === 'ranking' || id === 'victory';
+    const winOverlay = id === 'daily_result' || id === 'ranking' || id === 'victory' || id === 'streak';
     if (s?.status === 'won' ? winOverlay : s?.status === 'lost' && id === 'fail') session.onHome();
   }
 

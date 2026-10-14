@@ -490,6 +490,13 @@ export const catalog: LocaleCatalog = {
   'streak.today': 'Hari ini terhitung!',
   'streak.rewardDone': 'Hadiah rangkaian diterima!',
   'streak.a11y': 'Rangkaian: hari {day} dari {total}. {status}',
+  // UI batch (2026-10-13): the streak screen (AI draft from our English, meta.ts and the glossary; awaiting review).
+  'streak.screen.title': 'Rangkaian harian',
+  'streak.screen.run.other': 'hari berturut-turut',
+  'streak.screen.best': 'Terbaik: {best}',
+  'streak.screen.continue': 'Lanjut',
+  'streak.week.a11y': 'Hari rangkaian: {done} dari {total} selesai.',
+  'streak.week.gift.a11y': 'Hari {day} memberi hadiah.',
   'streak.best': 'Rangkaian terbaik',
   'streak.days.other': '{count} hari',
   'victory.streakDay': 'Rangkaian: hari {day} dari {total}',

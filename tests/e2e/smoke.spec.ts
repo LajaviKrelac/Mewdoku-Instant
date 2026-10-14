@@ -35,11 +35,13 @@ import type { InProgressV2, SaveData } from '../../src/game/types';
 import { kittyReference } from '../fixtures/kitty-reference';
 import { watchStrings } from './helpers/strings';
 import { gotItNewRanking } from './helpers/new-ranking';
+import { continueStreak, keepStreakScreen, streakContinue, streakScreen } from './helpers/streak-screen';
 
 // Phase 2e I-4: no screen of these tests may ask for an English string that no loaded table has.
 watchStrings(test);
 // Leaderboard update: the "New ranking" card is closed with Got it whenever it shows.
 gotItNewRanking(test);
+continueStreak(test); // UI batch (2026-10-13): Continue on the Daily Streak screen after the day's first win
 
 type TestWindow = Window & { __mewdoku?: E2EHooks };
 
@@ -246,33 +248,49 @@ test('4d · the victory rows: the level\'s points total, the fish kept and "This
   expect((await app(page))?.save.points.total).toBe(total);
 });
 
-test('4e · the daily streak (Phase 2e §5): the first win of the day → day 1 on the victory and on Home\'s streak pill, today done; saved', async ({ page }) => {
+test('4e · the daily streak (Phase 2e §5; UI batch 2026-10-13): the first win of the day → the Daily Streak screen (day 1, today lit) between the victory and the next level; Home\'s pill lit and opening the screen; saved', async ({ page }) => {
+  await keepStreakScreen(page);
   await open(page, '?flags=-ladder', returning());
-  // Home layout (2026-10-11): the streak pill at the top centre (the days in a row) replaced the strip.
-  const strip = page.locator('.screen--home .top-bar .streak-pill');
-  await expect(strip).toHaveAttribute('data-today', '0');
+  // Home layout (2026-10-11): the streak pill at the top centre (the days in a row); its flame faded until today counts.
+  const pill = page.locator('.screen--home .top-bar .streak-pill');
+  await expect(pill).toHaveAttribute('data-today', '0');
   await playLevel(page);
   const sol = await solution(page);
   for (let r = 0; r < sol.length; r++) await dbl(page, r * sol.length + (sol[r] as number));
   await continueFromPanel(page);
-  const row = page.locator('[data-overlay="victory"] .victory__streak');
-  await expect(row).toBeVisible();
-  await expect(row).toHaveAttribute('data-day', '1');
-  await expect(row).toContainText(/day 1 of 7/i);
+  await expect(page.locator('[data-overlay="victory"] .victory__streak')).toBeHidden(); // dayStreak.victoryRow off: the screen says it
+  await page.locator('[data-overlay="victory"] .victory__primary').click();
+  const screen = streakScreen(page);
+  await expect(screen.locator('.streak-screen')).toHaveAttribute('data-mode', 'win');
+  await expect(screen.locator('.streak-screen')).toHaveAttribute('data-today', '1');
+  await expect(screen.locator('.streak-screen__run')).toHaveText('1 day in a row');
+  await expect(screen.locator('.streak-week__day').first()).toHaveAttribute('data-today', '');
+  await expect(screen.locator('.streak-week__day[data-played]')).toHaveCount(1);
+  await expect(screen.locator('.streak-week')).toHaveAttribute('aria-label', `Streak days: 1 of ${cfg.dayStreak.cycleDays} solved. Day ${cfg.dayStreak.cycleDays} earns a reward.`);
   const s = (await app(page))?.save;
   expect(s?.dayStreak.run).toBe(1);
   expect(s?.dayStreak.dates).toEqual([today()]);
-  await page.locator('[data-overlay="victory"] .victory__home').click();
+  await streakContinue(page).click();
+  await playing(page);
+  expect((await game(page))?.id).toBe('L6');
+  await page.locator('.top-bar--game').getByRole('button', { name: 'Back' }).click();
   await ready(page, 'home');
-  await expect(strip).toHaveText('1');
-  await expect(strip).toHaveAttribute('data-today', '1');
-  await expect(strip).toHaveAttribute('data-state', 'done');
+  await expect(pill).toHaveText('1');
+  await expect(pill).toHaveAttribute('data-today', '1');
+  await expect(pill).toHaveAttribute('data-state', 'done');
+  // The pill opens the screen from Home: a back arrow, no Continue.
+  await pill.click();
+  await expect(screen.locator('.streak-screen')).toHaveAttribute('data-mode', 'home');
+  await expect(streakContinue(page)).toBeHidden();
+  await screen.getByRole('button', { name: 'Back' }).click();
+  await expect(screen).toBeHidden();
 });
 
 test('4f · the daily streak across days (fake clock): the next day → day 2; a skipped day → "A new streak starts today." and day 1', async ({ page }) => {
   test.setTimeout(90_000);
   const T = new Date(2026, 9, 12, 12, 0, 0).getTime(); // local noon (the browser's time zone is the host's)
   await page.clock.install({ time: T });
+  await keepStreakScreen(page);
   await open(page, '?flags=-ladder', returning());
   const strip = page.locator('.screen--home .top-bar .streak-pill');
   const winOnce = async (day: number): Promise<void> => {
@@ -280,10 +298,14 @@ test('4f · the daily streak across days (fake clock): the next day → day 2; a
     const sol = await solution(page);
     for (let r = 0; r < sol.length; r++) await dbl(page, r * sol.length + (sol[r] as number));
     await continueFromPanel(page);
-    const row = page.locator('[data-overlay="victory"] .victory__streak');
-    await expect(row).toHaveAttribute('data-day', String(day));
-    await expect(row).toContainText(new RegExp(`day ${day} of ${cfg.dayStreak.cycleDays}`, 'i'));
-    await page.locator('[data-overlay="victory"] .victory__home').click();
+    // UI batch (2026-10-13): the day shows on the Daily Streak screen after the victory (no victory streak row).
+    await page.locator('[data-overlay="victory"] .victory__primary').click();
+    const screen = streakScreen(page);
+    await expect(screen.locator('.streak-screen__run')).toHaveText(`${day} ${day === 1 ? 'day' : 'days'} in a row`);
+    await expect(screen.locator('.streak-week__day').nth(day - 1)).toHaveAttribute('data-today', '');
+    await streakContinue(page).click();
+    await playing(page);
+    await page.locator('.top-bar--game').getByRole('button', { name: 'Back' }).click();
     await ready(page, 'home');
     await expect(strip).toHaveText(String(day));
     await expect(strip).toHaveAttribute('data-today', '1');

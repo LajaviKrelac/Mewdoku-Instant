@@ -35,4 +35,5 @@ export { createSettingsModal } from '../ui/overlays/settings-modal';
 export { createGroupResult } from '../ui/overlays/group-result';
 export { createRankingPanel } from '../ui/overlays/ranking-panel';
 export { createShopSheet } from '../ui/overlays/shop-sheet';
+export { createStreakScreen } from '../ui/overlays/streak-screen';
 export { createVictoryScreen } from '../ui/overlays/victory-screen';

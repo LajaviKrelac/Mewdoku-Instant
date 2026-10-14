@@ -151,6 +151,8 @@ describe('the primary-button rule (phase2b §1.4)', () => {
       'ladder-result__double', 'ladder-result__ok', 'ladder-sheet__ok', 'nickname__save', 'settings__confirm-delete', 'settings__confirm-cancel',
       // Leaderboard update: the "New ranking" card's Got it.
       'ladder-session__ok',
+      // UI batch (2026-10-13): the Daily Streak screen's Continue.
+      'streak-screen__continue',
     ];
     const ui = walk(join(ROOT, 'src/ui'), ['.ts']).map((f) => read(f));
     for (const src of ui) {

@@ -53,11 +53,13 @@ import type { SaveData } from '../../src/game/types';
 import { devSwitches, fbPlayer, LADDER_URL, ladderUp, newPool } from './helpers/rank-players';
 import { watchStrings } from './helpers/strings';
 import { gotItNewRanking, gotItOn } from './helpers/new-ranking';
+import { continueStreak } from './helpers/streak-screen';
 
 // Phase 2e I-4: no screen of these tests may ask for an English string that no loaded table has.
 watchStrings(test);
 // Leaderboard update: the "New ranking" card is closed with Got it whenever it shows.
 gotItNewRanking(test);
+continueStreak(test); // UI batch (2026-10-13): Continue on the Daily Streak screen after the day's first win
 
 const STUB_PATH = resolve(dirname(fileURLToPath(import.meta.url)), '../fixtures/fbinstant-stub.js');
 const STUB_SRC = readFileSync(STUB_PATH, 'utf8');

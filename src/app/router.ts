@@ -45,6 +45,7 @@ import type { HintCardProps } from '../ui/overlays/hint-card';
 import type { HowToPlayProps } from '../ui/overlays/how-to-play';
 import type { RewardedPromptProps } from '../ui/overlays/rewarded-prompt';
 import type { SettingsProps } from '../ui/overlays/settings-modal';
+import type { StreakScreenProps } from '../ui/overlays/streak-screen';
 import { createLoadingIndicator, type LoadingIndicator } from '../ui/overlays/loading-indicator';
 import { createToastLayer, type ToastLayer } from '../ui/overlays/toast';
 import type { BootScreen } from '../ui/screens/boot-screen';
@@ -76,6 +77,8 @@ export interface OverlayPropsMap {
   ladder_result: LadderResultProps;
   nickname: NicknameSheetProps;
   ladder_session: LadderSessionProps;
+  // UI batch (2026-10-13): the Daily Streak screen (the lazy overlay chunk).
+  streak: StreakScreenProps;
 }
 
 export interface Router {
@@ -207,6 +210,9 @@ export function transitionKind(from: ScreenId, to: ScreenId): ScreenTransitionKi
   return null;
 }
 
+/** The full-screen overlays a won board is left from (PAR-6), the top-most first (UI batch: the streak screen). */
+const WIN_LAYERS: readonly OverlayId[] = ['streak', 'victory'];
+
 /** Whether an overlay is modal before its view exists (only the coach is not, CONTRACTS §4). */
 const isModalId = (id: OverlayId): boolean => id !== 'coach';
 
@@ -239,6 +245,7 @@ export async function loadOverlayChunk(): Promise<Partial<OverlayFactories>> {
     victory: m.createVictoryScreen,
     shop: m.createShopSheet,
     group_result: m.createGroupResult,
+    streak: m.createStreakScreen,
   };
 }
 
@@ -520,21 +527,28 @@ export function createRouter(root: HTMLElement, deps: RouterDeps = {}): Router {
     return !!a && a !== doc.body && root.contains(a);
   };
 
-  /** The victory screen when it is showing (PAR-6): it, not the solved board under it, is the screen being left. */
-  function shownVictory(): HTMLElement | null {
-    if (order.indexOf('victory') < 0 || pending.has('victory')) return null;
-    const v = views.get('victory');
-    return v && v.el.parentNode === overlayHost && !v.el.hidden ? v.el : null;
+  /**
+   * The victory screen when it is showing (PAR-6): it, not the solved board under it, is the screen being left. UI batch
+   * (2026-10-13): the streak screen opens over the victory (its Continue leaves the board), so the top-most of the two.
+   */
+  function shownVictory(): { readonly id: OverlayId; readonly el: HTMLElement } | null {
+    for (const id of WIN_LAYERS) {
+      if (order.indexOf(id) < 0 || pending.has(id)) continue;
+      const v = views.get(id);
+      if (v && v.el.parentNode === overlayHost && !v.el.hidden) return { id, el: v.el };
+    }
+    return null;
   }
 
   /**
-   * Hands `prev` to its outgoing half (PAR-6): with the victory showing (`stand`, taken before the
-   * overlays closed), the victory keeps showing as the leaving layer and the board under it, which it
+   * Hands `prev` to its outgoing half (PAR-6): with the victory (or the streak screen over it) showing (`standIn`,
+   * taken before the overlays closed), it keeps showing as the leaving layer and the board under it, which it
    * fully covers, is destroyed at once; otherwise `prev` itself leaves. Returns the leaving element and
    * its cleanup (remove + destroy, or release the stand-in).
    */
-  function outgoingOf(prev: { readonly el: HTMLElement; destroy(): void }, stand: HTMLElement | null): { el: HTMLElement; done: () => void } {
-    if (stand) {
+  function outgoingOf(prev: { readonly el: HTMLElement; destroy(): void }, standIn: ReturnType<typeof shownVictory>): { el: HTMLElement; done: () => void } {
+    if (standIn) {
+      const stand = standIn.el;
       stand.hidden = false; // closeAll() hid it; it stays up (inert) until its fade ends
       stand.setAttribute('aria-hidden', 'true');
       stand.setAttribute('inert', '');
@@ -543,7 +557,7 @@ export function createRouter(root: HTMLElement, deps: RouterDeps = {}): Router {
         el: stand,
         done: () => {
           releaseScreenOut(stand);
-          if (order.indexOf('victory') < 0) stand.hidden = true; // unless it was opened again meanwhile
+          if (order.indexOf(standIn.id) < 0) stand.hidden = true; // unless it was opened again meanwhile
         },
       };
     }

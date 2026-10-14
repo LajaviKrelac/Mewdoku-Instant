@@ -11,7 +11,7 @@
 // sentence; the steps are decorative and carry a shape (check, fill), never colour alone (§7.7).
 // Classes: .streak-steps > svg.streak-step[data-step][data-kind=empty|next|done|today] (victory-screen.ts);
 //          button.streak-pill[data-state][data-today] > svg.streak-pill__flame .streak-pill__n (Home's top centre, the
-//          original's streak counter); a tap hands the sentence to the app (a toast).
+//          original's streak counter); a tap opens the Daily Streak screen (UI batch 2026-10-13; it was a toast).
 import { formatNumber, onLocaleChanged, t } from '../../i18n';
 import { icon, type SymbolId } from '../art/sprite';
 import { h, setText, type View } from '../dom';
@@ -84,8 +84,8 @@ export function streakStripModel(v: StreakStripView): { day: string | null; stat
 }
 
 export interface StreakPillCallbacks {
-  /** A tap: the strip's sentence ("Streak: day 3 of 7. Today counts!"), for a toast. */
-  onPress(text: string): void;
+  /** A tap (UI batch 2026-10-13: the app opens the Daily Streak screen; it was a toast of the sentence). */
+  onPress(): void;
 }
 
 /** The days in a row the Home pill shows: 0 with no live run. Pure (tests). */
@@ -94,24 +94,26 @@ export function streakPillCount(v: StreakStripView): number {
   return Math.max(0, Math.floor(v.run ?? v.day));
 }
 
-/** Home's streak pill at the top centre: our flame and the days in a row, named with the strip's sentence. */
+/**
+ * Home's streak pill at the top centre: our flame and the days in a row, named with the strip's sentence. UI batch
+ * (2026-10-13): the flame stays faded until today counts (data-today, overlay-chunk.css), the box is 44 px tall, and a
+ * tap opens the Daily Streak screen (aria-haspopup).
+ */
 export function createStreakPill(view: StreakStripView, cb: StreakPillCallbacks): View<StreakStripView> {
   const n = h('span', { class: 'streak-pill__n num' });
-  let label = '';
   const el = h(
     'button',
-    { type: 'button', class: 'streak-pill', on: { click: () => cb.onPress(label) } },
+    { type: 'button', class: 'streak-pill', 'aria-haspopup': 'dialog', on: { click: () => cb.onPress() } },
     icon('icon-streak-flame', { class: 'streak-pill__flame' }),
     n,
   );
   let cur = view;
   const render = (v: StreakStripView): void => {
     cur = v;
-    label = streakStripModel(v).label;
     el.dataset.state = v.state === 'new' ? 'none' : v.state;
     el.dataset.today = v.state === 'done' ? '1' : '0';
     setText(n, formatNumber(streakPillCount(v)));
-    el.setAttribute('aria-label', label);
+    el.setAttribute('aria-label', streakStripModel(v).label);
   };
   render(view);
   const offLocale = onLocaleChanged(() => render(cur));

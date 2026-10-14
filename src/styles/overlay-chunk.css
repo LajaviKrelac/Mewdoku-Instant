@@ -1527,6 +1527,86 @@
   font-size: var(--fs-xl); cursor: pointer; box-shadow: var(--shadow-1); }
 .streak-pill:active { transform: scale(0.95); }
 .streak-pill__flame { width: 28px; height: 28px; margin-inline-end: 8px; }
+/* UI batch (2026-10-13): the flame stays faded and grey until today counts (data-today; the reference's washed-out
+   icon before the day's puzzle), on the pill and on the Daily Streak screen. The number keeps its colour. */
+.streak-pill[data-today='0'] .streak-pill__flame,
+.streak-screen[data-today='0'] .streak-screen__flame { opacity: 0.45; filter: grayscale(1); }
+
+/* ── UI batch (2026-10-13): the Daily Streak screen (streak-screen.ts) ──
+   Full screen on the page colour (as the victory is on the stage): the title row (a back disc at the start when opened
+   from Home), our flame on a soft gold glow, the run in the display font with its label, the white "Best" pill, the
+   week row on a white card (orange discs with a white check for the solved days, grey discs for the rest, today ringed,
+   the reward day a chest), the status line, and the sticky Continue clear of the banner band (mode 'win'). The hero, the
+   number and the gaps follow the screen's height (clamp, vh: 86 / 54 px at 568 px high, 176 / 88 px from 844 px up) so
+   320 × 568 fits without a scroll, the band too; the overlay still scrolls as a last resort with Continue on screen.
+   Tokens only; no flex gap, no inset. */
+.overlay[data-overlay='streak'] { justify-content: flex-start; padding: 0; overflow-x: hidden; overflow-y: auto; background: var(--page);
+  color: var(--ink); }
+/* --ss-foot: the free band at the bottom (the safe area, plus the banner's reserve and clearance with data-banner). */
+.streak-screen { --ss-flame: clamp(72px, 32.6vh - 99px, 176px); --ss-num: clamp(3rem, 12.3vh - 16px, 5.5rem); --ss-mark: 36px;
+  --ss-foot: calc(12px + var(--safe-bottom));
+  position: relative; display: flex; flex: 1 0 auto; flex-direction: column; align-items: center; width: 100%; max-width: 480px;
+  margin: 0 auto; padding: calc(8px + var(--safe-top)) 16px var(--ss-foot); text-align: center; outline: none; }
+.streak-screen[data-banner] { --ss-foot: calc(var(--banner-reserve, 58px) + var(--banner-clear, 16px) + var(--safe-bottom)); }
+/* Back disc, title, and an empty column of the disc's width: the title stays centred on the screen. */
+.streak-screen__head { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; width: 100%; min-height: 48px; }
+.streak-screen__back { grid-column: 1; justify-self: center; }
+[dir='rtl'] .streak-screen__back .btn__icon { transform: scaleX(-1); }
+.streak-screen__title { grid-column: 2; color: var(--ink); font-size: var(--fs-xxl); line-height: 1.15; text-wrap: balance; overflow-wrap: anywhere; }
+.streak-screen__body { display: flex; flex: 1 0 auto; flex-direction: column; align-items: center; justify-content: center; width: 100%;
+  padding-top: 6px; }
+.streak-screen__hero { position: relative; z-index: 0; width: var(--ss-flame); height: var(--ss-flame); }
+.streak-screen__hero::before { content: ''; position: absolute; top: -20%; left: -20%; z-index: -1; width: 140%; height: 140%;
+  border-radius: 50%; background: radial-gradient(closest-side, rgba(var(--gold-rgb), 0.55), rgba(var(--gold-rgb), 0)); }
+.streak-screen[data-today='0'] .streak-screen__hero::before { display: none; }
+.streak-screen__flame { width: 100%; height: 100%; }
+.streak-screen__run { display: flex; flex-direction: column; align-items: center; margin-top: 4px; }
+.streak-screen__n { color: var(--accent-title); font-weight: var(--display-weight); font-size: var(--ss-num); line-height: 1; }
+.streak-screen__label, .streak-screen__best, .streak-week__name { font-family: var(--font-display); font-weight: var(--display-weight); }
+.streak-screen__label { margin-top: 2px; color: var(--accent-text); font-size: clamp(var(--fs-xl), 3vh, 1.625rem); line-height: 1.15; }
+.streak-screen__best { margin-top: min(12px, 1.5vh); padding: 6px 18px; border-radius: var(--radius-pill); background: var(--card);
+  box-shadow: var(--shadow-1); font-size: var(--fs-l); }
+.streak-week { display: flex; width: 100%; max-width: 400px; margin-top: min(18px, 2.2vh); padding: 10px 4px 12px;
+  border-radius: var(--radius-l); background: var(--card); box-shadow: var(--shadow-1); }
+.streak-week__day { display: flex; flex: 1 1 0; flex-direction: column; align-items: center; min-width: 0; }
+.streak-week__name { max-width: 100%; color: var(--ink-2); font-size: var(--fs-xs); line-height: 1.2; text-transform: uppercase;
+  white-space: nowrap; }
+.streak-week[data-long] .streak-week__name { font-size: 0.6875rem; }
+.streak-week__day[data-today] .streak-week__name { color: var(--accent-text); }
+/* A grey disc; a solved day is orange with a white check drawn by its borders; today has a ring (shapes, not colour
+   alone); the reward day is our chest (streak-art.ts), open once its reward was paid. */
+.streak-week__mark { position: relative; display: flex; align-items: center; justify-content: center; width: var(--ss-mark);
+  height: var(--ss-mark); margin-top: 6px; border-radius: 50%; background: var(--life-empty); box-shadow: inset 0 0 0 2px var(--ink-3); }
+.streak-week__day[data-played] .streak-week__mark { background: var(--accent); box-shadow: inset 0 -3px 0 var(--accent-deep); }
+.streak-week__day[data-played]:not([data-gift]) .streak-week__mark::after { content: ''; position: absolute; top: 44%; left: 50%;
+  width: 8px; height: 15px; border: solid #fff; border-width: 0 3px 3px 0; transform: translate(-50%, -50%) rotate(45deg); }
+.streak-week__day[data-today] .streak-week__mark::before { content: ''; position: absolute; top: -5px; right: -5px; bottom: -5px;
+  left: -5px; border: 2px solid var(--accent-deep); border-radius: 50%; }
+.streak-week__day[data-gift] .streak-week__mark { background: none; box-shadow: none; }
+.streak-week__day[data-gift][data-today] .streak-week__mark { background: var(--gold-soft); }
+.streak-week__gift { flex: none; width: calc(var(--ss-mark) + 10px); height: calc(var(--ss-mark) + 10px); }
+.streak-week__day[data-paid] .streak-week__gift { --chest-open: 1; --chest-shut: 0; }
+.streak-screen__status { max-width: 340px; margin-top: min(14px, 1.8vh); color: var(--ink-2); font-weight: 600; line-height: 1.35;
+  text-wrap: balance; }
+/* Continue stays on screen and clear of the banner band (as the victory's buttons); the 6 px below it keep its edge and
+   focus ring clear of the footer's fill. */
+.streak-screen__actions { position: sticky; bottom: var(--ss-foot); z-index: 1; width: 100%; margin-top: 16px; padding: 8px 0 6px;
+  background: var(--page); }
+.streak-screen__actions::after { content: ''; position: absolute; top: 100%; right: 0; left: 0; height: var(--ss-foot); background: var(--page); }
+.streak-screen__continue.btn { width: 100%; min-height: 64px; font-size: 1.5rem; }
+/* The day's first win lights the flame and pops today's check once; reduced motion: neither (the overlay's fade only). */
+.streak-screen[data-anim] .streak-screen__flame { animation: streak-light 700ms var(--ease-out) 180ms both; }
+.streak-screen[data-anim] .streak-screen__hero::before { animation: mw-fade-in 700ms ease 180ms both; }
+.streak-screen[data-anim] .streak-week__day[data-today] .streak-week__mark { animation: streak-pop 480ms var(--ease-drop) 480ms both; }
+@keyframes streak-light { from { opacity: 0.45; filter: grayscale(1); transform: scale(0.9); } }
+@keyframes streak-pop { from { opacity: 0; transform: scale(0.4); } }
+[data-motion='reduced'] .streak-screen *, [data-motion='reduced'] .streak-screen *::before,
+.streak-screen[data-reduced] *, .streak-screen[data-reduced] *::before { animation: none; }
+@media (max-width: 359px) {
+  .streak-screen { --ss-mark: 30px; }
+  .streak-week { padding-right: 2px; padding-left: 2px; }
+}
+
 
 /* ── Victory: the daily reward line and the streak row (spec §5.3, §6.1) ── */
 /* The sticky footer's ::after (stage colour) starts right under the actions: room for the primary's ring and

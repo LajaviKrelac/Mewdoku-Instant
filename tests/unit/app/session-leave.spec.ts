@@ -51,8 +51,36 @@ describe('session start: the tap is answered before the build (PERF-1)', () => {
     await h.settle(h.config.fx.winButtonDelayMs);
     h.router.leaves.length = 0;
     h.router.props.victory?.onPrimary();
+    // UI batch (2026-10-13): the day's first counted win shows the streak screen first; its Continue leaves.
+    expect(h.router.isOpen('streak')).toBe(true);
+    await h.settle(0);
+    expect(h.router.leaves).toEqual([]);
+    h.router.props.streak?.onDone();
     await h.settle(0);
     expect(h.router.leaves).toEqual(['game']);
     expect(h.log).toContain('screen:game:L6');
+  });
+
+  it('a later win the same day: the victory leaves at the tap, no streak screen', async () => {
+    const h = createHarness();
+    await startLevel(h, 5);
+    winGame(h);
+    await h.settle(h.config.fx.winOverlayDelayMs + h.config.rank.panelTapMinMs);
+    await tapRanking(h);
+    await h.settle(h.config.fx.winButtonDelayMs);
+    h.router.props.victory?.onPrimary();
+    h.router.props.streak?.onDone();
+    await h.settle(0);
+    await startLevel(h, 6);
+    winGame(h);
+    await h.settle(h.config.fx.winOverlayDelayMs + h.config.rank.panelTapMinMs);
+    await tapRanking(h);
+    await h.settle(h.config.fx.winButtonDelayMs);
+    h.router.leaves.length = 0;
+    h.router.props.victory?.onPrimary();
+    await h.settle(0);
+    expect(h.log.filter((l) => l === 'open:streak')).toHaveLength(1);
+    expect(h.router.leaves).toEqual(['game']);
+    expect(h.log).toContain('screen:game:L7');
   });
 });

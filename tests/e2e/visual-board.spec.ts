@@ -30,9 +30,11 @@ import { mouseLandMs, mouseRunMs, mouseVisitMs } from '../../src/game/mouse';
 import { PALETTE } from '../../src/ui/art/palette';
 import { gapFor } from '../../src/ui/board/layout';
 import { gotItNewRanking, gotItOn } from './helpers/new-ranking';
+import { continueStreak, continueStreakOn } from './helpers/streak-screen';
 
 // Leaderboard update: the "New ranking" card is closed with Got it whenever it shows.
 gotItNewRanking(test);
+continueStreak(test); // UI batch (2026-10-13): Continue on the Daily Streak screen after the day's first win
 
 type TestWindow = Window & { __mewdoku?: E2EHooks };
 
@@ -225,7 +227,7 @@ test.describe('Phase 2d visual review: the board (look-spec §1.8–§1.10, §5.
   test('the recording\'s state at 402 × 874, DSF 3: X marks over five Coral tiles in the top row', async ({ browser }, info) => {
     test.skip(info.project.name !== 'web-390', 'one capture, in its own 402 × 874 context');
     const ctx = await browser.newContext({ viewport: { width: 402, height: 874 }, deviceScaleFactor: 3, hasTouch: true, isMobile: true, baseURL: info.project.use.baseURL });
-    const page = await gotItOn(await ctx.newPage());
+    const page = await gotItOn(await continueStreakOn(await ctx.newPage()));
     // the recording's device: safe areas 62 / 34 through the dev override (look-spec §1.1)
     await page.addInitScript(() => {
       const set = (): void => {
@@ -307,7 +309,7 @@ type FxWindow = TestWindow & { __fx?: { t0: number | null; seek(): void; watch(s
 /** The recording's device (402 × 874, DSF 3, safe 62 / 34), a returning player on `level`, the clock frozen on the playing board. */
 async function frozenBoard(browser: import('@playwright/test').Browser, baseURL: string | undefined, level: number, patch: Partial<SaveData> = {}): Promise<{ page: Page; close(): Promise<void>; sol: number[] }> {
   const ctx = await browser.newContext({ viewport: { width: 402, height: 874 }, deviceScaleFactor: 3, hasTouch: true, isMobile: true, baseURL });
-  const page = await gotItOn(await ctx.newPage());
+  const page = await gotItOn(await continueStreakOn(await ctx.newPage()));
   await page.addInitScript({
     content: `(() => { const set = () => { document.documentElement.style.setProperty('--dev-safe-top', '62px'); document.documentElement.style.setProperty('--dev-safe-bottom', '34px'); }; if (document.documentElement) set(); else document.addEventListener('DOMContentLoaded', set); })();`,
   });

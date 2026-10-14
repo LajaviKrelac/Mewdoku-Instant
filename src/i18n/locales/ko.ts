@@ -491,6 +491,13 @@ export const catalog: LocaleCatalog = {
   'streak.today': '오늘 기록 완료!',
   'streak.rewardDone': '연속 기록 보상을 받았어요!',
   'streak.a11y': '연속 기록: {total}일 중 {day}일째. {status}',
+  // UI batch (2026-10-13): the streak screen (AI draft from our English, meta.ts and the glossary; awaiting review).
+  'streak.screen.title': '매일 연속 기록',
+  'streak.screen.run.other': '일 연속',
+  'streak.screen.best': '최고 기록: {best}',
+  'streak.screen.continue': '계속',
+  'streak.week.a11y': '연속 기록 일수: {total}일 중 {done}일 완료.',
+  'streak.week.gift.a11y': '{day}일째에 보상을 받아요.',
   'streak.best': '최고 연속 기록',
   'streak.days.other': '{count}일',
   'victory.streakDay': '연속 기록: {total}일 중 {day}일째',

@@ -179,15 +179,20 @@ describe('Home: the floating ranking button, the profile and streak pill in the 
     home.destroy();
   });
 
-  it('the streak pill sits in the top bar\'s centre with the days in a row; a tap hands over the sentence; null hides it', () => {
+  it('the streak pill sits in the top bar\'s centre with the days in a row; a tap opens the streak screen (UI batch); null hides it', () => {
     const cb = { ...homeCb(), onStreak: vi.fn() };
     const home = createHomeScreen(homeView({ streak: { state: 'done', day: 1, total: 7, rewardDay: false, run: 8 } }), cb);
     document.body.appendChild(home.el);
     expect(home.el.querySelector('.streak-strip')).toBeNull();
     const pill = q<HTMLButtonElement>(home.el, '.top-bar .top-bar__center button.streak-pill');
     expect(pill.textContent).toBe('8');
+    expect(pill.getAttribute('aria-label')).toBe('Streak: day 1 of 7. Today counts!');
+    expect(pill.getAttribute('aria-haspopup')).toBe('dialog');
+    expect(pill.dataset.today).toBe('1');
     pill.click();
-    expect(cb.onStreak).toHaveBeenCalledWith('Streak: day 1 of 7. Today counts!');
+    expect(cb.onStreak).toHaveBeenCalledTimes(1);
+    home.update(homeView({ streak: { state: 'alive', day: 1, total: 7, rewardDay: false, run: 8 } }));
+    expect(pill.dataset.today).toBe('0'); // the flame is faded until today counts (overlay-chunk.css)
     expect(home.el.hasAttribute('data-streak')).toBe(true);
     home.update(homeView({ streak: null }));
     expect(pill.hidden).toBe(true);

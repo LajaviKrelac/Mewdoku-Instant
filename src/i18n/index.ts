@@ -10,7 +10,7 @@
 // caller does not await. Missing keys fall back to English.
 import { cfg, type LocaleId } from '../app/config';
 import { buildLocaleIds, localeLoader, type LocaleCatalog } from './build-locales';
-import { formatNumberFor, formatShortDateFor, isolate, pseudoLocalize, stripMarks } from './format';
+import { formatNumberFor, formatShortDateFor, formatWeekdayFor, isolate, pseudoLocalize, stripMarks } from './format';
 import { guessLocale, isLocaleId, isRtl, resolveLocale, type NavigatorLike } from './locale';
 import { pluralCategory } from './plural';
 import { COLOR_KEYS, enFirst, GLYPH_KEYS, MONTH_KEYS, PRAISE_KEYS, WEEKDAY_KEYS } from './en-first';
@@ -395,6 +395,21 @@ export function formatShortDate(dateKey: string): string {
     day: d,
     month: translate(MONTH_KEYS[mo] ?? 'date.month.0'),
   });
+}
+
+/**
+ * UI batch (2026-10-13): the short weekday of a YYYY-MM-DD key ("Tue"; the streak screen's week row). English (and
+ * the pseudo-locale) keep the catalogue's date.weekday.* words; other locales use Intl on the key's UTC date.
+ */
+export function formatWeekday(dateKey: string): string {
+  if (activeLang !== 'en') {
+    const viaIntl = formatWeekdayFor(activeLang, dateKey);
+    if (viaIntl !== null) return viaIntl;
+  }
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey);
+  if (!m) return dateKey;
+  const weekday = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))).getUTCDay();
+  return translate(WEEKDAY_KEYS[weekday] ?? 'date.weekday.0');
 }
 
 // The boot prefetch (§6.3): in a browser, start loading the chunk of the locale navigator.language

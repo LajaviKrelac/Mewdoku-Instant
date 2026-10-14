@@ -7,6 +7,7 @@ import {
   formatDuration,
   formatNumber,
   formatShortDate,
+  formatWeekday,
   getDir,
   interpolate,
   joinList,
@@ -19,6 +20,7 @@ import {
   FSI,
   formatNumberFor,
   formatShortDateFor,
+  formatWeekdayFor,
   isolate,
   latnTag,
   markCount,
@@ -129,6 +131,34 @@ describe('dates', () => {
   it('formatShortDate uses Intl for the active non-English locale', async () => {
     await setLocale('de', { doc });
     expect(formatShortDate('2026-10-06')).toBe(formatShortDateFor('de', '2026-10-06'));
+    await setLocale('en', { doc });
+  });
+
+  // UI batch (2026-10-13): the streak screen's week row labels each date with its real weekday.
+  const WEEK = ['2026-10-04', '2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09', '2026-10-10']; // Sun … Sat
+  it('formatWeekday: English keeps the catalogue words (Sun … Sat); a bad key is returned as is', () => {
+    expect(WEEK.map(formatWeekday)).toEqual(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
+    expect(formatWeekday('nope')).toBe('nope');
+    expect(formatWeekdayFor('de', 'nope')).toBeNull();
+  });
+
+  it('formatWeekdayFor: seven distinct short names per locale on the key\'s UTC date, Latin digits only (vi "Th 2")', () => {
+    for (const id of cfg.i18n.locales) {
+      if (id === 'en') continue;
+      const names = WEEK.map((k) => formatWeekdayFor(id, k) ?? '');
+      expect(new Set(names).size, id).toBe(7);
+      for (const s of names) {
+        expect(s.length, `${id} ${s}`).toBeGreaterThan(0);
+        expect(s.length, `${id} ${s}`).toBeLessThanOrEqual(8);
+        expect(s, id).not.toMatch(NON_LATN_DIGITS);
+      }
+    }
+    expect(formatWeekdayFor('de', '2026-10-05')).toBe(new Intl.DateTimeFormat('de', { weekday: 'short', timeZone: 'UTC' }).format(Date.UTC(2026, 9, 5)));
+  });
+
+  it('formatWeekday uses Intl for the active non-English locale', async () => {
+    await setLocale('fr', { doc });
+    expect(formatWeekday('2026-10-06')).toBe(formatWeekdayFor('fr', '2026-10-06'));
     await setLocale('en', { doc });
   });
 });

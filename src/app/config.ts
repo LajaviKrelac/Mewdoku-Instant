@@ -1280,8 +1280,17 @@ export interface GameConfig {
     readonly paidKept: number;
     /** [PROVISIONAL M9] The streak strip on Home (once the tutorial is done). */
     readonly showOnHome: boolean;
-    /** [PROVISIONAL M9] The streak row on the victory screen of the day's first counted win. */
+    /**
+     * [PROVISIONAL M9] The streak row on the victory screen of the day's first counted win. UI batch (2026-10-13): off,
+     * the streak screen (screenAfterWin) shows the day instead; the row's code stays.
+     */
     readonly victoryRow: boolean;
+    /**
+     * UI batch (2026-10-13; user: the reference's Daily Streak screen after the match): the streak screen (overlay
+     * `streak`) after the victory's primary press on the day's first counted win, before the interstitial and the next
+     * board; never for the tutorial, a second win the same day or a restored board. Off: the victory goes straight on.
+     */
+    readonly screenAfterWin: boolean;
     /** [ours] With a ranking server time seen in the last 24 h, a win does not count while the device clock is off by more than maxSkewMs. */
     readonly serverSkewCheck: boolean;
     readonly maxSkewMs: number;
@@ -1668,7 +1677,8 @@ export const cfg: GameConfig = deepFreeze({
     historyDays: 14,
     paidKept: 8,
     showOnHome: true,
-    victoryRow: true,
+    victoryRow: false,
+    screenAfterWin: true,
     serverSkewCheck: false,
     maxSkewMs: 129_600_000,
   },

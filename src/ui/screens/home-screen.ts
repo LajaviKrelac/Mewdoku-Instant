@@ -21,7 +21,7 @@
 // the top left (the top bar's lead slot, after the FB safe zone), the streak pill at the top centre, the gear at the top
 // right; the wordmark under the bar; the ranking button floating at the left edge halfway down the hero; the Play pill
 // and the daily pill (with its status tab hanging below) low on the screen, about 70 % of the width. The streak strip
-// left Home: the pill carries the run, and a tap tells the strip's sentence (HomeCallbacks.onStreak).
+// left Home: the pill carries the run, and a tap opens the Daily Streak screen (HomeCallbacks.onStreak, UI batch).
 // Classes: .screen.screen--home[data-banner][data-streak?] > .home__body (+ .home__bg, the scrolling board, last) > .home__hero(.home__wordmark .home__tagline .home__mascot)
 //          .home__actions(.home__cards > .event-card[data-state] .home__play .badge.badge--hard
 //          .daily-card[data-state] .home-card); the top bar's lead slot
@@ -151,8 +151,8 @@ export interface HomeCallbacks {
   onLadder(): void;
   /** The profile picture at the top left (the name sheet when there is a ranking name, else Settings). */
   onProfile?(): void;
-  /** The streak pill: the strip's sentence ("Day 3 of 7 · Today counts!") to show as a toast. */
-  onStreak?(text: string): void;
+  /** The streak pill (UI batch 2026-10-13: opens the Daily Streak screen; it was a toast of the strip's sentence). */
+  onStreak?(): void;
 }
 
 /** "3 d 4 h" for a day or more, else "7 h 48 min" / "12 min" (event countdowns, phase2b §4.4). */
@@ -401,7 +401,7 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
       return;
     }
     if (!strip) {
-      strip = (x as NonNullable<typeof x>).createStreakPill(v, { onPress: (text) => cb.onStreak?.(text) });
+      strip = (x as NonNullable<typeof x>).createStreakPill(v, { onPress: () => cb.onStreak?.() });
       streakSlot.appendChild(strip.el);
       pendingStrip?.remove();
       pendingStrip = null;

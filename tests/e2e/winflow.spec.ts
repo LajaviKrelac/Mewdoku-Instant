@@ -24,16 +24,19 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { E2EHooks } from '../../src/app/boot';
 import { ladderUp, LADDER_URL, newPool, webPlayer } from './helpers/rank-players';
+import { dailyDateKey } from '../../src/game/progression';
 import { defaults } from '../../src/game/save';
 import { catIncrement, comboPoints, comboRuleFor, comboRunMax, periodKeyAt, pointsRuleFor } from '../../src/game/scoring';
 import type { SaveData } from '../../src/game/types';
 import { watchStrings } from './helpers/strings';
 import { gotItNewRanking } from './helpers/new-ranking';
+import { continueStreak, keepStreakScreen, streakContinue } from './helpers/streak-screen';
 
 // Phase 2e I-4: no screen of these tests may ask for an English string that no loaded table has.
 watchStrings(test);
 // Leaderboard update: the "New ranking" card is closed with Got it whenever it shows.
 gotItNewRanking(test);
+continueStreak(test); // UI batch (2026-10-13): Continue on the Daily Streak screen after the day's first win
 
 type TestWindow = Window & { __mewdoku?: E2EHooks };
 
@@ -389,8 +392,11 @@ async function stopSampler(page: Page): Promise<{ t: number; rank: number; vic: 
   });
 }
 
-async function toVictory(page: Page): Promise<void> {
-  await open(page, atLevel(2));
+/** UI batch (2026-10-13): today already counted, so no Daily Streak screen follows the victory (a later win of the day). */
+const todayCounted = (): Partial<SaveData> => ({ dayStreak: { dates: [dailyDateKey(Date.now())], run: 1, best: 1, paid: [] } });
+
+async function toVictory(page: Page, save: SaveData = atLevel(2, todayCounted())): Promise<void> {
+  await open(page, save);
   await playNext(page);
   await solve(page);
   const panel = page.locator('[data-overlay="ranking"]');
@@ -424,6 +430,57 @@ test('PAR-6 / UX-4: panel → victory crossfades, and "Level 3" never shows the 
   const end = samples[samples.length - 1]?.games ?? [];
   expect(end).toHaveLength(1);
   expect(end[0]?.title).toMatch(/^Level 3(?!\d)/);
+});
+
+test('PAR-6 (UI batch 2026-10-13): the day\'s first win — the Daily Streak screen over the victory is what fades out into "Level 3"; neither the victory nor the solved board shows again', async ({ page }) => {
+  await keepStreakScreen(page);
+  await toVictory(page, atLevel(2));
+  await page.locator('[data-overlay="victory"] .victory__primary').click();
+  const cont = streakContinue(page);
+  await expect(cont).toBeEnabled({ timeout: 3000 });
+  await page.waitForTimeout(300); // the screen's own fade-in is over
+  // One frame sampler: the streak screen's and the victory's opacity, the solved board's, the boards present.
+  await page.evaluate(() => {
+    type Sample = { str: number; vic: number; old: number; titles: string[] };
+    const w = window as Window & { __streakSamples?: Sample[]; __streakSampling?: boolean };
+    w.__streakSamples = [];
+    w.__streakSampling = true;
+    const op = (el: Element | null): number => {
+      if (!el || (el as HTMLElement).hidden || !el.isConnected) return 0;
+      let o = 1;
+      for (let n: Element | null = el; n && n !== document.documentElement; n = n.parentElement) o *= Number(getComputedStyle(n).opacity);
+      return o;
+    };
+    const title = (g: Element): string => g.querySelector('.top-bar__text')?.getAttribute('aria-label') ?? g.querySelector('.top-bar__title')?.textContent ?? '';
+    const tick = (): void => {
+      if (!w.__streakSampling) return;
+      const games = Array.from(document.querySelectorAll('.app-screen > .screen--game'));
+      w.__streakSamples?.push({
+        str: op(document.querySelector('[data-overlay="streak"]')),
+        vic: op(document.querySelector('[data-overlay="victory"]')),
+        old: Math.max(0, ...games.filter((g) => /^Level 2(?!\d)/.test(title(g))).map(op)),
+        titles: games.map(title),
+      });
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+  await cont.click();
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.puzzle.id === 'L3');
+  await page.waitForTimeout(500);
+  const samples = await page.evaluate(() => {
+    const w = window as Window & { __streakSamples?: { str: number; vic: number; old: number; titles: string[] }[]; __streakSampling?: boolean };
+    w.__streakSampling = false;
+    return w.__streakSamples ?? [];
+  });
+  expect(samples.length).toBeGreaterThan(5);
+  // Once the streak screen no longer covers everything, neither the victory nor the solved "Level 2" shows.
+  expect(samples.filter((x) => x.str < 0.98 && (x.vic > 0.02 || x.old > 0.02))).toEqual([]);
+  // The streak screen is what fades out (§2.9's outgoing fade), into the new board.
+  expect(samples.some((x) => x.str > 0.05 && x.str < 0.95)).toBe(true);
+  const end = samples[samples.length - 1]?.titles ?? [];
+  expect(end).toHaveLength(1);
+  expect(end[0]).toMatch(/^Level 3(?!\d)/);
 });
 
 test('PAR-6: Home from the victory never shows the solved board again', async ({ page }) => {
