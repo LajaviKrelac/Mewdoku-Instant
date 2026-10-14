@@ -32,6 +32,7 @@ import type { E2EHooks } from '../../src/app/boot';
 import { catalog as ar } from '../../src/i18n/locales/ar';
 import { catalog as de } from '../../src/i18n/locales/de';
 import { catalog as fr } from '../../src/i18n/locales/fr';
+import { catalog as hi } from '../../src/i18n/locales/hi';
 import { catalog as ja } from '../../src/i18n/locales/ja';
 import { catalog as ru } from '../../src/i18n/locales/ru';
 import { catalog as th } from '../../src/i18n/locales/th';
@@ -441,6 +442,70 @@ test.describe('2c.1 integration N1: Arabic Hard-level title at the small phone',
     await barFits(page);
   });
 });
+
+// UI batch (2026-10-13, levelbutton): an Extra-hard level (340: a G5 board) at the small phone in the long locales. Home's
+// Play button wears the purple frame with its tag on the frame's top edge: the tag shows its whole text inside the
+// viewport, clear of the event card above; the frame clears the daily pill below. In the game the badge reads Extra
+// hard beside the whole level number.
+for (const [browser, lang, cat] of [['de-DE', 'de', de], ['ar-EG', 'ar', ar], ['hi-IN', 'hi', hi], ['ru-RU', 'ru', ru]] as const) {
+  test.describe(`UI batch: the Extra-hard level button in ${lang} at the small phone`, () => {
+    test.use({ locale: browser });
+
+    test('the tag fits on the frame, clear of the cards, and the game bar keeps the number', async ({ page }, info) => {
+      test.skip(info.project.name !== 'web-320', 'the small phone is the tight case');
+      await page.clock.setFixedTime(IN_EVENT_MS); // the event card sits right above Play
+      await seededHome(page, { progress: { level: 340, completed: 339, best: {} } });
+      const home = await page.evaluate(() => {
+        const box = (sel: string) => {
+          const el = document.querySelector<HTMLElement>(sel);
+          if (!el || el.hidden || el.getClientRects().length === 0) return null;
+          const r = el.getBoundingClientRect();
+          return { t: r.top, b: r.bottom, l: r.left, r: r.right };
+        };
+        const tag = document.querySelector<HTMLElement>('.home__play .home__tier') as HTMLElement;
+        return {
+          tier: (document.querySelector('.home__play') as HTMLElement).dataset.tier,
+          text: tag.textContent,
+          whole: tag.scrollWidth <= tag.clientWidth + 1,
+          tag: box('.home__play .home__tier'),
+          play: box('.home__play'),
+          event: box('.event-card'),
+          daily: box('.daily-card'),
+          vw: window.innerWidth,
+        };
+      });
+      expect(home.tier).toBe('extra');
+      expect(home.text).toBe(cat['common.extraHard']);
+      expect(home.whole, 'the tag shows its whole text').toBe(true);
+      const tag = home.tag as { t: number; b: number; l: number; r: number };
+      const play = home.play as { t: number; b: number; l: number; r: number };
+      expect(tag.l).toBeGreaterThanOrEqual(play.l - 0.5);
+      expect(tag.r).toBeLessThanOrEqual(play.r + 0.5);
+      expect(play.l - 7, 'the frame inside the viewport').toBeGreaterThanOrEqual(-0.5);
+      expect(play.r + 7).toBeLessThanOrEqual(home.vw + 0.5);
+      if (home.event) expect(tag.t, 'the tag clear of the event card').toBeGreaterThanOrEqual(home.event.b + 2);
+      expect(play.b + 11, 'the frame clear of the daily pill').toBeLessThanOrEqual((home.daily?.t ?? Infinity) - 2);
+      await noOverflow(page);
+      await noClipping(page);
+      await page.locator('.home__play').click();
+      await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
+      await page.waitForTimeout(600);
+      const bar = await page.evaluate(() => {
+        const h1 = document.querySelector<HTMLElement>('.screen--game .top-bar__text') as HTMLElement;
+        const suffix = h1.querySelector<HTMLElement>('.top-bar__suffix') as HTMLElement;
+        const badge = h1.querySelector<HTMLElement>('.badge--hard') as HTMLElement;
+        const b = suffix.getBoundingClientRect();
+        const c = badge.getBoundingClientRect();
+        return { text: badge.textContent, extra: badge.classList.contains('badge--extra') && !badge.hidden, number: suffix.textContent, apart: c.right <= b.left + 0.5 || c.left >= b.right - 0.5 };
+      });
+      expect(bar.extra).toBe(true);
+      expect(bar.text).toBe(cat['common.extraHard']);
+      expect(bar.number?.replace(/[⁦-⁩]/g, '')).toBe('340');
+      expect(bar.apart, 'the badge never covers the number').toBe(true);
+      await barFits(page);
+    });
+  });
+}
 
 test.describe('review fixes: larger text (I18N-TEXT-1)', () => {
   test.use({ locale: 'en-US' });

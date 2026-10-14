@@ -26,6 +26,7 @@ import type { Sfx } from '../audio/sfx';
 import { createAssetLoaders } from '../game/level-assets';
 import { createLevelsRepo, type LevelsRepo } from '../game/levels-repo';
 import { dailyDateKey } from '../game/progression';
+import type { BoardDifficulty } from '../game/ramp';
 import { migrate } from '../game/save';
 import type { GenResult, GenSpec } from '../engine/types';
 import { CellState, type GameState, type LocaleId, type SaveData } from '../game/types';
@@ -369,6 +370,8 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
     },
   };
   const levelSize = (level: number): number | null => attempt(() => levels.peekLevel(level)?.n ?? null, null);
+  // UI batch (2026-10-13): the Home button's Hard / Extra hard tier from the board in memory (game/ramp.ts levelTier).
+  const levelBoard = (level: number): BoardDifficulty | null => attempt(() => levels.peekLevel(level), null);
   const viewCtxFor = () => ({
     now: clock.now(),
     capabilities: platform.capabilities(),
@@ -470,6 +473,7 @@ export async function boot(platform: PlatformAdapter, root: HTMLElement, opts: B
     banners,
     eventTop,
     levelSize,
+    levelBoard,
     applyLocale: (override) => applyLocale(override),
     ladder: () => ladder,
     openRecordsSheet: () => openRecordsSheet(),

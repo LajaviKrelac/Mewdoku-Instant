@@ -23,6 +23,7 @@ export const catalog: LocaleCatalog = {
   'common.leaderboard': '排行榜',
   'common.notNow': '以后再说',
   'common.hard': '困难',
+  'common.extraHard': '非常困难', // UI batch (2026-10-13)
   'common.locked': '未解锁',
   'common.on': '开',
   'common.off': '关',

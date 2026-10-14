@@ -1501,3 +1501,21 @@ test.describe('Phase 2e (G3): the ranking views in the real app (route fake; spe
     });
   }
 });
+
+// ─────────────────────────────── UI batch (2026-10-13, levelbutton): the Hard and Extra-hard Play buttons ───────────────────────────────
+
+test.describe('UI batch (levelbutton): the Play button wears its frame on Hard and Extra-hard levels', () => {
+  for (const [level, tier, label] of [[40, 'hard', 'Hard'], [340, 'extra', 'Extra hard']] as const) {
+    test(`level ${level}: the ${tier} frame, its tag on the frame's top edge, and the name "Level ${level} ${label}"`, async ({ page }) => {
+      await open(page, returning({ progress: { level, completed: level - 1, best: {} } }));
+      const play = page.locator('.home__play');
+      await expect(play).toHaveAttribute('data-tier', tier);
+      await expect(play.locator('.home__tier')).toHaveText(label);
+      await expect(play).toHaveAccessibleName(new RegExp(`Level\\W*${level}\\W*${label}`));
+      const daily = (await page.locator('.screen--home .daily-card').boundingBox())!;
+      const box = (await play.boundingBox())!;
+      expect(daily.y - (box.y + box.height), 'room under the frame').toBeGreaterThanOrEqual(13);
+      await page.screenshot({ path: join(OUT_2E, `UI-levelbutton-home-${tier}-${page.viewportSize()?.width ?? 0}.png`) });
+    });
+  }
+});

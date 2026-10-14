@@ -95,6 +95,11 @@ export type TokenName =
   | 'glow'
   | 'wrong'
   | 'hard'
+  // UI batch (2026-10-13, levelbutton): the level tiers' badges (white text) and the Home button's frames.
+  | 'tier-hard'
+  | 'tier-hard-deep'
+  | 'tier-extra'
+  | 'tier-extra-deep'
   // Phase 2d (look-spec §1.2): count badges, the video badge, the gear's dot, the start toast, rule cards.
   | 'badge'
   | 'badge-video'
@@ -167,6 +172,10 @@ export const TOKENS: Readonly<Record<TokenName, string>> = Object.freeze({
   glow: 'rgba(255,194,61,.65)',
   wrong: '#560A1C',
   hard: '#6C3FB5',
+  'tier-hard': '#CF2A2A',
+  'tier-hard-deep': '#9E1C1C',
+  'tier-extra': '#7A3CC8',
+  'tier-extra-deep': '#55278F',
   badge: '#DC2F2F',
   'badge-video': '#03A84A',
   dot: '#F34F4F',

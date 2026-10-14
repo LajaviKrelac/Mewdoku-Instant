@@ -22,6 +22,7 @@ export const catalog: LocaleCatalog = {
   'common.leaderboard': 'Bảng xếp hạng',
   'common.notNow': 'Để sau',
   'common.hard': 'Khó',
+  'common.extraHard': 'Rất khó', // UI batch (2026-10-13)
   'common.locked': 'Đã khóa',
   'common.on': 'Bật',
   'common.off': 'Tắt',

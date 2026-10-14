@@ -103,6 +103,16 @@
 .home__actions > .event-card, .home__cards { align-self: stretch; }
 .home__play, .daily-card { width: min(100%, max(272px, 70vw)); max-width: 360px; }
 .home__play { position: relative; min-height: 60px; }
+/* UI batch (2026-10-13, levelbutton): a Hard level's frame (red; purple for Extra hard) is the button's own shadow: a
+   white ring, the tier's ring and the tier's 3D edge, outside its box (the layout and the e2e boxes keep their size),
+   pressed with it. The tag sits on the frame's top edge; 22 px above keep both clear of the event card, the 22 px
+   below of the daily pill. The focus ring moves outside the frame. */
+.home__play[data-tier] { --tier: var(--tier-hard); --tier-deep: var(--tier-hard-deep); margin-top: 22px;
+  box-shadow: 0 0 0 3px #fff, 0 0 0 7px var(--tier), 0 4px 0 7px var(--tier-deep), 0 8px 14px 7px rgba(var(--ink-rgb), 0.22); }
+.home__play[data-tier='extra'] { --tier: var(--tier-extra); --tier-deep: var(--tier-extra-deep); }
+.home__play[data-tier]:active:not([aria-disabled='true']):not(:disabled) { box-shadow: 0 0 0 3px #fff, 0 0 0 7px var(--tier), 0 1px 0 7px var(--tier-deep); }
+.home__play[data-tier]:focus-visible { outline-offset: 10px; }
+.home__play > .home__tier { position: absolute; top: -5px; left: 50%; margin: 0; border: 2px solid #fff; transform: translate(-50%, -50%); white-space: nowrap; }
 .home-card { display: flex; width: 100%; min-height: 72px; padding: 12px 16px; border: 0; border-radius: var(--radius-l);
   background: var(--card); color: var(--ink); font: inherit; text-align: start; cursor: pointer; box-shadow: 0 3px 0 var(--line-2), var(--shadow-1); }
 .home-card:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--line-2), var(--shadow-1); }

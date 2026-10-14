@@ -2,6 +2,8 @@
 // Run `npx vite --port 5182 --strictPort` and open the index (no view) for the list.
 // Options: &rm=1 (reduced motion), &fb=1 (FB safe zone), &banner=1 (banner reserve), &n=<size>,
 // &kept=1|2|3 (fish kept at the win).
+// UI batch (2026-10-13, levelbutton): &lang=<id> (a catalogue, with i18n.css for the scripts and RTL); the views
+// home-hard / home-extra (the Play button's frames, under the event card) and game-tier (&tier=hard|extra).
 // Phase 2c.1 (lead, I-1): the level-points counter (`game-points` plays three scoring cats and a
 // mistake), level totals on the victory fixtures, no perfect streak.
 // The `win` view plays the Phase 2c §2.2 timeline the way the app's win flow drives it (glow, the
@@ -25,6 +27,7 @@ import '../src/styles/coach-chunk.css';
 // Phase 2d.1 I-4: the board's lazy motion (mouse visits, cat sequence, waves) comes with the board-mouse chunk.
 import '../src/styles/board-mouse.css';
 import '../src/styles/events-chunk.css';
+import '../src/styles/i18n.css';
 import eventsJson from '../src/data/events/events.json';
 import { cfg } from '../src/app/config';
 import { panelAt } from '../src/app/win-flow';
@@ -54,6 +57,7 @@ import { createGameScreen, type GameScreen, type GameView } from '../src/ui/scre
 import { createHomeScreen, type HomeEventCardView, type HomeView } from '../src/ui/screens/home-screen';
 import { eventArt } from '../src/ui/art/event-art';
 import { gameView, homeView, midGame, solved } from './shell-fixtures';
+import { setLocale } from '../src/i18n/index';
 
 const LOADED_AT = performance.now();
 const q = new URLSearchParams(location.search);
@@ -61,6 +65,7 @@ const view = q.get('view') ?? 'index';
 const reduced = q.get('rm') === '1';
 const fb = q.get('fb') === '1';
 const banner = q.get('banner') === '1';
+const lang = q.get('lang') ?? 'en';
 
 mountSprite();
 // Phase 2e I-4: in the app these come with the lazy overlay chunk (app/overlay-chunk.ts).
@@ -400,6 +405,10 @@ const VIEWS: Record<string, () => void> = {
   'home-teaser': () => home({ event: eventCard('teaser', { now: Date.parse(lantern.startUtc) - 2 * DAY - 3 * 3_600_000, solved: 0 }) }),
   'home-locked': () => home({ level: 6, event: eventCard('locked', { solved: 0 }) }),
   'home-banner': () => home({ bannerReserved: true, event: eventCard('active') }),
+  'home-hard': () => home({ level: 40, hard: true, tier: 'hard', event: eventCard('active') }),
+  'home-extra': () => home({ level: 940, hard: true, tier: 'extra', event: eventCard('active') }),
+  'game-tier': () =>
+    void game(gameView(midGame(40), { level: 340, hard: true, tier: q.get('tier') === 'hard' ? 'hard' : 'extra', fbSafeZone: fb, reducedMotion: reduced })),
   game: () => void game(gameView(midGame(Number(q.get('level') ?? 37)), { fbSafeZone: fb, reducedMotion: reduced })),
   'game-event': () =>
     void game(gameView(midGame(37), { mode: 'event', level: null, event: { def: lantern, index: 12 }, fbSafeZone: fb, reducedMotion: reduced })),
@@ -587,5 +596,8 @@ function index(): void {
   app.appendChild(list);
 }
 
-(VIEWS[view] ?? index)();
-document.documentElement.dataset.ready = 'true';
+void (async () => {
+  if (lang !== 'en') await setLocale(lang, { override: lang } as never).catch((e: unknown) => console.error(e));
+  (VIEWS[view] ?? index)();
+  document.documentElement.dataset.ready = 'true';
+})();

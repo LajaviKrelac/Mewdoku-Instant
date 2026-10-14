@@ -3,7 +3,7 @@
    helpers. Tokens only: colour literals live in tokens.css (tests/unit/ui/css-rules.spec.ts).
    Shared vocabulary (used by ui-board and ui-shell DOM):
      .btn  --primary | --secondary | --ghost | --icon | --block | --lg ; .btn__icon .btn__label .btn__badge .btn__chev
-     .badge .badge--hard   .icon   .num   .sr-only / .visually-hidden   .screen  --boot | --home | --game [data-banner] */
+     .badge .badge--hard .badge--extra   .icon   .num   .sr-only / .visually-hidden   .screen  --boot | --home | --game [data-banner] */
 
 /* Fredoka 600 (OFL), Latin. Latin extended (tr, pl) is a second face with its own unicode-range: the
    browser fetches it only when such a glyph appears (phase2b §6.6). Other scripts use the system stacks
@@ -314,16 +314,16 @@ svg {
   line-height: 1;
 }
 
+/* UI batch (2026-10-13): Hard is red, Extra hard (.badge--extra on the same badge) purple; the Home button's tag is
+   overlays.css .home__tier. */
 .badge--hard {
-  background: var(--hard);
+  background: var(--tier-hard);
   color: #fff;
   box-shadow: 0 2px 0 rgba(var(--ink-rgb), 0.18);
 }
 
-.btn--primary .badge--hard {
-  background: #fff;
-  color: var(--hard);
-  box-shadow: none;
+.badge--extra {
+  background: var(--tier-extra);
 }
 
 /* ── Focus (02 §18: visible 3 px ring for keyboard users; --focus ≥ 4.5:1 on page and card) ── */

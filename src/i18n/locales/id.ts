@@ -22,6 +22,7 @@ export const catalog: LocaleCatalog = {
   'common.leaderboard': 'Papan peringkat',
   'common.notNow': 'Nanti saja',
   'common.hard': 'Sulit',
+  'common.extraHard': 'Sangat sulit', // UI batch (2026-10-13)
   'common.locked': 'Terkunci',
   'common.on': 'Aktif',
   'common.off': 'Mati',

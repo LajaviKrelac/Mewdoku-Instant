@@ -5,6 +5,7 @@
 // - Level column: the page's h1 (aria-label = the whole title). Label = splitTitle(title).name
 //   ("Level", "Daily", "Lantern Walk"); value = the suffix without its separator ("96", "Tue 6 Oct",
 //   "13"), then the Hard badge. A title with no suffix (zh "第96关") shows whole as the value.
+//   UI batch (2026-10-13, levelbutton): on an Extra-hard board the badge reads "Extra hard" (.badge--extra, purple).
 // - Score column: the level points of this attempt (GameView.points) on the shared counter builder
 //   (pills.ts buildCounter). Hidden when points is null (the tutorial); [data-final] at the win.
 //   Phase 2d.1 (helpers-spec §2.5, D-2d1-4): while the game screen's star flight is on
@@ -21,10 +22,11 @@
 //   --fb-s / --fb-e (game-screen.ts); the columns re-centre between the discs on their own.
 // Classes: header.top-bar.top-bar--game[data-fb-safe][data-fit]
 //            > button.top-bar__btn--home.top-bar__btn--back
-//              .top-bar__mid > h1.top-bar__text > .top-bar__name + .top-bar__val > .top-bar__suffix .badge--hard
+//              .top-bar__mid > h1.top-bar__text > .top-bar__name + .top-bar__val > .top-bar__suffix .badge--hard(.badge--extra)
 //                              .points-pill[data-final][data-counting] > .points-pill__name + .points-pill__val.top-bar__val > .points-pill__count > .points-pill__n[data-counting]
 //              button.top-bar__btn--settings > .top-bar__dot
 import { cfg } from '../../app/config';
+import type { LevelTier } from '../../game/ramp';
 import type { GameEvent } from '../../game/types';
 import { formatNumber, onLocaleChanged, t } from '../../i18n';
 import type { View } from '../dom';
@@ -36,6 +38,8 @@ export interface GameBarProps {
   /** Localized title ("Level 37", "Daily · Tue 6 Oct", "Lantern Walk · 13"). */
   readonly title: string;
   readonly hard: boolean;
+  /** UI batch (2026-10-13): 'extra' turns the Hard badge into "Extra hard"; absent: plain Hard. */
+  readonly tier?: LevelTier;
   /** false during the first-run tutorial (02 §4.2): the back disc hides. */
   readonly showBack: boolean;
   readonly fbSafeZone: boolean;
@@ -100,7 +104,9 @@ export function createGameBar(props: GameBarProps, cb: GameBarCallbacks): GameBa
   valRow.className = 'top-bar__val';
   const suffixEl = document.createElement('span');
   suffixEl.className = 'top-bar__suffix num';
-  const badge = L.text(document.createElement('span'), () => t('common.hard'));
+  /** The badge's tier (set by render before its text). */
+  let extra = false;
+  const badge = L.text(document.createElement('span'), () => t(extra ? 'common.extraHard' : 'common.hard'));
   badge.className = 'badge badge--hard';
   valRow.append(suffixEl, badge);
   text.append(nameEl, valRow);
@@ -221,7 +227,11 @@ export function createGameBar(props: GameBarProps, cb: GameBarCallbacks): GameBa
       text.setAttribute('aria-label', p.title);
       widen = true;
     }
-    if (!prev || prev.hard !== p.hard) widen = true;
+    const wasExtra = extra;
+    extra = p.hard && p.tier === 'extra';
+    if (!prev || prev.hard !== p.hard || wasExtra !== extra) widen = true;
+    if (wasExtra !== extra) L.apply();
+    badge.classList.toggle('badge--extra', extra);
     badge.hidden = !p.hard;
     back.hidden = !p.showBack;
     setSettingsDot(gear, p.settingsDot);

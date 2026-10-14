@@ -23,6 +23,7 @@ export const catalog: LocaleCatalog = {
   'common.leaderboard': 'กระดานอันดับ',
   'common.notNow': 'ไว้ทีหลัง',
   'common.hard': 'ยาก',
+  'common.extraHard': 'ยากมาก', // UI batch (2026-10-13)
   'common.locked': 'ล็อกอยู่',
   'common.on': 'เปิด',
   'common.off': 'ปิด',

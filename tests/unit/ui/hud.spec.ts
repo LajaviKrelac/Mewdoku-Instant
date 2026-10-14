@@ -114,6 +114,19 @@ describe('the game bar: back · Level / Score · gear (§1.4)', () => {
     bar.destroy();
   });
 
+  it('UI batch (2026-10-13): the badge reads Hard (red) or Extra hard (.badge--extra, purple) by the tier', () => {
+    const bar = createGameBar({ ...barProps, title: 'Level 340', hard: true }, { onBack: vi.fn(), onSettings: vi.fn() });
+    const badge = bar.el.querySelector('.badge--hard') as HTMLElement;
+    expect([badge.hidden, badge.textContent, badge.classList.contains('badge--extra')]).toEqual([false, 'Hard', false]);
+    bar.update({ ...barProps, title: 'Level 340', hard: true, tier: 'extra' });
+    expect([badge.hidden, badge.textContent, badge.classList.contains('badge--extra')]).toEqual([false, 'Extra hard', true]);
+    bar.update({ ...barProps, title: 'Level 350', hard: true, tier: 'hard' });
+    expect([badge.textContent, badge.classList.contains('badge--extra')]).toEqual(['Hard', false]);
+    bar.update({ ...barProps, title: 'Level 351', hard: false, tier: 'extra' }); // never without a Hard level
+    expect([badge.hidden, badge.classList.contains('badge--extra')]).toEqual([true, false]);
+    bar.destroy();
+  });
+
   it('back (Back, does what Home did) at the inline start, the gear at the end; the dot and its name; the safe zone', () => {
     const cb = { onBack: vi.fn(), onSettings: vi.fn() };
     const bar = createGameBar({ ...barProps, settingsDot: true, fbSafeZone: true }, cb);

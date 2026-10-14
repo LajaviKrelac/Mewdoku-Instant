@@ -34,6 +34,7 @@
 //          + main.game__col (.game__hud (.game__combo > .combo-bar, .pills, rules) .game__stage .game__tools) + .game__scrim + .game-fx[data-celebrate]; vars of §4.7
 import type { CellIndex } from '../../engine/types';
 import type { EventDef } from '../../game/events';
+import type { LevelTier } from '../../game/ramp';
 import type { FxHandle } from '../fx/fish-flight';
 import { playGlow } from '../fx/glow';
 import type { TickerLine, Tickers } from '../fx/tickers';
@@ -59,6 +60,8 @@ export interface GameView {
   /** Daily date YYYY-MM-DD; null otherwise. */
   readonly dateKey: string | null;
   readonly hard: boolean;
+  /** UI batch (2026-10-13): 'extra' when this Hard level's board is one of our hardest (the badge says so); absent: from `hard`. */
+  readonly tier?: LevelTier;
   /** false during the first-run tutorial (02 §4.2). */
   readonly showHome: boolean;
   /** Lives left: hearts = lives = fish (Phase 2c §0.5; the stored name stays). */
@@ -258,6 +261,7 @@ export function createGameScreen(view: GameView, cb: GameScreenCallbacks): GameS
   const barProps = (v: GameView): GameBarProps => ({
     title: gameTitle(v),
     hard: v.hard,
+    tier: v.tier,
     showBack: v.showHome,
     fbSafeZone: v.fbSafeZone,
     settingsDot: v.settingsDot,

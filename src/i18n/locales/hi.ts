@@ -24,6 +24,7 @@ export const catalog: LocaleCatalog = {
   'common.leaderboard': 'लीडरबोर्ड',
   'common.notNow': 'अभी नहीं',
   'common.hard': 'कठिन',
+  'common.extraHard': 'बहुत कठिन', // UI batch (2026-10-13)
   'common.locked': 'लॉक है',
   'common.on': 'चालू',
   'common.off': 'बंद',
