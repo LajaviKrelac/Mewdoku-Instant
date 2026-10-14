@@ -273,9 +273,9 @@ describe('bracket list: exactly the server rows (H-3, §10.6 #1)', () => {
     expect(cd.textContent).toBe('Ends in less than a minute');
     now += 60_000;
     vi.advanceTimersByTime(60_000);
-    // Left open over the end: the open-time rows are not final, so no "Final results" (and no dot before the count).
+    // Left open over the end: the open-time rows are not final, so no "Final results" (UI batch: no count, so no dot).
     expect(cd.hidden).toBe(true);
-    expect(q(list.el, '.ranking__sep').hidden).toBe(true);
+    expect(list.el.querySelector('.ranking__sep')).toBeNull();
     expect(list.el.textContent).not.toContain('Final results');
     // The server's final view.
     list.update(view({ endsAt: NOW, final: true, now: () => now }));

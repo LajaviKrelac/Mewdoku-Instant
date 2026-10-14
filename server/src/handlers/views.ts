@@ -10,12 +10,12 @@
 // (merge): a computer player's row carries its scripted activity (core/table.ts rivalActivity: "playing" while one
 // of its sessions runs, seenAt its last win or a later ping tick, never after the table's time), computed like its
 // points; a final table's rivals are frozen at ends_at, as a real row's activity stops at the end.
-import type { BracketRow as WireRow, BracketSummary, BracketView, PlayerView, ResultView, RewardView, RulesView } from '../contract';
+import { BACKGROUND_COUNT, FRAME_COUNT, type BracketRow as WireRow, type BracketSummary, type BracketView, type PlayerView, type ResultView, type RewardView, type RulesView } from '../contract';
 import { grantOf, heartsNew } from '../core/brackets';
 import type { ServerConfig } from '../core/config';
 import { rewardId, wirePool } from '../core/ids';
 import { nextNickChange } from '../core/nickname';
-import { decodeFinalRivals, isRivalSlot, parseRivalsTag } from '../core/rivals';
+import { decodeFinalRivals, isRivalSlot, parseRivalsTag, rivalLook } from '../core/rivals';
 import { finalPlan, finalTable, joinTimesKnown, liveTable, withRealHearts, type TableRow } from '../core/table';
 import type { Services } from '../services';
 import type { BracketRow, MemberRow, PlayerRow, RewardRow } from '../store/sql-store';
@@ -184,8 +184,19 @@ function activityOf(row: TableRow, member: MemberRow | undefined, presence: bool
   return member ? { seenAt: seenAtOf(member, true), playing: member.playing === 1 } : { seenAt: null, playing: false };
 }
 
-/** A table row (a real member or a computer player, core/table.ts) on the wire, with its activity (activityOf). */
-const toWire = (row: TableRow, rank: number, myKey: string, liked: ReadonlySet<number>, member: MemberRow | undefined, presence: boolean): WireRow => ({
+/**
+ * UI batch (profile): a row's frame and background: a real row's from its member row (members.frame / bg), a
+ * computer player's from rivalLook.
+ */
+function lookOf(row: TableRow, member: MemberRow | undefined, bracketId: string): { frameId: number; backgroundId: number } {
+  if (member) return { frameId: member.frame ?? 0, backgroundId: member.bg ?? 0 };
+  if (row.kind !== 'rival') return { frameId: 0, backgroundId: 0 };
+  const l = rivalLook(bracketId, row.slot, FRAME_COUNT, BACKGROUND_COUNT);
+  return { frameId: l.frame, backgroundId: l.bg };
+}
+
+/** A table row (a real member or a computer player, core/table.ts) on the wire, with its activity (activityOf) and look (lookOf). */
+const toWire = (row: TableRow, rank: number, myKey: string, liked: ReadonlySet<number>, member: MemberRow | undefined, presence: boolean, bracketId: string): WireRow => ({
   rank,
   slot: row.slot,
   nickname: row.nickname,
@@ -195,9 +206,7 @@ const toWire = (row: TableRow, rank: number, myKey: string, liked: ReadonlySet<n
   me: row.playerKey === myKey,
   likedByMe: liked.has(row.slot),
   ...activityOf(row, member, presence),
-  // UI batch (profile): a real row's frame and background (members.frame / bg); a computer player has the plain look.
-  frameId: member?.frame ?? 0,
-  backgroundId: member?.bg ?? 0,
+  ...lookOf(row, member, bracketId),
 });
 
 /**
@@ -235,7 +244,7 @@ export async function bracketView(s: Services, player: Pick<PlayerRow, 'key' | '
   // a computer player's from its script (2026-10-13).
   const bySlot = new Map(members.map((m) => [m.slot, m] as const));
   const presence = s.cfg.presence.enabled;
-  const rows: WireRow[] = withRealHearts(table, realTo).map((r) => toWire(r, r.rank, player.key, liked, r.kind === 'player' ? bySlot.get(r.slot) : undefined, presence));
+  const rows: WireRow[] = withRealHearts(table, realTo).map((r) => toWire(r, r.rank, player.key, liked, r.kind === 'player' ? bySlot.get(r.slot) : undefined, presence, id));
   const count = final ? (b.final_members ?? rows.length) : rows.length;
   const fresh = heartsNew(mine.hearts, mine.hearts_self, mine.hearts_seen);
   if (fresh > 0) await s.store.setHeartsSeen(id, mine.slot, mine.hearts - mine.hearts_self);

@@ -538,7 +538,7 @@ describe('finalisation with computer rivals (design §5)', () => {
     expect(t.count(BIG_SLOT_REWARDS)).toBe(0);
   });
 
-  it('golden (design §3.8) through the API: 15 wins at 39 fish end 2nd behind a rival, paid the 2nd place (1 + 1)', async () => {
+  it('golden (design §3.8) through the API: 15 wins at 39 fish end 2nd behind a rival, paid the 2nd place (2 + 2, UI batch)', async () => {
     const O = Date.parse('2026-10-12T08:00:00Z');
     const GOLD_TAG = 'r1:k3j9x0a1b20a:100:64:64';
     const rec = recorder();
@@ -576,16 +576,16 @@ describe('finalisation with computer rivals (design §5)', () => {
     // the end: 2nd of 50; the rival's 1st and 3rd places are not paid and not passed down
     t.clock.set(O + DAY + HOUR);
     const s = await me.signIn();
-    expect(s.results[0]).toMatchObject({ place: 2, members: 50, points: 39, reward: { place: 2, grant: { hints: 1, kitties: 1 } } });
+    expect(s.results[0]).toMatchObject({ place: 2, members: 50, points: 39, reward: { place: 2, grant: { hints: 2, kitties: 2 } } });
     const fin = await me.bracket();
     expectValid(fin);
     expect(fin.result).toMatchObject({ place: 2, members: 50 });
-    expect(t.rows('SELECT id, place, hints, kitties FROM rewards')).toEqual([{ id: `${fin.bracketId}:0`, place: 2, hints: 1, kitties: 1 }]);
+    expect(t.rows('SELECT id, place, hints, kitties FROM rewards')).toEqual([{ id: `${fin.bracketId}:0`, place: 2, hints: 2, kitties: 2 }]);
     expect([rec.sum('reward/rival_place'), rec.sum('bracket_final/members'), rec.sum('bracket_final/rivals'), rec.sum('reward/created')]).toEqual([2, 1, 49, 1]);
-    expect((await me.claim(`${fin.bracketId}:0`, true)).grant).toEqual({ hints: 2, kitties: 2 });
+    expect((await me.claim(`${fin.bracketId}:0`, true)).grant).toEqual({ hints: 4, kitties: 4 });
   });
 
-  it('30 wins of 3 fish (90 points) win 1st over every rival: 2 + 2', async () => {
+  it('30 wins of 3 fish (90 points) win 1st over every rival: 3 + 3 (UI batch)', async () => {
     const t = makeTestApp({ env: ON });
     const me = new TestPlayer(t, 'champ');
     await me.signIn();
@@ -595,7 +595,7 @@ describe('finalisation with computer rivals (design §5)', () => {
     }
     t.clock.set(T0 + DAY + HOUR);
     const s = await me.signIn();
-    expect(s.results[0]).toMatchObject({ place: 1, points: 90, reward: { place: 1, grant: { hints: 2, kitties: 2 } } });
+    expect(s.results[0]).toMatchObject({ place: 1, points: 90, reward: { place: 1, grant: { hints: 3, kitties: 3 } } });
     expect(s.results[0]!.members).toBeGreaterThanOrEqual(46);
     expect(t.count(BIG_SLOT_REWARDS)).toBe(0);
   });

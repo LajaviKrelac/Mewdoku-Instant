@@ -124,7 +124,7 @@ describe('size-check', () => {
     // Leaderboard update (2026-10-12): the podium leaderboard re-set the ladder rows to measured + about 2 %.
     expect([max('Lazy JS (ladder)'), max('Lazy CSS (ladder)')]).toEqual([47_000, 25_700]); // UI batch: chests, tooltip, profile looks
     expect([max('Lazy JS (ladder boot)'), max('Lazy JS (overlay chunk)'), max('Lazy JS (English)'), max('Lazy CSS (overlay chunk)')]).toEqual([
-      39_400, 61_400, 15_800, 40_100, // UI batch (2026-10-14): the streak screen, victory lines, profile, ~70 keys
+      41_100, 61_400, 15_800, 40_100, // UI batch (2026-10-14): the streak screen, victory lines, profile, ~70 keys; + the computer rivals
     ]);
     expect(FB_MAX_FILES).toBe(100);
   });
@@ -305,7 +305,7 @@ describe('size-check', () => {
     const d = tempDir('web');
     fakeBuild(d);
     writeTree(d, {
-      'assets/ladder-boot-Ab3_x-9Z.js': 39_400, // each at its ceiling
+      'assets/ladder-boot-Ab3_x-9Z.js': 41_100, // each at its ceiling
       'assets/overlay-chunk-Qw7-e2Rt.js': 61_400,
       'assets/en-lazy-hpVVNp3-.js': 15_800,
       'assets/overlay-chunk-CbqOliHw.css': 40_100,
@@ -313,7 +313,7 @@ describe('size-check', () => {
     });
     const r = checkSizes(d, { fb: false });
     const row = (label: string) => r.rows.find((x) => x.label === label);
-    expect(row('Lazy JS (ladder boot)')).toMatchObject({ bytes: 39_400, ok: true });
+    expect(row('Lazy JS (ladder boot)')).toMatchObject({ bytes: 41_100, ok: true });
     expect(row('Lazy JS (overlay chunk)')).toMatchObject({ bytes: 61_400, ok: true });
     expect(row('Lazy JS (English)')).toMatchObject({ bytes: 15_800, ok: true });
     expect(row('Lazy CSS (overlay chunk)')).toMatchObject({ bytes: 40_100, ok: true });
@@ -324,7 +324,7 @@ describe('size-check', () => {
     expect(row('Lazy JS (ladder)')?.bytes).toBe(0);
     expect(r.ok).toBe(true);
     for (const [file, bytes, label] of [
-      ['assets/ladder-boot-Ab3_x-9Z.js', 39_401, 'Lazy JS (ladder boot)'],
+      ['assets/ladder-boot-Ab3_x-9Z.js', 41_101, 'Lazy JS (ladder boot)'],
       ['assets/overlay-chunk-Qw7-e2Rt.js', 61_401, 'Lazy JS (overlay chunk)'],
       ['assets/en-lazy-hpVVNp3-.js', 15_801, 'Lazy JS (English)'],
       ['assets/overlay-chunk-CbqOliHw.css', 40_101, 'Lazy CSS (overlay chunk)'],

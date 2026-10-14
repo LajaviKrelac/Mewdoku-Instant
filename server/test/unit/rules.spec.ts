@@ -60,8 +60,8 @@ describe('ranking order (P-L11) and rewards (§1.6)', () => {
     ]);
     const paid = placed.filter((p) => !isRivalSlot(p.slot));
     expect(paid.map((p) => [p.place, p.slot, p.hints, p.kitties])).toEqual([
-      [1, 0, 2, 2],
-      [3, 1, 1, 0],
+      [1, 0, 3, 3],
+      [3, 1, 1, 1],
     ]);
     // a real player last of five beat nobody: never paid even when the places above are rivals'
     const last = rankRows([m(9000, 9, 1), m(9001, 8, 1), m(9002, 7, 1), m(9003, 6, 1), m(4, 5, 1)]);

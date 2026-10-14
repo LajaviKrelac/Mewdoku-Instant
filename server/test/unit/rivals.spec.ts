@@ -29,6 +29,7 @@ import {
   RIVAL_SLOT_BASE,
   RIVAL_TAG_RE,
   rivalAt,
+  rivalLook,
   rivalNames,
   rivalRoster,
   rivalSleep,
@@ -240,7 +241,7 @@ describe('r1 golden fixture (design §3.8)', () => {
     // Final: 2nd behind a rival, paid the 2nd place (1 hint + 1 kitty); the rival's 1st is not paid.
     const plan = finalPlan(b, [goldPlayerAt(O + DAY)], DEFAULT_CONFIG, O + DAY + HOUR, true);
     expect(plan.ranks).toEqual([{ slot: 0, rank: 2 }]);
-    expect(plan.rewards.map((w) => [w.id, w.place, w.hints, w.kitties, w.playerKey])).toEqual([['mgk1a2b3c4d5e6:0', 2, 1, 1, 'key-0']]);
+    expect(plan.rewards.map((w) => [w.id, w.place, w.hints, w.kitties, w.playerKey])).toEqual([['mgk1a2b3c4d5e6:0', 2, 2, 2, 'key-0']]);
     // Rivals hold 1st and 3rd: both places unpaid, not passed down.
     expect([plan.totals.finalMembers, plan.totals.finalReal, plan.rivalPlaces]).toEqual([50, 1, 2]);
     expect(freezeTable(b, [goldPlayerAt(O + DAY)], false).slice(0, 3).map((x) => x.kind)).toEqual(['rival', 'player', 'rival']);
@@ -783,11 +784,11 @@ describe('pointsForRank (design §11, §12.2 #10: the preview places its player 
 
 describe('finalPlan (design §5.1, §5.3)', () => {
   const at = O + DAY + HOUR;
-  it('rivals in 1st–3rd: no reward; a lone strong player: 1st, 2 + 2', () => {
+  it('rivals in 1st–3rd: no reward; a lone strong player: 1st, 3 + 3 (UI batch)', () => {
     const weak = finalPlan(bracket(), [member(0, { points: 1, scored_at: O + 23 * HOUR })], DEFAULT_CONFIG, at, true);
     expect([weak.rewards, weak.rivalPlaces, weak.ranks]).toEqual([[], 3, [{ slot: 0, rank: 50 }]]);
     const strong = finalPlan(bracket(), [member(0, { points: 90, scored_at: O + 23 * HOUR })], DEFAULT_CONFIG, at, true);
-    expect(strong.rewards).toEqual([{ id: 'mgk1a2b3c4d5e6:0', playerKey: 'key-0', place: 1, hints: 2, kitties: 2, expiresAt: at + DEFAULT_CONFIG.rewards.claimTtlMs }]);
+    expect(strong.rewards).toEqual([{ id: 'mgk1a2b3c4d5e6:0', playerKey: 'key-0', place: 1, hints: 3, kitties: 3, expiresAt: at + DEFAULT_CONFIG.rewards.claimTtlMs }]);
     expect(strong.rivalPlaces).toBe(2);
     expect(finalPlan(bracket(), [member(0, { points: 90 })], DEFAULT_CONFIG, at, false).rewards).toEqual([]);
   });
@@ -1753,5 +1754,26 @@ describe('auto-joined 0-fish members with computer players (2026-10-13, merge)',
       const paid = finalPlan(b, strong, DEFAULT_CONFIG, at, true);
       expect(paid.rewards.map((w) => [w.playerKey, w.place])).toEqual([['key-0', 1]]);
     }
+  });
+});
+
+describe('UI batch: a computer player\'s look (rivalLook)', () => {
+  it('fixed by bracket and slot, in range, about a third wear a frame and a third a background, some neither', () => {
+    const looks = Array.from({ length: 2000 }, (_, i) => rivalLook(`b${Math.floor(i / 50)}`, 9000 + (i % 50), 8, 8));
+    for (const l of looks) {
+      expect(l.frame).toBeGreaterThanOrEqual(0);
+      expect(l.frame).toBeLessThan(8);
+      expect(l.bg).toBeGreaterThanOrEqual(0);
+      expect(l.bg).toBeLessThan(8);
+    }
+    const share = (f: (l: { frame: number; bg: number }) => boolean): number => looks.filter(f).length / looks.length;
+    expect(share((l) => l.frame > 0)).toBeGreaterThan(0.28);
+    expect(share((l) => l.frame > 0)).toBeLessThan(0.42);
+    expect(share((l) => l.bg > 0)).toBeGreaterThan(0.28);
+    expect(share((l) => l.bg > 0)).toBeLessThan(0.42);
+    expect(share((l) => l.frame === 0 && l.bg === 0)).toBeGreaterThan(0.3);
+    expect(new Set(looks.map((l) => l.frame)).size).toBe(8);
+    expect(rivalLook('mgk1a2b3c4d5e6', 9003, 8, 8)).toEqual(rivalLook('mgk1a2b3c4d5e6', 9003, 8, 8));
+    expect(rivalLook('x', 9001, 1, 1)).toEqual({ frame: 0, bg: 0 });
   });
 });

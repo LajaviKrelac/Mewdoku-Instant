@@ -408,6 +408,17 @@ export function liveRivalCount(r: Roster, b: Pick<BracketRow, 'next_slot' | 'max
 }
 
 /**
+ * UI batch (profile looks): a computer player's frame and background, fixed by its bracket and slot (about a third
+ * wear each), so the plain look never tells a computer row from a real player's (H-9). Public inputs only, so it
+ * reveals nothing of the roster's seed; never stored, so the live and the final table show the same look.
+ */
+export function rivalLook(bracketId: string, slot: number, frames: number, backgrounds: number): { frame: number; bg: number } {
+  const [a, b] = cyrb128(`look:${bracketId}:${slot}`);
+  const pick = (h: number, n: number): number => (n > 1 && h % 100 < 35 ? 1 + ((h >>> 8) % (n - 1)) : 0);
+  return { frame: pick(a, frames), bg: pick(b, backgrounds) };
+}
+
+/**
  * Every rival's name and avatar, resolved for ALL rivals in index order (so a name depends on neither the
  * time nor K): the first of 16 candidates whose words are not retired, whose text no one in `takenLower`
  * (every member's nickname, hidden rows included, lowercased) or an earlier rival holds, and that passes

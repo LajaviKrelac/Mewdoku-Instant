@@ -241,7 +241,7 @@ describe('without storage (a blocked localStorage)', () => {
     const server = createSampleServer({ now: () => T0, storage: null, rng: seededRng(7), initial: { ...queueOperation(null, 'returning'), pending: { returning: true, endDay: true } } });
     const a = await server.handle('POST', '/v1/session', { platform: 'web', device: DEVICE, clientVersion: '0.1.0', contentVersion: CONTENT }, null);
     const session = parseSessionResponse(a.body) as SessionResponse;
-    expect(session.results[0]).toMatchObject({ place: 2, reward: { grant: { hints: 1, kitties: 1 } } });
+    expect(session.results[0]).toMatchObject({ place: 2, reward: { grant: { hints: 2, kitties: 2 } } });
     expect(session.results[0]?.members).toBeGreaterThanOrEqual(46);
     expect(server.state().pending).toEqual({ returning: false, endDay: false });
   });
@@ -354,7 +354,7 @@ describe('the name sheet and Settings (spec §1.8, §2.7)', () => {
     expect(looks?.player).toMatchObject({ frameId: 4, backgroundId: 6 });
     expect((await s.bracket()).me).toMatchObject({ frameId: 4, backgroundId: 6 });
     expect((await s.call('PUT', '/v1/me/profile', { frameId: 8 })).body).toMatchObject({ error: { code: 'avatar_invalid' } });
-    // some sample players wear a look too (fixed by their place, no randomness)
+    // some computer players wear a look too (rivalLook: fixed by bracket and slot, so a plain look tells nothing)
     const rows = (await s.bracket()).rows.filter((r) => !r.me);
     expect(rows.some((r) => r.frameId > 0) && rows.some((r) => r.backgroundId > 0) && rows.some((r) => r.frameId === 0)).toBe(true);
   });

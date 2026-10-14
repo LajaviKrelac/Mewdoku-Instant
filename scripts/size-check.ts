@@ -201,6 +201,8 @@ export const LOCALE_CHUNK = /^assets\/locale-[A-Za-z-]+-[^/]*\.js$/;
  * 21.8 → 24.9 KB CSS (chests, tooltip, profile looks art, the profile sheet), ladder boot 36.2 → 38.2, overlay chunk
  * 55.4/33.2 → 59.6/38.9 (the Daily Streak screen, victory lines), lazy English 13.6 → 15.3. Each re-set to measured +
  * about 3 %; the first-load total to 450 KB (it must stay below the sum of its rows' ceilings, 451.8 KB).
+ * The UI batch merged with the computer rivals (2026-10-14): the ladder boot chunk 38.2 → 39.9 KB (the rivals' rules
+ * and the after-the-end bracket view), re-set to 41.1 KB; every other row stays within its ceiling.
  */
 export const BUDGETS: readonly SizeBudget[] = [
   // The entry and the modulepreload chunks index.html links (since 2d.1 I-4: core-*, and the tutorial coach's
@@ -229,7 +231,7 @@ export const BUDGETS: readonly SizeBudget[] = [
   { label: 'Lazy JS (ladder)', pattern: /^assets\/ladder-[\w-]{8}\.js$/, maxBytes: 47 * KB },
   // Phase 2e I-4: the ladder's sign-in, sync, remote config and response parsers (src/app/ladder-boot.ts), loaded after
   // the first screen when the ranking is on.
-  { label: 'Lazy JS (ladder boot)', pattern: /^assets\/ladder-boot-[\w-]{8}\.js$/, maxBytes: 39.4 * KB }, // leaderboard update: 33.9 → 36.2 KB (presence, the card, the parsers' activity); UI batch 38.2 KB
+  { label: 'Lazy JS (ladder boot)', pattern: /^assets\/ladder-boot-[\w-]{8}\.js$/, maxBytes: 41.1 * KB }, // leaderboard update: 33.9 → 36.2 KB (presence, the card, the parsers' activity); UI batch 38.2 KB; + the computer rivals 39.9 KB
   // Phase 2e I-4: the overlay chunk (src/app/overlay-chunk.ts: every core overlay, Home's chip and strip), on its own row.
   { label: 'Lazy JS (overlay chunk)', pattern: /^assets\/overlay-chunk-[\w-]{8}\.js$/, maxBytes: 61.4 * KB },
   // Phase 2e I-4: the English strings only lazy chunks show (src/i18n/en-lazy.ts), shared by those chunks.

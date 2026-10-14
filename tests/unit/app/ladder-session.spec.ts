@@ -183,16 +183,19 @@ describe('the win is queued with the win (spec §2.3, critic C-25)', () => {
     expect(s.h.router.props.ranking?.list).toEqual({ kind: 'loading' });
     await tapRanking(s.h);
     expect(s.h.router.isOpen('ranking')).toBe(false);
-    expect(s.h.router.props.victory?.kept).toEqual({ fish: 3, max: 3, gained: 3, total: 0, kind: 'ladder', waiting: 3 });
+    expect(s.h.router.props.victory?.kept).toEqual({ fish: 3, max: 3 }); // UI batch: the fish alone, no "+3" and no total
     const opened = s.h.router.props.victory;
     s.fake().hold = false;
     s.fake().release();
     await drain();
     await s.h.settle(0);
-    // The server's total, nothing waiting; the rest of the victory stays as opened.
-    expect(s.h.router.props.victory?.kept).toEqual({ fish: 3, max: 3, gained: 3, total: 3, kind: 'ladder', waiting: 0 });
-    expect(s.h.router.props.victory).toEqual({ ...opened, kept: s.h.router.props.victory?.kept });
-    expect(s.h.router.props.victory?.onPrimary).toBe(opened?.onPrimary);
+    // The answer re-renders the open victory in place: the fish row stays, the rest of the victory as opened.
+    expect(s.h.router.props.victory?.kept).toEqual({ fish: 3, max: 3 });
+    // UI batch: the callbacks are rebuilt per render (afterStreakScreen keys its once-only state by the win, and
+    // the screen calls the latest props), so they are compared by kind, not by identity.
+    const plain = (p: object | undefined): Record<string, unknown> => Object.fromEntries(Object.entries(p ?? {}).filter(([, v]) => typeof v !== 'function'));
+    expect(plain(s.h.router.props.victory)).toEqual(plain({ ...opened, kept: s.h.router.props.victory?.kept }));
+    expect(typeof s.h.router.props.victory?.onPrimary).toBe('function');
   });
 
   it('2026-10-12 (compare §D2): a win the server did not count claims no "+3 fish": the panel shows the total alone, the victory no kept row', async () => {
@@ -209,7 +212,7 @@ describe('the win is queued with the win (spec §2.3, critic C-25)', () => {
     await win(15); // accepted: my bracket has 3
     expect(s.h.router.props.ranking?.result).toEqual({ kind: 'ladder', gained: 3, total: 3, waiting: 0 });
     await tapRanking(s.h);
-    expect(s.h.router.props.victory?.kept).toMatchObject({ gained: 3, total: 3 });
+    expect(s.h.router.props.victory?.kept).toEqual({ fish: 3, max: 3 });
     // The second win is rejected (its answer before the panel).
     s.fake().verdict('00000000-0000-4000-8000-000000000002', 'rejected', 'too_fast');
     await win(16);
@@ -227,7 +230,7 @@ describe('the win is queued with the win (spec §2.3, critic C-25)', () => {
     await s.h.settle(s.h.config.fx.winOverlayDelayMs);
     expect(s.h.router.props.ranking?.result).toEqual({ kind: 'ladder', gained: 3, total: 3, waiting: 3 }); // not answered yet
     await tapRanking(s.h);
-    expect(s.h.router.props.victory?.kept).toEqual({ fish: 3, max: 3, gained: 3, total: 3, kind: 'ladder', waiting: 3 });
+    expect(s.h.router.props.victory?.kept).toEqual({ fish: 3, max: 3 });
     s.fake().hold = false;
     s.fake().release();
     await drain();

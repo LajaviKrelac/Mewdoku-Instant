@@ -30,7 +30,9 @@
         "pool": "fb",
         "trust": "signed",
         "listed": true,
-        "nicknameChangeAt": null
+        "nicknameChangeAt": null,
+        "frameId": 0,
+        "backgroundId": 0
       },
       "rules": {
         "periodMode": "rolling",
