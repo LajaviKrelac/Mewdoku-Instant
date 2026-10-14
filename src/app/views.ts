@@ -22,7 +22,7 @@
 // the ladder flow's chip when it is active, else the records chip with the period pill's content) and
 // the streak strip (HomeView.streak, after the tutorial, dayStreak.showOnHome); the victory gains the
 // streak row (the day's first counted win, dayStreak.victoryRow) and the daily reward line.
-import { streakView, rewardForDay } from '../game/day-streak';
+import { streakView, rewardForDay, type StreakView } from '../game/day-streak';
 import { activeEvent, eventEnd, eventRecord, eventStart, sumRewards, teaserEvent, type EventDef } from '../game/events';
 import { getMode } from '../game/modes';
 import { hasMouseCandidate } from '../game/mouse';
@@ -97,10 +97,13 @@ const STEP_CHIPS: Readonly<Record<number, RuleChip>> = { 1: 'colours', 2: 'lines
 export function selectStreakStrip(state: AppState, today: string, c: GameConfig = cfg): StreakStripView | null {
   const { save } = state;
   if (!save.tutorialDone || !isFlagOn('dayStreak') || !c.dayStreak.enabled || !c.dayStreak.showOnHome) return null;
-  const v = streakView(save.dayStreak, today, c);
-  const state2: StreakStripView['state'] = v.alive ? (v.todayDone ? 'done' : 'alive') : v.broken ? 'new' : 'none';
+  return streakStripOf(streakView(save.dayStreak, today, c), c);
+}
+
+/** The pill's (and the UI batch streak screen's) view of a streakView. */
+export function streakStripOf(v: StreakView, c: GameConfig = cfg): StreakStripView {
   return {
-    state: state2,
+    state: v.alive ? (v.todayDone ? 'done' : 'alive') : v.broken ? 'new' : 'none',
     day: v.day,
     total: v.total,
     rewardDay: v.todayDone && v.day === v.total && rewardForDay(v.day, c) !== null,

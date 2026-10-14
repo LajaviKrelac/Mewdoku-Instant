@@ -511,6 +511,13 @@ export const catalog: LocaleCatalog = {
   'streak.today': 'Hôm nay đã tính!',
   'streak.rewardDone': 'Đã nhận thưởng chuỗi!',
   'streak.a11y': 'Chuỗi: ngày {day}/{total}. {status}',
+  // UI batch (2026-10-13): the streak screen (AI draft from our English, meta.ts and the glossary; awaiting review).
+  'streak.screen.title': 'Chuỗi hằng ngày',
+  'streak.screen.run.other': 'ngày liên tiếp',
+  'streak.screen.best': 'Kỷ lục: {best}',
+  'streak.screen.continue': 'Tiếp tục',
+  'streak.week.a11y': 'Ngày trong chuỗi: đã giải {done}/{total}.',
+  'streak.week.gift.a11y': 'Ngày {day} có phần thưởng.',
   'streak.best': 'Chuỗi dài nhất',
   'streak.days.other': '{count} ngày',
   'victory.streakDay': 'Chuỗi: ngày {day}/{total}',

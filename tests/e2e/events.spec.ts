@@ -19,11 +19,13 @@ import { comboRuleFor, comboRunMax, periodKeyAt, pointsRuleFor } from '../../src
 import type { SaveData } from '../../src/game/types';
 import { watchStrings } from './helpers/strings';
 import { gotItNewRanking } from './helpers/new-ranking';
+import { continueStreak } from './helpers/streak-screen';
 
 // Phase 2e I-4: no screen of these tests may ask for an English string that no loaded table has.
 watchStrings(test);
 // Leaderboard update: the "New ranking" card is closed with Got it whenever it shows.
 gotItNewRanking(test);
+continueStreak(test); // UI batch (2026-10-13): Continue on the Daily Streak screen after the day's first win
 
 type TestWindow = Window & { __mewdoku?: E2EHooks };
 

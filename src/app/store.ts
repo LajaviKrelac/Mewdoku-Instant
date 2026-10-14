@@ -116,7 +116,9 @@ export type OverlayId =
   | 'ladder_result'
   | 'nickname'
   // Leaderboard update: the "New ranking" card (the sign-in joined a new bracket).
-  | 'ladder_session';
+  | 'ladder_session'
+  // UI batch (2026-10-13): the Daily Streak screen (lazy overlay chunk; app/streak-screen-flow.ts).
+  | 'streak';
 
 /** What the player asked to play. phase2b §4.4 adds event puzzles (`index` 0-based). */
 export type SessionRequest =

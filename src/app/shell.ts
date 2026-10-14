@@ -46,6 +46,7 @@ import type { Session } from './session';
 import { withSlot } from './session-parts';
 import type { ShopFlow } from './shop-flow';
 import { shallowEqual, type AppState, type OverlayId, type Store } from './store';
+import { openStreakScreen } from './streak-screen-flow';
 import { selectEventView, selectHomeView, type ViewContext } from './views';
 
 export interface ShellDeps {
@@ -329,13 +330,12 @@ export function createShell(deps: ShellDeps): Shell {
           if (lf) lf.openSheet('home');
           else deps.openRecordsSheet?.();
         },
-        // Home layout (2026-10-11): the profile picture opens the name sheet, else Settings; the streak pill's sentence.
+        // Home layout (2026-10-11): the profile picture opens the name sheet, else Settings. UI batch (2026-10-13): the
+        // streak pill opens the Daily Streak screen (a back arrow closes it; not in MODALS: the Home banner stays up).
         onProfile: () => {
           if (!ladderNow()?.openProfile()) shell.openSettings();
         },
-        onStreak: (text) => {
-          if (text) router.toast(text);
-        },
+        onStreak: () => openStreakScreen({ router, state: () => store.get(), now: () => clock.now(), config: c }, 'home', () => router.close('streak')),
         onCard: () => undefined, // Phase 3 hook
         onEvent: () => {
           const card = selectHomeView(store.get(), ctx(), c).event;

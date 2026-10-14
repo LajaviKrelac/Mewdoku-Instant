@@ -323,6 +323,16 @@ export const enLazyUi2e = {
   'streak.today': 'Today counts!',
   'streak.rewardDone': 'Streak reward collected!',
   'streak.a11y': 'Streak: day {day} of {total}. {status}',
+  // UI batch (2026-10-13): the streak screen (Home's pill, and after the day's first counted win). The big number is
+  // the run; its label has no number of its own. {best} = streak.days ("10 days"). The week row is the run's current
+  // cycle ({total} = dayStreak.cycleDays): its name says how many of those days were solved and which day pays.
+  'streak.screen.title': 'Daily streak',
+  'streak.screen.run.one': 'day in a row',
+  'streak.screen.run.other': 'days in a row',
+  'streak.screen.best': 'Best: {best}',
+  'streak.screen.continue': 'Continue',
+  'streak.week.a11y': 'Streak days: {done} of {total} solved.',
+  'streak.week.gift.a11y': 'Day {day} earns a reward.',
   'streak.days.one': '{count} day',
   'streak.days.other': '{count} days',
   // Appendix A's 'victory.streak' renamed: that key was the retired 2c perfect streak (catalogs.spec, sanity.spec).

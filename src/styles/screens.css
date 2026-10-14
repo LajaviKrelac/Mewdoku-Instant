@@ -322,8 +322,9 @@
 .home__profile svg { position: absolute; top: 0; left: 0; width: 48px; height: 48px; }
 /* Our cat head stands in, smaller, until the avatar art arrives with the ranking chunk (the avatar's disc covers it). */
 .home__profile > svg { top: 7px; left: 7px; width: 34px; height: 34px; }
-/* The streak pill's box (its look comes with the overlay chunk, like the pill): reserved while it is on its way. */
-.streak-pill { display: inline-flex; min-width: 104px; height: 40px; }
+/* The streak pill's box (its look comes with the overlay chunk, like the pill): reserved while it is on its way. UI batch
+   (2026-10-13): 44 px tall, the touch-target minimum (spec §7.7); a tap opens the Daily Streak screen. */
+.streak-pill { display: inline-flex; min-width: 104px; height: 44px; }
 .streak-pill--pending { visibility: hidden; }
 .home__hero { position: relative; }
 .home__rank { position: absolute; top: 56%; left: -6px; display: flex; transform: translateY(-50%); }

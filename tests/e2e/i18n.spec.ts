@@ -40,9 +40,11 @@ import { en } from '../../src/i18n/en';
 import { NICK_WORDS_V1 } from '../../src/shared/nick-words';
 import { ladderUp, LADDER_URL, newPool } from './helpers/rank-players';
 import { gotItNewRanking, settleHome } from './helpers/new-ranking';
+import { continueStreak, keepStreakScreen } from './helpers/streak-screen';
 
 // Leaderboard update: the "New ranking" card is closed with Got it whenever it shows.
 gotItNewRanking(test);
+continueStreak(test); // UI batch (2026-10-13): Continue on the Daily Streak screen after the day's first win
 
 type TestWindow = Window & { __mewdoku?: E2EHooks };
 
@@ -225,8 +227,10 @@ for (const c of CASES) {
     // Review UX-8: the win flow's screens are checked per locale too (Phase 2c: the web has no shop;
     // the period pill, the ranking subtitle and the victory's kept-fish row and points; 2c.1: no streak chip).
     // Phase 2e (G3, spec §2.5, §5.3): the lead is the ranking chip (the records chip without a ranking server,
-    // named like the period pill) and the victory shows the streak row on the day's first counted win.
-    test('the period pill, the ranking panel and the victory fit and read in the locale', async ({ page }, info) => {
+    // named like the period pill). UI batch (2026-10-13): the day's first counted win shows the Daily Streak screen
+    // after the victory (no streak row on the victory any more): it fits and reads in the locale too.
+    test('the period pill, the ranking panel, the victory and the Daily Streak screen fit and read in the locale', async ({ page }, info) => {
+      await keepStreakScreen(page);
       await bootHome(page, c);
       await expect(page.locator('.screen--home .ladder-chip')).toBeVisible();
       await expect(page.locator('.screen--home .period-pill')).toBeHidden();
@@ -245,12 +249,20 @@ for (const c of CASES) {
       await expect(page.locator('[data-overlay="victory"] .victory__primary')).toBeVisible({ timeout: 4000 });
       await expect(page.locator('[data-overlay="victory"] .victory__kept')).toBeVisible();
       await expect(page.locator('[data-overlay="victory"] .victory__points')).toBeVisible();
-      await expect(page.locator('[data-overlay="victory"] .victory__streak')).toBeVisible();
-      await expect(page.locator('[data-overlay="victory"] .victory__streak .streak-step')).toHaveCount(7);
+      await expect(page.locator('[data-overlay="victory"] .victory__streak')).toBeHidden();
       await page.waitForTimeout(800);
       await noOverflow(page);
       await noClipping(page);
       await shot(page, info, c, 'victory');
+      await page.locator('[data-overlay="victory"] .victory__primary').click();
+      const streak = page.locator('.overlay[data-overlay="streak"]');
+      await expect(streak.locator('.streak-screen')).toHaveAttribute('data-mode', 'win');
+      await expect(streak.locator('.streak-week__day')).toHaveCount(7);
+      await expect(streak.locator('.streak-screen__continue')).toBeInViewport({ ratio: 1 });
+      await page.waitForTimeout(1300);
+      await noOverflow(page);
+      await noClipping(page);
+      await shot(page, info, c, 'streak');
     });
   });
 }

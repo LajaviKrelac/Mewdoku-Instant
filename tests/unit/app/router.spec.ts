@@ -443,6 +443,7 @@ describe('router: lazy overlay chunk (04 §9)', () => {
       'rewarded',
       'settings',
       'shop',
+      'streak', // UI batch (2026-10-13): the Daily Streak screen
       'victory',
     ]);
   });
@@ -624,7 +625,7 @@ describe('router: leaving the victory screen (PAR-6 / UX-4)', () => {
     const made: string[] = [];
     const s = setup({
       overlays: Object.fromEntries(
-        (['victory', 'ranking', 'settings'] as OverlayId[]).map((id) => [id, () => fakeOverlay(id, true, made) as never]),
+        (['victory', 'ranking', 'settings', 'streak'] as OverlayId[]).map((id) => [id, () => fakeOverlay(id, true, made) as never]),
       ) as unknown as OverlayFactories,
       screenTransition: (old, next, kind) => new Promise<void>((resolve) => void calls.push({ old, next, kind, resolve })),
     });
@@ -681,6 +682,29 @@ describe('router: leaving the victory screen (PAR-6 / UX-4)', () => {
     await Promise.resolve();
     expect((s.root.querySelector('.ov-victory') as HTMLElement).hidden).toBe(false);
     expect(s.router.isOpen('victory')).toBe(true);
+  });
+
+  it('UI batch (2026-10-13): the Daily Streak screen over the victory is the outgoing layer; the victory and the board go at once', async () => {
+    const s = victorySetup();
+    s.router.showGame({} as never, {} as never);
+    const board = (s.root.querySelector('.app-screen') as HTMLElement).firstElementChild as HTMLElement;
+    s.router.open('victory', {} as never);
+    s.router.open('streak', {} as never);
+    const victory = s.root.querySelector('.ov-victory') as HTMLElement;
+    const streak = s.root.querySelector('.ov-streak') as HTMLElement;
+    s.router.showGame({} as never, {} as never);
+    expect(s.calls.map((c) => c.kind)).toEqual(['to_game']);
+    expect(s.calls[0]?.old).toBe(streak);
+    expect(board.isConnected).toBe(false);
+    expect(s.router.isOpen('victory')).toBe(false); // closed with the rest (the fake's close() does not hide it)
+    expect(victory.hasAttribute('inert')).toBe(false); // not a leaving layer
+    expect(streak.hidden).toBe(false);
+    expect(streak.hasAttribute('inert')).toBe(true);
+    expect(s.router.isOpen('streak')).toBe(false);
+    s.calls[0]?.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(streak.hidden).toBe(true);
   });
 
   it('without the victory (a fail overlay, settings) the old screen leaves as before', () => {

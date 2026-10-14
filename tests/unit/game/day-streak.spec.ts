@@ -8,6 +8,7 @@ import { cfg, mergeConfig } from '../../../src/app/config';
 import {
   countWin,
   cycleDay,
+  dateKeyOfDay,
   dayNumber,
   emptyDayStreak,
   isDateKey,
@@ -17,7 +18,9 @@ import {
   readDayStreak,
   rewardForDay,
   streakView,
+  streakWeek,
   type DayStreakRecord,
+  type StreakWeekDay,
 } from '../../../src/game/day-streak';
 import { dailyDateKey } from '../../../src/game/progression';
 
@@ -184,6 +187,56 @@ describe('streakView (Home, spec §5.3)', () => {
 
   it('the clock went back (today before the last date): shown as done, alive', () => {
     expect(streakView(play([5, 6]), day(3))).toMatchObject({ todayDone: true, alive: true, day: 2 });
+  });
+});
+
+describe('streakWeek (UI batch 2026-10-13: the streak screen\'s row is the run\'s current cycle)', () => {
+  const marks = (w: readonly StreakWeekDay[]): string =>
+    w.map((d) => `${d.played ? 'x' : '.'}${d.today ? 'T' : ''}${d.reward ? (d.paid ? 'G' : 'g') : ''}`).join(' ');
+
+  it('no streak: day 1 is today, nothing played, the gift on the last day only (rewardForDay)', () => {
+    const w = streakWeek(emptyDayStreak(), day(3));
+    expect(w.map((d) => d.dateKey)).toEqual([3, 4, 5, 6, 7, 8, 9].map(day));
+    expect(w.map((d) => d.day)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(marks(w)).toBe('.T . . . . . .g');
+    expect(w[6]?.reward).toEqual({ hints: 2, kitties: 2 });
+  });
+
+  it('a live run, today not counted yet: the cycle starts at the run\'s cycle day 1, today is the next cell', () => {
+    expect(marks(streakWeek(play([0, 1, 2]), day(3)))).toBe('x x x .T . . .g');
+    expect(streakWeek(play([0, 1, 2]), day(3))[0]?.dateKey).toBe(day(0));
+  });
+
+  it('today counted: today is played and ringed; the second cycle starts on the run\'s day 8', () => {
+    expect(marks(streakWeek(play([0, 1, 2, 3]), day(3)))).toBe('x x x xT . . .g');
+    const w = streakWeek(play([0, 1, 2, 3, 4, 5, 6, 7, 8]), day(8));
+    expect(w[0]?.dateKey).toBe(day(7));
+    expect(marks(w)).toBe('x xT . . . . .g');
+  });
+
+  it('day 7 counted today: the gift shows paid; the next day (not counted yet) a new cycle starts today', () => {
+    const ds = play([0, 1, 2, 3, 4, 5, 6]);
+    expect(marks(streakWeek(ds, day(6)))).toBe('x x x x x x xTG');
+    const next = streakWeek(ds, day(7));
+    expect(next[0]?.dateKey).toBe(day(7));
+    expect(marks(next)).toBe('.T . . . . . .g');
+  });
+
+  it('a broken run never shows its old days: day 1 is today', () => {
+    const w = streakWeek(play([0, 1, 2]), day(5));
+    expect(w[0]?.dateKey).toBe(day(5));
+    expect(marks(w)).toBe('.T . . . . . .g');
+  });
+
+  it('the clock went back: the record\'s cycle, as counted; a bad today gives no row; cycleDays and dayRewards from config', () => {
+    expect(marks(streakWeek(play([2, 3, 4, 5, 6]), day(4)))).toBe('x x xT x x . .g');
+    expect(streakWeek(play([0]), 'not-a-date')).toEqual([]);
+    const c = mergeConfig({ dayStreak: { cycleDays: 3, dayRewards: [{ day: 2, hints: 1, kitties: 0 }] } });
+    expect(marks(streakWeek(play([0, 1], c), day(1), c))).toBe('x xTG .g');
+  });
+
+  it('dateKeyOfDay is dayNumber\'s inverse', () => {
+    for (const k of ['1970-01-01', '2026-02-28', '2026-03-01', '2028-02-29', '2026-12-31']) expect(dateKeyOfDay(dayNumber(k))).toBe(k);
   });
 });
 

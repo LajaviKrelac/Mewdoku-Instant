@@ -47,9 +47,11 @@ import type { SaveData } from '../../src/game/types';
 import { NICK_WORDS_V1 } from '../../src/shared/nick-words';
 import type { BracketRow, BracketView, PlayerView, ResultView, RulesView, SessionResponse, WinSubmission } from '../../src/shared/rank-api';
 import { gotItNewRanking, gotItOn } from './helpers/new-ranking';
+import { continueStreak, continueStreakOn, keepStreakScreen, streakContinue, streakScreen } from './helpers/streak-screen';
 
 // Leaderboard update: the "New ranking" card is closed with Got it whenever it shows.
 gotItNewRanking(test);
+continueStreak(test); // UI batch (2026-10-13): Continue on the Daily Streak screen after the day's first win
 
 type TestWindow = Window & { __mewdoku?: E2EHooks };
 
@@ -269,8 +271,8 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
     await expect(page.locator('.victory__period')).toHaveText('This week: 42');
     await expect(page.locator('.victory__points')).toHaveText(/^\d{1,2},\d{3} points$/);
     await expect(page.locator('.victory__score')).toHaveCount(0);
-    // Phase 2e (G3, spec §5.3): the day's first counted win shows the streak row (a fresh streak: day 1).
-    await expect(page.locator('.victory__streak .victory__streak-text')).toHaveText('Streak: day 1 of 7');
+    // UI batch (2026-10-13): no victory streak row (dayStreak.victoryRow off); the Daily Streak screen follows the primary.
+    await expect(page.locator('.victory__streak')).toBeHidden();
     await expect(page.locator('.victory__top, .fish-pill')).toHaveCount(0);
     await page.waitForTimeout(900);
     await shot(page, 'victory');
@@ -349,7 +351,7 @@ test.describe('Classic look, visual review (phase2b §1.12; Phase 2c)', () => {
   test('402 × 874 with the recording\'s safe areas and the banner: the rows at the measured positions (±2 px)', async ({ browser }, info) => {
     test.skip(info.project.name !== 'web-390', 'one phone size: the recording\'s');
     const ctx = await browser.newContext({ viewport: { width: 402, height: 874 }, deviceScaleFactor: 3, hasTouch: true, isMobile: true });
-    const page = await gotItOn(await ctx.newPage());
+    const page = await gotItOn(await continueStreakOn(await ctx.newPage()));
     await page.goto('/?ads=ok');
     await ready(page);
     await page.evaluate((json) => (window as TestWindow).__mewdoku?.seedSave(json), JSON.stringify(recordingSave()));
@@ -750,7 +752,7 @@ test.describe('Phase 2d.1 helpers (helpers-spec §7.7): tickers, "+N", star, cou
     test.skip(info.project.name !== 'web-390', 'the recordings\' phone');
     test.setTimeout(120_000);
     const ctx = await browser.newContext({ viewport: { width: 402, height: 874 }, deviceScaleFactor: 3, hasTouch: true, isMobile: true });
-    const page = await gotItOn(await ctx.newPage());
+    const page = await gotItOn(await continueStreakOn(await ctx.newPage()));
     await helperGame(page, undefined, true);
     await tickersMid(page, 'tickers-en');
     await kittyMoments(page, 'en', true);
@@ -856,7 +858,7 @@ test.describe('short phones with the banner band (review UX-1, UX-2, I18N-LAYOUT
   });
 });
 
-// ─────────────────────────────── Phase 2e (G3): the chip, the streak strip, the victory's streak row ───────────────────────────────
+// ─────────────────────── Phase 2e (G3): the chip, the streak pill; UI batch (2026-10-13): the Daily Streak screen ───────────────────────
 
 const OUT_2E = process.env.VISUAL_OUT_2E ?? resolve(dirname(fileURLToPath(import.meta.url)), '../../docs/phase2e/screenshots');
 mkdirSync(OUT_2E, { recursive: true });
@@ -865,7 +867,7 @@ const DAY_MS = 86_400_000;
 const streakSave = (): SaveData =>
   returning({ dayStreak: { dates: [dailyDateKey(NOW - 2 * DAY_MS), dailyDateKey(NOW - DAY_MS)], run: 2, best: 9, paid: [] } });
 
-test.describe('Phase 2e (G3): the ranking chip, the streak pill and the victory streak row', () => {
+test.describe('Phase 2e (G3): the ranking chip, the streak pill and the Daily Streak screen', () => {
   test('Home (layout 2026-10-11): profile top left, streak pill top centre, the records chip floating at the left, Play and the daily pill low', async ({ page }) => {
     await open(page, streakSave());
     const vw = page.viewportSize()?.width ?? 0;
@@ -898,23 +900,53 @@ test.describe('Phase 2e (G3): the ranking chip, the streak pill and the victory 
     expect(daily.y).toBeGreaterThan(play.y + play.height);
     expect(Math.abs(play.x + play.width / 2 - vw / 2)).toBeLessThan(2);
     expect(Math.abs(daily.x + daily.width / 2 - vw / 2)).toBeLessThan(2);
+    // UI batch (2026-10-13): the pill is a 44 px target, its flame faded until today counts.
+    expect(pillBox.height).toBeGreaterThanOrEqual(44);
+    await expect(pill).toHaveAttribute('data-today', '0');
     await page.screenshot({ path: join(OUT_2E, `G3-2e-home-${page.viewportSize()?.width ?? 0}.png`) });
+    // A tap opens the Daily Streak screen (before today counts: the faded flame, a back arrow, no Continue).
+    await pill.click();
+    const screen = streakScreen(page);
+    await expect(screen.locator('.streak-screen')).toHaveAttribute('data-mode', 'home');
+    await expect(screen.locator('.streak-screen')).toHaveAttribute('data-today', '0');
+    await expect(screen.locator('.streak-screen__run')).toHaveText('2 days in a row');
+    await expect(screen.locator('.streak-screen__best')).toHaveText('Best: 9 days');
+    await expect(screen.locator('.streak-week__day[data-played]')).toHaveCount(2);
+    await expect(screen.locator('.streak-week__day').nth(2)).toHaveAttribute('data-today', '');
+    await expect(screen.locator('.streak-screen__status')).toHaveText('Solve a puzzle today for day 3.');
+    await expect(streakContinue(page)).toBeHidden();
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: join(OUT_2E, `G3-2e-streak-home-${vw}.png`) });
+    await screen.getByRole('button', { name: 'Back' }).click();
+    await expect(screen).toBeHidden();
   });
 
-  test('victory: "Streak: day 3 of 7" on the day\'s first counted win, today\'s step filled', async ({ page }) => {
+  test('the Daily Streak screen after the victory of the day\'s first counted win: day 3 lit, today\'s check, the gift; Continue → the next level', async ({ page }) => {
+    await keepStreakScreen(page);
     await open(page, streakSave());
     await solve(page);
     await expect(page.locator('.overlay[data-overlay="ranking"]')).toBeVisible({ timeout: 8000 });
     await page.waitForTimeout(2000);
     const vp = page.viewportSize() ?? { width: 390, height: 844 };
     await page.mouse.click(10, vp.height - 10);
-    await expect(page.locator('.overlay[data-overlay="victory"]')).toBeVisible({ timeout: 4000 });
-    const row = page.locator('.victory__streak');
-    await expect(row).toBeVisible();
-    await expect(row.locator('.victory__streak-text')).toHaveText('Streak: day 3 of 7');
-    await expect(row.locator('.streak-step[data-kind="today"]')).toHaveCount(1);
-    await page.waitForTimeout(900);
-    await page.screenshot({ path: join(OUT_2E, `G3-2e-victory-${vp.width}.png`) });
+    const victory = page.locator('.overlay[data-overlay="victory"]');
+    await expect(victory).toBeVisible({ timeout: 4000 });
+    await expect(victory.locator('.victory__streak')).toBeHidden(); // dayStreak.victoryRow off
+    await expect(victory.locator('.victory__primary')).toBeEnabled({ timeout: 3000 });
+    await victory.locator('.victory__primary').click();
+    const screen = streakScreen(page);
+    await expect(screen.locator('.streak-screen')).toHaveAttribute('data-mode', 'win');
+    await expect(screen.locator('.streak-screen')).toHaveAttribute('data-today', '1');
+    await expect(screen.locator('.streak-screen__run')).toHaveText('3 days in a row');
+    await expect(screen.locator('.streak-week__day[data-played]')).toHaveCount(3);
+    await expect(screen.locator('.streak-week__day').nth(2)).toHaveAttribute('data-today', '');
+    await expect(screen.locator('.streak-week__day').nth(6)).toHaveAttribute('data-gift', '');
+    await expect(screen.locator('.streak-screen__status')).toHaveText('Today counts!');
+    await expect(streakContinue(page)).toBeInViewport({ ratio: 1 });
+    await page.waitForTimeout(1300); // the flame lights up and today's check pops in
+    await page.screenshot({ path: join(OUT_2E, `G3-2e-streak-win-${vp.width}.png`) });
+    await streakContinue(page).click();
+    await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
   });
 });
 
@@ -1182,7 +1214,7 @@ async function onVariant(browser: Browser, page: Page, info: TestInfo, v: Varian
   if (!v.ctx) return fn(page, String(page.viewportSize()?.width ?? 0));
   const ctx = await browser.newContext(v.ctx);
   try {
-    await fn(await gotItOn(await ctx.newPage()), v.id);
+    await fn(await gotItOn(await continueStreakOn(await ctx.newPage())), v.id);
   } finally {
     await ctx.close();
   }

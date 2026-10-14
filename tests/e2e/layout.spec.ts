@@ -48,11 +48,13 @@ import type { InProgressV2, SaveData } from '../../src/game/types';
 import { devAdvance, devCron, fillPool, LADDER_URL, ladderUp, newPool } from './helpers/rank-players';
 import { watchStrings } from './helpers/strings';
 import { gotItNewRanking, settleHome } from './helpers/new-ranking';
+import { continueStreak, keepStreakScreen } from './helpers/streak-screen';
 
 // Phase 2e I-4: no screen of these tests may ask for an English string that no loaded table has.
 watchStrings(test);
 // Leaderboard update: the "New ranking" card is closed with Got it whenever it shows.
 gotItNewRanking(test);
+continueStreak(test); // UI batch (2026-10-13): Continue on the Daily Streak screen after the day's first win
 
 type TestWindow = Window & { __mewdoku?: E2EHooks };
 
@@ -1001,6 +1003,7 @@ test('Phase 2e: Home at 320 × 568 — the ranking chip, Play, the streak strip,
       expect(await page.evaluate(() => window.scrollY)).toBe(0);
       await noHorizontalOverflow(page);
       expect(await hitAreaMisses(page, '.screen--home button.ladder-chip', 1), label).toEqual([]);
+      expect(await hitAreaMisses(page, '.screen--home button.streak-pill', 1), label).toEqual([]); // UI batch: 44 px tall
     }
   }
 });
@@ -1133,13 +1136,15 @@ test('Phase 2e: the result card (a paid place, ×2) fits inside its dialog at 32
  * Audit B1: the daily victory on a streak's day 7 carries the most lines of any victory (Solved, the stats, "Next
  * puzzle", the streak row with its reward line, the points and the fish pill). At 320 × 568 every line must sit above
  * the sticky Done (fit step 4 with the banner band), in English and German, on the records path and with the ranking's
- * "Your total".
+ * "Your total". UI batch (2026-10-13): the streak row is off (dayStreak.victoryRow); the Daily Streak screen that Done
+ * opens carries day 7 and its reward, and it must fit the same way (Continue fully on screen, above the band).
  */
 test('Phase 2e (audit B1): the daily victory on a streak\'s day 7 at 320 × 568 — every line above Done, nothing to scroll (en, de; records and ranking)', async ({ page }, info) => {
   test.skip(info.project.name !== 'web-320', 'the small phone');
   test.setTimeout(180_000);
   const ladder = await ladderUp();
   const DAY = 86_400_000;
+  await keepStreakScreen(page); // the streak screen is checked below (this test presses nothing on it)
   // With the banner band (ads=ok) the content needs fit step 4 (it ran under Done before the fix); without it, step 3.
   const runs: (readonly ['records' | 'ranking', 'ok' | 'unsupported', 'en' | 'de'])[] = [
     ['records', 'ok', 'en'],
@@ -1172,8 +1177,7 @@ test('Phase 2e (audit B1): the daily victory on a streak\'s day 7 at 320 × 568 
     await panel.locator('.ranking__tap').click();
     const victory = page.locator('.overlay[data-overlay="victory"]');
     await expect(victory.locator('.victory')).toHaveAttribute('data-variant', 'daily', { timeout: 6_000 });
-    await expect(victory.locator('.victory__streak')).toHaveAttribute('data-day', '7');
-    await expect(victory.locator('.victory__streak-reward')).toBeVisible();
+    await expect(victory.locator('.victory__streak')).toBeHidden(); // UI batch: the Daily Streak screen after Done says day 7
     await expect(victory.locator('.victory__kept')).toBeVisible();
     await page.waitForTimeout(900); // the button delay and the fit's second frame
     const r = await page.evaluate(() => {
@@ -1193,6 +1197,38 @@ test('Phase 2e (audit B1): the daily victory on a streak\'s day 7 at 320 × 568 
     expect(r.out, `${label} (fit ${r.fit})`).toEqual([]);
     expect(r.overflow, `${label}: content taller than the screen (fit ${r.fit})`).toBeLessThanOrEqual(1);
     await expect(victory.locator('.victory__primary')).toBeInViewport({ ratio: 1 });
+    await noHorizontalOverflow(page);
+    // UI batch (2026-10-13): Done → the Daily Streak screen: day 7 with its reward, every line above Continue, nothing to
+    // scroll, Continue on screen and clear of the banner band.
+    await victory.locator('.victory__primary').click();
+    const streak = page.locator('.overlay[data-overlay="streak"]');
+    await expect(streak.locator('.streak-screen__n')).toHaveText('7');
+    await expect(streak.locator('.streak-week__day').nth(6)).toHaveAttribute('data-paid', '');
+    await page.waitForTimeout(400);
+    const st = await page.evaluate(() => {
+      const scroller = document.querySelector('.overlay[data-overlay="streak"]') as HTMLElement;
+      const actions = (scroller.querySelector('.streak-screen__actions') as HTMLElement).getBoundingClientRect();
+      const out: string[] = [];
+      for (const sel of ['.streak-screen__title', '.streak-screen__hero', '.streak-screen__run', '.streak-screen__best', '.streak-week', '.streak-screen__status']) {
+        const b = (scroller.querySelector(sel) as HTMLElement).getBoundingClientRect();
+        if (b.bottom > actions.top + 0.5) out.push(`${sel} ends at ${b.bottom.toFixed(1)}, under Continue (from ${actions.top.toFixed(1)})`);
+        if (b.top < -0.5) out.push(`${sel} starts above the screen (${b.top.toFixed(1)})`);
+      }
+      return { out, overflow: scroller.scrollHeight - scroller.clientHeight };
+    });
+    expect(st.out, `${label}: the streak screen`).toEqual([]);
+    expect(st.overflow, `${label}: the streak screen taller than the screen`).toBeLessThanOrEqual(1);
+    await expect(streak.locator('.streak-screen__continue')).toBeInViewport({ ratio: 1 });
+    // With the band reserved, Continue stays ads.banner.buttonClearancePx above it (as the victory's buttons).
+    const band = await page.evaluate(() => {
+      const root = document.querySelector('.overlay[data-overlay="streak"] .streak-screen') as HTMLElement;
+      if (!root.hasAttribute('data-banner')) return null;
+      const cs = getComputedStyle(root);
+      const cont = (root.querySelector('.streak-screen__continue') as HTMLElement).getBoundingClientRect();
+      return { bottom: cont.bottom, limit: innerHeight - parseFloat(cs.getPropertyValue('--banner-reserve')) - parseFloat(cs.getPropertyValue('--banner-clear')) };
+    });
+    if (ads === 'ok') expect(band, `${label}: the streak screen reserves the band`).not.toBeNull();
+    if (band) expect(band.bottom, `${label}: Continue clear of the band`).toBeLessThanOrEqual(band.limit + 0.5);
     await noHorizontalOverflow(page);
   }
 });
@@ -1220,7 +1256,8 @@ test('Phase 2e (fix lead): reduced motion — the victory fit measures each step
   await page.evaluate(() => (window as TestWindow).__mewdoku?.solve());
   await page.locator('.overlay[data-overlay="ranking"] .ranking__tap').click({ timeout: 20_000 });
   const victory = page.locator('.overlay[data-overlay="victory"]');
-  await expect(victory.locator('.victory__streak')).toHaveAttribute('data-day', '7', { timeout: 6_000 });
+  await expect(victory.locator('.victory__primary')).toBeVisible({ timeout: 6_000 });
+  await expect(victory.locator('.victory__streak')).toBeHidden(); // UI batch: no streak row (the Daily Streak screen)
   await page.waitForTimeout(900);
   const r = await page.evaluate(() => {
     const sc = document.querySelector('.overlay[data-overlay="victory"]') as HTMLElement;

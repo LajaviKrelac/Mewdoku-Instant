@@ -512,6 +512,13 @@ export const catalog: LocaleCatalog = {
   'streak.today': '今天已打卡！',
   'streak.rewardDone': '已领取连续打卡奖励！',
   'streak.a11y': '连续打卡：第{day}天，共{total}天。{status}',
+  // UI batch (2026-10-13): the streak screen (AI draft from our English, meta.ts and the glossary; awaiting review).
+  'streak.screen.title': '每日连续打卡',
+  'streak.screen.run.other': '连续打卡天数',
+  'streak.screen.best': '最佳纪录：{best}',
+  'streak.screen.continue': '继续',
+  'streak.week.a11y': '连续打卡：{total} 天中已完成 {done} 天。',
+  'streak.week.gift.a11y': '第 {day} 天可获得奖励。',
   'streak.best': '最长连续打卡',
   'streak.days.other': '{count}天',
   'victory.streakDay': '连续打卡：第{day}天，共{total}天',

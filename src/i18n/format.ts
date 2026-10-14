@@ -71,6 +71,34 @@ export function formatShortDateFor(locale: string, dateKey: string): string | nu
   }
 }
 
+const weekdayFormats = new Map<string, Intl.DateTimeFormat | null>();
+
+/**
+ * UI batch (2026-10-13, the streak screen's week row): the short weekday name of a YYYY-MM-DD key in a non-English
+ * locale ("Mo.", "lun.", "пн"): Intl.DateTimeFormat(locale, {weekday: 'short', timeZone: 'UTC'}) on the key's UTC
+ * date. English keeps the catalogue's date.weekday.* words (index.ts formatWeekday). null when Intl cannot format it
+ * or the key is not a date (the caller falls back to the catalogue).
+ */
+export function formatWeekdayFor(locale: string, dateKey: string): string | null {
+  const d = dateFromKey(dateKey);
+  if (!d) return null;
+  let f = weekdayFormats.get(locale);
+  if (f === undefined) {
+    try {
+      f = new Intl.DateTimeFormat(latnTag(locale), { weekday: 'short', timeZone: 'UTC' });
+    } catch {
+      f = null;
+    }
+    weekdayFormats.set(locale, f);
+  }
+  if (!f) return null;
+  try {
+    return f.format(d);
+  } catch {
+    return null;
+  }
+}
+
 /** First-strong isolate (U+2068) and pop directional isolate (U+2069), §6.4. */
 export const FSI = '\u2068';
 export const PDI = '\u2069';

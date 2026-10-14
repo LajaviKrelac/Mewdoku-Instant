@@ -80,6 +80,9 @@ export const PLACEHOLDER_NOTES: Readonly<Record<string, string>> = {
   // Phase 2e (G3)
   items: "a pack's contents from the shop, e.g. '15 hints' or '8 kitties'",
   days: 'the streak cycle length, a number of days (7)',
+  // UI batch (2026-10-13, the streak screen)
+  best: "the longest streak as a phrase, e.g. '10 days' (streak.days)",
+  done: 'how many days of the streak row were solved (0–7)',
   min: 'the smallest number of players a ranking needs for rewards (5)',
   num: 'a number 1–99 (the number of a ranking name)',
   // UI batch (profile)
@@ -403,6 +406,16 @@ const NOTES: Readonly<Partial<Record<I18nKey, Partial<KeyMeta>>>> = {
   'rewarded.buy.loading': { description: 'A purchase button while the price loads (screen reader)' },
   'streak.day': { description: 'Streak strip: "Day 3 of 7" ({total} = the cycle length)', maxLength: 14 },
   'streak.a11y': { description: 'Screen-reader name of the streak strip: the day line and the status sentence' },
+  // UI batch (2026-10-13): the streak screen (opened from Home's streak pill; also shown once after the day's first solved
+  // puzzle). Top to bottom: the title, a flame, the run as a big number with its label, the best run, a row of the
+  // streak's days (each with its weekday), the status sentence, Continue.
+  'streak.screen.title': { description: 'Title of the streak screen. The feature\'s name (streak = days in a row)', maxLength: 18 },
+  'streak.screen.run.one': { description: 'Label under the big number of days in a row (the number is shown above it, not in the text)', maxLength: 22 },
+  'streak.screen.run.other': { description: 'Label under the big number of days in a row (the number is shown above it, not in the text)', maxLength: 22 },
+  'streak.screen.best': { description: 'A small pill under the number: the longest streak so far ({best} = "10 days")', maxLength: 24 },
+  'streak.screen.continue': { description: 'Button: go on to the next puzzle (after the day\'s first solved puzzle). A one-word label', maxLength: 16 },
+  'streak.week.a11y': { description: 'Screen-reader name of the row of streak days ({done} solved of {total}, the days until the streak reward)' },
+  'streak.week.gift.a11y': { description: 'Screen reader, after streak.week.a11y: which day of the row pays the streak reward (a gift box on screen)' },
   'victory.streakDay': { description: 'Victory screen: today\'s streak day', maxLength: 28 },
   'victory.streakReward': { description: 'Victory screen on the cycle\'s last day: the reward already added ({reward} = "+2 hints and +2 kitties")' },
   'victory.dailyReward': { description: 'Victory screen of the daily puzzle: a reward already added (only when the game gives one)' },
