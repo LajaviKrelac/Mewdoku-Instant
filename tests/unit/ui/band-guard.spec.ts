@@ -8,15 +8,22 @@
 // follows the band given by update() (app/streak-screen-flow.ts followStreakBand).
 // D-2e-25 review round 3 (2026-10-15, R3-1): a view that rebuilds Home or the event screen in place (inPlace) is on show
 // from its first render, so a band change from then on, even in that render's task, arms the guard.
+// D-2e-25 review round 4 (2026-10-15, R4-5): such a view takes over the guard time the view it replaces had left
+// (bandGuardLeft, first(band, true, carryMs)); app/shell.ts passes it in (HomeView / EventScreenView.guardMs).
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import eventsJson from '../../../src/data/events/events.json';
-import { cfg, mergeConfig } from '../../../src/app/config';
-import type { EventDef } from '../../../src/game/events';
-import { bandGuardMs, createBandGuard } from '../../../src/ui/overlays/overlay-base';
+import { createBannerFlow, type BannerFlow } from '../../../src/app/banner-flow';
+import { cfg, mergeConfig, type DeepPartial, type GameConfig } from '../../../src/app/config';
+import { createShell } from '../../../src/app/shell';
+import { eventStart, type EventDef } from '../../../src/game/events';
+import type { AdResult } from '../../../src/platform/types';
+import type { View } from '../../../src/ui/dom';
+import { bandGuardLeft, bandGuardMs, createBandGuard } from '../../../src/ui/overlays/overlay-base';
 import { createStreakScreen, type StreakScreenProps } from '../../../src/ui/overlays/streak-screen';
 import { createVictoryScreen, type VictoryProps } from '../../../src/ui/overlays/victory-screen';
 import { createEventScreen, type EventScreenView } from '../../../src/ui/screens/event-screen';
 import { createHomeScreen, type HomeView } from '../../../src/ui/screens/home-screen';
+import { createHarness } from '../app/harness';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -98,6 +105,41 @@ describe('createBandGuard (overlay-base)', () => {
     none.guard.band(false);
     none.btn.click();
     expect([none.guard.active(), none.pressed.mock.calls.length]).toEqual([false, 1]);
+  });
+
+  it('D-2e-25 review round 4 (R4-5): left() / bandGuardLeft(root) give the time still running; first(band, true, carryMs) goes on with it (at most the guard time; never without inPlace)', () => {
+    vi.useFakeTimers();
+    const f = fixture();
+    expect([f.guard.left(), bandGuardLeft(f.root), bandGuardLeft(null), bandGuardLeft(document.createElement('div'))]).toEqual([0, 0, 0, 0]);
+    f.guard.first(true);
+    vi.advanceTimersByTime(0);
+    f.guard.band(false);
+    vi.advanceTimersByTime(150);
+    expect([f.guard.left(), bandGuardLeft(f.root)]).toEqual([GUARD - 150, GUARD - 150]);
+    const g = fixture();
+    g.guard.first(false, true, bandGuardLeft(f.root)); // the view rebuilt in place takes the rest over
+    f.guard.stop(); // the old view goes
+    expect([g.guard.active(), guarded(g.root), g.guard.left()]).toEqual([true, true, GUARD - 150]);
+    g.btn.click();
+    vi.advanceTimersByTime(GUARD - 151);
+    g.btn.click();
+    expect(g.pressed).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect([g.guard.active(), guarded(g.root), g.guard.left()]).toEqual([false, false, 0]);
+    g.btn.click();
+    expect(g.pressed).toHaveBeenCalledTimes(1);
+    // Capped at the guard time; a new mount (no inPlace) never carries; 0 ms of guard: none.
+    const big = fixture();
+    big.guard.first(true, true, 10 * GUARD);
+    expect(big.guard.left()).toBe(GUARD);
+    const fresh = fixture();
+    fresh.guard.first(true, false, GUARD);
+    expect(fresh.guard.active()).toBe(false);
+    const none = fixture(() => 0);
+    none.guard.first(true, true, GUARD);
+    expect(none.guard.active()).toBe(false);
+    for (const x of [big, fresh, none]) x.guard.stop();
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('leaves aria-disabled alone (another rule\'s gate)', () => {
@@ -408,5 +450,126 @@ describe('the streak screen (N5: it follows the band; with its Continue gate)', 
     back.click();
     expect(h.onDone).toHaveBeenCalledTimes(2);
     v.destroy();
+  });
+});
+
+// ─────────── D-2e-25 review round 4 (R4-5): the shell rebuilds Home or the event screen in place ───────────
+
+describe('D-2e-25 review round 4 (R4-5): Home or the event screen rebuilt in place (app/shell.ts) keeps the tap guard still running', () => {
+  /**
+   * The shell with banner-flow on the app harness, its router building the real Home and event views (the one replaced is
+   * destroyed first, as router.replaceScreen does). Every banner load answers when the test says so.
+   */
+  function realScreens(config?: DeepPartial<GameConfig>) {
+    let flow: BannerFlow | null = null;
+    const ctl = { answer: (_r: AdResult): void => undefined };
+    const h = createHarness({
+      save: (s) => ({ ...s, progress: { level: 15, completed: 14, best: {} } }),
+      caps: { banner: true },
+      ...(config ? { config } : {}),
+      extra: (p) => {
+        p.platform.ads.banner = {
+          show: () => new Promise<AdResult>((resolve) => (ctl.answer = resolve)),
+          hide: async () => undefined,
+        };
+        flow = createBannerFlow({ platform: p.platform, store: p.store, clock: p.clock, config: p.config });
+        return { banners: flow };
+      },
+    });
+    const r = h.router;
+    let live: { destroy(): void } | null = null;
+    const homes: View<HomeView>[] = [];
+    const events: View<EventScreenView>[] = [];
+    const fakeHome = r.showHome.bind(r);
+    r.showHome = ((v, cb) => {
+      live?.destroy();
+      fakeHome(v, cb);
+      const real = createHomeScreen(v, cb);
+      document.body.append(real.el);
+      homes.push(real);
+      live = real;
+      return real;
+    }) as typeof r.showHome;
+    const fakeEvent = r.showEvent.bind(r);
+    r.showEvent = (async (v, cb) => {
+      live?.destroy();
+      await fakeEvent(v, cb);
+      const real = createEventScreen(v, cb);
+      document.body.append(real.el);
+      events.push(real);
+      live = real;
+      return real;
+    }) as typeof r.showEvent;
+    const shell = createShell({
+      store: h.store,
+      bus: h.bus,
+      clock: h.clock,
+      router: h.router,
+      platform: h.platform,
+      saves: h.saves,
+      session: () => h.session,
+      audio: { setMuted: () => undefined },
+      applyReducedMotion: () => false,
+      version: 'test',
+      banners: flow as unknown as BannerFlow,
+      config: h.config,
+    });
+    return { h, shell, ctl, homes, events };
+  }
+
+  it('Home: the band given back on show (a miss), then the late locale chunk rebuilds Home in place: the new view ignores taps for the rest of the guard, no longer; off: no guard at all', async () => {
+    for (const off of [false, true]) {
+      vi.useFakeTimers();
+      const s = realScreens(off ? { ads: { banner: { collapseWhenEmpty: false } } } : undefined);
+      s.shell.showHome(); // Home's load is in flight: its band reserved
+      vi.advanceTimersByTime(0); // Home is on show
+      s.ctl.answer({ ok: false, reason: 'no_fill' });
+      await s.h.settle(0);
+      const old = s.homes[0] as View<HomeView>;
+      expect(guarded(old.el), `off ${off}`).toBe(!off); // on: the band given back in view, taps wait
+      vi.advanceTimersByTime(100);
+      s.shell.refreshLocale(); // rebuilt in place (on: the same mount)
+      expect(s.homes).toHaveLength(2);
+      const home = s.homes[1] as View<HomeView>;
+      expect(guarded(old.el)).toBe(false); // destroyed
+      expect(guarded(home.el), `off ${off}`).toBe(!off);
+      if (off) continue;
+      expect(s.h.router.homeView).toMatchObject({ inPlace: true, guardMs: GUARD - 100, bannerReserved: false });
+      q<HTMLButtonElement>(home.el, '.home__play').click();
+      vi.advanceTimersByTime(GUARD - 101);
+      q<HTMLButtonElement>(home.el, '.home__play').click();
+      await s.h.settle(0);
+      expect(s.h.router.screen()).toBe('home'); // no level started: both taps were swallowed
+      vi.advanceTimersByTime(1);
+      expect(guarded(home.el)).toBe(false);
+      home.destroy();
+      vi.useRealTimers();
+      document.body.textContent = '';
+    }
+  });
+
+  it('the event screen: the band given back on show, then rebuilt in place (refreshLocale): the new view ignores taps for the rest of the guard', async () => {
+    vi.useFakeTimers();
+    const s = realScreens();
+    s.h.clock.setNow(eventStart(lantern) + 3_600_000);
+    await s.shell.showEvent(lantern);
+    vi.advanceTimersByTime(0);
+    s.ctl.answer({ ok: false, reason: 'no_fill' });
+    await s.h.settle(0);
+    const old = s.events[0] as View<EventScreenView>;
+    expect(guarded(old.el)).toBe(true);
+    vi.advanceTimersByTime(150);
+    s.shell.refreshLocale();
+    await s.h.settle(0);
+    expect(s.events).toHaveLength(2);
+    const scr = s.events[1] as View<EventScreenView>;
+    expect(s.h.router.eventView).toMatchObject({ inPlace: true, guardMs: GUARD - 150 });
+    expect(guarded(scr.el)).toBe(true);
+    q<HTMLButtonElement>(scr.el, '.event__home').click();
+    expect(s.h.router.screen()).toBe('event'); // swallowed
+    vi.advanceTimersByTime(GUARD - 150);
+    expect(guarded(scr.el)).toBe(false);
+    q<HTMLButtonElement>(scr.el, '.event__home').click();
+    expect(s.h.router.screen()).toBe('home');
   });
 });

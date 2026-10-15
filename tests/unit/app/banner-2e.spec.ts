@@ -20,6 +20,10 @@
 // Home mounted under fromCompletedLevels stays bare after a late cloud copy (R3-0 a); No Ads on Home gives its band back;
 // Home or the event screen rebuilt in place (refreshLocale, Home over Home) keeps its banner, band, bare mark and timer,
 // built with the band in view (R3-1); the event ended meanwhile: Home, a new mount; off: the 2e rule.
+// D-2e-25 review round 4 (2026-10-15): Home after the window from a board whose banner's SDK hide failed keeps its band
+// under that banner when its own load comes back empty, and the next board mounts with its band (R4-2); the remote
+// bannerInPlay switch off (or the end date) while the next board loads takes Home's kept banner down before the band-less
+// board mounts (R4-0); off: as before.
 import { describe, expect, it } from 'vitest';
 import { createAdFlow } from '../../../src/app/ad-flow';
 import { createBannerFlow, type BannerFlow } from '../../../src/app/banner-flow';
@@ -926,6 +930,87 @@ describe('D-2e-25 review round 3 (2026-10-15): the gate\'s no is a bare mount (R
       expect([p.flow.showing(), reserved(p.h)]).toEqual([false, false]); // inside the window, nothing up: bare (N1 c)
       expect(built.home).toHaveLength(1);
       expect(built.home[0]?.inPlace).toBeUndefined();
+    }
+  });
+});
+
+describe('D-2e-25 review round 4 (2026-10-15): a band goes only when no banner may be up (R4-2); a board whose band turned to no while it loaded (R4-0)', () => {
+  const OFF: DeepPartial<GameConfig> = { ads: { banner: { collapseWhenEmpty: false } } };
+  const reserved = (h: Harness): boolean => h.store.get().ui.bannerReserved;
+  /**
+   * The adapter's view of the SDK (PlatformAds.banner.mayBeUp, as the FB adapter's `visible`): a load answered ok puts a
+   * banner up; a hide() takes it down unless its SDK call fails (`hideFails`; the adapter answers all the same).
+   */
+  function sdk(p: Play): { up: boolean; hideFails: boolean } {
+    const st = { up: false, hideFails: false };
+    const b = p.h.platform.ads.banner;
+    if (b) {
+      const show = b.show.bind(b);
+      b.show = async (pos) => {
+        const r = await show(pos);
+        if (r.ok) st.up = true;
+        return r;
+      };
+      b.hide = async () => {
+        p.h.log.push('banner:hide');
+        if (!st.hideFails) st.up = false;
+      };
+      b.mayBeUp = () => st.up;
+    }
+    return st;
+  }
+
+  it("R4-2: Home's banner kept into the board, then Home after the window while the board's banner may still be up (shell.showHome's SDK hide fails): Home's own load comes back empty and Home keeps its band under that banner, bare (Settings closed after the window loads nothing); the next board mounts with its band; a hide that went through: Home bare, the next board band-less", async () => {
+    for (const fails of [true, false]) {
+      const p = play();
+      const st = sdk(p);
+      p.answers.push({ ok: true }, { ok: false, reason: 'no_fill' });
+      p.shell.showHome(); // L1: ok
+      await p.h.settle(0);
+      await startLevel(p.h, 15); // inside the window: the banner kept into the board (no hide), the band reserved
+      expect([banner(p.h), band(p.h), reserved(p.h)]).toEqual([['banner:show'], true, true]);
+      await p.h.settle(WINDOW);
+      st.hideFails = fails;
+      p.h.session.onHome(); // after the window: shell.showHome's hide() (the SDK call fails), then Home's load: no_fill
+      await p.h.settle(0);
+      expect(banner(p.h)).toEqual(['banner:show', 'banner:hide', 'banner:show']);
+      expect([reserved(p.h), p.h.router.homeView?.bannerReserved], `fails ${fails}`).toEqual([fails, fails]);
+      p.shell.openSettings();
+      await p.h.settle(WINDOW + 1_000);
+      p.h.router.close('settings');
+      await p.h.settle(2 * WINDOW);
+      expect(shows(p.h), `fails ${fails}`).toBe(2); // bare all the same: nothing more loads on this Home
+      expect(reserved(p.h), `fails ${fails}`).toBe(fails);
+      await startLevel(p.h, 16); // starved by Home's miss, but a banner may still be up: a board with its band under it
+      expect(p.h.store.get().session?.bannerBand, `fails ${fails}`).toBe(fails);
+    }
+  });
+
+  it("R4-0: the remote bannerInPlay switch turned off (or the end date reached) while the next board loads, Home's banner kept for it on start()'s early check: the banner is taken down before the band-less board mounts; off: it stays (as before)", async () => {
+    for (const cause of ['switch', 'endDate'] as const) {
+      for (const off of [false, true]) {
+        const p = play(off ? { config: OFF } : {});
+        p.today = '2027-03-30';
+        p.shell.showHome();
+        await p.h.settle(0);
+        expect(p.flow.showing()).toBe(true);
+        let release: () => void = () => undefined;
+        p.h.router.leaveWait = () => new Promise<void>((r) => (release = r)); // the board's build waits for Home's fade
+        const started = p.h.session.start({ mode: 'level', level: 15 });
+        expect(banner(p.h)).toEqual(['banner:show']); // kept for the board (banner to banner)
+        if (cause === 'switch') {
+          p.remote = { banner: true, bannerInPlay: false };
+          await p.flow.switchesChanged(); // Home's own banner is still allowed: nothing here
+        } else p.today = '2027-03-31'; // ads.banner.untilDate (nothing is told)
+        expect(banner(p.h)).toEqual(['banner:show']);
+        release();
+        await started;
+        await p.h.settle(p.h.config.fx.boardEntryMs);
+        const what = `${cause} off ${off}`;
+        expect([p.h.store.get().session?.bannerBand, band(p.h)], what).toEqual([false, false]); // the decision itself
+        expect(banner(p.h), what).toEqual(off ? ['banner:show'] : ['banner:show', 'banner:hide']);
+        expect(p.flow.showing(), what).toBe(off);
+      }
     }
   });
 });

@@ -37,6 +37,7 @@
 // control on Home ignores taps for ads.banner.bandChangeGuardMs (a tap aimed at Daily would land on Play and start a
 // level): overlay-base createBandGuard, never on the first render. D-2e-25 review round 3 (2026-10-15, R3-1): a view that
 // rebuilds Home in place (HomeView.inPlace, app/shell.ts) is on show from its first render: a change from then on arms it.
+// D-2e-25 review round 4 (2026-10-15, R4-5): it also goes on with the guard time the old view had left (HomeView.guardMs).
 import { cfg, type PeriodKind } from '../../app/config';
 import type { EventDef } from '../../game/events';
 import type { DailyCardState } from '../../game/progression';
@@ -145,6 +146,12 @@ export interface HomeView {
    * first(band, true)). Read at the first render only; absent: a new mount (that render's task never arms it).
    */
   readonly inPlace?: boolean;
+  /**
+   * D-2e-25 review round 4 (2026-10-15, R4-5; with inPlace only): the tap guard time still running on the Home view this
+   * one replaces (app/shell.ts, overlay-base bandGuardLeft), in ms: the new view keeps ignoring taps for it from its
+   * first render (the rebuild used to throw it away). Read at the first render only; absent or 0: none.
+   */
+  readonly guardMs?: number;
   /** Phase 2d §1.15: the gear's red dot (save.ext.settingsSeen < cfg.settingsDot.version). */
   readonly settingsDot: boolean;
   // ── Phase 2e (spec §2.5, §5.3; required since I-3) ──
@@ -564,8 +571,9 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
     }
     scheduleFit();
   };
-  // D-2e-25 review round 3 (R3-1): rebuilt in place, the view is on show from this first render (the band in view).
-  bandGuard.first(view.bannerReserved, view.inPlace === true);
+  // D-2e-25 review round 3 (R3-1): rebuilt in place, the view is on show from this first render (the band in view);
+  // round 4 (R4-5): with the old view's guard time left.
+  bandGuard.first(view.bannerReserved, view.inPlace === true, view.guardMs ?? 0);
   render(view);
   // Settings → Language over Home (A11Y-I18N-1): every text follows, also while a dialog is open.
   const offLocale = onLocaleChanged(() => render(last));

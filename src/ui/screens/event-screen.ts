@@ -19,7 +19,8 @@
 // render changes it on show (an empty banner answer gives it back), the footer moves down by the band, so the screen's
 // controls ignore taps for ads.banner.bandChangeGuardMs (Home would land on Top list): overlay-base createBandGuard,
 // never on the first render. D-2e-25 review round 3 (2026-10-15, R3-1): a view that rebuilds the screen in place
-// (EventScreenView.inPlace, app/shell.ts) is on show from its first render: a change from then on arms it.
+// (EventScreenView.inPlace, app/shell.ts) is on show from its first render: a change from then on arms it. D-2e-25
+// review round 4 (2026-10-15, R4-5): it also goes on with the guard time the old view had left (EventScreenView.guardMs).
 import { cfg } from '../../app/config';
 import type { EventDef, Milestone, Reward } from '../../game/events';
 import { formatNumber, t, tn, translate } from '../../i18n';
@@ -57,6 +58,12 @@ export interface EventScreenView {
    * (createBandGuard first(band, true)). Read at the first render only; absent: a new mount.
    */
   readonly inPlace?: boolean;
+  /**
+   * D-2e-25 review round 4 (2026-10-15, R4-5; with inPlace only): the tap guard time still running on the event view this
+   * one replaces (app/shell.ts, overlay-base bandGuardLeft), in ms: the new view keeps ignoring taps for it from its
+   * first render (the rebuild used to throw it away). Read at the first render only; absent or 0: none.
+   */
+  readonly guardMs?: number;
   /** Phase 2d §1.15: the gear's red dot. */
   readonly settingsDot: boolean;
 }
@@ -210,8 +217,9 @@ export function createEventScreen(view: EventScreenView, cb: EventScreenCallback
     top.toggleAttribute('data-autofocus', allDone);
     el.toggleAttribute('data-reduced', v.reducedMotion);
   };
-  // D-2e-25 review round 3 (R3-1): rebuilt in place, the view is on show from this first render (the band in view).
-  bandGuard.first(view.bannerReserved, view.inPlace === true);
+  // D-2e-25 review round 3 (R3-1): rebuilt in place, the view is on show from this first render (the band in view);
+  // round 4 (R4-5): with the old view's guard time left.
+  bandGuard.first(view.bannerReserved, view.inPlace === true, view.guardMs ?? 0);
   render(view);
   // Settings → Language over the event screen (A11Y-I18N-1): the milestone labels are rebuilt too.
   L.watch(() => {

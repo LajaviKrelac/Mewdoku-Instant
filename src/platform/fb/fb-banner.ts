@@ -41,6 +41,17 @@
 //     `wanted` (set by the newer show() that came back empty) and the stale banner stayed over a band-less
 //     screen until the app's next hide(). The newest load landing ok clears it and the retry, so a retry never
 //     takes down the banner the app was told about.
+//   - D-2e-25 review round 4 (2026-10-15, R4-2): round 3's rule covers every banner the app does not count as up,
+//     the app's own too (`hideOwed`, was `staleUp`): ANY SDK hide that fails or hangs while the app counts no banner
+//     (its hide(), a take-down above, a retry) owes a take-down, retried on the timer (HIDE_RETRIES at HIDE_RETRY_MS)
+//     even after a later show() sets `wanted`, until a hide succeeds with no landing during it or the newest load
+//     lands while wanted (that banner is the app's: no retry may take it down). Before, shell.showHome's hide() then
+//     screenShown('home') in one task: the hide failed, Home's show() cleared its retry (and `wanted` stopped any
+//     later one), Home's load came back empty, and the board's banner stayed over Home until the app's next hide().
+//     Every SDK hide is bounded by ads.readyTimeoutMs, and one that does not settle in time counts as failed (only
+//     the app's hide() was bounded, and its hung call was never retried); a late success still clears the state
+//     unless a load landed meanwhile. mayBeUp() reports `visible` (a load landed, no hide succeeded since) so the
+//     app keeps a band under a banner it no longer counts (banner-flow, collapseWhenEmpty).
 //   Platform correctness: none of this is behind ads.banner.collapseWhenEmpty.
 //
 // Unverified (§14 G4): the position argument's values ('bottom' is our reading), the 50 dp height,
@@ -134,11 +145,13 @@ export function createFbBanner(sdk: FBInstantSDK, opts: FbBannerOptions): NonNul
   /** D-2e-25 review: loads that resolved (the SDK may show a banner); read by sdkHide around its call. */
   let landings = 0;
   /**
-   * D-2e-25 review round 3 (R3-5): this module took down a landing the app was not told about (a stale one, or one
-   * after hide()) and no hide has succeeded since: the retries go on even while the app wants a banner, and a show()
-   * keeps them. Cleared when a hide succeeds or the newest load lands ok (that banner is the app's).
+   * D-2e-25 review round 3 (R3-5), generalised in round 4 (2026-10-15, R4-2; was `staleUp`, set for this module's own
+   * take-downs only): an SDK hide failed or hung while the app counted no banner as up (its hide(), the take-down of a
+   * landing it was not told about, a retry of either), so a banner may be left on screen that nobody counts. The
+   * retries go on even while the app wants a banner, and a show() keeps them. Cleared when a hide succeeds with no
+   * landing during it, or when the newest load lands while wanted (that banner is the app's: no retry may take it down).
    */
-  let staleUp = false;
+  let hideOwed = false;
 
   const latchOff = (): void => {
     if (off) return;
@@ -156,26 +169,52 @@ export function createFbBanner(sdk: FBInstantSDK, opts: FbBannerOptions): NonNul
     retryTimer = null;
   };
 
-  const sdkHide = async (): Promise<void> => {
+  /**
+   * A hide call failed (other than unsupported) or did not settle within callTimeoutMs: the banner may still be up
+   * (visible stays true). Try again shortly while nobody wants it; the next hide() also tries again. D-2e-25 review
+   * round 4 (R4-2): when the app counts no banner as up (no load answered ok since its hide()), the take-down is owed
+   * and its retries go on even after a show() (`hideOwed`). Nothing to retry when nothing is up any more (another
+   * call succeeded meanwhile), or when the newest load landed while the call was out (that banner is the app's).
+   */
+  const hideFailed = (): void => {
+    if (!visible || (wanted && okSeq !== 0)) return;
+    hideOwed = true;
+    scheduleRetry();
+  };
+
+  /**
+   * One hideBannerAdAsync, bounded by callTimeoutMs: settles when the call does or the bound passes; never rejects.
+   * D-2e-25 review round 4 (R4-2): a call still unsettled at the bound counts as failed (hideFailed: retried, owed);
+   * a late success then clears the state as any success does (unless a load landed meanwhile), a late failure adds
+   * nothing (already counted). Before, only the app's hide() was bounded and its hung call was never retried, and a
+   * take-down or a timer retry waited on the call forever.
+   */
+  const sdkHide = (): Promise<void> => {
     const landed = landings;
-    try {
-      await (sdk.hideBannerAdAsync as () => Promise<void>)();
-      // D-2e-25 review: a load that landed while this call was in flight may show after it: it still counts as up.
-      // Review round 3: and a retry pending for it (a stale landing's failed take-down) stays.
-      if (landings === landed) {
-        visible = false;
-        staleUp = false;
-        clearRetry();
-      }
-    } catch (err) {
-      if (fbErrorCode(err) === 'CLIENT_UNSUPPORTED_OPERATION') {
-        latchOff();
+    let late = false;
+    const call = (async (): Promise<void> => {
+      try {
+        await (sdk.hideBannerAdAsync as () => Promise<void>)();
+      } catch (err) {
+        if (fbErrorCode(err) === 'CLIENT_UNSUPPORTED_OPERATION') {
+          latchOff();
+          return;
+        }
+        if (!late) hideFailed();
         return;
       }
-      // Any other failure: the banner may still be up (visible stays true). Try again shortly, while
-      // nobody wants it; the next hide() also tries again.
-      scheduleRetry();
-    }
+      // D-2e-25 review: a load that landed while this call was in flight may show after it: it still counts as up.
+      // Review round 3: and a retry pending for it (an owed take-down) stays.
+      if (landings === landed) {
+        visible = false;
+        hideOwed = false;
+        clearRetry();
+      }
+    })();
+    return within(timers, call, callTimeoutMs, () => {
+      late = true;
+      hideFailed();
+    });
   };
 
   const scheduleRetry = (): void => {
@@ -183,8 +222,9 @@ export function createFbBanner(sdk: FBInstantSDK, opts: FbBannerOptions): NonNul
     retriesLeft--;
     retryTimer = timers.setTimeout(() => {
       retryTimer = null;
-      // D-2e-25 review round 3 (R3-5): a landing the app was not told about is taken down even while it wants a banner.
-      if (!visible || (wanted && !staleUp)) return;
+      // D-2e-25 review round 3 (R3-5), round 4 (R4-2): a banner the app does not count is taken down even while it
+      // wants one (an owed take-down: its own hide() that failed or hung, then a show() whose load came back empty).
+      if (!visible || (wanted && !hideOwed)) return;
       void sdkHide();
     }, HIDE_RETRY_MS);
   };
@@ -212,16 +252,17 @@ export function createFbBanner(sdk: FBInstantSDK, opts: FbBannerOptions): NonNul
       visible = true;
       if (!wanted || stale) {
         // hide() came while this load was in flight (or, D-2e-25 review, a newer load was started since):
-        // take the banner down again at once. Review round 3 (R3-5): its retries go on while the app wants one.
+        // take the banner down again at once. Review round 3 (R3-5): its retries go on while the app wants one (round 4,
+        // R4-2: a failed or hung take-down marks `hideOwed`, see hideFailed).
         clearRetry();
         retriesLeft = HIDE_RETRIES;
-        staleUp = true;
         await sdkHide();
         return { ok: false, reason: 'skipped' };
       }
       okSeq = seq;
-      // Review round 3 (R3-5): the banner on screen is the one the app is told about: no stale retry may take it down.
-      staleUp = false;
+      // Review round 3 (R3-5), round 4 (R4-2): the banner on screen is the one the app is told about (it replaced the
+      // one owed a take-down in the one slot): no retry may take it down.
+      hideOwed = false;
       clearRetry();
       return { ok: true };
     };
@@ -239,8 +280,10 @@ export function createFbBanner(sdk: FBInstantSDK, opts: FbBannerOptions): NonNul
       try {
         if (off) return UNSUPPORTED;
         wanted = true;
-        // D-2e-25 review round 3 (R3-5): a stale landing's take-down is retried still (the app never counted it as up).
-        if (!staleUp) clearRetry();
+        // D-2e-25 review round 3 (R3-5), round 4 (R4-2): an owed take-down is retried still (the app does not count that
+        // banner: its own hide() whose call failed or hung, or a landing it was not told about); this load may come
+        // back empty. Only the newest load landing (or a hide that succeeds) ends it.
+        if (!hideOwed) clearRetry();
         // A load that never settled is given up (stuckLoadMs): start a new one.
         if (loading && timers.now() - loadingSince >= stuckLoadMs(c)) loading = null;
         const p = loading ?? load(position);
@@ -260,10 +303,14 @@ export function createFbBanner(sdk: FBInstantSDK, opts: FbBannerOptions): NonNul
         if (!visible) return;
         clearRetry();
         retriesLeft = HIDE_RETRIES;
-        await within(timers, sdkHide(), callTimeoutMs, () => undefined);
+        // Bounded by callTimeoutMs (sdkHide; round 4: a call still out then counts as failed and is retried).
+        await sdkHide();
       } catch {
         /* never reject */
       }
     },
+
+    // D-2e-25 review round 4 (R4-2): a load landed and no SDK hide has succeeded since, counted by the app or not.
+    mayBeUp: () => visible,
   };
 }

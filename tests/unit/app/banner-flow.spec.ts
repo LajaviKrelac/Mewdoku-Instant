@@ -24,6 +24,10 @@
 // D-2e-25 review round 3 (2026-10-15): a Home, event or victory mount whose gate says no is bare (R3-0: no band later on
 // it whatever the gate says then; the victory gives back the board's band); No Ads or a remote switch off on such a
 // screen on show gives its band back once the banner is down (the game screen keeps its band); keepsMount (R3-1).
+// D-2e-25 review round 4 (2026-10-15): a band goes only when the adapter says no banner may be up (mayBeUp: a miss on Home
+// after the board's banner's SDK hide failed, R4-2; the gate's no after a hide that failed, R4-3, the victory's mount too),
+// the mount bare all the same; bandAtMount() counts such a banner as up; no banner API (the adapter latched off) is the
+// gate's no on a page (R4-1); the victory inside the window loads nothing before the window ends, then once (R4-6).
 import { describe, expect, it } from 'vitest';
 import { createAdFlow } from '../../../src/app/ad-flow';
 import { createBannerFlow, type BannerFlow } from '../../../src/app/banner-flow';
@@ -817,6 +821,221 @@ describe('D-2e-25 review round 3 (2026-10-15): a mount the gate refuses is bare;
     const o = setup({ config: OFF });
     await o.flow.screenShown('home');
     expect(o.flow.keepsMount('home')).toBe(false);
+  });
+});
+
+// ─────────── D-2e-25 review round 4 (2026-10-15): the band goes only when nothing can be on screen ───────────
+
+describe('D-2e-25 review round 4 (2026-10-15): a band is given back only when no banner may be up (mayBeUp); no banner API is the gate\'s no; the victory\'s one timer', () => {
+  const OFF: DeepPartial<GameConfig> = { ads: { banner: { collapseWhenEmpty: false } } };
+  const WINDOW = cfg.ads.banner.minReloadSec * 1000;
+  const shows = (s: ReturnType<typeof setup>): number => s.log.filter((l) => l.startsWith('banner:show')).length;
+  const on = (s: ReturnType<typeof setup>, screen: 'home' | 'event' | 'victory' | 'game'): void =>
+    s.store.update((st) => ({ ...st, screen: screen === 'victory' ? 'game' : screen, overlays: screen === 'victory' ? ['victory'] : [] }));
+  function flips(s: ReturnType<typeof setup>): boolean[] {
+    const out: boolean[] = [];
+    s.store.select(
+      (st) => st.ui.bannerReserved,
+      (v) => void out.push(v),
+    );
+    return out;
+  }
+  /**
+   * The adapter's view of the SDK (PlatformAds.banner.mayBeUp, as the FB adapter's `visible`): a load answered ok puts a
+   * banner up; a hide() takes it down unless its SDK call fails (`hideFails`; the adapter still answers, never rejects).
+   */
+  function sdk(s: ReturnType<typeof setup>): { up: boolean; hideFails: boolean } {
+    const st = { up: false, hideFails: false };
+    const b = s.platform.ads.banner;
+    if (b) {
+      const show = b.show.bind(b);
+      b.show = async (pos) => {
+        const r = await show(pos);
+        if (r.ok) st.up = true;
+        return r;
+      };
+      b.hide = async () => {
+        s.log.push('banner:hide');
+        if (!st.hideFails) st.up = false;
+      };
+      b.mayBeUp = () => st.up;
+    }
+    return st;
+  }
+  function withRemote(s: ReturnType<typeof setup>, config?: DeepPartial<GameConfig>) {
+    const remote = { banner: true, bannerInPlay: true };
+    const flow = createBannerFlow({ platform: s.platform, store: s.store, clock: s.clock, remote: () => remote, ...(config ? { config: mergeConfig(config) } : {}) });
+    return { flow, remote };
+  }
+  const noAds = (s: ReturnType<typeof setup>, owned = true): void =>
+    s.store.update((st) => ({ ...st, save: { ...st.save, purchases: { noAds: owned, tokens: [], pending: [] } } }));
+
+  it("R4-2: Home after the window while the board's banner may still be up (its SDK hide failed): Home's own load comes back empty, the band stays under it, bare (nothing more loads), and the next board mounts with its band; a hide that went through: the band goes as before", async () => {
+    for (const fails of [true, false]) {
+      const s = setup({ results: [{ ok: true }, { ok: false, reason: 'no_fill' }, { ok: true }] });
+      const st = sdk(s);
+      on(s, 'home');
+      await s.flow.screenShown('home'); // L1: ok
+      s.flow.screenGone(); // into the board, banner to banner (no hide)
+      on(s, 'game');
+      await s.flow.screenShown('game'); // inside the window: the banner kept, its band reserved
+      expect([shows(s), s.flow.showing(), s.reserved()]).toEqual([1, true, true]);
+      s.clock.advance(WINDOW + 1_000); // O4, then Home after the window
+      st.hideFails = fails;
+      await s.flow.hide(); // shell.showHome's hide(): the SDK call fails (the adapter answers all the same)
+      s.flow.screenGone();
+      on(s, 'home');
+      const seen = flips(s);
+      await s.flow.screenShown('home'); // L2: no_fill
+      expect(shows(s)).toBe(2);
+      expect(seen, `fails ${fails}`).toEqual(fails ? [true] : [true, false]);
+      expect(s.reserved(), `fails ${fails}`).toBe(fails); // the band stays under the banner that may still be up
+      // Bare all the same: a modal's close after the window loads nothing.
+      await s.flow.hide();
+      s.clock.advance(WINDOW + 1_000);
+      await s.flow.modalClosed('settings');
+      await s.clock.advanceAsync(3 * WINDOW);
+      await drain();
+      expect(shows(s), `fails ${fails}`).toBe(2);
+      expect(s.reserved(), `fails ${fails}`).toBe(fails);
+      // Starved (L2 was empty), but a banner may still be up: the next board mounts with its band, not band-less under it.
+      expect(s.flow.bandAtMount(), `fails ${fails}`).toBe(fails);
+      st.up = false; // the adapter's retry went through
+      expect(s.flow.bandAtMount()).toBe(false);
+    }
+    // Off: the 2e rule (a failed load keeps the reserve until the screen unmounts; bandAtMount() = eligible).
+    const o = setup({ results: [{ ok: true }, { ok: false, reason: 'no_fill' }], config: OFF });
+    const ost = sdk(o);
+    await o.flow.screenShown('home');
+    ost.hideFails = true;
+    await o.flow.hide();
+    o.flow.screenGone();
+    o.clock.advance(WINDOW + 1_000);
+    await o.flow.screenShown('home');
+    ost.up = false;
+    expect([shows(o), o.reserved(), o.flow.bandAtMount()]).toEqual([2, true, true]);
+  });
+
+  it('R4-3: No Ads or the remote switch off on Home, the event screen or the victory on show, the SDK hide failing: the band stays (bare) while a banner may still be up; a hide that went through gives it back as before; off: the band stays', async () => {
+    for (const cause of ['noAds', 'switch'] as const) {
+      for (const screen of ['home', 'event', 'victory'] as const) {
+        for (const fails of [true, false]) {
+          for (const off of [false, true]) {
+            const s = setup();
+            const st = sdk(s);
+            const { flow, remote } = withRemote(s, off ? OFF : undefined);
+            const what = `${cause} ${screen} fails ${fails} off ${off}`;
+            on(s, screen);
+            await flow.screenShown(screen);
+            expect([flow.showing(), s.reserved()], what).toEqual([true, true]);
+            st.hideFails = fails;
+            if (cause === 'noAds') {
+              noAds(s);
+              await flow.entitlementChanged();
+            } else {
+              remote.banner = false;
+              await flow.switchesChanged();
+            }
+            expect(s.log, what).toEqual(['banner:show:bottom', 'banner:hide']);
+            expect(s.reserved(), what).toBe(off || fails);
+            if (off) continue;
+            // Bare whatever the gate says later (a refund, the switch back): nothing loads, the band never comes back.
+            noAds(s, false);
+            remote.banner = true;
+            s.clock.advance(WINDOW + 1_000);
+            await flow.modalClosed('settings');
+            await s.clock.advanceAsync(3 * WINDOW);
+            await drain();
+            expect([shows(s), s.reserved()], what).toEqual([1, fails]);
+          }
+        }
+      }
+    }
+  });
+
+  it("R4-3: the victory whose gate says no while the board's banner may still be up (the switch's hide failed) keeps the board's band, bare; once a hide went through, a victory gives it back at its screenShown", async () => {
+    for (const fails of [true, false]) {
+      const s = setup();
+      const st = sdk(s);
+      const { flow, remote } = withRemote(s);
+      on(s, 'game');
+      await flow.screenShown('game'); // the board's banner, in its band
+      st.hideFails = fails;
+      remote.banner = false;
+      await flow.switchesChanged(); // the game screen keeps its band (never mid-level); the SDK hide fails
+      expect([s.log, s.reserved()]).toEqual([['banner:show:bottom', 'banner:hide'], true]);
+      s.clock.advance(WINDOW + 1_000);
+      on(s, 'victory');
+      const mount = flow.screenShown('victory'); // before the victory's props are built
+      expect(s.reserved(), `fails ${fails}`).toBe(fails);
+      await mount;
+      expect(s.reserved(), `fails ${fails}`).toBe(fails);
+      await flow.modalClosed('ranking');
+      await s.clock.advanceAsync(3 * WINDOW);
+      await drain();
+      expect([shows(s), s.reserved()], `fails ${fails}`).toEqual([1, fails]);
+    }
+  });
+
+  it("R4-1: the adapter latched banners off (its banner getter gone): the victory gives back the band the board left at its screenShown and loads nothing; Home on show gives its band back at the next attempt (a modal's close); off: the band stays", async () => {
+    for (const off of [false, true]) {
+      const s = setup(off ? { config: OFF } : {});
+      on(s, 'game');
+      await s.flow.screenShown('game'); // the board's banner, in its band
+      await s.flow.hide(); // the ranking panel; the adapter latches off ('unsupported'): no banner API from now on
+      delete s.platform.ads.banner;
+      s.clock.advance(WINDOW + 1_000);
+      on(s, 'victory');
+      const mount = s.flow.screenShown('victory');
+      expect(s.reserved(), `off ${off}`).toBe(off); // on: given back before the victory's props are built
+      await mount;
+      await s.flow.modalClosed('ranking');
+      await s.clock.advanceAsync(3 * WINDOW);
+      await drain();
+      expect([shows(s), s.reserved()], `off ${off}`).toEqual([1, off]);
+
+      const h = setup(off ? { config: OFF } : {});
+      on(h, 'home');
+      await h.flow.screenShown('home');
+      await h.flow.hide(); // Settings
+      delete h.platform.ads.banner;
+      const seen = flips(h);
+      h.clock.advance(WINDOW + 1_000);
+      await h.flow.modalClosed('settings');
+      expect(seen, `off ${off}`).toEqual(off ? [] : [false]); // on: the band (which can never fill) given back in view
+      // Bare from then on: the API back (it never comes back in a session; still) loads nothing on this mount.
+      h.platform.ads.banner = { show: async () => (h.log.push('banner:show:bottom'), { ok: true }), hide: async () => void h.log.push('banner:hide') };
+      await h.flow.hide();
+      h.clock.advance(WINDOW + 1_000);
+      await h.flow.modalClosed('settings');
+      expect(shows(h), `off ${off}`).toBe(off ? 2 : 1);
+    }
+  });
+
+  it('R4-6: a victory opened inside the window with nothing up (not starved) reserves its band at open and loads nothing until the window ends, then exactly once, into that band', async () => {
+    const s = setup();
+    on(s, 'game');
+    await s.flow.screenShown('game'); // the board's load (ok) starts the window
+    s.clock.advance(10_000);
+    await s.flow.hide(); // the ranking panel over the won board
+    on(s, 'victory');
+    const seen = flips(s);
+    void s.flow.screenShown('victory'); // before the victory's props are built (session.openVictory)
+    expect(s.reserved()).toBe(true);
+    const fade = cfg.fx.overlayFadeMs;
+    await s.clock.advanceAsync(fade); // the crossfade (session victoryCrossfadeMs)
+    expect(shows(s)).toBe(1);
+    await s.flow.modalClosed('ranking'); // the panel's close, inside the window: the same one timer
+    await s.clock.advanceAsync(WINDOW - 10_000 - fade - 1);
+    await drain();
+    expect([shows(s), s.flow.showing(), s.reserved()]).toEqual([1, false, true]); // nothing inside Meta's window
+    await s.clock.advanceAsync(1);
+    await drain();
+    expect([shows(s), s.flow.showing(), s.reserved()]).toEqual([2, true, true]); // the one timer, at the window's end
+    await s.clock.advanceAsync(5 * WINDOW);
+    await drain();
+    expect(shows(s)).toBe(2); // exactly once
+    expect(seen).toEqual([]); // the band was there all along (reserved at open, never flipped)
   });
 });
 

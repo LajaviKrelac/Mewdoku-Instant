@@ -30,6 +30,10 @@
 // the banner stays up, the band (or the bare mark) stays as decided, and the new view is built with the band in view
 // (inPlace: a change from its first render on arms its tap guard). Event → Home is another screen: the usual rules.
 // Off: every show is a new mount (hide, screenGone, screenShown), as before.
+// D-2e-25 review round 4 (2026-10-15, R4-5): such a rebuild threw away a tap guard still running on the old view (the
+// band had just changed: a tap meant for the old column then landed on the moved one). The shell reads the old view's
+// guard time left (overlay-base bandGuardLeft) before the swap and builds the new view with it (HomeView /
+// EventScreenView.guardMs), which keeps ignoring taps for that long. Off: no guard (bandChangeGuardMs only with the switch).
 import type { AudioEngine } from '../audio/audio-engine';
 import { isEventLive, type EventDef } from '../game/events';
 import { markSettingsSeen } from '../game/save';
@@ -40,6 +44,7 @@ import type { PlatformAdapter } from '../platform/types';
 import oflUrl from '../assets/fonts/OFL.txt?url';
 import { buildLocales, t } from '../i18n';
 import type { View } from '../ui/dom';
+import { bandGuardLeft } from '../ui/overlays/overlay-base';
 import type { SettingsProps } from '../ui/overlays/settings-modal';
 import type { EventScreenView } from '../ui/screens/event-screen';
 import type { HomeEventCardView, HomeView } from '../ui/screens/home-screen';
@@ -337,6 +342,8 @@ export function createShell(deps: ShellDeps): Shell {
       // D-2e-25 review round 3 (R3-1): Home over Home (the late locale chunk's refresh, a failed board start, an event
       // card whose event just ended) keeps the mount's banner and band: no hide, no screenShown, built with the band.
       const keep = sameMount('home');
+      // D-2e-25 review round 4 (R4-5): the tap guard still running on the Home being rebuilt goes on in the new view.
+      const guardMs = keep ? bandGuardLeft(home?.el) : 0;
       const today = dailyDateKey(clock.now(), c);
       const cleaned = clearStaleDaily(save(), today);
       if (cleaned !== save()) {
@@ -351,7 +358,7 @@ export function createShell(deps: ShellDeps): Shell {
       const built = selectHomeView(store.get(), ctx(), c);
       const token = keep ? ({ screen: 'home' } as const) : null;
       if (token) inPlace = token;
-      home = router.showHome(keep ? { ...built, inPlace: true } : built, {
+      home = router.showHome(keep ? { ...built, inPlace: true, ...(guardMs > 0 ? { guardMs } : {}) } : built, {
         onPlay: () => {
           const s = save();
           void deps.session().start(s.tutorialDone ? { mode: 'level', level: s.progress.level } : { mode: 'tutorial', replay: false });
@@ -435,11 +442,14 @@ export function createShell(deps: ShellDeps): Shell {
       // banner and band (no hide, no screenShown); built with the band in view, so a change while the chunk import is
       // awaited (the old view follows it until the swap) arms the new view's tap guard at the render below.
       const keep = sameMount('event');
+      // D-2e-25 review round 4 (R4-5): the tap guard still running on the event view being rebuilt goes on in the new one
+      // (read before the chunk's import: the old view, destroyed by the swap, may be guarded a few ms longer, never less).
+      const guardMs = keep ? bandGuardLeft(eventScreen?.el) : 0;
       const mine = ++navGen;
       if (!keep) void deps.banners?.hide().catch(() => undefined);
       const token = keep ? ({ screen: 'event' } as const) : null;
       if (token) inPlace = token;
-      const screen = await router.showEvent(keep ? { ...view, inPlace: true } : view, {
+      const screen = await router.showEvent(keep ? { ...view, inPlace: true, ...(guardMs > 0 ? { guardMs } : {}) } : view, {
         onPlay: () => {
           // The screen was left open across the event's end (L2B-4): Home, not an error toast.
           if (!isEventLive(ev, clock.now())) return shell.showHome();

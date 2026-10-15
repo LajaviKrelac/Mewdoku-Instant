@@ -87,6 +87,15 @@
 // of the event screen) is the same mount (R3-1, keepsMount()): the shell skips its hide(), the swap's screenGone() and
 // the screenShown() after it, so the banner, the band, the bare mark and the one timer stay as they are, and the new
 // view is built with the band in view. collapseWhenEmpty false: none of this (the 2e rule above, bit for bit).
+// D-2e-25 review round 4 (2026-10-15, collapseWhenEmpty): a band is given back only when nothing can be on screen. The
+// adapter's PlatformAds.banner.mayBeUp() (FB: a load landed and no SDK hide has succeeded since, whether or not this flow
+// counts it; absent = false) is read at the moment of each decision: a miss (missed()), the gate's no (refused(), after
+// its awaited hide) and the victory's bare mount inside the window keep the band while it says yes (R4-2, R4-3: the
+// board's banner whose SDK hide failed or hung stayed over Home after Home's own load came back empty, and over a page
+// whose No Ads or remote switch took its band); the mount is still marked bare (nothing more loads on it). bandAtMount()
+// treats it like `shown`: a board mounts with its band while a banner may still be up. No banner API at all (the adapter
+// latched banners off: its `banner` getter is gone) is the gate's no on Home, the event screen and the victory (R4-1):
+// before, attempt() returned before the gate, so the victory kept the band the board left, which could never fill.
 import { bannerGate } from '../game/ad-pacing';
 import type { TimerId } from './clock';
 import type { BannerScreen, GameConfig } from './config';
@@ -144,7 +153,8 @@ export interface BannerFlow {
    * whether a banner up on the screen being left may stay into it): eligible('game') and, with
    * collapseWhenEmpty, a banner up or still loading, or no empty answer ('no_fill' / 'error') since the
    * last successful load. No side effect; decided once per mount (never mid-level). collapseWhenEmpty
-   * false: eligible('game').
+   * false: eligible('game'). D-2e-25 review round 4 (R4-2): a banner the adapter may still show (mayBeUp(), a hide
+   * that failed or hung) counts as up.
    */
   bandAtMount(opts?: { readonly firstRunTutorial?: boolean }): boolean;
   /** Before unmount, a transition to the game screen, an interstitial or rewarded ad, or a modal overlay. */
@@ -167,7 +177,8 @@ export interface BannerFlow {
    * the gate now says no, a banner that is up (or still loading) is hidden at once. The reserve stays
    * until the screen unmounts (§3.2: nothing jumps). D-2e-25 review round 3 (R3-0, collapseWhenEmpty): on Home, the
    * event screen and the victory the band, empty for good now, is given back once the banner is down, and the mount
-   * stays bare; the game screen keeps its band (never mid-level).
+   * stays bare; the game screen keeps its band (never mid-level). Round 4 (R4-3): "down" is the adapter's word after the
+   * awaited hide (mayBeUp() no): while a banner may still be up (its SDK hide failed or hung) the band stays, bare.
    */
   entitlementChanged(): Promise<void>;
   /** Whether a banner is currently shown (tests, analytics). */
@@ -195,7 +206,8 @@ export interface BannerFlow {
   /**
    * Phase 2e (spec §7.4): the remote switches changed: a banner the gate now refuses is hidden at once. D-2e-25 review
    * round 3 (R3-0, collapseWhenEmpty): on Home, the event screen and the victory the gate's no also gives the band back
-   * (once the banner is down) and leaves the mount bare, as entitlementChanged().
+   * (once the banner is down; round 4, R4-3: once the adapter says none may be up) and leaves the mount bare, as
+   * entitlementChanged().
    */
   switchesChanged(): Promise<void>;
 }
@@ -317,6 +329,25 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
       return false;
     }
   };
+  /**
+   * D-2e-25 review round 4 (2026-10-15, R4-2, R4-3; read with collapseWhenEmpty only): the SDK may still be showing a
+   * banner (PlatformAds.banner.mayBeUp: a load landed and no SDK hide has succeeded since, whether or not this flow
+   * counts it as up). Absent (an adapter without it, no banner API) or throwing: false. Read at each decision, never kept.
+   */
+  const mayBeUp = (): boolean => {
+    try {
+      return api()?.mayBeUp?.() === true;
+    } catch {
+      return false;
+    }
+  };
+  /**
+   * D-2e-25 review round 4 (R4-2, R4-3): a Home, event or victory mount in view gives its band back, unless a banner may
+   * still be on screen (mayBeUp): then the band stays under it (the mount is bare all the same: nothing more loads).
+   */
+  const giveBack = (): void => {
+    if (!mayBeUp()) setReserved(false);
+  };
 
   /** Phase 2e (spec §7.4): the remote switches allow `screen` (off only; absent = on). */
   const remoteOk = (screen: BannerScreen): boolean => {
@@ -392,15 +423,17 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
    */
   async function attempt(force = false, closing: string | null = null, mount = false): Promise<void> {
     const cur = current;
-    const banner = api();
-    if (!cur || !banner) return;
+    if (!cur) return;
     const collapse = c.ads.banner.collapseWhenEmpty;
     const page = cur.screen !== 'game';
     // D-2e-25 review (N2): a bare Home, event or victory mount stays bare: no reserve, no load, no timer.
     if (collapse && page && bareGen === screenGen) return;
-    if (!gateOk(cur.screen, cur.firstRunTutorial)) {
+    const banner = api();
+    if (!banner || !gateOk(cur.screen, cur.firstRunTutorial)) {
       // D-2e-25 review round 3 (R3-0): the gate's no makes a Home, event or victory mount bare (at the mount: before its
-      // view is built; on show: its band given back), so no later gate change on it can add a band. Off: as before.
+      // view is built; on show: its band given back), so no later gate change on it can add a band. Round 4 (R4-1): no
+      // banner API (the adapter latched banners off: its getter is gone) is the same no; it returned before the gate,
+      // and the victory kept the band the board left. Off: as before (nothing).
       if (collapse && page) await refused(mount);
       return;
     }
@@ -416,13 +449,14 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
       } else if (mount) {
         // D-2e-25 review (N1 c): the victory reserves its band now, for the one timer's banner (the ranking panel
         // still covers it: the timer checks it is free when it fires); starved (or reshowAfterAnyHide off), and on
-        // Home and the event screen, the mount shows bare, giving back a reserve the board left in the store.
+        // Home and the event screen, the mount shows bare, giving back a reserve the board left in the store (round 4,
+        // R4-2: kept while the board's banner may still be up, its hide failed or hung).
         if (cur.screen === 'victory' && anyHide() && !starved) {
           setReserved(true);
           scheduleReshow(wait, false);
         } else {
           bareGen = screenGen;
-          setReserved(false);
+          giveBack();
         }
       } else if (anyHide() && reshowFree(closing)) {
         // D-2e-25 review (N3): a reserved band whose banner was hidden (a modal's close, the ranking panel's over the
@@ -482,14 +516,16 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
    * D-2e-25 (2026-10-14): the load attempted at `loadAt` on `cur` came back empty (see the header). Home, the
    * victory and the event screen give their band back at once and stay bare for the rest of the mount (D-2e-25
    * review, N2); the game screen keeps its band (never mid-level) and, after 'no_fill' / 'error', takes ONE more
-   * load when the reload window ends, at most once per board entry (a Retry is a new entry).
+   * load when the reload window ends, at most once per board entry (a Retry is a new entry). D-2e-25 review round 4
+   * (R4-2): a page keeps its band (bare all the same) while the adapter says a banner may still be up: the board's
+   * banner whose SDK hide failed or hung when Home was shown stayed over Home once Home's own load came back empty.
    */
   function missed(cur: NonNullable<typeof current>, reason: AdFailReason, loadAt: number): void {
     const empty = reason === 'no_fill' || reason === 'error';
     if (empty) starved = true;
     if (cur.screen !== 'game') {
       bareGen = screenGen;
-      setReserved(false);
+      giveBack();
       return;
     }
     if (!empty || !anyHide() || missRetryGen === screenGen || !gameScreenFree()) return;
@@ -504,14 +540,17 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
    * carry the board's; a load in flight hides itself when it lands). `mount` (screenShown): the reserve goes at once,
    * before the screen's view is built, so it shows bare from its first frame. On a screen already on show it goes only
    * once the adapter's hide answered (the column never moves under a banner still up), if the same mount is still up;
-   * the screen follows it going off (and arms its tap guard).
+   * the screen follows it going off (and arms its tap guard). D-2e-25 review round 4 (2026-10-15, R4-3): an answered
+   * hide is not a banner gone (its SDK call may have failed or hung: the adapter resolves either way), so the band goes
+   * only when the adapter then says none may be up (mayBeUp, read after the hide); else it stays, bare. At the mount
+   * likewise (a board's banner whose hide failed keeps the victory's band), then again once the hide answered.
    */
   async function refused(mount: boolean): Promise<void> {
     const mine = screenGen;
     bareGen = screenGen;
-    if (mount) setReserved(false);
+    if (mount) giveBack();
     await flow.hide();
-    if (!mount && screenGen === mine) setReserved(false);
+    if (screenGen === mine) giveBack();
   }
 
   /** reshowGame with the overlay whose close is being reported (still listed in the store). */
@@ -541,7 +580,8 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
       return !!api() && gateOk(screen, opts?.firstRunTutorial === true);
     },
     bandAtMount(opts) {
-      return flow.eligible('game', opts) && (!c.ads.banner.collapseWhenEmpty || shown || pending || !starved);
+      // D-2e-25 review round 4 (R4-2): a banner the adapter may still show (a hide that failed or hung) counts as up.
+      return flow.eligible('game', opts) && (!c.ads.banner.collapseWhenEmpty || shown || pending || !starved || mayBeUp());
     },
     async hide() {
       // Phase 2e: a new hide cancels a pending re-show and allows one more rate_limited retry.

@@ -40,12 +40,18 @@
 // it back on the mock's no_fill answer, and the board opened next mounts without the band (data-play-band="0").
 // D-2e-25 review (2026-10-14, #4): that bare Home stays bare: Settings closed after the reload window loads nothing and
 // the band never comes back (the first pass reserved it and loaded again: the band flashed on and off, the column
-// jumped); no tap guard either (the band went in the mount's own task, before anything was painted).
+// jumped); no tap guard either (the band went in the mount's own task, before anything was painted). D-2e-25 review round
+// 4 (2026-10-15, R4-7): that last check is recorded from the first frame (a MutationObserver on data-band-guard), as the
+// band is: the auto-retrying not.toHaveAttribute it was could never fail (a guard set at the mount simply ran out first).
+// And the guard itself, in the browser: Home's band given back on show (the remote banner switch, GET /v1/config held
+// back, turns off under Home's banner) sets data-band-guard once for ads.banner.bandChangeGuardMs, a tap on Play in that
+// time starts nothing, and Play works once it is gone.
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
 import type { E2EHooks } from '../../src/app/boot';
+import { cfg } from '../../src/app/config';
 import type { LevelPack } from '../../src/engine/types';
 import { defaults } from '../../src/game/save';
 import { pointsRuleFor, runTotal } from '../../src/game/scoring';
@@ -346,16 +352,21 @@ test('the banner reserve never overlaps the victory screen\'s primary button', a
 
 test('D-2e-25 (?ads=nofill): Home gives its banner reserve back after the empty answer; the board opened next mounts without the band', async ({ page }, info) => {
   test.skip(info.project.name !== 'web-390', 'one phone is enough (no layout measured)');
-  // Every data-banner change on Home, in order ('on' = added, 'off' = removed), from the first frame of each page load.
+  // Every data-banner change on Home, in order ('on' = added, 'off' = removed), from the first frame of each page load;
+  // D-2e-25 review round 4 (R4-7): every data-band-guard change on Home too (the tap guard, overlay-base createBandGuard).
   await page.addInitScript(() => {
     const seen: string[] = [];
-    (window as unknown as { __homeBand: string[] }).__homeBand = seen;
+    const guard: string[] = [];
+    (window as unknown as { __homeBand: string[]; __homeGuard: string[] }).__homeBand = seen;
+    (window as unknown as { __homeBand: string[]; __homeGuard: string[] }).__homeGuard = guard;
     new MutationObserver((records) => {
       for (const r of records) {
-        if ((r.target as Element).classList?.contains('screen--home')) seen.push(r.oldValue === null ? 'on' : 'off');
+        if (!(r.target as Element).classList?.contains('screen--home')) continue;
+        (r.attributeName === 'data-band-guard' ? guard : seen).push(r.oldValue === null ? 'on' : 'off');
       }
-    }).observe(document, { subtree: true, attributes: true, attributeFilter: ['data-banner'], attributeOldValue: true });
+    }).observe(document, { subtree: true, attributes: true, attributeFilter: ['data-banner', 'data-band-guard'], attributeOldValue: true });
   });
+  const homeGuard = (): Promise<string[]> => page.evaluate(() => (window as unknown as { __homeGuard: string[] }).__homeGuard);
   await page.goto('/?ads=nofill');
   await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen !== 'boot');
   await page.evaluate((json) => (window as TestWindow).__mewdoku?.seedSave(json), JSON.stringify(veteranSave()));
@@ -367,7 +378,10 @@ test('D-2e-25 (?ads=nofill): Home gives its banner reserve back after the empty 
   await expect(page.locator('.screen--home')).not.toHaveAttribute('data-banner', '');
   expect(await page.evaluate(() => (window as TestWindow).__mewdoku?.app().ui.bannerReserved)).toBe(false);
   await expect(page.locator('[data-testid="mock-banner"]')).toHaveCount(0);
-  await expect(page.locator('.screen--home')).not.toHaveAttribute('data-band-guard', '');
+  // No tap guard: the band went in the mount's own task, before anything was painted. Recorded from the first frame, so a
+  // guard armed and already released by now still shows (D-2e-25 review round 4, R4-7: the check here was an
+  // auto-retrying not.toHaveAttribute, which a guard set at the mount passed by simply running out).
+  expect(await homeGuard()).toEqual([]);
   // D-2e-25 review (#4): Settings over the bare Home, closed after the reload window: no reserve, no load.
   await page.clock.install();
   await page.locator('.screen--home .top-bar__btn--settings').click();
@@ -380,6 +394,7 @@ test('D-2e-25 (?ads=nofill): Home gives its banner reserve back after the empty 
   expect(await page.evaluate(() => (window as unknown as { __homeBand: string[] }).__homeBand)).toEqual(['on', 'off']);
   expect(await page.evaluate(() => (window as TestWindow).__mewdoku?.app().ui.bannerReserved)).toBe(false);
   await expect(page.locator('[data-testid="mock-banner"]')).toHaveCount(0);
+  expect(await homeGuard()).toEqual([]); // the band never moved on show: Play is live at once
   // The next board: no band from its first frame (data-play-band="0"), so it never loads one mid-level.
   await page.locator('.home__play').click();
   await page.waitForFunction(() => (window as TestWindow).__mewdoku?.state()?.status === 'playing');
@@ -387,6 +402,65 @@ test('D-2e-25 (?ads=nofill): Home gives its banner reserve back after the empty 
   await expect(page.locator('.screen--game')).not.toHaveAttribute('data-banner', '');
   expect(await page.evaluate(() => (window as TestWindow).__mewdoku?.app().session?.bannerBand)).toBe(false);
   await expect(page.locator('[data-testid="mock-banner"]')).toHaveCount(0);
+});
+
+test('D-2e-25 review round 4 (R4-7): the band given back on show (the remote banner switch turns off under Home\'s banner): Home swallows taps for bandChangeGuardMs, then takes them', async ({ page }, info) => {
+  test.skip(info.project.name !== 'web-390', 'one phone is enough (no layout measured)');
+  const GUARD = cfg.ads.banner.bandChangeGuardMs;
+  // Every data-band-guard change on Home with its time, from the first frame; at the guard's start a tap on Play (a DOM
+  // click in the same task), which the guard must swallow.
+  await page.addInitScript(() => {
+    const log: { on: boolean; t: number }[] = [];
+    (window as unknown as { __homeGuard: typeof log }).__homeGuard = log;
+    new MutationObserver((records) => {
+      for (const r of records) {
+        const el = r.target as Element;
+        if (!el.classList?.contains('screen--home')) continue;
+        const on = r.oldValue === null;
+        log.push({ on, t: performance.now() });
+        if (on) el.querySelector<HTMLElement>('.home__play')?.click();
+      }
+    }).observe(document, { subtree: true, attributes: true, attributeFilter: ['data-band-guard'], attributeOldValue: true });
+  });
+  type GuardLog = { on: boolean; t: number }[];
+  const guardLog = (): Promise<GuardLog> => page.evaluate(() => (window as unknown as { __homeGuard: GuardLog }).__homeGuard);
+  // The remote switches (GET /v1/config, at idle after the first screen) answer only when the test says so: banner off.
+  let release: () => void = () => undefined;
+  const answer = new Promise<void>((r) => (release = r));
+  await page.route(/\/v1\/config(\?.*)?$/, async (route) => {
+    const req = route.request();
+    const cors = {
+      'Access-Control-Allow-Origin': req.headers().origin ?? '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+      Vary: 'Origin',
+    };
+    if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
+    await answer;
+    const body = JSON.stringify({ switches: { banner: false }, ttlSec: 3600, serverTime: Date.now() });
+    // The first page load's request (before the save was seeded) is gone by then.
+    await route.fulfill({ status: 200, headers: { ...cors, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, body }).catch(() => undefined);
+  });
+  await boot(page, veteranSave());
+  const home = page.locator('.screen--home');
+  await expect(home).toHaveAttribute('data-banner', '');
+  await expect(page.locator('[data-testid="mock-banner"]')).toBeVisible();
+  await page.waitForTimeout(100); // Home has been on show a while (painted)
+  expect(await guardLog()).toEqual([]); // nothing so far: the band was decided at the mount
+  release(); // switchesChanged: the banner goes, then (the adapter's hide answered, none may be up) the band, in view
+  await expect(page.locator('[data-testid="mock-banner"]')).toHaveCount(0);
+  await expect(home).not.toHaveAttribute('data-banner', '');
+  await page.waitForFunction(() => (window as unknown as { __homeGuard: unknown[] }).__homeGuard.length >= 2, undefined, { timeout: 5_000 });
+  const log = await guardLog();
+  expect(log.map((e) => e.on)).toEqual([true, false]); // armed once, then released
+  const held = (log[1]?.t ?? 0) - (log[0]?.t ?? 0);
+  expect(held).toBeGreaterThanOrEqual(GUARD - 20); // a timer may fire a hair early
+  expect(held).toBeLessThan(GUARD + 1_000);
+  // The tap at the guard's start was swallowed: no level started.
+  expect(await page.evaluate(() => (window as TestWindow).__mewdoku?.app().screen)).toBe('home');
+  // Released: Play takes taps again.
+  await page.locator('.home__play').click();
+  await page.waitForFunction(() => (window as TestWindow).__mewdoku?.app().screen === 'game');
 });
 
 test('keyboard only: Enter continues the panel, Enter on "Level N", and Settings (no Shop row on the web) by keyboard', async ({ page }, info) => {

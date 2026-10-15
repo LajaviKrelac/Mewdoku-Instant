@@ -130,6 +130,13 @@ export interface PlatformAds {
   banner?: {
     show(position: 'bottom'): Promise<AdResult>;
     hide(): Promise<void>;
+    /**
+     * D-2e-25 review round 4 (2026-10-15, R4-2): the SDK may still be showing a banner: a load landed and no SDK hide
+     * has succeeded since, whether or not the app counts it as up (a hide() whose SDK call failed or hung, the adapter
+     * still retrying it). The app (banner-flow.ts, ads.banner.collapseWhenEmpty) keeps a band under it. No side effect,
+     * never throws. Optional: absent = false (the web mock's bar: whether it is on show, its hide() never fails).
+     */
+    mayBeUp?(): boolean;
   };
 }
 

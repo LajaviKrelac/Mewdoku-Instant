@@ -36,6 +36,11 @@
 // (2026-10-15, R3-0): a victory whose gate says no (No Ads bought or the remote switch turned off mid-level, the end
 // date) opens bare, the board's band given back before its props are built (it used to open on a band that could never
 // fill); the gate turning to no on the open victory gives its band back too (that same re-render).
+// D-2e-25 review round 4 (2026-10-15, R4-0): the hide before the board runs again at the mount decision when
+// bandAtMount() turned to no after start()'s early check (the remote bannerInPlay switch turned off, or the end date
+// reached, while the puzzle loaded): a banner kept for the board (banner to banner) no longer stays over a board that
+// mounts with no band (with collapseWhenEmpty; off: start()'s check alone, as before). bandAtMount() also counts a
+// banner the adapter may still show (banner-flow, R4-2).
 import type { CellIndex, HintStep, Puzzle } from '../engine/types';
 import { eventEnd, eventRules, type EventDef } from '../game/events';
 import { newGame, restoreGame, toInProgress } from '../game/factory';
@@ -801,6 +806,18 @@ export function createSession(deps: SessionDeps): Session {
       }
     }
     const level = req.mode === 'level' ? req.level : req.mode === 'tutorial' ? 1 : null;
+    // §1.16: decided once, at mount (the band never appears or goes mid-level, except for No Ads). D-2e-25:
+    // bandAtMount() = eligible('game') unless the last banner answer was empty with nothing up (no band, no load).
+    const bannerBand = deps.banners?.bandAtMount({ firstRunTutorial: mode === 'tutorial' }) === true;
+    if (!bannerBand && deps.banners && c.ads.banner.collapseWhenEmpty) {
+      // D-2e-25 review round 4 (2026-10-15, R4-0): start() kept a banner up for this board (banner to banner) on its
+      // early check, but the decision turned to no while the board loaded (the remote bannerInPlay switch turned off,
+      // which leaves the page's own banner alone; ads.banner.untilDate reached): take it down now, as start() does (both
+      // calls are idempotent: after start()'s own pair nothing reaches the adapter). Before, it stayed over a board with
+      // no band. The band decision itself is unchanged. collapseWhenEmpty off: as before (start()'s check alone).
+      deps.banners.screenGone();
+      void deps.banners.hide().catch(() => undefined);
+    }
     const m: SessionMeta = {
       request: req,
       mode,
@@ -812,9 +829,7 @@ export function createSession(deps: SessionDeps): Session {
       tutorialStep: mode === 'tutorial' ? 1 : null,
       substitute,
       event: eventDef && req.mode === 'event' ? { def: eventDef, index: req.index } : null,
-      // §1.16: decided once, at mount (the band never appears or goes mid-level, except for No Ads). D-2e-25:
-      // bandAtMount() = eligible('game') unless the last banner answer was empty with nothing up (no band, no load).
-      bannerBand: deps.banners?.bandAtMount({ firstRunTutorial: mode === 'tutorial' }) === true,
+      bannerBand,
       // Phase 2e §2.3: the ranking's WinSubmission.source.
       source,
     };

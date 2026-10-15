@@ -75,6 +75,8 @@ export function mockBannerStyle(): string {
 /**
  * Mock PlatformAds.banner for dev/e2e (phase2b §3.3), or undefined in 'unsupported' mode. show() puts
  * the bar up (idempotent) and answers ok, or no_fill in 'nofill' mode; hide() takes it down. Never rejects.
+ * D-2e-25 review round 4 (2026-10-15): mayBeUp() is whether the bar is on show (its hide() never fails, so it
+ * never outlives one).
  */
 export function createMockBanner(mode: MockAdMode, opts: { doc: Document; label?: () => string }): PlatformAds['banner'] {
   if (mode === 'unsupported') return undefined;
@@ -101,6 +103,7 @@ export function createMockBanner(mode: MockAdMode, opts: { doc: Document; label?
       bar = null;
       return Promise.resolve();
     },
+    mayBeUp: () => bar !== null,
   };
 }
 

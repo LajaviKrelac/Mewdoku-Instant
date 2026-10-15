@@ -14,7 +14,8 @@
 // Styles: src/styles/overlays.css (ui-board; adopted from the proposal in dev/shell-styles.ts).
 // Visual check: /dev/shell-harness.html?view=<name>.
 // D-2e-25 review (2026-10-14): createBandGuard, the short tap guard after a screen's banner band changed on show (review
-// round 3, 2026-10-15: first(band, true) for a view that rebuilds a screen on show in place).
+// round 3, 2026-10-15: first(band, true) for a view that rebuilds a screen on show in place; review round 4, 2026-10-15:
+// that view takes over the guard time the old one had left, first(band, true, carryMs) read with bandGuardLeft).
 import { cfg, type GameConfig } from '../../app/config';
 import { t } from '../../i18n';
 import { icon, type SymbolId } from '../art/sprite';
@@ -151,15 +152,32 @@ export interface BandGuard {
   /**
    * A first render (a mount, an open): the band shown; releases a guard still on (a reopened overlay). `inPlace`
    * (D-2e-25 review round 3, R3-1): the view rebuilds a screen on show in place, with the band in view: it is on show at
-   * once, so a change even in this render's own task arms the guard.
+   * once, so a change even in this render's own task arms the guard. `carryMs` (round 4, R4-5; with `inPlace` only): the
+   * guard time still running on the view this one replaces (bandGuardLeft of its root): taps keep being ignored for it
+   * (at most ms()).
    */
-  first(band: boolean, inPlace?: boolean): void;
+  first(band: boolean, inPlace?: boolean, carryMs?: number): void;
   /** A later render: when its band differs from the one shown and the screen is on show, taps are ignored for a while. */
   band(band: boolean): void;
   /** Taps are being ignored now (root[data-band-guard]). */
   active(): boolean;
+  /** D-2e-25 review round 4 (R4-5): how long taps are still ignored for (ms; 0 when the guard is off). */
+  left(): number;
   /** Close, destroy: the guard is released and the band forgotten (the next render is a first one again). */
   stop(): void;
+}
+
+/** D-2e-25 review round 4 (R4-5): the band guard created on each root (bandGuardLeft). */
+const guards = new WeakMap<object, BandGuard>();
+
+/**
+ * D-2e-25 review round 4 (2026-10-15, R4-5): the guard time still running on the band guard of `root` (a screen view's
+ * el), in ms; 0 when it has none or it is off. app/shell.ts reads it from the Home or event view it is about to rebuild in
+ * place, before the swap destroys it, and passes it to the new view (HomeView / EventScreenView.guardMs).
+ */
+export function bandGuardLeft(root: object | null | undefined): number {
+  if (!root) return 0;
+  return guards.get(root)?.left() ?? 0;
 }
 
 /**
@@ -176,6 +194,8 @@ export interface BandGuard {
  * stop() clears both timers (close, destroy), so nothing stays guarded. D-2e-25 review round 3 (2026-10-15, R3-1): a view
  * that rebuilds a screen on show in place (app/shell.ts: Home over Home, the event screen over itself) is built with the
  * band in view and is on show from its first render (first(band, true)): a change from then on is one the player sees.
+ * Round 4 (2026-10-15, R4-5): such a view also takes over the guard time the view it replaces had left (first(band, true,
+ * carryMs)): the rebuild threw it away, so a tap meant for the old column landed on the moved one.
  */
 export function createBandGuard(root: HTMLElement, ms: () => number = () => bandGuardMs()): BandGuard {
   /** The band on show; null before the first render. */
@@ -184,10 +204,19 @@ export function createBandGuard(root: HTMLElement, ms: () => number = () => band
   let onShow = false;
   let settle: ReturnType<typeof setTimeout> | null = null;
   let hold: ReturnType<typeof setTimeout> | null = null;
+  /** Round 4 (R4-5): Date.now() when the guard on ends (read while `hold` is set). */
+  let until = 0;
   const release = (): void => {
     if (hold !== null) clearTimeout(hold);
     hold = null;
     root.removeAttribute('data-band-guard');
+  };
+  /** Taps are ignored for `wait` ms from now (a guard still on is replaced). */
+  const arm = (wait: number): void => {
+    release();
+    root.setAttribute('data-band-guard', '');
+    until = Date.now() + wait;
+    hold = setTimeout(release, wait);
   };
   const forget = (): void => {
     if (settle !== null) clearTimeout(settle);
@@ -205,12 +234,15 @@ export function createBandGuard(root: HTMLElement, ms: () => number = () => band
     true,
   );
   const guard: BandGuard = {
-    first(band, inPlace = false) {
+    first(band, inPlace = false, carryMs = 0) {
       release();
       forget();
       shown = band;
       if (inPlace) {
         onShow = true;
+        // Round 4 (R4-5): the old view's guard time left goes on here (never longer than a full guard; 0 ms: none).
+        const wait = Math.min(carryMs, ms());
+        if (wait > 0) arm(wait);
         return;
       }
       settle = setTimeout(() => {
@@ -224,16 +256,16 @@ export function createBandGuard(root: HTMLElement, ms: () => number = () => band
       shown = band;
       const wait = ms();
       if (!onShow || !(wait > 0)) return;
-      release();
-      root.setAttribute('data-band-guard', '');
-      hold = setTimeout(release, wait);
+      arm(wait);
     },
     active: () => hold !== null,
+    left: () => (hold === null ? 0 : Math.max(0, Math.min(ms(), until - Date.now()))),
     stop() {
       release();
       forget();
     },
   };
+  guards.set(root, guard);
   return guard;
 }
 

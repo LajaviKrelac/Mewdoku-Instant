@@ -131,6 +131,18 @@ describe('createMockBanner (phase2b §3.3)', () => {
     expect(width(300, 60)).toBe(300); // max-width: 100 %
   });
 
+  it('D-2e-25 review round 4 (2026-10-15): mayBeUp() is whether the bar is on show', async () => {
+    const banner = createMockBanner('ok', { doc: document })!;
+    expect(banner.mayBeUp?.()).toBe(false);
+    await banner.show('bottom');
+    expect(banner.mayBeUp?.()).toBe(true);
+    await banner.hide();
+    expect([bar(), banner.mayBeUp?.()]).toEqual([null, false]);
+    const empty = createMockBanner('nofill', { doc: document })!;
+    await empty.show('bottom');
+    expect(empty.mayBeUp?.()).toBe(false);
+  });
+
   it('nofill answers no_fill without a bar; unsupported has no banner at all', async () => {
     await expect(createMockBanner('nofill', { doc: document })!.show('bottom')).resolves.toEqual({ ok: false, reason: 'no_fill' });
     expect(bar()).toBeNull();
