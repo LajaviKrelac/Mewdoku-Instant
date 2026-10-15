@@ -295,7 +295,7 @@ Your decisions after the ads review (spec D-2e-25, §3.1, §3.2):
 
 **Switches:** `ads.interstitial.fromSession: 1` (every session), `ads.banner.collapseWhenEmpty: false` (the 2e rule: a failed load keeps the reserve), `ads.banner.bandChangeGuardMs: 0` (no tap guard).
 
-**Checked (2026-10-15, the tip of `claude/intelligent-edison-clazp3`):** `npx tsc --noEmit` 0 errors; `npx vitest run` 162 files, **3 407 tests passed**; `npm --prefix server test` 22 files, 359 passed; builds within the size budget; i18n, levels and palette checks OK; Playwright: see the last line below.
+**Checked (2026-10-15, the tip of `claude/intelligent-edison-clazp3`):** `npx tsc --noEmit` 0 errors; `npx vitest run` 162 files, **3 407 tests passed**; `npm --prefix server test` 22 files, 359 passed; builds within the size budget; i18n, levels and palette checks OK; the full Playwright suite (web-390, web-320, web-1280, fbig-390, preview-390) **334 passed, 0 failed** (108 skipped by the specs' own per-project rules).
 
 **Known limits and what is left:**
 - When the SDK keeps refusing to hide a banner, the app keeps a band under it (an empty band for that visit once it does go) rather than risk a banner over controls.
