@@ -1148,6 +1148,40 @@ describe('D-2e-25 review round 4 (2026-10-15): a band is given back only when no
       expect(shows(s)).toBe(1);
     }
   });
+  it("final review: a load that answered 'timeout' and then latched banners off (nothing ever landed) does not count as a banner up: the next victory and Home give their band back", async () => {
+    const s = setup({ results: [{ ok: false, reason: 'timeout' }] });
+    on(s, 'home');
+    await s.flow.screenShown('home'); // 'timeout': pending (maybe up), the band reserved
+    expect(s.reserved()).toBe(true);
+    s.flow.screenGone();
+    delete s.platform.ads.banner; // the load then answered 'unsupported': the adapter latched, its getter gone
+    on(s, 'victory');
+    const mount = s.flow.screenShown('victory');
+    expect(s.reserved()).toBe(false);
+    await mount;
+    await drain();
+    expect(s.reserved()).toBe(false);
+    s.flow.screenGone();
+    on(s, 'home');
+    await s.flow.screenShown('home');
+    await drain();
+    expect([s.reserved(), shows(s)]).toEqual([false, 1]);
+  });
+
+  it("final review: banners latched off while a banner the SDK would not hide is on screen: the board mounts with a band under it (bandAtMount), and without one once it is down; off: eligible() as before", async () => {
+    for (const off of [false, true]) {
+      const s = setup(off ? { config: OFF } : {});
+      const st = sdk(s);
+      on(s, 'home');
+      await s.flow.screenShown('home');
+      st.hideFails = true;
+      await s.flow.hide(); // its SDK hide answers unsupported: the banner stays, the adapter latches
+      delete s.platform.ads.banner;
+      expect(s.flow.bandAtMount(), `off ${off}`).toBe(!off);
+      st.up = false;
+      expect(s.flow.bandAtMount(), `off ${off}`).toBe(false);
+    }
+  });
 });
 
 describe('banners in the session (§3.2)', () => {

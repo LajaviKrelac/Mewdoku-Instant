@@ -103,6 +103,11 @@
 // then Home inside the window), the band follows stillUp: a hide that went through leaves the page bare (no flash of a
 // band), one that failed or hung puts the band under the banner the SDK still shows (I1 over I2; the tap guard arms).
 // takeDown() also reaches the adapter while mayBeUp says yes, so every app hide starts one more bounded retry round.
+// D-2e-25 final review (2026-10-15): those readings were taken once; the adapter now tells the flow when its banner goes
+// down (PlatformAds.banner.onDown), and a bare page whose band was kept only because a banner might be up gives it back
+// then (an owed retry or a take-down that went through later left an empty band for the visit). `pending` counts only
+// while an adapter is reachable (a 'timeout' then a latch left it set for good: an empty band on every page), and a board
+// mounts with a band under a banner a latched adapter could not hide (bandAtMount), like the pages.
 import { bannerGate } from '../game/ad-pacing';
 import type { TimerId } from './clock';
 import type { BannerScreen, GameConfig } from './config';
@@ -327,15 +332,41 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
    * keeps asking that adapter, so no band is given back under it.
    */
   let lastApi: NonNullable<PlatformAdapter['ads']['banner']> | null = null;
+  /** D-2e-25 final review (2026-10-15): the banner API whose onDown() this flow listens to. */
+  let watched: object | null = null;
   const api = (): NonNullable<PlatformAdapter['ads']['banner']> | null => {
     try {
       const b = deps.platform.ads.banner ?? null;
-      if (b) lastApi = b;
+      if (b) {
+        lastApi = b;
+        if (watched !== b) {
+          watched = b;
+          try {
+            b.onDown?.(bannerDown);
+          } catch {
+            /* no notification: the decisions stay as taken */
+          }
+        }
+      }
       return b;
     } catch {
       return null;
     }
   };
+  /**
+   * D-2e-25 final review (2026-10-15, collapseWhenEmpty): the adapter's banner went down (PlatformAds.banner.onDown: an
+   * SDK hide succeeded, the app's own, a take-down or an owed retry). A bare Home, event or victory mount that kept its
+   * band only because a banner might still be up (a miss, the gate's no, coverAfterHide, each read once) gives it back
+   * now, when nothing else may be up: before, an owed retry or a take-down that went through after that one reading
+   * left an empty band for the rest of the visit. Never on the game screen (its band never changes mid-level), never
+   * adds a band.
+   */
+  function bannerDown(): void {
+    if (!c.ads.banner.collapseWhenEmpty) return;
+    const cur = current;
+    if (!cur || cur.screen === 'game' || bareGen !== screenGen) return;
+    if (!stillUp()) setReserved(false);
+  }
   const supported = (): boolean => {
     if (latched || !isFlagOn('banners') || !api()) return false;
     try {
@@ -367,7 +398,10 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
    * D-2e-25 review round 5 (2026-10-15): a banner may be on screen: the flow counts one (shown, or a load that may still
    * land: pending; both stay set when a hide could not reach any adapter) or the adapter says one may be up (mayBeUp).
    */
-  const stillUp = (): boolean => shown || pending || mayBeUp();
+  // Final review (2026-10-15): `pending` counts only while an adapter is reachable: a load that answered 'timeout' and
+  // then latched banners off ('unsupported') leaves it set for good, with nothing that could ever land (a latched
+  // adapter's own late landing shows in mayBeUp, asked of lastApi).
+  const stillUp = (): boolean => shown || (pending && api() !== null) || mayBeUp();
   /**
    * D-2e-25 review round 5 (2026-10-15): the last banner hide() asked of the adapter, settled either way (resolved when
    * none was asked yet). A bare Home, event or victory mount re-reads stillUp() once it answered (coverAfterHide).
@@ -632,6 +666,10 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
       return !!api() && gateOk(screen, opts?.firstRunTutorial === true);
     },
     bandAtMount(opts) {
+      // D-2e-25 final review (2026-10-15): banners latched off (no API: eligible() is false) while a banner the SDK
+      // would not hide may still be on screen (mayBeUp, asked of the last adapter): the board takes a band under it, as
+      // the pages do, decided at the mount (it loads nothing: attempt() asks nothing of a missing API on the board).
+      if (c.ads.banner.collapseWhenEmpty && api() === null && mayBeUp()) return true;
       // D-2e-25 review round 4 (R4-2): a banner the adapter may still show (a hide that failed or hung) counts as up.
       return flow.eligible('game', opts) && (!c.ads.banner.collapseWhenEmpty || shown || pending || !starved || mayBeUp());
     },

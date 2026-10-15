@@ -137,6 +137,13 @@ export interface PlatformAds {
      * never throws. Optional: absent = false (the web mock's bar: whether it is on show, its hide() never fails).
      */
     mayBeUp?(): boolean;
+    /**
+     * D-2e-25 final review (2026-10-15): `listener` runs whenever mayBeUp() turns from true to false (an SDK hide
+     * succeeded: the app's own, a take-down of a landing it was not told about, an owed retry). Returns the unsubscribe.
+     * The app re-reads its band decisions on a bare screen then (an empty band kept only because a banner might still
+     * be up is given back once it is down). Optional: absent = no notification.
+     */
+    onDown?(listener: () => void): () => void;
   };
 }
 

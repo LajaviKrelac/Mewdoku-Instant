@@ -562,6 +562,27 @@ describe('createFbBanner', () => {
     expect([fake.hideCalls, fake.onScreen, banner.mayBeUp?.()]).toEqual([1, true, true]);
   });
 
+  it('final review: onDown() listeners run once each time a banner goes down (an SDK hide succeeded), not for a hide with nothing up nor a failed one; the unsubscribe works', async () => {
+    const { banner, fake, clock } = await homeBannerUp();
+    let downs = 0;
+    const off = banner.onDown?.(() => void downs++);
+    fake.failHides = 1;
+    await banner.hide(); // fails: still up
+    await drain();
+    expect([downs, fake.onScreen]).toEqual([0, true]);
+    await clock.advanceAsync(HIDE_RETRY_MS); // the owed retry goes through
+    await drain();
+    expect([downs, fake.onScreen, banner.mayBeUp?.()]).toEqual([1, false, false]);
+    await banner.hide(); // nothing up: no SDK call, no notification
+    expect([downs, fake.hideCalls]).toEqual([1, 2]);
+    void banner.show('bottom');
+    fake.loads[1]?.resolve();
+    await drain();
+    off?.();
+    await banner.hide();
+    expect([downs, fake.onScreen]).toEqual([1, false]); // unsubscribed
+  });
+
   it('R3-5: the newest load landing ok ends a stale retry: it never takes down the banner the app was told about', async () => {
     const { banner, fake, clock } = manualSetup();
     void banner.show('bottom'); // L1 hangs

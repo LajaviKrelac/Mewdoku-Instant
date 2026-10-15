@@ -55,6 +55,8 @@
 //   - D-2e-25 review round 5 (2026-10-15): an owed retry due while the app wants a banner and its newest load is in
 //     flight waits for that load to settle (at most readyTimeoutMs): a hide sent then could be applied after the
 //     landing and take down the banner the app is told ok about. Landed ok: no hide at all; empty or still out: it runs.
+//   - D-2e-25 final review (2026-10-15): onDown(listener) runs the listeners whenever `visible` turns false (an SDK hide
+//     succeeded), so the app can give back a band it kept under a banner that might have been up.
 //   Platform correctness: none of this is behind ads.banner.collapseWhenEmpty.
 //
 // Unverified (§14 G4): the position argument's values ('bottom' is our reading), the 50 dp height,
@@ -129,6 +131,8 @@ export function createFbBanner(sdk: FBInstantSDK, opts: FbBannerOptions): NonNul
   let wanted = false;
   /** A load resolved and no hide has succeeded since: the SDK may be showing a banner. */
   let visible = false;
+  /** D-2e-25 final review (2026-10-15): onDown() listeners, told when `visible` turns false. */
+  const downListeners = new Set<() => void>();
   /** The in-flight load, shared by overlapping show() calls. */
   let loading: Promise<AdResult> | null = null;
   /** timers.now() when `loading` started: a load older than ads.banner.minReloadSec is given up. */
@@ -209,9 +213,20 @@ export function createFbBanner(sdk: FBInstantSDK, opts: FbBannerOptions): NonNul
       // D-2e-25 review: a load that landed while this call was in flight may show after it: it still counts as up.
       // Review round 3: and a retry pending for it (an owed take-down) stays.
       if (landings === landed) {
+        const was = visible;
         visible = false;
         hideOwed = false;
         clearRetry();
+        // D-2e-25 final review: the banner is down: the app may give back a band it kept under it.
+        if (was) {
+          for (const listener of [...downListeners]) {
+            try {
+              listener();
+            } catch {
+              /* a listener's failure never reaches the SDK path */
+            }
+          }
+        }
       }
     })();
     return within(timers, call, callTimeoutMs, () => {
@@ -326,5 +341,9 @@ export function createFbBanner(sdk: FBInstantSDK, opts: FbBannerOptions): NonNul
 
     // D-2e-25 review round 4 (R4-2): a load landed and no SDK hide has succeeded since, counted by the app or not.
     mayBeUp: () => visible,
+    onDown(listener) {
+      downListeners.add(listener);
+      return () => void downListeners.delete(listener);
+    },
   };
 }

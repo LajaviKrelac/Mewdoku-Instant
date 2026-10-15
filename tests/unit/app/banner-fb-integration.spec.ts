@@ -29,11 +29,14 @@ interface FakeSdk {
   onScreen: boolean;
   hideCalls: number;
   failHides: number;
+  /** D-2e-25 final review: hide calls stay in flight (the banner up) until the test runs their entry in `held`. */
+  holdHides: boolean;
+  readonly held: (() => void)[];
   readonly loads: { resolve(): void; reject(code: string): void }[];
 }
 
 function play(): { h: Harness; flow: BannerFlow; shell: Shell; fake: FakeSdk } {
-  const fake: FakeSdk = { onScreen: false, hideCalls: 0, failHides: 0, loads: [] };
+  const fake: FakeSdk = { onScreen: false, hideCalls: 0, failHides: 0, holdHides: false, held: [], loads: [] };
   const sdk = {
     loadBannerAdAsync: () =>
       new Promise<void>((resolve, reject) => {
@@ -50,6 +53,14 @@ function play(): { h: Harness; flow: BannerFlow; shell: Shell; fake: FakeSdk } {
       if (fake.failHides > 0) {
         fake.failHides--;
         return Promise.reject({ code: 'NETWORK_FAILURE', message: '' });
+      }
+      if (fake.holdHides) {
+        return new Promise<void>((resolve) => {
+          fake.held.push(() => {
+            fake.onScreen = false;
+            resolve();
+          });
+        });
       }
       fake.onScreen = false;
       return Promise.resolve();
@@ -159,7 +170,53 @@ describe('banner flow + FB adapter (D-2e-25 review round 3, 2026-10-15)', () => 
 
     await h.settle(HIDE_RETRY_MS); // the adapter's retry (Home's show() set `wanted`: retried all the same)
     expect([fake.hideCalls, fake.onScreen, h.platform.ads.banner?.mayBeUp?.()]).toEqual([2, false, false]);
+    // D-2e-25 final review: the banner is down (onDown): bare Home gives back the band it kept under it.
+    expect([reserved(), h.router.homeView?.bannerReserved]).toEqual([false, false]);
     await h.settle(10_000);
     expect([fake.hideCalls, fake.loads.length, fake.onScreen]).toEqual([2, 2, false]); // done; nothing loads on this mount
+  });
+
+  /** Home's banner kept into a board, lost, O4's Home after the window (Home's own load L2 asked in the same task). */
+  async function toHomeAfterWindow(fails: number, hold: boolean) {
+    const p = play();
+    const { h, shell, fake } = p;
+    shell.showHome();
+    await h.settle(0);
+    fake.loads[0]?.resolve(); // L1: Home's banner
+    await h.settle(0);
+    await startLevel(h, 15);
+    await loseGame(h);
+    await h.settle(WINDOW);
+    fake.failHides = fails;
+    fake.holdHides = hold;
+    h.router.props.fail?.onHome();
+    await h.settle(0);
+    expect(h.router.screen()).toBe('home');
+    expect([fake.hideCalls, fake.loads.length, fake.onScreen]).toEqual([1, 2, true]);
+    return { ...p, reserved: (): boolean => h.store.get().ui.bannerReserved };
+  }
+
+  it("final review: the owed retry falls due while Home's own load is still in flight: it waits for it; that load empty, the take-down runs and Home gives back the band it kept under the board's banner", async () => {
+    const { h, fake, reserved } = await toHomeAfterWindow(1, false);
+    await h.settle(HIDE_RETRY_MS); // the retry is due: L2 still loading (round 5: it waits)
+    expect([fake.hideCalls, fake.onScreen]).toEqual([1, true]);
+    fake.loads[1]?.reject('ADS_NO_FILL'); // Home's load is empty: the band stays while the board's banner may be up …
+    await h.settle(0);
+    // … and the owed take-down runs right after: the banner goes, and the band with it (onDown).
+    expect([fake.hideCalls, fake.onScreen, reserved(), h.router.homeView?.bannerReserved]).toEqual([2, false, false, false]);
+    await h.settle(10 * WINDOW);
+    expect([fake.hideCalls, fake.loads.length, reserved()]).toEqual([2, 2, false]);
+  });
+
+  it("final review: Home's own load comes back empty before the shell's hide of the board's banner answered: the band stays under it, then goes once that hide went through (no empty strip left for the visit)", async () => {
+    const { h, fake, reserved } = await toHomeAfterWindow(0, true);
+    fake.loads[1]?.reject('ADS_NO_FILL'); // before the hide answered: the board's banner may still be up
+    await h.settle(0);
+    expect([fake.onScreen, reserved()]).toEqual([true, true]);
+    fake.held.splice(0).forEach((go) => go()); // the shell's hide goes through
+    await h.settle(0);
+    expect([fake.onScreen, reserved(), h.router.homeView?.bannerReserved]).toEqual([false, false, false]);
+    await h.settle(10 * WINDOW);
+    expect([fake.hideCalls, fake.loads.length, reserved()]).toEqual([1, 2, false]);
   });
 });
