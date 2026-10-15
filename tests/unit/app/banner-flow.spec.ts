@@ -1037,6 +1037,117 @@ describe('D-2e-25 review round 4 (2026-10-15): a band is given back only when no
     expect(shows(s)).toBe(2); // exactly once
     expect(seen).toEqual([]); // the band was there all along (reserved at open, never flipped)
   });
+
+  // D-2e-25 review round 5 (2026-10-15).
+  it("round 5: banners latched off while a banner the SDK would not hide is on screen (hideBannerAdAsync answered unsupported): the band stays under it (mayBeUp asked of the last adapter seen); a hide that went through first: given back as in R4-1", async () => {
+    for (const fails of [true, false]) {
+      const s = setup();
+      const st = sdk(s);
+      on(s, 'home');
+      await s.flow.screenShown('home');
+      st.hideFails = fails;
+      await s.flow.hide(); // Settings: the SDK hide answers unsupported (the banner stays), the adapter latches off
+      const b = s.platform.ads.banner;
+      delete s.platform.ads.banner; // its getter is gone (fb/index.ts bannerOff)
+      expect(b).toBeDefined();
+      s.clock.advance(WINDOW + 1_000);
+      await s.flow.modalClosed('settings');
+      expect(s.reserved(), `fails ${fails}`).toBe(fails);
+      expect(shows(s)).toBe(1);
+    }
+  });
+
+  it("round 5: the board's banner the flow still counts (its hide could not reach an adapter latched off meanwhile): the victory keeps the board's band at its screenShown and after", async () => {
+    const s = setup();
+    on(s, 'game');
+    await s.flow.screenShown('game'); // the board's banner, in its band (shown)
+    delete s.platform.ads.banner; // the adapter latched off with no hide in between: the flow still counts it
+    s.clock.advance(WINDOW + 1_000);
+    on(s, 'victory');
+    const mount = s.flow.screenShown('victory');
+    expect(s.reserved()).toBe(true);
+    await mount;
+    await drain();
+    expect([s.reserved(), shows(s)]).toEqual([true, 1]);
+  });
+
+  it('round 5: once a banner hide failed and nothing counts it, every later app hide reaches the adapter again while it says a banner may be up (one more bounded round each); none when nothing may be up; off: as before', async () => {
+    for (const off of [false, true]) {
+      const s = setup(off ? { config: OFF } : {});
+      const st = sdk(s);
+      on(s, 'home');
+      await s.flow.screenShown('home');
+      st.hideFails = true;
+      await s.flow.hide(); // fails: the banner may still be up, nobody counts it
+      await s.flow.hide(); // Settings over the next screen, the hint, an ad's beforeShow …
+      const hides = (): number => s.log.filter((l) => l === 'banner:hide').length;
+      expect(hides(), `off ${off}`).toBe(off ? 1 : 2);
+      st.hideFails = false;
+      await s.flow.hide(); // goes through: down
+      await s.flow.hide(); // nothing may be up any more: no adapter call
+      expect(hides(), `off ${off}`).toBe(off ? 1 : 3);
+    }
+  });
+
+  it("round 5: Home shown inside the window while the board's banner hide is still in flight shows bare (no flash of a band); a hide that then fails puts the band under the banner the SDK still shows, one that goes through leaves Home bare; nothing loads", async () => {
+    for (const fails of [true, false]) {
+      const s = setup();
+      const st = sdk(s);
+      let answer: ((ok: boolean) => void) | null = null;
+      const b = s.platform.ads.banner;
+      if (!b) throw new Error('no banner API');
+      on(s, 'home');
+      await s.flow.screenShown('home'); // L1: ok
+      s.flow.screenGone();
+      on(s, 'game');
+      await s.flow.screenShown('game'); // the board, banner to banner (kept, inside the window)
+      b.hide = () =>
+        new Promise<void>((resolve) => {
+          s.log.push('banner:hide');
+          answer = (ok) => {
+            if (ok) st.up = false;
+            resolve();
+          };
+        });
+      s.clock.advance(10_000); // O4's Home, inside the window
+      const seen = flips(s);
+      const hiding = s.flow.hide(); // shell.showHome: hide() …
+      s.flow.screenGone(); // … the router's swap …
+      on(s, 'home');
+      await s.flow.screenShown('home'); // … and Home's screenShown, in the same task
+      expect([s.reserved(), shows(s)], `fails ${fails}`).toEqual([false, 1]); // bare at its first frame
+      (answer as ((ok: boolean) => void) | null)?.(!fails);
+      await hiding;
+      await drain();
+      expect(s.reserved(), `fails ${fails}`).toBe(fails);
+      expect(seen, `fails ${fails}`).toEqual(fails ? [false, true] : [false]);
+      s.clock.advance(WINDOW + 1_000);
+      await s.flow.modalClosed('settings');
+      await drain();
+      expect(shows(s), `fails ${fails}`).toBe(1); // bare: nothing loads on this mount
+    }
+  });
+  it("round 5: a Home mount the gate refuses (the remote switch turned off on the board) while the board's banner the SDK would not hide is still up: bare at its first frame, then the band under that banner once Home's own hide failed too; a hide that went through: bare", async () => {
+    for (const fails of [true, false]) {
+      const s = setup();
+      const st = sdk(s);
+      const { flow, remote } = withRemote(s);
+      on(s, 'game');
+      await flow.screenShown('game'); // the board's banner, in its band
+      st.hideFails = true;
+      remote.banner = false;
+      await flow.switchesChanged(); // its hide fails: the banner may still be up, the board keeps its band
+      st.hideFails = fails;
+      flow.screenGone();
+      on(s, 'home');
+      const mount = flow.screenShown('home'); // the gate says no: refused at the mount
+      expect(s.reserved(), `fails ${fails}`).toBe(false); // bare at its first frame (the reserve went with the board)
+      await mount;
+      await drain();
+      expect(s.reserved(), `fails ${fails}`).toBe(fails); // the band under a banner the SDK still shows
+      expect(shows(s)).toBe(1);
+    }
+  });
 });
 
 describe('banners in the session (§3.2)', () => {

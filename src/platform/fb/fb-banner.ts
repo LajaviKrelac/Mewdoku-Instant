@@ -52,6 +52,9 @@
 //     the app's hide() was bounded, and its hung call was never retried); a late success still clears the state
 //     unless a load landed meanwhile. mayBeUp() reports `visible` (a load landed, no hide succeeded since) so the
 //     app keeps a band under a banner it no longer counts (banner-flow, collapseWhenEmpty).
+//   - D-2e-25 review round 5 (2026-10-15): an owed retry due while the app wants a banner and its newest load is in
+//     flight waits for that load to settle (at most readyTimeoutMs): a hide sent then could be applied after the
+//     landing and take down the banner the app is told ok about. Landed ok: no hide at all; empty or still out: it runs.
 //   Platform correctness: none of this is behind ads.banner.collapseWhenEmpty.
 //
 // Unverified (§14 G4): the position argument's values ('bottom' is our reading), the 50 dp height,
@@ -225,6 +228,17 @@ export function createFbBanner(sdk: FBInstantSDK, opts: FbBannerOptions): NonNul
       // D-2e-25 review round 3 (R3-5), round 4 (R4-2): a banner the app does not count is taken down even while it
       // wants one (an owed take-down: its own hide() that failed or hung, then a show() whose load came back empty).
       if (!visible || (wanted && !hideOwed)) return;
+      // D-2e-25 review round 5 (2026-10-15): while the app wants a banner and its newest load is in flight, the owed
+      // take-down waits for that load to settle (at most callTimeoutMs): a hide sent now could be applied after the
+      // landing and take down the banner the app is about to be told ok about. Landed ok: that banner is the app's
+      // (hideOwed ends, nothing to do). Empty, given up or still out at the bound: the take-down runs then.
+      const inFlight = loading;
+      if (wanted && inFlight) {
+        void within(timers, inFlight, callTimeoutMs, () => undefined).then(() => {
+          if (visible && hideOwed && !(wanted && okSeq !== 0)) void sdkHide();
+        });
+        return;
+      }
       void sdkHide();
     }, HIDE_RETRY_MS);
   };

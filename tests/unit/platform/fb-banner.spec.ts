@@ -491,11 +491,14 @@ describe('createFbBanner', () => {
     expect(fake.loads).toHaveLength(3);
     await clock.advanceAsync(HIDE_RETRY_MS);
     await drain();
-    expect(fake.hideCalls).toBe(2);
-    expect(fake.onScreen).toBe(false);
+    // D-2e-25 review round 5 (2026-10-15): the retry is due while L3 (the app's newest load) is in flight: it waits for
+    // L3 to settle (a hide sent now could land after L3 and take the app's banner down; the band is reserved meanwhile).
+    expect(fake.hideCalls).toBe(1);
+    expect(fake.onScreen).toBe(true);
     fake.loads[2]?.reject('ADS_NO_FILL');
     await drain();
     expect(third.value).toEqual({ ok: false, reason: 'no_fill' });
+    expect(fake.hideCalls).toBe(2); // L3 came back empty: the owed take-down runs then
     expect(fake.onScreen).toBe(false);
     // Bounded: a take-down that keeps failing stops after HIDE_RETRIES timer retries.
     const q = manualSetup();
@@ -532,8 +535,31 @@ describe('createFbBanner', () => {
     await drain();
     await clock.advanceAsync(HIDE_RETRY_MS);
     await drain();
+    // D-2e-25 review round 5 (2026-10-15): L3 (the app's newest load) is still in flight: the retry waits for it, at
+    // most callTimeoutMs (ads.readyTimeoutMs), then runs.
+    expect(fake.hideCalls).toBe(2);
+    await clock.advanceAsync(cfg.ads.readyTimeoutMs);
+    await drain();
     expect(fake.hideCalls).toBe(3);
     expect(fake.onScreen).toBe(false);
+  });
+
+  it("round 5: an owed retry due while the app's newest load is in flight waits for it: that load landing ok is the app's banner (no hide is ever sent, it stays up); without the wait, a hide applied after the landing took it down", async () => {
+    const { banner, fake, clock } = await homeBannerUp();
+    fake.failHides = 1;
+    void banner.hide(); // O4's Home: shell.showHome's hide() fails …
+    const home = track(banner.show('bottom')); // … and Home's L2 starts in the same task
+    await drain();
+    expect([fake.hideCalls, fake.onScreen]).toEqual([1, true]);
+    await clock.advanceAsync(HIDE_RETRY_MS); // the owed retry is due: L2 still loading
+    await drain();
+    expect(fake.hideCalls).toBe(1);
+    fake.loads[1]?.resolve(); // L2 lands: the app is told ok
+    await drain();
+    expect(home.value).toEqual({ ok: true });
+    await clock.advanceAsync(10 * HIDE_RETRY_MS + cfg.ads.readyTimeoutMs);
+    await drain();
+    expect([fake.hideCalls, fake.onScreen, banner.mayBeUp?.()]).toEqual([1, true, true]);
   });
 
   it('R3-5: the newest load landing ok ends a stale retry: it never takes down the banner the app was told about', async () => {

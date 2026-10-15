@@ -96,6 +96,13 @@
 // treats it like `shown`: a board mounts with its band while a banner may still be up. No banner API at all (the adapter
 // latched banners off: its `banner` getter is gone) is the gate's no on Home, the event screen and the victory (R4-1):
 // before, attempt() returned before the gate, so the victory kept the band the board left, which could never fill.
+// D-2e-25 review round 5 (2026-10-15, collapseWhenEmpty): "a banner may be up" (stillUp) is the flow's own count (shown,
+// pending: both stay set when a hide could not reach any adapter) or the adapter's mayBeUp, asked of the last adapter seen
+// even after a latch dropped its getter (a hide answered unsupported may leave its banner on screen). After a refusal's
+// hide, and once the hide in flight at a bare mount answered (coverAfterHide: the shell's hide of the board's banner,
+// then Home inside the window), the band follows stillUp: a hide that went through leaves the page bare (no flash of a
+// band), one that failed or hung puts the band under the banner the SDK still shows (I1 over I2; the tap guard arms).
+// takeDown() also reaches the adapter while mayBeUp says yes, so every app hide starts one more bounded retry round.
 import { bannerGate } from '../game/ad-pacing';
 import type { TimerId } from './clock';
 import type { BannerScreen, GameConfig } from './config';
@@ -314,9 +321,17 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
   const setReserved = (on: boolean): void =>
     store.update((s) => (s.ui.bannerReserved === on ? s : { ...s, ui: { ...s.ui, bannerReserved: on } }));
 
+  /**
+   * D-2e-25 review round 5 (2026-10-15): the last banner API seen. An adapter that latched banners off drops its getter
+   * (FB: fb/index.ts bannerOff), but a banner whose SDK hide answered unsupported may still be on screen: mayBeUp()
+   * keeps asking that adapter, so no band is given back under it.
+   */
+  let lastApi: NonNullable<PlatformAdapter['ads']['banner']> | null = null;
   const api = (): NonNullable<PlatformAdapter['ads']['banner']> | null => {
     try {
-      return deps.platform.ads.banner ?? null;
+      const b = deps.platform.ads.banner ?? null;
+      if (b) lastApi = b;
+      return b;
     } catch {
       return null;
     }
@@ -336,7 +351,7 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
    */
   const mayBeUp = (): boolean => {
     try {
-      return api()?.mayBeUp?.() === true;
+      return (api() ?? lastApi)?.mayBeUp?.() === true;
     } catch {
       return false;
     }
@@ -346,7 +361,32 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
    * still be on screen (mayBeUp): then the band stays under it (the mount is bare all the same: nothing more loads).
    */
   const giveBack = (): void => {
-    if (!mayBeUp()) setReserved(false);
+    if (!stillUp()) setReserved(false);
+  };
+  /**
+   * D-2e-25 review round 5 (2026-10-15): a banner may be on screen: the flow counts one (shown, or a load that may still
+   * land: pending; both stay set when a hide could not reach any adapter) or the adapter says one may be up (mayBeUp).
+   */
+  const stillUp = (): boolean => shown || pending || mayBeUp();
+  /**
+   * D-2e-25 review round 5 (2026-10-15): the last banner hide() asked of the adapter, settled either way (resolved when
+   * none was asked yet). A bare Home, event or victory mount re-reads stillUp() once it answered (coverAfterHide).
+   */
+  let lastHide: Promise<void> = Promise.resolve();
+  /**
+   * D-2e-25 review round 5 (2026-10-15): the bare mount on show (`bareGen`) was decided while a banner may still be up
+   * (typically the board's, whose hide the shell asked for in the same task, still in flight): once that hide answered,
+   * the band follows what may be on screen. A hide that went through leaves the mount bare (no flash of a band at each
+   * board → Home inside the window); one that failed or hung puts the band under the banner the SDK still shows, so
+   * the page's bottom controls are never under it (I1 over I2: the screen arms its tap guard as for any band change
+   * in view). Nothing loads either way (the mount stays bare).
+   */
+  const coverAfterHide = (): void => {
+    if (!stillUp()) return;
+    const mine = screenGen;
+    void lastHide.then(() => {
+      if (screenGen === mine && bareGen === screenGen) setReserved(stillUp());
+    });
   };
 
   /** Phase 2e (spec §7.4): the remote switches allow `screen` (off only; absent = on). */
@@ -406,12 +446,20 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
     gen++;
     const banner = api();
     // Nothing was ever asked for since the last hide: no adapter call (it would be a no-op anyway).
-    if (!banner || (!shown && !pending && !(asked && c.ads.banner.collapseWhenEmpty))) return;
+    // D-2e-25 review round 5 (2026-10-15): with collapseWhenEmpty, also while the adapter says a banner may still be up
+    // (mayBeUp: a hide whose SDK call failed or hung, its bounded retries spent): every app hide starts one more bounded
+    // round in the adapter (a no-op there when nothing is up), so a banner nobody counts is never left for good.
+    if (!banner || (!shown && !pending && !(c.ads.banner.collapseWhenEmpty && (asked || mayBeUp())))) return;
     shown = false;
     pending = false;
     asked = false;
+    const asking = (async () => banner.hide())();
+    lastHide = asking.then(
+      () => undefined,
+      () => undefined,
+    );
     try {
-      await banner.hide();
+      await asking;
     } catch (error) {
       deps.onError?.(error);
     }
@@ -457,6 +505,8 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
         } else {
           bareGen = screenGen;
           giveBack();
+          // Round 5: the board's banner may still be up (the shell's hide in flight): re-read once that hide answered.
+          coverAfterHide();
         }
       } else if (anyHide() && reshowFree(closing)) {
         // D-2e-25 review (N3): a reserved band whose banner was hidden (a modal's close, the ranking panel's over the
@@ -550,7 +600,9 @@ export function createBannerFlow(deps: BannerFlowDeps): BannerFlow {
     bareGen = screenGen;
     if (mount) giveBack();
     await flow.hide();
-    if (screenGen === mine) giveBack();
+    // Round 5: the band follows what may still be on screen once the hide answered (given back, or put under a banner
+    // the SDK would not take down: a Home bare since its screenGone, a victory, after a hide that failed or hung).
+    if (screenGen === mine && bareGen === mine) setReserved(stillUp());
   }
 
   /** reshowGame with the overlay whose close is being reported (still listed in the store). */
