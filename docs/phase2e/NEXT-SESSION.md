@@ -225,3 +225,11 @@ workstreams, merged and reviewed by the lead; per-area notes, decisions and size
   opened_at (not with T = 48). No other running bracket was untagged. **Open design point (production rollout):** after
   `RIVALS` turns on, new players still join an untagged bracket for up to its 2 h join window; consider making the join
   skip untagged brackets while rivals are on for the pool.
+- **Test build (2026-10-15): the ad rules D-2e-25.** FB `mewdoku-instant-fbig-preview-0.1.0-ece0d68.zip` (546,800 bytes,
+  89 files; staging ranking `VITE_LADDER_URL=https://mewdoku-rank-staging.mewdoku-rank.workers.dev`; no ad placement or
+  IAP ids, build tag `mewdoku-fb-ids:i0r0b0l0h0k0m0v0d0`) uploaded, in Web Hosting as Standby (comment "Game test build
+  0.1.0 ece0d68 - ad rules D-2e-25 (no interstitial in first session, empty banner strip removed), staging ranking, no ad
+  placement ids"). Branch `claude/intelligent-edison-clazp3` (0 behind the default branch). Checked first on this tree:
+  tsc, 3,407 unit tests, 359 server tests, the full e2e run (334 passed, 0 failed), size check within budget. Without
+  placement ids the build shows no real ads (no interstitial, no banner; rewarded helpers use the free fallback): the
+  D-2e-25 rules need `VITE_FB_PLACEMENT_*` from Monetization Manager to be seen on a device.
