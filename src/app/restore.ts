@@ -56,11 +56,20 @@ export function loadSave(raw: RawSave, now: number, c: GameConfig = cfg): Loaded
  * Merges a copy that arrived after launch into the live save (04 §7.3): the FB cloud copy whose read
  * finished late (it wins the newest-wins fields, PLAT-1) or another tab's write (plain merge, RP-5).
  * An empty or unreadable copy changes nothing (the live save is returned as is).
+ * D-2e-25 review (2026-10-14): the late cloud copy never holds this boot's sessions + 1 (cloud writes stay
+ * off until it is merged, fb-storage.ts deliverLate / cloudReadOk), so this boot is counted on top of it:
+ * sessions = max(merged, cloud + 1). Before, max(live, cloud) let a new device whose cloud read was slow
+ * (live 0 + 1 = 1, cloud 1) stay at 1, and the player's real 2nd lifetime session got no interstitial
+ * (ads.interstitial.fromSession, gate 'first_session'). sessions is the only counter boot raises. Another
+ * tab's copy is a plain max (that tab counted its own boot; this one is in the live save).
  */
 export function mergeArrived(live: SaveData, copy: ExternalSave, now: number, c: GameConfig = cfg): SaveData {
   const r = migrateReport(copy.value, now, c);
   if (r.outcome === 'empty' || r.outcome === 'reset') return live;
-  return copy.source === 'cloud' ? mergePreferring(r.save, live) : merge(live, r.save);
+  if (copy.source !== 'cloud') return merge(live, r.save);
+  const merged = mergePreferring(r.save, live);
+  const sessions = Math.max(merged.sessions, r.save.sessions + 1);
+  return sessions === merged.sessions ? merged : { ...merged, sessions };
 }
 
 export interface RestoreResult {

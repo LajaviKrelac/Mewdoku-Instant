@@ -15,6 +15,11 @@
 //          > .event__header(.event-art .event__name .event__tagline .event__ends[data-soon])
 //            .event__track(.event__track-title .event__rail(.event__rail-fill) ol.event__nodes > li.event__node[data-reached])
 //            .event__progress; then the footer .event__actions(.event__done .event__play .event__top .event__home)
+// D-2e-25 review (2026-10-14, N4, review #5): the band is decided when the screen shows (app/banner-flow.ts); when a later
+// render changes it on show (an empty banner answer gives it back), the footer moves down by the band, so the screen's
+// controls ignore taps for ads.banner.bandChangeGuardMs (Home would land on Top list): overlay-base createBandGuard,
+// never on the first render. D-2e-25 review round 3 (2026-10-15, R3-1): a view that rebuilds the screen in place
+// (EventScreenView.inPlace, app/shell.ts) is on show from its first render: a change from then on arms it.
 import { cfg } from '../../app/config';
 import type { EventDef, Milestone, Reward } from '../../game/events';
 import { formatNumber, t, tn, translate } from '../../i18n';
@@ -23,7 +28,7 @@ import { icon, type IconSymbol } from '../art/sprite';
 import { clear, h, setText, type View } from '../dom';
 import { createTopBar, type TopBarProps } from '../hud/top-bar';
 import { createLocaleText } from '../locale-text';
-import { makeButton, setButtonLabel } from '../overlays/overlay-base';
+import { createBandGuard, makeButton, setButtonLabel } from '../overlays/overlay-base';
 import { formatDaysHours } from './home-screen';
 
 export interface EventTrackNodeView extends Milestone {
@@ -45,6 +50,13 @@ export interface EventScreenView {
   readonly reducedMotion: boolean;
   /** phase2b §3.2: the banner band is reserved on this screen. */
   readonly bannerReserved: boolean;
+  /**
+   * D-2e-25 review round 3 (2026-10-15, R3-1): this view rebuilds the event screen in place while it is on show
+   * (app/shell.ts: the late locale chunk's refresh) and is built with the band in view: it is on show from its first
+   * render, so a band change from then on (the shell's render after the swap with the latest reserve) arms the tap guard
+   * (createBandGuard first(band, true)). Read at the first render only; absent: a new mount.
+   */
+  readonly inPlace?: boolean;
   /** Phase 2d §1.15: the gear's red dot. */
   readonly settingsDot: boolean;
 }
@@ -129,6 +141,8 @@ export function createEventScreen(view: EventScreenView, cb: EventScreenCallback
 
   let artFor: string | null = null;
   let trackKey = '';
+  /** D-2e-25 review (N4): taps wait a moment after the band changed on show (the first render never arms it). */
+  const bandGuard = createBandGuard(el);
 
   const renderTrack = (v: EventScreenView): void => {
     const total = Math.max(1, v.total);
@@ -169,6 +183,7 @@ export function createEventScreen(view: EventScreenView, cb: EventScreenCallback
     topBar.update(topBarProps(v));
     el.dataset.eventTheme = v.def.id;
     el.toggleAttribute('data-banner', v.bannerReserved);
+    bandGuard.band(v.bannerReserved);
     el.style.setProperty('--banner-reserve', `${cfg.ads.banner.reservePx}px`);
     if (artFor !== v.def.id) {
       artFor = v.def.id;
@@ -195,6 +210,8 @@ export function createEventScreen(view: EventScreenView, cb: EventScreenCallback
     top.toggleAttribute('data-autofocus', allDone);
     el.toggleAttribute('data-reduced', v.reducedMotion);
   };
+  // D-2e-25 review round 3 (R3-1): rebuilt in place, the view is on show from this first render (the band in view).
+  bandGuard.first(view.bannerReserved, view.inPlace === true);
   render(view);
   // Settings → Language over the event screen (A11Y-I18N-1): the milestone labels are rebuilt too.
   L.watch(() => {
@@ -207,6 +224,7 @@ export function createEventScreen(view: EventScreenView, cb: EventScreenCallback
     update: render,
     destroy() {
       L.dispose();
+      bandGuard.stop();
       topBar.destroy();
       el.remove();
     },

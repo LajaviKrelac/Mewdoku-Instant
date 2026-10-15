@@ -19,6 +19,17 @@
 // chip) and opens the ranking sheet (records mode without a server); Home mounted → the flow's throttled
 // refresh, queue flush and the next result card; Settings gets the "Daily ranking" rows; every
 // `ladder:update` re-renders Home and open Settings. The ranking overlays are banner-hiding modals.
+// D-2e-25 review (2026-10-14, ads.banner.collapseWhenEmpty): Home renders once more right after its screenShown('home'),
+// in the same task, so its first painted band is the one banner-flow decided for the mount (not the reserve the board
+// left), and the streak screen opened from Home's pill follows Home's reserve going off (followStreakBand). Home and the
+// event screen re-render whenever the reserve changes (their tap guard arms on a change on show).
+// D-2e-25 review round 3 (2026-10-15, R3-1; collapseWhenEmpty): Home shown while Home is the screen on show, and the
+// event screen while it is (refreshLocale after the late boot locale chunk; Home again after a failed board start or
+// from an event card whose event just ended), is rebuilt in place: banner-flow keeps that mount (keepsMount), so there is
+// no hide() before the swap, the router's 'screen' event of the swap is no screenGone(), and no screenShown() follows:
+// the banner stays up, the band (or the bare mark) stays as decided, and the new view is built with the band in view
+// (inPlace: a change from its first render on arms its tap guard). Event → Home is another screen: the usual rules.
+// Off: every show is a new mount (hide, screenGone, screenShown), as before.
 import type { AudioEngine } from '../audio/audio-engine';
 import { isEventLive, type EventDef } from '../game/events';
 import { markSettingsSeen } from '../game/save';
@@ -46,7 +57,7 @@ import type { Session } from './session';
 import { withSlot } from './session-parts';
 import type { ShopFlow } from './shop-flow';
 import { shallowEqual, type AppState, type OverlayId, type Store } from './store';
-import { openStreakScreen } from './streak-screen-flow';
+import { followStreakBand, openStreakScreen } from './streak-screen-flow';
 import { selectEventView, selectHomeView, type ViewContext } from './views';
 
 export interface ShellDeps {
@@ -158,11 +169,31 @@ export function createShell(deps: ShellDeps): Shell {
     eventScreen = null;
     eventShown = null;
   };
+  /**
+   * D-2e-25 review round 3 (2026-10-15, R3-1): the swap under way rebuilds Home or the event screen in place while
+   * banner-flow keeps its mount (sameMount): its 'screen' event is not a screenGone() (that dropped the band in view: the
+   * column fell 58 px with no tap guard). One token per swap, taken by that event; one left over (the router answered
+   * null: the chunk failed, or another screen won the race) is cleared by its own caller only, never a newer one.
+   */
+  let inPlace: { readonly screen: 'home' | 'event' } | null = null;
   const offScreen = deps.bus.on('screen', ({ screen }) => {
     if (screen !== 'home') releaseHome();
     if (screen !== 'event') releaseEvent();
+    const kept = inPlace?.screen === screen;
+    inPlace = null;
+    if (kept) return;
     deps.banners?.screenGone(); // §3.2: the reserve belongs to the screen that set it
   });
+  /**
+   * D-2e-25 review round 3 (2026-10-15, R3-1): showing `screen` while it is the screen on show rebuilds it in place;
+   * with collapseWhenEmpty banner-flow keeps that mount (BannerFlow.keepsMount): the banner, its band, the bare mark and
+   * the one timer stay, so no hide() before the swap, no screenGone() at it, no screenShown() after it, and the new view
+   * is built with the band in view (HomeView / EventScreenView.inPlace: a band change from its first render on arms its
+   * tap guard). Off: false (a new mount, the 2e rule).
+   */
+  function sameMount(screen: 'home' | 'event'): boolean {
+    return router.screen() === screen && deps.banners?.keepsMount(screen) === true;
+  }
   /**
    * §3.2: a banner screen under a modal hides its banner; on close it may show again (after the 60 s
    * window). The victory screen is a banner screen too, although it is an overlay on the game screen
@@ -286,6 +317,9 @@ export function createShell(deps: ShellDeps): Shell {
   }
 
   function bindEventScreen(view: View<EventScreenView>, def: EventDef): void {
+    // An event screen shown over the event screen (the 'screen' event releases it only for another screen): the old
+    // view's select goes (D-2e-25 review round 3: it followed the band in view until the swap).
+    unbindEvent?.();
     eventScreen = view;
     eventShown = def;
     unbindEvent = store.select(
@@ -300,6 +334,9 @@ export function createShell(deps: ShellDeps): Shell {
 
   const shell: Shell = {
     showHome() {
+      // D-2e-25 review round 3 (R3-1): Home over Home (the late locale chunk's refresh, a failed board start, an event
+      // card whose event just ended) keeps the mount's banner and band: no hide, no screenShown, built with the band.
+      const keep = sameMount('home');
       const today = dailyDateKey(clock.now(), c);
       const cleaned = clearStaleDaily(save(), today);
       if (cleaned !== save()) {
@@ -308,10 +345,13 @@ export function createShell(deps: ShellDeps): Shell {
       }
       releaseHome();
       navGen++;
-      void deps.banners?.hide().catch(() => undefined);
+      if (!keep) void deps.banners?.hide().catch(() => undefined);
       deps.events?.clearEnded();
       store.update((s) => ({ ...s, screen: 'home', game: null, session: null }));
-      home = router.showHome(selectHomeView(store.get(), ctx(), c), {
+      const built = selectHomeView(store.get(), ctx(), c);
+      const token = keep ? ({ screen: 'home' } as const) : null;
+      if (token) inPlace = token;
+      home = router.showHome(keep ? { ...built, inPlace: true } : built, {
         onPlay: () => {
           const s = save();
           void deps.session().start(s.tutorialDone ? { mode: 'level', level: s.progress.level } : { mode: 'tutorial', replay: false });
@@ -352,14 +392,26 @@ export function createShell(deps: ShellDeps): Shell {
           else void shell.showEvent(card.def);
         },
       });
+      if (token && inPlace === token) inPlace = null;
       const view = home;
       unbindHome = store.select(
         (s) => [s.save, s.ui.bannerReserved, s.ui.reducedMotion] as const,
-        () => view.update(selectHomeView(store.get(), ctx(), c)),
+        () => {
+          view.update(selectHomeView(store.get(), ctx(), c));
+          // D-2e-25 review (N5): the streak screen opened from the pill follows Home's reserve going off.
+          followStreakBand({ router, state: () => store.get(), config: c });
+        },
         { equals: shallowEqual },
       );
-      // §3.2 (after the screen mounted) and §11 (the events chunk is prefetched after Home shows).
-      void deps.banners?.screenShown('home').catch(() => undefined);
+      // §3.2 (after the screen mounted) and §11 (the events chunk is prefetched after Home shows). D-2e-25 review round 3
+      // (R3-1): not when Home was rebuilt in place (the mount it replaced decided its band).
+      if (!keep) void deps.banners?.screenShown('home').catch(() => undefined);
+      // D-2e-25 review (2026-10-14, ads.banner.collapseWhenEmpty): Home was built before its band was decided, with the
+      // reserve the screen left behind (a board's band; screenGone drops it only once the screen changed), so a Home
+      // that shows bare could keep that empty band until some save change re-rendered it, then jump. One render now,
+      // in the same task (before anything is painted), gives it the band screenShown decided (rebuilt in place: the same
+      // band). Off: as before.
+      if (c.ads.banner.collapseWhenEmpty) view.update(selectHomeView(store.get(), ctx(), c));
       // Phase 2e §2.2, §2.6: a throttled bracket refresh, a queue flush and the next result card.
       ladderNow()?.homeMounted();
       const card = selectHomeView(store.get(), ctx(), c).event;
@@ -379,9 +431,15 @@ export function createShell(deps: ShellDeps): Shell {
       if (!isEventLive(ev, clock.now())) return shell.showHome();
       const view = selectEventView(store.get(), ctx(), ev, c);
       if (!view) return shell.showHome();
+      // D-2e-25 review round 3 (R3-1): the event screen over itself (the late locale chunk's refresh) keeps the mount's
+      // banner and band (no hide, no screenShown); built with the band in view, so a change while the chunk import is
+      // awaited (the old view follows it until the swap) arms the new view's tap guard at the render below.
+      const keep = sameMount('event');
       const mine = ++navGen;
-      void deps.banners?.hide().catch(() => undefined);
-      const screen = await router.showEvent(view, {
+      if (!keep) void deps.banners?.hide().catch(() => undefined);
+      const token = keep ? ({ screen: 'event' } as const) : null;
+      if (token) inPlace = token;
+      const screen = await router.showEvent(keep ? { ...view, inPlace: true } : view, {
         onPlay: () => {
           // The screen was left open across the event's end (L2B-4): Home, not an error toast.
           if (!isEventLive(ev, clock.now())) return shell.showHome();
@@ -392,6 +450,7 @@ export function createShell(deps: ShellDeps): Shell {
         onHome: () => shell.showHome(),
         onSettings: () => shell.openSettings(),
       });
+      if (token && inPlace === token) inPlace = null;
       if (!screen) {
         if (mine === navGen) router.toast(t('toast.error'));
         return;
@@ -401,7 +460,7 @@ export function createShell(deps: ShellDeps): Shell {
       // The reserve may have changed while the screen was built: render once with the latest state.
       const fresh = selectEventView(store.get(), ctx(), ev, c);
       if (fresh) screen.update(fresh);
-      void deps.banners?.screenShown('event').catch(() => undefined);
+      if (!keep) void deps.banners?.screenShown('event').catch(() => undefined);
     },
     openShop() {
       deps.shop?.open();

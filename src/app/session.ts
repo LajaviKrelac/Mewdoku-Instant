@@ -30,6 +30,12 @@
 // SessionMeta.bannerBand) read BannerFlow.bandAtMount(): after an empty banner answer a new board mounts with no
 // band and no screenShown('game') (so it never loads one) until a banner loads again on any screen; never
 // mid-level. An open victory re-renders when its reserve changes (a miss gives it back; the shell does Home, events).
+// D-2e-25 review (2026-10-14): the victory's band is decided when it opens (banner-flow screenShown('victory'), before
+// the props are built: reserved, or bare for the whole victory), so that re-render only ever sees it go off; the
+// streak screen over the victory follows it too (streak-screen-flow followStreakBand). D-2e-25 review round 3
+// (2026-10-15, R3-0): a victory whose gate says no (No Ads bought or the remote switch turned off mid-level, the end
+// date) opens bare, the board's band given back before its props are built (it used to open on a band that could never
+// fill); the gate turning to no on the open victory gives its band back too (that same re-render).
 import type { CellIndex, HintStep, Puzzle } from '../engine/types';
 import { eventEnd, eventRules, type EventDef } from '../game/events';
 import { newGame, restoreGame, toInProgress } from '../game/factory';
@@ -57,7 +63,7 @@ import { queueWin } from './ladder-origin';
 import { pickTickerLines, type LastTry } from './tickers';
 import type { BoardScore } from './ranking-flow';
 import { feedbackFor, failEvent, levelParam, mistakeEvent, startEvents, winBookkeeping, type WinSummary } from './session-effects';
-import { afterStreakScreen } from './streak-screen-flow';
+import { afterStreakScreen, followStreakBand } from './streak-screen-flow';
 import { createFeedbackPlayer, createSessionTimers, defaultColors, defaultPraise, overlayProps, withoutSlot, withSlot, type SaveSlot } from './session-parts';
 import { createTransitions } from './session-transitions';
 import { shallowEqual, type AppState, type OverlayId, type SessionMeta, type SessionRequest } from './store';
@@ -1156,15 +1162,20 @@ export function createSession(deps: SessionDeps): Session {
     }),
     bus.on('overlay:failed', ({ id }) => onOverlayFailed(id)),
     // D-2e-25 (2026-10-14, ads.banner.collapseWhenEmpty): an empty banner answer on the open victory gives its reserve
-    // back (banner-flow setReserved(false)), and a later load there (its one timer, a modal's close) takes it again:
-    // the victory, whose props are built at open, re-renders with the store's reserve, as Home and the event screen
-    // do through the shell, so a banner never lands over its buttons. Only with the switch on (off: the 2e rule, no
-    // re-render); leaving the victory closes it (and clears `win`) before the reserve goes.
+    // back (banner-flow setReserved(false)): the victory, whose props are built at open, re-renders with the store's
+    // reserve, as Home and the event screen do through the shell. D-2e-25 review (2026-10-14, N5, N6): the victory's
+    // band is decided when it opens (banner-flow: reserved at once, or bare for the whole victory), so this only ever
+    // sees the reserve go off on an open victory (re-rendering on either change keeps it robust); the streak screen
+    // opened over it follows too (followStreakBand), and their buttons ignore taps for a moment after the change.
+    // Only with the switch on (off: the 2e rule, no re-render); leaving the victory clears `win` (teardown) before the
+    // reserve goes, so a victory or streak screen on its way out never changes its band.
     store.select(
       (s) => s.ui.bannerReserved,
       () => {
         const w = win;
-        if (w && c.ads.banner.collapseWhenEmpty && router.isOpen('victory')) router.update('victory', victoryProps(w));
+        if (!w || !c.ads.banner.collapseWhenEmpty) return;
+        if (router.isOpen('victory')) router.update('victory', victoryProps(w));
+        followStreakBand({ router, state: () => store.get(), config: c });
       },
     ),
   ];

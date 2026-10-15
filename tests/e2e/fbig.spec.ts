@@ -1065,6 +1065,11 @@ test.describe('FBIG banner during play (phase 2d §1.16, D-2d-15)', () => {
     await expect.poll(() => count(page, 'hideBannerAdAsync')).toBeGreaterThanOrEqual(1);
     await closeOverlays(page);
     await page.clock.fastForward(61_000);
+    // D-2e-25 review (2026-10-14, N3): Home kept its band under Settings, so the close inside the window took ONE timer:
+    // Home's banner came back when the window ended (once); past that load's window too, the board loads its own.
+    await expect.poll(() => count(page, 'loadBannerAdAsync')).toBe(2);
+    await page.clock.fastForward(61_000);
+    expect(await count(page, 'loadBannerAdAsync')).toBe(2);
     await stub(page, (s) => s.clearCalls());
     await startLevel(page);
     await expect.poll(() => count(page, 'loadBannerAdAsync')).toBe(1); // at the entry's end

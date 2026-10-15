@@ -12,6 +12,11 @@
 // image named by streak.week.a11y (its cells are decorative); 44 px targets; Esc = the back arrow or Continue (not
 // while Continue is still gated); reduced motion: no pop and no light-up (the overlay's own fade only). Lazy overlay
 // chunk (streak-art.ts draws the flame and the chest; overlay-chunk.css styles it).
+// D-2e-25 review (2026-10-14, N4, N5): while open it follows the band of the screen under it (app/streak-screen-flow.ts
+// followStreakBand → update()); when the band changes on show, its buttons ignore taps for ads.banner.bandChangeGuardMs
+// (overlay-base createBandGuard; never on open, never releasing Continue's buttonDelayMs gate). D-2e-25 review round 3
+// (2026-10-15, R3-3): such an update (or a language switch) keeps the week row's cells, so today's check does not pop
+// again; they are rebuilt only when the week's data changes.
 // Classes: .overlay[data-overlay=streak] > .streak-screen[data-mode][data-today][data-banner][data-anim][data-reduced]
 //          > .streak-screen__head(button.streak-screen__back h2.streak-screen__title)
 //            .streak-screen__body(.streak-screen__hero > svg.streak-screen__flame
@@ -26,7 +31,7 @@ import { icon } from '../art/sprite';
 import { h, setText, type OverlayView } from '../dom';
 import { streakPillCount, streakStripModel, type StreakStripView } from '../hud/streak-strip';
 import { createLocaleText } from '../locale-text';
-import { createDelay, createOverlayShell, isGated, makeButton, nextId, setGated } from './overlay-base';
+import { createBandGuard, createDelay, createOverlayShell, isGated, makeButton, nextId, setGated } from './overlay-base';
 import { rewardText } from './victory-screen';
 
 /** One day of the week row (the app maps day-streak.ts StreakWeekDay). */
@@ -95,6 +100,14 @@ function weekCell(c: StreakWeekCell): HTMLElement {
   return el;
 }
 
+/**
+ * D-2e-25 review round 3 (2026-10-15, R3-3): what the week row's cells are built from (each day's date and states), so
+ * an update that changes none of it keeps the cells (and today's pop) as they are.
+ */
+function weekKeyOf(cells: readonly StreakWeekCell[]): string {
+  return cells.map((c) => `${c.dateKey}:${+c.played}${+c.today}${+c.gift}${+(c.gift && c.paid)}`).join(',');
+}
+
 export function createStreakScreen(): OverlayView<StreakScreenProps> {
   let props: StreakScreenProps | null = null;
   const shell = createOverlayShell({ id: 'streak', scrim: 'clear', panel: 'dialog' });
@@ -103,6 +116,10 @@ export function createStreakScreen(): OverlayView<StreakScreenProps> {
   root.style.setProperty('--banner-reserve', `${cfg.ads.banner.reservePx}px`);
   root.style.setProperty('--banner-clear', `${cfg.ads.banner.buttonClearancePx}px`);
   const delay = createDelay();
+  /** D-2e-25 review (N4): taps wait a moment after the band changed on the open screen. */
+  const bandGuard = createBandGuard(root);
+  /** D-2e-25 review round 3 (R3-3): the week data the row's cells were built from (weekKeyOf). */
+  let weekKey = '';
   const L = createLocaleText();
 
   const back = L.attr(
@@ -140,6 +157,8 @@ export function createStreakScreen(): OverlayView<StreakScreenProps> {
     root.dataset.mode = p.mode;
     root.dataset.today = p.streak.state === 'done' ? '1' : '0';
     root.toggleAttribute('data-banner', p.bannerReserved);
+    if (opening) bandGuard.first(p.bannerReserved);
+    else bandGuard.band(p.bannerReserved);
     root.toggleAttribute('data-reduced', p.reducedMotion);
     // The day's first win lights the flame and pops today's check once (CSS); never with reduced motion.
     if (opening) root.toggleAttribute('data-anim', win && !p.reducedMotion);
@@ -152,8 +171,21 @@ export function createStreakScreen(): OverlayView<StreakScreenProps> {
     const bestN = Math.max(0, Math.floor(p.best));
     setText(best, t('streak.screen.best', { best: tn('streak.days', bestN, { count: formatNumber(bestN) }) }));
 
-    week.textContent = '';
-    for (const c of p.week) week.appendChild(weekCell(c));
+    // D-2e-25 review round 3 (2026-10-15, R3-3): the cells are built at open and rebuilt only when the week's data
+    // changes. data-anim stays on the root while the screen is open, so new cells replayed today's pop: a band-only
+    // update (followStreakBand) leaves them alone, and a language switch relabels their weekdays in place.
+    const key = weekKeyOf(p.week);
+    if (opening || key !== weekKey) {
+      weekKey = key;
+      week.textContent = '';
+      for (const c of p.week) week.appendChild(weekCell(c));
+    } else {
+      const names = week.querySelectorAll<HTMLElement>('.streak-week__name');
+      p.week.forEach((c, i) => {
+        const name = names[i];
+        if (name) setText(name, formatWeekday(c.dateKey));
+      });
+    }
     week.hidden = p.week.length === 0;
     // Long weekday names (ar "الأربعاء", pl "niedz.") take a smaller size so neighbours never touch at 320 px.
     week.toggleAttribute('data-long', p.week.some((c) => Array.from(formatWeekday(c.dateKey)).length > LONG_WEEKDAY));
@@ -183,6 +215,7 @@ export function createStreakScreen(): OverlayView<StreakScreenProps> {
     },
     close() {
       delay.cancel();
+      bandGuard.stop();
       // The router may show the closed screen again as the layer that fades out (PAR-6): no light-up replay then.
       root.removeAttribute('data-anim');
       shell.hide();
@@ -195,6 +228,7 @@ export function createStreakScreen(): OverlayView<StreakScreenProps> {
     },
     destroy() {
       delay.cancel();
+      bandGuard.stop();
       L.dispose();
       props = null;
       shell.el.remove();

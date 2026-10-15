@@ -13,6 +13,9 @@
 //   .btn  --primary | --secondary | --ghost | --icon | --block ; .btn__icon .btn__label .btn__badge
 // Styles: src/styles/overlays.css (ui-board; adopted from the proposal in dev/shell-styles.ts).
 // Visual check: /dev/shell-harness.html?view=<name>.
+// D-2e-25 review (2026-10-14): createBandGuard, the short tap guard after a screen's banner band changed on show (review
+// round 3, 2026-10-15: first(band, true) for a view that rebuilds a screen on show in place).
+import { cfg, type GameConfig } from '../../app/config';
 import { t } from '../../i18n';
 import { icon, type SymbolId } from '../art/sprite';
 import { h, type DomChild } from '../dom';
@@ -132,6 +135,106 @@ export function setGated(btn: HTMLElement, gated: boolean): void {
 
 export function isGated(btn: HTMLElement): boolean {
   return btn.getAttribute('aria-disabled') === 'true';
+}
+
+// ─────────────────────────────── band-change guard ───────────────────────────────
+
+/**
+ * D-2e-25 review (2026-10-14, N4, review #5): how long the controls of a screen on show ignore taps after its banner
+ * band changed: ads.banner.bandChangeGuardMs with ads.banner.collapseWhenEmpty, else 0 (no guard).
+ */
+export function bandGuardMs(c: Pick<GameConfig, 'ads'> = cfg): number {
+  return c.ads.banner.collapseWhenEmpty ? Math.max(0, c.ads.banner.bandChangeGuardMs) : 0;
+}
+
+export interface BandGuard {
+  /**
+   * A first render (a mount, an open): the band shown; releases a guard still on (a reopened overlay). `inPlace`
+   * (D-2e-25 review round 3, R3-1): the view rebuilds a screen on show in place, with the band in view: it is on show at
+   * once, so a change even in this render's own task arms the guard.
+   */
+  first(band: boolean, inPlace?: boolean): void;
+  /** A later render: when its band differs from the one shown and the screen is on show, taps are ignored for a while. */
+  band(band: boolean): void;
+  /** Taps are being ignored now (root[data-band-guard]). */
+  active(): boolean;
+  /** Close, destroy: the guard is released and the band forgotten (the next render is a first one again). */
+  stop(): void;
+}
+
+/**
+ * D-2e-25 review (2026-10-14, N4, review #5): a banner band is decided when a screen shows, but on the same mount it may
+ * go away (an empty banner answer gives it back), and the column then moves by ads.banner.reservePx: a tap aimed at
+ * Daily lands on Play, the event screen's Home on Top list. So when the band of a screen ALREADY ON SHOW changes (Home,
+ * the event screen, the victory, the streak screen), every click inside `root` is swallowed in the capture phase for
+ * `ms()` (bandGuardMs(): ads.banner.bandChangeGuardMs, 0 = none, only with collapseWhenEmpty); root carries
+ * data-band-guard meanwhile. Not on the first render: the band a view was built or opened with, and any change before
+ * that render's next task (the same task: nothing painted yet, as when the shell renders Home again with the band it
+ * just decided) never arm it. Another change while it is on re-arms it for the full time. It leaves aria-disabled alone
+ * on purpose: setGated() / isGated() belong to the other rules (the victory's buttonDelayMs, the streak's Continue, a
+ * teaser card), which it can therefore never release early, and the column does not flash dimmed (.btn[aria-disabled]).
+ * stop() clears both timers (close, destroy), so nothing stays guarded. D-2e-25 review round 3 (2026-10-15, R3-1): a view
+ * that rebuilds a screen on show in place (app/shell.ts: Home over Home, the event screen over itself) is built with the
+ * band in view and is on show from its first render (first(band, true)): a change from then on is one the player sees.
+ */
+export function createBandGuard(root: HTMLElement, ms: () => number = () => bandGuardMs()): BandGuard {
+  /** The band on show; null before the first render. */
+  let shown: boolean | null = null;
+  /** The first render's task is over (a change now is one the player may see). */
+  let onShow = false;
+  let settle: ReturnType<typeof setTimeout> | null = null;
+  let hold: ReturnType<typeof setTimeout> | null = null;
+  const release = (): void => {
+    if (hold !== null) clearTimeout(hold);
+    hold = null;
+    root.removeAttribute('data-band-guard');
+  };
+  const forget = (): void => {
+    if (settle !== null) clearTimeout(settle);
+    settle = null;
+    onShow = false;
+    shown = null;
+  };
+  root.addEventListener(
+    'click',
+    (ev) => {
+      if (hold === null) return;
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+    },
+    true,
+  );
+  const guard: BandGuard = {
+    first(band, inPlace = false) {
+      release();
+      forget();
+      shown = band;
+      if (inPlace) {
+        onShow = true;
+        return;
+      }
+      settle = setTimeout(() => {
+        settle = null;
+        onShow = true;
+      }, 0);
+    },
+    band(band) {
+      if (shown === null) return guard.first(band);
+      if (band === shown) return;
+      shown = band;
+      const wait = ms();
+      if (!onShow || !(wait > 0)) return;
+      release();
+      root.setAttribute('data-band-guard', '');
+      hold = setTimeout(release, wait);
+    },
+    active: () => hold !== null,
+    stop() {
+      release();
+      forget();
+    },
+  };
+  return guard;
 }
 
 /** Kept on one line: a word followed by a "·" / "—" separator, and a hyphenated word ("double-tap"). */

@@ -1,7 +1,7 @@
 // UI batch (2026-10-13): streak — the Daily Streak screen (ui/overlays/streak-screen.ts): the reference's order with our
 // art and words (title, flame faded until today counts, the run and its label, the best pill, the week row, the status,
 // Continue or a back arrow), its accessible names, the gated Continue, Esc, the language switch, reduced motion and the
-// banner band.
+// banner band. D-2e-25 review round 3 (2026-10-15, R3-3): a band-only update keeps the week row's cells (no pop replay).
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setLocale } from '../../../src/i18n';
 import { createStreakScreen, streakScreenStatus, streakWeekLabel, type StreakScreenProps, type StreakWeekCell } from '../../../src/ui/overlays/streak-screen';
@@ -157,6 +157,29 @@ describe('the Daily Streak screen (UI batch 2026-10-13)', () => {
     expect(root.style.getPropertyValue('--banner-reserve')).toMatch(/px$/);
     v.update(props());
     expect(root.hasAttribute('data-banner')).toBe(false);
+    v.destroy();
+  });
+
+  it("D-2e-25 review round 3 (R3-3): a band-only update (followStreakBand) keeps the week row's cells, so today's check does not pop again; new week data rebuilds them", async () => {
+    const p = props({ mode: 'win', streak: { state: 'done', day: 3, total: 7, rewardDay: false, run: 3 }, week: week(3, 2), bannerReserved: true });
+    const v = mount(p);
+    const root = q(v.el, '.streak-screen');
+    expect(root.hasAttribute('data-anim')).toBe(true); // the pop runs on today's mark (CSS)
+    const today = q(v.el, '.streak-week__day[data-today] .streak-week__mark');
+    const cells = qa(v.el, '.streak-week__day');
+    v.update({ ...p, bannerReserved: false });
+    expect(root.hasAttribute('data-banner')).toBe(false);
+    expect(q(v.el, '.streak-week__day[data-today] .streak-week__mark')).toBe(today); // the same node: no replay
+    expect(qa(v.el, '.streak-week__day')).toEqual(cells);
+    expect(q(v.el, '.streak-week').getAttribute('aria-label')).toBe(streakWeekLabel(p.week));
+    // A language switch relabels the weekdays in place (the same nodes).
+    await setLocale('de', { doc: null });
+    expect(q(v.el, '.streak-week__day[data-today] .streak-week__mark')).toBe(today);
+    expect(q(v.el, '.streak-week__name').textContent).toBe(new Intl.DateTimeFormat('de', { weekday: 'short', timeZone: 'UTC' }).format(Date.UTC(2026, 9, 4)));
+    // New week data (another day played): the cells are rebuilt.
+    v.update({ ...p, bannerReserved: false, week: week(4, 3) });
+    expect(q(v.el, '.streak-week__day[data-today] .streak-week__mark')).not.toBe(today);
+    expect(qa(v.el, '.streak-week__day[data-played]')).toHaveLength(4);
     v.destroy();
   });
 

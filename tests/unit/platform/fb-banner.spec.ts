@@ -1,7 +1,10 @@
 // Owner: D
 // FB banner (phase2b §3.2, §3.5, §3.6): capability needs BOTH APIs, SDK calls and error mapping
 // against the stub (RATE_LIMITED → rate_limited inside its 45 s window), the unsupported latch, and
-// the hide-during-load race (a load that lands after hide() is hidden at once).
+// the hide-during-load race (a load that lands after hide() is hidden at once). D-2e-25 review (2026-10-14): only
+// the newest load may show (a given-up load that lands late is hidden unless a banner is up). D-2e-25 review round 3
+// (2026-10-15): "up" is what the app believes, an ok since its last hide() from any load, older ones too (R3-4, R3-2);
+// a failed take-down of a stale landing is retried even while the app wants a banner (R3-5).
 import { describe, expect, it } from 'vitest';
 import { createFakeClock } from '../../../src/app/clock';
 import { cfg, mergeConfig } from '../../../src/app/config';
@@ -15,6 +18,48 @@ function setup(config: StubConfig = {}, placement = 'ban-1') {
   let unsupported = 0;
   const banner = createFbBanner(sdk, { placement, timers: clock, onUnsupported: () => unsupported++ });
   return { clock, sdk, control, banner, unsupportedCalls: () => unsupported };
+}
+
+/**
+ * D-2e-25 review (2026-10-14): an SDK whose loads settle only when the test says so (the stub's 'never' never
+ * does). A load that resolves shows a banner (Meta: load = show); a hide call takes it down when the SDK gets it.
+ * With holdHides, hide calls stay in flight until the test runs their entry in `hides`. Review round 3 (2026-10-15):
+ * the next `failHides` hide calls reject (NETWORK_FAILURE) and leave the banner on screen.
+ */
+function manualSetup() {
+  const clock = createFakeClock();
+  const fake = {
+    onScreen: false,
+    hideCalls: 0,
+    holdHides: false,
+    failHides: 0,
+    loads: [] as { resolve(): void; reject(code: string): void }[],
+    hides: [] as (() => void)[],
+  };
+  const sdk = {
+    loadBannerAdAsync: () =>
+      new Promise<void>((resolve, reject) => {
+        fake.loads.push({
+          resolve: () => {
+            fake.onScreen = true;
+            resolve();
+          },
+          reject: (code) => reject({ code, message: '' }),
+        });
+      }),
+    hideBannerAdAsync: () => {
+      fake.hideCalls++;
+      if (fake.failHides > 0) {
+        fake.failHides--;
+        return Promise.reject({ code: 'NETWORK_FAILURE', message: '' });
+      }
+      fake.onScreen = false;
+      if (!fake.holdHides) return Promise.resolve();
+      return new Promise<void>((resolve) => void fake.hides.push(resolve));
+    },
+  } as unknown as FBInstantSDK;
+  const banner = createFbBanner(sdk, { placement: 'ban-1', timers: clock });
+  return { clock, fake, banner };
 }
 
 describe('bannerSupported', () => {
@@ -224,6 +269,259 @@ describe('createFbBanner', () => {
     await expect(banner.show('bottom')).resolves.toEqual({ ok: true });
     expect(control.count('loadBannerAdAsync')).toBe(2);
     expect(control.state.bannerVisible).toBe(true);
+  });
+
+  // ── D-2e-25 review (2026-10-14): only the newest load may show ──
+
+  it('a given-up load that lands after its successor came back empty is hidden at once (the app gave the band back)', async () => {
+    const { banner, fake, clock } = manualSetup();
+    const first = track(banner.show('bottom')); // L1 hangs
+    await clock.advanceAsync(cfg.ads.readyTimeoutMs);
+    await drain();
+    expect(first.value).toEqual({ ok: false, reason: 'timeout' });
+    await banner.hide(); // Settings: nothing up yet, no SDK call
+    expect(fake.hideCalls).toBe(0);
+    await clock.advanceAsync(stuckLoadMs());
+    const second = track(banner.show('bottom')); // wanted again: L1 is given up, L2 starts
+    expect(fake.loads).toHaveLength(2);
+    fake.loads[1]?.reject('ADS_NO_FILL');
+    await drain();
+    expect(second.value).toEqual({ ok: false, reason: 'no_fill' }); // banner-flow collapses the band here
+    fake.loads[0]?.resolve(); // L1 lands late: the SDK shows its banner
+    await drain();
+    expect(fake.hideCalls).toBe(1);
+    expect(fake.onScreen).toBe(false);
+    await banner.hide(); // visible was cleared: nothing left to take down
+    expect(fake.hideCalls).toBe(1);
+  });
+
+  it('a given-up load that lands after a newer load answered ok leaves that banner up (no SDK call)', async () => {
+    const { banner, fake, clock } = manualSetup();
+    void banner.show('bottom'); // L1 hangs
+    await clock.advanceAsync(stuckLoadMs());
+    const second = track(banner.show('bottom')); // L2
+    fake.loads[1]?.resolve();
+    await drain();
+    expect(second.value).toEqual({ ok: true });
+    fake.loads[0]?.resolve(); // L1 lands after L2 showed: the banner the app knows about stays
+    await drain();
+    expect(fake.hideCalls).toBe(0);
+    expect(fake.onScreen).toBe(true);
+    await banner.hide(); // still counted as up: the app's hide reaches the SDK
+    expect(fake.hideCalls).toBe(1);
+    expect(fake.onScreen).toBe(false);
+  });
+
+  it('a given-up load that lands while the newer load is still in flight is hidden; the newer one shows when it lands', async () => {
+    const { banner, fake, clock } = manualSetup();
+    void banner.show('bottom'); // L1 hangs
+    await clock.advanceAsync(stuckLoadMs());
+    const second = track(banner.show('bottom')); // L2, still loading
+    fake.loads[0]?.resolve(); // L1 lands first
+    await drain();
+    expect(fake.hideCalls).toBe(1);
+    expect(fake.onScreen).toBe(false);
+    expect(second.done).toBe(false);
+    fake.loads[1]?.resolve();
+    await drain();
+    expect(second.value).toEqual({ ok: true });
+    expect(fake.onScreen).toBe(true);
+    expect(fake.hideCalls).toBe(1);
+    await banner.hide();
+    expect(fake.hideCalls).toBe(2);
+    expect(fake.onScreen).toBe(false);
+  });
+
+  it('a load that lands while a hide call is in flight still counts as up: the next hide() reaches the SDK', async () => {
+    const { banner, fake, clock } = manualSetup();
+    void banner.show('bottom'); // L1 hangs
+    await clock.advanceAsync(stuckLoadMs());
+    const second = track(banner.show('bottom')); // L2, still loading
+    fake.holdHides = true;
+    fake.loads[0]?.resolve(); // L1 lands: its hide call goes out and stays in flight
+    await drain();
+    expect(fake.hideCalls).toBe(1);
+    fake.loads[1]?.resolve(); // L2 lands (and shows) before that hide call returns
+    await drain();
+    expect(second.value).toEqual({ ok: true });
+    fake.holdHides = false;
+    fake.hides.splice(0).forEach((h) => h());
+    await drain();
+    expect(fake.onScreen).toBe(true);
+    await banner.hide(); // the app's hide before the board: the banner must go
+    expect(fake.hideCalls).toBe(2);
+    expect(fake.onScreen).toBe(false);
+  });
+
+  // ── D-2e-25 review round 3 (2026-10-15): the SDK follows what the app believes (an ok since its last hide()) ──
+
+  it('R3-4: a given-up load that lands while an OLDER load\'s banner counts as up leaves it (no SDK call), even when the newest load comes back empty', async () => {
+    const { banner, fake, clock } = manualSetup();
+    const home = track(banner.show('bottom')); // L1: Home's banner
+    fake.loads[0]?.resolve();
+    await drain();
+    expect(home.value).toEqual({ ok: true });
+    await clock.advanceAsync(cfg.ads.banner.minReloadSec * 1000);
+    const board = track(banner.show('bottom')); // L2: Play keeps the banner (no hide); the board loads after the window
+    await clock.advanceAsync(cfg.ads.readyTimeoutMs);
+    await drain();
+    expect(board.value).toEqual({ ok: false, reason: 'timeout' }); // the app: still shown (L1), L2 maybe
+    await clock.advanceAsync(cfg.ads.banner.minReloadSec * 1000);
+    const retry = track(banner.show('bottom')); // O4 → the first Retry (no hide): L2 is given up, L3 starts
+    expect(fake.loads).toHaveLength(3);
+    fake.loads[1]?.resolve(); // L2 lands late: it only refreshes the slot the app counts as up
+    await drain();
+    expect(fake.hideCalls).toBe(0);
+    expect(fake.onScreen).toBe(true);
+    fake.loads[2]?.reject('ADS_NO_FILL'); // the Retry's load is empty: the app keeps its banner (shown)
+    await drain();
+    expect(retry.value).toEqual({ ok: false, reason: 'no_fill' });
+    await clock.advanceAsync(10 * HIDE_RETRY_MS);
+    await drain();
+    expect(fake.hideCalls).toBe(0);
+    expect(fake.onScreen).toBe(true); // what the app believes
+    await banner.hide(); // still counted as up: the app's hide reaches the SDK
+    expect(fake.hideCalls).toBe(1);
+    expect(fake.onScreen).toBe(false);
+  });
+
+  it('R3-2: an ok, then hide() and show() in one task: a given-up load landing during that hide call is hidden too (nothing left on screen)', async () => {
+    const { banner, fake, clock } = manualSetup();
+    void banner.show('bottom'); // L1 hangs
+    await clock.advanceAsync(stuckLoadMs());
+    const second = track(banner.show('bottom')); // L2
+    fake.loads[1]?.resolve();
+    await drain();
+    expect(second.value).toEqual({ ok: true });
+    fake.holdHides = true;
+    void banner.hide(); // the app's hide: its SDK call stays in flight (visible still set)…
+    const home = track(banner.show('bottom')); // …and Home's show() in the same task (shell.showHome): L3
+    expect(fake.loads).toHaveLength(3);
+    expect(fake.hideCalls).toBe(1);
+    fake.loads[0]?.resolve(); // L1 lands during the hide call: the app counts nothing as up (no ok since its hide)
+    await drain();
+    expect(fake.hideCalls).toBe(2);
+    expect(fake.onScreen).toBe(false);
+    fake.loads[2]?.reject('ADS_NO_FILL'); // L3 empty: Home gives its band back
+    await drain();
+    expect(home.value).toEqual({ ok: false, reason: 'no_fill' });
+    fake.holdHides = false;
+    fake.hides.splice(0).forEach((h) => h());
+    await drain();
+    expect(fake.onScreen).toBe(false);
+    await clock.advanceAsync(10 * HIDE_RETRY_MS);
+    await drain();
+    expect(fake.hideCalls).toBe(2);
+    await banner.hide(); // the second hide call (after L1's landing) cleared `visible`: nothing left to take down
+    expect(fake.hideCalls).toBe(2);
+  });
+
+  it("R3-5: a stale landing whose take-down fails is retried while the app wants a banner, until it succeeds", async () => {
+    const { banner, fake, clock } = manualSetup();
+    void banner.show('bottom'); // L1 hangs
+    await clock.advanceAsync(cfg.ads.readyTimeoutMs);
+    await banner.hide(); // nothing up yet, no SDK call
+    await clock.advanceAsync(stuckLoadMs());
+    const second = track(banner.show('bottom')); // wanted again: L2
+    fake.loads[1]?.reject('ADS_NO_FILL');
+    await drain();
+    expect(second.value).toEqual({ ok: false, reason: 'no_fill' }); // the app gives the band back
+    fake.failHides = 1;
+    fake.loads[0]?.resolve(); // L1 lands late; its take-down fails
+    await drain();
+    expect(fake.hideCalls).toBe(1);
+    expect(fake.onScreen).toBe(true);
+    await clock.advanceAsync(HIDE_RETRY_MS); // `wanted` is still set (L2's show()): retried all the same
+    await drain();
+    expect(fake.hideCalls).toBe(2);
+    expect(fake.onScreen).toBe(false);
+    await clock.advanceAsync(10 * HIDE_RETRY_MS);
+    await drain();
+    expect(fake.hideCalls).toBe(2); // done: no more calls
+    await banner.hide(); // `visible` was cleared
+    expect(fake.hideCalls).toBe(2);
+  });
+
+  it('R3-5: a show() keeps the stale retry (its load still in flight), and the retries stay bounded', async () => {
+    const { banner, fake, clock } = manualSetup();
+    void banner.show('bottom'); // L1 hangs
+    await clock.advanceAsync(cfg.ads.readyTimeoutMs);
+    await banner.hide();
+    await clock.advanceAsync(stuckLoadMs());
+    void banner.show('bottom'); // L2
+    fake.loads[1]?.reject('ADS_NO_FILL');
+    await drain();
+    fake.failHides = 1;
+    fake.loads[0]?.resolve(); // L1 lands; its take-down fails
+    await drain();
+    const third = track(banner.show('bottom')); // a new screen's show() before the retry: L3 starts
+    expect(fake.loads).toHaveLength(3);
+    await clock.advanceAsync(HIDE_RETRY_MS);
+    await drain();
+    expect(fake.hideCalls).toBe(2);
+    expect(fake.onScreen).toBe(false);
+    fake.loads[2]?.reject('ADS_NO_FILL');
+    await drain();
+    expect(third.value).toEqual({ ok: false, reason: 'no_fill' });
+    expect(fake.onScreen).toBe(false);
+    // Bounded: a take-down that keeps failing stops after HIDE_RETRIES timer retries.
+    const q = manualSetup();
+    void q.banner.show('bottom');
+    await q.clock.advanceAsync(stuckLoadMs());
+    void q.banner.show('bottom'); // L2
+    q.fake.loads[1]?.reject('ADS_NO_FILL');
+    await drain();
+    q.fake.failHides = 100;
+    q.fake.loads[0]?.resolve();
+    await drain();
+    await q.clock.advanceAsync(20 * HIDE_RETRY_MS);
+    await drain();
+    expect(q.fake.hideCalls).toBe(1 + HIDE_RETRIES);
+  });
+
+  it("R3-5: a stale take-down that fails while the app's hide call is in flight is still retried after that call returns", async () => {
+    const { banner, fake, clock } = manualSetup();
+    void banner.show('bottom'); // L1 hangs
+    await clock.advanceAsync(stuckLoadMs());
+    void banner.show('bottom'); // L2
+    fake.loads[1]?.resolve();
+    await drain();
+    fake.holdHides = true;
+    void banner.hide(); // the app's hide: in flight
+    void banner.show('bottom'); // L3
+    fake.failHides = 1;
+    fake.loads[0]?.resolve(); // L1 lands: its take-down fails at once (a retry is pending)
+    await drain();
+    expect(fake.hideCalls).toBe(2);
+    expect(fake.onScreen).toBe(true);
+    fake.holdHides = false;
+    fake.hides.splice(0).forEach((h) => h()); // the app's hide call returns ok, but L1 landed during it
+    await drain();
+    await clock.advanceAsync(HIDE_RETRY_MS);
+    await drain();
+    expect(fake.hideCalls).toBe(3);
+    expect(fake.onScreen).toBe(false);
+  });
+
+  it('R3-5: the newest load landing ok ends a stale retry: it never takes down the banner the app was told about', async () => {
+    const { banner, fake, clock } = manualSetup();
+    void banner.show('bottom'); // L1 hangs
+    await clock.advanceAsync(stuckLoadMs());
+    const second = track(banner.show('bottom')); // L2, still loading
+    fake.failHides = 1;
+    fake.loads[0]?.resolve(); // L1 lands first; its take-down fails (a retry is pending)
+    await drain();
+    expect(fake.hideCalls).toBe(1);
+    fake.loads[1]?.resolve(); // L2 lands before the retry: the app is told ok
+    await drain();
+    expect(second.value).toEqual({ ok: true });
+    await clock.advanceAsync(10 * HIDE_RETRY_MS);
+    await drain();
+    expect(fake.hideCalls).toBe(1);
+    expect(fake.onScreen).toBe(true);
+    await banner.hide();
+    expect(fake.hideCalls).toBe(2);
+    expect(fake.onScreen).toBe(false);
   });
 
   it('an empty placement never touches the SDK', async () => {

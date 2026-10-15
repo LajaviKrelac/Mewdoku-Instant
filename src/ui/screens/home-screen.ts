@@ -32,6 +32,11 @@
 // centred with auto margins (overflow can only go down), and fitHero() shrinks the mascot (then
 // drops the tagline) until the hero fits the space the event card, the banner reserve and the
 // localized text leave. The static texts follow the language (A11Y-I18N-1).
+// D-2e-25 review (2026-10-14, N4, review #5): Home's band is decided when it shows (app/banner-flow.ts); when a later
+// render changes it on show (an empty banner answer gives it back), the action stack moves down by the band, so every
+// control on Home ignores taps for ads.banner.bandChangeGuardMs (a tap aimed at Daily would land on Play and start a
+// level): overlay-base createBandGuard, never on the first render. D-2e-25 review round 3 (2026-10-15, R3-1): a view that
+// rebuilds Home in place (HomeView.inPlace, app/shell.ts) is on show from its first render: a change from then on arms it.
 import { cfg, type PeriodKind } from '../../app/config';
 import type { EventDef } from '../../game/events';
 import type { DailyCardState } from '../../game/progression';
@@ -47,6 +52,7 @@ import type { StreakStripView, createStreakPill } from '../hud/streak-strip';
 import { homeExtras, whenHomeExtras } from './home-extras';
 import { createTopBar, splitTitle, type TopBarProps } from '../hud/top-bar';
 import { createLocaleText } from '../locale-text';
+import { createBandGuard } from '../overlays/overlay-base';
 import { formatCountdown } from '../time-text';
 
 /** The smallest Home mascot (CSS px) before the tagline, and then the mascot, give way (fitHero). */
@@ -132,6 +138,13 @@ export interface HomeView {
   readonly event: HomeEventCardView | null;
   /** phase2b §3.2: the banner band is reserved (root data-banner). */
   readonly bannerReserved: boolean;
+  /**
+   * D-2e-25 review round 3 (2026-10-15, R3-1): this view rebuilds Home in place while Home is on show (app/shell.ts: the
+   * late locale chunk's refresh, Home shown again over Home) and is built with the band in view: it is on show from its
+   * first render, so a band change from then on, even in that render's task, arms the tap guard (createBandGuard
+   * first(band, true)). Read at the first render only; absent: a new mount (that render's task never arms it).
+   */
+  readonly inPlace?: boolean;
   /** Phase 2d §1.15: the gear's red dot (save.ext.settingsSeen < cfg.settingsDot.version). */
   readonly settingsDot: boolean;
   // ── Phase 2e (spec §2.5, §5.3; required since I-3) ──
@@ -376,6 +389,8 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
   };
   const w0 = win();
   w0?.addEventListener('resize', scheduleFit);
+  /** D-2e-25 review (N4): taps wait a moment after the band changed on show (the first render never arms it). */
+  const bandGuard = createBandGuard(el);
 
   let lastCards: readonly HomeCardView[] | null = null;
 
@@ -504,6 +519,7 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
     renderAvatar(v.avatarId ?? null, v.frameId ?? 0, v.backgroundId ?? 0);
     renderEvent(v.event);
     el.toggleAttribute('data-banner', v.bannerReserved);
+    bandGuard.band(v.bannerReserved);
     el.style.setProperty('--banner-reserve', `${cfg.ads.banner.reservePx}px`);
     // Home cleanup (2026-10-12): always "Level 38", also with a board in progress (Play resumes it).
     setText(playLabel, t('home.play', { level: v.level }));
@@ -548,6 +564,8 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
     }
     scheduleFit();
   };
+  // D-2e-25 review round 3 (R3-1): rebuilt in place, the view is on show from this first render (the band in view).
+  bandGuard.first(view.bannerReserved, view.inPlace === true);
   render(view);
   // Settings → Language over Home (A11Y-I18N-1): every text follows, also while a dialog is open.
   const offLocale = onLocaleChanged(() => render(last));
@@ -559,6 +577,7 @@ export function createHomeScreen(view: HomeView, cb: HomeCallbacks): View<HomeVi
       offLocale();
       L.dispose();
       stopTick();
+      bandGuard.stop();
       w0?.removeEventListener('resize', scheduleFit);
       if (fitRaf) win()?.cancelAnimationFrame(fitRaf);
       topBar.destroy();

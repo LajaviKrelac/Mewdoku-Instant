@@ -8,6 +8,14 @@
 //   action: the screen change that follows closes every overlay and lets the streak screen be the layer that fades out
 //   (router.ts, PAR-6), so neither the victory nor the solved board shows again in between.
 // The data is the player's own save only (day-streak.ts streakView / streakWeek): no other player, no estimate.
+// D-2e-25 review (2026-10-14, review #3; ads.banner.collapseWhenEmpty): the screen's band was read at open only, so an
+// empty banner answer landing under it (Home's load, the victory's one timer) left it an empty 58 px band. While it is
+// open it now follows the reserve of the screen under it (followStreakBand, called by the store selects that follow
+// that reserve: shell.ts for Home, session.ts for the victory; the screen's buttons ignore taps for a moment after the
+// change, ui/overlays/overlay-base.ts createBandGuard). By banner-flow's rule (a bare mount stays bare) that reserve can
+// only go off on the same mount (review round 3, 2026-10-15, R3-0: also when the gate turns to no under it, No Ads
+// bought or a remote switch off); off: the band stays as opened (the 2e rule). Review round 3 (R3-3): such a band-only
+// update keeps the screen's week cells (ui/overlays/streak-screen.ts), so today's check does not pop again.
 import { streakView, streakWeek } from '../game/day-streak';
 import type { Reward } from '../game/events';
 import { dailyDateKey } from '../game/progression';
@@ -50,9 +58,33 @@ export interface StreakScreenHost {
   readonly config?: GameConfig;
 }
 
+/**
+ * D-2e-25 review (N5): the props each router's streak screen was last opened or updated with (keyed by the router, so
+ * the band can follow the store without rebuilding the rest: the day, the reward and `onDone` stay as opened).
+ */
+const lastProps = new WeakMap<object, StreakScreenProps>();
+
 /** Opens the screen; `onDone` runs on Continue, the back arrow or Esc. */
 export function openStreakScreen(host: StreakScreenHost, mode: StreakScreenProps['mode'], onDone: () => void, reward: Reward | null = null): void {
-  host.router.open('streak', { ...selectStreakScreen(host.state(), host.now(), mode, reward, host.config ?? cfg), onDone });
+  const props: StreakScreenProps = { ...selectStreakScreen(host.state(), host.now(), mode, reward, host.config ?? cfg), onDone };
+  lastProps.set(host.router, props);
+  host.router.open('streak', props);
+}
+
+/**
+ * D-2e-25 review (2026-10-14, N5, review #3): the open streak screen takes the store's banner reserve when it changed
+ * (re-rendered with router.update; its buttons ignore taps for a moment, createBandGuard). Only with
+ * ads.banner.collapseWhenEmpty (off: the band stays as opened); nothing when the screen is not open. The callers are the
+ * selects that follow the reserve of the screen under it (shell.ts Home's, session.ts the victory's).
+ */
+export function followStreakBand(host: { readonly router: Pick<Router, 'isOpen' | 'update'>; state(): AppState; readonly config?: GameConfig }): void {
+  const p = lastProps.get(host.router);
+  if (!p || !(host.config ?? cfg).ads.banner.collapseWhenEmpty || !host.router.isOpen('streak')) return;
+  const on = host.state().ui.bannerReserved;
+  if (p.bannerReserved === on) return;
+  const next: StreakScreenProps = { ...p, bannerReserved: on };
+  lastProps.set(host.router, next);
+  host.router.update('streak', next);
 }
 
 /** The win shows the screen after its victory: the day's first counted win, with the switch and the flag on. */

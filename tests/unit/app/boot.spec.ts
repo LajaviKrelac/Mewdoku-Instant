@@ -497,6 +497,19 @@ describe('boot: save copies that arrive after launch (PLAT-1, RP-5)', () => {
     expect(h.cb).toBeNull();
   });
 
+  it("D-2e-25 review: a new device's late cloud copy counts this boot on top of it (sessions 1 + 1 = 2, saved)", async () => {
+    const h = hook();
+    const s = await start(null, { prepare: h.prepare }); // empty local copy, the cloud read slower than the boot
+    expect(s.app.store.get().save.sessions).toBe(1);
+    await s.clock.advanceAsync(400);
+    s.platform.writes.length = 0;
+    h.cb?.({ source: 'cloud', value: { ...cloudCopy(), sessions: 1 } }); // device A's first session
+    expect(s.app.store.get().save.sessions).toBe(2);
+    await s.clock.advanceAsync(400);
+    expect(s.platform.writes.at(-1)?.data.sessions).toBe(2);
+    s.app.dispose();
+  });
+
   it('a cloud copy that arrived during launch sends a returning player Home, not into the tutorial', async () => {
     const s = await start(null, {
       prepare: (p) => {

@@ -38,6 +38,9 @@
 // zone matters only in the FBIG build, where the chip sits after the zone (fbig.spec.ts checks it).
 // D-2e-25 (2026-10-14, ads.banner.collapseWhenEmpty): with ?ads=nofill Home reserves its band for the load and gives
 // it back on the mock's no_fill answer, and the board opened next mounts without the band (data-play-band="0").
+// D-2e-25 review (2026-10-14, #4): that bare Home stays bare: Settings closed after the reload window loads nothing and
+// the band never comes back (the first pass reserved it and loaded again: the band flashed on and off, the column
+// jumped); no tap guard either (the band went in the mount's own task, before anything was painted).
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -362,6 +365,19 @@ test('D-2e-25 (?ads=nofill): Home gives its banner reserve back after the empty 
   // A returning player past level 9: Home reserved its band for the load, then gave it back on the mock's no_fill.
   expect(await page.evaluate(() => (window as unknown as { __homeBand: string[] }).__homeBand)).toEqual(['on', 'off']);
   await expect(page.locator('.screen--home')).not.toHaveAttribute('data-banner', '');
+  expect(await page.evaluate(() => (window as TestWindow).__mewdoku?.app().ui.bannerReserved)).toBe(false);
+  await expect(page.locator('[data-testid="mock-banner"]')).toHaveCount(0);
+  await expect(page.locator('.screen--home')).not.toHaveAttribute('data-band-guard', '');
+  // D-2e-25 review (#4): Settings over the bare Home, closed after the reload window: no reserve, no load.
+  await page.clock.install();
+  await page.locator('.screen--home .top-bar__btn--settings').click();
+  const settings = page.locator('[data-overlay="settings"]');
+  await expect(settings).toBeVisible();
+  await page.clock.fastForward(61_000);
+  await page.keyboard.press('Escape');
+  await expect(settings).toBeHidden();
+  await page.clock.runFor(1_000);
+  expect(await page.evaluate(() => (window as unknown as { __homeBand: string[] }).__homeBand)).toEqual(['on', 'off']);
   expect(await page.evaluate(() => (window as TestWindow).__mewdoku?.app().ui.bannerReserved)).toBe(false);
   await expect(page.locator('[data-testid="mock-banner"]')).toHaveCount(0);
   // The next board: no band from its first frame (data-play-band="0"), so it never loads one mid-level.

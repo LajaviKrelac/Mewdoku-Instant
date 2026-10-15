@@ -19,7 +19,9 @@
 // lines of praise or an approximate statistic (VictoryProps.lines, picked by app/victory-lines.ts, text in
 // ./victory-line-text.ts) sit under the subtitle, in the daily under its time.
 // With `bannerReserved` the root gets data-banner (phase2b §3.2) and the column keeps the
-// ads.banner.reservePx band free under the buttons.
+// ads.banner.reservePx band free under the buttons. D-2e-25 review (2026-10-14, N4): when an update changes the band
+// of the open victory (an empty banner answer gives it back), the column moves, so its buttons ignore taps for
+// ads.banner.bandChangeGuardMs (overlay-base createBandGuard; never on open, never releasing the buttonDelayMs gate).
 // Esc and Enter: Enter presses the focused primary (autofocus); Esc is ignored (a choice is needed).
 // Reduced motion: a crossfade of fx.screenReducedMs (WAAPI), static rays, no progress-bar fill.
 // update() re-renders in place (2026-10-12: the session sends a late ranking answer's kept-fish row this way);
@@ -55,7 +57,7 @@ import { icon } from '../art/sprite';
 import { h, setText, type OverlayView } from '../dom';
 import { renderStreakSteps, streakStepKinds } from '../hud/streak-strip';
 import { createLocaleText } from '../locale-text';
-import { createDelay, createOverlayShell, createTicker, makeButton, nextId, setButtonLabel, setGated, setTextKeepTogether } from './overlay-base';
+import { createBandGuard, createDelay, createOverlayShell, createTicker, makeButton, nextId, setButtonLabel, setGated, setTextKeepTogether } from './overlay-base';
 import { victoryLineText, type VictoryLine } from './victory-line-text';
 
 /**
@@ -195,6 +197,8 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
   const delay = createDelay();
   const ticker = createTicker();
   const barDelay = createDelay();
+  /** D-2e-25 review (N4): taps wait a moment after the band changed on the open victory. */
+  const bandGuard = createBandGuard(root);
   /** The opening's event-bar fill is still waiting for barDelay (2026-10-12: a re-render leaves the bar alone then). */
   let barPending = false;
 
@@ -366,6 +370,8 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
     L.apply();
     root.dataset.variant = p.variant;
     root.toggleAttribute('data-banner', p.bannerReserved);
+    if (opening) bandGuard.first(p.bannerReserved);
+    else bandGuard.band(p.bannerReserved);
     root.toggleAttribute('data-reduced', p.reducedMotion);
     const tutorial = p.variant === 'tutorial' || p.variant === 'tutorial_replay';
 
@@ -520,6 +526,7 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
     },
     close() {
       delay.cancel();
+      bandGuard.stop();
       barDelay.cancel();
       barPending = false;
       ticker.stop();
@@ -530,6 +537,7 @@ export function createVictoryScreen(): OverlayView<VictoryProps> {
     dismiss: () => false,
     destroy() {
       delay.cancel();
+      bandGuard.stop();
       barDelay.cancel();
       barPending = false;
       ticker.stop();

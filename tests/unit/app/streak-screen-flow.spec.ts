@@ -2,11 +2,13 @@
 // from the save only (the run, the best, the run's current cycle), the victory's primary going through it once on the
 // day's first counted win (Continue then runs the gate and the next board; Home's pill opens it with a back arrow),
 // never on a later win, with the switch off or the flag off.
-import { afterEach, describe, expect, it } from 'vitest';
+// D-2e-25 review (2026-10-14, N5, review #3): an open screen follows the reserve of the screen under it going off
+// (followStreakBand; with ads.banner.collapseWhenEmpty only); the session and shell wiring is in banner-2e.spec.ts.
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cfg, mergeConfig } from '../../../src/app/config';
 import { setFlagOverrides } from '../../../src/app/flags';
 import { createShell } from '../../../src/app/shell';
-import { afterStreakScreen, openStreakScreen, selectStreakScreen, streakScreenDue } from '../../../src/app/streak-screen-flow';
+import { afterStreakScreen, followStreakBand, openStreakScreen, selectStreakScreen, streakScreenDue } from '../../../src/app/streak-screen-flow';
 import { initialAppState, type AppState, type OverlayId } from '../../../src/app/store';
 import { dateKeyOfDay, dayNumber, emptyDayStreak } from '../../../src/game/day-streak';
 import { dailyDateKey } from '../../../src/game/progression';
@@ -243,5 +245,55 @@ describe('the shell: Home\'s streak pill opens the screen with a back arrow', ()
     h.router.props.streak?.onDone();
     expect(h.router.isOpen('streak')).toBe(false);
     expect(h.router.screen()).toBe('home');
+  });
+});
+
+describe('D-2e-25 review (N5): followStreakBand', () => {
+  function host(config = cfg) {
+    let state = app({ dayStreak: runOf(2, 0) }, { bannerReserved: true });
+    const stack: OverlayId[] = [];
+    const updates: { id: OverlayId; props: Record<string, unknown> }[] = [];
+    const router = {
+      open: (id: OverlayId) => void stack.push(id),
+      update: (id: OverlayId, props: unknown) => void updates.push({ id, props: props as Record<string, unknown> }),
+      isOpen: (id: OverlayId) => stack.includes(id),
+    };
+    return {
+      h: { router, state: () => state, now: () => NOW, config },
+      stack,
+      updates,
+      reserve(on: boolean) {
+        state = { ...state, ui: { ...state.ui, bannerReserved: on } };
+      },
+    };
+  }
+
+  it("the open screen takes the store's reserve when it changed (once), everything else as opened", () => {
+    const t = host();
+    const done = vi.fn();
+    openStreakScreen(t.h, 'home', done);
+    followStreakBand(t.h); // no change: nothing
+    expect(t.updates).toEqual([]);
+    t.reserve(false); // a miss under it
+    followStreakBand(t.h);
+    expect(t.updates).toHaveLength(1);
+    expect(t.updates[0]?.id).toBe('streak');
+    expect(t.updates[0]?.props).toMatchObject({ mode: 'home', bannerReserved: false, onDone: done });
+    followStreakBand(t.h); // nothing new
+    expect(t.updates).toHaveLength(1);
+  });
+
+  it('nothing when the screen is not open, or with collapseWhenEmpty off (its band stays as opened)', () => {
+    const closed = host();
+    openStreakScreen(closed.h, 'home', () => undefined);
+    closed.stack.length = 0;
+    closed.reserve(false);
+    followStreakBand(closed.h);
+    expect(closed.updates).toEqual([]);
+    const off = host(mergeConfig({ ads: { banner: { collapseWhenEmpty: false } } }));
+    openStreakScreen(off.h, 'home', () => undefined);
+    off.reserve(false);
+    followStreakBand(off.h);
+    expect(off.updates).toEqual([]);
   });
 });

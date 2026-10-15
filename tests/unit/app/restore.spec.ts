@@ -3,7 +3,9 @@
 // and an exact restore of a level and a daily in progress at the same time.
 import { describe, expect, it } from 'vitest';
 import { applyRestoreRules, loadSave } from '../../../src/app/boot';
+import { cfg } from '../../../src/app/config';
 import { mergeArrived } from '../../../src/app/restore';
+import { interstitialGate } from '../../../src/game/ad-pacing';
 import { encodeCells } from '../../../src/game/save';
 import { defaults } from '../../../src/game/save';
 import type { InProgressV2, SaveData } from '../../../src/game/types';
@@ -28,9 +30,12 @@ function slot(id: InProgressV2['id'], mode: 'level' | 'daily', cells: Record<num
   };
 }
 
+// A returning player. D-2e-25 review (2026-10-14): sessions 2, past ads.interstitial.fromSession, as the harness
+// seeds it (defaults() alone is sessions 0, so the fail card's Home took the gated 'first_session' path).
 const base = (patch: Partial<SaveData> = {}): SaveData => ({
   ...defaults(NOW - 86_400_000),
   tutorialDone: true,
+  sessions: 2,
   progress: { level: 25, completed: 24, best: {} },
   ...patch,
 });
@@ -127,6 +132,30 @@ describe('mergeArrived: copies that arrive after launch', () => {
   it('an empty or unreadable copy changes nothing', () => {
     expect(mergeArrived(live, { source: 'cloud', value: null }, NOW)).toBe(live);
     expect(mergeArrived(live, { source: 'tab', value: 'not json {' }, NOW)).toBe(live);
+  });
+
+  // D-2e-25 review (2026-10-14): the late cloud copy never holds this boot's sessions + 1 (no cloud write before it).
+  it('the late FB cloud copy counts this boot on top of its sessions; a tab copy is a plain max', () => {
+    const merged = (liveSessions: number, copySessions: number, source: 'cloud' | 'tab'): number =>
+      mergeArrived({ ...live, sessions: liveSessions }, { source, value: { ...base({ sessions: copySessions }), updatedAt: NOW - 3_600_000 } }, NOW)
+        .sessions;
+    expect(merged(1, 1, 'cloud')).toBe(2); // a new device (0 + 1 at boot), the other device's first session
+    expect(merged(6, 5, 'cloud')).toBe(6); // local 5 + 1: this boot is already on top of the cloud's 5
+    expect(merged(6, 7, 'cloud')).toBe(8);
+    expect(merged(1, 1, 'tab')).toBe(1); // that tab counted its own boot, this one is in the live save
+    expect(merged(6, 7, 'tab')).toBe(7);
+  });
+
+  it("a new device's 2nd lifetime session gets interstitials once the late cloud copy is merged (ads.interstitial.fromSession 2)", () => {
+    expect(cfg.ads.interstitial.fromSession).toBe(2);
+    const gate = (save: SaveData) =>
+      interstitialGate({ trigger: 'next_level', now: NOW, sessionStartedAt: NOW - 600_000, save, interstitialSupported: true, retryIndex: null });
+    const fresh: SaveData = { ...defaults(NOW - 60_000), sessions: 1 }; // empty local copy + this boot
+    const cloud: SaveData = { ...base({ sessions: 1 }), updatedAt: NOW - 3_600_000 }; // device A's first session
+    const out = mergeArrived(fresh, { source: 'cloud', value: cloud }, NOW);
+    expect(out.sessions).toBe(2);
+    expect(gate(out)).toBe('ok');
+    expect(gate({ ...out, sessions: 1 })).toBe('first_session'); // what the plain max(1, 1) used to leave
   });
 });
 
@@ -281,7 +310,12 @@ describe('opening a restored board (02 §15 steps 3–6)', () => {
     await h.session.start({ mode: 'level', level: 25 });
     h.session.onHome();
     // Phase 2e (§3.2, P-I5): the fail card's Home runs the 'fail_home' interstitial first, then discards.
+    // D-2e-25 review (2026-10-14): base() seeds a returning player, so the gate lets the ad run (not 'first_session').
+    expect(h.save().inProgress.level).not.toBeNull(); // still there while the ad runs
     await h.settle(0);
+    expect(h.analytics).toContainEqual({ name: 'ad_interstitial', params: { trigger: 'fail_home', result: 'ok' } });
+    expect(h.log.indexOf('ad:interstitial:fail_home')).toBeGreaterThanOrEqual(0);
+    expect(h.log.indexOf('ad:interstitial:fail_home')).toBeLessThan(h.log.indexOf('goHome'));
     expect(h.save().inProgress.level).toBeNull();
     expect(last(h.platform.writes)?.cloud).toBe('now');
     expect(h.store.get().game).toBeNull();
